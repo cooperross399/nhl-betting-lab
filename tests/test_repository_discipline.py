@@ -186,3 +186,13 @@ def test_the_purchase_workflow_fails_when_the_quota_is_short() -> None:
     text = _read(".github/workflows/historical-props-purchase.yml")
 
     assert "--fail-under" in text
+
+
+def test_a_slate_is_bounded_by_hours_not_by_the_utc_date() -> None:
+    """A North American evening is the next day in UTC. Filtering on the UTC
+    date kept four of fourteen games on 2026-01-10 — and the four it kept
+    were the afternoon ones, which is a systematically different set."""
+    text = _read("scripts/buy_historical_props.py")
+
+    assert "window_start <= when.astimezone(timezone.utc) < window_end" in text
+    assert "the four it kept were the afternoon games" in text

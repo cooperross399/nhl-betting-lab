@@ -66,3 +66,22 @@ got better. Nothing about the model changed; a wrongly-included category of
 sample was removed. The corrected number describes what the model always did
 on real starts, and the old number described something that was never a
 question anyone could bet on.
+
+
+## And the provider does not retain it historically either
+
+A retention probe on 2026-01-10 requested all six prop markets and got five
+back. `player_total_saves` was the one missing, from all six books quoting
+that event.
+
+So goalie saves **cannot be measured against real prices at all**. There is no
+price-based evidence available for it, now or later, unless the provider's
+retention changes.
+
+That lands in the same place as the gate above rather than adding a new
+problem: the market already cannot reach the card, because nothing here knows
+who starts. A market that cannot be measured *and* cannot be selected is
+simply out of scope, and saying so plainly is better than carrying it as an
+open question. `data/outputs/player_props_backtest.md` names it as
+unmeasurable rather than leaving its calibration figure to be misread as
+evidence.

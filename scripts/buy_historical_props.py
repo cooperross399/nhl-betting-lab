@@ -74,9 +74,16 @@ def _events_in_window(
     no data for that window" and is not. That bug would have made a purchase
     run buy zero events and report success.
 
-    One listing per day at 12:00 UTC, which is before every NHL puck drop, so
-    the day's whole slate is on it. Each listing is documented at one credit
-    and is free when it finds nothing.
+    One listing per day at 12:00 UTC, and everything on the board for the
+    following twenty-four hours is that day's slate.
+
+    That window is the fix for a real and badly-shaped bug. Keeping only games
+    whose `commence_time` fell on the *same UTC date* discarded most of every
+    slate, because a North American evening is the next day in UTC: on
+    2026-01-10 the provider listed fourteen games and the filter kept four —
+    and the four it kept were the afternoon games. Sampling would have been
+    restricted to matinees and national-TV windows, which is a systematically
+    different set of fixtures, silently.
 
     `every_n_days` thins the window into a stratified sample rather than
     buying consecutive days. Consecutive days share injuries, road trips and
@@ -89,6 +96,8 @@ def _events_in_window(
     cursor = start
     while cursor <= end:
         snapshot = f"{cursor.isoformat()}T12:00:00Z"
+        window_start = datetime.fromisoformat(f"{cursor.isoformat()}T12:00:00+00:00")
+        window_end = window_start + timedelta(days=1)
         try:
             found, cost, _ = list_historical_events(
                 provider, snapshot=snapshot, raw_dir=raw_dir
@@ -107,10 +116,10 @@ def _events_in_window(
                 when = datetime.fromisoformat(commence.replace("Z", "+00:00"))
             except ValueError:
                 continue
-            if when.date() != cursor:
-                # The listing covers a window, not a day. Keep only the games
-                # actually played on the day being sampled, so `every_n_days`
-                # means what it says.
+            if not (window_start <= when.astimezone(timezone.utc) < window_end):
+                # The listing can carry games beyond this slate. Bounding it
+                # to the twenty-four hours after the snapshot keeps exactly
+                # one night's fixtures, so `every_n_days` means what it says.
                 continue
             seen.add(event_id)
             when_utc = when.astimezone(timezone.utc)

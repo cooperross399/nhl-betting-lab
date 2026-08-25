@@ -5,25 +5,28 @@ sensible and nothing more. The question that matters — does it disagree with a
 real price, profitably — needs prices that were actually for sale. The Odds
 API retains some of them and sells them back per event.
 
-## What this costs, measured rather than assumed
+## What this costs — measured, and now known
 
-The provider's documentation is **ambiguous** about the per-event historical
-endpoint. It states plainly that the *bulk* historical odds endpoint costs
-"10 x [number of markets specified] x [number of regions specified]", and it
-states that historical *events* costs 1. For the per-event historical odds
-endpoint it says either that the cost mirrors the live per-event endpoint
-(one per market returned per region) or nothing at all, depending on which
-part of the guide you read. That is a tenfold uncertainty on the most
-expensive thing this repository does.
+The provider's documentation is ambiguous about the per-event historical
+endpoint: it documents "10 x [markets] x [regions]" for the *bulk* historical
+endpoint, and for the per-event one says either one-per-market-returned or
+nothing at all, depending which part of the guide you read. That was a
+tenfold uncertainty on the most expensive thing this repository does.
 
-So nothing here assumes. Every response carries `x-requests-last`, which is
-what the request actually cost, and `x-requests-remaining`. Those are the
-numbers the cap is enforced against and the numbers the reports print.
+**Measured on 2026-08-25: it is ten credits per market returned.** A probe of
+one event requesting six markets got five back and `x-requests-last` said 50.
+The pessimistic reading was the right one.
 
-The estimate is still used, for one job only: a **pre-flight upper bound**, so
-a run can refuse to start a request that might breach the cap. It uses the
-pessimistic ten-per-market figure, because a cap that can only be
+Nothing assumes even so. Every response carries `x-requests-last`, which is
+what the request actually cost, and `x-requests-remaining`; those are the
+numbers accounted and reported. The estimate is kept for one job — a
+**pre-flight upper bound**, so a run refuses to start a request that might
+breach the cap — and it stays pessimistic, because a cap that can only be
 over-respected is the safe direction to be wrong in.
+
+A day's listing costs 1 credit and returns the whole slate, so the marginal
+cost of a sampled slate is `10 x [markets retained] x [games that night]`,
+plus one.
 
 Nothing spends a credit without an explicit `--live` and a `credit_cap`, and
 the cap is checked before each request rather than after.
