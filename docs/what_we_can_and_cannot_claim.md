@@ -8,12 +8,20 @@ project produces lands in a place that already knows how to read it.
 ## The current position, stated plainly
 
 **Nothing in this repository has a demonstrated edge, because nothing has been
-measured yet.** No market is allowlisted. No card produces selections. Every
-number below is a bound on what measurement *could* show, not a result.
+measured against a real price.** No market is allowlisted. No card produces
+selections. The honest answer to "does this work" is: *unknown, and it will
+stay unknown until historical prices are bought and measured against.*
 
-When a result exists, it replaces the relevant section here and carries its
-sample size and its interval. Until then, the honest answer to "does this work"
-is: *unknown, and it will stay unknown for a while.*
+What *has* been measured is calibration, and a lot of it — 1.9 million
+walk-forward prop samples and 51,212 team-market samples across 3,658 games.
+That establishes exactly one thing: the models' probabilities are internally
+sensible, once corrected. It establishes nothing about whether the market
+disagrees with them profitably, and this document will not let the two be
+confused.
+
+`data/outputs/what_we_can_claim.md` is the generated counterpart to this file.
+It is rebuilt from the measurement outputs every run, so it cannot drift from
+them.
 
 ## The rules this document enforces
 
@@ -78,9 +86,30 @@ than presenting a calibration number as though it settled the question. See
 
 ## What cannot be measured at all
 
-To be filled in by measurement, market by market, with the reason. An entry
-here is a statement that no historical price exists to test against — not a
-statement that the market is bad.
+To be filled in by the retention probe, market by market, with the reason. An
+entry here is a statement that no historical price exists to test against —
+not a statement that the market is bad.
+
+Until that probe has run, the honest state is **unknown**: not "all six
+markets are retained" and not "none are". `data/outputs/player_props_backtest.md`
+says so in those words.
+
+## Two things calibration has already ruled out
+
+Calibration cannot rule a model in, but it has already ruled two things out,
+and both changed the code:
+
+**Goalie saves could not be measured the way it was being measured.** Pricing
+every goalie in every boxscore put 16,145 relief appearances into the sample,
+predicting 42.8% and observing 0.3%. Those are bets no book offers. Excluding
+them is not the model improving —
+`docs/goalie_props_need_a_confirmed_starter.md` is explicit that nothing about
+the model changed.
+
+**The team model is overconfident on favourites.** Its docstring argued the
+opposite, from a plausible mechanism about empty-net goals. The measurement
+disagreed and the measurement governs; the wrong prediction stays on the
+record in `models/team_model.py`.
 
 ## The one thing that is certain
 

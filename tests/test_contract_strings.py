@@ -118,3 +118,29 @@ def test_claude_md_records_every_contract_string() -> None:
     assert SELECTIONS_CHANGED_MARKER in text
     for path in MEASUREMENT_PATHS:
         assert path in text
+
+
+def test_claude_md_carries_a_current_operating_state() -> None:
+    """A future session reads this first; if it is absent or stale, every
+    other document is being read without context."""
+    text = (PROJECT_ROOT / "CLAUDE.md").read_text(encoding="utf-8")
+
+    assert "## Current operating state" in text
+    assert "Nothing has a demonstrated edge" in text
+    assert "No market is allowlisted" in text
+
+
+def test_the_operating_state_names_the_hard_gated_market() -> None:
+    text = (PROJECT_ROOT / "CLAUDE.md").read_text(encoding="utf-8")
+
+    assert "goalie_saves` cannot reach the card" in text
+    assert "not a no-value judgement" in text
+
+
+def test_the_honesty_doc_does_not_claim_calibration_is_evidence_of_an_edge() -> None:
+    text = (PROJECT_ROOT / "docs" / "what_we_can_and_cannot_claim.md").read_text(
+        encoding="utf-8"
+    )
+
+    assert "It establishes nothing about whether the market" in text
+    assert "will not let the two be" in text

@@ -36,6 +36,46 @@ Every session, in this order. These replace chat history as project memory.
 7. Latest `data/outputs/` reports, then GitHub PRs, Actions runs, and the
    pinned **"NHL Betting Lab — Claude Operating Home"** issue.
 
+## Current operating state
+
+Every number below is measured, walk-forward, and carries its sample size.
+Re-derive rather than trust if the data has moved.
+
+- **Nothing has a demonstrated edge, because nothing has been measured against
+  real prices.** No historical prop or team prices have been bought. That is a
+  spending decision, not a technical gap: ten credits per market per event,
+  720 for one twelve-game night across six markets.
+- **No market is allowlisted.** `data/manual/staging_provider_policy.json`
+  allowlists nothing, so the card produces no selection, no lean, no pass and
+  no stake. It lists every market with its reason. That is correct behaviour.
+- **Data**: three seasons cached — 3,936 games, 157,419 player-game rows,
+  121 unresolved names (0.08%). A completed boxscore is never refetched.
+- **Props calibration**: 1,889,685 walk-forward samples over 3,658 games
+  (2023-11-22 to 2026-04-16), 63 refits. `data/outputs/props_calibration.md`.
+- **Every skater market is bent by ice time, and one Platt curve cannot fix
+  it.** Shots on goal under twelve minutes: pooled predicts 12.9% against 7.7%
+  observed on 74,588 samples. The ice-time-conditional correction predicts
+  7.6% and straightens every bucket, on all six markets. The mechanism —
+  ice-time quantity without ice-time quality, plus shrinkage toward a baseline
+  dominated by well-deployed players — is in
+  `docs/why_ice_time_gets_its_own_correction.md`.
+- **Neither correction is in force.** The card prices props with the raw
+  model. Calibration cannot rule a model in, and the price-based backtest that
+  would decide measures nothing yet.
+- **`goalie_saves` cannot reach the card at all**, above and beyond policy: a
+  saves prop is only bettable on the confirmed starter, and this lab has no
+  confirmed-starter source. The card names the market and that reason, and
+  says it is not a no-value judgement.
+  `docs/goalie_props_need_a_confirmed_starter.md`.
+- **Team markets** measured over 51,212 samples across 3,658 games. Moneyline
+  Brier 0.2430, puck line 0.2066, totals 0.2136.
+  `data/outputs/team_markets_measurement.md`.
+- **The team model is overconfident on favourites**, not conservative as its
+  docstring originally argued. Puck line: 75.0% predicted against 70.9%
+  observed on 3,098 samples; 83.7% against 78.5% on 1,397. Fitted slope 0.792
+  on the moneyline. The wrong prediction is left on the record in
+  `models/team_model.py` rather than deleted.
+
 ## Contract strings — never change these
 
 Cooper's local scheduled tasks hard-code these. Renaming any of them silently
