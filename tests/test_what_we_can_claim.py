@@ -66,6 +66,7 @@ def test_an_interval_that_includes_zero_uses_the_exact_words(
                     "low": -0.05,
                     "high": 0.19,
                     "includes_zero": True,
+                    "survives_correction": False,
                 }
             },
             "overall": {"bets": 240, "roi": 0.07, "includes_zero": True},
@@ -75,7 +76,7 @@ def test_an_interval_that_includes_zero_uses_the_exact_words(
     report = claims.build_claims_report(output_dir=tmp_path)
     shots = next(c for c in report.claims if c.market == "shots_on_goal")
 
-    assert claims.NO_DEMONSTRATED_EDGE in shots.sentence()
+    assert claims.NO_DEMONSTRATED_EDGE.capitalize() in shots.sentence()
     assert "240" in shots.sentence()
 
 
@@ -93,6 +94,8 @@ def test_a_significant_result_is_still_hedged_about_persistence(
                     "low": 0.02,
                     "high": 0.16,
                     "includes_zero": False,
+                    "survives_correction": True,
+                    "looks": 7,
                 }
             }
         },
@@ -102,7 +105,10 @@ def test_a_significant_result_is_still_hedged_about_persistence(
     points = next(c for c in report.claims if c.market == "points")
 
     assert "not the same as an edge that will persist" in points.sentence()
-    assert report.anything_demonstrated is True
+    assert "means nothing until it replicates" in points.sentence()
+    # Surviving the correction is not enough on its own: a result counts only
+    # once it has also held on a window it was not found on.
+    assert report.anything_demonstrated is False
 
 
 def test_every_sentence_carries_its_sample_size(tmp_path: Path) -> None:
@@ -117,6 +123,7 @@ def test_every_sentence_carries_its_sample_size(tmp_path: Path) -> None:
                     "low": -0.12,
                     "high": 0.06,
                     "includes_zero": True,
+                    "survives_correction": False,
                 }
             }
         },
@@ -196,3 +203,112 @@ def test_the_detection_table_is_included_so_sample_size_is_concrete(
 
     assert "1,537" in rendered
     assert "props are the only part of the system" in rendered
+
+
+def test_a_replication_verdict_outranks_the_single_window_number(
+    tmp_path: Path,
+) -> None:
+    """A market that survived on one window and was contradicted on another is
+    described by the second fact, not the first."""
+    _write(
+        tmp_path,
+        "player_props_backtest.json",
+        {
+            "by_market": {
+                "shots_on_goal": {
+                    "bets": 683,
+                    "roi": 0.033,
+                    "low": -0.041,
+                    "high": 0.107,
+                    "includes_zero": True,
+                    "survives_correction": False,
+                }
+            }
+        },
+    )
+    _write(
+        tmp_path,
+        "replication.json",
+        {
+            "test_label": "2024-25",
+            "markets": [{"market": "shots_on_goal", "state": "contradicted"}],
+        },
+    )
+
+    report = claims.build_claims_report(output_dir=tmp_path)
+    shots = next(c for c in report.claims if c.market == "shots_on_goal")
+
+    assert "contradicted" in shots.sentence()
+    assert claims.NO_DEMONSTRATED_EDGE in shots.sentence()
+
+
+def test_a_replicated_result_is_the_only_thing_that_counts_as_demonstrated(
+    tmp_path: Path,
+) -> None:
+    _write(
+        tmp_path,
+        "player_props_backtest.json",
+        {
+            "by_market": {
+                "shots_on_goal": {
+                    "bets": 683,
+                    "roi": 0.12,
+                    "low": 0.04,
+                    "high": 0.20,
+                    "includes_zero": False,
+                    "survives_correction": True,
+                    "looks": 7,
+                }
+            }
+        },
+    )
+    _write(
+        tmp_path,
+        "replication.json",
+        {
+            "test_label": "2024-25",
+            "markets": [{"market": "shots_on_goal", "state": "replicated"}],
+        },
+    )
+
+    report = claims.build_claims_report(output_dir=tmp_path)
+    shots = next(c for c in report.claims if c.market == "shots_on_goal")
+
+    assert shots.replication.startswith("**Replicated")
+    assert report.anything_demonstrated is True
+    assert "survived the correction and then replicated" in report.headline()
+
+
+def test_an_untestable_replication_does_not_change_the_sentence(
+    tmp_path: Path,
+) -> None:
+    _write(
+        tmp_path,
+        "player_props_backtest.json",
+        {
+            "by_market": {
+                "points": {
+                    "bets": 288,
+                    "roi": -0.069,
+                    "low": -0.182,
+                    "high": 0.043,
+                    "includes_zero": True,
+                    "survives_correction": False,
+                }
+            }
+        },
+    )
+    _write(
+        tmp_path,
+        "replication.json",
+        {
+            "test_label": "2024-25",
+            "markets": [{"market": "points", "state": "untestable"}],
+        },
+    )
+
+    report = claims.build_claims_report(output_dir=tmp_path)
+    points = next(c for c in report.claims if c.market == "points")
+
+    assert "untestable" not in points.sentence()
+    assert claims.NO_DEMONSTRATED_EDGE.capitalize() in points.sentence()

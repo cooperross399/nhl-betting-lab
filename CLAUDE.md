@@ -41,21 +41,23 @@ Every session, in this order. These replace chat history as project memory.
 Every number below is measured, walk-forward, and carries its sample size.
 Re-derive rather than trust if the data has moved.
 
-- **Props have been measured against real prices once, and the result is not
-  yet something to act on.** 58 events sampled every 14 days across 2025-26,
-  3,454 credits, 28,017 price rows, 556 bets. Overall **+4.7% over 556 bets,
-  95% interval −3.5% to +12.8% — no demonstrated edge.**
-- **`shots_on_goal` is the one result that survives everything so far**:
-  +18.1% over 263 bets, and the interval still excludes zero after correcting
-  for the seven figures computed from the same data (+2.1% to +34.2%). It has
-  **not been replicated**, it comes from one sampled window of one season,
-  and it is not allowlisted.
-- **`points` lost significantly on the naive interval and does not survive the
-  correction**: −16.4% over 137 bets, corrected −38.8% to +5.9%.
-- **90% of every bet is on the Under.** That is one directional disagreement
-  with the market rather than six independent ones, so per-market results
-  pointing opposite ways rest on the same underlying bias and are harder to
-  read separately than the table suggests.
+- **Props have been measured against real prices on two seasons, and nothing
+  survives.** 192 events bought (58 from 2025-26, 134 from 2024-25), 11,418
+  credits, 90,594 price rows, 1,268 bets. Pooled: **+2.3% over 1,268 bets,
+  95% interval −3.1% to +7.7% — no demonstrated edge**, and nothing survives
+  correcting for the number of markets tested.
+- **`shots_on_goal` was the one result that survived on the first window, and
+  it did not replicate.** +18.1% over 263 bets on 2025-26, surviving
+  correction (+2.1% to +34.2%); **−6.0% over 420 bets on 2024-25**, pointing
+  the other way on the larger sample. `points` reversed too, −16.4% then
+  +1.7%. `data/outputs/replication.md`.
+- **That is the system working, not failing.** A single window found a
+  survivor; the second window contradicted it. Had the lab shipped on the
+  first result it would have staked money on a window property. Nothing is
+  allowlisted and nothing should be.
+- **92% of every bet is on the Under.** One directional disagreement with the
+  market rather than six independent ones, which is why markets flip sign
+  between windows: they share the bias.
 - **The measured historical rate is ten credits per market returned per
   event.** The documentation was ambiguous between one and ten; the
   pessimistic reading was right. Quota after the purchase: ~96,495 of 100,000.
