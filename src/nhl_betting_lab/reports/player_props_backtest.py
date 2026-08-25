@@ -108,6 +108,8 @@ class BacktestReport:
     unmatched_players: list[str] = field(default_factory=list)
     retention_note: str = ""
     unmeasurable_markets: dict[str, str] = field(default_factory=dict)
+    #: Which slice of history this measured. Empty means everything on disk.
+    window_label: str = ""
     notes: list[str] = field(default_factory=list)
 
     def summary_line(self) -> str:
@@ -146,6 +148,7 @@ def run_backtest(
     now: datetime | None = None,
     retention_note: str = "",
     unmeasurable_markets: Mapping[str, str] | None = None,
+    window_label: str = "",
 ) -> BacktestReport:
     """Measure the props model against historically-bought prices.
 
@@ -159,6 +162,7 @@ def run_backtest(
         edge_threshold=float(edge_threshold),
         retention_note=retention_note,
         unmeasurable_markets=dict(unmeasurable_markets or {}),
+        window_label=window_label,
     )
     report.notes = _standing_notes()
 
@@ -322,6 +326,11 @@ def render_backtest(report: BacktestReport) -> str:
         ),
         "",
         f"- Generated: {report.generated_at}",
+        *(
+            [f"- Window measured: **{report.window_label}**"]
+            if report.window_label
+            else []
+        ),
         f"- Edge threshold: **{report.edge_threshold:.1%}**",
         f"- {report.summary_line()}",
         "",
@@ -538,8 +547,17 @@ def render_backtest(report: BacktestReport) -> str:
 
 
 def save_backtest(
-    report: BacktestReport, *, output_dir: Path | None = None
+    report: BacktestReport,
+    *,
+    output_dir: Path | None = None,
+    label: str = "",
 ) -> dict[str, str]:
+    """Write the report. A label writes a second, window-specific copy.
+
+    The contract filename always gets the report as run, so a scheduled job
+    that reads it never has to know about labels. A labelled copy sits beside
+    it, which is what makes two windows comparable side by side.
+    """
     directory = Path(output_dir) if output_dir else Path(OUTPUTS_DIR)
     directory.mkdir(parents=True, exist_ok=True)
     markdown = directory / BACKTEST_MARKDOWN_FILENAME
@@ -574,11 +592,25 @@ def save_backtest(
     pd.DataFrame([bet.__dict__ for bet in report.bets]).to_csv(
         csv_path, index=False, lineterminator="\n"
     )
-    return {
+    written = {
         "markdown": str(markdown),
         "json": str(json_path),
         "csv": str(csv_path),
     }
+    if label:
+        safe = "".join(
+            ch if ch.isalnum() or ch in "-_" else "_" for ch in label
+        )
+        labelled = directory / f"player_props_backtest_{safe}.md"
+        labelled.write_text(render_backtest(report), encoding="utf-8")
+        labelled_json = directory / f"player_props_backtest_{safe}.json"
+        labelled_json.write_text(
+            json.dumps(payload, indent=2, sort_keys=True, default=str) + "\n",
+            encoding="utf-8",
+        )
+        written["labelled_markdown"] = str(labelled)
+        written["labelled_json"] = str(labelled_json)
+    return written
 
 
 def _interval_payload(interval: RoiInterval | None) -> dict[str, Any] | None:

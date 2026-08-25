@@ -418,3 +418,49 @@ def test_yes_and_no_are_normalised_onto_over_and_under() -> None:
     )
 
     assert bt._side_of(bet) == "over"
+
+
+def test_a_window_label_is_recorded_in_the_report() -> None:
+    report = bt.run_backtest(
+        _prices(), _samples(), edge_threshold=0.05, window_label="2025-26"
+    )
+
+    assert "Window measured: **2025-26**" in bt.render_backtest(report)
+
+
+def test_a_label_writes_a_second_copy_beside_the_contract_path(
+    tmp_path: Path,
+) -> None:
+    """The contract filename always gets the report as run, so a scheduled job
+    never has to know about labels; the labelled copy is what makes two
+    windows comparable side by side."""
+    report = bt.run_backtest(
+        _prices(), _samples(), edge_threshold=0.05, window_label="2024-25"
+    )
+
+    paths = bt.save_backtest(report, output_dir=tmp_path, label="2024-25")
+
+    assert Path(paths["markdown"]).name == "player_props_backtest.md"
+    assert Path(paths["labelled_markdown"]).name == (
+        "player_props_backtest_2024-25.md"
+    )
+    assert Path(paths["labelled_json"]).is_file()
+
+
+def test_a_label_with_awkward_characters_is_made_safe(tmp_path: Path) -> None:
+    report = bt.run_backtest(_prices(), _samples(), edge_threshold=0.05)
+
+    paths = bt.save_backtest(
+        report, output_dir=tmp_path, label="../etc/passwd 2024"
+    )
+
+    assert "/" not in Path(paths["labelled_markdown"]).name
+    assert Path(paths["labelled_markdown"]).parent == tmp_path
+
+
+def test_no_label_writes_only_the_contract_path(tmp_path: Path) -> None:
+    report = bt.run_backtest(_prices(), _samples(), edge_threshold=0.05)
+
+    paths = bt.save_backtest(report, output_dir=tmp_path)
+
+    assert "labelled_markdown" not in paths

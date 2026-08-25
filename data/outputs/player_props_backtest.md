@@ -2,7 +2,8 @@
 
 Does the model beat a price that was actually for sale? Calibration cannot answer that; this can, to the extent the sample allows.
 
-- Generated: 2026-08-25T22:47:11+00:00
+- Generated: 2026-08-25T22:52:37+00:00
+- Window measured: **2025-26**
 - Edge threshold: **6.0%**
 - +4.7% over 556 bets, 95% interval -3.5% to +12.8%. The interval includes zero, which means **no demonstrated edge**.
 
