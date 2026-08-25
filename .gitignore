@@ -1,0 +1,16 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+.DS_Store
+.pytest_cache/
+data/raw/**
+!data/raw/.gitkeep
+data/processed/*.csv
+data/outputs/*.csv
+data/outputs/archive/
+data/staging/*_staging.csv
+data/staging/staging_provenance.json
+*.egg-info/
+build/
+dist/
