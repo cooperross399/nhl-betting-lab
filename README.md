@@ -59,6 +59,9 @@ PYTHONPATH=src .venv/bin/python scripts/run_props_calibration.py
 # Price-based backtest -> data/outputs/player_props_backtest.md
 PYTHONPATH=src .venv/bin/python scripts/run_player_props_backtest.py
 
+# Team markets, calibrated and priced -> data/outputs/team_markets_measurement.md
+PYTHONPATH=src .venv/bin/python scripts/run_team_markets_measurement.py
+
 # What the evidence supports -> data/outputs/what_we_can_claim.md
 PYTHONPATH=src .venv/bin/python scripts/run_what_we_can_claim.py
 ```

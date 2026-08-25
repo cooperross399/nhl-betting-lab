@@ -99,7 +99,9 @@ def test_a_regulation_tie_is_split_evenly_and_the_assumption_is_stated() -> None
     moneyline = model.moneyline_probabilities("AVA", "AVB")
 
     assert moneyline["home"] == pytest.approx(home + tie / 2)
-    assert "coin flip" in TeamModel.moneyline_probabilities.__doc__
+    assert "coin flip" in " ".join(
+        TeamModel.moneyline_probabilities.__doc__.split()
+    )
 
 
 def test_an_overtime_winner_can_never_cover_minus_one_and_a_half() -> None:
@@ -218,9 +220,29 @@ def test_every_market_probability_is_renormalised_to_sum_to_one() -> None:
     assert totals["over"] + totals["under"] == pytest.approx(1.0)
 
 
-def test_the_empty_net_limitation_is_stated_rather_than_fudged() -> None:
-    assert "Empty-net goals" in TeamModel.__module__ or True
+def _docstring() -> str:
+    """The module docstring with its line wrapping flattened.
+
+    Asserting on wrapped prose otherwise fails on where the paragraph happened
+    to break, which is a test failing on formatting rather than on meaning.
+    """
     from nhl_betting_lab.models import team_model
 
-    assert "empty-net" in team_model.__doc__.lower()
-    assert "conservative on favourites" in team_model.__doc__
+    return " ".join(team_model.__doc__.split())
+
+
+def test_the_empty_net_limitation_is_stated_rather_than_fudged() -> None:
+    text = _docstring()
+
+    assert "empty-net" in text.lower()
+    assert "fitting the residual twice" in text
+
+
+def test_the_docstring_records_that_its_own_prediction_was_wrong() -> None:
+    """The measurement contradicted the reasoning, and the reasoning stays on
+    the record rather than being quietly deleted."""
+    text = _docstring()
+
+    assert "says the opposite" in text
+    assert "turned out backwards" in text
+    assert "the measurement is what governs" in text
