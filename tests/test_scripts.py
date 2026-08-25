@@ -296,3 +296,29 @@ def test_the_dataset_builder_runs_on_an_empty_cache(
 
     assert code == 0
     assert "Dry run" in capsys.readouterr().out
+
+
+def test_the_shadow_script_exits_three_on_an_empty_slate(
+    tmp_path: Path, monkeypatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Exit 3 marks a state the caller must not treat as a failure."""
+    from nhl_betting_lab.providers.odds_api import EmptySlateError
+
+    module = load_script("run_provider_shadow.py")
+
+    class NoSlate:
+        def fetch_team_markets(self, **kwargs: object) -> object:
+            raise EmptySlateError("nothing on the board")
+
+    monkeypatch.setattr(module.odds_api, "OddsApiProvider", lambda: NoSlate())
+
+    code = module.main(
+        [
+            "--live",
+            "--staging-dir", str(tmp_path / "staging"),
+            "--output-dir", str(tmp_path / "outputs"),
+        ]
+    )
+
+    assert code == 3
+    assert "No slate" in capsys.readouterr().out

@@ -113,6 +113,22 @@ class MissingCredentialError(ProviderError):
     """A live fetch was asked for without a credential."""
 
 
+class EmptySlateError(ProviderError):
+    """There are no NHL games to price. Not a fault.
+
+    The provider answers the bulk odds endpoint with HTTP 422 when a sport has
+    nothing on the board, which is the ordinary state of `icehockey_nhl` from
+    mid-June to early October. Treating that as a failure would mail an
+    alarming red run every single day of the off-season, and a red that fires
+    daily for four months is a red nobody reads in October.
+
+    A 422 is only ever reported as an empty slate after the free events
+    endpoint confirms the board really is empty. The same status can mean a
+    malformed request, and quietly reading "your markets parameter is wrong"
+    as "the season has not started" would hide a real bug for months.
+    """
+
+
 def _default_requester(url: str, **kwargs: Any) -> Any:
     return requests.get(url, **kwargs)
 
@@ -404,10 +420,19 @@ class OddsApiProvider:
         markets = list(BULK_PROVIDER_MARKETS)
         if include_alternates:
             markets += list(ALTERNATE_PROVIDER_MARKETS)
-        payload, headers = self._get(
-            f"{self.base_url}/v4/sports/{self.sport_key}/odds",
-            self._params(regions=self.regions, markets=",".join(markets)),
-        )
+        try:
+            payload, headers = self._get(
+                f"{self.base_url}/v4/sports/{self.sport_key}/odds",
+                self._params(regions=self.regions, markets=",".join(markets)),
+            )
+        except ProviderError as exc:
+            if "422" in str(exc) and not self.list_events():
+                raise EmptySlateError(
+                    "The provider has no NHL games on the board, so there is "
+                    "nothing to price. That is the ordinary state of the "
+                    "off-season and not a fault."
+                ) from exc
+            raise
         if not isinstance(payload, list):
             raise ProviderError("The odds response is not a JSON event list.")
         result = FetchResult(
