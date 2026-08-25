@@ -563,3 +563,18 @@ def test_the_buy_reports_the_measured_rate_per_event(tmp_path: Path) -> None:
     assert buy.credits_per_event == pytest.approx(2.0)
     assert "2 credit(s) actually spent" in buy.summary_line()
     assert "4998 remaining" in buy.summary_line()
+
+
+def test_the_measured_rate_is_recorded_in_the_module() -> None:
+    """Probed 2026-08-25: six markets requested, five returned, 50 credits.
+    The pessimistic reading of the documentation was the right one."""
+    text = " ".join(hist.__doc__.split())
+
+    assert "ten credits per market returned" in text
+    assert "x-requests-last` said 50" in text
+
+
+def test_the_upper_bound_still_matches_what_was_measured() -> None:
+    """If these ever diverge, the cap stops being conservative."""
+    assert hist.HISTORICAL_CREDITS_UPPER_BOUND_PER_MARKET == 10
+    assert hist.estimate_credits(events=1, markets=5) == 50

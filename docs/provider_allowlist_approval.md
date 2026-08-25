@@ -16,8 +16,14 @@ policy file `data/manual/staging_provider_policy.json` ships allowlisting
 3. **Measurement against real prices.** Historical prices are bought per event
    where the provider retains them. Where it does not, that is recorded by name
    as unmeasurable, and a calibration number is **not** offered as a substitute.
-4. **Evidence bundle.** Shadow report, coverage report, measurement report,
-   and their checksums, assembled into one reviewable artifact.
+4. **Evidence bundle.** Shadow report, coverage report, measurement reports,
+   and their checksums, assembled into one reviewable artifact by
+   `scripts/run_allowlist_evidence.py` →
+   `data/outputs/allowlist_evidence_bundle.md`. It states what the evidence
+   supports market by market, and its honest default — the one every market
+   in this repository currently gets — is **not supported**. A market with
+   only a calibration number is never supported by it, however large the
+   sample.
 5. **PR gate.** A pull request that changes the policy file must carry a
    matching evidence bundle and a human acceptance receipt, or CI fails.
 6. **Human acceptance receipt.** Cooper reviews the evidence and signs. Only

@@ -45,6 +45,8 @@ card gates on this separately; the model does not pretend to.
 
 from __future__ import annotations
 
+import re
+import unicodedata
 from dataclasses import dataclass, field
 
 import pandas as pd
@@ -88,6 +90,48 @@ POSITION_GROUPS = ("F", "D", "G")
 #: are excluded on purpose: a player on the power play is not blocking shots,
 #: he is taking them.
 PP_SENSITIVE_STATS = frozenset({"points", "goals", "assists"})
+
+
+def normalize_player_name(name: object) -> str:
+    """A comparison key that removes representation without inventing identity.
+
+    The NHL registry spells `"Alexis Lafrenière"`; the odds provider sends
+    `"Alexis Lafreniere"`. Fifty-one of the thirteen hundred players in the
+    log carry an accent, a hyphen, an apostrophe or a full stop, so matching
+    on the raw string loses about four percent of the league silently — and
+    silently is the problem, because the row simply never appears.
+
+    This strips accents and punctuation and collapses whitespace. It does
+    **not** do anything fuzzy: `"J.T. Miller"` and `"JT Miller"` are the same
+    string once punctuation is gone, whereas `"J. Miller"` and `"JT Miller"`
+    are not, and should not be.
+    """
+    text = unicodedata.normalize("NFKD", str(name or ""))
+    text = "".join(ch for ch in text if not unicodedata.combining(ch))
+    text = re.sub(r"[^0-9A-Za-z]+", " ", text)
+    return " ".join(text.split()).casefold()
+
+
+def player_name_aliases(name: object) -> tuple[str, ...]:
+    """Every normalized form one registry spelling can legitimately take.
+
+    The registry carries constructions like `"Anthony-John (AJ) Greer"`, where
+    the parenthesis is the name the player actually goes by and the name a
+    book will print. Both forms are indexed, because the alias is stated in
+    the source rather than guessed at.
+    """
+    text = str(name or "")
+    forms = {normalize_player_name(text)}
+    nickname = re.search(r"\(([^)]+)\)", text)
+    if nickname:
+        without = normalize_player_name(re.sub(r"\([^)]*\)", " ", text))
+        parts = without.split()
+        called = normalize_player_name(nickname.group(1))
+        if called and parts:
+            # The nickname replaces the given name, keeping the surname.
+            forms.add(" ".join([called, parts[-1]]))
+        forms.add(without)
+    return tuple(sorted(form for form in forms if form))
 
 
 def position_group(position: str) -> str:
@@ -194,7 +238,11 @@ class PlayerPropsModel:
         self.league_shots_against_per60: float = 30.0
         self.report = PropsModelReport()
         self.opponent_shot_factors: dict[str, float] = {}
+        #: Names two priced players share, which resolve to neither on their
+        #: own. Some are recoverable with a team; see `_index_names`.
+        self.ambiguous_names: tuple[str, ...] = ()
         self._by_name: dict[str, int] = {}
+        self._by_name_team: dict[tuple[str, str], int] = {}
 
     # -- fitting ---------------------------------------------------------
 
@@ -250,19 +298,61 @@ class PlayerPropsModel:
         self._fit_goalies(goalies)
         self.opponent_shot_factors = fit_opponent_shot_factors(frame)
         self.report.dispersion = dict(self.dispersion)
-        self._by_name = {
-            rates.player.strip().casefold(): player_id
-            for player_id, rates in self.skaters.items()
-            if rates.player.strip()
-        }
-        self._by_name.update(
-            {
-                rates.player.strip().casefold(): player_id
-                for player_id, rates in self.goalies.items()
-                if rates.player.strip()
-            }
-        )
+        self._index_names()
         return self
+
+    def _index_names(self) -> None:
+        """Index every priced player under every legitimate spelling.
+
+        A key two different players share is **dropped**, not assigned to one
+        of them. Resolving it to whichever was indexed first would produce a
+        confident price for the wrong man on a row that looks correct.
+
+        The league has two of these right now and they are not hypothetical:
+        two Elias Petterssons, both Vancouver, and two Sebastian Ahos, one
+        Carolina and one on the Islanders. So names are indexed a second time
+        **by name and team**, which is not a fuzzier match but a stricter one
+        — it uses a field the price row already carries. That recovers Aho.
+        It does not recover Pettersson, because both play for the same club
+        and nothing in a prop row separates them, and that is the correct
+        outcome rather than a coin flip.
+        """
+        claimed: dict[str, int] = {}
+        ambiguous: set[str] = set()
+        by_team: dict[tuple[str, str], int] = {}
+        team_ambiguous: set[tuple[str, str]] = set()
+
+        for source in (self.skaters, self.goalies):
+            for player_id, rates in source.items():
+                if not rates.player.strip():
+                    continue
+                team = str(rates.team).strip().upper()
+                for alias in player_name_aliases(rates.player):
+                    owner = claimed.get(alias)
+                    if owner is not None and owner != player_id:
+                        ambiguous.add(alias)
+                    else:
+                        claimed[alias] = player_id
+                    if not team:
+                        continue
+                    key = (alias, team)
+                    team_owner = by_team.get(key)
+                    if team_owner is not None and team_owner != player_id:
+                        team_ambiguous.add(key)
+                    else:
+                        by_team[key] = player_id
+
+        self.ambiguous_names = tuple(sorted(ambiguous))
+        self._by_name = {
+            alias: player_id
+            for alias, player_id in claimed.items()
+            if alias not in ambiguous
+        }
+        self._by_name_team = {
+            key: player_id
+            for key, player_id in by_team.items()
+            if key not in team_ambiguous
+        }
 
     def _fit_dispersion(self, skaters: pd.DataFrame, goalies: pd.DataFrame) -> None:
         """Measure variance/mean per stat once, on the whole column.
@@ -421,15 +511,48 @@ class PlayerPropsModel:
 
     # -- pricing ---------------------------------------------------------
 
-    def resolve_player(self, name: str) -> int | None:
+    def resolve_player(self, name: str, *, team: str | None = None) -> int | None:
         """Map a provider's player name to a fitted player id, or None.
 
-        Deliberately exact after casefolding. Fuzzy matching a prop to the
-        wrong player produces a confident price for a bet nobody placed, and
-        the failure is invisible: the row looks exactly like a correct one.
-        Unmatched names are reported by the caller instead.
+        Exact after normalisation — accents, punctuation and casing are
+        representation and are removed; nothing else is. Fuzzy matching a prop
+        to the wrong player produces a confident price for a bet nobody
+        placed, and the failure is invisible: the row looks exactly like a
+        correct one. Unmatched names are reported by the caller instead.
+
+        `team` is consulted only when the name alone is ambiguous, and it
+        narrows rather than loosens: it is another field that must agree, not
+        a tolerance.
         """
-        return self._by_name.get(str(name or "").strip().casefold())
+        alias = normalize_player_name(name)
+        found = self._by_name.get(alias)
+        if found is not None:
+            return found
+        if team:
+            return self._by_name_team.get(
+                (alias, str(team).strip().upper())
+            )
+        return None
+
+    def resolve_player_in_game(
+        self, name: str, *, home: str, away: str
+    ) -> int | None:
+        """Resolve a name given the two teams in the game it was priced for.
+
+        A prop row names the game but not which side the player is on, so both
+        are tried. Exactly one match resolves; two matches is a genuine
+        ambiguity — the same name on both teams — and resolves to neither.
+        """
+        found = self.resolve_player(name)
+        if found is not None:
+            return found
+        candidates = {
+            self.resolve_player(name, team=team)
+            for team in (home, away)
+            if team
+        }
+        candidates.discard(None)
+        return candidates.pop() if len(candidates) == 1 else None
 
     def pp_multiplier(self, rates: SkaterRates, stat: str) -> float:
         if stat not in PP_SENSITIVE_STATS:

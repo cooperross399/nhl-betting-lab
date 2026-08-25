@@ -116,6 +116,10 @@ decision rather than a default.
 ### Gates and tests
 
 ```bash
+# Assemble everything a human needs to decide on allowlisting a market.
+# Read-only: it writes no receipt and approves nothing.
+PYTHONPATH=src .venv/bin/python scripts/run_allowlist_evidence.py
+
 # The provider policy PR gate. Exits non-zero when the paperwork does not hold.
 PYTHONPATH=src .venv/bin/python scripts/run_policy_pr_gate.py
 

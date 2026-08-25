@@ -401,3 +401,117 @@ def test_opponent_shot_factors_on_a_season_with_no_games_are_empty() -> None:
     empty = sample_logs(2).iloc[0:0]
 
     assert fit_opponent_shot_factors(empty) == {}
+
+
+# -- name resolution ----------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("Alexis Lafrenière", "alexis lafreniere"),
+        ("Aatu Räty", "aatu raty"),
+        ("J.T. Miller", "j t miller"),
+        ("JT Miller", "jt miller"),
+        ("Drew O'Connor", "drew o connor"),
+        ("  Auston   MATTHEWS  ", "auston matthews"),
+    ],
+)
+def test_player_normalisation_removes_representation_only(
+    raw: str, expected: str
+) -> None:
+    """Fifty-one of the league's thirteen hundred players carry an accent, a
+    hyphen, an apostrophe or a full stop. Matching raw strings loses them."""
+    from nhl_betting_lab.models.player_props import normalize_player_name
+
+    assert normalize_player_name(raw) == expected
+
+
+def test_normalisation_does_not_make_two_players_the_same() -> None:
+    from nhl_betting_lab.models.player_props import normalize_player_name
+
+    assert normalize_player_name("J. Miller") != normalize_player_name("JT Miller")
+
+
+def test_a_parenthesised_nickname_is_indexed_as_the_name_books_print() -> None:
+    """The registry carries `Anthony-John (AJ) Greer`; a book prints AJ Greer."""
+    from nhl_betting_lab.models.player_props import player_name_aliases
+
+    aliases = player_name_aliases("Anthony-John (AJ) Greer")
+
+    assert "aj greer" in aliases
+    assert "anthony john greer" in aliases
+
+
+def test_an_accented_registry_name_resolves_from_the_plain_provider_spelling() -> None:
+    logs = sample_logs()
+    logs.loc[logs["player_id"] == 1, "player"] = "Alexis Lafrenière"
+    model = PlayerPropsModel().fit(logs)
+
+    assert model.resolve_player("Alexis Lafreniere") == 1
+    assert model.resolve_player("Alexis Lafrenière") == 1
+
+
+def test_a_name_two_players_share_resolves_to_neither() -> None:
+    """Live examples: two Elias Petterssons, two Sebastian Ahos."""
+    logs = sample_logs()
+    logs.loc[logs["player_id"].isin([1, 101]), "player"] = "Sebastian Aho"
+    model = PlayerPropsModel().fit(logs)
+
+    assert model.resolve_player("Sebastian Aho") is None
+    assert "sebastian aho" in model.ambiguous_names
+
+
+def test_a_shared_name_resolves_when_the_teams_differ() -> None:
+    """Team is not a looser match, it is another field that must agree."""
+    logs = sample_logs()
+    logs.loc[logs["player_id"] == 1, "player"] = "Sebastian Aho"
+    logs.loc[logs["player_id"] == 101, "player"] = "Sebastian Aho"
+    model = PlayerPropsModel().fit(logs)
+
+    tor = model.resolve_player("Sebastian Aho", team="TOR")
+    bos = model.resolve_player("Sebastian Aho", team="BOS")
+
+    assert tor == 1
+    assert bos == 101
+    assert tor != bos
+
+
+def test_resolving_within_a_game_picks_the_side_that_matches() -> None:
+    logs = sample_logs()
+    logs.loc[logs["player_id"] == 1, "player"] = "Sebastian Aho"
+    logs.loc[logs["player_id"] == 101, "player"] = "Sebastian Aho"
+    model = PlayerPropsModel().fit(logs)
+
+    assert model.resolve_player_in_game("Sebastian Aho", home="TOR", away="MTL") == 1
+    assert model.resolve_player_in_game("Sebastian Aho", home="BOS", away="MTL") == 101
+
+
+def test_a_shared_name_on_both_sides_of_one_game_resolves_to_neither() -> None:
+    """Carolina hosting the Islanders is a real fixture."""
+    logs = sample_logs()
+    logs.loc[logs["player_id"] == 1, "player"] = "Sebastian Aho"
+    logs.loc[logs["player_id"] == 101, "player"] = "Sebastian Aho"
+    model = PlayerPropsModel().fit(logs)
+
+    assert model.resolve_player_in_game("Sebastian Aho", home="TOR", away="BOS") is None
+
+
+def test_two_players_of_one_name_on_one_team_resolve_to_neither() -> None:
+    """Both Elias Petterssons play for Vancouver, and nothing in a prop row
+    separates them."""
+    logs = sample_logs()
+    logs.loc[logs["player_id"].isin([1, 2]), "player"] = "Elias Pettersson"
+    model = PlayerPropsModel().fit(logs)
+
+    assert model.resolve_player("Elias Pettersson", team="TOR") is None
+    assert model.resolve_player_in_game(
+        "Elias Pettersson", home="TOR", away="BOS"
+    ) is None
+
+
+def test_an_unambiguous_name_does_not_need_a_team() -> None:
+    model = PlayerPropsModel().fit(sample_logs())
+
+    assert model.resolve_player("Star TOR") == 1
+    assert model.resolve_player_in_game("Star TOR", home="TOR", away="BOS") == 1

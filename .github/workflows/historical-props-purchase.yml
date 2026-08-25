@@ -139,9 +139,17 @@ jobs:
           echo "and real spend is read from x-requests-last as it happens."
 
       - name: Rebuild the results and the walk-forward samples
-        # A purchase with nothing to measure it against is wasted credits. The
-        # NHL API is free and keyless, and a final boxscore is never
-        # refetched, so this is cheap on any run after the first.
+        # A purchase with nothing to measure it against is wasted credits, so
+        # a buy rebuilds the samples first. The NHL API is free and keyless
+        # and a final boxscore is never refetched, so this is cheap on any run
+        # after the first — but the first pays for four thousand games.
+        #
+        # A probe skips it entirely. A probe asks one question of one event
+        # ("which markets does the provider retain") and nothing in the answer
+        # depends on the model, so making it wait half an hour for 1.9 million
+        # walk-forward samples was pure ceremony. Probing is the thing you do
+        # repeatedly while exploring retention; it should be minutes.
+        if: ${{ inputs.mode == 'buy' }}
         env:
           PYTHONPATH: src
         run: |

@@ -19,6 +19,20 @@ the thing with the most gates in front of it. In order:
 6. **The puck-drop guard.** Anything whose game has started, or whose start
    cannot be confirmed, is quarantined and its stake removed.
 
+## Why edges are computed against the vigged price, on every market
+
+`devig_two_way` exists and is deliberately not used here. On a two-sided team
+market both sides are quoted, so the vig *could* be split out; on a prop it
+usually cannot, because books quote the Over alone.
+
+Devigging only where it is possible would make the two thresholds in
+`config.py` mean different things — a 3.5% team edge measured without vig and
+a 6% prop edge measured with it are not on one scale, and the card ranks them
+against each other. So both are computed the same way, against the price as
+sold. Every edge on this card is therefore **understated**, uniformly, and
+being wrong in the conservative direction on both is better than being right
+on one and incomparable across the two.
+
 Two rules run through all of it:
 
 **A blocked card produces no selections, not placeholder ones.** An empty card
@@ -138,6 +152,10 @@ class GamedayCard:
     passes: list[dict[str, Any]] = field(default_factory=list)
     quarantined: list[dict[str, Any]] = field(default_factory=list)
     stake_removed_by_guard: float = 0.0
+    #: Provider names that could not be matched to a modelled team or player.
+    #: Recorded on the card because "why is my player not here" is the first
+    #: question a reader asks, and the answer must not be buried in a log.
+    unresolved_names: list[str] = field(default_factory=list)
     blockers: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
     safety: dict[str, bool] = field(
@@ -318,6 +336,7 @@ def build_card(
     blockers: Sequence[str] = (),
     now: datetime | None = None,
     juice_limit: int = MAX_DEFAULT_JUICE,
+    unresolved_names: Sequence[str] = (),
 ) -> GamedayCard:
     """Assemble the card, or explain why there is not one."""
     moment = now or datetime.now(timezone.utc)
@@ -326,6 +345,7 @@ def build_card(
         slate_games=eligibility.games_in_slate,
         excluded_markets=dict(eligibility.exclusion_reasons()),
         blockers=list(blockers),
+        unresolved_names=sorted(str(name) for name in unresolved_names),
     )
 
     eligible = [
@@ -543,6 +563,34 @@ def render_card(card: GamedayCard) -> str:
             QuarantineResult(playable=[], quarantined=card.quarantined)
         )
     )
+
+    if card.unresolved_names:
+        shown = card.unresolved_names[:20]
+        lines.extend(
+            [
+                "## Names that could not be matched",
+                "",
+                (
+                    "These appeared in the provider's prices and could not be "
+                    "matched to a modelled team or player, so they produced "
+                    "**no selection**. That is not a judgement about them — it "
+                    "is a join that did not land. A fuzzy match would produce "
+                    "a confident price for a bet nobody placed, on a row that "
+                    "looks exactly like a correct one."
+                ),
+                "",
+                *[f"- {name}" for name in shown],
+                "",
+            ]
+        )
+        if len(card.unresolved_names) > len(shown):
+            lines.extend(
+                [
+                    f"_{len(card.unresolved_names) - len(shown)} further "
+                    "unmatched name(s) not listed._",
+                    "",
+                ]
+            )
 
     lines.extend(["## Excluded markets", ""])
     if card.excluded_markets:

@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from nhl_betting_lab.market_eligibility import (
     ELIGIBLE,
@@ -466,3 +467,91 @@ def test_the_card_never_claims_a_demonstrated_edge() -> None:
     assert "No edge here is a demonstrated edge" in rendered
     assert "what_we_can_claim.md" in rendered
     assert "Bets placed: **No**" in rendered
+
+
+def test_unmatched_names_are_recorded_on_the_card() -> None:
+    """"Why is my player not here" is the first question a reader asks."""
+    rows = [_price_row(price=150)]
+
+    card = card_module.build_card(
+        _prices(rows),
+        {_key(rows[0]): 0.60},
+        eligibility=_eligibility(["shots_on_goal"]),
+        now=NOW,
+        unresolved_names=["Hartford Whalers", "Elias Pettersson"],
+    )
+
+    assert card.unresolved_names == ["Elias Pettersson", "Hartford Whalers"]
+
+
+def test_the_card_explains_that_an_unmatched_name_is_not_a_judgement() -> None:
+    rows = [_price_row(price=150)]
+
+    card = card_module.build_card(
+        _prices(rows),
+        {_key(rows[0]): 0.60},
+        eligibility=_eligibility(["shots_on_goal"]),
+        now=NOW,
+        unresolved_names=["Elias Pettersson"],
+    )
+    rendered = card_module.render_card(card)
+
+    assert "Names that could not be matched" in rendered
+    assert "not a judgement about them" in rendered
+    assert "a join that did not land" in rendered
+
+
+def test_the_unmatched_section_is_absent_when_everything_matched() -> None:
+    rows = [_price_row(price=150)]
+
+    card = card_module.build_card(
+        _prices(rows),
+        {_key(rows[0]): 0.60},
+        eligibility=_eligibility(["shots_on_goal"]),
+        now=NOW,
+    )
+
+    assert "Names that could not be matched" not in card_module.render_card(card)
+
+
+def test_a_long_unmatched_list_is_truncated_with_a_count() -> None:
+    rows = [_price_row(price=150)]
+
+    card = card_module.build_card(
+        _prices(rows),
+        {_key(rows[0]): 0.60},
+        eligibility=_eligibility(["shots_on_goal"]),
+        now=NOW,
+        unresolved_names=[f"Player {index}" for index in range(30)],
+    )
+    rendered = card_module.render_card(card)
+
+    assert "10 further" in rendered
+
+
+def test_edges_are_computed_against_the_price_as_sold() -> None:
+    """Devigging only where possible would put team and prop thresholds on
+    different scales, and the card ranks them against each other."""
+    from nhl_betting_lab.models.value import american_to_implied
+
+    rows = [_price_row(price=-130)]
+
+    card = card_module.build_card(
+        _prices(rows),
+        {_key(rows[0]): 0.70},
+        eligibility=_eligibility(["shots_on_goal"]),
+        now=NOW,
+    )
+    selection = (card.best_bets + card.leans)[0]
+
+    assert selection["implied_probability"] == pytest.approx(
+        american_to_implied(-130)
+    )
+    assert selection["edge"] == pytest.approx(0.70 - american_to_implied(-130))
+
+
+def test_the_module_states_why_it_does_not_devig() -> None:
+    text = " ".join(card_module.__doc__.split())
+
+    assert "deliberately not used here" in text
+    assert "understated" in text

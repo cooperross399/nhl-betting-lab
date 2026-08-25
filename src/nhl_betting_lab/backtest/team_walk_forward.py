@@ -248,7 +248,7 @@ def generate_team_samples(
                     rows.append(
                         {
                             **shared,
-                            "market": "total_5_5",
+                            "market": "total_goals",
                             "selection": side,
                             "line": line,
                             "model_probability": totals[side],
