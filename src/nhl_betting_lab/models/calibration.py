@@ -236,16 +236,18 @@ class WalkForwardResult:
 
 
 def walk_forward_calibrate(
-    samples: Sequence[tuple[str, float, bool]],
+    samples: Sequence[tuple[str, float, bool] | tuple[str, float, bool, str]],
     *,
     minimum_fit_samples: int = PlattCalibration.MINIMUM_SAMPLES,
     refit_every: int = 1,
+    grouped: bool = False,
 ) -> WalkForwardResult:
     """Correct each sample using only samples dated strictly before it.
 
-    `samples` is `(date, raw probability, outcome)`. Dates are compared as
-    strings, which is correct for ISO dates and wrong for anything else — so
-    anything else is refused rather than silently mis-ordered.
+    `samples` is `(date, raw probability, outcome)`, optionally with a fourth
+    element naming a group. Dates are compared as strings, which is correct
+    for ISO dates and wrong for anything else — so anything else is refused
+    rather than silently mis-ordered.
 
     The strictness is the point. A same-day sample is excluded from its own
     correction: on a single game-day a model prices a dozen props off the same
@@ -256,9 +258,18 @@ def walk_forward_calibrate(
     scored with the identity. Scoring them with the identity and reporting them
     alongside corrected ones would mix two different measurements into one
     average and flatter whichever is worse.
+
+    With `grouped=True` a separate correction is fitted per group, falling back
+    to the pooled correction when a group has too little history of its own.
+    That is only worth doing where the miscalibration is genuinely
+    group-dependent and there is a mechanism for why — see
+    `docs/why_ice_time_gets_its_own_correction.md`. A per-group correction
+    without a mechanism is curve-fitting with extra steps.
     """
-    rows = list(samples)
-    for date_text, probability, _ in rows:
+    rows: list[tuple[str, float, bool, str]] = []
+    for entry in samples:
+        date_text, probability, won = entry[0], entry[1], entry[2]
+        group = str(entry[3]) if grouped and len(entry) > 3 else ""
         text = str(date_text)
         if len(text) < 10 or text[4] != "-" or text[7] != "-":
             raise ValueError(
@@ -266,12 +277,15 @@ def walk_forward_calibrate(
             )
         if not 0.0 <= float(probability) <= 1.0:
             raise ValueError("A raw probability must lie in [0, 1].")
+        rows.append((text, float(probability), bool(won), group))
     rows.sort(key=lambda row: row[0])
 
     scored: list[tuple[str, float, float, bool]] = []
     corrections: list[tuple[str, PlattCalibration]] = []
     history: list[tuple[float, bool]] = []
-    current = PlattCalibration.identity()
+    grouped_history: dict[str, list[tuple[float, bool]]] = {}
+    pooled = PlattCalibration.identity()
+    by_group: dict[str, PlattCalibration] = {}
     warmup = 0
     index = 0
     steps_since_refit = 0
@@ -280,27 +294,41 @@ def walk_forward_calibrate(
         day = rows[index][0]
         # Everything on this date is scored by a correction fitted on strictly
         # earlier dates only.
-        same_day: list[tuple[str, float, bool]] = []
+        same_day: list[tuple[str, float, bool, str]] = []
         while index < len(rows) and rows[index][0] == day:
             same_day.append(rows[index])
             index += 1
 
         if len(history) >= minimum_fit_samples:
             if steps_since_refit <= 0:
-                current = PlattCalibration.fit(
-                    history, minimum=minimum_fit_samples
-                )
-                corrections.append((day, current))
+                pooled = PlattCalibration.fit(history, minimum=minimum_fit_samples)
+                corrections.append((day, pooled))
+                if grouped:
+                    by_group = {
+                        name: PlattCalibration.fit(
+                            entries, minimum=minimum_fit_samples
+                        )
+                        for name, entries in grouped_history.items()
+                    }
                 steps_since_refit = max(1, int(refit_every))
             steps_since_refit -= 1
-            for date_text, probability, won in same_day:
+            for date_text, probability, won, group in same_day:
+                # A group whose own correction fell back to the identity has
+                # too little history to have one, so it uses the pooled curve
+                # rather than no curve at all.
+                correction = by_group.get(group) if grouped else None
+                if correction is None or correction.is_identity:
+                    correction = pooled
                 scored.append(
-                    (date_text, probability, current.apply(probability), won)
+                    (date_text, probability, correction.apply(probability), won)
                 )
         else:
             warmup += len(same_day)
 
-        history.extend((probability, won) for _, probability, won in same_day)
+        for _, probability, won, group in same_day:
+            history.append((probability, won))
+            if grouped:
+                grouped_history.setdefault(group, []).append((probability, won))
 
     return WalkForwardResult(
         scored=scored, corrections=corrections, warmup_skipped=warmup
@@ -308,13 +336,23 @@ def walk_forward_calibrate(
 
 
 def calibration_verdict(
-    result: WalkForwardResult, *, minimum_samples: int = 200
+    result: WalkForwardResult,
+    *,
+    minimum_samples: int = 200,
+    material_improvement: float = 0.0005,
 ) -> str:
     """One sentence a report can print without overclaiming.
 
     Deliberately never says a model is good. The strongest thing calibration
     evidence can support is "not ruled out", and saying more than that is the
     exact failure mode this project exists to avoid.
+
+    `material_improvement` exists because the first version of this function
+    reported "the correction improves the Brier score (0.1053 raw, 0.1053
+    corrected)". Both numbers were the same to four places and the sentence
+    still said "improves", which is technically true and reads as a finding. A
+    change below the threshold is now reported as *no material change*, with
+    the delta shown so the reader can judge it.
     """
     count = len(result.scored)
     if count < minimum_samples:
@@ -326,12 +364,25 @@ def calibration_verdict(
     corrected_brier = brier_score(result.corrected)
     if raw_brier is None or corrected_brier is None:
         return "Not measurable: no scored samples. No verdict."
-    direction = (
-        "improves" if corrected_brier < raw_brier else "does not improve"
-    )
+    delta = raw_brier - corrected_brier
+    if abs(delta) < material_improvement:
+        direction = (
+            f"makes no material difference to the Brier score "
+            f"({raw_brier:.4f} raw, {corrected_brier:.4f} corrected, delta "
+            f"{delta:+.5f})"
+        )
+    elif delta > 0:
+        direction = (
+            f"improves the Brier score from {raw_brier:.4f} to "
+            f"{corrected_brier:.4f} (delta {delta:+.5f})"
+        )
+    else:
+        direction = (
+            f"makes the Brier score worse, from {raw_brier:.4f} to "
+            f"{corrected_brier:.4f} (delta {delta:+.5f})"
+        )
     return (
-        f"Over {count} held-out samples the correction {direction} the Brier "
-        f"score ({raw_brier:.4f} raw, {corrected_brier:.4f} corrected). "
+        f"Over {count:,} held-out samples the correction {direction}. "
         "Calibration can rule this model out; it cannot rule it in. Whether "
         "the market disagrees with it profitably is a separate question, "
         "answered only by prices."
