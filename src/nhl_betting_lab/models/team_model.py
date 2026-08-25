@@ -34,15 +34,34 @@ Each of those is handled explicitly below rather than absorbed into a fudge
 factor, because a fudge factor would hide which of the three was wrong when
 the numbers came out badly.
 
-## Empty-net goals
+## What the measurement says, which is not what the reasoning predicted
 
-A trailing team pulls its goalie, and the resulting empty-net goal is
-disproportionately likely late in a one-goal game — which is exactly the
-scoreline the puck line asks about. This is not modelled separately, and that
-is a stated limitation rather than an oversight: an empty-net adjustment
-fitted on the same data that sets the base rates would be fitting the residual
-twice. The effect pushes -1.5 covers slightly *up* relative to this model, so
-the model is conservative on favourites laying the puck line.
+The docstring used to argue that empty-net goals — disproportionately likely
+late in a one-goal game, which is exactly the scoreline the puck line asks
+about — would push -1.5 covers *up* relative to this model, making it
+conservative on favourites laying the puck line.
+
+`data/outputs/team_markets_measurement.md` says the opposite. Over 14,400
+walk-forward samples the model is **optimistic** on favourites, not
+conservative: where it predicts a 75.0% cover the observed rate is 70.9% on
+3,098 samples, and at 83.7% predicted the observed rate is 78.5% on 1,397. The
+same shape appears on the moneyline — 73.4% predicted against 67.9% observed
+on 212 samples — so the puck-line error is downstream of a general
+favourite-overconfidence rather than of anything specific to empty nets.
+
+The mechanism that fits is the one an independent-Poisson model always has: it
+assumes two teams score at constant, unrelated rates for sixty minutes, and
+hockey does not work that way. Teams protect leads, coaches shorten benches,
+and the trailing side pulls its goalie — which raises the variance of the
+final margin in both directions and thins out the blowouts the model expects
+from a strong favourite.
+
+Empty nets are still not modelled separately, for the original reason: an
+adjustment fitted on the same data that sets the base rates would be fitting
+the residual twice. But the direction claimed above was wrong, and the
+measurement is what governs. This paragraph stays as written because a
+prediction that turned out backwards is worth more on the record than
+silently deleted.
 """
 
 from __future__ import annotations
