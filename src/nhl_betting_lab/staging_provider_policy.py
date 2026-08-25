@@ -129,10 +129,15 @@ class StagingProviderPolicy:
         """Why this market is not allowed, in words a report can print."""
         name = str(provider_name or "").strip()
         market = str(market_key or "").strip()
+        # `valid` is defined as "no blockers", so a separate `not self.valid`
+        # branch below this one was unreachable. Dead code in a gate reads as
+        # a covered case and is not one, so it is gone rather than tested
+        # around.
         if self.blockers:
-            return f"Provider policy could not be read: {self.blockers[0]}"
-        if not self.valid:
-            return "Provider policy is not valid, so nothing is allowlisted."
+            return (
+                f"Provider policy is not usable, so nothing is allowlisted: "
+                f"{self.blockers[0]}"
+            )
         if name not in self.allowed_provider_names:
             return (
                 f"`{name}` is not in `allowed_provider_names`. Allowlisting is "

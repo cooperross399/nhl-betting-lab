@@ -315,3 +315,208 @@ def test_no_configured_limit_means_no_freshness_check() -> None:
     fresh, _ = run_is_fresh(_stamp(500), max_age_hours=None)
 
     assert fresh is True
+
+
+# -- malformed shapes, each of which must fail closed ------------------
+
+
+def test_a_policy_whose_root_is_not_an_object_allows_nothing(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "data" / "manual" / "staging_provider_policy.json"
+    path.parent.mkdir(parents=True)
+    path.write_text('["not", "an", "object"]', encoding="utf-8")
+
+    loaded = load_policy(path, repository_root=tmp_path)
+
+    assert loaded.provider_allowed("the_odds_api") is False
+    assert "must be an object" in loaded.blockers[0]
+
+
+def test_a_directory_where_the_policy_should_be_allows_nothing(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "data" / "manual" / "staging_provider_policy.json"
+    path.mkdir(parents=True)
+
+    loaded = load_policy(path, repository_root=tmp_path)
+
+    assert loaded.valid is False
+
+
+def test_an_allowlist_entry_that_is_not_an_object_is_refused(
+    tmp_path: Path,
+) -> None:
+    _policy(
+        tmp_path,
+        provider_allowlist_entries={"the_odds_api": "allowed please"},
+    )
+
+    loaded = load_policy(repository_root=tmp_path)
+
+    assert loaded.valid is False
+    assert any("not a JSON object" in item for item in loaded.blockers)
+
+
+def test_required_markets_that_is_not_a_list_is_refused(tmp_path: Path) -> None:
+    _policy(
+        tmp_path,
+        provider_allowlist_entries={
+            "the_odds_api": _approved_entry(required_markets="moneyline")
+        },
+    )
+
+    loaded = load_policy(repository_root=tmp_path)
+
+    assert loaded.valid is False
+    assert any("as a list" in item for item in loaded.blockers)
+
+
+def test_a_non_numeric_freshness_limit_on_an_entry_is_refused(
+    tmp_path: Path,
+) -> None:
+    _policy(
+        tmp_path,
+        provider_allowlist_entries={
+            "the_odds_api": _approved_entry(max_provider_run_age_hours="soon")
+        },
+    )
+
+    loaded = load_policy(repository_root=tmp_path)
+
+    assert loaded.valid is False
+
+
+def test_a_non_numeric_top_level_freshness_limit_is_refused(
+    tmp_path: Path,
+) -> None:
+    _policy(tmp_path, max_provider_run_age_hours="twelve")
+
+    loaded = load_policy(repository_root=tmp_path)
+
+    assert loaded.valid is False
+
+
+def test_allowed_provider_names_that_is_not_a_list_is_refused(
+    tmp_path: Path,
+) -> None:
+    _policy(tmp_path, allowed_provider_names="the_odds_api")
+
+    loaded = load_policy(repository_root=tmp_path)
+
+    assert loaded.valid is False
+    assert any("list of names" in item for item in loaded.blockers)
+
+
+def test_an_unrecognised_provider_type_in_the_top_level_list_is_refused(
+    tmp_path: Path,
+) -> None:
+    _policy(tmp_path, allowed_provider_types=["odds_api", "carrier_pigeon"])
+
+    loaded = load_policy(repository_root=tmp_path)
+
+    assert loaded.valid is False
+
+
+def test_entries_that_are_not_an_object_are_refused(tmp_path: Path) -> None:
+    _policy(tmp_path, provider_allowlist_entries=[])
+
+    loaded = load_policy(repository_root=tmp_path)
+
+    assert loaded.valid is False
+
+
+# -- the status and refusal wording ------------------------------------
+
+
+def test_a_refusing_policy_says_so_in_its_status(tmp_path: Path) -> None:
+    path = tmp_path / "data" / "manual" / "staging_provider_policy.json"
+    path.parent.mkdir(parents=True)
+    path.write_text("{ broken", encoding="utf-8")
+
+    loaded = load_policy(path, repository_root=tmp_path)
+
+    assert loaded.status == "Policy refuses"
+    assert "nothing is allowlisted" in loaded.refusal_reason("x", "moneyline")
+
+
+def test_an_allowlisted_policy_says_so_in_its_status(tmp_path: Path) -> None:
+    _policy(tmp_path)
+
+    assert load_policy(repository_root=tmp_path).status == "Allowlisted"
+
+
+def test_every_malformed_policy_refuses_with_one_consistent_sentence(
+    tmp_path: Path,
+) -> None:
+    """`valid` means "no blockers", so a separate not-valid branch was
+    unreachable. One sentence covers every way a policy can be unusable."""
+    _policy(tmp_path, allowed_provider_names="not a list")
+
+    loaded = load_policy(repository_root=tmp_path)
+    reason = loaded.refusal_reason("the_odds_api", "moneyline")
+
+    assert "nothing is allowlisted" in reason
+    assert "must be a JSON list of names" in reason
+
+
+def test_allowed_markets_is_empty_when_the_policy_refuses(tmp_path: Path) -> None:
+    path = tmp_path / "data" / "manual" / "staging_provider_policy.json"
+    path.parent.mkdir(parents=True)
+    path.write_text("{ broken", encoding="utf-8")
+
+    loaded = load_policy(path, repository_root=tmp_path)
+
+    assert loaded.allowed_markets("the_odds_api") == ()
+
+
+def test_a_blank_provider_name_is_never_allowed(tmp_path: Path) -> None:
+    _policy(tmp_path)
+
+    loaded = load_policy(repository_root=tmp_path)
+
+    assert loaded.provider_allowed("") is False
+    assert loaded.provider_allowed(None) is False
+
+
+def test_allowed_markets_returns_the_reviewed_list(tmp_path: Path) -> None:
+    _policy(tmp_path)
+
+    loaded = load_policy(repository_root=tmp_path)
+
+    assert loaded.allowed_markets("the_odds_api") == ("moneyline", "shots_on_goal")
+
+
+def test_a_hand_built_policy_with_a_name_and_no_entry_still_refuses() -> None:
+    """`load_policy` blocks this shape, so the branch is defence in depth for
+    a policy object constructed some other way. A gate should not depend on
+    every caller having gone through one door."""
+    policy = policy_module.StagingProviderPolicy(
+        path="in-memory",
+        valid=True,
+        allowed_provider_names=("the_odds_api",),
+        entries={},
+    )
+
+    assert policy.provider_allowed("the_odds_api") is False
+    assert "no approval exists to rely on" in policy.refusal_reason(
+        "the_odds_api", "moneyline"
+    )
+
+
+def test_an_unhashable_policy_file_allows_nothing(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """The checksum is what makes an approval current; without one there is
+    no approval to rely on."""
+    _policy(tmp_path)
+
+    def refuse(path):
+        raise OSError("permission denied")
+
+    monkeypatch.setattr(policy_module, "file_sha256", refuse)
+    loaded = load_policy(repository_root=tmp_path)
+
+    assert loaded.valid is False
+    assert loaded.provider_allowed("the_odds_api") is False
+    assert any("could not be hashed" in item for item in loaded.blockers)

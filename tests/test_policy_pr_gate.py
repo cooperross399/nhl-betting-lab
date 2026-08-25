@@ -236,3 +236,176 @@ def test_the_receipts_directory_is_documented_and_empty_of_receipts() -> None:
 
     assert (directory / "README.md").is_file()
     assert receipts == []
+
+
+# -- every malformed receipt shape, each of which must fail the gate ----
+
+
+def test_an_entry_naming_no_receipt_id_is_caught_before_the_gate(
+    tmp_path: Path,
+) -> None:
+    """The policy loader refuses an `allowed` entry with no receipt id, so the
+    gate never sees it. Both layers refuse; asserting the outer one is the
+    honest test, because that is what actually happens."""
+    _policy(tmp_path, receipt_id="", markets=["moneyline"])
+
+    result = gate.run_gate(repository_root=tmp_path)
+
+    assert result.passed is False
+    assert any("not valid" in item for item in result.failures)
+
+
+def test_an_unreadable_receipt_fails(tmp_path: Path) -> None:
+    receipt = _receipt(tmp_path)
+    path = tmp_path / "data" / "manual" / gate.RECEIPTS_DIRNAME / f"{receipt}.json"
+    path.write_text("{ not json", encoding="utf-8")
+    _policy(tmp_path, receipt_id=receipt, markets=["moneyline"])
+
+    result = gate.run_gate(repository_root=tmp_path)
+
+    assert result.passed is False
+    assert any("could not be read" in item for item in result.failures)
+
+
+def test_a_receipt_whose_root_is_not_an_object_fails(tmp_path: Path) -> None:
+    receipt = _receipt(tmp_path)
+    path = tmp_path / "data" / "manual" / gate.RECEIPTS_DIRNAME / f"{receipt}.json"
+    path.write_text('["approved"]', encoding="utf-8")
+    _policy(tmp_path, receipt_id=receipt, markets=["moneyline"])
+
+    result = gate.run_gate(repository_root=tmp_path)
+
+    assert result.passed is False
+    assert any("not a JSON object" in item for item in result.failures)
+
+
+def test_a_receipt_naming_no_reviewer_fails(tmp_path: Path) -> None:
+    receipt = _receipt(tmp_path, reviewer_name="   ")
+    _policy(tmp_path, receipt_id=receipt, markets=["moneyline"])
+
+    result = gate.run_gate(repository_root=tmp_path)
+
+    assert result.passed is False
+    assert any("names no reviewer" in item for item in result.failures)
+
+
+def test_approved_markets_that_is_not_a_list_fails(tmp_path: Path) -> None:
+    receipt = _receipt(tmp_path, approved_markets="moneyline")
+    _policy(tmp_path, receipt_id=receipt, markets=["moneyline"])
+
+    result = gate.run_gate(repository_root=tmp_path)
+
+    assert result.passed is False
+    assert any("as a list of keys" in item for item in result.failures)
+
+
+def test_a_receipt_approving_a_market_that_does_not_exist_fails(
+    tmp_path: Path,
+) -> None:
+    """A typo must not read as an approval that covers something."""
+    receipt = _receipt(
+        tmp_path, approved_markets=["moneyline", "shots_on_target"]
+    )
+    _policy(tmp_path, receipt_id=receipt, markets=["moneyline"])
+
+    result = gate.run_gate(repository_root=tmp_path)
+
+    assert result.passed is False
+    assert any("approves unknown markets" in item for item in result.failures)
+
+
+def test_an_evidence_entry_that_is_not_an_object_fails(tmp_path: Path) -> None:
+    receipt = _receipt(tmp_path, evidence=["data/outputs/whatever.md"])
+    _policy(tmp_path, receipt_id=receipt, markets=["moneyline"])
+
+    result = gate.run_gate(repository_root=tmp_path)
+
+    assert result.passed is False
+    assert any("is not an object" in item for item in result.failures)
+
+
+def test_evidence_without_a_valid_checksum_fails(tmp_path: Path) -> None:
+    receipt = _receipt(
+        tmp_path,
+        evidence=[{"path": "data/outputs/x.md", "checksum_sha256": "abc"}],
+    )
+    _policy(tmp_path, receipt_id=receipt, markets=["moneyline"])
+
+    result = gate.run_gate(repository_root=tmp_path)
+
+    assert result.passed is False
+    assert any("64-character SHA-256" in item for item in result.failures)
+
+
+def test_evidence_with_no_path_fails(tmp_path: Path) -> None:
+    receipt = _receipt(
+        tmp_path, evidence=[{"path": "", "checksum_sha256": "a" * 64}]
+    )
+    _policy(tmp_path, receipt_id=receipt, markets=["moneyline"])
+
+    result = gate.run_gate(repository_root=tmp_path)
+
+    assert result.passed is False
+
+
+def test_a_receipt_id_that_is_only_whitespace_fails(tmp_path: Path) -> None:
+    payload, error = gate.load_receipt("   ", repository_root=tmp_path)
+
+    assert payload is None
+    assert "names no receipt id" in error
+
+
+# -- the rendered report -----------------------------------------------
+
+
+def test_the_rendered_report_lists_every_failure(tmp_path: Path) -> None:
+    _policy(tmp_path, receipt_id="missing", markets=["moneyline"])
+
+    rendered = gate.render_gate(gate.run_gate(repository_root=tmp_path))
+
+    assert "FAIL" in rendered
+    assert "## Failures" in rendered
+    assert "no receipt file" in rendered
+
+
+def test_the_rendered_report_lists_what_was_checked(tmp_path: Path) -> None:
+    receipt = _receipt(tmp_path)
+    _policy(tmp_path, receipt_id=receipt, markets=["moneyline"])
+
+    rendered = gate.render_gate(gate.run_gate(repository_root=tmp_path))
+
+    assert "PASS" in rendered
+    assert "Provider `the_odds_api`" in rendered
+    assert "Market `moneyline`" in rendered
+
+
+def test_the_summary_counts_the_problems(tmp_path: Path) -> None:
+    _policy(tmp_path, receipt_id="missing", markets=["moneyline"])
+
+    summary = gate.run_gate(repository_root=tmp_path).summary_line()
+
+    assert "problem(s) with the approval paperwork" in summary
+    assert "not supported by the evidence it cites" in summary
+
+
+def test_a_hand_built_policy_allowlisting_a_name_with_no_entry_fails(
+    tmp_path: Path,
+) -> None:
+    """Defence in depth: `load_policy` blocks this shape, so the gate's own
+    check only fires on a policy object built some other way. A gate should
+    not depend on every caller having gone through one door."""
+    from nhl_betting_lab.staging_provider_policy import StagingProviderPolicy
+
+    policy = StagingProviderPolicy(
+        path="in-memory",
+        valid=True,
+        allowed_provider_names=("the_odds_api",),
+        entries={},
+    )
+
+    result = gate.run_gate(policy=policy, repository_root=tmp_path)
+
+    assert result.passed is False
+    assert any(
+        "allowlisted with no allowlist entry" in item for item in result.failures
+    )
