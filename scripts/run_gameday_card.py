@@ -26,6 +26,10 @@ from nhl_betting_lab.market_eligibility import assess_markets, slate_games_from
 from nhl_betting_lab.models.player_props import PlayerPropsModel
 from nhl_betting_lab.models.team_model import TeamModel
 from nhl_betting_lab.providers import odds_api
+from nhl_betting_lab.providers.team_names import (
+    build_team_name_map,
+    save_team_name_map,
+)
 from nhl_betting_lab.reports.card_pricing import price_props, price_team_markets
 from nhl_betting_lab.reports.gameday_card import build_card, save_card
 from nhl_betting_lab.staging_provider_policy import load_policy
@@ -87,6 +91,25 @@ def main(argv: list[str] | None = None) -> int:
 
     blockers: list[str] = []
     probabilities: dict[tuple, float] = {}
+    unresolved_names: set[str] = set()
+
+    # The provider says "Toronto Maple Leafs" and every model here is keyed by
+    # "TOR". Without this map every lookup misses and every game is priced
+    # league-average against league-average — with no error anywhere.
+    team_names = build_team_name_map()
+    if not team_names:
+        blockers.append(
+            "No team-name map could be built, because no boxscores are "
+            "cached. Without it the provider's team names cannot be matched "
+            "to the model, and every game would be priced league-average "
+            "against league-average with nothing to show it."
+        )
+    else:
+        save_team_name_map(team_names, processed_dir=processed)
+        print(
+            f"Team-name map: {len(set(team_names.values()))} franchises, "
+            f"{len(team_names)} spellings."
+        )
 
     logs = load_player_logs(processed)
     games = load_team_games(processed)
@@ -106,15 +129,14 @@ def main(argv: list[str] | None = None) -> int:
             # until a price-based backtest says it should, which is the rule
             # in CLAUDE.md and the reason this argument is deliberately empty.
             prop_probabilities, unresolved = price_props(
-                prices, props_model, corrections={}
+                prices, props_model, corrections={}, team_names=team_names
             )
             probabilities.update(prop_probabilities)
-            if unresolved:
+            unresolved_names.update(unresolved)
+            if props_model.ambiguous_names:
                 print(
-                    f"{len(unresolved)} provider player name(s) could not be "
-                    "resolved to a fitted player; they produced no selection. "
-                    "A fuzzy match would produce a confident price for a bet "
-                    "nobody placed."
+                    f"{len(props_model.ambiguous_names)} name(s) are shared by "
+                    "two priced players and resolve to neither."
                 )
         except (KeyError, ValueError) as exc:
             blockers.append(f"The props model could not be fitted: {exc}")
@@ -127,9 +149,25 @@ def main(argv: list[str] | None = None) -> int:
         try:
             team_model = TeamModel().fit(games)
             print(team_model.report.summary_line())
-            probabilities.update(price_team_markets(prices, team_model))
+            team_probabilities, unresolved = price_team_markets(
+                prices, team_model, team_names=team_names
+            )
+            probabilities.update(team_probabilities)
+            unresolved_names.update(unresolved)
         except (KeyError, ValueError) as exc:
             blockers.append(f"The team model could not be fitted: {exc}")
+
+    if unresolved_names:
+        preview = ", ".join(sorted(unresolved_names)[:8])
+        print(
+            f"{len(unresolved_names)} name(s) could not be resolved and "
+            f"produced no selection: {preview}"
+            + (" ..." if len(unresolved_names) > 8 else "")
+        )
+        print(
+            "A fuzzy match would produce a confident price for a bet nobody "
+            "placed, on a row that looks exactly like a correct one."
+        )
 
     card = build_card(
         prices,
@@ -137,6 +175,7 @@ def main(argv: list[str] | None = None) -> int:
         eligibility=eligibility,
         blockers=blockers,
         now=moment,
+        unresolved_names=sorted(unresolved_names),
     )
     paths = save_card(card, output_dir=outputs)
     print(card.summary_line())

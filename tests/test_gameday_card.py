@@ -466,3 +466,63 @@ def test_the_card_never_claims_a_demonstrated_edge() -> None:
     assert "No edge here is a demonstrated edge" in rendered
     assert "what_we_can_claim.md" in rendered
     assert "Bets placed: **No**" in rendered
+
+
+def test_unmatched_names_are_recorded_on_the_card() -> None:
+    """"Why is my player not here" is the first question a reader asks."""
+    rows = [_price_row(price=150)]
+
+    card = card_module.build_card(
+        _prices(rows),
+        {_key(rows[0]): 0.60},
+        eligibility=_eligibility(["shots_on_goal"]),
+        now=NOW,
+        unresolved_names=["Hartford Whalers", "Elias Pettersson"],
+    )
+
+    assert card.unresolved_names == ["Elias Pettersson", "Hartford Whalers"]
+
+
+def test_the_card_explains_that_an_unmatched_name_is_not_a_judgement() -> None:
+    rows = [_price_row(price=150)]
+
+    card = card_module.build_card(
+        _prices(rows),
+        {_key(rows[0]): 0.60},
+        eligibility=_eligibility(["shots_on_goal"]),
+        now=NOW,
+        unresolved_names=["Elias Pettersson"],
+    )
+    rendered = card_module.render_card(card)
+
+    assert "Names that could not be matched" in rendered
+    assert "not a judgement about them" in rendered
+    assert "a join that did not land" in rendered
+
+
+def test_the_unmatched_section_is_absent_when_everything_matched() -> None:
+    rows = [_price_row(price=150)]
+
+    card = card_module.build_card(
+        _prices(rows),
+        {_key(rows[0]): 0.60},
+        eligibility=_eligibility(["shots_on_goal"]),
+        now=NOW,
+    )
+
+    assert "Names that could not be matched" not in card_module.render_card(card)
+
+
+def test_a_long_unmatched_list_is_truncated_with_a_count() -> None:
+    rows = [_price_row(price=150)]
+
+    card = card_module.build_card(
+        _prices(rows),
+        {_key(rows[0]): 0.60},
+        eligibility=_eligibility(["shots_on_goal"]),
+        now=NOW,
+        unresolved_names=[f"Player {index}" for index in range(30)],
+    )
+    rendered = card_module.render_card(card)
+
+    assert "10 further" in rendered

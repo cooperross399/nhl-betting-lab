@@ -165,7 +165,7 @@ def test_a_moneyline_row_gets_a_probability() -> None:
         ]
     )
 
-    probabilities = card_pricing.price_team_markets(prices, model)
+    probabilities, _ = card_pricing.price_team_markets(prices, model)
 
     assert len(probabilities) == 1
     assert next(iter(probabilities.values())) > 0.5
@@ -185,7 +185,7 @@ def test_the_puck_line_sign_decides_which_side_is_laying_the_goals() -> None:
     }
     taking = dict(laying, line=1.5)
 
-    probabilities = card_pricing.price_team_markets(
+    probabilities, _ = card_pricing.price_team_markets(
         _team_prices([laying, taking]), model
     )
     values = list(probabilities.values())
@@ -206,7 +206,7 @@ def test_a_totals_row_gets_over_and_under() -> None:
     }
     under = dict(over, selection="under")
 
-    probabilities = card_pricing.price_team_markets(
+    probabilities, _ = card_pricing.price_team_markets(
         _team_prices([over, under]), model
     )
 
@@ -229,19 +229,19 @@ def test_a_puck_line_row_with_no_line_is_skipped() -> None:
         ]
     )
 
-    assert card_pricing.price_team_markets(prices, model) == {}
+    assert card_pricing.price_team_markets(prices, model)[0] == {}
 
 
 def test_a_prop_row_is_not_priced_by_the_team_path() -> None:
     model = TeamModel().fit(balanced_league())
 
-    assert card_pricing.price_team_markets(_prop_prices(), model) == {}
+    assert card_pricing.price_team_markets(_prop_prices(), model)[0] == {}
 
 
 def test_an_empty_frame_prices_nothing() -> None:
     model = TeamModel().fit(balanced_league())
     empty = pd.DataFrame(columns=["market"])
 
-    assert card_pricing.price_team_markets(empty, model) == {}
+    assert card_pricing.price_team_markets(empty, model) == ({}, [])
     props_model = PlayerPropsModel().fit(sample_logs())
     assert card_pricing.price_props(empty, props_model) == ({}, [])
