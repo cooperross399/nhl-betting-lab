@@ -1,0 +1,102 @@
+name: Provider Market Discovery
+
+# Answers "which books quote which markets, on which lines, for how much of
+# the slate" — including the alternate ladders.
+#
+# This exists because of one specific mistake. In the EPL lab a market was
+# written off for a season on a coverage check that examined only the bulk
+# endpoint, while the complete line sat in the alternate ladder the whole
+# time. Before any market is recorded as unavailable, run this.
+#
+# SCOPE: fetches prices into staging and writes a report. It allowlists
+# nothing, promotes nothing, places no bet, and the card cannot read what it
+# writes.
+#
+# COST: the bulk fetch is a handful of credits. Props are opt-in and capped.
+on:
+  workflow_dispatch:
+    inputs:
+      include_props:
+        description: "Also probe player prop coverage (costs credits per event)"
+        type: boolean
+        required: false
+        default: false
+      credit_cap:
+        description: "Hard cap on props credits"
+        type: string
+        required: false
+        default: "60"
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    name: Provider market discovery
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install project
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install -e .
+
+      - name: Check the provider credential
+        env:
+          NHL_ODDS_API_KEY: ${{ secrets.NHL_ODDS_API_KEY }}
+          PYTHONPATH: src
+        run: |
+          python scripts/check_provider_credential.py
+
+      - name: Fetch and report coverage
+        env:
+          NHL_ODDS_API_KEY: ${{ secrets.NHL_ODDS_API_KEY }}
+          PYTHONPATH: src
+        run: |
+          python scripts/run_provider_shadow.py --live --overwrite-staging \
+            ${{ inputs.include_props == true && '--props' || '' }} \
+            --credit-cap "${{ inputs.credit_cap || '60' }}"
+
+      - name: Write the coverage report to the run summary
+        if: always()
+        run: |
+          {
+            echo "## Provider market discovery"
+            echo
+            cat data/outputs/provider_market_discovery.md 2>/dev/null \
+              || echo "No coverage report was produced."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: market-discovery
+          path: |
+            data/outputs/provider_market_discovery.md
+            data/outputs/provider_shadow_verification.md
+            data/outputs/provider_shadow_verification.json
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Confirm the boundary
+        if: always()
+        run: |
+          echo "This job fetched prices into staging and wrote a report."
+          echo "It allowlisted nothing, promoted nothing, edited no policy,"
+          echo "wrote no receipt, and placed no bet. The card cannot read"
+          echo "the files it wrote."
