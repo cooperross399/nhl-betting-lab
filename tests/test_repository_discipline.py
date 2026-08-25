@@ -158,3 +158,31 @@ def test_the_shipped_policy_allowlists_nothing() -> None:
 
     assert payload["allowed_provider_names"] == []
     assert payload["provider_allowlist_entries"] == {}
+
+
+def test_a_probe_does_not_rebuild_the_walk_forward_samples() -> None:
+    """A probe asks one question of one event and nothing in the answer
+    depends on the model. Making it wait for 1.9 million samples first was
+    ceremony, and probing is the thing you do repeatedly."""
+    text = _read(".github/workflows/historical-props-purchase.yml")
+    rebuild = text.index("Rebuild the results and the walk-forward samples")
+    probe = text.index("- name: Probe retention")
+    between = text[rebuild:probe]
+
+    assert "if: ${{ inputs.mode == 'buy' }}" in between
+
+
+def test_the_purchase_workflow_checks_the_quota_before_it_spends() -> None:
+    text = _read(".github/workflows/historical-props-purchase.yml")
+    quota = text.index("Report the quota before spending any of it")
+
+    for later in ("- name: Probe retention", "- name: Buy a window"):
+        assert text.index(later) > quota
+
+
+def test_the_purchase_workflow_fails_when_the_quota_is_short() -> None:
+    """Discovering the quota is short halfway through a buy wastes what was
+    already spent."""
+    text = _read(".github/workflows/historical-props-purchase.yml")
+
+    assert "--fail-under" in text
