@@ -15,9 +15,11 @@ Read this second, after `CLAUDE.md`. It is the shortest honest answer to
 - A team model for moneyline, puck line and totals, with overtime handled
   explicitly — a -1.5 cover is computed on regulation scorelines only,
   because an overtime winner takes the game by exactly one.
-- Walk-forward calibration, including an ice-time-conditional correction that
-  straightens every volume bucket. See
-  `docs/why_ice_time_gets_its_own_correction.md`.
+- Walk-forward calibration of both models — 1,889,685 prop samples and 51,212
+  team-market samples across 3,658 games — including an ice-time-conditional
+  correction that straightens every volume bucket. See
+  `docs/why_ice_time_gets_its_own_correction.md`. Neither correction is in
+  force on the card; calibration cannot rule a model in.
 - The provider adapter, shadow-only. The card cannot read what it writes.
 - A fail-closed provider policy that ships allowlisting nothing, and a PR gate
   that checks approval paperwork is real and current.
