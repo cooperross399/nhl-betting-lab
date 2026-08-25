@@ -67,7 +67,13 @@ SKATER_STATS: tuple[str, ...] = (
 )
 
 #: The goalie stat, modelled through shots against rather than directly.
-GOALIE_STAT = "saves"
+#: Named for the market, not for the log column it settles on: every stat key
+#: in this module is a market key, so nothing downstream has to translate
+#: between two vocabularies and get it wrong once.
+GOALIE_STAT = "goalie_saves"
+
+#: The player-log column `goalie_saves` settles on.
+GOALIE_SETTLEMENT_COLUMN = "saves"
 
 #: Every market name the card and the provider mapping share.
 PROP_STATS: tuple[str, ...] = SKATER_STATS + (GOALIE_STAT,)
@@ -269,7 +275,9 @@ class PlayerPropsModel:
         for stat in SKATER_STATS:
             self.dispersion[stat] = measure_dispersion(regulars[stat].tolist())
         starters = goalies[goalies["toi_seconds"] >= 1800]
-        self.dispersion[GOALIE_STAT] = measure_dispersion(starters["saves"].tolist())
+        self.dispersion[GOALIE_STAT] = measure_dispersion(
+            starters[GOALIE_SETTLEMENT_COLUMN].tolist()
+        )
 
     def _fit_baselines(self, skaters: pd.DataFrame) -> None:
         self.baselines = {}

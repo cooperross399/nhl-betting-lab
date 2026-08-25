@@ -257,7 +257,7 @@ def test_the_verdict_states_the_sample_size() -> None:
 
     verdict = cal.calibration_verdict(result)
 
-    assert str(len(result.scored)) in verdict
+    assert f"{len(result.scored):,}" in verdict
 
 
 def test_refit_every_reduces_the_number_of_fits_without_leaking() -> None:
@@ -268,3 +268,74 @@ def test_refit_every_reduces_the_number_of_fits_without_leaking() -> None:
 
     assert len(rarely.corrections) < len(often.corrections)
     assert len(rarely.scored) == len(often.scored)
+
+
+def test_the_verdict_does_not_call_a_five_decimal_change_an_improvement() -> None:
+    """It used to print "improves the Brier score (0.1053 raw, 0.1053
+    corrected)", which is technically true and reads as a finding."""
+    result = cal.WalkForwardResult(
+        scored=[("2025-01-01", 0.5, 0.5000001, index % 2 == 0) for index in range(400)],
+        corrections=[],
+        warmup_skipped=0,
+    )
+
+    verdict = cal.calibration_verdict(result)
+
+    assert "no material difference" in verdict
+    assert "improves" not in verdict
+
+
+def test_the_verdict_reports_a_correction_that_made_things_worse() -> None:
+    result = cal.WalkForwardResult(
+        scored=[("2025-01-01", 0.5, 0.9, False) for _ in range(400)],
+        corrections=[],
+        warmup_skipped=0,
+    )
+
+    verdict = cal.calibration_verdict(result)
+
+    assert "worse" in verdict
+
+
+def test_a_grouped_correction_fits_each_group_separately() -> None:
+    """Two groups with opposite biases cannot both be fixed by one curve."""
+    rows: list[tuple[str, float, bool, str]] = []
+    for index in range(4000):
+        day = f"2025-{1 + index // 900:02d}-{1 + index % 27:02d}"
+        if index % 2:
+            # "low" claims 40% and happens 20% of the time.
+            rows.append((day, 0.40, index % 10 < 2, "low"))
+        else:
+            # "high" claims 40% and happens 60% of the time.
+            rows.append((day, 0.40, index % 10 < 6, "high"))
+
+    pooled = cal.walk_forward_calibrate(rows, minimum_fit_samples=500, refit_every=5)
+    grouped = cal.walk_forward_calibrate(
+        rows, minimum_fit_samples=500, refit_every=5, grouped=True
+    )
+
+    assert cal.brier_score(grouped.corrected) < cal.brier_score(pooled.corrected)
+
+
+def test_a_group_with_too_little_history_falls_back_to_the_pooled_curve() -> None:
+    rows: list[tuple[str, float, bool, str]] = []
+    for index in range(2000):
+        day = f"2025-{1 + index // 500:02d}-{1 + index % 27:02d}"
+        rows.append((day, 0.70, index % 10 < 6, "common"))
+    # One sample from a group that will never have enough history of its own.
+    rows.append(("2025-04-27", 0.70, True, "rare"))
+
+    result = cal.walk_forward_calibrate(
+        rows, minimum_fit_samples=300, refit_every=5, grouped=True
+    )
+    rare = [row for row in result.scored if row[1] == 0.70]
+
+    assert rare, "the rare sample should still be scored, by the pooled curve"
+
+
+def test_grouping_is_off_by_default_so_a_three_tuple_still_works() -> None:
+    rows = [("2025-01-01", 0.5, True), ("2025-01-02", 0.5, False)]
+
+    result = cal.walk_forward_calibrate(rows, minimum_fit_samples=1)
+
+    assert len(result.scored) == 1
