@@ -54,7 +54,17 @@ jobs:
         env:
           PYTHONPATH: src
         run: |
-          python -m pytest -q
+          python -m coverage run -m pytest -q
+
+      - name: Check coverage has not collapsed
+        # A floor, not a target. It catches a module arriving with no tests or
+        # a large deletion of them; it is deliberately well below where the
+        # suite sits, so an honest refactor never becomes a negotiation about
+        # a percentage.
+        env:
+          PYTHONPATH: src
+        run: |
+          python -m coverage report
 
       - name: Confirm no odds were fetched
         if: always()

@@ -22,3 +22,17 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 filterwarnings = ["error::DeprecationWarning:nhl_betting_lab.*"]
+
+[tool.coverage.run]
+source = ["src"]
+branch = true
+
+[tool.coverage.report]
+# A floor well below where the suite actually sits, not a target. Its job is
+# to catch a module arriving with no tests at all, or a large deletion of
+# them. Setting it at the current number would turn every honest refactor
+# into a coverage negotiation, and would reward tests written to move a
+# percentage rather than to catch a defect.
+fail_under = 90
+show_missing = true
+skip_covered = true

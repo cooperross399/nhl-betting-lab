@@ -22,3 +22,5 @@ data/staging/staging_provenance.json
 *.egg-info/
 build/
 dist/
+.coverage
+htmlcov/
