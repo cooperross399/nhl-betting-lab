@@ -24,8 +24,10 @@ Two, and only two:
    to `required_markets`, and never presents shadow evidence as though it had
    approved something.
 2. **Spending API credits beyond a small measurement budget.** The historical
-   endpoints bill ten credits per market per event. A probe is cheap; a season
-   is not. State the cost, then wait.
+   endpoints bill somewhere between one and ten credits per market per
+   event — the documentation is ambiguous and the true rate is measured from
+   the response headers. A probe is cheap; a season may not be. State the
+   range, then wait.
 
 Everything else — including changing a model, restructuring a report, or
 deciding a measurement was wrong — is Claude's to do, with the reasoning

@@ -4,8 +4,10 @@ name: Historical Props Purchase
 # were actually for sale.
 #
 # THIS SPENDS CREDITS, and it is the most expensive thing in the repository:
-# ten credits per market per event, an order of magnitude above the live rate.
-# Six markets across one twelve-game night is 720 credits.
+# somewhere between one and ten credits per market per event. The provider
+# documents ten for its bulk historical endpoint and is ambiguous about the
+# per-event one, so the true rate is read from `x-requests-last` as it is
+# spent and the cap is enforced against the pessimistic reading.
 #
 # It is manual-dispatch only and will never be put on a schedule. The credit
 # cap is a required input and is enforced before each request rather than
@@ -25,20 +27,30 @@ on:
         required: true
         default: "60"
       start_date:
-        description: "ISO start date, for mode=buy"
+        description: "ISO start date of the window to sample"
         type: string
-        required: false
-        default: ""
+        required: true
+        default: "2025-10-08"
       end_date:
-        description: "ISO end date, for mode=buy"
+        description: "ISO end date of the window to sample"
+        type: string
+        required: true
+        default: "2026-04-15"
+      every_n_days:
+        description: "Sample every Nth day, so the window is spread not clumped"
         type: string
         required: false
-        default: ""
+        default: "7"
       hours_before:
         description: "Hours before puck drop to price at"
         type: string
         required: false
         default: "4"
+      seasons:
+        description: "Season ids to fit the model on, space separated"
+        type: string
+        required: false
+        default: "20232024 20242025 20252026"
 
 permissions:
   contents: read
@@ -47,7 +59,10 @@ jobs:
   purchase:
     name: Historical props purchase
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # Generous, because this job rebuilds the walk-forward samples from the
+    # NHL API before it measures anything. A first run pays for the whole
+    # boxscore cache; every later run restores it and is quick.
+    timeout-minutes: 120
 
     steps:
       - name: Check out repository
@@ -68,6 +83,34 @@ jobs:
           python -m pip install -r requirements.txt
           python -m pip install -e .
 
+      - name: Restore the cached boxscores and samples
+        # Without this, every run refetches four thousand boxscores. They
+        # never change once a game is final, so this is the difference
+        # between a two-minute job and an hour-long one.
+        id: restore
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -u
+          previous=$(gh run list --workflow historical-props-purchase.yml \
+            --status success --limit 1 --json databaseId \
+            --jq '.[0].databaseId // empty')
+          if [ -z "$previous" ]; then
+            previous=$(gh run list --workflow gameday-refresh.yml \
+              --status success --limit 1 --json databaseId \
+              --jq '.[0].databaseId // empty')
+          fi
+          if [ -z "$previous" ]; then
+            echo "No previous state. This run rebuilds it from scratch."
+            exit 0
+          fi
+          mkdir -p data
+          gh run download "$previous" --dir data || \
+            echo "No usable state on run $previous; rebuilding."
+          find data/raw/nhl/boxscore -name '*.json' 2>/dev/null | wc -l \
+            | xargs echo "Cached boxscores restored:"
+
       - name: Check the provider credential
         env:
           NHL_ODDS_API_KEY: ${{ secrets.NHL_ODDS_API_KEY }}
@@ -75,21 +118,54 @@ jobs:
         run: |
           python scripts/check_provider_credential.py
 
-      - name: State the cost before spending it
+      - name: Report the quota before spending any of it
+        # The /v4/sports listing is documented as free, so this is the
+        # cheapest possible way to find out whether the run can afford itself.
         env:
+          NHL_ODDS_API_KEY: ${{ secrets.NHL_ODDS_API_KEY }}
           PYTHONPATH: src
+        run: |
+          python scripts/check_provider_quota.py \
+            --fail-under "${{ inputs.credit_cap }}"
+
+      - name: State the cost before spending it
         run: |
           echo "Mode: ${{ inputs.mode }}"
           echo "Hard credit cap: ${{ inputs.credit_cap }}"
-          echo "Historical endpoints bill 10 credits per market per event."
+          echo "Window: ${{ inputs.start_date }} .. ${{ inputs.end_date }}"
+          echo "Sampling every ${{ inputs.every_n_days }} day(s)."
+          echo "Historical per-event cost is documented ambiguously: between"
+          echo "1 and 10 credits per market. The cap is enforced against 10,"
+          echo "and real spend is read from x-requests-last as it happens."
+
+      - name: Rebuild the results and the walk-forward samples
+        # A purchase with nothing to measure it against is wasted credits. The
+        # NHL API is free and keyless, and a final boxscore is never
+        # refetched, so this is cheap on any run after the first.
+        env:
+          PYTHONPATH: src
+        run: |
+          python scripts/fetch_nhl_data.py --polite-seconds 0.05 \
+            --seasons ${{ inputs.seasons }}
+          python scripts/build_datasets.py
+          if [ ! -s data/outputs/prop_calibration_samples.csv ]; then
+            python scripts/run_props_calibration.py
+          else
+            echo "Reusing the restored walk-forward samples."
+            python scripts/run_props_calibration.py --reuse-samples
+          fi
 
       - name: Probe retention
+        # One event, so the cost is bounded and known, and the answer turns
+        # "which markets can be measured historically" from an assumption into
+        # a measured fact.
         if: ${{ inputs.mode == 'probe' }}
         env:
           NHL_ODDS_API_KEY: ${{ secrets.NHL_ODDS_API_KEY }}
           PYTHONPATH: src
         run: |
           python scripts/buy_historical_props.py --probe --live \
+            --from "${{ inputs.start_date }}" --to "${{ inputs.start_date }}" \
             --credit-cap "${{ inputs.credit_cap }}" \
             --hours-before "${{ inputs.hours_before }}"
 
@@ -99,12 +175,9 @@ jobs:
           NHL_ODDS_API_KEY: ${{ secrets.NHL_ODDS_API_KEY }}
           PYTHONPATH: src
         run: |
-          if [ -z "${{ inputs.start_date }}" ] || [ -z "${{ inputs.end_date }}" ]; then
-            echo "::error::mode=buy needs start_date and end_date."
-            exit 1
-          fi
           python scripts/buy_historical_props.py --live \
             --from "${{ inputs.start_date }}" --to "${{ inputs.end_date }}" \
+            --every-n-days "${{ inputs.every_n_days }}" \
             --credit-cap "${{ inputs.credit_cap }}" \
             --hours-before "${{ inputs.hours_before }}"
 
@@ -137,7 +210,27 @@ jobs:
             data/processed/historical_prop_prices.csv
             data/outputs/historical_props_retention.json
             data/outputs/player_props_backtest.md
+            data/outputs/player_props_backtest_bets.csv
             data/outputs/what_we_can_claim.md
+          if-no-files-found: warn
+          retention-days: 90
+
+      - name: Upload the state for the next run
+        # The boxscore cache and the walk-forward samples are what make a
+        # second run cheap. The bought prices go with them because they are
+        # evidence: historical prices never change, so re-buying one is a
+        # credit spent on something already owned.
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gameday-state
+          path: |
+            data/raw/nhl/boxscore
+            data/raw/nhl/registry
+            data/raw/nhl/club_schedule
+            data/raw/historical_props
+            data/processed
+            data/outputs/prop_calibration_samples.csv
           if-no-files-found: warn
           retention-days: 90
 

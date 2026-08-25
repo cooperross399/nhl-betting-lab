@@ -30,8 +30,11 @@ Read this second, after `CLAUDE.md`. It is the shortest honest answer to
 
 - No historical prop prices have been bought, so **no market has been measured
   against a real price**. That is the single biggest gap and it is a spending
-  decision, not a technical one: ten credits per market per event, 720 for one
-  twelve-game night across six markets.
+  decision, not a technical one. The cost is between one and ten credits per
+  market per event: the provider documents ten for the bulk historical
+  endpoint and is ambiguous about the per-event one, so the real figure is
+  read from `x-requests-last` as it is spent and the cap is enforced against
+  the pessimistic reading.
 - No confirmed-starter source, so goalie saves cannot reach the card. See
   `docs/goalie_props_need_a_confirmed_starter.md`.
 - No xG source. MoneyPuck's CSVs need a data licence; see
