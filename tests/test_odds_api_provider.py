@@ -513,3 +513,37 @@ def test_other_statuses_are_never_read_as_an_empty_slate() -> None:
         provider.fetch_team_markets()
 
     assert not isinstance(exc.value, odds_api.EmptySlateError)
+
+
+def test_an_unreadable_events_list_still_means_an_empty_slate() -> None:
+    """In the off-season the events endpoint can refuse too. A lookup that
+    cannot answer is not evidence of games."""
+    requester = RecordingRequester(
+        {
+            "/odds": FakeResponse(status_code=422),
+            "/events": FakeResponse(status_code=422),
+        }
+    )
+    provider = odds_api.OddsApiProvider(
+        environment=ENVIRONMENT, requester=requester
+    )
+
+    with pytest.raises(odds_api.EmptySlateError) as exc:
+        provider.fetch_team_markets()
+
+    assert "could not be read either" in str(exc.value)
+
+
+def test_the_message_distinguishes_checked_from_could_not_check() -> None:
+    """"We could not check" must never read as "we checked"."""
+    requester = RecordingRequester(
+        {"/odds": FakeResponse(status_code=422), "/events": FakeResponse([])}
+    )
+    provider = odds_api.OddsApiProvider(
+        environment=ENVIRONMENT, requester=requester
+    )
+
+    with pytest.raises(odds_api.EmptySlateError) as exc:
+        provider.fetch_team_markets()
+
+    assert "the events list is empty" in str(exc.value)

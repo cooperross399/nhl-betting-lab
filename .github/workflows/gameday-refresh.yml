@@ -168,7 +168,11 @@ jobs:
         env:
           PYTHONPATH: src
         run: |
-          python scripts/fetch_nhl_data.py --polite-seconds 0.1
+          # 0.25 rather than 0.1. A cold cache makes about four thousand
+          # requests and the first run at 0.05 was rate-limited into near-total
+          # failure. The client retries a 429 now, but the cheaper fix is not
+          # to earn one.
+          python scripts/fetch_nhl_data.py --polite-seconds 0.25
           python scripts/build_datasets.py
 
       - name: Fetch prices into staging

@@ -161,7 +161,7 @@ jobs:
         env:
           PYTHONPATH: src
         run: |
-          python scripts/fetch_nhl_data.py --polite-seconds 0.05 \
+          python scripts/fetch_nhl_data.py --polite-seconds 0.25 \
             --seasons ${{ inputs.seasons }}
           python scripts/build_datasets.py
           if [ ! -s data/outputs/prop_calibration_samples.csv ]; then

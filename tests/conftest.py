@@ -128,3 +128,14 @@ def boxscore_payload(
         "awayTeam": {"abbrev": away, "score": away_score, "sog": 28},
         "playerByGameStats": {"homeTeam": block, "awayTeam": block},
     }
+
+
+@pytest.fixture(autouse=True)
+def never_actually_sleep(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No test may spend real time waiting.
+
+    The NHL client backs off between retries, which is correct in production
+    and pure cost in a suite. A test that wants to assert on the delays passes
+    its own recorder; everything else simply never waits.
+    """
+    monkeypatch.setattr("time.sleep", lambda _seconds: None)

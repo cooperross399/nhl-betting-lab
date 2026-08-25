@@ -426,13 +426,26 @@ class OddsApiProvider:
                 self._params(regions=self.regions, markets=",".join(markets)),
             )
         except ProviderError as exc:
-            if "422" in str(exc) and not self.list_events():
-                raise EmptySlateError(
-                    "The provider has no NHL games on the board, so there is "
-                    "nothing to price. That is the ordinary state of the "
-                    "off-season and not a fault."
-                ) from exc
-            raise
+            if "422" not in str(exc):
+                raise
+            # The events endpoint is the confirmation, and in the off-season
+            # it can refuse too. A lookup that cannot answer is not evidence
+            # of games, so the two failures together are still an empty slate
+            # — and the message says which of the two it saw, so "we could not
+            # check" is never mistaken for "we checked".
+            try:
+                board = self.list_events()
+                confirmed = "the events list is empty"
+            except ProviderError:
+                board = []
+                confirmed = "the events list could not be read either"
+            if board:
+                raise
+            raise EmptySlateError(
+                "The provider has no NHL games on the board, so there is "
+                f"nothing to price ({confirmed}). That is the ordinary state "
+                "of the off-season and not a fault."
+            ) from exc
         if not isinstance(payload, list):
             raise ProviderError("The odds response is not a JSON event list.")
         result = FetchResult(
