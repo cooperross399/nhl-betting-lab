@@ -30,6 +30,8 @@ from bisect import bisect_left
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 
+import numpy as np
+
 
 #: Probabilities are clamped away from 0 and 1 before a logit. Without this a
 #: single certain-looking prediction produces an infinite value and takes the
@@ -94,20 +96,33 @@ class PlattCalibration:
             # correction, which is the opposite of what the data shows.
             return cls.identity(fitted_on=len(rows))
 
-        xs = [logit(p) for p, _ in rows]
-        ys = [1.0 if won else 0.0 for _, won in rows]
+        # Vectorised Newton. The scalar loop was correct and unusably slow:
+        # a real walk-forward pass refits a few hundred times over a history
+        # that grows into the hundreds of thousands, and at sixty iterations
+        # apiece that is billions of Python-level operations. The arithmetic
+        # below is the same arithmetic.
+        xs = np.fromiter(
+            (logit(p) for p, _ in rows), dtype=float, count=len(rows)
+        )
+        ys = np.fromiter(
+            (1.0 if won else 0.0 for _, won in rows), dtype=float, count=len(rows)
+        )
         a, b = 0.0, 1.0
         for _ in range(60):
-            g0 = g1 = 0.0
-            h00 = h01 = h11 = 0.0
-            for x, y in zip(xs, ys):
-                p = sigmoid(a + b * x)
-                w = max(p * (1.0 - p), 1e-9)
-                g0 += p - y
-                g1 += (p - y) * x
-                h00 += w
-                h01 += w * x
-                h11 += w * x * x
+            z = a + b * xs
+            # Stable sigmoid: exp overflows on the negative branch otherwise.
+            p = np.where(
+                z >= 0,
+                1.0 / (1.0 + np.exp(-np.clip(z, 0, 700))),
+                np.exp(np.clip(z, -700, 0)) / (1.0 + np.exp(np.clip(z, -700, 0))),
+            )
+            residual = p - ys
+            w = np.maximum(p * (1.0 - p), 1e-9)
+            g0 = float(residual.sum())
+            g1 = float((residual * xs).sum())
+            h00 = float(w.sum())
+            h01 = float((w * xs).sum())
+            h11 = float((w * xs * xs).sum())
             determinant = h00 * h11 - h01 * h01
             if abs(determinant) < 1e-12:
                 break

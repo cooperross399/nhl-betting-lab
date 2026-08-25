@@ -99,7 +99,15 @@ def main(argv: list[str] | None = None) -> int:
         try:
             props_model = PlayerPropsModel().fit(logs)
             print(props_model.report.summary_line())
-            prop_probabilities, unresolved = price_props(prices, props_model)
+            # No calibration correction is applied. Both the pooled and the
+            # ice-time-conditional corrections beat the raw model on every
+            # market in data/outputs/props_calibration.md — and calibration
+            # cannot rule a model in. Neither correction ships to the card
+            # until a price-based backtest says it should, which is the rule
+            # in CLAUDE.md and the reason this argument is deliberately empty.
+            prop_probabilities, unresolved = price_props(
+                prices, props_model, corrections={}
+            )
             probabilities.update(prop_probabilities)
             if unresolved:
                 print(

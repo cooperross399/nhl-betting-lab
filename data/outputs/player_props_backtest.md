@@ -2,7 +2,7 @@
 
 Does the model beat a price that was actually for sale? Calibration cannot answer that; this can, to the extent the sample allows.
 
-- Generated: 2026-08-25T19:59:43+00:00
+- Generated: 2026-08-25T20:18:50+00:00
 - Edge threshold: **6.0%**
 - No bets were placed, so nothing is measured. That is a statement about the evidence, not about the model.
 

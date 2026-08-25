@@ -59,9 +59,10 @@ class MarketClaim:
 
     def sentence(self) -> str:
         if not self.measured:
+            reason = self.reason_unmeasured.strip().rstrip(".")
             base = (
                 f"`{self.market}` has **no price-based measurement**"
-                + (f": {self.reason_unmeasured}" if self.reason_unmeasured else ".")
+                + (f": {reason}." if reason else ".")
             )
             if self.calibration_samples:
                 base += (
