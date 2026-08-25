@@ -1,0 +1,324 @@
+name: Gameday Refresh
+
+# The card is produced here, not on anyone's laptop. This workflow fetches
+# results, fetches prices, rebuilds every report, renders the card, and posts
+# it to the operating-home issue.
+#
+# THE NAME IS A CONTRACT. Cooper's local scheduled tasks hard-code the workflow
+# name "Gameday Refresh", the issue title "NHL Betting Lab — Claude Operating
+# Home", and the marker phrase "Selections changed". Renaming any of them
+# silently breaks his automation, and the breakage looks exactly like the lab
+# going quiet.
+#
+# SCOPE: this refetches prices and rebuilds reports. It does NOT place a bet,
+# allowlist a provider, widen market scope, edit the provider policy, or write
+# a human acceptance receipt. Those remain human decisions and no schedule can
+# take them.
+#
+# DESIGN RULE: a run never ends with nothing to show. Both external sources are
+# outside this repository and will have bad days, so a failure downgrades the
+# run rather than aborting it: the card is rebuilt from the last good state,
+# the summary says exactly what went wrong, and the result is posted even if
+# the selections did not change. The run still finishes red, so the failure
+# notice arrives too. Silence therefore always means "it ran and nothing
+# moved", which is the only thing that makes silence safe to read.
+#
+# CADENCE: the NHL plays almost every day from early October to mid-April, so
+# this runs daily in season. Two triggers ninety minutes apart, because GitHub
+# documents that scheduled workflows may be delayed or dropped entirely under
+# load — a trigger that usually works is not a trigger a card can depend on.
+# The concurrency group serialises them and the second run only reposts if it
+# has something new to say, so a duplicate run is invisible.
+#
+# COST: the bulk team-market fetch is a handful of credits. Player props are
+# per-event and bill one credit per market per event, which on a twelve-game
+# night across six markets is 72 credits — so the props fetch runs under a hard
+# cap set here, and the run prints what it spent.
+on:
+  schedule:
+    # 13:30 UTC is 09:30 in New York: the card is in the inbox before the
+    # morning read and well before any 19:00 local puck drop. The 15:00 backup
+    # covers a dropped primary.
+    - cron: "30 13 * 1-4,10-12 *"
+    - cron: "0 15 * 1-4,10-12 *"
+  workflow_dispatch:
+    inputs:
+      skip_provider_fetch:
+        description: "Rebuild reports from existing evidence without refetching prices"
+        type: boolean
+        required: false
+        default: false
+      props_credit_cap:
+        description: "Hard cap on props credits for this run"
+        type: string
+        required: false
+        default: "90"
+      force_post:
+        description: "Post the card even if the selections did not change"
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: read
+  # Read-only, and only so the run can fetch the previous run's state.
+  actions: read
+  # Lets the run comment the card on an issue, which is what delivers it by
+  # email. This writes issue comments and nothing else.
+  issues: write
+
+concurrency:
+  group: gameday-refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    name: Gameday Refresh
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install project
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install -e .
+
+      - name: Restore the previous state
+        # A runner starts empty, and neither the boxscore cache nor the
+        # processed tables are tracked in git. Without this, every run begins
+        # with no memory of the last one: the "selections changed" diff stays
+        # permanently blank, so every card looks like a change and the marker
+        # stops meaning anything.
+        #
+        # Additive and scoped to data/, so it cannot overwrite the prices this
+        # run is about to fetch. A first run or a pruned artifact is not fatal.
+        id: restore
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -u
+          previous=$(gh run list --workflow gameday-refresh.yml --status success \
+            --limit 1 --json databaseId --jq '.[0].databaseId // empty')
+          if [ -z "$previous" ]; then
+            echo "No previous successful run. This run establishes the baseline."
+            exit 0
+          fi
+          mkdir -p data
+          gh run download "$previous" --name gameday-state --dir data || {
+            echo "No state on run $previous; continuing without it."
+            exit 0
+          }
+          if [ -f data/outputs/gameday_card.json ]; then
+            cp data/outputs/gameday_card.json previous_card.json
+            echo "Restored the previous card for the selections diff."
+          fi
+          find data/raw/nhl/boxscore -name '*.json' 2>/dev/null | wc -l \
+            | xargs echo "Cached boxscores restored:"
+
+      - name: Check the provider credential
+        # Fails fast and legibly if the key was rotated without updating the
+        # secret, rather than surfacing as a confusing provider error later.
+        # Costs no quota and prints nothing about the key beyond whether it is
+        # present. Deliberately hard: without a key there is no price fetch to
+        # degrade to, and a dead credential must be loud.
+        if: ${{ inputs.skip_provider_fetch != true }}
+        env:
+          NHL_ODDS_API_KEY: ${{ secrets.NHL_ODDS_API_KEY }}
+          PYTHONPATH: src
+        run: |
+          python scripts/check_provider_credential.py
+
+      - name: Fetch results
+        # The NHL API is public, keyless and free, and a completed boxscore is
+        # never refetched. Fetched before any quota is spent, so an outage here
+        # costs nothing.
+        #
+        # Soft: if this fails and the restored cache is present, the run
+        # continues on slightly older results and says so. Fitting on results
+        # a day old is a far better outcome than no card.
+        id: results
+        continue-on-error: true
+        env:
+          PYTHONPATH: src
+        run: |
+          python scripts/fetch_nhl_data.py --polite-seconds 0.1
+          python scripts/build_datasets.py
+
+      - name: Fetch prices into staging
+        # Soft for the same reason: without fresh prices the card is refused,
+        # and a blocked card that explains itself beats a red X with a
+        # traceback.
+        id: prices
+        if: ${{ inputs.skip_provider_fetch != true }}
+        continue-on-error: true
+        env:
+          NHL_ODDS_API_KEY: ${{ secrets.NHL_ODDS_API_KEY }}
+          PYTHONPATH: src
+        run: |
+          python scripts/run_provider_shadow.py --live --props \
+            --overwrite-staging \
+            --credit-cap "${{ inputs.props_credit_cap || '90' }}"
+
+      - name: Record what went wrong
+        # One place that knows whether the run was degraded, so the summary,
+        # the comment, and the exit status cannot disagree about it.
+        id: health
+        if: always()
+        run: |
+          set -u
+          : > run_degraded.txt
+          if [ ! -f data/processed/player_game_logs.csv ]; then
+            echo "No player logs: no prop can be priced, so no card can be built. The NHL API could not be reached and no previous cache was restored." >> run_degraded.txt
+          elif [ "${{ steps.results.outcome }}" = "failure" ]; then
+            echo "Results could not be refreshed; the models were fitted on the previously cached games." >> run_degraded.txt
+          fi
+          if [ "${{ steps.prices.outcome }}" = "failure" ]; then
+            echo "The price fetch failed, so the card was built from whatever was already staged. No price was invented." >> run_degraded.txt
+          fi
+          if [ -s run_degraded.txt ]; then
+            echo "degraded=true" >> "$GITHUB_OUTPUT"
+            cat run_degraded.txt
+          else
+            echo "degraded=false" >> "$GITHUB_OUTPUT"
+            echo "Nothing went wrong."
+          fi
+
+      - name: Rebuild the measurement reports
+        # Soft: a measurement failure must never cost a card, and the card's
+        # own gates do not depend on these reports.
+        continue-on-error: true
+        env:
+          PYTHONPATH: src
+        run: |
+          python scripts/run_props_calibration.py --reuse-samples || \
+            python scripts/run_props_calibration.py
+          python scripts/run_player_props_backtest.py
+          python scripts/run_what_we_can_claim.py
+
+      - name: Render the card
+        id: card
+        if: always()
+        env:
+          PYTHONPATH: src
+        run: |
+          python scripts/run_gameday_card.py
+
+      - name: Write the card to the run summary
+        if: always()
+        run: |
+          {
+            echo "## Gameday card"
+            echo
+            cat data/outputs/gameday_card.md 2>/dev/null || echo "No card was produced."
+            echo
+            echo "## What went wrong"
+            echo
+            if [ -s run_degraded.txt ]; then cat run_degraded.txt; else echo "Nothing."; fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Post the card to the operating home
+        # Delivery. GitHub emails everyone watching the issue, so commenting is
+        # the whole mechanism: no SMTP server, no credentials, no third party.
+        #
+        # Normally only when the selections change — a card a day would train
+        # the reader to ignore them. But a degraded run always posts, because
+        # silence is only safe to read as "nothing moved" if anything going
+        # wrong breaks the silence.
+        if: always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PYTHONPATH: src
+        run: |
+          set -u
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          DECISION=$(python scripts/post_card_to_issue.py \
+            --previous-json previous_card.json \
+            --out card_comment.md --title-out card_title.txt \
+            --body-out issue_body.md \
+            --degraded-file run_degraded.txt --run-url "$RUN_URL" \
+            ${{ inputs.force_post == true && '--force' || '' }} | tail -1)
+          if [ "$DECISION" != "post" ]; then
+            echo "Not posting: the run was clean and the selections did not change."
+            exit 0
+          fi
+          # The title comes from the module so the two cannot drift apart and
+          # start posting to different issues. Matched exactly against the open
+          # issues rather than through the search API: the title contains an em
+          # dash, and a search quietly returning nothing would create a
+          # duplicate issue every run.
+          TITLE=$(cat card_title.txt)
+          NUMBER=$(gh issue list --state open --limit 200 --json number,title \
+            | jq -r --arg t "$TITLE" \
+              '[.[] | select(.title == $t)] | .[0].number // empty')
+          if [ -z "$NUMBER" ]; then
+            echo "Creating the operating-home issue."
+            NUMBER=$(gh issue create --title "$TITLE" \
+              --body-file issue_body.md | grep -o '[0-9]*$')
+            gh issue pin "$NUMBER" || echo "Could not pin; not fatal."
+          fi
+          gh issue comment "$NUMBER" --body-file card_comment.md
+          echo "Card posted to issue #$NUMBER."
+
+      - name: Upload the reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gameday-reports
+          path: |
+            data/outputs/gameday_card.md
+            data/outputs/gameday_card.json
+            data/outputs/provider_shadow_verification.md
+            data/outputs/provider_market_discovery.md
+            data/outputs/props_calibration.md
+            data/outputs/player_props_backtest.md
+            data/outputs/what_we_can_claim.md
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Upload the state for the next run
+        # The boxscore cache and the previous card are the only link between
+        # one gameday and the next, which is why they outlive the reports. The
+        # card in particular: without it the "selections changed" marker cannot
+        # mean anything.
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gameday-state
+          path: |
+            data/raw/nhl/boxscore
+            data/raw/nhl/registry
+            data/processed
+            data/outputs/gameday_card.json
+            data/outputs/prop_calibration_samples.csv
+          if-no-files-found: warn
+          retention-days: 90
+
+      - name: Report the outcome
+        # Last, and the only step that can fail the job. Everything above is
+        # allowed to degrade so the card still gets built, summarised and
+        # delivered; the run then finishes red so the failure notice arrives.
+        if: always()
+        run: |
+          echo "This job refetched results and prices and rebuilt reports."
+          echo "It placed no bet, edited no policy, wrote no receipt,"
+          echo "allowlisted no provider, and widened no market scope."
+          if [ "${{ steps.health.outputs.degraded }}" = "true" ]; then
+            echo "::error::This run was degraded. The card was still built and posted; see the job summary."
+            exit 1
+          fi
+          echo "Clean run."
