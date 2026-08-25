@@ -228,3 +228,29 @@ def test_coverage_is_a_declared_dependency() -> None:
     """CI installs from requirements.txt; a step using a tool that is not
     there fails twenty minutes into a job."""
     assert "coverage" in _read("requirements.txt")
+
+
+@pytest.mark.parametrize(
+    "workflow", ["gameday-refresh.yml", "historical-props-purchase.yml"]
+)
+def test_state_restore_names_the_artifact_it_wants(workflow: str) -> None:
+    """Without `--name`, `gh` puts each artifact in a subdirectory named after
+    itself — the cache lands where nothing looks for it, the step still
+    reports success, and the run silently refetches everything it already
+    had."""
+    text = (PROJECT_ROOT / ".github" / "workflows" / workflow).read_text(
+        encoding="utf-8"
+    )
+    if "gh run download" not in text:
+        pytest.skip("This workflow restores no state.")
+
+    for line in text.splitlines():
+        if "gh run download" in line:
+            assert "--name" in line, line
+
+
+def test_a_failed_restore_is_warned_about_rather_than_passed_over() -> None:
+    """It is `continue-on-error`, so silence would look like success."""
+    text = _read(".github/workflows/historical-props-purchase.yml")
+
+    assert "No boxscores were restored" in text
