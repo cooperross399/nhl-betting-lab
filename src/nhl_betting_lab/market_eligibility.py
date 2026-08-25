@@ -29,6 +29,24 @@ and modelled. A market the provider could not supply is a different thing
 entirely, and presenting one as the other misrepresents the card.
 
 Nothing here invents a price. Absence stays absence.
+
+## A tension worth naming rather than quietly resolving
+
+`require_full_slate` treats a market priced for ten of twelve games as
+incomplete, and excludes it. For team markets that is plainly right: a
+provider that covers part of a slate is one whose coverage correlates with
+something, and picking only where prices exist is a selection effect.
+
+For props the argument is weaker. Books post player props for the games they
+post them for, and the bettor is not choosing the subset — the book is. A
+strict reading could keep every prop market permanently ineligible, which
+would make the lab's primary product unreachable.
+
+That tension is left strict on purpose. If props do turn out to be
+systematically incomplete, the honest response is to **measure whether the
+covered subset differs from the rest** — not to loosen the gate because the
+gate is inconvenient. Loosening it without that measurement would be exactly
+the move this repository exists to not make.
 """
 
 from __future__ import annotations

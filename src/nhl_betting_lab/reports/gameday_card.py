@@ -19,6 +19,20 @@ the thing with the most gates in front of it. In order:
 6. **The puck-drop guard.** Anything whose game has started, or whose start
    cannot be confirmed, is quarantined and its stake removed.
 
+## Why edges are computed against the vigged price, on every market
+
+`devig_two_way` exists and is deliberately not used here. On a two-sided team
+market both sides are quoted, so the vig *could* be split out; on a prop it
+usually cannot, because books quote the Over alone.
+
+Devigging only where it is possible would make the two thresholds in
+`config.py` mean different things — a 3.5% team edge measured without vig and
+a 6% prop edge measured with it are not on one scale, and the card ranks them
+against each other. So both are computed the same way, against the price as
+sold. Every edge on this card is therefore **understated**, uniformly, and
+being wrong in the conservative direction on both is better than being right
+on one and incomparable across the two.
+
 Two rules run through all of it:
 
 **A blocked card produces no selections, not placeholder ones.** An empty card

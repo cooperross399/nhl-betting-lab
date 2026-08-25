@@ -292,3 +292,14 @@ def test_slate_games_are_deduplicated() -> None:
 def test_only_eligible_is_a_usable_state() -> None:
     """The list of states that may produce a pick is exactly one long."""
     assert elig.USABLE_STATES == {elig.ELIGIBLE}
+
+
+def test_the_slate_coverage_tension_is_named_rather_than_resolved_quietly() -> None:
+    """A strict reading could keep every prop market permanently ineligible,
+    which would make the lab's primary product unreachable. Loosening the gate
+    without measuring whether the covered subset differs is the move this
+    repository exists to not make."""
+    text = " ".join(elig.__doc__.split())
+
+    assert "left strict on purpose" in text
+    assert "measure whether the covered subset differs" in text
