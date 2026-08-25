@@ -1,0 +1,149 @@
+name: Historical Props Purchase
+
+# Buys historical prop prices so the model can be measured against prices that
+# were actually for sale.
+#
+# THIS SPENDS CREDITS, and it is the most expensive thing in the repository:
+# ten credits per market per event, an order of magnitude above the live rate.
+# Six markets across one twelve-game night is 720 credits.
+#
+# It is manual-dispatch only and will never be put on a schedule. The credit
+# cap is a required input and is enforced before each request rather than
+# checked afterwards.
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "probe (one event, find out what is retained) or buy"
+        type: choice
+        required: true
+        options: [probe, buy]
+        default: probe
+      credit_cap:
+        description: "Hard cap on credits for this run. Required."
+        type: string
+        required: true
+        default: "60"
+      start_date:
+        description: "ISO start date, for mode=buy"
+        type: string
+        required: false
+        default: ""
+      end_date:
+        description: "ISO end date, for mode=buy"
+        type: string
+        required: false
+        default: ""
+      hours_before:
+        description: "Hours before puck drop to price at"
+        type: string
+        required: false
+        default: "4"
+
+permissions:
+  contents: read
+
+jobs:
+  purchase:
+    name: Historical props purchase
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install project
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install -e .
+
+      - name: Check the provider credential
+        env:
+          NHL_ODDS_API_KEY: ${{ secrets.NHL_ODDS_API_KEY }}
+          PYTHONPATH: src
+        run: |
+          python scripts/check_provider_credential.py
+
+      - name: State the cost before spending it
+        env:
+          PYTHONPATH: src
+        run: |
+          echo "Mode: ${{ inputs.mode }}"
+          echo "Hard credit cap: ${{ inputs.credit_cap }}"
+          echo "Historical endpoints bill 10 credits per market per event."
+
+      - name: Probe retention
+        if: ${{ inputs.mode == 'probe' }}
+        env:
+          NHL_ODDS_API_KEY: ${{ secrets.NHL_ODDS_API_KEY }}
+          PYTHONPATH: src
+        run: |
+          python scripts/buy_historical_props.py --probe --live \
+            --credit-cap "${{ inputs.credit_cap }}" \
+            --hours-before "${{ inputs.hours_before }}"
+
+      - name: Buy a window
+        if: ${{ inputs.mode == 'buy' }}
+        env:
+          NHL_ODDS_API_KEY: ${{ secrets.NHL_ODDS_API_KEY }}
+          PYTHONPATH: src
+        run: |
+          if [ -z "${{ inputs.start_date }}" ] || [ -z "${{ inputs.end_date }}" ]; then
+            echo "::error::mode=buy needs start_date and end_date."
+            exit 1
+          fi
+          python scripts/buy_historical_props.py --live \
+            --from "${{ inputs.start_date }}" --to "${{ inputs.end_date }}" \
+            --credit-cap "${{ inputs.credit_cap }}" \
+            --hours-before "${{ inputs.hours_before }}"
+
+      - name: Rebuild the backtest with whatever was bought
+        if: always()
+        continue-on-error: true
+        env:
+          PYTHONPATH: src
+        run: |
+          python scripts/run_player_props_backtest.py
+          python scripts/run_what_we_can_claim.py
+
+      - name: Write the result to the run summary
+        if: always()
+        run: |
+          {
+            echo "## What can be measured"
+            echo
+            cat data/outputs/player_props_backtest.md 2>/dev/null \
+              || echo "No backtest report was produced."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload what was bought
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: historical-props
+          path: |
+            data/raw/historical_props
+            data/processed/historical_prop_prices.csv
+            data/outputs/historical_props_retention.json
+            data/outputs/player_props_backtest.md
+            data/outputs/what_we_can_claim.md
+          if-no-files-found: warn
+          retention-days: 90
+
+      - name: Confirm the boundary
+        if: always()
+        run: |
+          echo "This job bought prices and rebuilt the measurement reports."
+          echo "It placed no bet, edited no policy, wrote no receipt, and"
+          echo "allowlisted no market."

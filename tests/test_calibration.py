@@ -339,3 +339,51 @@ def test_grouping_is_off_by_default_so_a_three_tuple_still_works() -> None:
     result = cal.walk_forward_calibrate(rows, minimum_fit_samples=1)
 
     assert len(result.scored) == 1
+
+
+def test_the_vectorised_fit_matches_a_scalar_reference() -> None:
+    """The Newton loop was rewritten for speed. Same arithmetic, or it is not
+    a speed-up, it is a different model."""
+    samples = _overconfident_samples(1200, seed=11)
+
+    fitted = cal.PlattCalibration.fit(samples)
+
+    # A plain scalar Newton, written out here so the two cannot share a bug.
+    xs = [cal.logit(p) for p, _ in samples]
+    ys = [1.0 if won else 0.0 for _, won in samples]
+    a, b = 0.0, 1.0
+    for _ in range(60):
+        g0 = g1 = h00 = h01 = h11 = 0.0
+        for x, y in zip(xs, ys):
+            p = cal.sigmoid(a + b * x)
+            w = max(p * (1.0 - p), 1e-9)
+            g0 += p - y
+            g1 += (p - y) * x
+            h00 += w
+            h01 += w * x
+            h11 += w * x * x
+        determinant = h00 * h11 - h01 * h01
+        if abs(determinant) < 1e-12:
+            break
+        da = (h11 * g0 - h01 * g1) / determinant
+        db = (h00 * g1 - h01 * g0) / determinant
+        a -= da
+        b -= db
+        if abs(da) < 1e-10 and abs(db) < 1e-10:
+            break
+
+    assert fitted.intercept == pytest.approx(a, abs=1e-8)
+    assert fitted.slope == pytest.approx(b, abs=1e-8)
+
+
+def test_the_fit_survives_probabilities_at_both_extremes() -> None:
+    """The stable-sigmoid branches exist so exp does not overflow here."""
+    samples = [(0.0001, False)] * 400 + [(0.9999, True)] * 400 + [
+        (0.5, index % 2 == 0) for index in range(400)
+    ]
+
+    fitted = cal.PlattCalibration.fit(samples)
+
+    assert math.isfinite(fitted.intercept)
+    assert math.isfinite(fitted.slope)
+    assert 0.0 <= fitted.apply(0.5) <= 1.0

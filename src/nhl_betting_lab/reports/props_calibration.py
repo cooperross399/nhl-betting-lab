@@ -306,6 +306,12 @@ def build_calibration_report(
         "Both a pooled correction and an ice-time-conditional one are shown "
         "for every market, whether or not the conditional one wins. A variant "
         "reported only when it wins is a selection, not a measurement.",
+        "**Neither correction is in force on the card.** The card prices "
+        "props with the raw model. Calibration cannot rule a model in, so a "
+        "correction ships only when the price-based backtest in "
+        "`data/outputs/player_props_backtest.md` says it should — and that "
+        "report currently measures nothing, because no historical prices have "
+        "been bought.",
     ]
     return report
 
