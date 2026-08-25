@@ -71,9 +71,16 @@ def test_the_ice_time_split_is_reported() -> None:
 
 
 def test_the_conditional_correction_beats_the_pooled_one_on_a_split_defect() -> None:
-    """Two buckets needing opposite corrections is what the real data shows."""
+    """Two buckets needing opposite corrections is what the real data shows.
+
+    Three thousand samples rather than fourteen hundred: at the smaller size
+    neither group accumulates enough of its own history to be fitted before
+    the run ends, so the two corrections are identical and the assertion
+    passes or fails on float summation order. A test that decides a real
+    question must not sit on that boundary.
+    """
     report = report_module.build_calibration_report(
-        _samples(1400), minimum_fit_samples=200
+        _samples(3000), minimum_fit_samples=300
     )
 
     assert report.markets[0].grouped_beats_pooled is True
@@ -82,7 +89,7 @@ def test_the_conditional_correction_beats_the_pooled_one_on_a_split_defect() -> 
 def test_both_corrections_are_reported_whether_or_not_the_variant_wins() -> None:
     """A variant shown only when it wins is a selection, not a measurement."""
     report = report_module.build_calibration_report(
-        _samples(1400), minimum_fit_samples=200
+        _samples(3000), minimum_fit_samples=300
     )
 
     rendered = report_module.render_calibration(report)
@@ -94,7 +101,7 @@ def test_both_corrections_are_reported_whether_or_not_the_variant_wins() -> None
 
 def test_the_report_points_at_the_mechanism_document() -> None:
     report = report_module.build_calibration_report(
-        _samples(1400), minimum_fit_samples=200
+        _samples(3000), minimum_fit_samples=300
     )
 
     rendered = report_module.render_calibration(report)
@@ -149,7 +156,7 @@ def test_saving_writes_both_outputs_at_the_contract_path(tmp_path: Path) -> None
 
 def test_the_json_carries_both_corrections_for_every_market(tmp_path: Path) -> None:
     report = report_module.build_calibration_report(
-        _samples(1400), minimum_fit_samples=200
+        _samples(3000), minimum_fit_samples=300
     )
 
     paths = report_module.save_calibration_report(report, output_dir=tmp_path)
