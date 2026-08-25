@@ -38,9 +38,16 @@ have per game. The boxscore does not carry it. The stats API carries it as a
 season total, which cannot be used walk-forward without leakage.
 
 So the model uses a **leak-free proxy**: a rolling share of the player's
-recent power-play points against the team's, computed from per-game boxscore
-data only. That is noisier than PP TOI would be, and this is stated in every
-report that depends on it rather than quietly assumed away.
+recent power-play *goals* against his team's, computed from per-game boxscore
+data only. Power-play goals is what the boxscore actually carries — not PP
+assists, not PP points, not PP time. It is a much noisier deployment signal
+than PP TOI would be, especially for a defenceman who quarterbacks a unit and
+rarely finishes, and this is stated in every report that depends on it rather
+than quietly assumed away.
+
+There is deliberately no `power_play_points` column in the processed logs.
+Naming a goals count "points" would be a lie the model would inherit and every
+downstream report would repeat.
 
 If per-game PP TOI becomes reachable without leakage, it replaces the proxy and
 the change is judged by the backtest, not by whether it looks more principled.
