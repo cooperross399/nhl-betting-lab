@@ -453,3 +453,63 @@ def test_the_frame_has_a_stable_column_order() -> None:
     rows = odds_api.normalize_event(_event(markets=[_h2h()]), fetched_at="now")
 
     assert list(odds_api.to_frame(rows).columns) == list(odds_api.PRICE_COLUMNS)
+
+
+# -- the off-season -----------------------------------------------------
+
+
+def test_an_empty_slate_is_reported_as_such_rather_than_as_a_failure() -> None:
+    """The provider answers 422 when a sport has nothing on the board, which
+    is the ordinary state of icehockey_nhl from June to October."""
+    requester = RecordingRequester(
+        {
+            "/odds": FakeResponse(status_code=422),
+            "/events": FakeResponse([]),
+        }
+    )
+    provider = odds_api.OddsApiProvider(
+        environment=ENVIRONMENT, requester=requester
+    )
+
+    with pytest.raises(odds_api.EmptySlateError, match="off-season"):
+        provider.fetch_team_markets()
+
+
+def test_a_422_with_games_on_the_board_is_still_a_failure() -> None:
+    """The same status can mean a malformed request, and reading "your markets
+    parameter is wrong" as "the season has not started" would hide a real bug
+    for months."""
+    requester = RecordingRequester(
+        {
+            "/odds": FakeResponse(status_code=422),
+            "/events": FakeResponse([{"id": "evt1"}]),
+        }
+    )
+    provider = odds_api.OddsApiProvider(
+        environment=ENVIRONMENT, requester=requester
+    )
+
+    with pytest.raises(odds_api.ProviderError) as exc:
+        provider.fetch_team_markets()
+
+    assert not isinstance(exc.value, odds_api.EmptySlateError)
+    assert "422" in str(exc.value)
+
+
+def test_an_empty_slate_error_is_still_a_provider_error() -> None:
+    """So a caller that does not care about the distinction still catches it."""
+    assert issubclass(odds_api.EmptySlateError, odds_api.ProviderError)
+
+
+def test_other_statuses_are_never_read_as_an_empty_slate() -> None:
+    requester = RecordingRequester(
+        {"/odds": FakeResponse(status_code=500), "/events": FakeResponse([])}
+    )
+    provider = odds_api.OddsApiProvider(
+        environment=ENVIRONMENT, requester=requester
+    )
+
+    with pytest.raises(odds_api.ProviderError) as exc:
+        provider.fetch_team_markets()
+
+    assert not isinstance(exc.value, odds_api.EmptySlateError)

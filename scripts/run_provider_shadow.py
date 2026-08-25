@@ -30,6 +30,7 @@ import pandas as pd
 
 from nhl_betting_lab.config import OUTPUTS_DIR, STAGING_DIR
 from nhl_betting_lab.providers import odds_api
+from nhl_betting_lab.providers.odds_api import EmptySlateError
 from nhl_betting_lab.providers.env_file import load_provider_env
 from nhl_betting_lab.reports.provider_shadow import (
     build_shadow_summary,
@@ -110,6 +111,12 @@ def main(argv: list[str] | None = None) -> int:
         stamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
         try:
             team = provider.fetch_team_markets(fetched_at=stamp)
+        except EmptySlateError as exc:
+            # Exit 3 marks a state the caller should not treat as a failure.
+            # The off-season lasts four months; a red run every day of it is a
+            # red nobody reads in October.
+            print(f"No slate: {exc}")
+            return 3
         except odds_api.ProviderError as exc:
             print(f"Team-market fetch failed: {exc}", file=sys.stderr)
             return 2

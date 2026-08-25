@@ -182,9 +182,21 @@ jobs:
           NHL_ODDS_API_KEY: ${{ secrets.NHL_ODDS_API_KEY }}
           PYTHONPATH: src
         run: |
+          set +e
           python scripts/run_provider_shadow.py --live --props \
             --overwrite-staging \
             --credit-cap "${{ inputs.props_credit_cap || '90' }}"
+          code=$?
+          set -e
+          # 3 means there are no NHL games on the board. The off-season runs
+          # from mid-June to early October, and a red run every day of it is a
+          # red nobody reads on opening night.
+          if [ "$code" -eq 3 ]; then
+            echo "empty_slate=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::No NHL games are scheduled, so there was nothing to price. Not a fault."
+            exit 0
+          fi
+          exit "$code"
 
       - name: Record what went wrong
         # One place that knows whether the run was degraded, so the summary,
@@ -194,12 +206,15 @@ jobs:
         run: |
           set -u
           : > run_degraded.txt
+          : > run_quiet.txt
           if [ ! -f data/processed/player_game_logs.csv ]; then
             echo "No player logs: no prop can be priced, so no card can be built. The NHL API could not be reached and no previous cache was restored." >> run_degraded.txt
           elif [ "${{ steps.results.outcome }}" = "failure" ]; then
             echo "Results could not be refreshed; the models were fitted on the previously cached games." >> run_degraded.txt
           fi
-          if [ "${{ steps.prices.outcome }}" = "failure" ]; then
+          if [ "${{ steps.prices.outputs.empty_slate }}" = "true" ]; then
+            echo "No NHL games are scheduled, so there was nothing to price. Not a fault." >> run_quiet.txt
+          elif [ "${{ steps.prices.outcome }}" = "failure" ]; then
             echo "The price fetch failed, so the card was built from whatever was already staged. No price was invented." >> run_degraded.txt
           fi
           if [ -s run_degraded.txt ]; then
@@ -261,6 +276,10 @@ jobs:
         run: |
           set -u
           RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          if [ "${{ steps.prices.outputs.empty_slate }}" = "true" ]; then
+            echo "No NHL games are scheduled; there is no card to post."
+            exit 0
+          fi
           DECISION=$(python scripts/post_card_to_issue.py \
             --previous-json previous_card.json \
             --out card_comment.md --title-out card_title.txt \
@@ -334,6 +353,10 @@ jobs:
           echo "This job refetched results and prices and rebuilt reports."
           echo "It placed no bet, edited no policy, wrote no receipt,"
           echo "allowlisted no provider, and widened no market scope."
+          if [ "${{ steps.prices.outputs.empty_slate }}" = "true" ]; then
+            echo "::notice::No NHL games were scheduled. Nothing to price, and nothing wrong."
+            exit 0
+          fi
           if [ "${{ steps.health.outputs.degraded }}" = "true" ]; then
             echo "::error::This run was degraded. The card was still built and posted; see the job summary."
             exit 1

@@ -254,3 +254,21 @@ def test_a_failed_restore_is_warned_about_rather_than_passed_over() -> None:
     text = _read(".github/workflows/historical-props-purchase.yml")
 
     assert "No boxscores were restored" in text
+
+
+def test_an_empty_slate_is_not_reported_as_a_failure() -> None:
+    """The off-season runs mid-June to early October. A red run every day of
+    it is a red nobody reads on opening night."""
+    text = _read(".github/workflows/gameday-refresh.yml")
+
+    assert "empty_slate=true" in text
+    assert "Not a fault" in text
+    assert 'code" -eq 3' in text
+
+
+def test_an_empty_slate_posts_no_card() -> None:
+    """A comment a day saying "no games today" trains the reader to ignore
+    the one that matters."""
+    text = _read(".github/workflows/gameday-refresh.yml")
+
+    assert "there is no card to post" in text
