@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
@@ -39,6 +40,20 @@ STATS_BASE_URL = "https://api.nhle.com/stats/rest/en"
 #: usual terminal state; `FINAL` appears briefly between the final horn and
 #: the official close.
 FINAL_GAME_STATES = frozenset({"OFF", "FINAL"})
+
+#: HTTP statuses worth retrying. 429 is the NHL API asking for a slower pace,
+#: and a cold cache makes about four thousand requests — enough to earn one.
+#: The first workflow run to fetch from scratch was rate-limited into
+#: near-total failure and the reports downstream simply had less data, with
+#: nothing saying so.
+RETRYABLE_STATUSES = frozenset({429, 500, 502, 503, 504})
+
+#: Attempts per request, including the first. Backoff doubles each time.
+MAX_ATTEMPTS = 4
+
+#: Seconds before the first retry. Deliberately generous: being asked to slow
+#: down and then retrying immediately is how a client earns a longer ban.
+INITIAL_BACKOFF_SECONDS = 2.0
 
 #: Team abbreviation shape. Used to refuse a path segment that could escape
 #: the cache directory or the API's own routing.
@@ -99,20 +114,44 @@ def _get_json(
     requester: Requester,
     params: dict[str, str] | None = None,
     timeout_seconds: float = 30.0,
+    sleeper: Callable[[float], None] | None = None,
 ) -> Any:
-    try:
-        response = requester(url, params=params or {}, timeout=timeout_seconds)
-    except (requests.RequestException, OSError, TimeoutError) as exc:
-        raise NhlApiError(
-            f"The NHL API could not be reached ({type(exc).__name__})."
-        ) from exc
-    status = int(getattr(response, "status_code", 0) or 0)
-    if status != 200:
-        raise NhlApiError(f"The NHL API returned HTTP {status or 'unknown'}.")
-    try:
-        return response.json()
-    except (AttributeError, TypeError, ValueError) as exc:
-        raise NhlApiError("The NHL API returned unreadable JSON.") from exc
+    """Fetch and parse, retrying the statuses that mean "try again".
+
+    A cold cache makes about four thousand requests, which is enough to earn a
+    429. Without a retry the fetch simply returns less data and every report
+    downstream is quietly thinner, with nothing saying so — which is the same
+    silent-shortfall failure this repository keeps finding.
+    """
+    # Resolved at call time rather than bound as a default, so a test that
+    # patches `time.sleep` is actually obeyed. A default argument captures the
+    # function at import and silently ignores the patch, which is how a suite
+    # ends up spending half a minute asleep.
+    wait = sleeper if sleeper is not None else time.sleep
+    delay = INITIAL_BACKOFF_SECONDS
+    last: str = ""
+    for attempt in range(1, MAX_ATTEMPTS + 1):
+        try:
+            response = requester(url, params=params or {}, timeout=timeout_seconds)
+        except (requests.RequestException, OSError, TimeoutError) as exc:
+            last = f"The NHL API could not be reached ({type(exc).__name__})."
+            if attempt == MAX_ATTEMPTS:
+                raise NhlApiError(last) from exc
+            wait(delay)
+            delay *= 2
+            continue
+        status = int(getattr(response, "status_code", 0) or 0)
+        if status == 200:
+            try:
+                return response.json()
+            except (AttributeError, TypeError, ValueError) as exc:
+                raise NhlApiError("The NHL API returned unreadable JSON.") from exc
+        last = f"The NHL API returned HTTP {status or 'unknown'}."
+        if status not in RETRYABLE_STATUSES or attempt == MAX_ATTEMPTS:
+            raise NhlApiError(last)
+        wait(delay)
+        delay *= 2
+    raise NhlApiError(last or "The NHL API could not be reached.")
 
 
 def game_is_final(payload: Any) -> bool:

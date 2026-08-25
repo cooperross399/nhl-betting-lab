@@ -112,8 +112,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--polite-seconds",
         type=float,
-        default=0.2,
-        help="Pause between live requests. The API is free; do not hammer it.",
+        default=0.25,
+        help=(
+            "Pause between live requests. The API is free and it rate-limits: "
+            "a cold cache is about four thousand requests, and 0.05 earned an "
+            "HTTP 429 that thinned every report downstream with nothing "
+            "saying so."
+        ),
     )
     parser.add_argument(
         "--max-games",

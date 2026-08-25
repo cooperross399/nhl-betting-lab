@@ -290,3 +290,99 @@ def test_the_client_never_sends_a_credential(tmp_path: Path) -> None:
     _, kwargs = requester.calls[0]
     assert "apiKey" not in json.dumps(kwargs)
     assert kwargs.get("params") == {}
+
+
+# -- rate limiting ------------------------------------------------------
+
+
+def test_a_rate_limited_request_is_retried(tmp_path: Path) -> None:
+    """A cold cache makes about four thousand requests, which is enough to
+    earn a 429. Without a retry the fetch simply returns less data and every
+    report downstream is quietly thinner."""
+    attempts = {"n": 0}
+
+    def flaky(url: str, **kwargs: object) -> object:
+        attempts["n"] += 1
+        if attempts["n"] < 3:
+            return FakeResponse(status_code=429)
+        return FakeResponse(boxscore_payload(game_state="OFF"))
+
+    slept: list[float] = []
+    nhl_api._get_json(
+        "https://example/x", requester=flaky, sleeper=slept.append
+    )
+
+    assert attempts["n"] == 3
+    assert slept == [2.0, 4.0]
+
+
+def test_backoff_doubles_rather_than_retrying_immediately() -> None:
+    """Being asked to slow down and retrying at once earns a longer ban."""
+    slept: list[float] = []
+
+    with pytest.raises(nhl_api.NhlApiError):
+        nhl_api._get_json(
+            "https://example/x",
+            requester=lambda url, **kwargs: FakeResponse(status_code=429),
+            sleeper=slept.append,
+        )
+
+    assert slept == [2.0, 4.0, 8.0]
+
+
+def test_a_client_error_is_not_retried() -> None:
+    """A 404 will still be a 404 in two seconds."""
+    attempts = {"n": 0}
+
+    def missing(url: str, **kwargs: object) -> object:
+        attempts["n"] += 1
+        return FakeResponse(status_code=404)
+
+    with pytest.raises(nhl_api.NhlApiError, match="404"):
+        nhl_api._get_json("https://example/x", requester=missing, sleeper=lambda _: None)
+
+    assert attempts["n"] == 1
+
+
+@pytest.mark.parametrize("status", [429, 500, 502, 503, 504])
+def test_every_retryable_status_is_retried(status: int) -> None:
+    attempts = {"n": 0}
+
+    def flaky(url: str, **kwargs: object) -> object:
+        attempts["n"] += 1
+        if attempts["n"] < 2:
+            return FakeResponse(status_code=status)
+        return FakeResponse({"ok": True})
+
+    nhl_api._get_json(
+        "https://example/x", requester=flaky, sleeper=lambda _: None
+    )
+
+    assert attempts["n"] == 2
+
+
+def test_a_connection_error_is_retried_then_reported() -> None:
+    def explode(url: str, **kwargs: object) -> object:
+        raise requests.ConnectionError("no route")
+
+    slept: list[float] = []
+    with pytest.raises(nhl_api.NhlApiError, match="could not be reached"):
+        nhl_api._get_json(
+            "https://example/x", requester=explode, sleeper=slept.append
+        )
+
+    assert len(slept) == nhl_api.MAX_ATTEMPTS - 1
+
+
+def test_unreadable_json_is_not_retried() -> None:
+    """A malformed body is not a transient condition."""
+    attempts = {"n": 0}
+
+    def bad(url: str, **kwargs: object) -> object:
+        attempts["n"] += 1
+        return FakeResponse(raises=ValueError("not json"))
+
+    with pytest.raises(nhl_api.NhlApiError, match="unreadable"):
+        nhl_api._get_json("https://example/x", requester=bad, sleeper=lambda _: None)
+
+    assert attempts["n"] == 1
