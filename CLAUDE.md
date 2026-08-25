@@ -43,8 +43,11 @@ Re-derive rather than trust if the data has moved.
 
 - **Nothing has a demonstrated edge, because nothing has been measured against
   real prices.** No historical prop or team prices have been bought. That is a
-  spending decision, not a technical gap: ten credits per market per event,
-  720 for one twelve-game night across six markets.
+  spending decision, not a technical gap. The per-event historical rate is
+  between one and ten credits per market: the provider documents ten for its
+  bulk endpoint and is ambiguous about the per-event one, so the real number
+  is read from `x-requests-last` and the cap is enforced against the
+  pessimistic reading.
 - **No market is allowlisted.** `data/manual/staging_provider_policy.json`
   allowlists nothing, so the card produces no selection, no lean, no pass and
   no stake. It lists every market with its reason. That is correct behaviour.

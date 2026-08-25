@@ -83,6 +83,9 @@ PYTHONPATH=src .venv/bin/python scripts/post_card_to_issue.py --out comment.md
 # Confirm the credential is present. Costs no quota; prints only its length.
 PYTHONPATH=src .venv/bin/python scripts/check_provider_credential.py
 
+# How many credits are left. The /v4/sports listing is documented as free.
+PYTHONPATH=src .venv/bin/python scripts/check_provider_quota.py
+
 # Assess whatever is already staged. No credits.
 PYTHONPATH=src .venv/bin/python scripts/run_provider_shadow.py
 
@@ -104,8 +107,11 @@ PYTHONPATH=src .venv/bin/python scripts/buy_historical_props.py \
     --probe --live --credit-cap 60
 ```
 
-Ten credits per market per event. Six markets across a twelve-game night is
-720 credits, so this is a spending decision rather than a default.
+Between one and ten credits per market per event. The provider documents ten
+for its bulk historical endpoint and is ambiguous about the per-event one, so
+the real rate is read from `x-requests-last` as it is spent and the cap is
+enforced against the pessimistic reading. Either way this is a spending
+decision rather than a default.
 
 ### Gates and tests
 
