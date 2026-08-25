@@ -555,3 +555,97 @@ def test_the_module_states_why_it_does_not_devig() -> None:
 
     assert "deliberately not used here" in text
     assert "understated" in text
+
+
+# -- defence in depth ---------------------------------------------------
+
+
+def test_a_leaked_excluded_market_blocks_the_whole_card(monkeypatch) -> None:
+    """The input is already filtered to eligible markets, so this branch only
+    fires if a future change upstream lets one through. Simulating that change
+    is the only way to know the net is there."""
+    rows = [_price_row(price=150)]
+    real = card_module.build_candidates
+
+    def leak(prices, probabilities, **kwargs):
+        selections, passes = real(prices, probabilities, **kwargs)
+        for candidate in selections:
+            candidate.market = "points"  # never eligible in this card
+        return selections, passes
+
+    monkeypatch.setattr(card_module, "build_candidates", leak)
+
+    card = card_module.build_card(
+        _prices(rows),
+        {_key(rows[0]): 0.60},
+        eligibility=_eligibility(["shots_on_goal"]),
+        now=NOW,
+    )
+
+    assert card.card_generated is False
+    assert card.best_bets == []
+    assert card.leans == []
+    assert card.passes == []
+    assert any("reached the selections" in item for item in card.blockers)
+
+
+def test_an_unusable_price_produces_no_candidate_at_all() -> None:
+    rows = [_price_row(price=150)]
+    prices = _prices(rows)
+    prices["american_odds"] = prices["american_odds"].astype(object)
+    prices.loc[0, "american_odds"] = "not a price"
+
+    card = card_module.build_card(
+        prices,
+        {_key(rows[0]): 0.60},
+        eligibility=_eligibility(["shots_on_goal"]),
+        now=NOW,
+    )
+
+    assert card.best_bets == []
+    assert card.passes == []
+
+
+def test_an_unparseable_line_is_treated_as_no_line() -> None:
+    rows = [_price_row(price=150, line=None)]
+    prices = _prices(rows)
+    prices["line"] = prices["line"].astype(object)
+    prices.loc[0, "line"] = "two and a half"
+
+    card = card_module.build_card(
+        prices,
+        {("shots_on_goal", "auston matthews", "TOR", "BOS", "over", None): 0.60},
+        eligibility=_eligibility(["shots_on_goal"]),
+        now=NOW,
+    )
+
+    assert card.card_generated is True
+
+
+def test_a_market_key_the_lab_does_not_know_produces_no_candidate() -> None:
+    rows = [_price_row(market="corner_kicks", price=150)]
+
+    card = card_module.build_card(
+        _prices(rows),
+        {_key(rows[0]): 0.60},
+        eligibility=_eligibility(["corner_kicks"]),
+        now=NOW,
+    )
+
+    assert card.best_bets == []
+    assert card.leans == []
+
+
+def test_a_tier_is_assigned_by_edge_size() -> None:
+    """Staking follows the tier, so the boundary is worth pinning down."""
+    assert card_module._tier_for(0.30, is_prop=False) == "A"
+    assert card_module._tier_for(0.10, is_prop=False) == "B"
+    assert card_module._tier_for(0.05, is_prop=False) == "C"
+    # A prop must clear a higher bar for the same tier.
+    assert card_module._tier_for(0.10, is_prop=True) == "C"
+
+
+def test_every_tier_has_a_stake_and_none_is_large() -> None:
+    """These are positions whose expected value is genuinely uncertain."""
+    assert set(card_module.TIER_UNITS) == {"A", "B", "C"}
+    assert all(0 < units <= 0.5 for units in card_module.TIER_UNITS.values())
