@@ -107,9 +107,9 @@ TEAM_MARKETS: tuple[Market, ...] = (
         selections=("home", "away"),
     ),
     Market(
-        key="total_5_5",
+        key="total_goals",
         provider_key="totals",
-        label="Total goals 5.5",
+        label="Total goals",
         is_prop=False,
         selections=("over", "under"),
     ),
@@ -131,12 +131,19 @@ PROVIDER_KEY_TO_MARKET: dict[str, str] = {
 #: market for a whole season because only the bulk one was checked.
 ALTERNATE_PROVIDER_KEYS: dict[str, str] = {
     "alternate_spreads": "puck_line",
-    "alternate_totals": "total_5_5",
+    "alternate_totals": "total_goals",
 }
 
-#: The line the provider's headline NHL total sits on almost every night. Used
-#: only to name the market; the actual line always comes from the response.
-DEFAULT_TOTAL_LINE = 5.5
+#: Where the provider's headline NHL total sits almost every night. Used for
+#: reporting only — the line a price is judged against always comes from the
+#: response, never from here.
+#:
+#: This market key is `total_goals` and not `total_5_5`. It carries whatever
+#: line the response holds, including the 6.5 and 7.5 rungs of the alternate
+#: ladder, and a key naming a line it does not always hold is the same lie as
+#: a column called `power_play_points` holding a count of goals. Renamed
+#: before any approval receipt could cite the old name.
+TYPICAL_TOTAL_LINE = 5.5
 
 #: Anytime goal scorer is goals over 0.5. There is one name for this in the
 #: repository, not two, so the two cannot disagree on the same card.

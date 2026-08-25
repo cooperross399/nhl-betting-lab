@@ -16,9 +16,11 @@ from pathlib import Path
 
 import pandas as pd
 
+from nhl_betting_lab.backtest import samples_are_current
 from nhl_betting_lab.backtest.team_walk_forward import generate_team_samples
 from nhl_betting_lab.config import MIN_EDGE, OUTPUTS_DIR, PROCESSED_DIR
 from nhl_betting_lab.data.build_datasets import load_team_games
+from nhl_betting_lab.markets import team_market_keys
 from nhl_betting_lab.reports.team_markets_measurement import (
     build_team_measurement,
     save_team_measurement,
@@ -47,10 +49,18 @@ def main(argv: list[str] | None = None) -> int:
     outputs = Path(args.output_dir)
     samples_path = outputs / SAMPLES_FILENAME
 
+    samples = None
     if args.reuse_samples and samples_path.is_file():
-        samples = pd.read_csv(samples_path)
-        print(f"Reusing {len(samples):,} cached samples from {samples_path}.")
-    else:
+        cached = pd.read_csv(samples_path)
+        current, reason = samples_are_current(
+            cached, known_markets=team_market_keys()
+        )
+        if current:
+            samples = cached
+            print(f"Reusing {len(samples):,} cached samples from {samples_path}.")
+        else:
+            print(f"Not reusing the cached samples: {reason}")
+    if samples is None:
         games = load_team_games(processed)
         if games.empty:
             print(

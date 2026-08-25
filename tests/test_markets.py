@@ -22,7 +22,7 @@ def test_every_team_market_the_brief_names_is_priced() -> None:
     assert set(markets.team_market_keys()) == {
         "moneyline",
         "puck_line",
-        "total_5_5",
+        "total_goals",
     }
 
 
@@ -71,7 +71,7 @@ def test_a_provider_key_maps_back_to_a_project_market() -> None:
 
 def test_alternate_ladders_map_to_the_same_project_market() -> None:
     """The whole EPL `total_2_5` lesson lives in this line."""
-    assert markets.market_for_provider_key("alternate_totals").key == "total_5_5"
+    assert markets.market_for_provider_key("alternate_totals").key == "total_goals"
     assert markets.market_for_provider_key("alternate_spreads").key == "puck_line"
 
 
@@ -95,3 +95,23 @@ def test_anytime_scorer_is_the_goals_market_at_half() -> None:
 
 def test_case_and_whitespace_do_not_change_a_lookup() -> None:
     assert markets.market_for("  GOALS  ").key == "goals"
+
+
+def test_the_totals_key_does_not_name_a_line_it_may_not_hold() -> None:
+    """It was `total_5_5` and carries 6.5 and 7.5 from the alternate ladder.
+    A key naming a line it does not always hold is the same lie as a column
+    called `power_play_points` holding a count of goals."""
+    assert "total_goals" in markets.MARKETS_BY_KEY
+    assert not any("5_5" in key for key in markets.MARKETS_BY_KEY)
+
+
+def test_no_market_key_hardcodes_a_line() -> None:
+    import re
+
+    for key in markets.MARKETS_BY_KEY:
+        assert not re.search(r"\d_\d", key), key
+
+
+def test_the_typical_total_line_is_reporting_only() -> None:
+    """The line a price is judged against comes from the response."""
+    assert markets.TYPICAL_TOTAL_LINE == 5.5

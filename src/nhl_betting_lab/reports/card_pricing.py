@@ -188,7 +188,7 @@ def price_team_markets(
                 probabilities[key] = sides["home_minus" if line < 0 else "home_plus"]
             elif selection == "away":
                 probabilities[key] = sides["away_minus" if line < 0 else "away_plus"]
-        elif market_key == "total_5_5":
+        elif market_key == "total_goals":
             if line is None:
                 continue
             totals = model.total_probabilities(home, away, line=line)

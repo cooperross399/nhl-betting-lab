@@ -104,7 +104,7 @@ def test_samples_cover_every_team_market() -> None:
         _games(400), minimum_history_games=50, refit_days=30
     )
 
-    assert set(samples["market"]) == {"moneyline", "puck_line", "total_5_5"}
+    assert set(samples["market"]) == {"moneyline", "puck_line", "total_goals"}
 
 
 def test_the_moneyline_sides_are_mutually_exclusive_per_game() -> None:
@@ -125,7 +125,7 @@ def test_a_push_is_recorded_rather_than_scored_as_a_loss() -> None:
         refit_days=30,
         total_lines=(6.0,),
     )
-    totals = samples[samples["market"] == "total_5_5"]
+    totals = samples[samples["market"] == "total_goals"]
 
     assert not totals.empty
     assert totals["push"].all()
@@ -139,8 +139,8 @@ def test_a_pushed_total_is_neither_an_over_nor_an_under() -> None:
         refit_days=30,
         total_lines=(6.0, 5.5),
     )
-    pushed = samples[(samples["market"] == "total_5_5") & (samples["line"] == 6.0)]
-    live = samples[(samples["market"] == "total_5_5") & (samples["line"] == 5.5)]
+    pushed = samples[(samples["market"] == "total_goals") & (samples["line"] == 6.0)]
+    live = samples[(samples["market"] == "total_goals") & (samples["line"] == 5.5)]
 
     assert set(pushed["outcome"]) == {False}
     # The same games clear 5.5, so the fixture is not simply always under.

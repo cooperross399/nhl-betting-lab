@@ -155,7 +155,7 @@ def test_an_unmatched_price_is_not_scored_as_a_loss() -> None:
 def test_a_push_returns_the_stake_rather_than_losing_it() -> None:
     samples = _samples(400)
     samples["push"] = False
-    samples.loc[samples.index[:50], "market"] = "total_5_5"
+    samples.loc[samples.index[:50], "market"] = "total_goals"
     samples.loc[samples.index[:50], "selection"] = "over"
     samples.loc[samples.index[:50], "line"] = 6.0
     samples.loc[samples.index[:50], "push"] = True
@@ -165,7 +165,7 @@ def test_a_push_returns_the_stake_rather_than_losing_it() -> None:
                 "date": row.date,
                 "home_team": "TOR",
                 "away_team": "BOS",
-                "market": "total_5_5",
+                "market": "total_goals",
                 "selection": "over",
                 "line": 6.0,
                 "american_odds": 150,
@@ -177,7 +177,7 @@ def test_a_push_returns_the_stake_rather_than_losing_it() -> None:
     report = tmm.build_team_measurement(
         samples, prices, edge_threshold=0.05, minimum_fit_samples=100
     )
-    totals = next(m for m in report.markets if m.market == "total_5_5")
+    totals = next(m for m in report.markets if m.market == "total_goals")
 
     assert totals.priced is not None
     assert totals.priced.profit == pytest.approx(0.0)

@@ -196,7 +196,7 @@ def test_the_puck_line_sign_decides_which_side_is_laying_the_goals() -> None:
 def test_a_totals_row_gets_over_and_under() -> None:
     model = TeamModel().fit(balanced_league())
     over = {
-        "market": "total_5_5",
+        "market": "total_goals",
         "player": "",
         "home_team": "AVA",
         "away_team": "AVB",

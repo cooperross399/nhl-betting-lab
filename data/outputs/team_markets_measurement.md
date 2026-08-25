@@ -2,16 +2,16 @@
 
 Moneyline, puck line and totals — calibrated walk-forward, and measured against real prices wherever any have been bought.
 
-- Generated: 2026-08-25T20:30:53+00:00
+- Generated: 2026-08-25T22:00:53+00:00
 - 51,212 walk-forward samples across 3 market(s) and 3,658 games; 0 market(s) have any price-based evidence.
 
 ## Calibration
 
 | Market | Samples | Brier raw | Brier corrected | Correction |
 |:-------|--------:|----------:|----------------:|:-----------|
-| `moneyline` (Moneyline) | 7,114 | 0.2430 | 0.2429 | intercept +0.000, slope 0.792 (fitted on 7254 samples) |
-| `puck_line` (Puck line (-1.5 / +1.5)) | 14,400 | 0.2066 | 0.2057 | intercept +0.000, slope 0.832 (fitted on 14484 samples) |
-| `total_5_5` (Total goals 5.5) | 29,032 | 0.2136 | 0.2137 | intercept +0.000, slope 1.005 (fitted on 29016 samples) |
+| `moneyline` (Moneyline) | 7,114 | 0.2430 | 0.2429 | intercept -0.000, slope 0.792 (fitted on 7254 samples) |
+| `puck_line` (Puck line (-1.5 / +1.5)) | 14,400 | 0.2066 | 0.2057 | intercept -0.000, slope 0.832 (fitted on 14484 samples) |
+| `total_goals` (Total goals) | 29,032 | 0.2136 | 0.2137 | intercept -0.000, slope 1.005 (fitted on 29016 samples) |
 
 ### `moneyline`
 
@@ -45,7 +45,7 @@ Moneyline, puck line and totals — calibrated walk-forward, and measured agains
 | 80%-90% | 1,397 | 83.7% | 78.5% | 76.3% .. 80.6% |
 | 90%-100% | 94 | 91.5% | 91.5% | 84.1% .. 95.6% |
 
-### `total_5_5`
+### `total_goals`
 
 - Over 29,032 held-out samples the correction makes no material difference to the Brier score (0.2136 raw, 0.2137 corrected, delta -0.00010). Calibration can rule this model out; it cannot rule it in. Whether the market disagrees with it profitably is a separate question, answered only by prices.
 

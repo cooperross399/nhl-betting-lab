@@ -369,7 +369,7 @@ class TeamModel:
         return {
             "moneyline": self.moneyline_probabilities(home_team, away_team),
             "puck_line": self.puck_line_probabilities(home_team, away_team),
-            "total_5_5": self.total_probabilities(
+            "total_goals": self.total_probabilities(
                 home_team, away_team, line=total_line
             ),
         }

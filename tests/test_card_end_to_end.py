@@ -167,7 +167,7 @@ def _prices() -> pd.DataFrame:
              "selection": "over", "line": 2.5, "american_odds": 160},
             {**common, "market": "moneyline", "player": "",
              "selection": "home", "line": None, "american_odds": 120},
-            {**common, "market": "total_5_5", "player": "",
+            {**common, "market": "total_goals", "player": "",
              "selection": "over", "line": 5.5, "american_odds": 110},
         ]
     )
@@ -252,7 +252,7 @@ def test_the_card_is_keyed_by_the_providers_own_labels(tmp_path: Path) -> None:
     card = build_card(
         prices,
         probabilities,
-        eligibility=_eligibility(["shots_on_goal", "moneyline", "total_5_5"]),
+        eligibility=_eligibility(["shots_on_goal", "moneyline", "total_goals"]),
         now=NOW,
     )
 

@@ -194,7 +194,7 @@ def test_alternate_ladders_land_in_the_same_project_market() -> None:
 
     rows = odds_api.normalize_event(_event(markets=[market]), fetched_at="now")
 
-    assert {row["market"] for row in rows} == {"total_5_5"}
+    assert {row["market"] for row in rows} == {"total_goals"}
     assert {row["line"] for row in rows} == {6.5}
 
 

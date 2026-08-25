@@ -195,7 +195,7 @@ def test_the_market_bundle_covers_every_team_market() -> None:
 
     bundle = model.market_probabilities("STR", "WEA")
 
-    assert set(bundle) == {"moneyline", "puck_line", "total_5_5"}
+    assert set(bundle) == {"moneyline", "puck_line", "total_goals"}
 
 
 def test_the_scoreline_matrix_holds_essentially_all_the_mass() -> None:

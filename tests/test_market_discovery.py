@@ -34,12 +34,12 @@ def test_an_absent_market_is_not_declared_unavailable() -> None:
 def test_a_book_covering_the_whole_slate_on_one_line_is_complete() -> None:
     frame = pd.DataFrame(
         [
-            _row("total_5_5", "DraftKings", 5.5, "TOR"),
-            _row("total_5_5", "DraftKings", 5.5, "EDM"),
+            _row("total_goals", "DraftKings", 5.5, "TOR"),
+            _row("total_goals", "DraftKings", 5.5, "EDM"),
         ]
     )
 
-    report = discovery.discover_coverage(frame, markets=["total_5_5"])
+    report = discovery.discover_coverage(frame, markets=["total_goals"])
 
     assert report.markets[0].has_a_complete_line is True
     assert "cover the whole slate" in report.markets[0].verdict()
@@ -49,12 +49,12 @@ def test_a_market_split_across_books_is_incomplete_not_unavailable() -> None:
     """One book on each half of the slate is not one book on the slate."""
     frame = pd.DataFrame(
         [
-            _row("total_5_5", "DraftKings", 5.5, "TOR"),
-            _row("total_5_5", "FanDuel", 5.5, "EDM"),
+            _row("total_goals", "DraftKings", 5.5, "TOR"),
+            _row("total_goals", "FanDuel", 5.5, "EDM"),
         ]
     )
 
-    report = discovery.discover_coverage(frame, markets=["total_5_5"])
+    report = discovery.discover_coverage(frame, markets=["total_goals"])
 
     assert report.markets[0].offered is True
     assert report.markets[0].has_a_complete_line is False
@@ -66,14 +66,14 @@ def test_the_alternate_ladder_can_supply_a_complete_line_the_bulk_one_lacks() ->
     frame = pd.DataFrame(
         [
             # Bulk line: only one book, only one game.
-            _row("total_5_5", "WilliamHill", 5.5, "TOR"),
+            _row("total_goals", "WilliamHill", 5.5, "TOR"),
             # Alternate ladder: a book that covers everything at 6.5.
-            _row("total_5_5", "BetRivers", 6.5, "TOR"),
-            _row("total_5_5", "BetRivers", 6.5, "EDM"),
+            _row("total_goals", "BetRivers", 6.5, "TOR"),
+            _row("total_goals", "BetRivers", 6.5, "EDM"),
         ]
     )
 
-    report = discovery.discover_coverage(frame, markets=["total_5_5"])
+    report = discovery.discover_coverage(frame, markets=["total_goals"])
     coverage = report.markets[0]
 
     assert coverage.has_a_complete_line is True

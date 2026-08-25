@@ -15,9 +15,11 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+from nhl_betting_lab.backtest import samples_are_current
 from nhl_betting_lab.backtest.walk_forward import generate_prop_samples
 from nhl_betting_lab.config import OUTPUTS_DIR, PROCESSED_DIR
 from nhl_betting_lab.data.build_datasets import load_player_logs
+from nhl_betting_lab.markets import prop_market_keys
 from nhl_betting_lab.reports.props_calibration import (
     build_calibration_report,
     save_calibration_report,
@@ -46,12 +48,20 @@ def main(argv: list[str] | None = None) -> int:
     outputs = Path(args.output_dir)
     samples_path = outputs / SAMPLES_FILENAME
 
+    samples = None
     if args.reuse_samples and samples_path.is_file():
         import pandas as pd
 
-        samples = pd.read_csv(samples_path)
-        print(f"Reusing {len(samples):,} cached samples from {samples_path}.")
-    else:
+        cached = pd.read_csv(samples_path)
+        current, reason = samples_are_current(
+            cached, known_markets=prop_market_keys()
+        )
+        if current:
+            samples = cached
+            print(f"Reusing {len(samples):,} cached samples from {samples_path}.")
+        else:
+            print(f"Not reusing the cached samples: {reason}")
+    if samples is None:
         logs = load_player_logs(processed)
         if logs.empty:
             print(
