@@ -1,0 +1,19 @@
+{
+  "_comment": [
+    "This file decides which provider and which markets the card may use.",
+    "It ships allowlisting NOTHING, and that is the correct state until a",
+    "market has been measured against real prices and Cooper has reviewed",
+    "the evidence and signed a human acceptance receipt.",
+    "",
+    "Claude may prepare a change to this file and open a pull request for",
+    "it. Claude may never add a name to allowed_provider_names, add a market",
+    "to required_markets, or write a receipt. See",
+    "docs/provider_allowlist_approval.md."
+  ],
+  "allowed_provider_names": [],
+  "allowed_provider_types": [
+    "odds_api"
+  ],
+  "provider_allowlist_entries": {},
+  "max_provider_run_age_hours": 12
+}

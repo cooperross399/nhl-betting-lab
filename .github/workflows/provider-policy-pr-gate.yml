@@ -1,0 +1,62 @@
+name: Provider Policy PR Gate
+
+# Fails a pull request that widens the provider policy without the approval
+# paperwork to justify it.
+#
+# SCOPE: read-only. This job checks files. It never edits the policy, never
+# writes a receipt, and never approves anything.
+#
+# WHAT IT CANNOT DO: prove a human wrote a receipt. Nothing in a file can.
+# Branch protection and Cooper's review on the pull request are what carry
+# that weight; this gate makes sure the paperwork is real and current.
+on:
+  pull_request:
+    paths:
+      - "data/manual/staging_provider_policy.json"
+      - "data/manual/human_acceptance_receipts/**"
+      - "src/nhl_betting_lab/staging_provider_policy.py"
+      - "src/nhl_betting_lab/reports/policy_pr_gate.py"
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    name: Provider policy PR gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install project
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install -e .
+
+      - name: Run the gate
+        env:
+          PYTHONPATH: src
+        run: |
+          python scripts/run_policy_pr_gate.py
+
+      - name: Confirm the boundary
+        if: always()
+        run: |
+          echo "This job read files and wrote one report. It used no secret,"
+          echo "made no provider request, edited no policy, wrote no receipt,"
+          echo "and approved nothing."
