@@ -41,13 +41,24 @@ Every session, in this order. These replace chat history as project memory.
 Every number below is measured, walk-forward, and carries its sample size.
 Re-derive rather than trust if the data has moved.
 
-- **Nothing has a demonstrated edge, because nothing has been measured against
-  real prices.** No historical prop or team prices have been bought. That is a
-  spending decision, not a technical gap. The per-event historical rate is
-  between one and ten credits per market: the provider documents ten for its
-  bulk endpoint and is ambiguous about the per-event one, so the real number
-  is read from `x-requests-last` and the cap is enforced against the
-  pessimistic reading.
+- **Props have been measured against real prices once, and the result is not
+  yet something to act on.** 58 events sampled every 14 days across 2025-26,
+  3,454 credits, 28,017 price rows, 556 bets. Overall **+4.7% over 556 bets,
+  95% interval −3.5% to +12.8% — no demonstrated edge.**
+- **`shots_on_goal` is the one result that survives everything so far**:
+  +18.1% over 263 bets, and the interval still excludes zero after correcting
+  for the seven figures computed from the same data (+2.1% to +34.2%). It has
+  **not been replicated**, it comes from one sampled window of one season,
+  and it is not allowlisted.
+- **`points` lost significantly on the naive interval and does not survive the
+  correction**: −16.4% over 137 bets, corrected −38.8% to +5.9%.
+- **90% of every bet is on the Under.** That is one directional disagreement
+  with the market rather than six independent ones, so per-market results
+  pointing opposite ways rest on the same underlying bias and are harder to
+  read separately than the table suggests.
+- **The measured historical rate is ten credits per market returned per
+  event.** The documentation was ambiguous between one and ten; the
+  pessimistic reading was right. Quota after the purchase: ~96,495 of 100,000.
 - **No market is allowlisted.** `data/manual/staging_provider_policy.json`
   allowlists nothing, so the card produces no selection, no lean, no pass and
   no stake. It lists every market with its reason. That is correct behaviour.

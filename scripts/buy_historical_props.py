@@ -153,7 +153,20 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--probe",
         action="store_true",
-        help="Buy one event only, to find out which markets are retained.",
+        help=(
+            "Sample a few events to find out which markets are retained. "
+            "Deliberately more than one: a single event is a book's night, "
+            "not the provider's retention policy."
+        ),
+    )
+    parser.add_argument(
+        "--probe-events",
+        type=int,
+        default=hist.MINIMUM_PROBES_FOR_ABSENCE,
+        help=(
+            "How many events to probe. Below the floor, a market that does "
+            "not appear is reported as unseen rather than as unmeasurable."
+        ),
     )
     parser.add_argument(
         "--live",
@@ -227,12 +240,15 @@ def main(argv: list[str] | None = None) -> int:
     if args.probe:
         if not events:
             print(
-                "A probe needs one event to look at. Give --from/--to over a "
-                "day the season was being played.",
+                "A probe needs events to look at. Give --from/--to over days "
+                "the season was being played.",
                 file=sys.stderr,
             )
             return 2
-        events = events[:1]
+        # Spread across the window rather than taking the first few, so the
+        # probe does not describe one night's book coverage.
+        step = max(1, len(events) // max(1, args.probe_events))
+        events = events[::step][: args.probe_events]
 
     print(
         hist.cost_note(events=len(events), markets=len(markets))
@@ -253,34 +269,40 @@ def main(argv: list[str] | None = None) -> int:
     outputs.mkdir(parents=True, exist_ok=True)
 
     if args.probe:
-        probe = hist.probe_retention(
-            provider,
-            event_id=events[0]["event_id"],
-            snapshot=events[0]["snapshot"],
-            markets=markets,
-            raw_dir=Path(args.raw_dir),
-        )
-        print(probe.summary_line())
-        table = hist.retention_table([probe])
-        print(table)
-        unmeasurable = {
-            market.key: (
-                "The provider did not return this market in the historical "
-                f"snapshot probed at {probe.snapshot}, so it cannot be "
-                "measured against real prices."
+        probes = []
+        for event in events:
+            probe = hist.probe_retention(
+                provider,
+                event_id=event["event_id"],
+                snapshot=event["snapshot"],
+                markets=markets,
+                raw_dir=Path(args.raw_dir),
             )
-            for market in PROP_MARKETS
-            if market.provider_key in probe.markets_missing
+            print(probe.summary_line())
+            probes.append(probe)
+        table = hist.retention_table(probes)
+        print(table)
+        provider_to_key = {
+            market.provider_key: market.key for market in PROP_MARKETS
         }
+        unmeasurable = {
+            provider_to_key.get(provider_key, provider_key): reason
+            for provider_key, reason in hist.unmeasurable_markets(probes).items()
+        }
+        spent = sum(probe.credits_spent for probe in probes) + listing_cost
         (outputs / RETENTION_FILENAME).write_text(
             json.dumps(
                 {
-                    "probed_at": probe.snapshot,
-                    "event_id": probe.event_id,
-                    "markets_returned": list(probe.markets_returned),
-                    "markets_missing": list(probe.markets_missing),
-                    "books_returned": list(probe.books_returned),
-                    "credits_spent": probe.credits_spent,
+                    "events_probed": len(probes),
+                    "snapshots": [probe.snapshot for probe in probes],
+                    "markets_seen": sorted(
+                        {
+                            market
+                            for probe in probes
+                            for market in probe.markets_returned
+                        }
+                    ),
+                    "credits_spent": spent,
                     "table": table,
                     "unmeasurable": unmeasurable,
                 },
@@ -290,6 +312,7 @@ def main(argv: list[str] | None = None) -> int:
             + "\n",
             encoding="utf-8",
         )
+        print(f"Total spend this run: {spent} credit(s).")
         print(f"Retention written to {outputs / RETENTION_FILENAME}.")
         return 0
 

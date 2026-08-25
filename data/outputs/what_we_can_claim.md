@@ -2,21 +2,28 @@
 
 Generated from the measurement outputs, so it cannot drift from them. The hand-written rules live in `docs/what_we_can_and_cannot_claim.md`.
 
-- Generated: 2026-08-25T20:21:35+00:00
+- Generated: 2026-08-25T22:49:36+00:00
 
-**Nothing in this repository has a demonstrated edge, because nothing has been measured against real prices yet.** That is a statement about the evidence, not about the models.
+6 market(s) measured against real prices; at least one interval excludes zero on this sample. Read the per-market lines and the sample sizes before doing anything with that.
+
+## Across every measured market
+
++4.7% over 556 bets. The interval includes zero: **no demonstrated edge**.
+
+## Measured against real prices
+
+- `shots_on_goal`: +18.1% over 263 bets, 95% interval +6.5% to +29.8%. The interval excludes zero on this sample and this data, which is not the same as an edge that will persist.
+- `points`: -16.4% over 137 bets, 95% interval -32.7% to -0.1%. The interval excludes zero on this sample and this data, which is not the same as an edge that will persist.
+- `goals`: -49.6% over 3 bets, 95% interval -148.4% to +49.3%. The interval includes zero, which means **no demonstrated edge**.
+- `assists`: -2.4% over 72 bets, 95% interval -21.5% to +16.6%. The interval includes zero, which means **no demonstrated edge**.
+- `goalie_saves`: +20.8% over 14 bets, 95% interval -28.2% to +69.8%. The interval includes zero, which means **no demonstrated edge**.
+- `blocked_shots`: +1.5% over 67 bets, 95% interval -25.1% to +28.0%. The interval includes zero, which means **no demonstrated edge**.
 
 ## Not measured against real prices
 
-- `shots_on_goal` has **no price-based measurement**: no historical prices have been bought for it yet. It has been calibration-checked on 493,384 walk-forward samples, which can rule the model out and can never rule it in. That is not evidence of an edge and is not offered as any.
-- `points` has **no price-based measurement**: no historical prices have been bought for it yet. It has been calibration-checked on 370,038 walk-forward samples, which can rule the model out and can never rule it in. That is not evidence of an edge and is not offered as any.
-- `goals` has **no price-based measurement**: no historical prices have been bought for it yet. It has been calibration-checked on 246,692 walk-forward samples, which can rule the model out and can never rule it in. That is not evidence of an edge and is not offered as any.
-- `assists` has **no price-based measurement**: no historical prices have been bought for it yet. It has been calibration-checked on 246,692 walk-forward samples, which can rule the model out and can never rule it in. That is not evidence of an edge and is not offered as any.
-- `goalie_saves` has **no price-based measurement**: no historical prices have been bought for it yet. It has been calibration-checked on 33,595 walk-forward samples, which can rule the model out and can never rule it in. That is not evidence of an edge and is not offered as any.
-- `blocked_shots` has **no price-based measurement**: no historical prices have been bought for it yet. It has been calibration-checked on 493,384 walk-forward samples, which can rule the model out and can never rule it in. That is not evidence of an edge and is not offered as any.
 - `moneyline` has **no price-based measurement**: no historical prices have been bought for it yet.
 - `puck_line` has **no price-based measurement**: no historical prices have been bought for it yet.
-- `total_5_5` has **no price-based measurement**: no historical prices have been bought for it yet.
+- `total_goals` has **no price-based measurement**: no historical prices have been bought for it yet.
 
 A market in this list is **not** a market judged to have no value. It is a market with no price-based evidence either way, and nothing in this repository will present the two as the same thing.
 

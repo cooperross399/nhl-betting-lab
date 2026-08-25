@@ -131,7 +131,14 @@ class EvidenceBundle:
             "The evidence is consistent with enabling "
             f"{', '.join(f'`{m}`' for m in self.supported_markets)}. That is "
             "not a recommendation to do so — it is a statement that the "
-            "measurement does not rule them out. The decision is yours."
+            "measurement does not rule them out.\n\n"
+            "**It has not been replicated.** Everything above comes from one "
+            "sampled window of one season, scored by a model that has never "
+            "been tested on a season it did not help fit. A result that "
+            "survives on a second, unseen window is worth far more than the "
+            "same result measured more precisely on this one — and buying "
+            "that window is the cheapest decisive thing left to do. The "
+            "decision is yours either way."
         )
 
 
@@ -220,6 +227,13 @@ def assess_markets(*, output_dir: Path) -> list[MarketVerdict]:
             continue
 
         includes_zero = bool(entry.get("includes_zero", True))
+        # The corrected interval is the one that counts. Several markets are
+        # measured on one body of data, so the uncorrected number for whichever
+        # cleared 95% describes a search rather than a finding.
+        survives = bool(entry.get("survives_correction", not includes_zero))
+        looks = int(entry.get("looks", 1) or 1)
+        adjusted_low = entry.get("adjusted_low")
+        adjusted_high = entry.get("adjusted_high")
         roi = entry.get("roi")
         roi_value = float(roi) if isinstance(roi, (int, float)) else None
 
@@ -231,22 +245,31 @@ def assess_markets(*, output_dir: Path) -> list[MarketVerdict]:
                 f"{bets_needed_to_detect(0.10):,} bets."
             )
             supported = False
-        elif includes_zero:
-            reason = (
-                f"{roi_value:+.1%} over {bets:,} bets, and the 95% interval "
-                f"includes zero — {NO_DEMONSTRATED_EDGE}."
-                if roi_value is not None
-                else f"{bets:,} bets, interval includes zero — {NO_DEMONSTRATED_EDGE}."
+        elif not survives:
+            corrected = (
+                f" Corrected for the {looks} markets measured on the same data "
+                f"it runs {float(adjusted_low):+.1%} to "
+                f"{float(adjusted_high):+.1%}, which includes zero."
+                if isinstance(adjusted_low, (int, float))
+                and isinstance(adjusted_high, (int, float))
+                and looks > 1
+                else ""
             )
+            reason = (
+                f"{roi_value:+.1%} over {bets:,} bets."
+                if roi_value is not None
+                else f"{bets:,} bets."
+            ) + corrected + f" {NO_DEMONSTRATED_EDGE.capitalize()}."
             supported = False
         else:
             reason = (
-                f"{roi_value:+.1%} over {bets:,} bets, and the 95% interval "
-                "excludes zero on this sample. That is the strongest thing "
-                "this repository can currently say, and it is still a "
-                "statement about one sample rather than about the future."
+                f"{roi_value:+.1%} over {bets:,} bets, and the interval "
+                f"excludes zero even after correcting for the {looks} markets "
+                "measured on the same data. That is the strongest thing this "
+                "repository can currently say. It rests on one sampled window "
+                "of one season and has not been replicated."
                 if roi_value is not None
-                else f"{bets:,} bets, interval excludes zero on this sample."
+                else f"{bets:,} bets, and the corrected interval excludes zero."
             )
             supported = True
 
@@ -295,6 +318,10 @@ def build_bundle(
         "An approval made against this evidence's recommendation is a "
         "legitimate decision, and it stays on the record as one. The EPL lab "
         "has exactly that on file.",
+        "Where several markets are measured on one body of data, the interval "
+        "that counts is the one corrected for how many were tested. The "
+        "uncorrected number for whichever market cleared 95% describes a "
+        "search.",
     ]
     return bundle
 

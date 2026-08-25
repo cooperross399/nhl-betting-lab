@@ -45,6 +45,22 @@ def _load(path: Path, columns: list[str]) -> pd.DataFrame:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--edge-threshold", type=float, default=MIN_PROP_EDGE)
+    parser.add_argument(
+        "--from",
+        dest="start",
+        default="",
+        help=(
+            "Measure only prices on or after this ISO date. Use it to score "
+            "one window at a time: pooling two windows makes a bigger sample, "
+            "which is a different question from whether a result replicates."
+        ),
+    )
+    parser.add_argument("--to", dest="end", default="", help="ISO end date.")
+    parser.add_argument(
+        "--label",
+        default="",
+        help="Name for this window, written into the report and its filenames.",
+    )
     parser.add_argument("--processed-dir", default=str(PROCESSED_DIR))
     parser.add_argument("--output-dir", default=str(OUTPUTS_DIR))
     args = parser.parse_args(argv)
@@ -75,6 +91,19 @@ def main(argv: list[str] | None = None) -> int:
                 "retention is treated as unknown."
             )
 
+    if args.start or args.end:
+        before = len(prices)
+        if not prices.empty and "date" in prices.columns:
+            dates = prices["date"].astype(str).str.slice(0, 10)
+            if args.start:
+                prices = prices[dates >= args.start]
+            if args.end:
+                prices = prices[dates <= args.end]
+        print(
+            f"Window {args.start or 'start'} .. {args.end or 'end'}: "
+            f"{len(prices):,} of {before:,} price rows."
+        )
+
     if prices.empty:
         print(
             "No historical prop prices are on disk, so nothing can be "
@@ -92,8 +121,14 @@ def main(argv: list[str] | None = None) -> int:
         edge_threshold=args.edge_threshold,
         retention_note=retention_note,
         unmeasurable_markets=unmeasurable,
+        window_label=args.label
+        or (
+            f"{args.start or 'start'} to {args.end or 'end'}"
+            if args.start or args.end
+            else ""
+        ),
     )
-    paths = save_backtest(report, output_dir=outputs)
+    paths = save_backtest(report, output_dir=outputs, label=args.label)
     print(report.summary_line())
     for market, interval in report.by_market.items():
         print(f"  {market}: {interval.verdict()}")

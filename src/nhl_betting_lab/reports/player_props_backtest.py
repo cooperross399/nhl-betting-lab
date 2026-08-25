@@ -100,12 +100,16 @@ class BacktestReport:
     bets: list[PlacedBet] = field(default_factory=list)
     by_market: dict[str, RoiInterval] = field(default_factory=dict)
     overall: RoiInterval | None = None
+    by_side: dict[str, RoiInterval] = field(default_factory=dict)
+    looks: int = 1
     priced_outcomes: int = 0
     outcomes_without_a_model_opinion: int = 0
     outcomes_below_threshold: int = 0
     unmatched_players: list[str] = field(default_factory=list)
     retention_note: str = ""
     unmeasurable_markets: dict[str, str] = field(default_factory=dict)
+    #: Which slice of history this measured. Empty means everything on disk.
+    window_label: str = ""
     notes: list[str] = field(default_factory=list)
 
     def summary_line(self) -> str:
@@ -144,6 +148,7 @@ def run_backtest(
     now: datetime | None = None,
     retention_note: str = "",
     unmeasurable_markets: Mapping[str, str] | None = None,
+    window_label: str = "",
 ) -> BacktestReport:
     """Measure the props model against historically-bought prices.
 
@@ -157,6 +162,7 @@ def run_backtest(
         edge_threshold=float(edge_threshold),
         retention_note=retention_note,
         unmeasurable_markets=dict(unmeasurable_markets or {}),
+        window_label=window_label,
     )
     report.notes = _standing_notes()
 
@@ -251,19 +257,43 @@ def run_backtest(
 
     report.unmatched_players = sorted(unmatched)[:50]
     if report.bets:
+        markets = sorted({bet.market for bet in report.bets})
+        # Every market measured on the same data is one look in one family.
+        # Reporting the market that cleared 95% without counting the rest is
+        # not a finding, it is a search.
+        looks = len(markets) + 1  # the markets, plus the overall figure
+        report.looks = looks
         report.overall = roi_interval(
             [bet.profit for bet in report.bets],
             wins=sum(1 for bet in report.bets if bet.won),
             pushes=sum(1 for bet in report.bets if bet.push),
+            looks=looks,
         )
-        for market in sorted({bet.market for bet in report.bets}):
+        for market in markets:
             subset = [bet for bet in report.bets if bet.market == market]
             report.by_market[market] = roi_interval(
                 [bet.profit for bet in subset],
                 wins=sum(1 for bet in subset if bet.won),
                 pushes=sum(1 for bet in subset if bet.push),
+                looks=looks,
             )
+        report.by_side = {
+            side: roi_interval(
+                [bet.profit for bet in report.bets if _side_of(bet) == side],
+                wins=sum(
+                    1 for bet in report.bets if _side_of(bet) == side and bet.won
+                ),
+            )
+            for side in ("over", "under")
+            if any(_side_of(bet) == side for bet in report.bets)
+        }
     return report
+
+
+def _side_of(bet: PlacedBet) -> str:
+    """Which way a bet points, normalising `yes`/`no` onto over/under."""
+    side = str(bet.selection).strip().lower()
+    return "over" if side in {"over", "yes"} else "under"
 
 
 def _standing_notes() -> list[str]:
@@ -296,6 +326,11 @@ def render_backtest(report: BacktestReport) -> str:
         ),
         "",
         f"- Generated: {report.generated_at}",
+        *(
+            [f"- Window measured: **{report.window_label}**"]
+            if report.window_label
+            else []
+        ),
         f"- Edge threshold: **{report.edge_threshold:.1%}**",
         f"- {report.summary_line()}",
         "",
@@ -349,6 +384,73 @@ def render_backtest(report: BacktestReport) -> str:
         lines.extend(["", "### What each row means", ""])
         for market, interval in report.by_market.items():
             lines.append(f"- `{market}`: {interval.verdict()}")
+
+        if report.looks > 1:
+            lines.extend(
+                [
+                    "",
+                    "### Why there are two intervals",
+                    "",
+                    (
+                        f"{report.looks} figures were computed from one body "
+                        "of data. Under the null, the chance that at least one "
+                        f"of {report.looks} independent 95% tests clears is "
+                        f"about {1 - 0.95 ** report.looks:.0%} — so reporting "
+                        "the market that cleared, at its uncorrected interval, "
+                        "would be reporting a search and calling it a finding."
+                    ),
+                    "",
+                    (
+                        "The corrected column is Bonferroni, which is crude "
+                        "and conservative. That is the right trade here: a "
+                        "sharper correction needs assumptions about how these "
+                        "markets covary, and nothing in this repository has "
+                        "measured that."
+                    ),
+                    "",
+                ]
+            )
+
+        if report.by_side:
+            lines.extend(
+                [
+                    "### Which way the bets point",
+                    "",
+                    (
+                        "This is the most important structural fact in the "
+                        "report, and it is not visible in the table above."
+                    ),
+                    "",
+                    "| Side | Bets | Profit | ROI | 95% interval |",
+                    "|:-----|-----:|-------:|----:|:-------------|",
+                ]
+            )
+            for side, interval in report.by_side.items():
+                lines.append(
+                    f"| {side} | {interval.bets} | {interval.profit:+.1f}u "
+                    f"| {interval.roi:+.1%} "
+                    f"| {interval.low:+.1%} .. {interval.high:+.1%} |"
+                )
+            total = sum(item.bets for item in report.by_side.values())
+            dominant = max(report.by_side.items(), key=lambda item: item[1].bets)
+            share = dominant[1].bets / total if total else 0.0
+            lines.extend(
+                [
+                    "",
+                    (
+                        f"**{share:.0%} of every bet is on the {dominant[0]}.** "
+                        "That is one directional disagreement with the market, "
+                        "not many independent ones: the model thinks these "
+                        f"counts land {'above' if dominant[0] == 'over' else 'below'} "
+                        "where the line sits, across the board. Per-market "
+                        "results that point in opposite directions are "
+                        "therefore harder to read as separate findings than "
+                        "the table suggests, because they rest on the same "
+                        "underlying bias."
+                    ),
+                    "",
+                ]
+            )
         lines.extend(
             [
                 "",
@@ -445,8 +547,17 @@ def render_backtest(report: BacktestReport) -> str:
 
 
 def save_backtest(
-    report: BacktestReport, *, output_dir: Path | None = None
+    report: BacktestReport,
+    *,
+    output_dir: Path | None = None,
+    label: str = "",
 ) -> dict[str, str]:
+    """Write the report. A label writes a second, window-specific copy.
+
+    The contract filename always gets the report as run, so a scheduled job
+    that reads it never has to know about labels. A labelled copy sits beside
+    it, which is what makes two windows comparable side by side.
+    """
     directory = Path(output_dir) if output_dir else Path(OUTPUTS_DIR)
     directory.mkdir(parents=True, exist_ok=True)
     markdown = directory / BACKTEST_MARKDOWN_FILENAME
@@ -462,9 +573,14 @@ def save_backtest(
         "unmeasurable_markets": report.unmeasurable_markets,
         "notes": report.notes,
         "overall": _interval_payload(report.overall),
+        "looks": report.looks,
         "by_market": {
             market: _interval_payload(interval)
             for market, interval in report.by_market.items()
+        },
+        "by_side": {
+            side: _interval_payload(interval)
+            for side, interval in report.by_side.items()
         },
     }
     json_path = directory / BACKTEST_JSON_FILENAME
@@ -476,11 +592,25 @@ def save_backtest(
     pd.DataFrame([bet.__dict__ for bet in report.bets]).to_csv(
         csv_path, index=False, lineterminator="\n"
     )
-    return {
+    written = {
         "markdown": str(markdown),
         "json": str(json_path),
         "csv": str(csv_path),
     }
+    if label:
+        safe = "".join(
+            ch if ch.isalnum() or ch in "-_" else "_" for ch in label
+        )
+        labelled = directory / f"player_props_backtest_{safe}.md"
+        labelled.write_text(render_backtest(report), encoding="utf-8")
+        labelled_json = directory / f"player_props_backtest_{safe}.json"
+        labelled_json.write_text(
+            json.dumps(payload, indent=2, sort_keys=True, default=str) + "\n",
+            encoding="utf-8",
+        )
+        written["labelled_markdown"] = str(labelled)
+        written["labelled_json"] = str(labelled_json)
+    return written
 
 
 def _interval_payload(interval: RoiInterval | None) -> dict[str, Any] | None:
@@ -493,5 +623,9 @@ def _interval_payload(interval: RoiInterval | None) -> dict[str, Any] | None:
         "low": interval.low,
         "high": interval.high,
         "includes_zero": interval.includes_zero,
+        "looks": interval.looks,
+        "adjusted_low": interval.adjusted_low,
+        "adjusted_high": interval.adjusted_high,
+        "survives_correction": interval.survives_correction,
         "verdict": interval.verdict(),
     }

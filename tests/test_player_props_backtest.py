@@ -306,3 +306,161 @@ def test_the_saved_json_carries_the_interval_for_every_market(tmp_path: Path) ->
     for entry in payload["by_market"].values():
         assert "includes_zero" in entry
         assert "verdict" in entry
+
+
+# -- the search, and which way the bets point --------------------------
+
+
+def _many(market: str, side: str, count: int, *, won: bool) -> pd.DataFrame:
+    return pd.DataFrame(
+        [
+            {
+                "date": f"2025-01-{1 + index % 28:02d}",
+                "market": market,
+                "player": f"Player {index}",
+                "line": 2.5,
+                "model_probability": 0.70,
+                "actual": 5.0 if won else 0.0,
+            }
+            for index in range(count)
+        ]
+    )
+
+
+def test_measuring_several_markets_counts_them_as_a_family() -> None:
+    samples = pd.concat(
+        [_many("shots_on_goal", "over", 60, won=True),
+         _many("points", "over", 60, won=False)],
+        ignore_index=True,
+    )
+    prices = pd.DataFrame(
+        [
+            {
+                "date": row.date,
+                "market": row.market,
+                "player": row.player,
+                "selection": "over",
+                "line": 2.5,
+                "american_odds": 150,
+            }
+            for row in samples.itertuples()
+        ]
+    )
+
+    report = bt.run_backtest(prices, samples, edge_threshold=0.05)
+
+    assert report.looks > 1
+    assert all(item.looks == report.looks for item in report.by_market.values())
+
+
+def test_the_report_explains_why_there_are_two_intervals() -> None:
+    samples = pd.concat(
+        [_many("shots_on_goal", "over", 60, won=True),
+         _many("points", "over", 60, won=False)],
+        ignore_index=True,
+    )
+    prices = pd.DataFrame(
+        [
+            {
+                "date": row.date,
+                "market": row.market,
+                "player": row.player,
+                "selection": "over",
+                "line": 2.5,
+                "american_odds": 150,
+            }
+            for row in samples.itertuples()
+        ]
+    )
+
+    rendered = bt.render_backtest(
+        bt.run_backtest(prices, samples, edge_threshold=0.05)
+    )
+
+    assert "Why there are two intervals" in rendered
+    assert "reporting a search and calling it a finding" in rendered
+    assert "Bonferroni" in rendered
+
+
+def test_the_report_shows_which_way_the_bets_point() -> None:
+    """The most important structural fact, and invisible in the market table."""
+    samples = _many("shots_on_goal", "under", 40, won=True)
+    prices = pd.DataFrame(
+        [
+            {
+                "date": row.date,
+                "market": "shots_on_goal",
+                "player": row.player,
+                "selection": "under",
+                "line": 2.5,
+                "american_odds": 150,
+            }
+            for row in samples.itertuples()
+        ]
+    )
+    # The model says 70% Over, so the Under side is 30% and never bet; flip it.
+    samples["model_probability"] = 0.20
+
+    report = bt.run_backtest(prices, samples, edge_threshold=0.05)
+    rendered = bt.render_backtest(report)
+
+    assert "Which way the bets point" in rendered
+    assert "of every bet is on the under" in rendered
+    assert "one directional disagreement with the market" in rendered
+
+
+def test_yes_and_no_are_normalised_onto_over_and_under() -> None:
+    bet = bt.PlacedBet(
+        date="2025-01-01", market="goals", player="X", line=0.5,
+        selection="yes", american_odds=150, model_probability=0.6,
+        implied_probability=0.4, edge=0.2, actual=1.0, won=True,
+        push=False, profit=1.5,
+    )
+
+    assert bt._side_of(bet) == "over"
+
+
+def test_a_window_label_is_recorded_in_the_report() -> None:
+    report = bt.run_backtest(
+        _prices(), _samples(), edge_threshold=0.05, window_label="2025-26"
+    )
+
+    assert "Window measured: **2025-26**" in bt.render_backtest(report)
+
+
+def test_a_label_writes_a_second_copy_beside_the_contract_path(
+    tmp_path: Path,
+) -> None:
+    """The contract filename always gets the report as run, so a scheduled job
+    never has to know about labels; the labelled copy is what makes two
+    windows comparable side by side."""
+    report = bt.run_backtest(
+        _prices(), _samples(), edge_threshold=0.05, window_label="2024-25"
+    )
+
+    paths = bt.save_backtest(report, output_dir=tmp_path, label="2024-25")
+
+    assert Path(paths["markdown"]).name == "player_props_backtest.md"
+    assert Path(paths["labelled_markdown"]).name == (
+        "player_props_backtest_2024-25.md"
+    )
+    assert Path(paths["labelled_json"]).is_file()
+
+
+def test_a_label_with_awkward_characters_is_made_safe(tmp_path: Path) -> None:
+    report = bt.run_backtest(_prices(), _samples(), edge_threshold=0.05)
+
+    paths = bt.save_backtest(
+        report, output_dir=tmp_path, label="../etc/passwd 2024"
+    )
+
+    assert "/" not in Path(paths["labelled_markdown"]).name
+    assert Path(paths["labelled_markdown"]).parent == tmp_path
+
+
+def test_no_label_writes_only_the_contract_path(tmp_path: Path) -> None:
+    report = bt.run_backtest(_prices(), _samples(), edge_threshold=0.05)
+
+    paths = bt.save_backtest(report, output_dir=tmp_path)
+
+    assert "labelled_markdown" not in paths

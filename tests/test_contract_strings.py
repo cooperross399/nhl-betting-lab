@@ -126,8 +126,24 @@ def test_claude_md_carries_a_current_operating_state() -> None:
     text = (PROJECT_ROOT / "CLAUDE.md").read_text(encoding="utf-8")
 
     assert "## Current operating state" in text
-    assert "Nothing has a demonstrated edge" in text
+    assert "no demonstrated edge" in text
     assert "No market is allowlisted" in text
+
+
+def test_the_operating_state_hedges_the_one_surviving_result() -> None:
+    """A result that survives correction on one window is still one window."""
+    text = (PROJECT_ROOT / "CLAUDE.md").read_text(encoding="utf-8")
+
+    assert "shots_on_goal` is the one result" in text
+    assert "not been replicated" in text
+    assert "is not allowlisted" in text
+
+
+def test_the_operating_state_records_the_directional_concentration() -> None:
+    text = (PROJECT_ROOT / "CLAUDE.md").read_text(encoding="utf-8")
+
+    assert "on the Under" in text
+    assert "one directional disagreement" in text
 
 
 def test_the_operating_state_names_the_hard_gated_market() -> None:
