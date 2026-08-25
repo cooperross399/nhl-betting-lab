@@ -2,22 +2,22 @@
 
 Generated from the measurement outputs, so it cannot drift from them. The hand-written rules live in `docs/what_we_can_and_cannot_claim.md`.
 
-- Generated: 2026-08-25T22:49:36+00:00
+- Generated: 2026-08-25T23:11:33+00:00
 
-6 market(s) measured against real prices; at least one interval excludes zero on this sample. Read the per-market lines and the sample sizes before doing anything with that.
+**No demonstrated edge in any market.** 6 market(s) have been measured against real prices. Nothing survives correcting for the number of markets tested and then holds on a window it was not found on.
 
 ## Across every measured market
 
-+4.7% over 556 bets. The interval includes zero: **no demonstrated edge**.
++2.3% over 1,268 bets. The interval includes zero: **no demonstrated edge**.
 
 ## Measured against real prices
 
-- `shots_on_goal`: +18.1% over 263 bets, 95% interval +6.5% to +29.8%. The interval excludes zero on this sample and this data, which is not the same as an edge that will persist.
-- `points`: -16.4% over 137 bets, 95% interval -32.7% to -0.1%. The interval excludes zero on this sample and this data, which is not the same as an edge that will persist.
-- `goals`: -49.6% over 3 bets, 95% interval -148.4% to +49.3%. The interval includes zero, which means **no demonstrated edge**.
-- `assists`: -2.4% over 72 bets, 95% interval -21.5% to +16.6%. The interval includes zero, which means **no demonstrated edge**.
-- `goalie_saves`: +20.8% over 14 bets, 95% interval -28.2% to +69.8%. The interval includes zero, which means **no demonstrated edge**.
-- `blocked_shots`: +1.5% over 67 bets, 95% interval -25.1% to +28.0%. The interval includes zero, which means **no demonstrated edge**.
+- `shots_on_goal`: +3.3% over 683 bets, 95% interval -4.1% to +10.7%. Measured again on the 2024-25 window and **contradicted** there, so **no demonstrated edge**.
+- `points`: -6.9% over 288 bets, 95% interval -18.2% to +4.3%. **No demonstrated edge**.
+- `goals`: -37.3% over 7 bets, 95% interval -95.6% to +21.0%. **No demonstrated edge**.
+- `assists`: +0.9% over 111 bets, 95% interval -14.2% to +16.0%. **No demonstrated edge**.
+- `goalie_saves`: +45.1% over 23 bets, 95% interval +13.1% to +77.1%. Correcting for the 7 markets measured on the same data, it does not exclude zero. **No demonstrated edge**.
+- `blocked_shots`: +11.5% over 156 bets, 95% interval -5.4% to +28.4%. **No demonstrated edge**.
 
 ## Not measured against real prices
 
@@ -50,3 +50,4 @@ The NHL's advantage over a smaller league is volume: about 1,312 regular-season 
 - Prop prices are one-sided at most books, so every measured prop edge here is understated rather than overstated.
 - The first genuinely out-of-sample evidence this project will ever have is the season being played, one game-day at a time. That is worth more than any further slicing of the seasons already in the file.
 - No market reaches the card without a reviewed human approval, whatever the numbers above say.
+- A result has to clear three things before it counts: enough bets, an interval that survives correcting for how many markets were tested, and then holding on a window it was not found on. Clearing the first two and failing the third is the ordinary outcome, not a surprise.

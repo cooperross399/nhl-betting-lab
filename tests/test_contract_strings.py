@@ -28,6 +28,17 @@ def _workflow_text() -> str:
     return WORKFLOW_PATH.read_text(encoding="utf-8")
 
 
+def _claude_md() -> str:
+    """CLAUDE.md with its line wrapping flattened.
+
+    Asserting on wrapped prose otherwise fails on where a paragraph happened
+    to break, which is a test failing on formatting rather than on meaning.
+    """
+    return " ".join(
+        (PROJECT_ROOT / "CLAUDE.md").read_text(encoding="utf-8").split()
+    )
+
+
 def test_the_workflow_file_is_at_the_contracted_path() -> None:
     assert WORKFLOW_PATH.is_file()
 
@@ -123,7 +134,7 @@ def test_claude_md_records_every_contract_string() -> None:
 def test_claude_md_carries_a_current_operating_state() -> None:
     """A future session reads this first; if it is absent or stale, every
     other document is being read without context."""
-    text = (PROJECT_ROOT / "CLAUDE.md").read_text(encoding="utf-8")
+    text = _claude_md()
 
     assert "## Current operating state" in text
     assert "no demonstrated edge" in text
@@ -131,23 +142,23 @@ def test_claude_md_carries_a_current_operating_state() -> None:
 
 
 def test_the_operating_state_hedges_the_one_surviving_result() -> None:
-    """A result that survives correction on one window is still one window."""
-    text = (PROJECT_ROOT / "CLAUDE.md").read_text(encoding="utf-8")
+    """It survived on one window and was contradicted on the next."""
+    text = _claude_md()
 
-    assert "shots_on_goal` is the one result" in text
-    assert "not been replicated" in text
-    assert "is not allowlisted" in text
+    assert "shots_on_goal` was the one result" in text
+    assert "did not replicate" in text
+    assert "Nothing is allowlisted" in text
 
 
 def test_the_operating_state_records_the_directional_concentration() -> None:
-    text = (PROJECT_ROOT / "CLAUDE.md").read_text(encoding="utf-8")
+    text = _claude_md()
 
     assert "on the Under" in text
-    assert "one directional disagreement" in text
+    assert "One directional disagreement" in text
 
 
 def test_the_operating_state_names_the_hard_gated_market() -> None:
-    text = (PROJECT_ROOT / "CLAUDE.md").read_text(encoding="utf-8")
+    text = _claude_md()
 
     assert "goalie_saves` cannot reach the card" in text
     assert "not a no-value judgement" in text
@@ -160,3 +171,12 @@ def test_the_honesty_doc_does_not_claim_calibration_is_evidence_of_an_edge() -> 
 
     assert "It establishes nothing about whether the market" in text
     assert "will not let the two be" in text
+
+
+def test_the_operating_state_records_the_failed_replication() -> None:
+    """The single most important fact about this lab's evidence."""
+    text = _claude_md()
+
+    assert "did not replicate" in text
+    assert "nothing survives" in text
+    assert "system working, not failing" in text

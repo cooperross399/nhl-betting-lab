@@ -53,6 +53,11 @@ class MarketClaim:
     low: float | None = None
     high: float | None = None
     includes_zero: bool = True
+    #: Whether it still excludes zero once the number of markets measured on
+    #: the same data is counted. This is the one that governs.
+    survives_correction: bool = False
+    looks: int = 1
+    replication: str = ""
     calibration_samples: int = 0
     allowlisted: bool = False
     reason_unmeasured: str = ""
@@ -73,17 +78,27 @@ class MarketClaim:
                 )
             return base
         assert self.roi is not None
-        if self.includes_zero:
+        base = (
+            f"`{self.market}`: {self.roi:+.1%} over {self.bets:,} bets, 95% "
+            f"interval {self.low:+.1%} to {self.high:+.1%}."
+        )
+        if self.replication:
+            return f"{base} {self.replication}"
+        if not self.survives_correction:
+            correction = (
+                f" Correcting for the {self.looks} markets measured on the "
+                "same data, it does not exclude zero."
+                if self.looks > 1 and not self.includes_zero
+                else ""
+            )
             return (
-                f"`{self.market}`: {self.roi:+.1%} over {self.bets:,} bets, "
-                f"95% interval {self.low:+.1%} to {self.high:+.1%}. The "
-                f"interval includes zero, which means **{NO_DEMONSTRATED_EDGE}**."
+                f"{base}{correction} **{NO_DEMONSTRATED_EDGE.capitalize()}**."
             )
         return (
-            f"`{self.market}`: {self.roi:+.1%} over {self.bets:,} bets, 95% "
-            f"interval {self.low:+.1%} to {self.high:+.1%}. The interval "
-            "excludes zero on this sample and this data, which is not the "
-            "same as an edge that will persist."
+            f"{base} The interval excludes zero even after correcting for the "
+            f"{self.looks} markets measured on the same data — which is not "
+            "the same as an edge that will persist, and means nothing until "
+            "it replicates on a window it was not found on."
         )
 
 
@@ -100,8 +115,12 @@ class ClaimsReport:
 
     @property
     def anything_demonstrated(self) -> bool:
+        """Nothing counts until it survives the search and then replicates."""
         return any(
-            claim.measured and not claim.includes_zero for claim in self.claims
+            claim.measured
+            and claim.survives_correction
+            and claim.replication.lstrip("*").startswith("Replicated")
+            for claim in self.claims
         )
 
     def headline(self) -> str:
@@ -116,12 +135,15 @@ class ClaimsReport:
             return (
                 f"**{NO_DEMONSTRATED_EDGE.capitalize()} in any market.** "
                 f"{len(measured)} market(s) have been measured against real "
-                "prices and every interval includes zero."
+                "prices. Nothing survives correcting for the number of "
+                "markets tested and then holds on a window it was not found "
+                "on."
             )
         return (
-            f"{len(measured)} market(s) measured against real prices; at least "
-            "one interval excludes zero on this sample. Read the per-market "
-            "lines and the sample sizes before doing anything with that."
+            f"{len(measured)} market(s) measured against real prices, and at "
+            "least one survived the correction and then replicated on an "
+            "unseen window. Read the per-market lines and the sample sizes "
+            "before doing anything with that."
         )
 
 
@@ -147,6 +169,29 @@ def build_claims_report(
     moment = now or datetime.now(timezone.utc)
     backtest = _read_json(directory / "player_props_backtest.json")
     calibration = _read_json(directory / "props_calibration.json")
+    replication = _read_json(directory / "replication.json")
+
+    # A replication verdict outranks any single-window number, so it is
+    # attached to the market and printed instead of the interval prose.
+    replication_states: dict[str, str] = {}
+    for item in replication.get("markets", []) or []:
+        if not isinstance(item, dict):
+            continue
+        state = str(item.get("state", ""))
+        if state in {"", "untestable"}:
+            continue
+        market_key = str(item.get("market", ""))
+        if state == "replicated":
+            replication_states[market_key] = (
+                f"**Replicated** on the "
+                f"{replication.get('test_label', 'test')} window."
+            )
+        else:
+            replication_states[market_key] = (
+                f"Measured again on the "
+                f"{replication.get('test_label', 'test')} window and "
+                f"**{state}** there, so **{NO_DEMONSTRATED_EDGE}**."
+            )
 
     calibration_samples = {
         str(item.get("market")): int(item.get("samples", 0) or 0)
@@ -174,6 +219,11 @@ def build_claims_report(
                     low=float(entry.get("low", 0.0)),
                     high=float(entry.get("high", 0.0)),
                     includes_zero=bool(entry.get("includes_zero", True)),
+                    survives_correction=bool(
+                        entry.get("survives_correction", False)
+                    ),
+                    looks=int(entry.get("looks", 1) or 1),
+                    replication=replication_states.get(market.key, ""),
                     calibration_samples=calibration_samples.get(market.key, 0),
                     allowlisted=market.key in allowlisted_markets,
                 )
@@ -213,6 +263,10 @@ def build_claims_report(
         "file.",
         "No market reaches the card without a reviewed human approval, "
         "whatever the numbers above say.",
+        "A result has to clear three things before it counts: enough bets, an "
+        "interval that survives correcting for how many markets were tested, "
+        "and then holding on a window it was not found on. Clearing the first "
+        "two and failing the third is the ordinary outcome, not a surprise.",
     ]
     return report
 
