@@ -1,0 +1,569 @@
+"""The Odds API adapter for `icehockey_nhl`. Shadow-only by construction.
+
+What this module does: fetch prices, normalise them into a long-form table,
+and write that table into `data/staging/`. What it does not do, ever: decide
+anything. The card cannot read `data/staging/` — it reads the card input,
+which is built only from markets a reviewed policy allowlists. So a shadow run
+can be wrong, incomplete, or surprising without a single pick changing.
+
+## The credential
+
+Read from `NHL_ODDS_API_KEY` in the environment (a GitHub secret in CI, a
+gitignored `.env` locally). It is never written to a report, a provenance
+file, a staging row, or a log line. Every URL that reaches a report goes
+through `redact`, and `tests/test_no_secrets_committed.py` fails the build if
+a key shape ever reaches a tracked file.
+
+## What a fetch costs
+
+The bulk endpoint serves `h2h`, `spreads` and `totals` for the whole slate for
+a handful of credits. Player props are per-event: **one credit per market per
+event**. Six prop markets across a twelve-game night is 72 credits.
+
+Every entry point states the cost before spending it and takes a hard cap, so
+a probe cannot become a bill by accident.
+"""
+
+from __future__ import annotations
+
+import json
+import math
+import os
+import re
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+from urllib.parse import urlparse
+
+import pandas as pd
+import requests
+
+from nhl_betting_lab.config import ODDS_API_SPORT_KEY, STAGING_DIR
+from nhl_betting_lab.markets import (
+    ALTERNATE_PROVIDER_KEYS,
+    PROP_MARKETS,
+    market_for_provider_key,
+)
+from nhl_betting_lab.providers.env_file import redact
+
+
+API_KEY_ENV = "NHL_ODDS_API_KEY"
+API_BASE_URL_ENV = "NHL_ODDS_API_BASE_URL"
+DEFAULT_API_BASE_URL = "https://api.the-odds-api.com"
+
+#: Only these hosts. A base URL override is a convenience for testing against
+#: a local mock, not a way to point the credential at an arbitrary server.
+ALLOWED_API_HOSTS = frozenset(
+    {"api.the-odds-api.com", "ipv6-api.the-odds-api.com"}
+)
+
+PROVIDER_KEY = "odds_api"
+PROVIDER_NAME = "the_odds_api"
+PROVIDER_TYPE = "odds_api"
+
+DEFAULT_REGIONS = "us"
+
+#: Markets the bulk endpoint serves for the whole slate at once.
+BULK_PROVIDER_MARKETS: tuple[str, ...] = ("h2h", "spreads", "totals")
+
+#: Markets that cost one credit per market per event.
+PROP_PROVIDER_MARKETS: tuple[str, ...] = tuple(
+    market.provider_key for market in PROP_MARKETS
+)
+
+#: Alternate ladders. Fetched alongside the bulk markets because the EPL lab
+#: excluded a market for a season by checking only the bulk one.
+ALTERNATE_PROVIDER_MARKETS: tuple[str, ...] = tuple(ALTERNATE_PROVIDER_KEYS)
+
+SAFE_RESPONSE_HEADERS = (
+    "x-requests-remaining",
+    "x-requests-used",
+    "x-requests-last",
+)
+
+STAGING_PRICES_FILENAME = "odds_api_prices_staging.csv"
+STAGING_PROPS_FILENAME = "player_props_staging.csv"
+PROVENANCE_FILENAME = "staging_provenance.json"
+
+PRICE_COLUMNS = (
+    "date",
+    "commence_time",
+    "provider_event_id",
+    "home_team",
+    "away_team",
+    "market",
+    "player",
+    "selection",
+    "line",
+    "american_odds",
+    "book",
+    "fetched_at",
+)
+
+Requester = Callable[..., Any]
+
+
+class ProviderError(RuntimeError):
+    """The provider could not answer safely. No staging file is written."""
+
+
+class MissingCredentialError(ProviderError):
+    """A live fetch was asked for without a credential."""
+
+
+def _default_requester(url: str, **kwargs: Any) -> Any:
+    return requests.get(url, **kwargs)
+
+
+def american_price(value: object) -> float | None:
+    """A usable American price, or None. Never a guess."""
+    if isinstance(value, bool):
+        return None
+    try:
+        price = float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(price) or -100 < price < 100:
+        return None
+    return price
+
+
+def _line_of(outcome: Mapping[str, Any]) -> float | None:
+    point = outcome.get("point")
+    if point is None:
+        return None
+    try:
+        return float(point)
+    except (TypeError, ValueError):
+        return None
+
+
+@dataclass
+class FetchResult:
+    """What one fetch saw and what it cost."""
+
+    rows: list[dict[str, Any]] = field(default_factory=list)
+    events_seen: int = 0
+    events_priced: int = 0
+    credits_spent: int = 0
+    quota_remaining: str = ""
+    warnings: list[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
+    fetched_at: str = ""
+
+    def summary_line(self) -> str:
+        return (
+            f"{len(self.rows)} price rows from {self.events_priced} of "
+            f"{self.events_seen} events; about {self.credits_spent} credit(s) "
+            f"spent"
+            + (
+                f"; {self.quota_remaining} remaining."
+                if self.quota_remaining
+                else "."
+            )
+        )
+
+
+def normalize_event(
+    event: Mapping[str, Any], *, fetched_at: str
+) -> list[dict[str, Any]]:
+    """Long-form price rows for one event payload.
+
+    Every book's price is kept. The card quotes the best reachable book, so
+    the staged data has to hold them all; keeping only the best here would
+    make "the best price" mean "the best price at the moment of the fetch",
+    which is not recoverable afterwards.
+
+    A market this lab does not price is skipped rather than raising. A
+    provider response legitimately carries dozens of markets we ignore, and
+    treating each as an error would make an ordinary response unparseable.
+    """
+    event_id = str(event.get("id", "")).strip()
+    commence = str(event.get("commence_time", "")).strip()
+    home = str(event.get("home_team", "")).strip()
+    away = str(event.get("away_team", "")).strip()
+    if not home or not away:
+        return []
+
+    rows: list[dict[str, Any]] = []
+    for bookmaker in event.get("bookmakers", []) or []:
+        if not isinstance(bookmaker, Mapping):
+            continue
+        book = str(bookmaker.get("title") or bookmaker.get("key") or "").strip()
+        for market in bookmaker.get("markets", []) or []:
+            if not isinstance(market, Mapping):
+                continue
+            provider_key = str(market.get("key", "")).strip().lower()
+            target = market_for_provider_key(provider_key)
+            if target is None:
+                continue
+            for outcome in market.get("outcomes", []) or []:
+                if not isinstance(outcome, Mapping):
+                    continue
+                price = american_price(outcome.get("price"))
+                if price is None:
+                    continue
+                name = str(outcome.get("name", "")).strip()
+                if not name:
+                    continue
+                player = str(outcome.get("description", "")).strip()
+                if target.is_prop and not player:
+                    # A prop outcome with no player is unusable: it cannot be
+                    # settled and cannot be matched to a model opinion.
+                    continue
+                selection = name.strip().lower()
+                if not target.is_prop and target.key == "moneyline":
+                    if name == home:
+                        selection = "home"
+                    elif name == away:
+                        selection = "away"
+                    else:
+                        # NHL moneylines have no draw. An outcome that is
+                        # neither team is not something to guess at.
+                        continue
+                elif not target.is_prop and target.key == "puck_line":
+                    if name == home:
+                        selection = "home"
+                    elif name == away:
+                        selection = "away"
+                    else:
+                        continue
+                rows.append(
+                    {
+                        "date": commence[:10],
+                        "commence_time": commence,
+                        "provider_event_id": event_id,
+                        "home_team": home,
+                        "away_team": away,
+                        "market": target.key,
+                        "player": player,
+                        "selection": selection,
+                        "line": _line_of(outcome),
+                        "american_odds": price,
+                        "book": book,
+                        "fetched_at": fetched_at,
+                    }
+                )
+    return rows
+
+
+class OddsApiProvider:
+    """Fetches NHL prices into staging. Decides nothing."""
+
+    def __init__(
+        self,
+        *,
+        environment: Mapping[str, str] | None = None,
+        requester: Requester | None = None,
+        sport_key: str = ODDS_API_SPORT_KEY,
+        regions: str = DEFAULT_REGIONS,
+        bookmakers: str = "",
+        timeout_seconds: float = 30.0,
+    ) -> None:
+        self.environment = dict(os.environ if environment is None else environment)
+        self.requester = requester or _default_requester
+        self.sport_key = (sport_key or ODDS_API_SPORT_KEY).strip()
+        self.regions = (regions or DEFAULT_REGIONS).strip()
+        self.bookmakers = str(bookmakers or "").strip()
+        self.timeout_seconds = float(timeout_seconds)
+        self._validate_configuration()
+
+    # -- configuration ---------------------------------------------------
+
+    @property
+    def api_key(self) -> str:
+        return self.environment.get(API_KEY_ENV, "").strip()
+
+    @property
+    def base_url(self) -> str:
+        return (
+            self.environment.get(API_BASE_URL_ENV, DEFAULT_API_BASE_URL).strip()
+            or DEFAULT_API_BASE_URL
+        ).rstrip("/")
+
+    def _validate_configuration(self) -> None:
+        parsed = urlparse(self.base_url)
+        if (
+            parsed.scheme != "https"
+            or parsed.hostname not in ALLOWED_API_HOSTS
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.path not in {"", "/"}
+            or parsed.query
+            or parsed.fragment
+        ):
+            raise ProviderError(
+                f"{API_BASE_URL_ENV} must be an approved The Odds API HTTPS "
+                "host. The credential is not sent anywhere else."
+            )
+        if not re.fullmatch(r"[a-z0-9_]+", self.sport_key):
+            raise ProviderError("The sport key contains unsafe characters.")
+        for label, value in (
+            ("regions", self.regions),
+            ("bookmakers", self.bookmakers),
+        ):
+            if value and not re.fullmatch(r"[a-z0-9_,]+", value):
+                raise ProviderError(
+                    f"Provider {label} must contain only lowercase keys and "
+                    "commas."
+                )
+        if self.timeout_seconds <= 0:
+            raise ProviderError("Provider timeout must be positive.")
+
+    def public_configuration(self) -> dict[str, Any]:
+        """Everything about this run that is safe to write into a report."""
+        return {
+            "provider_key": PROVIDER_KEY,
+            "provider_name": PROVIDER_NAME,
+            "provider_type": PROVIDER_TYPE,
+            "sport_key": self.sport_key,
+            "regions": self.regions,
+            "bookmakers": self.bookmakers or "provider region default",
+            "base_url": self.base_url,
+            "credential_environment_variable": API_KEY_ENV,
+            "credential_present": bool(self.api_key),
+        }
+
+    # -- requests --------------------------------------------------------
+
+    def _params(self, **extra: str) -> dict[str, str]:
+        params = {
+            "apiKey": self.api_key,
+            "oddsFormat": "american",
+            "dateFormat": "iso",
+        }
+        if self.bookmakers:
+            params["bookmakers"] = self.bookmakers
+        params.update(extra)
+        return params
+
+    def _get(self, url: str, params: Mapping[str, str]) -> tuple[Any, dict[str, str]]:
+        try:
+            response = self.requester(
+                url, params=dict(params), timeout=self.timeout_seconds
+            )
+        except (requests.RequestException, OSError, TimeoutError) as exc:
+            raise ProviderError(
+                redact(
+                    f"The odds provider could not be reached "
+                    f"({type(exc).__name__}). No staging file was written."
+                )
+            ) from exc
+        status = int(getattr(response, "status_code", 0) or 0)
+        if status != 200:
+            raise ProviderError(
+                f"The odds provider returned HTTP {status or 'unknown'}. "
+                "No staging file was written."
+            )
+        try:
+            payload = response.json()
+        except (AttributeError, TypeError, ValueError) as exc:
+            raise ProviderError(
+                "The odds provider returned unreadable JSON."
+            ) from exc
+        headers = getattr(response, "headers", {}) or {}
+        safe = {
+            name: str(headers.get(name, ""))
+            for name in SAFE_RESPONSE_HEADERS
+            if headers.get(name) is not None
+        }
+        return payload, safe
+
+    def _require_credential(self) -> None:
+        if not self.api_key:
+            raise MissingCredentialError(
+                f"A live fetch requires `{API_KEY_ENV}` from the environment, "
+                "a gitignored local `.env`, or a GitHub Secret. Never pass the "
+                "key as a command argument and never commit it."
+            )
+
+    # -- fetches ---------------------------------------------------------
+
+    def list_events(self) -> list[dict[str, Any]]:
+        """The upcoming slate. Free: the events list costs no credits."""
+        self._require_credential()
+        payload, _ = self._get(
+            f"{self.base_url}/v4/sports/{self.sport_key}/events",
+            {"apiKey": self.api_key, "dateFormat": "iso"},
+        )
+        if not isinstance(payload, list):
+            raise ProviderError("The events list is not a JSON list.")
+        return [item for item in payload if isinstance(item, dict)]
+
+    def fetch_team_markets(
+        self, *, include_alternates: bool = True, fetched_at: str = ""
+    ) -> FetchResult:
+        """Bulk team markets for the whole slate.
+
+        Cheap: the bulk endpoint bills per market requested, not per event.
+        """
+        self._require_credential()
+        stamp = fetched_at or datetime.now(timezone.utc).isoformat(timespec="seconds")
+        markets = list(BULK_PROVIDER_MARKETS)
+        if include_alternates:
+            markets += list(ALTERNATE_PROVIDER_MARKETS)
+        payload, headers = self._get(
+            f"{self.base_url}/v4/sports/{self.sport_key}/odds",
+            self._params(regions=self.regions, markets=",".join(markets)),
+        )
+        if not isinstance(payload, list):
+            raise ProviderError("The odds response is not a JSON event list.")
+        result = FetchResult(
+            fetched_at=stamp,
+            events_seen=len(payload),
+            credits_spent=len(markets),
+            quota_remaining=headers.get("x-requests-remaining", ""),
+        )
+        for event in payload:
+            if not isinstance(event, dict):
+                continue
+            rows = normalize_event(event, fetched_at=stamp)
+            if rows:
+                result.events_priced += 1
+                result.rows.extend(rows)
+        if not result.rows:
+            result.warnings.append(
+                "The provider returned events but no usable team-market "
+                "prices. Nothing was guessed; the markets stay absent."
+            )
+        return result
+
+    def estimate_prop_credits(
+        self, *, events: int, markets: Sequence[str] | None = None
+    ) -> int:
+        """One credit per market per event. Stated before it is spent."""
+        count = len(list(markets)) if markets is not None else len(PROP_PROVIDER_MARKETS)
+        return int(events) * count
+
+    def fetch_player_props(
+        self,
+        *,
+        markets: Sequence[str] | None = None,
+        max_events: int = 0,
+        credit_cap: int = 0,
+        fetched_at: str = "",
+    ) -> FetchResult:
+        """Per-event player props, under a hard credit cap.
+
+        `credit_cap` is not advisory. A probe that quietly turned into a
+        full-slate fetch is exactly the accident this parameter exists to make
+        impossible, so the loop stops the moment the next event would exceed
+        it — and says how many events it skipped.
+        """
+        self._require_credential()
+        stamp = fetched_at or datetime.now(timezone.utc).isoformat(timespec="seconds")
+        wanted = list(markets) if markets is not None else list(PROP_PROVIDER_MARKETS)
+        if not wanted:
+            raise ProviderError("A props fetch needs at least one market.")
+        per_event = len(wanted)
+
+        events = self.list_events()
+        result = FetchResult(fetched_at=stamp, events_seen=len(events))
+        selected = events[:max_events] if max_events else events
+
+        skipped_for_budget = 0
+        for event in selected:
+            event_id = str(event.get("id", "")).strip()
+            if not event_id:
+                continue
+            if credit_cap and result.credits_spent + per_event > credit_cap:
+                skipped_for_budget += 1
+                continue
+            try:
+                payload, headers = self._get(
+                    f"{self.base_url}/v4/sports/{self.sport_key}/events/"
+                    f"{event_id}/odds",
+                    self._params(regions=self.regions, markets=",".join(wanted)),
+                )
+            except ProviderError as exc:
+                # One event failing must not lose the rest. A partial props
+                # result surfaces as an incomplete market, never as a
+                # fabricated one.
+                result.errors.append(f"Event {event_id}: {exc}")
+                continue
+            result.credits_spent += per_event
+            if headers.get("x-requests-remaining"):
+                result.quota_remaining = headers["x-requests-remaining"]
+            if not isinstance(payload, Mapping):
+                result.errors.append(f"Event {event_id}: malformed payload.")
+                continue
+            rows = normalize_event(payload, fetched_at=stamp)
+            if rows:
+                result.events_priced += 1
+                result.rows.extend(rows)
+
+        if skipped_for_budget:
+            result.warnings.append(
+                f"{skipped_for_budget} event(s) were not fetched because the "
+                f"{credit_cap}-credit cap would have been exceeded. Their "
+                "markets are absent, not empty."
+            )
+        return result
+
+
+def to_frame(rows: Sequence[Mapping[str, Any]]) -> pd.DataFrame:
+    """A long-form price table with the fixed column order."""
+    frame = pd.DataFrame(list(rows), columns=list(PRICE_COLUMNS))
+    if frame.empty:
+        return frame
+    return frame.sort_values(
+        ["date", "home_team", "market", "player", "selection", "book"],
+        ignore_index=True,
+    )
+
+
+def write_staging(
+    rows: Sequence[Mapping[str, Any]],
+    *,
+    filename: str,
+    staging_dir: Path | None = None,
+    overwrite: bool = False,
+) -> Path:
+    """Write a staging CSV. Refuses to replace evidence by accident."""
+    directory = Path(staging_dir) if staging_dir else Path(STAGING_DIR)
+    directory.mkdir(parents=True, exist_ok=True)
+    target = directory / filename
+    if target.exists() and not overwrite:
+        raise ProviderError(
+            f"{target.name} already exists. Review it first; pass overwrite "
+            "only for an intentional replacement."
+        )
+    to_frame(rows).to_csv(target, index=False, lineterminator="\n")
+    return target
+
+
+def write_provenance(
+    result: FetchResult,
+    *,
+    configuration: Mapping[str, Any],
+    staging_files: Sequence[Path],
+    staging_dir: Path | None = None,
+) -> Path:
+    """Record what ran, when, and against what. Never records a credential."""
+    directory = Path(staging_dir) if staging_dir else Path(STAGING_DIR)
+    directory.mkdir(parents=True, exist_ok=True)
+    target = directory / PROVENANCE_FILENAME
+    payload = {
+        "generated_at": result.fetched_at,
+        "provider": dict(configuration),
+        "events_seen": result.events_seen,
+        "events_priced": result.events_priced,
+        "credits_spent": result.credits_spent,
+        "quota_remaining": result.quota_remaining,
+        "rows": len(result.rows),
+        "warnings": list(result.warnings),
+        "errors": list(result.errors),
+        "staging_files": [str(path.name) for path in staging_files],
+        "shadow_only": True,
+        "note": (
+            "Staging is invisible to the card. Nothing here allowlists a "
+            "provider or a market; that requires a reviewed human approval."
+        ),
+    }
+    # Belt and braces: nothing is supposed to put a credential in here, and
+    # this makes a mistake in that direction non-fatal.
+    text = redact(json.dumps(payload, indent=2, sort_keys=True))
+    target.write_text(text + "\n", encoding="utf-8")
+    return target

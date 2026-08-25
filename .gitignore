@@ -7,7 +7,14 @@ __pycache__/
 data/raw/**
 !data/raw/.gitkeep
 data/processed/*.csv
-data/outputs/*.csv
+# Generated reports are rebuilt by every run and are not history. The three
+# measurement documents are the exception: they are the durable record the
+# operating contract points at, so they are tracked deliberately.
+data/outputs/*
+!data/outputs/.gitkeep
+!data/outputs/player_props_backtest.md
+!data/outputs/props_calibration.md
+!data/outputs/what_we_can_claim.md
 data/outputs/archive/
 data/staging/*_staging.csv
 data/staging/staging_provenance.json

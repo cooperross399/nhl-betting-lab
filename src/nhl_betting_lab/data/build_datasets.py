@@ -29,7 +29,7 @@ from typing import Any
 
 import pandas as pd
 
-from nhl_betting_lab.config import PROCESSED_DIR, RAW_DIR
+from nhl_betting_lab.config import PROCESSED_DIR
 from nhl_betting_lab.data.nhl_api import (
     _cache_root,
     _read_cache,
