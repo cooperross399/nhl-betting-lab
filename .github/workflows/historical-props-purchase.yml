@@ -106,10 +106,18 @@ jobs:
             exit 0
           fi
           mkdir -p data
-          gh run download "$previous" --dir data || \
+          # `--name` matters. Without it `gh` puts each artifact in a
+          # subdirectory named after itself, so the cache lands in
+          # `data/gameday-state/raw/...` where nothing looks for it — and the
+          # step still reports success, so the run silently refetches four
+          # thousand boxscores it already had.
+          gh run download "$previous" --name gameday-state --dir data || \
             echo "No usable state on run $previous; rebuilding."
-          find data/raw/nhl/boxscore -name '*.json' 2>/dev/null | wc -l \
-            | xargs echo "Cached boxscores restored:"
+          restored=$(find data/raw/nhl/boxscore -name '*.json' 2>/dev/null | wc -l)
+          echo "Cached boxscores restored: $restored"
+          if [ "$restored" -eq 0 ]; then
+            echo "::warning::No boxscores were restored; this run rebuilds the cache from scratch."
+          fi
 
       - name: Check the provider credential
         env:

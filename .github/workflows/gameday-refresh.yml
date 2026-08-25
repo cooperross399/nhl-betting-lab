@@ -114,6 +114,19 @@ jobs:
           previous=$(gh run list --workflow gameday-refresh.yml --status success \
             --limit 1 --json databaseId --jq '.[0].databaseId // empty')
           if [ -z "$previous" ]; then
+            # The purchase workflow uploads the same `gameday-state` artifact,
+            # and on a repository where it has run and this one has not, its
+            # cache is exactly as good. Without this fallback the very first
+            # refresh refetches four thousand boxscores that are already
+            # sitting in an artifact.
+            previous=$(gh run list --workflow historical-props-purchase.yml \
+              --status success --limit 1 --json databaseId \
+              --jq '.[0].databaseId // empty')
+            if [ -n "$previous" ]; then
+              echo "No previous refresh; restoring from purchase run $previous."
+            fi
+          fi
+          if [ -z "$previous" ]; then
             echo "No previous successful run. This run establishes the baseline."
             exit 0
           fi

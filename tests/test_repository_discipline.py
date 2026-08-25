@@ -196,3 +196,61 @@ def test_a_slate_is_bounded_by_hours_not_by_the_utc_date() -> None:
 
     assert "window_start <= when.astimezone(timezone.utc) < window_end" in text
     assert "the four it kept were the afternoon games" in text
+
+
+def test_the_two_workflows_can_restore_each_others_state() -> None:
+    """They upload the same `gameday-state` artifact, so a first run of either
+    should not refetch four thousand boxscores that already exist in one."""
+    refresh = _read(".github/workflows/gameday-refresh.yml")
+    purchase = _read(".github/workflows/historical-props-purchase.yml")
+
+    assert "historical-props-purchase.yml" in refresh
+    assert "gameday-refresh.yml" in purchase
+    assert refresh.count("name: gameday-state") >= 1
+    assert purchase.count("name: gameday-state") >= 1
+
+
+def test_ci_measures_coverage_and_enforces_a_floor() -> None:
+    """A floor catches a module arriving with no tests at all. It is not a
+    target: setting it where the suite sits would reward tests written to move
+    a percentage rather than to catch a defect."""
+    import tomllib
+
+    workflow = _read(".github/workflows/tests.yml")
+    config = tomllib.loads(_read("pyproject.toml"))
+
+    assert "coverage run" in workflow
+    assert "coverage report" in workflow
+    assert config["tool"]["coverage"]["report"]["fail_under"] == 90
+
+
+def test_coverage_is_a_declared_dependency() -> None:
+    """CI installs from requirements.txt; a step using a tool that is not
+    there fails twenty minutes into a job."""
+    assert "coverage" in _read("requirements.txt")
+
+
+@pytest.mark.parametrize(
+    "workflow", ["gameday-refresh.yml", "historical-props-purchase.yml"]
+)
+def test_state_restore_names_the_artifact_it_wants(workflow: str) -> None:
+    """Without `--name`, `gh` puts each artifact in a subdirectory named after
+    itself — the cache lands where nothing looks for it, the step still
+    reports success, and the run silently refetches everything it already
+    had."""
+    text = (PROJECT_ROOT / ".github" / "workflows" / workflow).read_text(
+        encoding="utf-8"
+    )
+    if "gh run download" not in text:
+        pytest.skip("This workflow restores no state.")
+
+    for line in text.splitlines():
+        if "gh run download" in line:
+            assert "--name" in line, line
+
+
+def test_a_failed_restore_is_warned_about_rather_than_passed_over() -> None:
+    """It is `continue-on-error`, so silence would look like success."""
+    text = _read(".github/workflows/historical-props-purchase.yml")
+
+    assert "No boxscores were restored" in text
