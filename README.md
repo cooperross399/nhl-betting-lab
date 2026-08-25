@@ -59,6 +59,11 @@ PYTHONPATH=src .venv/bin/python scripts/run_props_calibration.py
 # Price-based backtest -> data/outputs/player_props_backtest.md
 PYTHONPATH=src .venv/bin/python scripts/run_player_props_backtest.py
 
+# Did a result on one window hold on another? -> data/outputs/replication.md
+PYTHONPATH=src .venv/bin/python scripts/run_replication.py \
+    --discovery data/outputs/player_props_backtest_2025-26.json \
+    --test data/outputs/player_props_backtest_2024-25.json
+
 # Team markets, calibrated and priced -> data/outputs/team_markets_measurement.md
 PYTHONPATH=src .venv/bin/python scripts/run_team_markets_measurement.py
 
