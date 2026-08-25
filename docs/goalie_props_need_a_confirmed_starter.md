@@ -68,20 +68,38 @@ on real starts, and the old number described something that was never a
 question anyone could bet on.
 
 
-## And the provider does not retain it historically either
+## A claim I made here and had to withdraw
+
+This section previously said the provider does not retain goalie saves
+historically, and that the market therefore could never be measured against
+real prices.
+
+That was wrong, and the way it was wrong is worth keeping.
 
 A retention probe on 2026-01-10 requested all six prop markets and got five
-back. `player_total_saves` was the one missing, from all six books quoting
-that event.
+back, missing `player_total_saves`. I recorded it as unmeasurable. The
+purchase that followed found it priced on **54 of 58 events, across six
+books** — BetMGM, BetOnline.ag, Bovada, DraftKings, FanDuel and Fanatics. The
+market was there all along. One event was not a sample of retention; it was
+one night's book coverage.
 
-So goalie saves **cannot be measured against real prices at all**. There is no
-price-based evidence available for it, now or later, unless the provider's
-retention changes.
+This repository carries `docs/nhl_data_sources.md` and a rule in `CLAUDE.md`
+about exactly this: the EPL lab wrote off `total_2_5` for a season after
+checking coverage in one place. I then made the same mistake from a sample of
+one, in a repository built to stop it.
 
-That lands in the same place as the gate above rather than adding a new
-problem: the market already cannot reach the card, because nothing here knows
-who starts. A market that cannot be measured *and* cannot be selected is
-simply out of scope, and saying so plainly is better than carrying it as an
-open question. `data/outputs/player_props_backtest.md` names it as
-unmeasurable rather than leaving its calibration figure to be misread as
-evidence.
+The code changed rather than only the wording. `MINIMUM_PROBES_FOR_ABSENCE`
+now governs: below it, a market that did not appear is reported as *not seen
+in N events*, which is a claim about the probe, rather than *cannot be
+measured*, which is a claim about the provider. `retention_table` and
+`unmeasurable_markets` both refuse to write the second sentence from too
+little evidence, and the probe samples spread across the window by default
+instead of taking one night.
+
+## So goalie saves is measurable, and still cannot reach the card
+
+The gate above is unaffected and remains the operative one. Saves can be
+measured, and it did produce fourteen bets in the first purchase — far too few
+to mean anything, and the report says so. But it still cannot produce a
+selection, because nothing here knows who starts, and that is a question about
+lineups rather than about data retention.

@@ -90,7 +90,7 @@ def test_the_roi_table_row_always_carries_the_sample_size() -> None:
     row = interval.as_row("shots_on_goal")
 
     assert "| 55 |" in row
-    assert "yes" in row  # includes zero
+    assert "no" in row  # does not survive correction
 
 
 def test_the_wilson_interval_is_sane_at_small_n() -> None:
@@ -123,3 +123,80 @@ def test_the_multiple_comparison_warning_states_the_chance() -> None:
 def test_the_multiple_comparison_warning_is_silent_on_a_single_look() -> None:
     assert stats.looks_significant_but_is_a_multiple_comparison(1, 1) == ""
     assert stats.looks_significant_but_is_a_multiple_comparison(0, 25) == ""
+
+
+# -- correcting for the number of tests ---------------------------------
+
+
+def test_one_look_needs_no_correction() -> None:
+    interval = stats.roi_interval([0.91] * 30 + [-1.0] * 25, looks=1)
+
+    assert interval.adjusted_low == interval.low
+    assert interval.adjusted_high == interval.high
+
+
+def test_more_looks_widen_the_interval() -> None:
+    """Testing seven markets and reporting the one that cleared 95% is a
+    search, not a finding."""
+    returns = [0.91] * 160 + [-1.0] * 103
+
+    naive = stats.roi_interval(returns, looks=1)
+    corrected = stats.roi_interval(returns, looks=7)
+
+    assert corrected.adjusted_low < naive.low
+    assert corrected.adjusted_high > naive.high
+
+
+def test_a_marginal_result_stops_surviving_once_the_search_is_counted() -> None:
+    returns = [0.91] * 55 + [-1.0] * 45
+
+    interval = stats.roi_interval(returns, looks=7)
+
+    assert interval.includes_zero is False or interval.survives_correction is False
+
+
+def test_a_strong_result_survives_the_correction() -> None:
+    returns = [0.91] * 200 + [-1.0] * 100
+
+    interval = stats.roi_interval(returns, looks=7)
+
+    assert interval.survives_correction is True
+    assert "also survives correcting" in interval.verdict()
+
+
+def test_a_result_that_does_not_survive_says_no_demonstrated_edge() -> None:
+    returns = [0.91] * 58 + [-1.0] * 45
+
+    interval = stats.roi_interval(returns, looks=7)
+    verdict = interval.verdict()
+
+    if not interval.survives_correction and not interval.includes_zero:
+        assert stats.NO_DEMONSTRATED_EDGE in verdict
+        assert "family of tests actually run" in verdict
+
+
+def test_a_tiny_sample_never_survives_correction() -> None:
+    interval = stats.roi_interval([5.0] * 10, looks=7)
+
+    assert interval.survives_correction is False
+
+
+@pytest.mark.parametrize(("looks", "expected"), [(1, 1.96), (7, 2.69), (20, 3.02)])
+def test_the_critical_value_grows_with_the_number_of_looks(
+    looks: int, expected: float
+) -> None:
+    assert stats.bonferroni_z(looks) == pytest.approx(expected, abs=0.01)
+
+
+def test_the_table_row_reports_both_intervals() -> None:
+    interval = stats.roi_interval([0.91] * 160 + [-1.0] * 103, looks=7)
+
+    row = interval.as_row("shots_on_goal")
+
+    assert row.count("..") == 2
+
+
+def test_a_single_test_says_so_rather_than_showing_a_fake_correction() -> None:
+    interval = stats.roi_interval([0.91] * 30 + [-1.0] * 25, looks=1)
+
+    assert "n/a (one test)" in interval.as_row("shots_on_goal")

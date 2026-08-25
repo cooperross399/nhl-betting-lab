@@ -77,7 +77,12 @@ def test_an_interval_including_zero_is_not_supported(tmp_path: Path) -> None:
         "player_props_backtest.json",
         {
             "by_market": {
-                "points": {"bets": 900, "roi": 0.06, "includes_zero": True}
+                "points": {
+                    "bets": 900,
+                    "roi": 0.06,
+                    "includes_zero": True,
+                    "survives_correction": False,
+                }
             }
         },
     )
@@ -88,7 +93,7 @@ def test_an_interval_including_zero_is_not_supported(tmp_path: Path) -> None:
     points = next(v for v in bundle.verdicts if v.market == "points")
 
     assert points.supported is False
-    assert NO_DEMONSTRATED_EDGE in points.reason
+    assert NO_DEMONSTRATED_EDGE.capitalize() in points.reason
 
 
 def test_a_thin_sample_is_not_supported_however_good_it_looks(
@@ -100,7 +105,12 @@ def test_a_thin_sample_is_not_supported_however_good_it_looks(
         "player_props_backtest.json",
         {
             "by_market": {
-                "goals": {"bets": 40, "roi": 0.55, "includes_zero": False}
+                "goals": {
+                    "bets": 40,
+                    "roi": 0.55,
+                    "includes_zero": False,
+                    "survives_correction": True,
+                }
             }
         },
     )
@@ -128,6 +138,8 @@ def test_a_large_sample_excluding_zero_is_supported_but_hedged(
                     "bets": 1400,
                     "roi": 0.08,
                     "includes_zero": False,
+                    "survives_correction": True,
+                    "looks": 7,
                 }
             }
         },
@@ -140,6 +152,7 @@ def test_a_large_sample_excluding_zero_is_supported_but_hedged(
     assert bundle.supported_markets == ("shots_on_goal",)
     assert "not a recommendation to do so" in bundle.recommendation()
     assert "The decision is yours" in bundle.recommendation()
+    assert "has not been replicated" in bundle.recommendation()
 
 
 def test_a_team_market_is_read_from_its_own_report(tmp_path: Path) -> None:
@@ -149,7 +162,13 @@ def test_a_team_market_is_read_from_its_own_report(tmp_path: Path) -> None:
         "team_markets_measurement.json",
         {
             "markets": [
-                {"market": "moneyline", "bets": 800, "roi": 0.04, "includes_zero": True}
+                {
+                    "market": "moneyline",
+                    "bets": 800,
+                    "roi": 0.04,
+                    "includes_zero": True,
+                    "survives_correction": False,
+                }
             ]
         },
     )
@@ -280,3 +299,66 @@ def test_a_malformed_measurement_file_does_not_crash_the_bundle(
 
     assert bundle.verdicts
     assert ev.render_bundle(bundle)
+
+
+def test_a_result_that_does_not_survive_the_search_is_not_supported(
+    tmp_path: Path,
+) -> None:
+    """Several markets measured on one body of data; the uncorrected number
+    for whichever cleared 95% describes a search."""
+    _all_evidence_present(tmp_path)
+    _write(
+        tmp_path,
+        "player_props_backtest.json",
+        {
+            "by_market": {
+                "points": {
+                    "bets": 900,
+                    "roi": -0.16,
+                    "includes_zero": False,
+                    "survives_correction": False,
+                    "looks": 7,
+                    "adjusted_low": -0.39,
+                    "adjusted_high": 0.06,
+                }
+            }
+        },
+    )
+
+    bundle = ev.build_bundle(
+        provider_name="the_odds_api", output_dir=tmp_path, repository_root=tmp_path
+    )
+    points = next(v for v in bundle.verdicts if v.market == "points")
+
+    assert points.supported is False
+    assert "Corrected for the 7 markets" in points.reason
+    assert "includes zero" in points.reason
+
+
+def test_a_supported_market_still_says_it_is_not_replicated(
+    tmp_path: Path,
+) -> None:
+    _all_evidence_present(tmp_path)
+    _write(
+        tmp_path,
+        "player_props_backtest.json",
+        {
+            "by_market": {
+                "shots_on_goal": {
+                    "bets": 263,
+                    "roi": 0.181,
+                    "includes_zero": False,
+                    "survives_correction": True,
+                    "looks": 7,
+                }
+            }
+        },
+    )
+
+    bundle = ev.build_bundle(
+        provider_name="the_odds_api", output_dir=tmp_path, repository_root=tmp_path
+    )
+    shots = next(v for v in bundle.verdicts if v.market == "shots_on_goal")
+
+    assert shots.supported is True
+    assert "has not been replicated" in shots.reason

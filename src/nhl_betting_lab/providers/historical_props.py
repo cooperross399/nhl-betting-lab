@@ -39,9 +39,18 @@ measured historically**, and the honest response is to record it by name as
 unmeasurable — not to substitute a calibration number and let it read like a
 backtest.
 
-`probe_retention` answers that question for one event at a known cost, so the
-per-market retention table in `data/outputs/player_props_backtest.md` is
-measured rather than assumed.
+`probe_retention` answers that question for one event at a known cost. **One
+event is not retention.** A probe of a single event on 2026-01-10 returned
+five of six markets and I recorded `player_total_saves` as unmeasurable; the
+purchase that followed found it priced on 54 of 58 events across six books.
+The market was there all along and the sample of one was not a sample.
+
+That is the EPL `total_2_5` mistake repeating in a new costume — concluding
+"not offered" from a look too narrow to support it — in a repository that
+carries a document about that exact lesson. So `MINIMUM_PROBES_FOR_ABSENCE`
+now governs: below it, a market that did not appear is reported as *not seen
+in N events*, which is a different sentence from *cannot be measured*, and
+`retention_table` refuses to write the second one.
 """
 
 from __future__ import annotations
@@ -70,6 +79,12 @@ HISTORICAL_CREDITS_UPPER_BOUND_PER_MARKET = 10
 
 #: Historical events list. Documented flatly, and free when it finds nothing.
 HISTORICAL_EVENTS_LIST_COST = 1
+
+#: How many events must be probed before absence means anything. One probe
+#: called `player_total_saves` unmeasurable; it was priced on 54 of the next
+#: 58 events. Books differ, and a single event is a book's night rather than
+#: the provider's retention policy.
+MINIMUM_PROBES_FOR_ABSENCE = 5
 
 CACHE_DIRNAME = "historical_props"
 
@@ -430,7 +445,13 @@ def buy_historical_props(
 
 
 def retention_table(probes: Sequence[RetentionProbe]) -> str:
-    """The per-market retention table the backtest report embeds."""
+    """The per-market retention table the backtest report embeds.
+
+    Absence is only ever reported as absence once enough events have been
+    looked at. Below `MINIMUM_PROBES_FOR_ABSENCE` a market that did not appear
+    is "not seen in N events", which is a claim about the probe; "cannot be
+    measured" is a claim about the provider, and one event cannot support it.
+    """
     if not probes:
         return (
             "No retention probe has been run, so which prop markets can be "
@@ -443,15 +464,55 @@ def retention_table(probes: Sequence[RetentionProbe]) -> str:
             if market not in requested:
                 requested.append(market)
     lines = [
-        "| Provider market | Snapshots probed | Retained in | Measurable historically |",
-        "|:----------------|-----------------:|------------:|:------------------------|",
+        "| Provider market | Events probed | Seen in | Verdict |",
+        "|:----------------|--------------:|--------:|:--------|",
     ]
     for market in requested:
         probed = [probe for probe in probes if market in probe.markets_requested]
         retained = [probe for probe in probed if market in probe.markets_returned]
+        if retained:
+            verdict = f"measurable ({len(retained)}/{len(probed)})"
+        elif len(probed) >= MINIMUM_PROBES_FOR_ABSENCE:
+            verdict = f"**not offered in any of {len(probed)} events**"
+        else:
+            verdict = (
+                f"not seen in {len(probed)} event(s) — too few to call it "
+                "absent"
+            )
         lines.append(
-            f"| `{market}` | {len(probed)} | {len(retained)} | "
-            + ("yes" if retained else "**no — cannot be measured**")
-            + " |"
+            f"| `{market}` | {len(probed)} | {len(retained)} | {verdict} |"
+        )
+    if len(probes) < MINIMUM_PROBES_FOR_ABSENCE:
+        lines.append("")
+        lines.append(
+            f"Only {len(probes)} event(s) probed. A market missing from this "
+            "many is a book's night, not the provider's retention policy: a "
+            "single probe once recorded `player_total_saves` as unmeasurable "
+            "and the next purchase found it priced on 54 of 58 events."
         )
     return "\n".join(lines)
+
+
+def unmeasurable_markets(
+    probes: Sequence[RetentionProbe],
+) -> dict[str, str]:
+    """Markets a large enough probe never saw. Empty below the floor.
+
+    Deliberately returns nothing when too few events were probed, so a thin
+    probe cannot write "cannot be measured" into a report through this door
+    either.
+    """
+    if len(probes) < MINIMUM_PROBES_FOR_ABSENCE:
+        return {}
+    requested: set[str] = set()
+    seen: set[str] = set()
+    for probe in probes:
+        requested.update(probe.markets_requested)
+        seen.update(probe.markets_returned)
+    return {
+        market: (
+            f"Not offered on any of {len(probes)} probed events, so it cannot "
+            "be measured against real prices."
+        )
+        for market in sorted(requested - seen)
+    }

@@ -231,18 +231,70 @@ def test_an_unprobed_market_is_reported_as_unknown_not_as_absent() -> None:
     assert "not assumed to be all of them" in hist.retention_table([])
 
 
-def test_the_retention_table_names_an_unmeasurable_market() -> None:
-    probe = hist.RetentionProbe(
-        event_id="evt1",
-        snapshot="2025-01-05T19:00:00Z",
-        markets_requested=("player_points", "player_blocked_shots"),
-        markets_returned=("player_points",),
+def _probes(count: int, *, returned: tuple[str, ...]) -> list[hist.RetentionProbe]:
+    return [
+        hist.RetentionProbe(
+            event_id=f"evt{index}",
+            snapshot=f"2025-01-0{1 + index}T19:00:00Z",
+            markets_requested=("player_points", "player_blocked_shots"),
+            markets_returned=returned,
+        )
+        for index in range(count)
+    ]
+
+
+def test_one_probe_cannot_call_a_market_absent() -> None:
+    """A single probe once recorded `player_total_saves` as unmeasurable; the
+    next purchase found it priced on 54 of 58 events."""
+    table = hist.retention_table(_probes(1, returned=("player_points",)))
+
+    assert "too few to call it absent" in table
+    assert "cannot be measured" not in table
+    assert "not offered in any" not in table
+
+
+def test_enough_probes_can_call_a_market_absent() -> None:
+    probes = _probes(
+        hist.MINIMUM_PROBES_FOR_ABSENCE, returned=("player_points",)
     )
 
-    table = hist.retention_table([probe])
+    table = hist.retention_table(probes)
 
-    assert "cannot be measured" in table
+    assert "not offered in any of" in table
     assert "player_blocked_shots" in table
+
+
+def test_a_market_seen_even_once_is_measurable() -> None:
+    probes = _probes(5, returned=("player_points", "player_blocked_shots"))
+
+    assert "measurable (5/5)" in hist.retention_table(probes)
+
+
+def test_unmeasurable_markets_are_empty_below_the_probe_floor() -> None:
+    """A thin probe must not write "cannot be measured" through this door."""
+    assert hist.unmeasurable_markets(_probes(1, returned=("player_points",))) == {}
+
+
+def test_unmeasurable_markets_name_the_absent_ones_above_the_floor() -> None:
+    probes = _probes(
+        hist.MINIMUM_PROBES_FOR_ABSENCE, returned=("player_points",)
+    )
+
+    missing = hist.unmeasurable_markets(probes)
+
+    assert set(missing) == {"player_blocked_shots"}
+    assert "probed events" in missing["player_blocked_shots"]
+
+
+def test_the_probe_floor_is_more_than_one() -> None:
+    assert hist.MINIMUM_PROBES_FOR_ABSENCE > 1
+
+
+def test_the_module_records_the_claim_it_had_to_withdraw() -> None:
+    text = " ".join(hist.__doc__.split())
+
+    assert "One event is not retention" in text
+    assert "54 of 58 events" in text
 
 
 # -- buying ------------------------------------------------------------
