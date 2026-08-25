@@ -1,0 +1,312 @@
+"""A cached client for the official NHL API at `api-web.nhle.com`.
+
+Public, keyless, no quota. Everything the models are fitted on comes from
+here, and every response is written to `data/raw/nhl/` before it is parsed.
+
+**Caching is a correctness rule, not an optimisation.** A completed game's
+boxscore never changes, so it is fetched once and never again. Refetching
+would make the dataset silently depend on when it was built, which is exactly
+the kind of dependency that turns an unreproducible number into an argument.
+
+The rule has one exception and it is explicit: a schedule day, or a boxscore
+for a game that is not final, is *incomplete evidence*. Those are cached too,
+but `is_final` is recorded alongside so a later run knows to fetch again. A
+cache that cannot tell "finished" from "in progress" would freeze a game at
+the second period forever.
+
+Nothing here needs a credential, so nothing here can leak one.
+"""
+
+from __future__ import annotations
+
+import json
+import re
+from collections.abc import Callable
+from dataclasses import dataclass
+from datetime import date, datetime, timezone
+from pathlib import Path
+from typing import Any
+
+import requests
+
+from nhl_betting_lab.config import RAW_DIR
+
+
+API_BASE_URL = "https://api-web.nhle.com"
+STATS_BASE_URL = "https://api.nhle.com/stats/rest/en"
+
+#: Game states the API uses for a game whose result is settled. `OFF` is the
+#: usual terminal state; `FINAL` appears briefly between the final horn and
+#: the official close.
+FINAL_GAME_STATES = frozenset({"OFF", "FINAL"})
+
+#: Team abbreviation shape. Used to refuse a path segment that could escape
+#: the cache directory or the API's own routing.
+TEAM_PATTERN = re.compile(r"^[A-Z]{3}$")
+DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+Requester = Callable[..., Any]
+
+
+class NhlApiError(RuntimeError):
+    """The NHL API could not answer, or answered with something unusable."""
+
+
+def _default_requester(url: str, **kwargs: Any) -> Any:
+    return requests.get(url, **kwargs)
+
+
+@dataclass(frozen=True)
+class CacheEntry:
+    """One cached response and how it got there."""
+
+    path: Path
+    payload: Any
+    from_cache: bool
+    #: True when the payload is settled evidence that will never change.
+    complete: bool
+
+
+def _cache_root(raw_dir: Path | None = None) -> Path:
+    return (Path(raw_dir) if raw_dir else Path(RAW_DIR)) / "nhl"
+
+
+def _read_cache(path: Path) -> Any | None:
+    if not path.is_file():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        # A truncated cache file is worse than no cache file: it makes the
+        # dataset silently short. Treat it as a miss and refetch.
+        return None
+
+
+def _write_cache(path: Path, payload: Any) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(path.suffix + ".partial")
+    temporary.write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    # Atomic: a run interrupted mid-write must not leave half a boxscore that
+    # a later run trusts.
+    temporary.replace(path)
+
+
+def _get_json(
+    url: str,
+    *,
+    requester: Requester,
+    params: dict[str, str] | None = None,
+    timeout_seconds: float = 30.0,
+) -> Any:
+    try:
+        response = requester(url, params=params or {}, timeout=timeout_seconds)
+    except (requests.RequestException, OSError, TimeoutError) as exc:
+        raise NhlApiError(
+            f"The NHL API could not be reached ({type(exc).__name__})."
+        ) from exc
+    status = int(getattr(response, "status_code", 0) or 0)
+    if status != 200:
+        raise NhlApiError(f"The NHL API returned HTTP {status or 'unknown'}.")
+    try:
+        return response.json()
+    except (AttributeError, TypeError, ValueError) as exc:
+        raise NhlApiError("The NHL API returned unreadable JSON.") from exc
+
+
+def game_is_final(payload: Any) -> bool:
+    """Whether a boxscore payload describes a settled result."""
+    if not isinstance(payload, dict):
+        return False
+    return str(payload.get("gameState", "")).strip().upper() in FINAL_GAME_STATES
+
+
+def fetch_boxscore(
+    game_id: int,
+    *,
+    requester: Requester | None = None,
+    raw_dir: Path | None = None,
+    refresh: bool = False,
+) -> CacheEntry:
+    """One game's boxscore, from cache when the result is already settled."""
+    identifier = int(game_id)
+    if identifier <= 0:
+        raise NhlApiError(f"{game_id!r} is not a usable NHL game id.")
+    path = _cache_root(raw_dir) / "boxscore" / f"{identifier}.json"
+
+    if not refresh:
+        cached = _read_cache(path)
+        if cached is not None and game_is_final(cached):
+            return CacheEntry(
+                path=path, payload=cached, from_cache=True, complete=True
+            )
+
+    payload = _get_json(
+        f"{API_BASE_URL}/v1/gamecenter/{identifier}/boxscore", requester=requester or _default_requester
+    )
+    complete = game_is_final(payload)
+    _write_cache(path, payload)
+    return CacheEntry(path=path, payload=payload, from_cache=False, complete=complete)
+
+
+def fetch_schedule_day(
+    day: date | str,
+    *,
+    requester: Requester | None = None,
+    raw_dir: Path | None = None,
+    refresh: bool = False,
+) -> CacheEntry:
+    """The schedule week anchored on `day`.
+
+    The endpoint answers with a whole `gameWeek`, not a single day. That is the
+    provider's shape and it is kept: trimming it here would throw away six days
+    of free evidence and make a season build seven times as many requests.
+    """
+    text = day.isoformat() if isinstance(day, date) else str(day).strip()
+    if not DATE_PATTERN.fullmatch(text):
+        raise NhlApiError(f"{day!r} is not an ISO date (YYYY-MM-DD).")
+    path = _cache_root(raw_dir) / "schedule" / f"{text}.json"
+
+    if not refresh:
+        cached = _read_cache(path)
+        if cached is not None:
+            # A schedule is never "settled": times move and games are added.
+            # It is cached so a rebuild is cheap, never so a refresh is
+            # skipped when one was asked for.
+            return CacheEntry(
+                path=path, payload=cached, from_cache=True, complete=False
+            )
+
+    payload = _get_json(
+        f"{API_BASE_URL}/v1/schedule/{text}", requester=requester or _default_requester
+    )
+    _write_cache(path, payload)
+    return CacheEntry(path=path, payload=payload, from_cache=False, complete=False)
+
+
+def fetch_club_season_schedule(
+    team: str,
+    season_id: int,
+    *,
+    requester: Requester | None = None,
+    raw_dir: Path | None = None,
+    refresh: bool = False,
+) -> CacheEntry:
+    """Every game one club plays in one season, scheduled or completed."""
+    abbrev = str(team).strip().upper()
+    if not TEAM_PATTERN.fullmatch(abbrev):
+        raise NhlApiError(f"{team!r} is not a three-letter NHL team abbreviation.")
+    season = int(season_id)
+    if len(str(season)) != 8:
+        raise NhlApiError(f"{season_id!r} is not an eight-digit NHL season id.")
+    path = _cache_root(raw_dir) / "club_schedule" / f"{abbrev}_{season}.json"
+
+    if not refresh:
+        cached = _read_cache(path)
+        if cached is not None:
+            return CacheEntry(
+                path=path, payload=cached, from_cache=True, complete=False
+            )
+
+    payload = _get_json(
+        f"{API_BASE_URL}/v1/club-schedule-season/{abbrev}/{season}",
+        requester=requester or _default_requester,
+    )
+    _write_cache(path, payload)
+    return CacheEntry(path=path, payload=payload, from_cache=False, complete=False)
+
+
+def fetch_player_registry(
+    season_id: int,
+    *,
+    requester: Requester | None = None,
+    raw_dir: Path | None = None,
+    refresh: bool = False,
+) -> CacheEntry:
+    """`playerId` -> full name, for one season, from the stats API.
+
+    The boxscore abbreviates first names (`"S. Noesen"`); the odds provider
+    spells them out (`"Stefan Noesen"`). Joining prop prices to results needs
+    the full form, and this is the only thing the stats API is used for.
+
+    It is deliberately not a model input: its per-player endpoints return
+    season-to-date totals with no as-of date, so feeding them to a walk-forward
+    fit would leak the rest of the season into a game being priced. Names
+    cannot leak anything.
+    """
+    season = int(season_id)
+    if len(str(season)) != 8:
+        raise NhlApiError(f"{season_id!r} is not an eight-digit NHL season id.")
+    path = _cache_root(raw_dir) / "registry" / f"{season}.json"
+
+    if not refresh:
+        cached = _read_cache(path)
+        if cached is not None:
+            return CacheEntry(
+                path=path, payload=cached, from_cache=True, complete=False
+            )
+
+    request = requester or _default_requester
+    combined: dict[str, list[Any]] = {"skaters": [], "goalies": []}
+    for role, endpoint, name_field in (
+        ("skaters", "skater/summary", "skaterFullName"),
+        ("goalies", "goalie/summary", "goalieFullName"),
+    ):
+        start = 0
+        while True:
+            payload = _get_json(
+                f"{STATS_BASE_URL}/{endpoint}",
+                requester=request,
+                params={
+                    "limit": "100",
+                    "start": str(start),
+                    "cayenneExp": f"seasonId={season}",
+                },
+            )
+            rows = payload.get("data") if isinstance(payload, dict) else None
+            if not isinstance(rows, list) or not rows:
+                break
+            for row in rows:
+                if not isinstance(row, dict):
+                    continue
+                player_id = row.get("playerId")
+                full_name = str(row.get(name_field, "")).strip()
+                if player_id is None or not full_name:
+                    continue
+                combined[role].append(
+                    {
+                        "playerId": int(player_id),
+                        "fullName": full_name,
+                        "positionCode": str(row.get("positionCode", "")).strip()
+                        or ("G" if role == "goalies" else ""),
+                        "teamAbbrevs": str(row.get("teamAbbrevs", "")).strip(),
+                    }
+                )
+            if len(rows) < 100:
+                break
+            start += 100
+            if start > 5000:  # a season has ~1,000 players; this is a runaway guard
+                break
+
+    payload = {
+        "seasonId": season,
+        "fetched_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        **combined,
+    }
+    _write_cache(path, payload)
+    return CacheEntry(path=path, payload=payload, from_cache=False, complete=False)
+
+
+def cached_boxscore_ids(raw_dir: Path | None = None) -> list[int]:
+    """Every game id already on disk, so a rebuild needs no network at all."""
+    directory = _cache_root(raw_dir) / "boxscore"
+    if not directory.is_dir():
+        return []
+    ids: list[int] = []
+    for path in directory.glob("*.json"):
+        try:
+            ids.append(int(path.stem))
+        except ValueError:
+            continue
+    return sorted(ids)
