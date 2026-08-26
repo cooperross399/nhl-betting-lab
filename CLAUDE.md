@@ -41,23 +41,26 @@ Every session, in this order. These replace chat history as project memory.
 Every number below is measured, walk-forward, and carries its sample size.
 Re-derive rather than trust if the data has moved.
 
-- **Props have been measured against real prices on two seasons, and nothing
-  survives.** 192 events bought (58 from 2025-26, 134 from 2024-25), 11,418
-  credits, 90,594 price rows, 1,268 bets. Pooled: **+2.3% over 1,268 bets,
-  95% interval −3.1% to +7.7% — no demonstrated edge**, and nothing survives
-  correcting for the number of markets tested.
-- **`shots_on_goal` was the one result that survived on the first window, and
-  it did not replicate.** +18.1% over 263 bets on 2025-26, surviving
-  correction (+2.1% to +34.2%); **−6.0% over 420 bets on 2024-25**, pointing
-  the other way on the larger sample. `points` reversed too, −16.4% then
-  +1.7%. `data/outputs/replication.md`.
-- **That is the system working, not failing.** A single window found a
-  survivor; the second window contradicted it. Had the lab shipped on the
-  first result it would have staked money on a window property. Nothing is
-  allowlisted and nothing should be.
+- **Props are measured on two seasons and nothing survives.** 192 events
+  bought, 90,594 price rows, **4,777 bets**. Pooled: **+1.2% over 4,777 bets,
+  95% interval −1.7% to +4.0% — no demonstrated edge**, and no market clears
+  once the seven figures computed from the same data are counted.
+  `blocked_shots` is the only naive survivor (+11.8% over 555) and it dies on
+  correction (−0.1% to +23.7%).
+- **The earlier +18.1% on `shots_on_goal` was a data defect, not a result.**
+  The backtest joined prices to results on the provider's UTC timestamp while
+  the NHL dates a game by the day it is played. An evening face-off is the
+  next day in UTC, so **69% of every price bought was silently discarded** and
+  the survivors were disproportionately matinees. With the join fixed,
+  `shots_on_goal` is +3.0% over 1,925 bets on 2024-25 and +0.6% over 551 on
+  2025-26. The rule now lives in `season.py` and nowhere else.
+- **The fixed line grid was the second defect.** Samples priced five goalie
+  saves lines against ten on offer, and two goals lines against three, so
+  three quarters of the saves prices could not be scored at all. Samples now
+  store the fitted distribution — mean and dispersion — so any line the
+  provider offers is priced exactly.
 - **92% of every bet is on the Under.** One directional disagreement with the
-  market rather than six independent ones, which is why markets flip sign
-  between windows: they share the bias.
+  market rather than six independent ones.
 - **The measured historical rate is ten credits per market returned per
   event.** The documentation was ambiguous between one and ten; the
   pessimistic reading was right. Quota: **88,527 of 100,000 remaining**;

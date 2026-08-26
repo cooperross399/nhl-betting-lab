@@ -18,6 +18,7 @@ absence out of the measurement instead of scoring it as a loss.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date, timedelta
@@ -32,9 +33,9 @@ from nhl_betting_lab.models.player_props import (
 )
 
 
-#: The lines the calibration measurement prices, per market. Chosen to sit
-#: where books actually hang them, so a calibration result says something
-#: about bets that exist rather than about arbitrary thresholds.
+#: Lines the *calibration* sweep reports at. Calibration asks whether a stated
+#: probability means what it says, so it needs a fixed grid to bucket by; the
+#: price-based backtest does not, and no longer uses this.
 DEFAULT_LINES: dict[str, tuple[float, ...]] = {
     "shots_on_goal": (1.5, 2.5, 3.5, 4.5),
     "points": (0.5, 1.5, 2.5),
@@ -70,6 +71,18 @@ SETTLEMENT_COLUMNS: dict[str, str] = {
 #: see `docs/goalie_props_need_a_confirmed_starter.md`.
 GOALIE_START_SECONDS = 2400
 
+#: One row per player-game-market, carrying the fitted **distribution** rather
+#: than probabilities at a fixed grid of lines.
+#:
+#: The grid was the original design and it threw away most of the evidence. A
+#: book offers ten distinct goalie-saves lines and the grid priced five, so
+#: three-quarters of the saves prices bought could not be scored at all; goals
+#: lost a third the same way. Worse, the surviving subset is not a random
+#: sample of the prices — it is whichever lines the grid happened to name.
+#:
+#: Storing the mean and the dispersion instead lets any line be priced exactly,
+#: including alternate ladders nobody anticipated, and makes the sample file
+#: about six times smaller into the bargain.
 SAMPLE_COLUMNS = (
     "date",
     "game_id",
@@ -79,10 +92,9 @@ SAMPLE_COLUMNS = (
     "opponent",
     "venue",
     "market",
-    "line",
-    "model_probability",
+    "mean",
+    "dispersion_r",
     "actual",
-    "outcome",
     "toi_seconds",
 )
 
@@ -122,6 +134,16 @@ def _as_date(value: object) -> date | None:
         return None
 
 
+def distribution_from(mean: float, dispersion_r: float | None):
+    """Rebuild the fitted distribution from a stored sample row."""
+    from nhl_betting_lab.models.counts import NegativeBinomial, Poisson
+
+    average = max(float(mean), 1e-9)
+    if dispersion_r is None or not math.isfinite(float(dispersion_r)):
+        return Poisson(mean=average)
+    return NegativeBinomial(mean=average, r=float(dispersion_r))
+
+
 def generate_prop_samples(
     logs: pd.DataFrame,
     *,
@@ -137,6 +159,7 @@ def generate_prop_samples(
         for key, values in (lines or DEFAULT_LINES).items()
     }
     report = WalkForwardReport(lines=wanted)
+    priced_markets = tuple(wanted)
 
     frame = logs.copy()
     if frame.empty:
@@ -191,7 +214,7 @@ def generate_prop_samples(
             markets = (
                 ("goalie_saves",)
                 if role == "goalie"
-                else tuple(key for key in wanted if key != "goalie_saves")
+                else tuple(key for key in priced_markets if key != "goalie_saves")
             )
             priced_any = False
             for market in markets:
@@ -199,37 +222,37 @@ def generate_prop_samples(
                 if column is None or column not in log:
                     continue
                 actual = float(pd.to_numeric(log[column], errors="coerce") or 0.0)
-                for line in wanted.get(market, ()):
-                    probability = model.over_probability(
-                        player_id,
-                        market,
-                        line,
-                        opponent=str(log["opponent"]),
-                        venue=str(log["venue"]),
-                    )
-                    if probability is None:
-                        continue
-                    priced_any = True
-                    rows.append(
-                        {
-                            "date": str(log["date"])[:10],
-                            "game_id": int(log["game_id"]),
-                            "player_id": player_id,
-                            "player": str(log.get("player", "")),
-                            "team": str(log["team"]),
-                            "opponent": str(log["opponent"]),
-                            "venue": str(log["venue"]),
-                            "market": market,
-                            "line": line,
-                            "model_probability": float(probability),
-                            "actual": actual,
-                            "outcome": bool(actual > line),
-                            "toi_seconds": int(
-                                pd.to_numeric(log["toi_seconds"], errors="coerce")
-                                or 0
-                            ),
-                        }
-                    )
+                shape = model.distribution(
+                    player_id,
+                    market,
+                    opponent=str(log["opponent"]),
+                    venue=str(log["venue"]),
+                )
+                if shape is None:
+                    continue
+                priced_any = True
+                rows.append(
+                    {
+                        "date": str(log["date"])[:10],
+                        "game_id": int(log["game_id"]),
+                        "player_id": player_id,
+                        "player": str(log.get("player", "")),
+                        "team": str(log["team"]),
+                        "opponent": str(log["opponent"]),
+                        "venue": str(log["venue"]),
+                        "market": market,
+                        "mean": float(shape.mean),
+                        # None for a Poisson; a finite value for a negative
+                        # binomial. The scorer rebuilds the same distribution
+                        # from these two numbers.
+                        "dispersion_r": float(getattr(shape, "r", float("nan"))),
+                        "actual": actual,
+                        "toi_seconds": int(
+                            pd.to_numeric(log["toi_seconds"], errors="coerce")
+                            or 0
+                        ),
+                    }
+                )
             if not priced_any:
                 unpriced.add(player_id)
         report.games_priced += int(window["game_id"].nunique())

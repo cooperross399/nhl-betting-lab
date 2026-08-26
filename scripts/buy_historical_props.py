@@ -50,6 +50,7 @@ from nhl_betting_lab.markets import PROP_MARKETS
 from nhl_betting_lab.providers import historical_props as hist
 from nhl_betting_lab.providers.env_file import load_provider_env
 from nhl_betting_lab.providers.historical_props import list_historical_events
+from nhl_betting_lab.season import game_date
 from nhl_betting_lab.providers.odds_api import OddsApiProvider, ProviderError
 
 
@@ -126,6 +127,7 @@ def _events_in_window(
             events.append(
                 {
                     "event_id": event_id,
+                    "game_date": game_date(commence),
                     "snapshot": (
                         when_utc - timedelta(hours=hours_before)
                     ).isoformat(timespec="seconds").replace("+00:00", "Z"),

@@ -26,6 +26,7 @@ import pandas as pd
 
 from nhl_betting_lab.config import MIN_PROP_EDGE, OUTPUTS_DIR, PROCESSED_DIR
 from nhl_betting_lab.reports.player_props_backtest import run_backtest, save_backtest
+from nhl_betting_lab.season import game_date
 
 
 HISTORICAL_PRICES_FILENAME = "historical_prop_prices.csv"
@@ -93,12 +94,21 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.start or args.end:
         before = len(prices)
-        if not prices.empty and "date" in prices.columns:
-            dates = prices["date"].astype(str).str.slice(0, 10)
+        if not prices.empty:
+            # Filter on the league game date, not the UTC commence date, so a
+            # window boundary does not cut an evening slate in half.
+            source = (
+                prices["commence_time"]
+                if "commence_time" in prices.columns
+                else prices["date"]
+            )
+            dates = source.map(game_date)
+            keep = pd.Series(True, index=prices.index)
             if args.start:
-                prices = prices[dates >= args.start]
+                keep &= dates >= args.start
             if args.end:
-                prices = prices[dates <= args.end]
+                keep &= dates <= args.end
+            prices = prices[keep]
         print(
             f"Window {args.start or 'start'} .. {args.end or 'end'}: "
             f"{len(prices):,} of {before:,} price rows."

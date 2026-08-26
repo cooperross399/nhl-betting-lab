@@ -141,13 +141,12 @@ def test_claude_md_carries_a_current_operating_state() -> None:
     assert "No market is allowlisted" in text
 
 
-def test_the_operating_state_hedges_the_one_surviving_result() -> None:
-    """It survived on one window and was contradicted on the next."""
+def test_the_operating_state_records_that_the_headline_was_a_defect() -> None:
+    """The +18.1% came from a biased 31% subset, not from the strategy."""
     text = _claude_md()
 
-    assert "shots_on_goal` was the one result" in text
-    assert "did not replicate" in text
-    assert "Nothing is allowlisted" in text
+    assert "was a data defect, not a result" in text
+    assert "69% of every price bought was silently discarded" in text
 
 
 def test_the_operating_state_records_the_directional_concentration() -> None:
@@ -173,13 +172,13 @@ def test_the_honesty_doc_does_not_claim_calibration_is_evidence_of_an_edge() -> 
     assert "will not let the two be" in text
 
 
-def test_the_operating_state_records_the_failed_replication() -> None:
+def test_the_operating_state_records_that_nothing_survives() -> None:
     """The single most important fact about this lab's evidence."""
     text = _claude_md()
 
-    assert "did not replicate" in text
     assert "nothing survives" in text
-    assert "system working, not failing" in text
+    assert "no demonstrated edge" in text
+    assert "4,777 bets" in text
 
 
 def test_the_operating_state_records_that_the_pipeline_runs_live() -> None:

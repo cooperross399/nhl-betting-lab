@@ -9,33 +9,30 @@ import pytest
 from nhl_betting_lab.reports import player_props_backtest as bt
 
 
+def _sample(date: str, market: str, player: str, mean: float, actual: float) -> dict:
+    """One player-game-market, carrying the fitted distribution."""
+    return {
+        "date": date,
+        "game_id": abs(hash((date, player, market))) % 100000,
+        "player_id": abs(hash(player)) % 10000,
+        "market": market,
+        "player": player,
+        "mean": mean,
+        "dispersion_r": float("nan"),
+        "actual": actual,
+        "toi_seconds": 1200,
+    }
+
+
 def _samples() -> pd.DataFrame:
     return pd.DataFrame(
         [
-            {
-                "date": "2025-01-05",
-                "market": "shots_on_goal",
-                "player": "Auston Matthews",
-                "line": 3.5,
-                "model_probability": 0.62,
-                "actual": 5.0,
-            },
-            {
-                "date": "2025-01-05",
-                "market": "shots_on_goal",
-                "player": "Mitch Marner",
-                "line": 2.5,
-                "model_probability": 0.58,
-                "actual": 1.0,
-            },
-            {
-                "date": "2025-01-06",
-                "market": "points",
-                "player": "Auston Matthews",
-                "line": 0.5,
-                "model_probability": 0.70,
-                "actual": 2.0,
-            },
+            # Poisson(4.6) puts ~0.62 above 3.5.
+            _sample("2025-01-05", "shots_on_goal", "Auston Matthews", 4.6, 5.0),
+            # Poisson(3.3) puts ~0.58 above 2.5.
+            _sample("2025-01-05", "shots_on_goal", "Mitch Marner", 3.3, 1.0),
+            # Poisson(1.2) puts ~0.70 above 0.5.
+            _sample("2025-01-06", "points", "Auston Matthews", 1.2, 2.0),
         ]
     )
 
@@ -47,6 +44,7 @@ def _prices(rows: list[dict] | None = None) -> pd.DataFrame:
         else [
             {
                 "date": "2025-01-05",
+                "commence_time": "2025-01-06T00:10:00Z",
                 "market": "shots_on_goal",
                 "player": "Auston Matthews",
                 "selection": "over",
@@ -56,6 +54,7 @@ def _prices(rows: list[dict] | None = None) -> pd.DataFrame:
             },
             {
                 "date": "2025-01-05",
+                "commence_time": "2025-01-06T00:10:00Z",
                 "market": "shots_on_goal",
                 "player": "Mitch Marner",
                 "selection": "over",
@@ -65,6 +64,7 @@ def _prices(rows: list[dict] | None = None) -> pd.DataFrame:
             },
             {
                 "date": "2025-01-06",
+                "commence_time": "2025-01-07T00:10:00Z",
                 "market": "points",
                 "player": "Auston Matthews",
                 "selection": "over",
@@ -172,6 +172,7 @@ def test_an_unmatched_player_is_reported_not_scored_as_a_loss() -> None:
         [
             {
                 "date": "2025-01-05",
+                "commence_time": "2025-01-06T00:10:00Z",
                 "market": "shots_on_goal",
                 "player": "Nobody At All",
                 "selection": "over",
@@ -205,11 +206,13 @@ def test_the_under_side_uses_the_complement_of_the_model_probability() -> None:
         [
             {
                 "date": "2025-01-05",
+                "commence_time": "2025-01-06T00:10:00Z",
                 "market": "shots_on_goal",
                 "player": "Mitch Marner",
                 "selection": "under",
                 "line": 2.5,
-                "american_odds": 150,
+                # +250 implies 28.6%; the model puts the Under at 35.9%.
+                "american_odds": 250,
                 "book": "FanDuel",
             }
         ]
@@ -217,8 +220,12 @@ def test_the_under_side_uses_the_complement_of_the_model_probability() -> None:
 
     report = bt.run_backtest(prices, _samples(), edge_threshold=0.01)
 
+    from nhl_betting_lab.models.counts import Poisson
+
     assert len(report.bets) == 1
-    assert report.bets[0].model_probability == pytest.approx(1 - 0.58)
+    assert report.bets[0].model_probability == pytest.approx(
+        1 - Poisson(3.3).over_probability(2.5)
+    )
     assert report.bets[0].won is True  # 1 shot is under 2.5
 
 
@@ -314,14 +321,13 @@ def test_the_saved_json_carries_the_interval_for_every_market(tmp_path: Path) ->
 def _many(market: str, side: str, count: int, *, won: bool) -> pd.DataFrame:
     return pd.DataFrame(
         [
-            {
-                "date": f"2025-01-{1 + index % 28:02d}",
-                "market": market,
-                "player": f"Player {index}",
-                "line": 2.5,
-                "model_probability": 0.70,
-                "actual": 5.0 if won else 0.0,
-            }
+            _sample(
+                f"2025-01-{1 + index % 28:02d}",
+                market,
+                f"Player {index}",
+                3.4,  # Poisson(3.4) puts ~0.70 above 2.5
+                5.0 if won else 0.0,
+            )
             for index in range(count)
         ]
     )
@@ -337,6 +343,7 @@ def test_measuring_several_markets_counts_them_as_a_family() -> None:
         [
             {
                 "date": row.date,
+                "commence_time": f"{row.date}T18:00:00Z",
                 "market": row.market,
                 "player": row.player,
                 "selection": "over",
@@ -363,6 +370,7 @@ def test_the_report_explains_why_there_are_two_intervals() -> None:
         [
             {
                 "date": row.date,
+                "commence_time": f"{row.date}T18:00:00Z",
                 "market": row.market,
                 "player": row.player,
                 "selection": "over",
@@ -389,6 +397,7 @@ def test_the_report_shows_which_way_the_bets_point() -> None:
         [
             {
                 "date": row.date,
+                "commence_time": f"{row.date}T18:00:00Z",
                 "market": "shots_on_goal",
                 "player": row.player,
                 "selection": "under",
@@ -398,8 +407,9 @@ def test_the_report_shows_which_way_the_bets_point() -> None:
             for row in samples.itertuples()
         ]
     )
-    # The model says 70% Over, so the Under side is 30% and never bet; flip it.
-    samples["model_probability"] = 0.20
+    # The model says 70% Over, so the Under side is 30% and never bet. A far
+    # lower mean flips it: Poisson(1.0) puts only ~8% above 2.5.
+    samples["mean"] = 1.0
 
     report = bt.run_backtest(prices, samples, edge_threshold=0.05)
     rendered = bt.render_backtest(report)
