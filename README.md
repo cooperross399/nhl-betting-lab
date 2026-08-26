@@ -105,6 +105,10 @@ PYTHONPATH=src .venv/bin/python scripts/run_provider_shadow.py --live --props \
     --credit-cap 60
 ```
 
+# Rebuild the price CSVs from the raw cached responses. Free, and the reason
+# a clobbered file is a five-minute recovery rather than a re-purchase.
+PYTHONPATH=src .venv/bin/python scripts/rebuild_price_files.py
+
 ### Historical prices — the expensive one
 
 ```bash

@@ -2,7 +2,7 @@
 
 Does the model beat a price that was actually for sale? Calibration cannot answer that; this can, to the extent the sample allows.
 
-- Generated: 2026-08-26T02:52:57+00:00
+- Generated: 2026-08-26T03:01:41+00:00
 - Edge threshold: **6.0%**
 - +1.2% over 4777 bets, 95% interval -1.7% to +4.0%. The interval includes zero, which means **no demonstrated edge**.
 
@@ -126,9 +126,15 @@ Players whose prices could not be matched to a model opinion (first 50). A name 
 
 ## Which markets can be measured at all
 
-No retention probe has been run, so which prop markets the provider retains historically is **unknown**. It is not assumed to be all of them and it is not assumed to be none.
+| Provider market | Events probed | Seen in | Verdict |
+|:----------------|--------------:|--------:|:--------|
+| `player_hits` | 256 | 0 | **not offered in any of 256 events** |
 
-Markets this lab prices: `shots_on_goal`, `points`, `goals`, `assists`, `goalie_saves`, `blocked_shots`, `hits`. Until a retention probe has run, none of them is established as measurable or unmeasurable.
+### Named as unmeasurable
+
+- `hits`: Not offered in any historical snapshot across 256 probed events spanning two seasons, so it cannot be measured against past prices. It is served live; its evidence must accumulate forward.
+
+These markets have **no price-based evidence at all**. Whatever their calibration says, it cannot substitute for this, and no report in this repository will present it as though it does.
 
 ## Standing notes
 

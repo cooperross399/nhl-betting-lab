@@ -134,6 +134,20 @@ jobs:
             echo "::warning::No boxscores were restored; this run rebuilds the cache from scratch."
           fi
 
+      - name: Rebuild the price files from the raw cache
+        # The CSVs are derived data: every bought response is cached raw and
+        # never changes, so the CSVs are reconstructed from them on every run.
+        # This is what makes a clobbered or missing CSV in an artifact heal
+        # itself instead of silently shrinking the measurement — a purchase
+        # that bought nothing once overwrote eleven thousand credits of
+        # accumulated prices with an empty file, and the raw cache turned that
+        # into a five-minute recovery.
+        continue-on-error: true
+        env:
+          PYTHONPATH: src
+        run: |
+          python scripts/rebuild_price_files.py
+
       - name: Check the provider credential
         env:
           NHL_ODDS_API_KEY: ${{ secrets.NHL_ODDS_API_KEY }}

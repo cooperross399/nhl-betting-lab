@@ -59,8 +59,21 @@ Re-derive rather than trust if the data has moved.
   three quarters of the saves prices could not be scored at all. Samples now
   store the fitted distribution — mean and dispersion — so any line the
   provider offers is priced exactly.
-- **92% of every bet is on the Under.** One directional disagreement with the
-  market rather than six independent ones.
+- **92% of every bet is on the Under.** Not because the model under-predicts —
+  the walk-forward means run within ±5% of the actuals on every market — but
+  because books hang the vigged, publicly-shaded side on the Over, so the
+  model's disagreements point Under. And the claimed edge on selected bets
+  (+9.4%) realises as +1.2% because bets are selected exactly where the
+  model's estimation error concentrates.
+- **Hits is priced live and not retained historically.** Measured across 256
+  events spanning both sampled seasons: zero rows from any book. It can reach
+  a future card once approved; it can never be backtested. Its evidence must
+  accumulate forward. Cost of establishing that: 2,600 credits.
+- **The price CSVs are derived data.** Every bought response is cached raw and
+  the CSVs are rebuilt from the cache on every purchase run — because a
+  purchase that bought nothing once overwrote the accumulated file with an
+  empty frame, and the raw cache turned an 11,000-credit loss into a
+  five-minute recovery.
 - **The measured historical rate is ten credits per market returned per
   event.** The documentation was ambiguous between one and ten; the
   pessimistic reading was right. Quota: **88,527 of 100,000 remaining**;

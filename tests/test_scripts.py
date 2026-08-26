@@ -379,3 +379,107 @@ def test_buying_an_unknown_market_is_refused(tmp_path: Path) -> None:
         )
 
     assert exit_info.value.code != 0
+
+
+def test_an_empty_purchase_never_replaces_a_file_that_holds_something(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """This exact write once emptied eleven thousand credits of accumulated
+    prices. The raw cache made it recoverable; this makes it not happen."""
+    from nhl_betting_lab.providers import historical_props as hist
+
+    module = load_script("buy_historical_props.py")
+    processed = tmp_path / "processed"
+    processed.mkdir()
+    target = processed / "historical_prop_prices.csv"
+    target.write_text("date,market\n2025-01-05,points\n", encoding="utf-8")
+
+    class BuysNothing:
+        def __call__(self, *args: object, **kwargs: object):
+            return hist.HistoricalBuy()
+
+    # Route a buy that returns nothing through the real write path.
+    import unittest.mock as mock
+
+    with mock.patch.object(module.hist, "buy_historical_props", BuysNothing()):
+        with mock.patch.object(module, "OddsApiProvider") as provider:
+            provider.return_value = object()
+            module.main(
+                [
+                    "--live",
+                    "--credit-cap", "10",
+                    "--events-file", str(_events_file(tmp_path)),
+                    "--processed-dir", str(processed),
+                    "--output-dir", str(tmp_path),
+                    "--raw-dir", str(tmp_path),
+                ]
+            )
+
+    assert target.read_text(encoding="utf-8").count("\n") == 2
+    assert "left as it was" in capsys.readouterr().out
+
+
+def _events_file(tmp_path: Path) -> Path:
+    import json
+
+    path = tmp_path / "events.json"
+    path.write_text(
+        json.dumps([{"event_id": "evt1", "snapshot": "2025-01-05T19:00:00Z"}]),
+        encoding="utf-8",
+    )
+    return path
+
+
+def test_the_rebuild_script_reconstructs_the_csv_from_the_raw_cache(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The CSVs are derived data, which is what made the clobber recoverable."""
+    import json
+
+    module = load_script("rebuild_price_files.py")
+    cache = tmp_path / "historical_props"
+    cache.mkdir(parents=True)
+    (cache / "evt1_x_abc.json").write_text(
+        json.dumps(
+            {
+                "timestamp": "2025-01-05T19:00:00Z",
+                "data": {
+                    "id": "evt1",
+                    "commence_time": "2025-01-06T00:10:00Z",
+                    "home_team": "Toronto Maple Leafs",
+                    "away_team": "Boston Bruins",
+                    "bookmakers": [
+                        {
+                            "key": "draftkings",
+                            "title": "DraftKings",
+                            "markets": [
+                                {
+                                    "key": "player_shots_on_goal",
+                                    "outcomes": [
+                                        {
+                                            "name": "Over",
+                                            "description": "Auston Matthews",
+                                            "price": -115,
+                                            "point": 3.5,
+                                        }
+                                    ],
+                                }
+                            ],
+                        }
+                    ],
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    code = module.main(
+        ["--raw-dir", str(tmp_path), "--processed-dir", str(tmp_path / "out")]
+    )
+
+    assert code == 0
+    import pandas as pd
+
+    rebuilt = pd.read_csv(tmp_path / "out" / "historical_prop_prices.csv")
+    assert len(rebuilt) == 1
+    assert rebuilt.iloc[0]["player"] == "Auston Matthews"
