@@ -153,7 +153,7 @@ def test_the_operating_state_records_the_directional_concentration() -> None:
     text = _claude_md()
 
     assert "on the Under" in text
-    assert "One directional disagreement" in text
+    assert "the vigged, publicly-shaded side" in text
 
 
 def test_the_operating_state_names_the_hard_gated_market() -> None:
