@@ -162,14 +162,15 @@ def test_the_shipped_policy_allowlists_nothing() -> None:
 
 def test_a_probe_does_not_rebuild_the_walk_forward_samples() -> None:
     """A probe asks one question of one event and nothing in the answer
-    depends on the model. Making it wait for 1.9 million samples first was
-    ceremony, and probing is the thing you do repeatedly."""
+    depends on the model. Making it wait for the full rebuild first was
+    ceremony, and probing is the thing you do repeatedly. A buy of either kind
+    does need the samples, because a buy has something to measure."""
     text = _read(".github/workflows/historical-props-purchase.yml")
     rebuild = text.index("Rebuild the results and the walk-forward samples")
     probe = text.index("- name: Probe retention")
     between = text[rebuild:probe]
 
-    assert "if: ${{ inputs.mode == 'buy' }}" in between
+    assert "if: ${{ inputs.mode != 'probe' }}" in between
 
 
 def test_the_purchase_workflow_checks_the_quota_before_it_spends() -> None:
@@ -289,3 +290,12 @@ def test_a_thin_cache_is_reported_rather_than_silently_modelled() -> None:
 
     assert "fitted on a thin history" in text
     assert "this resolves itself" in text
+
+
+def test_team_prices_can_be_bought_from_the_workflow() -> None:
+    """They went unmeasured while props were bought twice, because they were
+    cheap enough to forget."""
+    text = _read(".github/workflows/historical-props-purchase.yml")
+
+    assert "buy_team" in text
+    assert "buy_historical_team_prices.py" in text

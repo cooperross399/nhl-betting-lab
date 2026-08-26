@@ -23,6 +23,7 @@ fine on moneylines and totals and wrong only here.
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -39,11 +40,13 @@ from nhl_betting_lab.models.calibration import (
     reliability_table,
     walk_forward_calibrate,
 )
+from nhl_betting_lab.providers.team_names import load_team_name_map, resolve_team
 from nhl_betting_lab.models.value import (
     OddsError,
     american_to_implied,
     profit_on_win,
 )
+from nhl_betting_lab.season import game_date
 from nhl_betting_lab.stats import (
     NO_DEMONSTRATED_EDGE,
     ROI_TABLE_HEADER,
@@ -150,6 +153,7 @@ def measure_prices(
     *,
     market: str,
     edge_threshold: float = MIN_EDGE,
+    team_names: Mapping[str, str] | None = None,
 ) -> RoiInterval | None:
     """Flat-stake ROI against historical team prices, or None if there are none."""
     if prices.empty or samples.empty:
@@ -157,6 +161,8 @@ def measure_prices(
     priced = prices[prices["market"].astype(str) == market]
     if priced.empty:
         return None
+    # The provider says "Toronto Maple Leafs"; the samples say "TOR".
+    names = dict(team_names or load_team_name_map())
 
     lookup: dict[tuple, tuple[float, bool, bool]] = {}
     for row in samples[samples["market"].astype(str) == market].itertuples():
@@ -183,10 +189,16 @@ def measure_prices(
             )
         except (TypeError, ValueError):
             line = None
+        # The league game date, not the UTC commence date. An evening face-off
+        # is the next day in UTC and joining on that discards most of a season.
         key = (
-            str(getattr(row, "date", ""))[:10],
-            str(getattr(row, "home_team", "")),
-            str(getattr(row, "away_team", "")),
+            game_date(
+                getattr(row, "commence_time", "") or getattr(row, "date", "")
+            ),
+            resolve_team(getattr(row, "home_team", ""), names)
+            or str(getattr(row, "home_team", "")),
+            resolve_team(getattr(row, "away_team", ""), names)
+            or str(getattr(row, "away_team", "")),
             str(getattr(row, "selection", "")),
             line,
         )
@@ -219,6 +231,7 @@ def build_team_measurement(
     edge_threshold: float = MIN_EDGE,
     now: datetime | None = None,
     minimum_fit_samples: int = PlattCalibration.MINIMUM_SAMPLES,
+    team_names: Mapping[str, str] | None = None,
 ) -> TeamMeasurementReport:
     moment = now or datetime.now(timezone.utc)
     price_frame = (
@@ -238,7 +251,11 @@ def build_team_measurement(
             samples, market=market, minimum_fit_samples=minimum_fit_samples
         )
         measurement.priced = measure_prices(
-            price_frame, samples, market=market, edge_threshold=edge_threshold
+            price_frame,
+            samples,
+            market=market,
+            edge_threshold=edge_threshold,
+            team_names=team_names,
         )
         report.markets.append(measurement)
 
