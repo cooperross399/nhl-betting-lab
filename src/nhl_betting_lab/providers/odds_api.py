@@ -73,8 +73,16 @@ PROP_PROVIDER_MARKETS: tuple[str, ...] = tuple(
     market.provider_key for market in PROP_MARKETS
 )
 
-#: Alternate ladders. Fetched alongside the bulk markets because the EPL lab
-#: excluded a market for a season by checking only the bulk one.
+#: Alternate ladders. **Per-event only.** The provider does not serve these on
+#: the bulk endpoint and answers the whole request with HTTP 422 when they are
+#: asked for there — which took down every team-market fetch, and looked like
+#: an off-season for two rounds of debugging because the season genuinely had
+#: not started.
+#:
+#: They are fetched per event instead, never dropped. Losing them would repeat
+#: the EPL `total_2_5` mistake exactly: the complete line lives in the
+#: alternate ladder, and a market written off after checking only the bulk
+#: endpoint is a market written off for the wrong reason.
 ALTERNATE_PROVIDER_MARKETS: tuple[str, ...] = tuple(ALTERNATE_PROVIDER_KEYS)
 
 SAFE_RESPONSE_HEADERS = (
@@ -408,18 +416,19 @@ class OddsApiProvider:
             raise ProviderError("The events list is not a JSON list.")
         return [item for item in payload if isinstance(item, dict)]
 
-    def fetch_team_markets(
-        self, *, include_alternates: bool = True, fetched_at: str = ""
-    ) -> FetchResult:
+    def fetch_team_markets(self, *, fetched_at: str = "") -> FetchResult:
         """Bulk team markets for the whole slate.
 
         Cheap: the bulk endpoint bills per market requested, not per event.
+
+        Only the markets the bulk endpoint actually serves are requested. The
+        alternate ladders are per-event and asking for them here makes the
+        provider refuse the entire request, which is not obvious from the
+        response — a 422 with no indication of which market caused it.
         """
         self._require_credential()
         stamp = fetched_at or datetime.now(timezone.utc).isoformat(timespec="seconds")
         markets = list(BULK_PROVIDER_MARKETS)
-        if include_alternates:
-            markets += list(ALTERNATE_PROVIDER_MARKETS)
         try:
             payload, headers = self._get(
                 f"{self.base_url}/v4/sports/{self.sport_key}/odds",
