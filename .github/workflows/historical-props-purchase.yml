@@ -16,10 +16,10 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "probe (one event, find out what is retained) or buy"
+        description: "probe retention, buy props, or buy team markets"
         type: choice
         required: true
-        options: [probe, buy]
+        options: [probe, buy, buy_team]
         default: probe
       credit_cap:
         description: "Hard cap on credits for this run. Required."
@@ -152,6 +152,8 @@ jobs:
           echo "and real spend is read from x-requests-last as it happens."
 
       - name: Rebuild the results and the walk-forward samples
+        # Buying team markets needs the team samples, which come from the same
+        # rebuild.
         # A purchase with nothing to measure it against is wasted credits, so
         # a buy rebuilds the samples first. The NHL API is free and keyless
         # and a final boxscore is never refetched, so this is cheap on any run
@@ -162,7 +164,7 @@ jobs:
         # depends on the model, so making it wait half an hour for 1.9 million
         # walk-forward samples was pure ceremony. Probing is the thing you do
         # repeatedly while exploring retention; it should be minutes.
-        if: ${{ inputs.mode == 'buy' }}
+        if: ${{ inputs.mode != 'probe' }}
         env:
           PYTHONPATH: src
         run: |
@@ -206,6 +208,29 @@ jobs:
             --credit-cap "${{ inputs.credit_cap }}" \
             --hours-before "${{ inputs.hours_before }}" $MARKETS
 
+      - name: Buy team markets
+        # The bulk historical endpoint returns every game on the board at one
+        # instant for 10 x markets x regions, so a whole slate costs thirty
+        # credits whether it holds four games or fourteen. That is why these
+        # went unmeasured while the props were bought twice.
+        if: ${{ inputs.mode == 'buy_team' }}
+        env:
+          NHL_ODDS_API_KEY: ${{ secrets.NHL_ODDS_API_KEY }}
+          PYTHONPATH: src
+        run: |
+          python scripts/buy_historical_team_prices.py --live \
+            --from "${{ inputs.start_date }}" --to "${{ inputs.end_date }}" \
+            --every-n-days "${{ inputs.every_n_days }}" \
+            --credit-cap "${{ inputs.credit_cap }}"
+
+      - name: Rebuild the team measurement
+        if: ${{ inputs.mode == 'buy_team' }}
+        continue-on-error: true
+        env:
+          PYTHONPATH: src
+        run: |
+          python scripts/run_team_markets_measurement.py
+
       - name: Rebuild the backtest with whatever was bought
         if: always()
         continue-on-error: true
@@ -233,6 +258,8 @@ jobs:
           path: |
             data/raw/historical_props
             data/processed/historical_prop_prices.csv
+            data/processed/historical_team_prices.csv
+            data/outputs/team_markets_measurement.md
             data/outputs/historical_props_retention.json
             data/outputs/player_props_backtest.md
             data/outputs/player_props_backtest_bets.csv
@@ -254,8 +281,10 @@ jobs:
             data/raw/nhl/registry
             data/raw/nhl/club_schedule
             data/raw/historical_props
+            data/raw/historical_team_prices
             data/processed
             data/outputs/prop_calibration_samples.csv
+            data/outputs/team_market_samples.csv
           if-no-files-found: warn
           retention-days: 90
 

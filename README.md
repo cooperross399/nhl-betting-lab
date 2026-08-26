@@ -117,11 +117,18 @@ PYTHONPATH=src .venv/bin/python scripts/buy_historical_props.py \
     --probe --live --credit-cap 60
 ```
 
-Between one and ten credits per market per event. The provider documents ten
+# Team markets, from the bulk endpoint — far cheaper, per snapshot not per event
+PYTHONPATH=src .venv/bin/python scripts/buy_historical_team_prices.py \
+    --from 2024-10-08 --to 2026-04-15
+```
+
+Props: between one and ten credits per market per event. The provider documents ten
 for its bulk historical endpoint and is ambiguous about the per-event one, so
 the real rate is read from `x-requests-last` as it is spent and the cap is
-enforced against the pessimistic reading. Either way this is a spending
-decision rather than a default.
+enforced against the pessimistic reading. Team markets come from the bulk
+historical endpoint at `10 x markets x regions` **per snapshot**, so a whole
+slate costs thirty credits whether it holds four games or fourteen. Either way
+this is a spending decision rather than a default.
 
 ### Gates and tests
 
