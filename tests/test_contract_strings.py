@@ -180,3 +180,19 @@ def test_the_operating_state_records_the_failed_replication() -> None:
     assert "did not replicate" in text
     assert "nothing survives" in text
     assert "system working, not failing" in text
+
+
+def test_the_operating_state_records_that_the_pipeline_runs_live() -> None:
+    """A future session should not have to wonder whether it has ever worked."""
+    text = _claude_md()
+
+    assert "Gameday Refresh runs green" in text
+    assert "Verified end to end" in text
+
+
+def test_the_operating_state_warns_about_the_bulk_endpoint() -> None:
+    """The trap that cost two rounds of debugging, written down."""
+    text = _claude_md()
+
+    assert "per-event markets, not bulk ones" in text
+    assert "total_2_5` mistake" in text
