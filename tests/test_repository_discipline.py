@@ -309,3 +309,10 @@ def test_purchases_are_serialised_and_never_cancelled() -> None:
 
     assert "group: historical-purchase" in text
     assert "cancel-in-progress: false" in text
+
+
+def test_the_linter_runs_in_ci_not_only_on_one_machine() -> None:
+    """An undefined name in `Mapping` reached a branch this session because
+    pyflakes ran locally and nowhere else."""
+    assert "pyflakes" in _read(".github/workflows/tests.yml")
+    assert "pyflakes" in _read("requirements.txt")
