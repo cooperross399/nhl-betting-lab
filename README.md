@@ -91,6 +91,11 @@ PYTHONPATH=src .venv/bin/python scripts/check_provider_credential.py
 # How many credits are left. The /v4/sports listing is documented as free.
 PYTHONPATH=src .venv/bin/python scripts/check_provider_quota.py
 
+# Which NHL markets does the provider actually serve? Probes each candidate
+# individually, so one bad name cannot hide the others.
+PYTHONPATH=src .venv/bin/python scripts/discover_nhl_markets.py --live \
+    --credit-cap 120
+
 # Assess whatever is already staged. No credits.
 PYTHONPATH=src .venv/bin/python scripts/run_provider_shadow.py
 
