@@ -2,8 +2,8 @@
 
 Moneyline, puck line and totals — calibrated walk-forward, and measured against real prices wherever any have been bought.
 
-- Generated: 2026-08-25T22:00:53+00:00
-- 51,212 walk-forward samples across 3 market(s) and 3,658 games; 0 market(s) have any price-based evidence.
+- Generated: 2026-08-26T02:01:18+00:00
+- 62,186 walk-forward samples across 4 market(s) and 3,658 games; 0 market(s) have any price-based evidence.
 
 ## Calibration
 
@@ -11,6 +11,7 @@ Moneyline, puck line and totals — calibrated walk-forward, and measured agains
 |:-------|--------:|----------:|----------------:|:-----------|
 | `moneyline` (Moneyline) | 7,114 | 0.2430 | 0.2429 | intercept -0.000, slope 0.792 (fitted on 7254 samples) |
 | `puck_line` (Puck line (-1.5 / +1.5)) | 14,400 | 0.2066 | 0.2057 | intercept -0.000, slope 0.832 (fitted on 14484 samples) |
+| `regulation_3_way` (Regulation result (3-way)) | 10,749 | 0.2144 | 0.2121 | intercept -0.234, slope 0.633 (fitted on 10911 samples) |
 | `total_goals` (Total goals) | 29,032 | 0.2136 | 0.2137 | intercept -0.000, slope 1.005 (fitted on 29016 samples) |
 
 ### `moneyline`
@@ -44,6 +45,20 @@ Moneyline, puck line and totals — calibrated walk-forward, and measured agains
 | 70%-80% | 3,098 | 75.0% | 70.9% | 69.2% .. 72.4% |
 | 80%-90% | 1,397 | 83.7% | 78.5% | 76.3% .. 80.6% |
 | 90%-100% | 94 | 91.5% | 91.5% | 84.1% .. 95.6% |
+
+### `regulation_3_way`
+
+- Over 10,749 held-out samples the correction improves the Brier score from 0.2144 to 0.2121 (delta +0.00233). Calibration can rule this model out; it cannot rule it in. Whether the market disagrees with it profitably is a separate question, answered only by prices.
+
+| Bucket | Samples | Predicted | Observed | 95% on observed |
+|:-------|--------:|----------:|---------:|:----------------|
+| 10%-20% | 3,691 | 15.9% | 22.0% | 20.7% .. 23.3% |
+| 20%-30% | 833 | 26.4% | 25.7% | 22.8% .. 28.8% |
+| 30%-40% | 2,187 | 35.6% | 35.4% | 33.5% .. 37.5% |
+| 40%-50% | 2,452 | 44.8% | 40.9% | 38.9% .. 42.8% |
+| 50%-60% | 1,246 | 54.3% | 48.2% | 45.5% .. 51.0% |
+| 60%-70% | 295 | 63.9% | 51.2% | 45.5% .. 56.8% |
+| 70%-80% | 45 | 72.5% | 64.4% | 49.8% .. 76.8% |
 
 ### `total_goals`
 

@@ -2,20 +2,20 @@
 
 Did a result found on one window hold on another? No amount of extra precision on the first window can answer that — a result measured more carefully on the data that produced it is still that data.
 
-- Generated: 2026-08-26T01:38:53+00:00
-- Discovery window: **2025-26**
-- Test window: **2024-25**
+- Generated: 2026-08-26T02:01:30+00:00
+- Discovery window: **2024-25**
+- Test window: **2025-26**
 
-Nothing survived correction on **2025-26**, so there is no result to replicate. That is not a failure of the test window.
+Nothing survived correction on **2024-25**, so there is no result to replicate. That is not a failure of the test window.
 
 | Market | Discovery | Test | Verdict |
 |:-------|:----------|:-----|:--------|
-| `assists` | -12.8% / 166 bets | -1.0% / 220 bets | **untestable** |
-| `blocked_shots` | +7.4% / 144 bets | +13.4% / 411 bets | **untestable** |
-| `goalie_saves` | -1.2% / 153 bets | -3.3% / 257 bets | **untestable** |
-| `goals` | +1.6% / 11 bets | +20.4% / 26 bets | **untestable** |
-| `points` | -13.6% / 302 bets | +0.0% / 611 bets | **untestable** |
-| `shots_on_goal` | +0.6% / 551 bets | +3.0% / 1925 bets | **untestable** |
+| `assists` | -1.0% / 220 bets | -12.8% / 166 bets | **untestable** |
+| `blocked_shots` | +13.4% / 411 bets | +7.4% / 144 bets | **untestable** |
+| `goalie_saves` | -3.3% / 257 bets | -1.2% / 153 bets | **untestable** |
+| `goals` | +20.4% / 26 bets | +1.6% / 11 bets | **untestable** |
+| `points` | +0.0% / 611 bets | -13.6% / 302 bets | **untestable** |
+| `shots_on_goal` | +3.0% / 1925 bets | +0.6% / 551 bets | **untestable** |
 
 ✓ marks an interval that excludes zero after correcting for the markets tested in that window.
 

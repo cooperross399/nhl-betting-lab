@@ -2,7 +2,7 @@
 
 Does the model beat a price that was actually for sale? Calibration cannot answer that; this can, to the extent the sample allows.
 
-- Generated: 2026-08-26T01:38:54+00:00
+- Generated: 2026-08-26T02:01:26+00:00
 - Edge threshold: **6.0%**
 - +1.2% over 4777 bets, 95% interval -1.7% to +4.0%. The interval includes zero, which means **no demonstrated edge**.
 
@@ -122,7 +122,7 @@ Players whose prices could not be matched to a model opinion (first 50). A name 
 
 No retention probe has been run, so which prop markets the provider retains historically is **unknown**. It is not assumed to be all of them and it is not assumed to be none.
 
-Markets this lab prices: `shots_on_goal`, `points`, `goals`, `assists`, `goalie_saves`, `blocked_shots`. Until a retention probe has run, none of them is established as measurable or unmeasurable.
+Markets this lab prices: `shots_on_goal`, `points`, `goals`, `assists`, `goalie_saves`, `blocked_shots`, `hits`. Until a retention probe has run, none of them is established as measurable or unmeasurable.
 
 ## Standing notes
 

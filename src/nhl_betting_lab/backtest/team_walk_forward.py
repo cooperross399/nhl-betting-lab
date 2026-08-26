@@ -101,6 +101,30 @@ def settle_moneyline(home_goals: int, away_goals: int) -> str:
     )
 
 
+def settle_regulation_3_way(
+    home_goals: int, away_goals: int, *, regulation: bool
+) -> str:
+    """Who led after sixty minutes, with the draw as a real outcome.
+
+    A game that went past regulation was level at sixty whatever the boxscore
+    says the final score was, because every goal after that belongs to
+    overtime. Reading the final score here would settle a draw as a win and
+    make the market look far more decisive than it is.
+    """
+    if not regulation:
+        return "draw"
+    if home_goals > away_goals:
+        return "home"
+    if away_goals > home_goals:
+        return "away"
+    # Regulation flagged true and level is a contradiction: a level game goes
+    # to overtime by rule, so the flag is wrong rather than the score.
+    raise ValueError(
+        "A game cannot be level and end in regulation; this row is a data "
+        "fault."
+    )
+
+
 def settle_puck_line(
     home_goals: int, away_goals: int, *, regulation: bool, line: float = PUCK_LINE
 ) -> dict[str, bool]:
@@ -204,6 +228,23 @@ def generate_team_samples(
                 winner = settle_moneyline(home_goals, away_goals)
             except ValueError:
                 continue
+
+            regulation_result = settle_regulation_3_way(
+                home_goals, away_goals, regulation=regulation
+            )
+            three_way = model.regulation_3_way_probabilities(home, away)
+            for side in ("home", "draw", "away"):
+                rows.append(
+                    {
+                        **shared,
+                        "market": "regulation_3_way",
+                        "selection": side,
+                        "line": None,
+                        "model_probability": three_way[side],
+                        "outcome": regulation_result == side,
+                        "push": False,
+                    }
+                )
 
             moneyline = model.moneyline_probabilities(home, away)
             for side in ("home", "away"):

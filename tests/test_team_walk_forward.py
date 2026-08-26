@@ -104,7 +104,36 @@ def test_samples_cover_every_team_market() -> None:
         _games(400), minimum_history_games=50, refit_days=30
     )
 
-    assert set(samples["market"]) == {"moneyline", "puck_line", "total_goals"}
+    assert set(samples["market"]) == {
+        "moneyline",
+        "puck_line",
+        "total_goals",
+        "regulation_3_way",
+    }
+
+
+def test_a_game_that_went_past_regulation_settles_the_three_way_as_a_draw() -> None:
+    """Every goal after sixty minutes belongs to overtime. Reading the final
+    score here would settle a draw as a win."""
+    assert twf.settle_regulation_3_way(4, 3, regulation=False) == "draw"
+    assert twf.settle_regulation_3_way(4, 3, regulation=True) == "home"
+    assert twf.settle_regulation_3_way(2, 3, regulation=True) == "away"
+
+
+def test_a_level_game_flagged_as_regulation_is_a_data_fault() -> None:
+    """A level game goes to overtime by rule, so the flag is wrong."""
+    with pytest.raises(ValueError, match="data fault"):
+        twf.settle_regulation_3_way(3, 3, regulation=True)
+
+
+def test_exactly_one_three_way_side_wins_per_game() -> None:
+    samples, _ = twf.generate_team_samples(
+        _games(400), minimum_history_games=50, refit_days=30
+    )
+    three_way = samples[samples["market"] == "regulation_3_way"]
+
+    for _, rows in three_way.groupby("game_id"):
+        assert rows["outcome"].sum() == 1
 
 
 def test_the_moneyline_sides_are_mutually_exclusive_per_game() -> None:

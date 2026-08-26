@@ -88,6 +88,17 @@ PROP_MARKETS: tuple[Market, ...] = (
         settles_on="blocked_shots",
         per_event=True,
     ),
+    # Added after a market probe showed the provider serves it and this lab
+    # had simply never asked. The boxscore carries hits, so it settles like
+    # any other count.
+    Market(
+        key="hits",
+        provider_key="player_hits",
+        label="Hits",
+        is_prop=True,
+        settles_on="hits",
+        per_event=True,
+    ),
 )
 
 #: Team markets. Priced and modelled so an edge anywhere can be found.
@@ -112,6 +123,17 @@ TEAM_MARKETS: tuple[Market, ...] = (
         label="Total goals",
         is_prop=False,
         selections=("over", "under"),
+    ),
+    # The result after sixty minutes, with the draw as a real outcome. The
+    # team model already computes this distribution exactly — it is the
+    # quantity the moneyline is derived *from* — so pricing it needs no new
+    # model, and it settles from the regulation flag the boxscore supplies.
+    Market(
+        key="regulation_3_way",
+        provider_key="h2h_3_way",
+        label="Regulation result (3-way)",
+        is_prop=False,
+        selections=("home", "draw", "away"),
     ),
 )
 

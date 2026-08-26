@@ -66,6 +66,7 @@ SKATER_STATS: tuple[str, ...] = (
     "goals",
     "assists",
     "blocked_shots",
+    "hits",
 )
 
 #: The goalie stat, modelled through shots against rather than directly.
@@ -87,8 +88,10 @@ PROP_STATS: tuple[str, ...] = SKATER_STATS + (GOALIE_STAT,)
 POSITION_GROUPS = ("F", "D", "G")
 
 #: Stats where power-play deployment plausibly moves the rate. Blocked shots
-#: are excluded on purpose: a player on the power play is not blocking shots,
-#: he is taking them.
+#: and hits are excluded on purpose, and for the same reason: a player on the
+#: power play is not blocking shots or finishing checks, he is carrying the
+#: puck. If anything the effect runs the other way, and this model does not
+#: claim to know by how much.
 PP_SENSITIVE_STATS = frozenset({"points", "goals", "assists"})
 
 

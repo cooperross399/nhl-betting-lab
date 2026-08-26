@@ -33,6 +33,7 @@ def _log(
         "assists": 1,
         "points": 1,
         "blocked_shots": 1,
+        "hits": 2,
         "power_play_goals": 0,
         "saves": 0,
         "shots_against": 0,

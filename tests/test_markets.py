@@ -19,11 +19,24 @@ def test_every_prop_market_the_brief_names_is_priced() -> None:
 
 
 def test_every_team_market_the_brief_names_is_priced() -> None:
-    assert set(markets.team_market_keys()) == {
-        "moneyline",
-        "puck_line",
-        "total_goals",
-    }
+    assert {"moneyline", "puck_line", "total_goals"} <= set(
+        markets.team_market_keys()
+    )
+
+
+def test_the_regulation_three_way_is_priced_too() -> None:
+    """Found by probing the provider rather than by reading its docs: it is
+    served, it is quoted today, and the team model already computes the
+    distribution it settles on."""
+    assert "regulation_3_way" in markets.team_market_keys()
+    assert markets.market_for("regulation_3_way").provider_key == "h2h_3_way"
+
+
+def test_hits_is_priced_because_the_provider_serves_it() -> None:
+    """A market probe showed the provider serves `player_hits` and this lab
+    had simply never asked."""
+    assert "hits" in markets.prop_market_keys()
+    assert markets.market_for("hits").settles_on == "hits"
 
 
 def test_every_prop_settles_on_a_real_log_column() -> None:
