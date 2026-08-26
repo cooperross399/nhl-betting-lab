@@ -322,3 +322,44 @@ def test_the_shadow_script_exits_three_on_an_empty_slate(
 
     assert code == 3
     assert "No slate" in capsys.readouterr().out
+
+
+def test_the_shadow_script_fetches_the_alternate_ladders_per_event(
+    tmp_path: Path, monkeypatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """They are per-event markets. Losing them would repeat the EPL
+    `total_2_5` mistake, where the complete line lived in the alternate ladder
+    the whole time."""
+    from nhl_betting_lab.providers import odds_api
+
+    module = load_script("run_provider_shadow.py")
+    asked: dict[str, object] = {}
+
+    class Recording:
+        def fetch_team_markets(self, **kwargs: object) -> object:
+            return odds_api.FetchResult(fetched_at="now", events_seen=2)
+
+        def estimate_prop_credits(self, **kwargs: object) -> int:
+            return 0
+
+        def fetch_player_props(self, **kwargs: object) -> object:
+            asked.update(kwargs)
+            return odds_api.FetchResult(fetched_at="now")
+
+        def public_configuration(self) -> dict:
+            return {}
+
+    monkeypatch.setattr(module.odds_api, "OddsApiProvider", lambda: Recording())
+
+    module.main(
+        [
+            "--live", "--props",
+            "--staging-dir", str(tmp_path / "staging"),
+            "--output-dir", str(tmp_path / "outputs"),
+        ]
+    )
+
+    requested = list(asked.get("markets") or [])
+    assert "alternate_totals" in requested
+    assert "alternate_spreads" in requested
+    assert "player_shots_on_goal" in requested

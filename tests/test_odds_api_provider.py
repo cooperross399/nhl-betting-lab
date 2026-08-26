@@ -241,14 +241,13 @@ def test_a_team_market_fetch_stages_rows_and_counts_credits() -> None:
     result = provider.fetch_team_markets(fetched_at="now")
 
     assert len(result.rows) == 2
-    assert result.credits_spent == len(odds_api.BULK_PROVIDER_MARKETS) + len(
-        odds_api.ALTERNATE_PROVIDER_MARKETS
-    )
+    assert result.credits_spent == len(odds_api.BULK_PROVIDER_MARKETS)
     assert result.quota_remaining == "19000"
 
 
-def test_the_alternate_ladders_are_requested_by_default() -> None:
-    """The EPL `total_2_5` lesson, encoded as a default."""
+def test_the_bulk_fetch_asks_only_for_markets_that_endpoint_serves() -> None:
+    """Asking for an alternate ladder here makes the provider refuse the
+    entire request with a 422 that names nothing."""
     requester = RecordingRequester({"/odds": FakeResponse([])})
     provider = odds_api.OddsApiProvider(
         environment=ENVIRONMENT, requester=requester
@@ -257,8 +256,19 @@ def test_the_alternate_ladders_are_requested_by_default() -> None:
     provider.fetch_team_markets(fetched_at="now")
 
     _, kwargs = requester.calls[0]
-    assert "alternate_totals" in kwargs["params"]["markets"]
-    assert "alternate_spreads" in kwargs["params"]["markets"]
+    requested = kwargs["params"]["markets"].split(",")
+    assert requested == list(odds_api.BULK_PROVIDER_MARKETS)
+    assert not any(item.startswith("alternate_") for item in requested)
+
+
+def test_the_alternate_ladders_are_still_fetched_somewhere() -> None:
+    """Dropping them would repeat the EPL `total_2_5` mistake: the complete
+    line lives in the alternate ladder and the bulk endpoint never shows it."""
+    assert odds_api.ALTERNATE_PROVIDER_MARKETS
+    assert all(
+        market.startswith("alternate_")
+        for market in odds_api.ALTERNATE_PROVIDER_MARKETS
+    )
 
 
 def test_an_http_error_writes_no_staging_file() -> None:

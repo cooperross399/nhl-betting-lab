@@ -136,12 +136,24 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Team markets: {team.summary_line()}")
 
         if args.props:
-            estimate = provider.estimate_prop_credits(events=events_seen)
+            estimate = provider.estimate_prop_credits(
+                events=events_seen,
+                markets=list(odds_api.PROP_PROVIDER_MARKETS)
+                + list(odds_api.ALTERNATE_PROVIDER_MARKETS),
+            )
             print(
-                f"Props would cost about {estimate} credits for "
+                f"Per-event markets would cost about {estimate} credits for "
                 f"{events_seen} events; the cap is {args.credit_cap}."
             )
+            # The alternate team ladders ride along with the props, because
+            # they are per-event markets too. Dropping them would repeat the
+            # EPL `total_2_5` mistake: the complete line lives in the
+            # alternate ladder and the bulk endpoint never shows it.
+            per_event = list(odds_api.PROP_PROVIDER_MARKETS) + list(
+                odds_api.ALTERNATE_PROVIDER_MARKETS
+            )
             props = provider.fetch_player_props(
+                markets=per_event,
                 max_events=args.max_events,
                 credit_cap=args.credit_cap,
                 fetched_at=stamp,
