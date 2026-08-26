@@ -170,6 +170,7 @@ def build_claims_report(
     backtest = _read_json(directory / "player_props_backtest.json")
     calibration = _read_json(directory / "props_calibration.json")
     replication = _read_json(directory / "replication.json")
+    team = _read_json(directory / "team_markets_measurement.json")
 
     # A replication verdict outranks any single-window number, so it is
     # attached to the market and printed instead of the interval prose.
@@ -198,8 +199,20 @@ def build_claims_report(
         for item in calibration.get("markets", [])
         if isinstance(item, dict)
     }
-    by_market = backtest.get("by_market", {})
-    unmeasurable = backtest.get("unmeasurable_markets", {}) or {}
+    by_market = dict(backtest.get("by_market", {}) or {})
+    # Team markets are measured in their own report; the claims document
+    # covers everything or it is not the claims document.
+    for entry in team.get("markets", []) or []:
+        if not isinstance(entry, dict):
+            continue
+        if int(entry.get("bets", 0) or 0) > 0:
+            by_market.setdefault(str(entry.get("market")), entry)
+    unmeasurable = dict(backtest.get("unmeasurable_markets", {}) or {})
+    unmeasurable.setdefault(
+        "regulation_3_way",
+        "the provider serves it per-event only, with no bulk history; its "
+        "evidence accumulates forward once the season starts",
+    )
 
     report = ClaimsReport(
         generated_at=moment.isoformat(timespec="seconds"),
@@ -215,9 +228,9 @@ def build_claims_report(
                     market=market.key,
                     measured=True,
                     bets=int(entry["bets"]),
-                    roi=float(entry.get("roi", 0.0)),
-                    low=float(entry.get("low", 0.0)),
-                    high=float(entry.get("high", 0.0)),
+                    roi=float(entry.get("roi", 0.0) or 0.0),
+                    low=float(entry.get("low", 0.0) or 0.0),
+                    high=float(entry.get("high", 0.0) or 0.0),
                     includes_zero=bool(entry.get("includes_zero", True)),
                     survives_correction=bool(
                         entry.get("survives_correction", False)
