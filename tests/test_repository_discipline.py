@@ -299,3 +299,13 @@ def test_team_prices_can_be_bought_from_the_workflow() -> None:
 
     assert "buy_team" in text
     assert "buy_historical_team_prices.py" in text
+
+
+def test_purchases_are_serialised_and_never_cancelled() -> None:
+    """Two racing would each restore the other's stale price file, and the
+    second upload would silently discard the first run's spend. And a
+    purchase that has spent credits must be allowed to finish."""
+    text = _read(".github/workflows/historical-props-purchase.yml")
+
+    assert "group: historical-purchase" in text
+    assert "cancel-in-progress: false" in text
