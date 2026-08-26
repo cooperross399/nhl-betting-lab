@@ -53,7 +53,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.reuse_samples and samples_path.is_file():
         cached = pd.read_csv(samples_path)
         current, reason = samples_are_current(
-            cached, known_markets=team_market_keys()
+            cached,
+            known_markets=team_market_keys(),
+            required_columns=("model_probability", "outcome", "push"),
         )
         if current:
             samples = cached
