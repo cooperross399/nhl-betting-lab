@@ -26,6 +26,11 @@ on:
         type: string
         required: false
         default: "60"
+      probe_every_market:
+        description: "Ask about every candidate market individually (~1 credit each)"
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
@@ -62,6 +67,21 @@ jobs:
         run: |
           python scripts/check_provider_credential.py
 
+      - name: Ask about every candidate market individually
+        # Guessing a market list is how every team-market fetch failed for a
+        # week: `alternate_spreads` is real, documented, and not served on the
+        # bulk endpoint, and asking for it there makes the provider refuse the
+        # whole request with a 422 that names nothing. Asking one at a time
+        # means a single bad name cannot hide the others.
+        if: ${{ inputs.probe_every_market == true }}
+        continue-on-error: true
+        env:
+          NHL_ODDS_API_KEY: ${{ secrets.NHL_ODDS_API_KEY }}
+          PYTHONPATH: src
+        run: |
+          python scripts/discover_nhl_markets.py --live \
+            --credit-cap "${{ inputs.credit_cap || '60' }}"
+
       - name: Fetch and report coverage
         env:
           NHL_ODDS_API_KEY: ${{ secrets.NHL_ODDS_API_KEY }}
@@ -77,6 +97,14 @@ jobs:
           {
             echo "## Provider market discovery"
             echo
+            if [ -f data/outputs/nhl_market_discovery.json ]; then
+              echo "### Markets the provider serves"
+              echo
+              echo '```json'
+              cat data/outputs/nhl_market_discovery.json
+              echo '```'
+              echo
+            fi
             cat data/outputs/provider_market_discovery.md 2>/dev/null \
               || echo "No coverage report was produced."
           } >> "$GITHUB_STEP_SUMMARY"
@@ -90,6 +118,7 @@ jobs:
             data/outputs/provider_market_discovery.md
             data/outputs/provider_shadow_verification.md
             data/outputs/provider_shadow_verification.json
+            data/outputs/nhl_market_discovery.json
           if-no-files-found: warn
           retention-days: 30
 
