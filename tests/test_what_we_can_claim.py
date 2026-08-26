@@ -312,3 +312,47 @@ def test_an_untestable_replication_does_not_change_the_sentence(
 
     assert "untestable" not in points.sentence()
     assert claims.NO_DEMONSTRATED_EDGE.capitalize() in points.sentence()
+
+
+def test_team_markets_measured_in_their_own_report_are_covered(
+    tmp_path: Path,
+) -> None:
+    """The claims document covers everything or it is not the claims document."""
+    _write(
+        tmp_path,
+        "team_markets_measurement.json",
+        {
+            "markets": [
+                {
+                    "market": "moneyline",
+                    "bets": 1536,
+                    "roi": -0.033,
+                    "low": -0.088,
+                    "high": 0.022,
+                    "includes_zero": True,
+                    "survives_correction": False,
+                    "looks": 4,
+                }
+            ]
+        },
+    )
+
+    report = claims.build_claims_report(output_dir=tmp_path)
+    moneyline = next(c for c in report.claims if c.market == "moneyline")
+
+    assert moneyline.measured is True
+    assert "1,536 bets" in moneyline.sentence()
+    assert "-8.8%" in moneyline.sentence()
+
+
+def test_the_regulation_three_way_is_named_unmeasurable_with_its_reason(
+    tmp_path: Path,
+) -> None:
+    report = claims.build_claims_report(output_dir=tmp_path)
+    three_way = next(
+        c for c in report.claims if c.market == "regulation_3_way"
+    )
+
+    assert three_way.measured is False
+    assert "per-event only" in three_way.sentence()
+    assert "accumulates forward" in three_way.sentence()

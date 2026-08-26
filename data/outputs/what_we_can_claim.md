@@ -2,9 +2,9 @@
 
 Generated from the measurement outputs, so it cannot drift from them. The hand-written rules live in `docs/what_we_can_and_cannot_claim.md`.
 
-- Generated: 2026-08-26T01:39:06+00:00
+- Generated: 2026-08-26T04:56:59+00:00
 
-**No demonstrated edge in any market.** 6 market(s) have been measured against real prices. Nothing survives correcting for the number of markets tested and then holds on a window it was not found on.
+**No demonstrated edge in any market.** 9 market(s) have been measured against real prices. Nothing survives correcting for the number of markets tested and then holds on a window it was not found on.
 
 ## Across every measured market
 
@@ -18,12 +18,14 @@ Generated from the measurement outputs, so it cannot drift from them. The hand-w
 - `assists`: -6.1% over 386 bets, 95% interval -14.8% to +2.7%. **No demonstrated edge**.
 - `goalie_saves`: -2.5% over 410 bets, 95% interval -11.6% to +6.6%. **No demonstrated edge**.
 - `blocked_shots`: +11.8% over 555 bets, 95% interval +3.2% to +20.5%. Correcting for the 7 markets measured on the same data, it does not exclude zero. **No demonstrated edge**.
+- `moneyline`: -3.3% over 1,536 bets, 95% interval -8.8% to +2.2%. **No demonstrated edge**.
+- `puck_line`: -4.6% over 1,563 bets, 95% interval -8.9% to -0.2%. Correcting for the 4 markets measured on the same data, it does not exclude zero. **No demonstrated edge**.
+- `total_goals`: -0.1% over 823 bets, 95% interval -6.7% to +6.4%. **No demonstrated edge**.
 
 ## Not measured against real prices
 
-- `moneyline` has **no price-based measurement**: no historical prices have been bought for it yet.
-- `puck_line` has **no price-based measurement**: no historical prices have been bought for it yet.
-- `total_goals` has **no price-based measurement**: no historical prices have been bought for it yet.
+- `hits` has **no price-based measurement**: Not offered in any historical snapshot across 256 probed events spanning two seasons, so it cannot be measured against past prices. It is served live; its evidence must accumulate forward. It has been calibration-checked on 616,730 walk-forward samples, which can rule the model out and can never rule it in. That is not evidence of an edge and is not offered as any.
+- `regulation_3_way` has **no price-based measurement**: the provider serves it per-event only, with no bulk history; its evidence accumulates forward once the season starts.
 
 A market in this list is **not** a market judged to have no value. It is a market with no price-based evidence either way, and nothing in this repository will present the two as the same thing.
 

@@ -442,8 +442,14 @@ def save_team_measurement(
                 "has_price_evidence": item.has_price_evidence,
                 "bets": item.priced.bets if item.priced else 0,
                 "roi": item.priced.roi if item.priced else None,
+                "low": item.priced.low if item.priced else None,
+                "high": item.priced.high if item.priced else None,
                 "includes_zero": (
                     item.priced.includes_zero if item.priced else True
+                ),
+                "looks": item.priced.looks if item.priced else 1,
+                "survives_correction": (
+                    item.priced.survives_correction if item.priced else False
                 ),
             }
             for item in report.markets
