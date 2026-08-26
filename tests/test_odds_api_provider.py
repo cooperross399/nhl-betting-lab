@@ -458,42 +458,59 @@ def test_the_frame_has_a_stable_column_order() -> None:
 # -- the off-season -----------------------------------------------------
 
 
-def test_an_empty_slate_is_reported_as_such_rather_than_as_a_failure() -> None:
-    """The provider answers 422 when a sport has nothing on the board, which
-    is the ordinary state of icehockey_nhl from June to October."""
-    requester = RecordingRequester(
-        {
-            "/odds": FakeResponse(status_code=422),
-            "/events": FakeResponse([]),
-        }
-    )
+def test_no_odds_at_all_is_reported_as_an_empty_slate() -> None:
+    """Refusing even a plain moneyline means the provider is serving no NHL
+    odds, which is the ordinary state between seasons."""
     provider = odds_api.OddsApiProvider(
-        environment=ENVIRONMENT, requester=requester
+        environment=ENVIRONMENT,
+        requester=RecordingRequester({"/odds": FakeResponse(status_code=422)}),
     )
 
-    with pytest.raises(odds_api.EmptySlateError, match="off-season"):
+    with pytest.raises(odds_api.EmptySlateError, match="not a fault"):
         provider.fetch_team_markets()
 
 
-def test_a_422_with_games_on_the_board_is_still_a_failure() -> None:
-    """The same status can mean a malformed request, and reading "your markets
-    parameter is wrong" as "the season has not started" would hide a real bug
-    for months."""
-    requester = RecordingRequester(
-        {
-            "/odds": FakeResponse(status_code=422),
-            "/events": FakeResponse([{"id": "evt1"}]),
-        }
-    )
+def test_a_bad_market_key_is_a_request_problem_not_an_off_season() -> None:
+    """Reading "your markets parameter is wrong" as "the season has not
+    started" would hide a real bug for months."""
+    calls = {"n": 0}
+
+    def answer(url: str, **kwargs: object) -> object:
+        if "/odds" not in url:
+            return FakeResponse(status_code=404)
+        calls["n"] += 1
+        # The full market list is refused; a plain moneyline is served.
+        if kwargs["params"]["markets"] == "h2h":
+            return FakeResponse([])
+        return FakeResponse(status_code=422)
+
     provider = odds_api.OddsApiProvider(
-        environment=ENVIRONMENT, requester=requester
+        environment=ENVIRONMENT, requester=answer
     )
 
     with pytest.raises(odds_api.ProviderError) as exc:
         provider.fetch_team_markets()
 
     assert not isinstance(exc.value, odds_api.EmptySlateError)
-    assert "422" in str(exc.value)
+    assert "not a market it serves" in str(exc.value)
+    assert calls["n"] == 2
+
+
+def test_a_listed_schedule_does_not_prevent_an_empty_slate_verdict() -> None:
+    """Through September the October schedule is listed while no book has
+    priced anything, so "events exist" is true in exactly the case being
+    tested for."""
+    def answer(url: str, **kwargs: object) -> object:
+        if "/events" in url:
+            return FakeResponse([{"id": "evt1", "commence_time": "2026-10-08T23:00:00Z"}])
+        return FakeResponse(status_code=422)
+
+    provider = odds_api.OddsApiProvider(
+        environment=ENVIRONMENT, requester=answer
+    )
+
+    with pytest.raises(odds_api.EmptySlateError):
+        provider.fetch_team_markets()
 
 
 def test_an_empty_slate_error_is_still_a_provider_error() -> None:
@@ -515,35 +532,19 @@ def test_other_statuses_are_never_read_as_an_empty_slate() -> None:
     assert not isinstance(exc.value, odds_api.EmptySlateError)
 
 
-def test_an_unreadable_events_list_still_means_an_empty_slate() -> None:
-    """In the off-season the events endpoint can refuse too. A lookup that
-    cannot answer is not evidence of games."""
-    requester = RecordingRequester(
-        {
-            "/odds": FakeResponse(status_code=422),
-            "/events": FakeResponse(status_code=422),
-        }
-    )
+def test_the_empty_slate_check_does_not_depend_on_the_events_endpoint() -> None:
+    """It was the first thing tried and it answered the wrong question."""
+    calls: list[str] = []
+
+    def answer(url: str, **kwargs: object) -> object:
+        calls.append(url)
+        return FakeResponse(status_code=422)
+
     provider = odds_api.OddsApiProvider(
-        environment=ENVIRONMENT, requester=requester
+        environment=ENVIRONMENT, requester=answer
     )
 
-    with pytest.raises(odds_api.EmptySlateError) as exc:
+    with pytest.raises(odds_api.EmptySlateError):
         provider.fetch_team_markets()
 
-    assert "could not be read either" in str(exc.value)
-
-
-def test_the_message_distinguishes_checked_from_could_not_check() -> None:
-    """"We could not check" must never read as "we checked"."""
-    requester = RecordingRequester(
-        {"/odds": FakeResponse(status_code=422), "/events": FakeResponse([])}
-    )
-    provider = odds_api.OddsApiProvider(
-        environment=ENVIRONMENT, requester=requester
-    )
-
-    with pytest.raises(odds_api.EmptySlateError) as exc:
-        provider.fetch_team_markets()
-
-    assert "the events list is empty" in str(exc.value)
+    assert not any("/events" in url for url in calls)
