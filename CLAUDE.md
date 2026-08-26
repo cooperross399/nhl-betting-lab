@@ -60,7 +60,20 @@ Re-derive rather than trust if the data has moved.
   between windows: they share the bias.
 - **The measured historical rate is ten credits per market returned per
   event.** The documentation was ambiguous between one and ten; the
-  pessimistic reading was right. Quota after the purchase: ~96,495 of 100,000.
+  pessimistic reading was right. Quota: **88,527 of 100,000 remaining**;
+  11,473 spent on the two measurement windows and the live runs.
+- **Gameday Refresh runs green and fetches live prices.** Verified end to end
+  on 2026-08-26: 578 team-market rows from 32 events, models fitted on 2,811
+  cached games, card correctly blocked because nothing is allowlisted, comment
+  posted to the operating home. Player props return no rows yet — books have
+  not posted them this far out — which is an absence, not a fault.
+- **The alternate ladders are per-event markets, not bulk ones.** Asking for
+  them on the bulk endpoint makes the provider refuse the whole request with a
+  422 naming nothing, which looked exactly like an off-season for two rounds
+  of debugging because the season had also not started. They are fetched per
+  event now and must stay fetched: the complete line lives in the ladder, and
+  writing a market off after checking only the bulk endpoint is the EPL
+  `total_2_5` mistake.
 - **No market is allowlisted.** `data/manual/staging_provider_policy.json`
   allowlists nothing, so the card produces no selection, no lean, no pass and
   no stake. It lists every market with its reason. That is correct behaviour.
