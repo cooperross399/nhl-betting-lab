@@ -54,7 +54,9 @@ def main(argv: list[str] | None = None) -> int:
 
         cached = pd.read_csv(samples_path)
         current, reason = samples_are_current(
-            cached, known_markets=prop_market_keys()
+            cached,
+            known_markets=prop_market_keys(),
+            required_columns=("mean", "dispersion_r", "actual"),
         )
         if current:
             samples = cached
