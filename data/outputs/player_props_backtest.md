@@ -2,7 +2,7 @@
 
 Does the model beat a price that was actually for sale? Calibration cannot answer that; this can, to the extent the sample allows.
 
-- Generated: 2026-08-26T02:01:26+00:00
+- Generated: 2026-08-26T02:52:57+00:00
 - Edge threshold: **6.0%**
 - +1.2% over 4777 bets, 95% interval -1.7% to +4.0%. The interval includes zero, which means **no demonstrated edge**.
 
@@ -32,6 +32,12 @@ Does the model beat a price that was actually for sale? Calibration cannot answe
 7 figures were computed from one body of data. Under the null, the chance that at least one of 7 independent 95% tests clears is about 30% — so reporting the market that cleared, at its uncorrected interval, would be reporting a search and calling it a finding.
 
 The corrected column is Bonferroni, which is crude and conservative. That is the right trade here: a sharper correction needs assumptions about how these markets covary, and nothing in this repository has measured that.
+
+### The claimed edge against the realised one
+
+The average selected bet claimed a **+9.4%** edge and the flat-stake return was **+1.2%**. That gap is not a mystery and not a fault in the measurement: bets are selected wherever the model most disagrees with the price, which is exactly where the model's own estimation error concentrates. A threshold on estimated edge harvests real edge and estimation error together, and the realised number is what is left after the error washes out.
+
+The mean predictions themselves are close to unbiased — the walk-forward means run within a few percent of the actuals on every market — so the gap lives in the tails and in selection, not in the rates.
 
 ### Which way the bets point
 

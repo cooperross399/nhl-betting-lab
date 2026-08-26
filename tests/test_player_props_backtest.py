@@ -474,3 +474,31 @@ def test_no_label_writes_only_the_contract_path(tmp_path: Path) -> None:
     paths = bt.save_backtest(report, output_dir=tmp_path)
 
     assert "labelled_markdown" not in paths
+
+
+def test_the_report_explains_the_gap_between_claimed_and_realised_edge() -> None:
+    """Bets are selected wherever the model most disagrees with the price,
+    which is exactly where its estimation error concentrates."""
+    samples = _many("shots_on_goal", "over", 60, won=True)
+    prices = pd.DataFrame(
+        [
+            {
+                "date": row.date,
+                "commence_time": f"{row.date}T18:00:00Z",
+                "market": row.market,
+                "player": row.player,
+                "selection": "over",
+                "line": 2.5,
+                "american_odds": 150,
+            }
+            for row in samples.itertuples()
+        ]
+    )
+
+    rendered = bt.render_backtest(
+        bt.run_backtest(prices, samples, edge_threshold=0.05)
+    )
+
+    assert "claimed edge against the realised one" in rendered
+    assert "estimation error concentrates" in rendered
+    assert "not a fault in the measurement" in rendered
