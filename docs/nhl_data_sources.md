@@ -81,7 +81,7 @@ Prop market keys the provider prices for the NHL:
 | `player_assists` | `assists` | boxscore `assists` |
 | `player_total_saves` | `goalie_saves` | boxscore `saveShotsAgainst` numerator |
 | `player_blocked_shots` | `blocked_shots` | boxscore `blockedShots` |
-| `player_hits` | `hits` | boxscore `hits` |
+| `player_hits` | `hits` | boxscore `hits` — live only; see below |
 
 Anytime goal scorer is priced by the provider as `player_goals` at the 0.5 line
 (and by some books as a dedicated market); this lab treats it as `goals` over
@@ -91,6 +91,13 @@ Team market keys: `h2h` (moneyline), `spreads` (puck line), `totals`, and
 `h2h_3_way` (the regulation result, draw included). The alternate ladders
 `alternate_spreads` and `alternate_totals` are **per-event only** — asking for
 them on the bulk endpoint makes the provider refuse the entire request.
+
+**Hits is priced live and not retained historically.** A purchase requested
+`player_hits` across 256 events spanning both sampled seasons and got zero
+rows back from every book — this time measured well past the probe floor, not
+concluded from one event. So hits can appear on a future card once approved,
+but it can never be backtested against past prices; its evidence will have to
+accumulate forward, one game-day at a time, like BTTS did in the EPL lab.
 
 Markets probed and deliberately not priced, with the reason:
 

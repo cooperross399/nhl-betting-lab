@@ -105,7 +105,17 @@ def main(argv: list[str] | None = None) -> int:
     if target.is_file() and not frame.empty:
         existing = pd.read_csv(target)
         frame = pd.concat([existing, frame], ignore_index=True).drop_duplicates()
-    frame.to_csv(target, index=False, lineterminator="\n")
+    if frame.empty and target.is_file():
+        # A run that bought nothing must never replace a file that holds
+        # something. This exact write once emptied eleven thousand credits of
+        # accumulated prices; the raw cache made it recoverable, and this
+        # guard makes it not happen.
+        print(
+            f"Nothing was bought, so {target.name} is left as it was "
+            f"({sum(1 for _ in open(target)) - 1:,} rows)."
+        )
+    else:
+        frame.to_csv(target, index=False, lineterminator="\n")
     print(f"{len(frame):,} team price rows now in {target}.")
     print(
         "Bought prices only. No bet was placed, no policy was edited, and no "
