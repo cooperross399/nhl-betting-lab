@@ -59,6 +59,16 @@ on:
 
 permissions:
   contents: read
+  # Read-only, and only so a run can restore the previous run's artifacts.
+  actions: read
+
+concurrency:
+  # Two purchases racing would each restore the other's stale price file and
+  # the second upload would win, silently discarding the first run's spend.
+  # Serialised, never cancelled: a purchase that has already spent credits
+  # must be allowed to finish and upload what it bought.
+  group: historical-purchase
+  cancel-in-progress: false
 
 jobs:
   purchase:
