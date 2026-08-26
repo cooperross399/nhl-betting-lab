@@ -2,22 +2,22 @@
 
 Generated from the measurement outputs, so it cannot drift from them. The hand-written rules live in `docs/what_we_can_and_cannot_claim.md`.
 
-- Generated: 2026-08-25T23:11:33+00:00
+- Generated: 2026-08-26T01:39:06+00:00
 
 **No demonstrated edge in any market.** 6 market(s) have been measured against real prices. Nothing survives correcting for the number of markets tested and then holds on a window it was not found on.
 
 ## Across every measured market
 
-+2.3% over 1,268 bets. The interval includes zero: **no demonstrated edge**.
++1.2% over 4,777 bets. The interval includes zero: **no demonstrated edge**.
 
 ## Measured against real prices
 
-- `shots_on_goal`: +3.3% over 683 bets, 95% interval -4.1% to +10.7%. Measured again on the 2024-25 window and **contradicted** there, so **no demonstrated edge**.
-- `points`: -6.9% over 288 bets, 95% interval -18.2% to +4.3%. **No demonstrated edge**.
-- `goals`: -37.3% over 7 bets, 95% interval -95.6% to +21.0%. **No demonstrated edge**.
-- `assists`: +0.9% over 111 bets, 95% interval -14.2% to +16.0%. **No demonstrated edge**.
-- `goalie_saves`: +45.1% over 23 bets, 95% interval +13.1% to +77.1%. Correcting for the 7 markets measured on the same data, it does not exclude zero. **No demonstrated edge**.
-- `blocked_shots`: +11.5% over 156 bets, 95% interval -5.4% to +28.4%. **No demonstrated edge**.
+- `shots_on_goal`: +2.4% over 2,476 bets, 95% interval -1.5% to +6.4%. **No demonstrated edge**.
+- `points`: -4.5% over 913 bets, 95% interval -11.1% to +2.0%. **No demonstrated edge**.
+- `goals`: +14.8% over 37 bets, 95% interval -29.4% to +59.0%. **No demonstrated edge**.
+- `assists`: -6.1% over 386 bets, 95% interval -14.8% to +2.7%. **No demonstrated edge**.
+- `goalie_saves`: -2.5% over 410 bets, 95% interval -11.6% to +6.6%. **No demonstrated edge**.
+- `blocked_shots`: +11.8% over 555 bets, 95% interval +3.2% to +20.5%. Correcting for the 7 markets measured on the same data, it does not exclude zero. **No demonstrated edge**.
 
 ## Not measured against real prices
 

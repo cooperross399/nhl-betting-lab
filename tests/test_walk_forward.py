@@ -174,13 +174,43 @@ def test_a_skater_is_never_priced_on_the_goalie_market() -> None:
     assert "goalie_saves" not in set(skater_rows["market"])
 
 
-def test_the_outcome_column_settles_against_the_line() -> None:
+def test_a_sample_carries_a_distribution_that_prices_any_line() -> None:
+    """The fixed grid discarded most of the prices bought, and what survived
+    was whichever lines the grid happened to name."""
+    samples, _ = wf.generate_prop_samples(
+        sample_logs(400), minimum_history_games=50, refit_days=30
+    )
+    row = samples.iloc[0]
+    shape = wf.distribution_from(row["mean"], row["dispersion_r"])
+
+    assert shape.mean > 0
+    # Any line, including one no grid would have named.
+    falling = [shape.over_probability(line) for line in (0.5, 1.5, 2.5, 3.5, 7.5)]
+    assert falling == sorted(falling, reverse=True)
+
+
+def test_there_is_one_sample_per_player_game_market_not_per_line() -> None:
     samples, _ = wf.generate_prop_samples(
         sample_logs(400), minimum_history_games=50, refit_days=30
     )
 
-    for row in samples.head(200).itertuples():
-        assert bool(row.outcome) == (row.actual > row.line)
+    assert "line" not in samples.columns
+    assert not samples.duplicated(
+        subset=["game_id", "player_id", "market"]
+    ).any()
+
+
+def test_a_poisson_sample_stores_no_dispersion() -> None:
+    """`dispersion_r` is NaN for a Poisson and finite for a negative binomial;
+    the scorer rebuilds the right shape from that alone."""
+    import math
+
+    samples, _ = wf.generate_prop_samples(
+        sample_logs(400), minimum_history_games=50, refit_days=30
+    )
+    values = samples["dispersion_r"].tolist()
+
+    assert all(math.isnan(v) or v > 0 for v in values)
 
 
 def test_every_settlement_column_exists_in_the_logs() -> None:

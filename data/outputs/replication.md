@@ -2,20 +2,20 @@
 
 Did a result found on one window hold on another? No amount of extra precision on the first window can answer that — a result measured more carefully on the data that produced it is still that data.
 
-- Generated: 2026-08-25T23:10:47+00:00
+- Generated: 2026-08-26T01:38:53+00:00
 - Discovery window: **2025-26**
 - Test window: **2024-25**
 
-`shots_on_goal` survived on **2025-26** and did **not** replicate on **2024-25**. The first result is not yet evidence of anything durable: no demonstrated edge.
+Nothing survived correction on **2025-26**, so there is no result to replicate. That is not a failure of the test window.
 
 | Market | Discovery | Test | Verdict |
 |:-------|:----------|:-----|:--------|
-| `assists` | -2.4% / 72 bets | +7.2% / 39 bets | **untestable** |
-| `blocked_shots` | +1.5% / 67 bets | +19.0% / 89 bets | **untestable** |
-| `goalie_saves` | +20.8% / 14 bets | +82.9% / 9 bets | **untestable** |
-| `goals` | -49.6% / 3 bets | -28.2% / 4 bets | **untestable** |
-| `points` | -16.4% / 137 bets | +1.7% / 151 bets | **untestable** |
-| `shots_on_goal` | +18.1% / 263 bets ✓ | -6.0% / 420 bets | **contradicted** |
+| `assists` | -12.8% / 166 bets | -1.0% / 220 bets | **untestable** |
+| `blocked_shots` | +7.4% / 144 bets | +13.4% / 411 bets | **untestable** |
+| `goalie_saves` | -1.2% / 153 bets | -3.3% / 257 bets | **untestable** |
+| `goals` | +1.6% / 11 bets | +20.4% / 26 bets | **untestable** |
+| `points` | -13.6% / 302 bets | +0.0% / 611 bets | **untestable** |
+| `shots_on_goal` | +0.6% / 551 bets | +3.0% / 1925 bets | **untestable** |
 
 ✓ marks an interval that excludes zero after correcting for the markets tested in that window.
 
@@ -26,7 +26,7 @@ Did a result found on one window hold on another? No amount of extra precision o
 - `goalie_saves`: Nothing survived correction on the first window, so there is no result here to replicate.
 - `goals`: Nothing survived correction on the first window, so there is no result here to replicate.
 - `points`: Nothing survived correction on the first window, so there is no result here to replicate.
-- `shots_on_goal`: The test window points the other way (-6.0% against +18.1%). No demonstrated edge.
+- `shots_on_goal`: Nothing survived correction on the first window, so there is no result here to replicate.
 
 ## How much data would settle it
 

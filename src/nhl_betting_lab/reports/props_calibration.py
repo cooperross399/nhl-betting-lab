@@ -40,6 +40,7 @@ from typing import Any
 
 import pandas as pd
 
+from nhl_betting_lab.backtest.walk_forward import DEFAULT_LINES, distribution_from
 from nhl_betting_lab.config import OUTPUTS_DIR
 from nhl_betting_lab.markets import MARKETS_BY_KEY
 from nhl_betting_lab.models.calibration import (
@@ -183,6 +184,44 @@ def _volume_rows(
     return rows
 
 
+def expand_to_lines(
+    samples: pd.DataFrame, *, lines: dict[str, tuple[float, ...]] | None = None
+) -> pd.DataFrame:
+    """Turn stored distributions into probabilities at a grid of lines.
+
+    Calibration asks whether a stated probability means what it says, so it
+    needs buckets, and buckets need a grid. The price-based backtest has no
+    such need and prices the exact line on offer — the two jobs differ, and
+    one sample file serves both because it stores the distribution rather than
+    a set of answers.
+    """
+    grid = lines or DEFAULT_LINES
+    if samples.empty:
+        return pd.DataFrame(
+            columns=[
+                "date", "game_id", "player_id", "market", "line",
+                "model_probability", "outcome", "toi_seconds",
+            ]
+        )
+    rows: list[dict[str, object]] = []
+    for row in samples.itertuples():
+        shape = distribution_from(row.mean, getattr(row, "dispersion_r", None))
+        for line in grid.get(str(row.market), ()):  # type: ignore[arg-type]
+            rows.append(
+                {
+                    "date": str(row.date)[:10],
+                    "game_id": int(row.game_id),
+                    "player_id": int(row.player_id),
+                    "market": str(row.market),
+                    "line": float(line),
+                    "model_probability": shape.over_probability(float(line)),
+                    "outcome": bool(float(row.actual) > float(line)),
+                    "toi_seconds": int(row.toi_seconds),
+                }
+            )
+    return pd.DataFrame(rows)
+
+
 def measure_market(
     samples: pd.DataFrame,
     *,
@@ -267,6 +306,8 @@ def build_calibration_report(
     minimum_fit_samples: int = PlattCalibration.MINIMUM_SAMPLES,
 ) -> CalibrationReport:
     moment = now or datetime.now(timezone.utc)
+    if "model_probability" not in samples.columns and not samples.empty:
+        samples = expand_to_lines(samples)
     report = CalibrationReport(
         generated_at=moment.isoformat(timespec="seconds"),
         total_samples=len(samples),

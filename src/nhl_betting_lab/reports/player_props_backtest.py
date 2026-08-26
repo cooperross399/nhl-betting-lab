@@ -52,8 +52,11 @@ from typing import Any
 
 import pandas as pd
 
+from nhl_betting_lab.backtest.walk_forward import distribution_from
 from nhl_betting_lab.config import MIN_PROP_EDGE, OUTPUTS_DIR
 from nhl_betting_lab.markets import MARKETS_BY_KEY, PROP_MARKETS
+from nhl_betting_lab.models.player_props import normalize_player_name
+from nhl_betting_lab.season import game_date
 from nhl_betting_lab.models.value import (
     OddsError,
     american_to_implied,
@@ -169,23 +172,20 @@ def run_backtest(
     if prices.empty or samples.empty:
         return report
 
-    model_by_key: dict[tuple[str, str, str, float], tuple[float, float]] = {}
+    # One entry per player-game-market, carrying the fitted distribution. Any
+    # line the provider offers can be priced from it exactly, including
+    # alternate ladders the calibration sweep never named.
+    model_by_key: dict[tuple[str, str, str], tuple[Any, float]] = {}
     for row in samples.itertuples():
         key = (
             str(row.date)[:10],
             str(row.market),
-            str(row.player).strip().casefold(),
-            float(row.line),
+            normalize_player_name(row.player),
         )
-        model_by_key[key] = (float(row.model_probability), float(row.actual))
-
-    # Actuals keyed without the line, so an Over on a line the calibration
-    # sweep did not price can still be settled from the same player-game.
-    actual_by_player: dict[tuple[str, str, str], float] = {}
-    for row in samples.itertuples():
-        actual_by_player[
-            (str(row.date)[:10], str(row.market), str(row.player).strip().casefold())
-        ] = float(row.actual)
+        model_by_key[key] = (
+            distribution_from(row.mean, getattr(row, "dispersion_r", None)),
+            float(row.actual),
+        )
 
     unmatched: set[str] = set()
     for row in prices.itertuples():
@@ -197,23 +197,23 @@ def run_backtest(
             line = float(getattr(row, "line"))
         except (TypeError, ValueError):
             continue
-        date_text = str(getattr(row, "date", ""))[:10]
-        key = (date_text, market, player.casefold(), line)
+        # The game date, not the UTC date of puck drop. An evening North
+        # American game commences on the *next* UTC day, so joining on the raw
+        # commence date silently discarded roughly seven prices in ten — and
+        # the survivors were disproportionately matinees, which is a
+        # systematically different set of fixtures.
+        date_text = game_date(
+            getattr(row, "commence_time", "") or getattr(row, "date", "")
+        )
+        key = (date_text, market, normalize_player_name(player))
 
         model = model_by_key.get(key)
         if model is None:
-            actual = actual_by_player.get((date_text, market, player.casefold()))
-            if actual is None:
-                unmatched.add(player)
-                report.outcomes_without_a_model_opinion += 1
-                continue
-            # The model priced this player-game but not this exact line. It is
-            # not scored: re-pricing the line here would use a model fitted
-            # for a different sweep, and quietly mixing the two would make the
-            # measurement unreproducible.
+            unmatched.add(player)
             report.outcomes_without_a_model_opinion += 1
             continue
-        model_probability, actual = model
+        distribution, actual = model
+        over_probability = distribution.over_probability(line)
 
         try:
             implied = american_to_implied(getattr(row, "american_odds"))
@@ -225,9 +225,9 @@ def run_backtest(
         # complement; the price's is its own, which is why the two sides can
         # both look like edges on a vigged market and neither is.
         side_probability = (
-            model_probability
+            over_probability
             if selection in {"over", "yes"}
-            else 1.0 - model_probability
+            else 1.0 - over_probability
         )
         edge = side_probability - implied
         if edge < report.edge_threshold:
