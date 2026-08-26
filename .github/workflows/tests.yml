@@ -40,6 +40,15 @@ jobs:
           python -m pip install -r requirements.txt
           python -m pip install -e .
 
+      - name: Lint for dead names
+        # Pyflakes catches exactly two things this repository has shipped
+        # bugs through: an unused import left after a refactor, and an
+        # undefined name that only fails on the code path no test happened
+        # to walk. It ran locally all along; a check that runs only on one
+        # machine is a check that runs only sometimes.
+        run: |
+          python -m pyflakes src scripts tests
+
       - name: Compile every module
         # A module can be syntactically invalid and still pass the suite if no
         # test imports it. In the EPL lab one sat broken for over a month that
