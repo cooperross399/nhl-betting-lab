@@ -81,13 +81,26 @@ Prop market keys the provider prices for the NHL:
 | `player_assists` | `assists` | boxscore `assists` |
 | `player_total_saves` | `goalie_saves` | boxscore `saveShotsAgainst` numerator |
 | `player_blocked_shots` | `blocked_shots` | boxscore `blockedShots` |
+| `player_hits` | `hits` | boxscore `hits` |
 
 Anytime goal scorer is priced by the provider as `player_goals` at the 0.5 line
 (and by some books as a dedicated market); this lab treats it as `goals` over
 0.5 and says so, rather than maintaining two names for one thing.
 
-Team market keys: `h2h` (moneyline), `spreads` (puck line), `totals`, plus
-`alternate_spreads` and `alternate_totals` for the ladders.
+Team market keys: `h2h` (moneyline), `spreads` (puck line), `totals`, and
+`h2h_3_way` (the regulation result, draw included). The alternate ladders
+`alternate_spreads` and `alternate_totals` are **per-event only** — asking for
+them on the bulk endpoint makes the provider refuse the entire request.
+
+Markets probed and deliberately not priced, with the reason:
+
+| Provider key | Why not |
+|:-------------|:--------|
+| `player_power_play_points` | the boxscore has PP goals, not PP assists — nothing here can settle it |
+| `player_faceoffs_won` | the boxscore has a win percentage, not counts |
+| `player_goal_scorer_first` / `_last` | ordering, not a rate this model measures |
+| `h2h_p1`..`totals_p3` | need period scores the stored boxscore does not keep |
+| `player_penalty_minutes`, `player_time_on_ice`, `player_giveaways`, `player_takeaways` | not markets the provider serves at all (422 by name) |
 
 **Coverage is checked per bookmaker, including alternate lines, before any
 market is called unavailable.** See the `total_2_5` lesson in `CLAUDE.md`.
