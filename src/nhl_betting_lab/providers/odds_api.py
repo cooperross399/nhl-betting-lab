@@ -428,24 +428,40 @@ class OddsApiProvider:
         except ProviderError as exc:
             if "422" not in str(exc):
                 raise
-            # The events endpoint is the confirmation, and in the off-season
-            # it can refuse too. A lookup that cannot answer is not evidence
-            # of games, so the two failures together are still an empty slate
-            # — and the message says which of the two it saw, so "we could not
-            # check" is never mistaken for "we checked".
+            # A 422 means one of two things and they need separating.
+            #
+            # Either the provider has no odds for this sport right now — the
+            # ordinary state from mid-June until books post opening-night
+            # markets — or the request itself was malformed, most likely a
+            # market key this adapter asked for and the provider does not
+            # serve.
+            #
+            # The events list does not separate them: through September the
+            # October schedule is listed while no book has priced anything, so
+            # "events exist" is true in exactly the case being tested for.
+            # What separates them is asking again for `h2h` alone, which is
+            # the one market every sport serves. If that is refused too, there
+            # are no odds. If it succeeds, the market list was the problem.
             try:
-                board = self.list_events()
-                confirmed = "the events list is empty"
+                self._get(
+                    f"{self.base_url}/v4/sports/{self.sport_key}/odds",
+                    self._params(regions=self.regions, markets="h2h"),
+                )
             except ProviderError:
-                board = []
-                confirmed = "the events list could not be read either"
-            if board:
-                raise
-            raise EmptySlateError(
-                "The provider has no NHL games on the board, so there is "
-                f"nothing to price ({confirmed}). That is the ordinary state "
-                "of the off-season and not a fault."
+                raise EmptySlateError(
+                    "The provider is serving no NHL odds at all — even a "
+                    "plain moneyline request is refused — so there is nothing "
+                    "to price. That is the ordinary state between the end of "
+                    "one season and the day books post the next, and it is "
+                    "not a fault."
+                ) from exc
+            raise ProviderError(
+                "The provider refused this market list but served a plain "
+                f"moneyline request, so one of {markets} is not a market it "
+                "serves for this sport. This is a request problem, not an "
+                "off-season."
             ) from exc
+
         if not isinstance(payload, list):
             raise ProviderError("The odds response is not a JSON event list.")
         result = FetchResult(
