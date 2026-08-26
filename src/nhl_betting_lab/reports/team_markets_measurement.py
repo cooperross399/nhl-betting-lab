@@ -147,6 +147,22 @@ def measure_calibration(
     )
 
 
+def _puck_line_selection(selection: str, line: float | None) -> tuple[str, float | None]:
+    """Translate a price row's puck-line naming onto the samples' naming.
+
+    The provider says `home` at line `-1.5`; the samples say `home_minus` at
+    `-1.5`. The two describe one bet, and joining them on the raw strings
+    silently measured the puck line as having no price evidence at all —
+    the third join-vocabulary mismatch this repository has found, after team
+    names and game dates.
+    """
+    side = str(selection).strip().lower()
+    if line is None or side not in {"home", "away"}:
+        return side, line
+    suffix = "minus" if float(line) < 0 else "plus"
+    return f"{side}_{suffix}", line
+
+
 def measure_prices(
     prices: pd.DataFrame,
     samples: pd.DataFrame,
@@ -154,6 +170,7 @@ def measure_prices(
     market: str,
     edge_threshold: float = MIN_EDGE,
     team_names: Mapping[str, str] | None = None,
+    looks: int = 1,
 ) -> RoiInterval | None:
     """Flat-stake ROI against historical team prices, or None if there are none."""
     if prices.empty or samples.empty:
@@ -191,6 +208,9 @@ def measure_prices(
             line = None
         # The league game date, not the UTC commence date. An evening face-off
         # is the next day in UTC and joining on that discards most of a season.
+        selection = str(getattr(row, "selection", ""))
+        if market == "puck_line":
+            selection, line = _puck_line_selection(selection, line)
         key = (
             game_date(
                 getattr(row, "commence_time", "") or getattr(row, "date", "")
@@ -199,7 +219,7 @@ def measure_prices(
             or str(getattr(row, "home_team", "")),
             resolve_team(getattr(row, "away_team", ""), names)
             or str(getattr(row, "away_team", "")),
-            str(getattr(row, "selection", "")),
+            selection,
             line,
         )
         found = lookup.get(key)
@@ -221,7 +241,7 @@ def measure_prices(
         wins += 1 if won else 0
     if not returns:
         return None
-    return roi_interval(returns, wins=wins, pushes=pushes)
+    return roi_interval(returns, wins=wins, pushes=pushes, looks=looks)
 
 
 def build_team_measurement(
@@ -246,6 +266,9 @@ def build_team_measurement(
     markets = (
         sorted(set(samples["market"].astype(str))) if not samples.empty else []
     )
+    # Every team market measured on the same games is one family of tests,
+    # exactly as the props are.
+    looks = max(1, len(markets))
     for market in markets:
         measurement = measure_calibration(
             samples, market=market, minimum_fit_samples=minimum_fit_samples
@@ -256,6 +279,7 @@ def build_team_measurement(
             market=market,
             edge_threshold=edge_threshold,
             team_names=team_names,
+            looks=looks,
         )
         report.markets.append(measurement)
 

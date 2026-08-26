@@ -2,17 +2,17 @@
 
 Moneyline, puck line and totals — calibrated walk-forward, and measured against real prices wherever any have been bought.
 
-- Generated: 2026-08-26T02:01:18+00:00
-- 62,186 walk-forward samples across 4 market(s) and 3,658 games; 0 market(s) have any price-based evidence.
+- Generated: 2026-08-26T03:44:12+00:00
+- 62,186 walk-forward samples across 4 market(s) and 3,658 games; 3 market(s) have any price-based evidence.
 
 ## Calibration
 
 | Market | Samples | Brier raw | Brier corrected | Correction |
 |:-------|--------:|----------:|----------------:|:-----------|
-| `moneyline` (Moneyline) | 7,114 | 0.2430 | 0.2429 | intercept -0.000, slope 0.792 (fitted on 7254 samples) |
-| `puck_line` (Puck line (-1.5 / +1.5)) | 14,400 | 0.2066 | 0.2057 | intercept -0.000, slope 0.832 (fitted on 14484 samples) |
+| `moneyline` (Moneyline) | 7,114 | 0.2430 | 0.2429 | intercept +0.000, slope 0.792 (fitted on 7254 samples) |
+| `puck_line` (Puck line (-1.5 / +1.5)) | 14,400 | 0.2066 | 0.2057 | intercept +0.000, slope 0.832 (fitted on 14484 samples) |
 | `regulation_3_way` (Regulation result (3-way)) | 10,749 | 0.2144 | 0.2121 | intercept -0.234, slope 0.633 (fitted on 10911 samples) |
-| `total_goals` (Total goals) | 29,032 | 0.2136 | 0.2137 | intercept -0.000, slope 1.005 (fitted on 29016 samples) |
+| `total_goals` (Total goals) | 29,032 | 0.2136 | 0.2137 | intercept +0.000, slope 1.005 (fitted on 29016 samples) |
 
 ### `moneyline`
 
@@ -77,9 +77,24 @@ Moneyline, puck line and totals — calibrated walk-forward, and measured agains
 
 ## Measured against real prices
 
-**No price-based measurement.** 0 historical team price(s) are on disk, and no market has enough matched, above-threshold outcomes to measure. This means **no demonstrated edge** — and equally, no demonstrated absence of one.
+| Market | Bets | Profit | ROI | 95% interval | Corrected for the search | Survives |
+|:-------|-----:|-------:|----:|:-------------|:-------------------------|:---------|
+| `moneyline` | 1536 | -50.5u | -3.3% | -8.8% .. +2.2% | -10.3% .. +3.7% | no |
+| `puck_line` | 1563 | -71.3u | -4.6% | -8.9% .. -0.2% | -10.1% .. +1.0% | no |
+| `total_goals` | 823 | -1.2u | -0.1% | -6.7% .. +6.4% | -8.5% .. +8.2% | no |
 
-The calibration numbers above are **not** a substitute. They say the model's probabilities are internally sensible; they say nothing about whether the market disagrees with them profitably.
+- `moneyline`: -3.3% over 1536 bets, 95% interval -8.8% to +2.2%. The interval includes zero, which means **no demonstrated edge**.
+- `puck_line`: -4.6% over 1563 bets, 95% interval -8.9% to -0.2%. The interval excludes zero, so this sample is losing beyond chance — at this sample size and on this data, which is not the same as an edge that will persist. But correcting for the 4 markets tested widens it to -10.1% to +1.0%, which includes zero — so on the family of tests actually run, **no demonstrated edge**.
+- `total_goals`: -0.1% over 823 bets, 95% interval -6.7% to +6.4%. The interval includes zero, which means **no demonstrated edge**.
+
+### How much data would settle it
+
+| If the true edge were | Bets needed to separate it from zero |
+|----------------------:|-------------------------------------:|
+| +5% | ~1,537 |
+| +8% | ~601 |
+| +10% | ~385 |
+| +15% | ~171 |
 
 ## Standing notes
 
