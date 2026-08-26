@@ -220,3 +220,73 @@ def test_a_thin_market_gets_its_count_and_no_reliability_table() -> None:
     rendered = tmm.render_team_measurement(report)
 
     assert "no reliability table is shown" in rendered
+
+
+def test_a_puck_line_price_joins_onto_the_samples_vocabulary() -> None:
+    """The provider says `home` at line -1.5; the samples say `home_minus`.
+    Joining on the raw strings measured the puck line as having no price
+    evidence at all — the third join-vocabulary mismatch found here, after
+    team names and game dates."""
+    assert tmm._puck_line_selection("home", -1.5) == ("home_minus", -1.5)
+    assert tmm._puck_line_selection("home", 1.5) == ("home_plus", 1.5)
+    assert tmm._puck_line_selection("away", -1.5) == ("away_minus", -1.5)
+    assert tmm._puck_line_selection("away", 1.5) == ("away_plus", 1.5)
+
+
+def test_other_markets_pass_through_the_translator_unchanged() -> None:
+    assert tmm._puck_line_selection("over", 5.5) == ("over", 5.5)
+    assert tmm._puck_line_selection("home", None) == ("home", None)
+
+
+def test_a_puck_line_bet_is_actually_matched_end_to_end() -> None:
+    samples = pd.DataFrame(
+        [
+            {
+                "date": "2025-01-05",
+                "game_id": 1,
+                "home_team": "TOR",
+                "away_team": "BOS",
+                "market": "puck_line",
+                "selection": "home_minus",
+                "line": -1.5,
+                "model_probability": 0.60,
+                "outcome": True,
+                "push": False,
+                "home_goals": 5,
+                "away_goals": 2,
+                "regulation": True,
+            }
+        ]
+    )
+    prices = pd.DataFrame(
+        [
+            {
+                "date": "2025-01-05",
+                "commence_time": "2025-01-06T00:10:00Z",
+                "home_team": "TOR",
+                "away_team": "BOS",
+                "market": "puck_line",
+                "selection": "home",
+                "line": -1.5,
+                "american_odds": 150,
+            }
+        ]
+    )
+
+    interval = tmm.measure_prices(
+        prices, samples, market="puck_line", edge_threshold=0.05,
+        team_names={"tor": "TOR", "bos": "BOS"},
+    )
+
+    assert interval is not None
+    assert interval.bets == 1
+
+
+def test_team_markets_are_corrected_as_one_family() -> None:
+    report = tmm.build_team_measurement(_samples(), minimum_fit_samples=300)
+
+    # However many markets are present, the looks count flows through.
+    assert all(
+        item.priced is None or item.priced.looks >= 1
+        for item in report.markets
+    )

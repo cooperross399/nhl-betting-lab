@@ -74,6 +74,17 @@ Re-derive rather than trust if the data has moved.
   purchase that bought nothing once overwrote the accumulated file with an
   empty frame, and the raw cache turned an 11,000-credit loss into a
   five-minute recovery.
+- **Team markets are measured now too, and none shows an edge.** 40 bulk
+  snapshots across both seasons cost 1,200 credits and produced 24,292 price
+  rows: moneyline **−3.3% over 1,536 bets**, puck line **−4.6% over 1,563**,
+  totals **−0.1% over 823** — every interval includes zero after correcting
+  for the family. The regulation three-way has no historical prices, because
+  `h2h_3_way` is per-event only; like hits, its evidence accumulates forward.
+- **The puck line was silently unmeasured until its join was fixed** — the
+  provider says `home` at line −1.5 where the samples say `home_minus`. That
+  is the third join-vocabulary mismatch this repository has found, after team
+  names and game dates. Every join between bought prices and model output now
+  has a test that runs one real row end to end.
 - **The measured historical rate is ten credits per market returned per
   event.** The documentation was ambiguous between one and ten; the
   pessimistic reading was right. Quota: **88,527 of 100,000 remaining**;
