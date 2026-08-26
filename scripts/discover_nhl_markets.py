@@ -91,6 +91,7 @@ def main(argv: list[str] | None = None) -> int:
 
     served: dict[str, dict[str, object]] = {}
     refused: list[str] = []
+    unpriced: list[str] = []
     spent = 0
 
     for market in CANDIDATE_MARKETS:
@@ -131,8 +132,11 @@ def main(argv: list[str] | None = None) -> int:
                         except (TypeError, ValueError):
                             pass
         if not books:
-            refused.append(market)
-            print(f"  {market:<34} answered but no book priced it")
+            # Valid name, nobody pricing it right now. That is a different
+            # fact from "this market does not exist", and conflating them is
+            # how a market gets written off in August for being out of season.
+            unpriced.append(market)
+            print(f"  {market:<34} valid, not priced on this event")
             continue
         served[market] = {
             "books": sorted(books),
@@ -146,7 +150,10 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     known = {m.provider_key for m in ALL_MARKETS}
-    unmapped = sorted(set(served) - known)
+    # A market this lab does not price is worth naming whether or not a book
+    # happened to quote it today: the question is what the provider serves,
+    # not what was on the board this afternoon.
+    unmapped = sorted((set(served) | set(unpriced)) - known)
     directory = Path(args.output_dir)
     directory.mkdir(parents=True, exist_ok=True)
     (directory / DISCOVERY_FILENAME).write_text(
@@ -154,8 +161,9 @@ def main(argv: list[str] | None = None) -> int:
             {
                 "event_id": event_id,
                 "credits_spent": spent,
-                "served": served,
-                "refused": refused,
+                "served_and_priced": served,
+                "valid_but_unpriced": unpriced,
+                "not_a_market": refused,
                 "served_but_unmapped": unmapped,
             },
             indent=2,
@@ -164,7 +172,10 @@ def main(argv: list[str] | None = None) -> int:
         + "\n",
         encoding="utf-8",
     )
-    print(f"\n{len(served)} served, {len(refused)} not. {spent} credits spent.")
+    print(
+        f"\n{len(served)} priced now, {len(unpriced)} valid but unpriced, "
+        f"{len(refused)} not a market at all. {spent} credits spent."
+    )
     if unmapped:
         print(f"Served but this lab does not price: {', '.join(unmapped)}")
     print(f"Written to {directory / DISCOVERY_FILENAME}.")

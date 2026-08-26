@@ -195,7 +195,26 @@ def test_the_market_bundle_covers_every_team_market() -> None:
 
     bundle = model.market_probabilities("STR", "WEA")
 
-    assert set(bundle) == {"moneyline", "puck_line", "total_goals"}
+    assert set(bundle) == {
+        "moneyline",
+        "puck_line",
+        "total_goals",
+        "regulation_3_way",
+    }
+
+
+def test_the_three_way_and_the_moneyline_share_one_source() -> None:
+    """The moneyline is derived from the regulation distribution by splitting
+    the draw. Two sources would let them disagree on one card."""
+    model = TeamModel().fit(balanced_league())
+
+    three_way = model.regulation_3_way_probabilities("STR", "WEA")
+    moneyline = model.moneyline_probabilities("STR", "WEA")
+
+    assert sum(three_way.values()) == pytest.approx(1.0)
+    assert moneyline["home"] == pytest.approx(
+        three_way["home"] + three_way["draw"] / 2
+    )
 
 
 def test_the_scoreline_matrix_holds_essentially_all_the_mass() -> None:

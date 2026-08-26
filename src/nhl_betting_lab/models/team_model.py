@@ -362,6 +362,20 @@ class TeamModel:
                 over, under = over / remaining, under / remaining
         return {"over": over, "under": under, "push": push}
 
+    def regulation_3_way_probabilities(
+        self, home_team: str, away_team: str
+    ) -> dict[str, float]:
+        """P(home), P(draw), P(away) after sixty minutes.
+
+        This needs no new model: it is `regulation_probabilities` under its
+        market name. The moneyline is *derived* from this distribution by
+        splitting the draw, so pricing the 3-way is the more direct of the two
+        — and any disagreement between the two on one card would be a bug
+        rather than an opinion, which is why they share one source.
+        """
+        home, draw, away = self.regulation_probabilities(home_team, away_team)
+        return {"home": home, "draw": draw, "away": away}
+
     def market_probabilities(
         self, home_team: str, away_team: str, *, total_line: float = 5.5
     ) -> dict[str, dict[str, float]]:
@@ -371,5 +385,8 @@ class TeamModel:
             "puck_line": self.puck_line_probabilities(home_team, away_team),
             "total_goals": self.total_probabilities(
                 home_team, away_team, line=total_line
+            ),
+            "regulation_3_way": self.regulation_3_way_probabilities(
+                home_team, away_team
             ),
         }

@@ -55,6 +55,7 @@ in N events*, which is a different sentence from *cannot be measured*, and
 
 from __future__ import annotations
 
+import hashlib
 import json
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
@@ -207,16 +208,38 @@ def cost_note(*, events: int, markets: int) -> str:
     )
 
 
-def _cache_path(event_id: str, snapshot: str, *, raw_dir: Path | None = None) -> Path:
+def _markets_fingerprint(markets: Sequence[str] | None) -> str:
+    """A short, stable tag for the market list a response was bought with.
+
+    The cache key needs it. A response holds the markets that were asked for
+    and nothing else, so a later run asking for one more market would have
+    been served the old file and told, quite confidently, that the new market
+    is not offered — the same shape as every other silent-shortfall bug in
+    this repository, and self-fulfilling to boot.
+    """
+    if not markets:
+        return "all"
+    joined = ",".join(sorted(str(item) for item in markets))
+    return hashlib.sha256(joined.encode("utf-8")).hexdigest()[:8]
+
+
+def _cache_path(
+    event_id: str,
+    snapshot: str,
+    *,
+    raw_dir: Path | None = None,
+    markets: Sequence[str] | None = None,
+) -> Path:
     """Where one bought snapshot lives.
 
     `event_id` is a provider id, or the literal `events` for a slate listing.
     Historical prices never change, so a cached file is evidence and a re-run
-    over the same window costs nothing.
+    over the same window costs nothing — provided it asked for the same
+    markets, which is why they are in the key.
     """
     directory = (Path(raw_dir) if raw_dir else Path(RAW_DIR)) / CACHE_DIRNAME
     stamp = str(snapshot).replace(":", "").replace("-", "")
-    return directory / f"{event_id}_{stamp}.json"
+    return directory / f"{event_id}_{stamp}_{_markets_fingerprint(markets)}.json"
 
 
 def _read_cache(path: Path) -> Any | None:
@@ -266,7 +289,7 @@ def list_historical_events(
 
     Documented at one credit, and free when it finds nothing.
     """
-    path = _cache_path("events", snapshot, raw_dir=raw_dir)
+    path = _cache_path("events", snapshot, raw_dir=raw_dir, markets=None)
     cached = _read_cache(path)
     if cached is not None:
         data = cached.get("data") if isinstance(cached, Mapping) else cached
@@ -315,7 +338,7 @@ def probe_retention(
         markets_requested=wanted,
     )
     probe.credits_estimated = estimate_credits(events=1, markets=len(wanted))
-    path = _cache_path(event_id, snapshot, raw_dir=raw_dir)
+    path = _cache_path(event_id, snapshot, raw_dir=raw_dir, markets=wanted)
     payload = _read_cache(path)
     if payload is None:
         try:
@@ -397,7 +420,7 @@ def buy_historical_props(
         if not event_id or not snapshot:
             buy.errors.append(f"Skipped an event with no id or snapshot: {entry!r}")
             continue
-        path = _cache_path(event_id, snapshot, raw_dir=raw_dir)
+        path = _cache_path(event_id, snapshot, raw_dir=raw_dir, markets=wanted)
         payload = _read_cache(path)
         if payload is None:
             if worst_case_spent + worst_case_per_event > credit_cap:

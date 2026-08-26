@@ -43,6 +43,7 @@ DEFAULT_LINES: dict[str, tuple[float, ...]] = {
     "goals": (0.5, 1.5),
     "assists": (0.5, 1.5),
     "blocked_shots": (0.5, 1.5, 2.5, 3.5),
+    "hits": (0.5, 1.5, 2.5, 3.5, 4.5),
     "goalie_saves": (19.5, 24.5, 27.5, 29.5, 31.5),
 }
 

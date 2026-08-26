@@ -630,3 +630,55 @@ def test_the_upper_bound_still_matches_what_was_measured() -> None:
     """If these ever diverge, the cap stops being conservative."""
     assert hist.HISTORICAL_CREDITS_UPPER_BOUND_PER_MARKET == 10
     assert hist.estimate_credits(events=1, markets=5) == 50
+
+
+def test_a_different_market_list_is_a_different_cache_entry(tmp_path: Path) -> None:
+    """A response holds the markets asked for and nothing else. Serving it to
+    a later run asking for one more would report the new market as not
+    offered — confidently, and self-fulfillingly."""
+    requester = RecordingRequester(
+        {"/historical/": FakeResponse(_snapshot(["player_points"]))}
+    )
+    provider = OddsApiProvider(environment=ENVIRONMENT, requester=requester)
+    events = [{"event_id": "evt1", "snapshot": "2025-01-05T19:00:00Z"}]
+
+    hist.buy_historical_props(
+        provider, events=events, markets=["player_points"], credit_cap=100,
+        raw_dir=tmp_path,
+    )
+    second = hist.buy_historical_props(
+        provider,
+        events=events,
+        markets=["player_points", "player_hits"],
+        credit_cap=100,
+        raw_dir=tmp_path,
+    )
+
+    assert second.events_from_cache == 0
+    assert second.events_bought == 1
+    assert len(requester.calls) == 2
+
+
+def test_the_same_market_list_still_hits_the_cache(tmp_path: Path) -> None:
+    requester = RecordingRequester(
+        {"/historical/": FakeResponse(_snapshot(["player_points"]))}
+    )
+    provider = OddsApiProvider(environment=ENVIRONMENT, requester=requester)
+    events = [{"event_id": "evt1", "snapshot": "2025-01-05T19:00:00Z"}]
+
+    for _ in range(2):
+        result = hist.buy_historical_props(
+            provider, events=events, markets=["player_points"],
+            credit_cap=100, raw_dir=tmp_path,
+        )
+
+    assert result.events_from_cache == 1
+    assert len(requester.calls) == 1
+
+
+def test_the_market_fingerprint_ignores_ordering() -> None:
+    """Asking for the same markets in a different order is the same request."""
+    assert hist._markets_fingerprint(["a", "b"]) == hist._markets_fingerprint(
+        ["b", "a"]
+    )
+    assert hist._markets_fingerprint(["a"]) != hist._markets_fingerprint(["a", "b"])

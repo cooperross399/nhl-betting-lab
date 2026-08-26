@@ -2,8 +2,8 @@
 
 When the model says 62%, does it happen 62% of the time? That is the only question this report answers. Whether the model beats a price is a different question, answered in `data/outputs/player_props_backtest.md`.
 
-- Generated: 2026-08-26T01:36:19+00:00
-- 1,889,685 walk-forward samples across 6 market(s); 6 have enough samples to say anything about.
+- Generated: 2026-08-26T01:58:46+00:00
+- 2,508,315 walk-forward samples across 7 market(s); 7 have enough samples to say anything about.
 
 ## Headline, per market
 
@@ -13,6 +13,7 @@ When the model says 62%, does it happen 62% of the time? That is the only questi
 | `blocked_shots` (Blocked shots) | 493,384 | 1,520 | 0.1128 | 0.1122 | 0.1120 | intercept +0.172, slope 1.190 (fitted on 490000 samples) |
 | `goalie_saves` (Goalie saves) | 33,595 | 200 | 0.1935 | 0.1938 | 0.1917 | intercept +0.012, slope 0.905 (fitted on 33530 samples) |
 | `goals` (Goals (incl. anytime scorer)) | 246,692 | 760 | 0.0693 | 0.0693 | 0.0691 | intercept -0.010, slope 0.986 (fitted on 245000 samples) |
+| `hits` (Hits) | 616,730 | 1,900 | 0.1234 | 0.1227 | 0.1213 | intercept +0.172, slope 1.193 (fitted on 612500 samples) |
 | `points` (Points) | 370,038 | 1,140 | 0.1003 | 0.1003 | 0.0997 | intercept +0.033, slope 0.996 (fitted on 367500 samples) |
 | `shots_on_goal` (Shots on goal) | 493,384 | 1,520 | 0.1259 | 0.1252 | 0.1237 | intercept +0.086, slope 1.226 (fitted on 490000 samples) |
 
@@ -168,6 +169,47 @@ Brier 0.0691 against 0.0693 pooled, so the ice-time-conditional correction beats
 | 12-16 min | 69,718 | 8.0% | 7.9% |
 | 16-20 min | 79,430 | 10.8% | 10.9% |
 | 20 min and up | 60,250 | 9.4% | 9.3% |
+
+## `hits`
+
+- Over 616,730 held-out samples the correction improves the Brier score from 0.1234 to 0.1227 (delta +0.00065). Calibration can rule this model out; it cannot rule it in. Whether the market disagrees with it profitably is a separate question, answered only by prices.
+
+### Reliability, before and after the correction
+
+| Bucket | Samples | Predicted (raw) | Predicted (corrected) | Observed |
+|:-------|--------:|----------------:|----------------------:|---------:|
+| 0%-10% | 241,438 | 4.4% | 4.0% | 3.0% |
+| 10%-20% | 111,749 | 14.5% | 14.5% | 13.0% |
+| 20%-30% | 74,325 | 24.7% | 24.8% | 24.4% |
+| 30%-40% | 45,428 | 34.6% | 34.5% | 38.2% |
+| 40%-50% | 41,096 | 45.2% | 45.1% | 46.3% |
+| 50%-60% | 51,712 | 55.1% | 55.3% | 55.3% |
+| 60%-70% | 36,967 | 64.5% | 64.6% | 72.7% |
+| 70%-80% | 12,888 | 73.7% | 74.3% | 86.7% |
+| 80%-90% | 1,123 | 82.4% | 83.1% | 95.9% |
+| 90%-100% | 4 | 90.8% | 91.6% | 100.0% |
+
+### By ice time — where a count model's defects actually live
+
+| Ice time | Samples | Predicted (raw) | Predicted (corrected) | Observed | 95% on observed |
+|:---------|--------:|----------------:|----------------------:|---------:|:----------------|
+| under 12 min | 93,235 | 22.1% | 22.5% | 28.2% | 27.9% .. 28.5% |
+| 12-16 min | 174,295 | 22.9% | 23.4% | 25.3% | 25.1% .. 25.5% |
+| 16-20 min | 198,575 | 23.4% | 23.9% | 21.8% | 21.6% .. 22.0% |
+| 20 min and up | 150,625 | 23.5% | 24.0% | 20.1% | 19.9% .. 20.3% |
+
+⚠ marks a bucket below 100 samples. Its numbers are printed with their count and should be read as noise, not as a finding.
+
+### The same buckets, corrected per ice-time bucket
+
+Brier 0.1213 against 0.1227 pooled, so the ice-time-conditional correction beats the pooled curve here. The mechanism is in `docs/why_ice_time_gets_its_own_correction.md`; the decision to use it belongs to the price-based backtest, not to this table.
+
+| Ice time | Samples | Predicted | Observed |
+|:---------|--------:|----------:|---------:|
+| under 12 min | 93,235 | 28.8% | 28.2% |
+| 12-16 min | 174,295 | 25.6% | 25.3% |
+| 16-20 min | 198,575 | 22.2% | 21.8% |
+| 20 min and up | 150,625 | 20.4% | 20.1% |
 
 ## `points`
 
