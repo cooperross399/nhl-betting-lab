@@ -75,7 +75,7 @@ jobs:
   refresh:
     name: Gameday Refresh
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     steps:
       - name: Check out repository
@@ -168,11 +168,20 @@ jobs:
         env:
           PYTHONPATH: src
         run: |
-          # 0.25 rather than 0.1. A cold cache makes about four thousand
+          # Two bounds, and both matter.
+          #
+          # 0.25 seconds rather than 0.05: a cold cache is about four thousand
           # requests and the first run at 0.05 was rate-limited into near-total
           # failure. The client retries a 429 now, but the cheaper fix is not
           # to earn one.
-          python scripts/fetch_nhl_data.py --polite-seconds 0.25
+          #
+          # --max-games caps the work per run so a run always finishes. At a
+          # quarter-second apiece, four thousand games cannot be fetched
+          # inside any sensible job timeout, and a run killed at the timeout
+          # produces no card at all. A cold cache therefore fills over
+          # consecutive days rather than in one heroic run; in steady season
+          # there are about a dozen new games a night and this is instant.
+          python scripts/fetch_nhl_data.py --polite-seconds 0.25 --max-games 600
           python scripts/build_datasets.py
 
       - name: Fetch prices into staging
@@ -211,8 +220,12 @@ jobs:
           set -u
           : > run_degraded.txt
           : > run_quiet.txt
+          games=$(find data/raw/nhl/boxscore -name '*.json' 2>/dev/null | wc -l)
+          echo "Boxscores cached: $games"
           if [ ! -f data/processed/player_game_logs.csv ]; then
             echo "No player logs: no prop can be priced, so no card can be built. The NHL API could not be reached and no previous cache was restored." >> run_degraded.txt
+          elif [ "$games" -lt 1000 ]; then
+            echo "Only $games games are cached, so the models are fitted on a thin history. The fetch is capped per run and the cache fills over consecutive days; this resolves itself." >> run_degraded.txt
           elif [ "${{ steps.results.outcome }}" = "failure" ]; then
             echo "Results could not be refreshed; the models were fitted on the previously cached games." >> run_degraded.txt
           fi

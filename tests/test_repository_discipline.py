@@ -272,3 +272,20 @@ def test_an_empty_slate_posts_no_card() -> None:
     text = _read(".github/workflows/gameday-refresh.yml")
 
     assert "there is no card to post" in text
+
+
+def test_the_daily_fetch_is_bounded_so_a_run_always_finishes() -> None:
+    """At a quarter-second apiece, four thousand games cannot be fetched
+    inside any sensible timeout, and a run killed at the timeout produces no
+    card at all."""
+    text = _read(".github/workflows/gameday-refresh.yml")
+
+    assert "--max-games" in text
+    assert "fills over consecutive days" in text
+
+
+def test_a_thin_cache_is_reported_rather_than_silently_modelled() -> None:
+    text = _read(".github/workflows/gameday-refresh.yml")
+
+    assert "fitted on a thin history" in text
+    assert "this resolves itself" in text
