@@ -181,9 +181,10 @@ to pull it.
 ## Model and betting discipline
 
 - Props are the priority: shots on goal, points, goals (including anytime
-  scorer), assists, goalie saves, blocked shots.
-- Team markets — moneyline, puck line, totals — are priced and modelled so an
-  edge anywhere can be found, but they are not the point of the lab.
+  scorer), assists, goalie saves, blocked shots, hits.
+- Team markets — moneyline, puck line, totals, and the regulation three-way —
+  are priced and modelled so an edge anywhere can be found, but they are not
+  the point of the lab.
 - Prop edges must clear a **higher** bar than team edges, never a lower one. The
   card is built hours before the lineup, the scratches, and the confirmed
   starting goalie are known, and books reprice on all three. That is a
