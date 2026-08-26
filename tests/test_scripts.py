@@ -363,3 +363,19 @@ def test_the_shadow_script_fetches_the_alternate_ladders_per_event(
     assert "alternate_totals" in requested
     assert "alternate_spreads" in requested
     assert "player_shots_on_goal" in requested
+
+
+def test_buying_an_unknown_market_is_refused(tmp_path: Path) -> None:
+    """Nothing here could settle it, so buying it is spending on nothing."""
+    module = load_script("buy_historical_props.py")
+
+    with pytest.raises(SystemExit) as exit_info:
+        module.main(
+            [
+                "--live", "--credit-cap", "10",
+                "--from", "2026-01-10", "--to", "2026-01-10",
+                "--markets", "player_time_on_ice",
+            ]
+        )
+
+    assert exit_info.value.code != 0
