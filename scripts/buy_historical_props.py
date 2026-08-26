@@ -181,6 +181,18 @@ def main(argv: list[str] | None = None) -> int:
         default=0,
         help="Hard cap. Required with --live; the run stops rather than exceed it.",
     )
+    parser.add_argument(
+        "--markets",
+        nargs="*",
+        default=None,
+        help=(
+            "Provider market keys to buy. Defaults to every prop this lab "
+            "prices. Naming a subset is how a market added later is filled in "
+            "without re-buying the ones already on disk — at ten credits per "
+            "market per event, re-buying six to add a seventh costs seven "
+            "times what it needs to."
+        ),
+    )
     parser.add_argument("--hours-before", type=float, default=4.0)
     parser.add_argument(
         "--every-n-days",
@@ -205,7 +217,18 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     load_provider_env()
-    markets = [market.provider_key for market in PROP_MARKETS]
+    markets = (
+        list(args.markets)
+        if args.markets
+        else [market.provider_key for market in PROP_MARKETS]
+    )
+    known = {market.provider_key for market in PROP_MARKETS}
+    unknown = sorted(set(markets) - known)
+    if unknown:
+        parser.error(
+            f"{unknown} are not markets this lab prices, so nothing could "
+            "settle them. Add them to markets.py first."
+        )
 
     events: list[dict[str, str]] = []
     listing_cost = 0

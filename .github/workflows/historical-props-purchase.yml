@@ -41,6 +41,11 @@ on:
         type: string
         required: false
         default: "7"
+      markets:
+        description: "Provider market keys to buy, space separated. Blank buys all."
+        type: string
+        required: false
+        default: ""
       hours_before:
         description: "Hours before puck drop to price at"
         type: string
@@ -191,11 +196,15 @@ jobs:
           NHL_ODDS_API_KEY: ${{ secrets.NHL_ODDS_API_KEY }}
           PYTHONPATH: src
         run: |
+          MARKETS=""
+          if [ -n "${{ inputs.markets }}" ]; then
+            MARKETS="--markets ${{ inputs.markets }}"
+          fi
           python scripts/buy_historical_props.py --live \
             --from "${{ inputs.start_date }}" --to "${{ inputs.end_date }}" \
             --every-n-days "${{ inputs.every_n_days }}" \
             --credit-cap "${{ inputs.credit_cap }}" \
-            --hours-before "${{ inputs.hours_before }}"
+            --hours-before "${{ inputs.hours_before }}" $MARKETS
 
       - name: Rebuild the backtest with whatever was bought
         if: always()
