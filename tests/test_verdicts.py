@@ -63,3 +63,18 @@ def test_describe_names_every_policy() -> None:
 
     for policy in ("by_toi", "team_b2b", "props_b2b"):
         assert policy in line
+
+
+def test_both_rest_policies_go_through_the_door_in_the_card() -> None:
+    """The props side read the verdict and the team side shipped by code
+    assertion — reported off while the factors kept applying. Both sides now
+    read the same door."""
+    from nhl_betting_lab.config import PROJECT_ROOT
+
+    runner = (PROJECT_ROOT / "scripts" / "run_gameday_card.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'ships("team_b2b"' in runner
+    assert 'ships("props_b2b"' in runner
+    assert "history=games" not in runner  # only ever through a gated variable

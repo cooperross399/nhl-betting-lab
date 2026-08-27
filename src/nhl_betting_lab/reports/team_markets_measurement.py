@@ -46,7 +46,7 @@ from nhl_betting_lab.models.value import (
     american_to_implied,
     profit_on_win,
 )
-from nhl_betting_lab.season import game_date
+from nhl_betting_lab.season import row_game_date
 from nhl_betting_lab.stats import (
     NO_DEMONSTRATED_EDGE,
     ROI_TABLE_HEADER,
@@ -249,9 +249,7 @@ def measure_prices(
         if market == "puck_line":
             selection, line = _puck_line_selection(selection, line)
         key = (
-            game_date(
-                getattr(row, "commence_time", "") or getattr(row, "date", "")
-            ),
+            row_game_date(row),
             resolve_team(getattr(row, "home_team", ""), names)
             or str(getattr(row, "home_team", "")),
             resolve_team(getattr(row, "away_team", ""), names)

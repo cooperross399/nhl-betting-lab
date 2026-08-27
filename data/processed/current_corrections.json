@@ -1,0 +1,172 @@
+{
+  "bucketed": {
+    "assists|12-16 min": {
+      "fitted_on": 74518,
+      "intercept": -0.09711779751098314,
+      "slope": 0.9628588421121382
+    },
+    "assists|16-20 min": {
+      "fitted_on": 87270,
+      "intercept": 0.06379820555208296,
+      "slope": 0.9936832368161157
+    },
+    "assists|20 min and up": {
+      "fitted_on": 53640,
+      "intercept": 0.10812502694660578,
+      "slope": 0.9635754286290626
+    },
+    "assists|under 12 min": {
+      "fitted_on": 32024,
+      "intercept": -0.16029259642444427,
+      "slope": 1.0396724127164891
+    },
+    "blocked_shots|12-16 min": {
+      "fitted_on": 149036,
+      "intercept": 0.21624580476809133,
+      "slope": 1.1589927063826797
+    },
+    "blocked_shots|16-20 min": {
+      "fitted_on": 174540,
+      "intercept": 0.15672501963430172,
+      "slope": 1.2341540416151215
+    },
+    "blocked_shots|20 min and up": {
+      "fitted_on": 107280,
+      "intercept": 0.1182316281844853,
+      "slope": 1.3214730423759526
+    },
+    "blocked_shots|under 12 min": {
+      "fitted_on": 64048,
+      "intercept": 0.3296565778593034,
+      "slope": 1.0772646574464677
+    },
+    "goalie_saves|goalie, full game (50 min+)": {
+      "fitted_on": 32505,
+      "intercept": -0.010466110769380579,
+      "slope": 0.9291389276854112
+    },
+    "goalie_saves|goalie, pulled or partial (under 50 min)": {
+      "fitted_on": 1290,
+      "intercept": 0.8193267932306578,
+      "slope": 0.8765939543462895
+    },
+    "goals|12-16 min": {
+      "fitted_on": 74518,
+      "intercept": -0.0903104537919121,
+      "slope": 0.9669260204337696
+    },
+    "goals|16-20 min": {
+      "fitted_on": 87270,
+      "intercept": 0.027858281126507557,
+      "slope": 0.983318209890751
+    },
+    "goals|20 min and up": {
+      "fitted_on": 53640,
+      "intercept": -0.01608511592709061,
+      "slope": 0.9426446271044293
+    },
+    "goals|under 12 min": {
+      "fitted_on": 32024,
+      "intercept": -0.16687331929189939,
+      "slope": 0.9947484287345513
+    },
+    "hits|12-16 min": {
+      "fitted_on": 186295,
+      "intercept": 0.3961676708216576,
+      "slope": 1.2306035288516888
+    },
+    "hits|16-20 min": {
+      "fitted_on": 218175,
+      "intercept": 0.018552307865494673,
+      "slope": 1.288699289413749
+    },
+    "hits|20 min and up": {
+      "fitted_on": 134100,
+      "intercept": -0.2302482493422196,
+      "slope": 1.3360350698602093
+    },
+    "hits|under 12 min": {
+      "fitted_on": 80060,
+      "intercept": 0.9338577796953087,
+      "slope": 1.0727569989936196
+    },
+    "points|12-16 min": {
+      "fitted_on": 111777,
+      "intercept": -0.06643609537012901,
+      "slope": 0.9751416210165729
+    },
+    "points|16-20 min": {
+      "fitted_on": 130905,
+      "intercept": 0.06648154034276388,
+      "slope": 0.9840957125745329
+    },
+    "points|20 min and up": {
+      "fitted_on": 80460,
+      "intercept": 0.12575703428853774,
+      "slope": 0.9647812041742999
+    },
+    "points|under 12 min": {
+      "fitted_on": 48036,
+      "intercept": -0.23739511334173163,
+      "slope": 0.9909502805108272
+    },
+    "shots_on_goal|12-16 min": {
+      "fitted_on": 149036,
+      "intercept": -0.007636199835826396,
+      "slope": 1.1896781587745524
+    },
+    "shots_on_goal|16-20 min": {
+      "fitted_on": 174540,
+      "intercept": 0.11461348691340353,
+      "slope": 1.2291580313138746
+    },
+    "shots_on_goal|20 min and up": {
+      "fitted_on": 107280,
+      "intercept": 0.15168590901705792,
+      "slope": 1.223733809381259
+    },
+    "shots_on_goal|under 12 min": {
+      "fitted_on": 64048,
+      "intercept": -0.0889403218425934,
+      "slope": 1.1491645263438168
+    }
+  },
+  "fitted_at": "2026-08-27T05:44:30+00:00",
+  "pooled": {
+    "assists": {
+      "fitted_on": 247452,
+      "intercept": 0.06506002129213471,
+      "slope": 1.0143866681356095
+    },
+    "blocked_shots": {
+      "fitted_on": 494904,
+      "intercept": 0.16829688964955528,
+      "slope": 1.1912051041303078
+    },
+    "goalie_saves": {
+      "fitted_on": 33795,
+      "intercept": 0.012832029599901696,
+      "slope": 0.9059096346334278
+    },
+    "goals": {
+      "fitted_on": 247452,
+      "intercept": -0.006397563457641143,
+      "slope": 0.9847797703012287
+    },
+    "hits": {
+      "fitted_on": 618630,
+      "intercept": 0.17903485114103815,
+      "slope": 1.1902605992707964
+    },
+    "points": {
+      "fitted_on": 371178,
+      "intercept": 0.03918718609170598,
+      "slope": 0.9937608674743095
+    },
+    "shots_on_goal": {
+      "fitted_on": 494904,
+      "intercept": 0.09028342861458197,
+      "slope": 1.2237377674191494
+    }
+  }
+}

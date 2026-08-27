@@ -42,6 +42,7 @@ import requests
 
 from nhl_betting_lab.config import ODDS_API_SPORT_KEY, STAGING_DIR
 from nhl_betting_lab.markets import (
+    ALL_MARKETS,
     ALTERNATE_PROVIDER_KEYS,
     PROP_MARKETS,
     market_for_provider_key,
@@ -71,6 +72,13 @@ BULK_PROVIDER_MARKETS: tuple[str, ...] = ("h2h", "spreads", "totals")
 #: Markets that cost one credit per market per event.
 PROP_PROVIDER_MARKETS: tuple[str, ...] = tuple(
     market.provider_key for market in PROP_MARKETS
+)
+
+#: Every per-event market, props and team alike. The live per-event fetch
+#: requests these: `h2h_3_way` sat outside the prop list, so the market this
+#: lab wired end to end was simply never asked for.
+PER_EVENT_PROVIDER_MARKETS: tuple[str, ...] = tuple(
+    market.provider_key for market in ALL_MARKETS if market.per_event
 )
 
 #: Alternate ladders. **Per-event only.** The provider does not serve these on

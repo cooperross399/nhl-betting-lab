@@ -695,3 +695,32 @@ def test_a_gap_in_the_accounting_is_printed_loudly() -> None:
 
     assert "DOES NOT RECONCILE" in rendered
     assert "no counter" in rendered
+
+
+def test_a_lone_candidate_on_the_wrong_team_is_a_void_not_a_match() -> None:
+    """A lone candidate can still be the wrong same-named player when the
+    right one did not dress. The price names the game; a candidate outside
+    it is an unmatched price."""
+    samples = _aho_samples().iloc[[0]]  # only the Carolina Aho dressed
+
+    report = bt.run_backtest(
+        _aho_price("New York Islanders", "Boston Bruins"),  # the NYI game
+        samples,
+        edge_threshold=0.01,
+    )
+
+    assert len(report.bets) == 0
+    assert report.outcomes_without_a_model_opinion == 1
+    assert "Sebastian Aho" in report.unmatched_players
+
+
+def test_a_disambiguated_price_never_binds_to_the_bare_name() -> None:
+    samples = _aho_samples()
+    samples.loc[:, "player"] = "Elias Pettersson"
+    prices = _aho_price("Carolina Hurricanes", "Boston Bruins")
+    prices.loc[:, "player"] = "Elias Pettersson (2004)"
+
+    report = bt.run_backtest(prices, samples, edge_threshold=0.01)
+
+    assert len(report.bets) == 0
+    assert report.outcomes_without_a_model_opinion == 1

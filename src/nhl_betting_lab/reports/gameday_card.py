@@ -68,6 +68,7 @@ from nhl_betting_lab.config import (
 from nhl_betting_lab.market_eligibility import EligibilityReport
 from nhl_betting_lab.markets import MARKETS_BY_KEY
 from nhl_betting_lab.reports.card_pricing import selection_key
+from nhl_betting_lab.season import clean_text
 from nhl_betting_lab.models.value import (
     OddsError,
     american_to_implied,
@@ -281,7 +282,7 @@ def build_candidates(
             away_team=away,
             market=market_key,
             selection=selection,
-            player=str(getattr(row, "player", "") or "").strip(),
+            player=clean_text(getattr(row, "player", "")),
             line=line,
             american_odds=price,
             book=str(getattr(row, "book", "")),

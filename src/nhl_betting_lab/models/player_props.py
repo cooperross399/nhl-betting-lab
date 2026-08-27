@@ -154,6 +154,18 @@ def player_name_aliases(name: object) -> tuple[str, ...]:
     anything fuzzy happening.
     """
     text = str(name or "")
+    digits = re.search(r"\((\d+)\)", text)
+    if digits:
+        # A parenthesised number is a disambiguator, not a nickname: the
+        # provider writes "Elias Pettersson (2004)" precisely because two
+        # players share the name. Erasing it to the bare name re-creates the
+        # collision the provider went out of its way to prevent — the bare
+        # form then binds to whichever same-named player happens to have a
+        # sample, which put one wrong-player bet into a shipped measurement.
+        # The disambiguated form aliases only to itself; a sample side that
+        # cannot produce the same form goes honestly unmatched (a void, not
+        # a coin flip).
+        return (normalize_player_name(text),)
     forms = {normalize_player_name(text)}
     nickname = re.search(r"\(([^)]+)\)", text)
     if nickname:

@@ -173,11 +173,16 @@ def main(argv: list[str] | None = None) -> int:
         try:
             team_model = TeamModel().fit(games)
             print(team_model.report.summary_line())
-            # `history=games` is what carries the back-to-back flags. The
-            # rest adjustment shipped with rest included; pricing without it
-            # would ship an unmeasured policy under a measured one's name.
+            # Schedule history reaches the team pricer only while the
+            # recorded verdict ships the adjustment — the same door the props
+            # side reads, because a policy the verdict file has withdrawn
+            # must actually be withdrawn, not merely reported as off while
+            # the factors keep applying.
+            team_history = (
+                games if ships("team_b2b", output_dir=outputs) else None
+            )
             team_probabilities, unresolved = price_team_markets(
-                prices, team_model, team_names=team_names, history=games
+                prices, team_model, team_names=team_names, history=team_history
             )
             probabilities.update(team_probabilities)
             unresolved_names.update(unresolved)

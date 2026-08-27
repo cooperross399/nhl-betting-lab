@@ -517,3 +517,15 @@ def test_an_unambiguous_name_does_not_need_a_team() -> None:
 
     assert model.resolve_player("Star TOR") == 1
     assert model.resolve_player_in_game("Star TOR", home="TOR", away="BOS") == 1
+
+
+def test_a_parenthesised_number_is_a_disambiguator_not_a_nickname() -> None:
+    """The provider writes "Elias Pettersson (2004)" precisely because two
+    players share the name. Erasing it re-creates the collision the provider
+    prevented, and put one wrong-player bet into a shipped measurement."""
+    from nhl_betting_lab.models.player_props import player_name_aliases
+
+    aliases = player_name_aliases("Elias Pettersson (2004)")
+
+    assert "elias pettersson" not in aliases
+    assert aliases == ("elias pettersson 2004",)

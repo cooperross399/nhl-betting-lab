@@ -326,3 +326,25 @@ def test_the_evidence_bundle_is_assembled_where_the_evidence_is() -> None:
 
     assert "run_allowlist_evidence.py" in text
     assert "allowlist_evidence_bundle.md" in text
+
+
+def test_every_wired_market_is_actually_fetched_somewhere() -> None:
+    """The regulation three-way was modelled, sampled, priced and never
+    requested — dead code on every production path, with the docs promising
+    evidence that could never accumulate. Every market this lab declares must
+    appear in a fetch list: bulk, per-event, or alternate."""
+    from nhl_betting_lab.markets import ALL_MARKETS
+    from nhl_betting_lab.providers import odds_api
+
+    fetchable = (
+        set(odds_api.BULK_PROVIDER_MARKETS)
+        | set(odds_api.PER_EVENT_PROVIDER_MARKETS)
+        | set(odds_api.ALTERNATE_PROVIDER_MARKETS)
+    )
+    shadow = _read("scripts/run_provider_shadow.py")
+
+    for market in ALL_MARKETS:
+        assert market.provider_key in fetchable, (
+            f"{market.key} is wired but never fetched"
+        )
+    assert "PER_EVENT_PROVIDER_MARKETS" in shadow

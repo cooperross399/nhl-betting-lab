@@ -48,3 +48,31 @@ def game_date(commence_time: object) -> str:
         # move a third of the schedule by a day.
         return text[:10]
     return moment.astimezone(LEAGUE_TIMEZONE).date().isoformat()
+
+
+def clean_text(value: object) -> str:
+    """A CSV-safe string: NaN, None and whitespace all read as empty.
+
+    `str(x or "")` looks like it does this and does not — float NaN is
+    truthy, so an empty CSV cell round-trips to the literal string "nan",
+    which then matches nothing, resolves nothing, and renders as a player
+    called nan. Three copies of that pattern shipped before this function.
+    """
+    if value is None:
+        return ""
+    if isinstance(value, float) and value != value:  # NaN without numpy
+        return ""
+    text = str(value).strip()
+    return "" if text.lower() == "nan" else text
+
+
+def row_game_date(row: object) -> str:
+    """The league game date for a price row: commence time, else its date.
+
+    The fallback exists for hand-built frames; real staged rows always carry
+    a commence time. `or` cannot express it, because a NaN commence time is
+    truthy and `game_date(nan)` is the string "nan" — which made two fixtures
+    between the same clubs on different days share one key.
+    """
+    commence = clean_text(getattr(row, "commence_time", ""))
+    return game_date(commence or clean_text(getattr(row, "date", "")))

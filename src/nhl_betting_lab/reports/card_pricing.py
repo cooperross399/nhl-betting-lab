@@ -34,7 +34,7 @@ from nhl_betting_lab.models.toi_corrections import CurrentCorrections
 from nhl_betting_lab.models.team_model import TeamModel
 from nhl_betting_lab.providers.team_names import resolve_team
 from nhl_betting_lab.rest import last_played_dates, played_previous_day
-from nhl_betting_lab.season import game_date
+from nhl_betting_lab.season import clean_text, row_game_date
 
 
 ProbabilityMap = dict[tuple, float]
@@ -63,7 +63,7 @@ def selection_key(row: object, *, market: str, selection: str, line: float | Non
         str(getattr(row, "away_team", "")),
         str(selection),
         line,
-        game_date(getattr(row, "commence_time", "") or getattr(row, "date", "")),
+        row_game_date(row),
     )
 
 
@@ -107,7 +107,7 @@ def price_props(
         market = MARKETS_BY_KEY.get(market_key)
         if market is None or not market.is_prop:
             continue
-        player = str(getattr(row, "player", "") or "").strip()
+        player = clean_text(getattr(row, "player", ""))
         line = _line(getattr(row, "line", None))
         if not player or line is None:
             continue
@@ -152,9 +152,7 @@ def price_props(
             unresolved.add(player)
             continue
 
-        day = game_date(
-            getattr(row, "commence_time", "") or getattr(row, "date", "")
-        )
+        day = row_game_date(row)
         over = model.over_probability(
             player_id,
             market_key,
@@ -232,7 +230,7 @@ def price_team_markets(
         line = _line(getattr(row, "line", None))
         key = selection_key(row, market=market_key, selection=selection, line=line)
 
-        day = game_date(getattr(row, "commence_time", "") or getattr(row, "date", ""))
+        day = row_game_date(row)
         rest = {
             "home_b2b": played_previous_day(last_played, home, day),
             "away_b2b": played_previous_day(last_played, away, day),

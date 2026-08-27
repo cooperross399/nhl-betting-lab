@@ -297,12 +297,29 @@ def team_row_from_boxscore(payload: Mapping[str, Any]) -> dict[str, Any] | None:
     }
 
 
+def _existing_row_count(path: Path) -> int:
+    """Data rows in an existing CSV, cheaply: line count minus the header.
+
+    "The file exists" is not "the file holds data" — a header-only file left
+    by a permitted first empty build made the guard raise falsely on the
+    second.
+    """
+    if not path.is_file():
+        return 0
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            return max(0, sum(1 for _ in handle) - 1)
+    except OSError:
+        return 0
+
+
 def build_datasets(
     *,
     raw_dir: Path | None = None,
     processed_dir: Path | None = None,
     game_ids: Iterable[int] | None = None,
     write: bool = True,
+    allow_shrink: bool = False,
 ) -> tuple[pd.DataFrame, pd.DataFrame, BuildResult]:
     """Rebuild both processed tables from the cache. No network access."""
     ids = (
@@ -348,19 +365,33 @@ def build_datasets(
     if write:
         directory = Path(processed_dir) if processed_dir else Path(PROCESSED_DIR)
         directory.mkdir(parents=True, exist_ok=True)
-        # A build that saw nothing must never replace files that hold
-        # something. An absent or wrongly-pointed raw cache produces empty
-        # frames without an error, and writing them would replace the
-        # accumulated tables with headers — the destructive-write shape that
-        # once emptied the price CSV, guarded there and not here.
-        if players.empty and (directory / PLAYER_LOGS_FILENAME).is_file():
-            result.games_malformed = result.games_malformed or []
-            raise ValueError(
-                "This build produced zero usable games, but "
-                f"{PLAYER_LOGS_FILENAME} already holds data. Refusing to "
-                "replace an accumulated dataset with an empty one — check "
-                "that data/raw/nhl/boxscore is present and populated."
-            )
+        # A build that saw little must never quietly replace files that hold
+        # much. An absent or wrongly-pointed raw cache produces empty or tiny
+        # frames without an error, and the destructive-write guard here went
+        # through three verified holes before reaching this shape: it checked
+        # one of the two files it writes, it treated a header-only file as
+        # data (so a repeated empty build raised falsely), and it let a
+        # one-game build replace a full-season accumulation because only
+        # exactly-empty was guarded. Now: each file is guarded on its own,
+        # "holds data" means rows rather than existence, both files are
+        # checked before either is written (no half-written refusal), and a
+        # shrink below half is refused with `allow_shrink` as the deliberate
+        # override.
+        for frame, filename, label in (
+            (players, PLAYER_LOGS_FILENAME, "player log"),
+            (teams, TEAM_GAMES_FILENAME, "team games"),
+        ):
+            existing_rows = _existing_row_count(directory / filename)
+            shrunk = existing_rows and len(frame) < max(1, existing_rows // 2)
+            if shrunk and not allow_shrink:
+                raise ValueError(
+                    f"This build produced {len(frame):,} {label} row(s), but "
+                    f"{filename} already holds {existing_rows:,}. Refusing to "
+                    "shrink an accumulated dataset by more than half — check "
+                    "that data/raw/nhl/boxscore is present and fully "
+                    "populated, or pass allow_shrink=True if the shrink is "
+                    "deliberate."
+                )
         players.to_csv(
             directory / PLAYER_LOGS_FILENAME, index=False, lineterminator="\n"
         )

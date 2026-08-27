@@ -134,6 +134,12 @@ TEAM_MARKETS: tuple[Market, ...] = (
         label="Regulation result (3-way)",
         is_prop=False,
         selections=("home", "draw", "away"),
+        # Served on the per-event endpoint only (probed 2026-08-26: four
+        # books answered there; the bulk endpoint refuses it). Without this
+        # flag the market was fully wired and never fetched — dead code on
+        # every production path, with the operating docs promising evidence
+        # that could never accumulate.
+        per_event=True,
     ),
 )
 

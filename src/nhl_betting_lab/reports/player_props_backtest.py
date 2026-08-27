@@ -60,7 +60,7 @@ from nhl_betting_lab.providers.team_names import (
     build_team_name_map,
     resolve_team,
 )
-from nhl_betting_lab.season import game_date
+from nhl_betting_lab.season import clean_text, row_game_date
 from nhl_betting_lab.models.value import (
     OddsError,
     american_to_implied,
@@ -234,9 +234,7 @@ def run_backtest(
         # commence date silently discarded roughly seven prices in ten — and
         # the survivors were disproportionately matinees, which is a
         # systematically different set of fixtures.
-        date_text = game_date(
-            getattr(row, "commence_time", "") or getattr(row, "date", "")
-        )
+        date_text = row_game_date(row)
         candidates: dict[int, tuple[str, Any, float, float]] = {}
         for alias in player_name_aliases(player):
             candidates.update(
@@ -246,25 +244,34 @@ def run_backtest(
             unmatched.add(player)
             report.outcomes_without_a_model_opinion += 1
             continue
-        if len(candidates) > 1:
-            # Two different players share this name tonight. The price row
-            # names the game, so the side that plays in it wins the join —
-            # and when both do (Carolina hosting the Islanders, both Ahos
-            # dressed), it resolves to neither rather than to a coin flip.
+        # The price row names the game, so the side that plays in it wins the
+        # join — and the check runs on a *single* candidate too, because a
+        # lone candidate can still be the wrong same-named player when the
+        # right one did not dress that night. A lone candidate whose team is
+        # not in the priced game is an unmatched price (a void), not a match.
+        home_label = clean_text(getattr(row, "home_team", ""))
+        away_label = clean_text(getattr(row, "away_team", ""))
+        if home_label or away_label:
             if team_map is None:
                 team_map = build_team_name_map()
             game_teams = {
-                resolve_team(getattr(row, "home_team", ""), team_map),
-                resolve_team(getattr(row, "away_team", ""), team_map),
+                resolve_team(home_label, team_map),
+                resolve_team(away_label, team_map),
             }
-            candidates = {
-                player_id: entry
-                for player_id, entry in candidates.items()
-                if entry[0] in game_teams
-            }
-            if len(candidates) != 1:
-                report.outcomes_ambiguous += 1
-                continue
+            game_teams.discard(None)
+            if game_teams:
+                candidates = {
+                    player_id: entry
+                    for player_id, entry in candidates.items()
+                    if entry[0] in game_teams
+                }
+        if len(candidates) > 1:
+            report.outcomes_ambiguous += 1
+            continue
+        if not candidates:
+            unmatched.add(player)
+            report.outcomes_without_a_model_opinion += 1
+            continue
         _, distribution, actual, toi_seconds = next(iter(candidates.values()))
         over_probability = distribution.over_probability(line)
         if correct is not None:
