@@ -29,6 +29,7 @@ from nhl_betting_lab.models.team_model import TeamModel
 from nhl_betting_lab.providers import odds_api
 from nhl_betting_lab.providers.team_names import (
     build_team_name_map,
+    resolve_team,
     save_team_name_map,
 )
 from nhl_betting_lab.reports.card_pricing import (
@@ -38,7 +39,11 @@ from nhl_betting_lab.reports.card_pricing import (
 )
 from nhl_betting_lab.reports.gameday_card import build_card, save_card
 from nhl_betting_lab.forward_evidence import write_snapshot
-from nhl_betting_lab.season import LEAGUE_TIMEZONE
+from nhl_betting_lab.season import (
+    LEAGUE_TIMEZONE,
+    known_regular_season_games,
+    row_game_date,
+)
 from nhl_betting_lab.staging_provider_policy import load_policy
 from nhl_betting_lab.verdicts import describe as describe_verdicts, ships
 
@@ -89,6 +94,51 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Recorded policy verdicts: {describe_verdicts(output_dir=outputs)}.")
 
     prices = _staged_prices(staging)
+
+    # Regular season only. The provider does not flag preseason, the models
+    # are fitted on regular season only, and exhibition results are never
+    # ingested — an unfiltered card would freeze opinions into the forward
+    # ledger that can never settle. A game the schedule cache does not know
+    # is excluded and counted, never guessed at; with no schedule knowledge
+    # at all, nothing is excluded and the run says so loudly.
+    schedule = known_regular_season_games()
+    if not prices.empty and schedule:
+        # The screen judges only dates it actually knows. If next season's
+        # schedule is not cached yet, every real game would read "unknown"
+        # and the screen would exclude the entire opening slate — so outside
+        # the known date range it abstains, which lets a stale cache leak a
+        # preseason game rather than nuke a real one. The workflow refetches
+        # schedules every run, so in production the range always covers the
+        # slate.
+        known_until = max(day for day, _, _ in schedule)
+        team_lookup = build_team_name_map()
+
+        def _is_regular(row) -> bool:
+            day = row_game_date(row)
+            if day > known_until:
+                return True  # abstain: the cache cannot judge this date
+            return (
+                day,
+                resolve_team(getattr(row, "home_team", ""), team_lookup) or "",
+                resolve_team(getattr(row, "away_team", ""), team_lookup) or "",
+            ) in schedule
+
+        keep = [_is_regular(row) for row in prices.itertuples()]
+        excluded = len(keep) - sum(keep)
+        if excluded:
+            print(
+                f"{excluded} price row(s) are for games the regular-season "
+                "schedule does not know — preseason or unrecognisable — and "
+                "were excluded before pricing. They are not passes and no "
+                "opinion was frozen for them."
+            )
+        prices = prices[keep].reset_index(drop=True)
+    elif not prices.empty:
+        print(
+            "WARNING: no regular-season schedule is cached, so nothing could "
+            "be screened for preseason. Run scripts/fetch_nhl_data.py first."
+        )
+
     slate = slate_games_from(prices)
     eligibility = assess_markets(
         prices,

@@ -76,3 +76,44 @@ def row_game_date(row: object) -> str:
     """
     commence = clean_text(getattr(row, "commence_time", ""))
     return game_date(commence or clean_text(getattr(row, "date", "")))
+
+
+def known_regular_season_games(raw_dir=None) -> set[tuple[str, str, str]]:
+    """(game date, HOME, AWAY) for every regular-season game the cache knows.
+
+    Read from the cached club schedules, which carry the full season —
+    including future games — the moment they are fetched. This exists because
+    the odds provider does not flag preseason: books post lines for
+    exhibition games from late September, the models are fitted on regular
+    season only, and `build_datasets` never ingests exhibition results — so
+    an unfiltered card would freeze opinions it has no business holding into
+    the forward ledger, where they would rot as unsettleable noise for the
+    two weeks before opening night.
+    """
+    import json
+    from pathlib import Path
+
+    from nhl_betting_lab.config import RAW_DIR, REGULAR_SEASON_GAME_TYPE
+
+    directory = (Path(raw_dir) if raw_dir else Path(RAW_DIR)) / "nhl" / (
+        "club_schedule"
+    )
+    known: set[tuple[str, str, str]] = set()
+    if not directory.is_dir():
+        return known
+    for path in directory.glob("*.json"):
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError):
+            continue
+        for game in payload.get("games", []) or []:
+            if not isinstance(game, dict):
+                continue
+            if int(game.get("gameType", 0) or 0) != REGULAR_SEASON_GAME_TYPE:
+                continue
+            day = str(game.get("gameDate", ""))[:10]
+            home = str((game.get("homeTeam") or {}).get("abbrev", "")).upper()
+            away = str((game.get("awayTeam") or {}).get("abbrev", "")).upper()
+            if len(day) == 10 and home and away:
+                known.add((day, home, away))
+    return known
