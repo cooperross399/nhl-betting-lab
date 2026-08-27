@@ -15,10 +15,15 @@ before believing any number this repository produces.
 
 ## The current answer to "does this work"
 
-Nothing in this repository has a demonstrated edge, because nothing has been
-measured against real prices yet. That is a statement about the evidence, not
-about the models. `data/outputs/what_we_can_claim.md` is regenerated from the
-measurements every run and always says what they actually support.
+**No demonstrated edge, measured thoroughly.** Nine markets have been measured
+against real bought prices — 4,830 prop bets pooled at +1.4% with a 95%
+interval of −1.4% to +4.2%, three team markets all negative — and every
+interval includes zero. The card runs live anyway, by Cooper's explicit
+approval overriding the evidence's enable-nothing recommendation (receipt
+`odds_api-20260827T165300-0400-cooperross399`), so the forward ledger can
+accumulate genuinely out-of-sample evidence. `data/outputs/what_we_can_claim.md`
+is regenerated from the measurements every run and always says what they
+actually support.
 
 ## Setup
 
@@ -74,10 +79,11 @@ PYTHONPATH=src .venv/bin/python scripts/run_what_we_can_claim.py
 ### The card — offline, gated
 
 ```bash
-# With the shipped policy this produces no card and no selections, and says
-# why. That is correct behaviour, not a failure. Every priced opinion is also
-# frozen into data/archive/priced_snapshots/ — the day's first opinion
-# stands, never repriced.
+# Prices whatever the policy allows and recommends only where the measured
+# bars clear; a slate with no qualifying edge yields a card with no
+# selections that says why. Every priced opinion is also frozen into
+# data/archive/priced_snapshots/ — the day's first opinion stands, never
+# repriced.
 PYTHONPATH=src .venv/bin/python scripts/run_gameday_card.py
 
 # Settle pending snapshots against final boxscores and rebuild the

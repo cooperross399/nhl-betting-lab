@@ -7,9 +7,11 @@ Reads only what is already on disk: the staged prices, the processed logs, and
 the provider policy. It fetches nothing, spends no credits, edits no policy,
 and places no bet.
 
-With the shipped policy — which allowlists nothing — this produces **no card
-and no selections**, and says why. That is the correct behaviour, not a
-failure.
+The policy decides what may be priced; the measured bars decide what may be
+recommended. A slate where nothing clears them produces a card with no
+selections that says why — correct behaviour, not a failure — and a policy
+allowlisting nothing produces no card at all, the state this repository
+shipped in.
 """
 
 from __future__ import annotations
