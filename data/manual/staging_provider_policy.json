@@ -10,10 +10,33 @@
     "to required_markets, or write a receipt. See",
     "docs/provider_allowlist_approval.md."
   ],
-  "allowed_provider_names": [],
+  "allowed_provider_names": [
+    "the_odds_api"
+  ],
   "allowed_provider_types": [
     "odds_api"
   ],
-  "provider_allowlist_entries": {},
+  "provider_allowlist_entries": {
+    "the_odds_api": {
+      "allowlist_status": "allowed",
+      "provider_type": "odds_api",
+      "approved_at": "2026-08-27T16:53:00-04:00",
+      "reviewer_name": "cooperross399",
+      "evidence_receipt_id": "odds_api-20260827T165300-0400-cooperross399",
+      "required_markets": [
+        "assists",
+        "blocked_shots",
+        "goalie_saves",
+        "goals",
+        "hits",
+        "moneyline",
+        "points",
+        "puck_line",
+        "regulation_3_way",
+        "shots_on_goal",
+        "total_goals"
+      ]
+    }
+  },
   "max_provider_run_age_hours": 12
 }
