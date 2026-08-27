@@ -25,6 +25,7 @@ from datetime import date, timedelta
 
 import pandas as pd
 
+from nhl_betting_lab.rest import played_previous_day
 from nhl_betting_lab.models.player_props import (
     GOALIE_SETTLEMENT_COLUMN,
     GOALIE_STAT,
@@ -150,6 +151,26 @@ def distribution_from(mean: float, dispersion_r: float | None):
     return NegativeBinomial(mean=average, r=float(dispersion_r))
 
 
+def _team_b2b_flags(logs: pd.DataFrame) -> dict[tuple[int, str], bool]:
+    """(game_id, team) -> whether that team played the previous league day.
+
+    Derived from the logs themselves, in date order, so the flag for any game
+    depends only on games before it — walk-forward by construction, and the
+    same "played yesterday" rule the team markets ship.
+    """
+    dated = logs[["game_id", "team", "date"]].drop_duplicates()
+    last_seen: dict[str, str] = {}
+    flags: dict[tuple[int, str], bool] = {}
+    for row in dated.sort_values("date").itertuples():
+        day = str(row.date)[:10]
+        team = str(row.team)
+        flags[(int(row.game_id), team)] = played_previous_day(
+            last_seen, team, day
+        )
+        last_seen[team] = day
+    return flags
+
+
 def generate_prop_samples(
     logs: pd.DataFrame,
     *,
@@ -158,8 +179,14 @@ def generate_prop_samples(
     minimum_history_games: int = 200,
     start_date: str = "",
     end_date: str = "",
+    use_rest: bool = True,
 ) -> tuple[pd.DataFrame, WalkForwardReport]:
-    """Price every player-game in the log with a model that could not see it."""
+    """Price every player-game in the log with a model that could not see it.
+
+    `use_rest=False` prices with the schedule ignored, which exists so the two
+    policies can be compared on identical prices — the comparison that decides
+    whether the props rest adjustment ships.
+    """
     wanted = {
         key: tuple(float(line) for line in values)
         for key, values in (lines or DEFAULT_LINES).items()
@@ -182,6 +209,7 @@ def generate_prop_samples(
     all_logs = logs.copy()
     all_logs["_date"] = all_logs["date"].map(_as_date)
     all_logs = all_logs.dropna(subset=["_date"])
+    b2b = _team_b2b_flags(logs) if use_rest else {}
 
     first = frame["_date"].min()
     last = frame["_date"].max()
@@ -233,6 +261,10 @@ def generate_prop_samples(
                     market,
                     opponent=str(log["opponent"]),
                     venue=str(log["venue"]),
+                    own_b2b=b2b.get((int(log["game_id"]), str(log["team"])), False),
+                    opp_b2b=b2b.get(
+                        (int(log["game_id"]), str(log["opponent"])), False
+                    ),
                 )
                 if shape is None:
                     continue

@@ -313,3 +313,80 @@ def test_without_a_team_map_the_prices_are_reported_not_silently_defaulted(
 
     assert priced == {}
     assert unresolved
+
+
+def test_team_markets_survive_a_csv_round_trip(tmp_path: Path) -> None:
+    """The bug this catches: read_csv turns the empty player field into NaN,
+    one key side rendered it 'nan' and the other '', and every team-market
+    row silently lost its opinion. The in-memory fixtures never saw it."""
+    teams = TeamModel().fit(_games())
+    mapping = _team_map(tmp_path)
+    prices = _prices()
+    path = tmp_path / "staged.csv"
+    prices.to_csv(path, index=False)
+    round_tripped = pd.read_csv(path)
+    assert round_tripped["player"].isna().any(), "the round trip must produce NaN"
+
+    probabilities, _ = price_team_markets(
+        round_tripped, teams, team_names=mapping
+    )
+    card = build_card(
+        round_tripped,
+        probabilities,
+        eligibility=_eligibility(["moneyline", "total_goals"]),
+        now=NOW,
+    )
+
+    assert card.card_generated is True
+    team_rows = [
+        row
+        for row in card.best_bets + card.leans + card.passes
+        if row["market"] in ("moneyline", "total_goals")
+    ]
+    assert team_rows, "team markets vanished across the CSV boundary"
+
+
+def test_two_games_between_the_same_clubs_stay_two_selections(
+    tmp_path: Path,
+) -> None:
+    """The staged file spans days. Without the game date in the key, the two
+    fixtures collapsed into whichever row had the better price — and the
+    puck-drop guard then vetted the survivor's commence time for both."""
+    props = PlayerPropsModel().fit(_logs())
+    mapping = _team_map(tmp_path)
+    tonight = _prices().iloc[[0]].copy()
+    tomorrow = tonight.copy()
+    tomorrow["date"] = "2026-01-11"
+    tomorrow["commence_time"] = _at(29)  # tomorrow evening
+    tomorrow["american_odds"] = 175
+    prices = pd.concat([tonight, tomorrow], ignore_index=True)
+
+    probabilities, _ = price_props(prices, props, team_names=mapping)
+    card = build_card(
+        prices,
+        probabilities,
+        eligibility=_eligibility(["shots_on_goal"]),
+        now=NOW,
+    )
+
+    rows = card.best_bets + card.leans + card.passes
+    assert len(rows) == 2, "one of the two games vanished"
+    assert len({row["commence_time"] for row in rows}) == 2
+
+
+def test_the_fingerprint_separates_the_same_pick_in_two_games(
+    tmp_path: Path,
+) -> None:
+    """Same player, same line, different night: different selections."""
+    from nhl_betting_lab.reports.gameday_card import GamedayCard
+
+    a = GamedayCard(generated_at="now", best_bets=[
+        {"market": "shots_on_goal", "player": "X", "home_team": "TOR",
+         "away_team": "BOS", "selection": "over", "line": 2.5,
+         "date": "2026-01-10"}])
+    b = GamedayCard(generated_at="now", best_bets=[
+        {"market": "shots_on_goal", "player": "X", "home_team": "TOR",
+         "away_team": "BOS", "selection": "over", "line": 2.5,
+         "date": "2026-01-11"}])
+
+    assert a.selection_fingerprint() != b.selection_fingerprint()

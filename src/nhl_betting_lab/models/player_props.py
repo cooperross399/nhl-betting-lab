@@ -105,14 +105,42 @@ def normalize_player_name(name: object) -> str:
     silently is the problem, because the row simply never appears.
 
     This strips accents and punctuation and collapses whitespace. It does
-    **not** do anything fuzzy: `"J.T. Miller"` and `"JT Miller"` are the same
-    string once punctuation is gone, whereas `"J. Miller"` and `"JT Miller"`
-    are not, and should not be.
+    **not** do anything fuzzy — and it does *not* make `"J.T. Miller"` equal
+    `"JT Miller"`: the dots become spaces, so the first normalises to
+    `"j t miller"` and the second to `"jt miller"`. An earlier version of this
+    docstring claimed otherwise, and the claim cost twenty priced A.J. Greer
+    outcomes their match. Joining the two spellings is the alias layer's job
+    (`player_name_aliases`), which emits an initials-collapsed variant —
+    a *stated* equivalence, not a fuzzy one.
     """
     text = unicodedata.normalize("NFKD", str(name or ""))
     text = "".join(ch for ch in text if not unicodedata.combining(ch))
     text = re.sub(r"[^0-9A-Za-z]+", " ", text)
     return " ".join(text.split()).casefold()
+
+
+def _collapse_initials(normalized: str) -> str:
+    """`"j t miller"` -> `"jt miller"`; `"a j greer"` -> `"aj greer"`.
+
+    A run of single-letter tokens is initials however the source punctuated
+    them, and books print `"JT Miller"` where the registry writes
+    `"J.T. Miller"`. Joining the letters is a stated equivalence about
+    initials, not a fuzzy match: multi-letter tokens are never merged, so
+    `"j miller"` stays distinct from `"jt miller"`.
+    """
+    tokens = normalized.split()
+    collapsed: list[str] = []
+    run: list[str] = []
+    for token in tokens + [""]:
+        if len(token) == 1:
+            run.append(token)
+            continue
+        if run:
+            collapsed.append("".join(run))
+            run = []
+        if token:
+            collapsed.append(token)
+    return " ".join(collapsed)
 
 
 def player_name_aliases(name: object) -> tuple[str, ...]:
@@ -121,7 +149,9 @@ def player_name_aliases(name: object) -> tuple[str, ...]:
     The registry carries constructions like `"Anthony-John (AJ) Greer"`, where
     the parenthesis is the name the player actually goes by and the name a
     book will print. Both forms are indexed, because the alias is stated in
-    the source rather than guessed at.
+    the source rather than guessed at — and every form is also indexed with
+    its initials collapsed, so `"J.T. Miller"` meets `"JT Miller"` without
+    anything fuzzy happening.
     """
     text = str(name or "")
     forms = {normalize_player_name(text)}
@@ -134,6 +164,7 @@ def player_name_aliases(name: object) -> tuple[str, ...]:
             # The nickname replaces the given name, keeping the surname.
             forms.add(" ".join([called, parts[-1]]))
         forms.add(without)
+    forms |= {_collapse_initials(form) for form in set(forms)}
     return tuple(sorted(form for form in forms if form))
 
 
@@ -230,6 +261,13 @@ class PlayerPropsModel:
     #: proxy is noisy: it is allowed to nudge and never to dominate.
     PP_MULTIPLIER_RANGE = (0.88, 1.18)
 
+    #: Player-appearances of back-to-back evidence at which a fitted factor
+    #: keeps half its measured deviation from 1.0. About twelve percent of
+    #: appearances are back-to-backs, so a full fit holds many thousands and
+    #: an early walk-forward window a few hundred — early factors sit near
+    #: 1.0 and grow with evidence, the same shape the team model uses.
+    B2B_SHRINKAGE_APPEARANCES = 1500
+
     def __init__(self) -> None:
         self.skaters: dict[int, SkaterRates] = {}
         self.goalies: dict[int, GoalieRates] = {}
@@ -237,6 +275,9 @@ class PlayerPropsModel:
         self.opponent_factors: dict[str, dict[str, float]] = {}
         self.venue_factors: dict[str, dict[str, float]] = {}
         self.dispersion: dict[str, Dispersion] = {}
+        #: Per-market production multipliers when a side played yesterday,
+        #: keyed by market then "own"/"opp". Fitted in `_fit_b2b_factors`.
+        self.b2b_factors: dict[str, dict[str, float]] = {}
         self.league_save_rate: float = 0.900
         self.league_shots_against_per60: float = 30.0
         self.report = PropsModelReport()
@@ -293,6 +334,7 @@ class PlayerPropsModel:
         goalies = frame[frame["role"].astype(str) == "goalie"]
 
         self.report = PropsModelReport(games=int(frame["game_id"].nunique()))
+        self._fit_b2b_factors(frame)
         self._fit_dispersion(skaters, goalies)
         self._fit_baselines(skaters)
         self._fit_opponent_factors(skaters)
@@ -356,6 +398,85 @@ class PlayerPropsModel:
             for key, player_id in by_team.items()
             if key not in team_ambiguous
         }
+
+    def _fit_b2b_factors(self, frame: pd.DataFrame) -> None:
+        """How production shifts when a side played yesterday, per market.
+
+        Fitted from the training logs only — the schedule state of a training
+        game derives from earlier training games, so a walk-forward refit can
+        never see the game it prices. Two factors per market:
+
+        ``own``: the player's team played yesterday. Scoring drops about six
+        percent in the diagnostic; blocked shots hold; the tired team's goalie
+        faces *more* shots.
+
+        ``opp``: the opponent played yesterday. The mirror image — facing
+        tired legs, scoring rises — and the both-tired case multiplies the two
+        and lands near baseline, which is what the diagnostic showed without
+        being asked to.
+
+        The ratio is per *appearance*, not per sixty minutes, so it carries
+        both the rate effect and any bench-shortening in one number — the
+        model's expected TOI is a trailing mean that knows nothing about
+        tonight's schedule, so the correction has to carry the minutes effect
+        itself.
+        """
+        dated = frame[["game_id", "team", "date"]].drop_duplicates()
+        last_seen: dict[str, str] = {}
+        flags: dict[tuple[int, str], bool] = {}
+        for row in dated.sort_values("date").itertuples():
+            day = str(row.date)[:10]
+            team = str(row.team)
+            previous = last_seen.get(team)
+            tired = False
+            if previous:
+                try:
+                    tired = (
+                        pd.Timestamp(day) - pd.Timestamp(previous)
+                    ).days == 1
+                except (ValueError, TypeError):
+                    tired = False
+            flags[(int(row.game_id), team)] = tired
+            last_seen[team] = day
+
+        working = frame.copy()
+        working["_own_b2b"] = [
+            flags.get((int(g), str(team)), False)
+            for g, team in zip(working["game_id"], working["team"])
+        ]
+        working["_opp_b2b"] = [
+            flags.get((int(g), str(opponent)), False)
+            for g, opponent in zip(working["game_id"], working["opponent"])
+        ]
+
+        skaters = working[working["role"].astype(str) == "skater"]
+        goalies = working[
+            (working["role"].astype(str) == "goalie")
+            & (working["toi_seconds"] >= 2400)
+        ]
+        self.b2b_factors = {}
+        for stat, rows_frame, column in (
+            *((stat, skaters, stat) for stat in SKATER_STATS),
+            (GOALIE_STAT, goalies, GOALIE_SETTLEMENT_COLUMN),
+        ):
+            factors = {}
+            for side, flag_column in (("own", "_own_b2b"), ("opp", "_opp_b2b")):
+                tired_rows = rows_frame[rows_frame[flag_column]]
+                rested_rows = rows_frame[~rows_frame[flag_column]]
+                rested_rate = (
+                    float(rested_rows[column].mean())
+                    if len(rested_rows)
+                    else 0.0
+                )
+                if not len(tired_rows) or rested_rate <= 0:
+                    factors[side] = 1.0
+                    continue
+                raw = float(tired_rows[column].mean()) / rested_rate
+                weight = len(tired_rows) / (
+                    len(tired_rows) + self.B2B_SHRINKAGE_APPEARANCES
+                )
+                factors[side] = 1.0 + weight * (raw - 1.0)
+            self.b2b_factors[stat] = factors
 
     def _fit_dispersion(self, skaters: pd.DataFrame, goalies: pd.DataFrame) -> None:
         """Measure variance/mean per stat once, on the whole column.
@@ -567,6 +688,23 @@ class PlayerPropsModel:
         low, high = self.PP_MULTIPLIER_RANGE
         return min(max(raw, low), high)
 
+    def b2b_multiplier(
+        self, stat: str, *, own_b2b: bool = False, opp_b2b: bool = False
+    ) -> float:
+        """The fitted rest effect for one market, given tonight's schedule.
+
+        Both-tired multiplies the two factors, which the diagnostic showed
+        landing near baseline without being asked to — the effects genuinely
+        cancel rather than compounding.
+        """
+        factors = self.b2b_factors.get(stat, {})
+        multiplier = 1.0
+        if own_b2b:
+            multiplier *= float(factors.get("own", 1.0))
+        if opp_b2b:
+            multiplier *= float(factors.get("opp", 1.0))
+        return multiplier
+
     def expected_count(
         self,
         player_id: int,
@@ -575,14 +713,24 @@ class PlayerPropsModel:
         opponent: str,
         venue: str,
         expected_toi_seconds: float | None = None,
+        own_b2b: bool = False,
+        opp_b2b: bool = False,
     ) -> float | None:
-        """The distribution's mean, or None when there is no modelled opinion."""
+        """The distribution's mean, or None when there is no modelled opinion.
+
+        `own_b2b` / `opp_b2b`: whether each side played yesterday. Rest is
+        schedule information, known before puck drop; a caller that does not
+        know passes nothing and prices every side as rested — the direction
+        that only ever declines to move a price.
+        """
         if stat == GOALIE_STAT:
             return self.expected_saves(
                 player_id,
                 opponent=opponent,
                 venue=venue,
                 expected_toi_seconds=expected_toi_seconds,
+                own_b2b=own_b2b,
+                opp_b2b=opp_b2b,
             )
         if stat not in SKATER_STATS:
             raise KeyError(f"Unknown prop stat {stat!r}. Known: {PROP_STATS}")
@@ -604,6 +752,7 @@ class PlayerPropsModel:
             * opponent_factor
             * venue_factor
             * self.pp_multiplier(rates, stat)
+            * self.b2b_multiplier(stat, own_b2b=own_b2b, opp_b2b=opp_b2b)
         )
 
     def expected_saves(
@@ -613,12 +762,19 @@ class PlayerPropsModel:
         opponent: str,
         venue: str,
         expected_toi_seconds: float | None = None,
+        own_b2b: bool = False,
+        opp_b2b: bool = False,
     ) -> float | None:
         """Expected saves = expected shots against x save rate.
 
         Shots against is driven by the opponent's shot volume and by the
         goalie's own team's defensive profile, neither of which is a property
         of the goalie. Modelling saves directly would attribute both to him.
+
+        The rest flags are *team* facts, deliberately: `own_b2b` means the
+        skaters in front of him played yesterday — tired legs concede more
+        shots, so his expected saves rise — whatever the goalie himself did,
+        which matters because back-to-backs are exactly when backups start.
         """
         rates = self.goalies.get(int(player_id))
         if rates is None:
@@ -635,7 +791,13 @@ class PlayerPropsModel:
         # the mirror image: how many the opponent generates.
         opponent_factor = self.opponent_shot_factor(str(opponent))
         shots = rates.shots_against_per60 * (toi / 3600.0) * opponent_factor
-        return shots * rates.save_rate
+        return (
+            shots
+            * rates.save_rate
+            * self.b2b_multiplier(
+                GOALIE_STAT, own_b2b=own_b2b, opp_b2b=opp_b2b
+            )
+        )
 
     def opponent_shot_factor(self, opponent: str) -> float:
         """How many shots this opponent generates, relative to the league.
@@ -655,6 +817,8 @@ class PlayerPropsModel:
         opponent: str,
         venue: str,
         expected_toi_seconds: float | None = None,
+        own_b2b: bool = False,
+        opp_b2b: bool = False,
     ) -> CountDistribution | None:
         mean = self.expected_count(
             player_id,
@@ -662,6 +826,8 @@ class PlayerPropsModel:
             opponent=opponent,
             venue=venue,
             expected_toi_seconds=expected_toi_seconds,
+            own_b2b=own_b2b,
+            opp_b2b=opp_b2b,
         )
         if mean is None or mean <= 0:
             return None
@@ -676,6 +842,8 @@ class PlayerPropsModel:
         opponent: str,
         venue: str,
         expected_toi_seconds: float | None = None,
+        own_b2b: bool = False,
+        opp_b2b: bool = False,
     ) -> float | None:
         """P(count beats `line`), or None when there is no modelled opinion."""
         shape = self.distribution(
@@ -684,6 +852,8 @@ class PlayerPropsModel:
             opponent=opponent,
             venue=venue,
             expected_toi_seconds=expected_toi_seconds,
+            own_b2b=own_b2b,
+            opp_b2b=opp_b2b,
         )
         if shape is None:
             return None

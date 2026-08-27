@@ -55,13 +55,20 @@ def _prices(rows: list[dict] | None = None) -> pd.DataFrame:
 
 
 def _key(row: dict) -> tuple:
-    return (
-        row["market"],
-        str(row["player"] or "").casefold(),
-        row["home_team"],
-        row["away_team"],
-        row["selection"],
-        row["line"],
+    """Built by the real key function, not a hand copy of it.
+
+    A hand-built fixture key is how the production drift went unseen: the
+    tests agreed with themselves while the two production copies disagreed
+    with each other."""
+    from types import SimpleNamespace
+
+    from nhl_betting_lab.reports.card_pricing import selection_key
+
+    return selection_key(
+        SimpleNamespace(**row),
+        market=row["market"],
+        selection=row["selection"],
+        line=row["line"],
     )
 
 

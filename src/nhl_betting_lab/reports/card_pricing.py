@@ -5,9 +5,14 @@ presentation; this module's job is producing an opinion. Mixing them would
 make it possible for a gate to be bypassed by a pricing path, which is exactly
 the shape of bug that lets an unapproved market reach a selection.
 
-The map is keyed by `(market, player_casefold, home, away, selection, line)`,
-using the provider's own team strings so the card can join back to its price
-rows. A key that is absent means *no modelled opinion* — which is different
+The map is keyed by `selection_key(...)` — market, player, the provider's own
+team strings, selection, line, and the league game date. One function builds
+every key on both sides of the join, because the two hand-built copies of it
+disagreed twice: a CSV round-trip turned an empty player into the string
+`"nan"` on one side and `""` on the other, which silently unmatched every
+team-market row; and neither copy carried the game date, so two games between
+the same clubs in one staged file collapsed into whichever row had the better
+price. A key that is absent means *no modelled opinion* — which is different
 from a probability of zero, and the card treats it as different.
 
 Both entry points take a team-name map, because the provider says
@@ -35,6 +40,33 @@ from nhl_betting_lab.season import game_date
 ProbabilityMap = dict[tuple, float]
 
 
+def selection_key(row: object, *, market: str, selection: str, line: float | None) -> tuple:
+    """The one key both sides of the price/probability join build.
+
+    `player` goes through `pd.isna` before `str`, because a CSV round-trip
+    turns an empty field into NaN — which is truthy, so `str(x or "")` yields
+    the literal string `"nan"` and quietly matches nothing forever.
+
+    The league game date is a component because a staged file spans days: the
+    bulk endpoint returns every upcoming game, and two fixtures between the
+    same clubs are two different bets whose start times the puck-drop guard
+    must judge separately.
+    """
+    raw_player = getattr(row, "player", "")
+    player = (
+        "" if raw_player is None or pd.isna(raw_player) else str(raw_player)
+    ).strip()
+    return (
+        str(market),
+        player.casefold(),
+        str(getattr(row, "home_team", "")),
+        str(getattr(row, "away_team", "")),
+        str(selection),
+        line,
+        game_date(getattr(row, "commence_time", "") or getattr(row, "date", "")),
+    )
+
+
 def _line(value: object) -> float | None:
     if value is None:
         return None
@@ -51,6 +83,7 @@ def price_props(
     *,
     corrections: CurrentCorrections | None = None,
     team_names: Mapping[str, str] | None = None,
+    history: pd.DataFrame | None = None,
 ) -> tuple[ProbabilityMap, list[str]]:
     """Model probabilities for every prop row the model has an opinion on.
 
@@ -61,6 +94,11 @@ def price_props(
     probabilities: ProbabilityMap = {}
     unresolved: set[str] = set()
     lookup = dict(team_names or {})
+    # Rest flags for props, from the completed-games table — the same rule
+    # and the same reason as the team markets: the adjustment ships only in
+    # the shape it was measured, and without history every side prices as
+    # rested, the direction that only ever declines to move a price.
+    last_played = last_played_dates(history) if history is not None else {}
     if prices.empty:
         return probabilities, []
 
@@ -114,8 +152,17 @@ def price_props(
             unresolved.add(player)
             continue
 
+        day = game_date(
+            getattr(row, "commence_time", "") or getattr(row, "date", "")
+        )
         over = model.over_probability(
-            player_id, market_key, line, opponent=opponent, venue=venue
+            player_id,
+            market_key,
+            line,
+            opponent=opponent,
+            venue=venue,
+            own_b2b=played_previous_day(last_played, team, day),
+            opp_b2b=played_previous_day(last_played, opponent, day),
         )
         if over is None:
             continue
@@ -130,16 +177,7 @@ def price_props(
             )
 
         selection = str(getattr(row, "selection", "")).strip().lower()
-        # Keyed on the provider's own labels, because that is what the card
-        # will look the row up by.
-        key = (
-            market_key,
-            player.casefold(),
-            home_label,
-            away_label,
-            selection,
-            line,
-        )
+        key = selection_key(row, market=market_key, selection=selection, line=line)
         if selection in {"over", "yes"}:
             probabilities[key] = over
         elif selection in {"under", "no"}:
@@ -192,7 +230,7 @@ def price_team_markets(
             continue
         selection = str(getattr(row, "selection", "")).strip().lower()
         line = _line(getattr(row, "line", None))
-        key = (market_key, "", home_label, away_label, selection, line)
+        key = selection_key(row, market=market_key, selection=selection, line=line)
 
         day = game_date(getattr(row, "commence_time", "") or getattr(row, "date", ""))
         rest = {
@@ -200,10 +238,14 @@ def price_team_markets(
             "away_b2b": played_previous_day(last_played, away, day),
         }
 
+        # An unrecognised selection produces *no* entry, never a default. The
+        # map's contract is that absence means no opinion, and `.get(x, 0.0)`
+        # broke it: a selection staged in the wrong vocabulary was published
+        # as a confident 0% — roughly a −60% "edge" — under passes/avoids.
         if market_key == "moneyline":
-            probabilities[key] = model.moneyline_probabilities(
-                home, away, **rest
-            ).get(selection, 0.0)
+            sides = model.moneyline_probabilities(home, away, **rest)
+            if selection in sides:
+                probabilities[key] = sides[selection]
         elif market_key == "puck_line":
             if line is None:
                 continue
@@ -218,9 +260,9 @@ def price_team_markets(
             elif selection == "away":
                 probabilities[key] = sides["away_minus" if line < 0 else "away_plus"]
         elif market_key == "regulation_3_way":
-            probabilities[key] = model.regulation_3_way_probabilities(
-                home, away, **rest
-            ).get(selection, 0.0)
+            sides = model.regulation_3_way_probabilities(home, away, **rest)
+            if selection in sides:
+                probabilities[key] = sides[selection]
         elif market_key == "total_goals":
             if line is None:
                 continue

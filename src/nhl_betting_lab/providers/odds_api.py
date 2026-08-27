@@ -247,6 +247,19 @@ def normalize_event(
                         # NHL moneylines have no draw. An outcome that is
                         # neither team is not something to guess at.
                         continue
+                elif not target.is_prop and target.key == "regulation_3_way":
+                    # The fourth join-vocabulary bug's fix: the provider names
+                    # the sides after the teams and this lab's vocabulary is
+                    # home/draw/away, and a row staged in the provider's
+                    # vocabulary silently misses every downstream join.
+                    if name == home:
+                        selection = "home"
+                    elif name == away:
+                        selection = "away"
+                    elif name.strip().lower() in {"draw", "tie"}:
+                        selection = "draw"
+                    else:
+                        continue
                 elif not target.is_prop and target.key == "puck_line":
                     if name == home:
                         selection = "home"

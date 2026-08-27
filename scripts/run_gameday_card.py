@@ -159,6 +159,7 @@ def main(argv: list[str] | None = None) -> int:
                 props_model,
                 corrections=corrections,
                 team_names=team_names,
+                history=games,
             )
             probabilities.update(prop_probabilities)
             unresolved_names.update(unresolved)
