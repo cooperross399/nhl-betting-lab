@@ -5,9 +5,12 @@ measured, calibrated recommendation cards. **It never places a bet, and it
 never invents a price.**
 
 Player props are the primary product: shots on goal, points, goals (including
-anytime scorer), assists, goalie saves, and blocked shots. Team markets —
-moneyline, puck line, totals — are priced and modelled so that an edge
-anywhere can be found.
+anytime scorer), assists, goalie saves, blocked shots, and hits — with the
+alternate ladders riding the same markets. Team markets — moneyline, puck
+line, totals, the regulation 3-way, and team totals — are priced and
+modelled so that an edge anywhere can be found. What is deliberately *not*
+wired, and why, is recorded in
+[`docs/periphery_markets_decision.md`](docs/periphery_markets_decision.md).
 
 Read [`CLAUDE.md`](CLAUDE.md) for the operating rules and
 [`docs/what_we_can_and_cannot_claim.md`](docs/what_we_can_and_cannot_claim.md)

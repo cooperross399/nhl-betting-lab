@@ -263,12 +263,14 @@ def test_the_bulk_fetch_asks_only_for_markets_that_endpoint_serves() -> None:
 
 def test_the_alternate_ladders_are_still_fetched_somewhere() -> None:
     """Dropping them would repeat the EPL `total_2_5` mistake: the complete
-    line lives in the alternate ladder and the bulk endpoint never shows it."""
+    line lives in the alternate ladder and the bulk endpoint never shows it.
+    Every ladder key must resolve to a market this lab prices — an alias to
+    nowhere would stage rows no join can ever find."""
     assert odds_api.ALTERNATE_PROVIDER_MARKETS
-    assert all(
-        market.startswith("alternate_")
-        for market in odds_api.ALTERNATE_PROVIDER_MARKETS
-    )
+    assert {"alternate_spreads", "alternate_totals", "alternate_team_totals"} \
+        <= set(odds_api.ALTERNATE_PROVIDER_MARKETS)
+    for provider_key in odds_api.ALTERNATE_PROVIDER_MARKETS:
+        assert odds_api.market_for_provider_key(provider_key) is not None
 
 
 def test_an_http_error_writes_no_staging_file() -> None:

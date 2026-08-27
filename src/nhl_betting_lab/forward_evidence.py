@@ -47,6 +47,7 @@ from nhl_betting_lab.backtest.team_walk_forward import (
     settle_moneyline,
     settle_puck_line,
     settle_regulation_3_way,
+    settle_team_total,
     settle_total,
 )
 from nhl_betting_lab.config import DATA_DIR, MIN_EDGE, MIN_PROP_EDGE, OUTPUTS_DIR
@@ -285,6 +286,16 @@ def _settle_team_row(row, game) -> tuple[str, float | None, float]:
         over, push = settle_total(home_goals, away_goals, float(row.line))
         won = over if selection == "over" else (not over and not push)
         actual = float(home_goals + away_goals)
+    elif market == "team_total":
+        # The side rides in the selection vocabulary (`home_over` …); a row
+        # outside it cannot be settled and must never be guessed at.
+        side, _, direction = selection.partition("_")
+        if side not in {"home", "away"} or direction not in {"over", "under"}:
+            return "unsettleable", None, 0.0
+        side_goals = home_goals if side == "home" else away_goals
+        over, push = settle_team_total(side_goals, float(row.line))
+        won = over if direction == "over" else (not over and not push)
+        actual = float(side_goals)
     else:
         return "unsettleable", None, 0.0
 

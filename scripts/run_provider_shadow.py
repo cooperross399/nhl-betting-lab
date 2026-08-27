@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import argparse
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pandas as pd
@@ -32,6 +32,7 @@ from nhl_betting_lab.config import OUTPUTS_DIR, STAGING_DIR
 from nhl_betting_lab.providers import odds_api
 from nhl_betting_lab.providers.odds_api import EmptySlateError
 from nhl_betting_lab.providers.env_file import load_provider_env
+from nhl_betting_lab.season import LEAGUE_TIMEZONE
 from nhl_betting_lab.reports.provider_shadow import (
     build_shadow_summary,
     save_shadow_reports,
@@ -79,6 +80,18 @@ def main(argv: list[str] | None = None) -> int:
         type=int,
         default=0,
         help="Fetch props for at most this many events. 0 means the whole slate.",
+    )
+    parser.add_argument(
+        "--horizon-days",
+        type=int,
+        default=1,
+        help=(
+            "Fetch per-event markets only for games on this many NHL game "
+            "dates starting today (America/New_York). 1 is today's slate — "
+            "the daily default. 0 removes the window, which is what a probe "
+            "wants and what once let a 32-event August board starve the "
+            "day's own games."
+        ),
     )
     parser.add_argument(
         "--overwrite-staging",
@@ -153,11 +166,29 @@ def main(argv: list[str] | None = None) -> int:
             per_event = list(odds_api.PER_EVENT_PROVIDER_MARKETS) + list(
                 odds_api.ALTERNATE_PROVIDER_MARKETS
             )
+            # The board holds every posted upcoming game, and the cap
+            # spends front-to-back — an unfiltered per-event fetch buys
+            # prices for games days away while starving today's slate. The
+            # horizon restricts spend to the game days this card is for;
+            # tomorrow's run fetches tomorrow's games at today's freshness.
+            league_days = None
+            if args.horizon_days > 0:
+                today = datetime.now(LEAGUE_TIMEZONE).date()
+                league_days = [
+                    (today + timedelta(days=offset)).isoformat()
+                    for offset in range(args.horizon_days)
+                ]
+                print(
+                    "Per-event fetch window: "
+                    + ", ".join(league_days)
+                    + " (league dates)."
+                )
             props = provider.fetch_player_props(
                 markets=per_event,
                 max_events=args.max_events,
                 credit_cap=args.credit_cap,
                 fetched_at=stamp,
+                league_days=league_days,
             )
             written.append(
                 odds_api.write_staging(

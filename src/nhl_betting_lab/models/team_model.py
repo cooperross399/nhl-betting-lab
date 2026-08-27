@@ -551,6 +551,58 @@ class TeamModel:
                 over, under = over / remaining, under / remaining
         return {"over": over, "under": under, "push": push}
 
+    def team_total_probabilities(
+        self,
+        home_team: str,
+        away_team: str,
+        *,
+        line: float,
+        side: str,
+        home_b2b: bool = False,
+        away_b2b: bool = False,
+    ) -> dict[str, float]:
+        """P(over), P(under), P(push) for one side's goals — overtime included.
+
+        A marginal of the same scoreline matrix the totals are computed from,
+        not a new model. A team total settles on the final score, and a
+        regulation tie ends with exactly one more goal for whichever side
+        wins overtime — split evenly here, the same stated-not-tuned
+        assumption the moneyline makes. Whole-number lines push on an exact
+        hit and the over/under are conditioned on no push, matching every
+        other total in this file.
+        """
+        if side not in {"home", "away"}:
+            raise ValueError(f"side must be 'home' or 'away', not {side!r}.")
+        matrix = self.scoreline_matrix(
+            home_team, away_team, home_b2b=home_b2b, away_b2b=away_b2b
+        )
+        final: dict[int, float] = {}
+        for i, row in enumerate(matrix):
+            for j, mass in enumerate(row):
+                goals = i if side == "home" else j
+                if i == j:
+                    # The overtime goal goes to one side or the other.
+                    final[goals + 1] = final.get(goals + 1, 0.0) + mass / 2.0
+                    final[goals] = final.get(goals, 0.0) + mass / 2.0
+                else:
+                    final[goals] = final.get(goals, 0.0) + mass
+
+        value = float(line)
+        floor = math.floor(value)
+        mass_total = sum(final.values()) or 1.0
+        push = (
+            final.get(int(floor), 0.0) / mass_total
+            if math.isclose(value, floor)
+            else 0.0
+        )
+        over = sum(m for g, m in final.items() if g > value) / mass_total
+        under = sum(m for g, m in final.items() if g < value) / mass_total
+        if push > 0:
+            remaining = 1.0 - push
+            if remaining > 0:
+                over, under = over / remaining, under / remaining
+        return {"over": over, "under": under, "push": push}
+
     def regulation_3_way_probabilities(
         self,
         home_team: str,

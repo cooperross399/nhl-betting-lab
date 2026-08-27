@@ -17,8 +17,12 @@ a key shape ever reaches a tracked file.
 ## What a fetch costs
 
 The bulk endpoint serves `h2h`, `spreads` and `totals` for the whole slate for
-a handful of credits. Player props are per-event: **one credit per market per
-event**. Six prop markets across a twelve-game night is 72 credits.
+a handful of credits. Everything else is per-event: **one credit per market
+per event when a book actually quotes it, nothing when none does** — the
+alternate ladders ride along for free until the day a book hangs one. The cap
+is enforced against the pessimistic bound (every asked market billed), so the
+per-event fetch is also filtered to the day's slate; spending the budget on
+games four days out was how a 32-event August board starved the nearest nine.
 
 Every entry point states the cost before spending it and takes a hard cap, so
 a probe cannot become a bill by accident.
@@ -44,10 +48,13 @@ from nhl_betting_lab.config import ODDS_API_SPORT_KEY, STAGING_DIR
 from nhl_betting_lab.markets import (
     ALL_MARKETS,
     ALTERNATE_PROVIDER_KEYS,
+    ANYTIME_SCORER_LINE,
     PROP_MARKETS,
+    SCORER_YES_PROVIDER_KEYS,
     market_for_provider_key,
 )
 from nhl_betting_lab.providers.env_file import redact
+from nhl_betting_lab.season import game_date
 
 
 API_KEY_ENV = "NHL_ODDS_API_KEY"
@@ -241,11 +248,40 @@ def normalize_event(
                 if not name:
                     continue
                 player = str(outcome.get("description", "")).strip()
+                selection = name.strip().lower()
+                line_value = _line_of(outcome)
+                if provider_key in SCORER_YES_PROVIDER_KEYS:
+                    # Scorer markets invert the prop shape: the outcome NAME
+                    # is the player and the price is the "yes" side, with no
+                    # line. Both observed layouts are accepted — name=player,
+                    # or name=Yes/No with the player in the description —
+                    # and everything lands as goals over 0.5, which is what
+                    # an anytime scorer is.
+                    if selection in {"yes", "no"}:
+                        if not player:
+                            continue
+                    else:
+                        player, selection = name, "yes"
+                    line_value = ANYTIME_SCORER_LINE
                 if target.is_prop and not player:
                     # A prop outcome with no player is unusable: it cannot be
                     # settled and cannot be matched to a model opinion.
                     continue
-                selection = name.strip().lower()
+                if not target.is_prop and target.key == "team_total":
+                    # Both teams arrive under one provider key, the side in
+                    # the outcome's description and Over/Under in its name.
+                    # Staged in this lab's vocabulary (`home_over` …), for
+                    # the same reason the 3-way is: rows staged in the
+                    # provider's vocabulary silently miss every join.
+                    if selection not in {"over", "under"}:
+                        continue
+                    if player == home:
+                        selection = f"home_{selection}"
+                    elif player == away:
+                        selection = f"away_{selection}"
+                    else:
+                        continue
+                    player = ""
                 if not target.is_prop and target.key == "moneyline":
                     if name == home:
                         selection = "home"
@@ -285,7 +321,7 @@ def normalize_event(
                         "market": target.key,
                         "player": player,
                         "selection": selection,
-                        "line": _line_of(outcome),
+                        "line": line_value,
                         "american_odds": price,
                         "book": book,
                         "fetched_at": fetched_at,
@@ -528,6 +564,7 @@ class OddsApiProvider:
         max_events: int = 0,
         credit_cap: int = 0,
         fetched_at: str = "",
+        league_days: Sequence[str] | None = None,
     ) -> FetchResult:
         """Per-event player props, under a hard credit cap.
 
@@ -535,6 +572,13 @@ class OddsApiProvider:
         full-slate fetch is exactly the accident this parameter exists to make
         impossible, so the loop stops the moment the next event would exceed
         it — and says how many events it skipped.
+
+        `league_days` restricts the fetch to events on those NHL game dates
+        (America/New_York). The board holds every posted upcoming game — 32
+        of them one August evening — and the cap spends front-to-back, so an
+        unfiltered fetch starves today's slate to buy prices for games days
+        away that tomorrow's run will fetch again anyway. None means no
+        filter, which is what a probe wants and a daily card must not use.
         """
         self._require_credential()
         stamp = fetched_at or datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -545,6 +589,22 @@ class OddsApiProvider:
 
         events = self.list_events()
         result = FetchResult(fetched_at=stamp, events_seen=len(events))
+        if league_days is not None:
+            allowed_days = {str(day).strip() for day in league_days}
+            in_window = [
+                event
+                for event in events
+                if game_date(event.get("commence_time")) in allowed_days
+            ]
+            outside = len(events) - len(in_window)
+            if outside:
+                result.warnings.append(
+                    f"{outside} posted event(s) fall outside the fetch "
+                    f"window {sorted(allowed_days)} and were not asked "
+                    "about. Their markets are absent, not empty; the run on "
+                    "their own game day fetches them."
+                )
+            events = in_window
         selected = events[:max_events] if max_events else events
 
         skipped_for_budget = 0

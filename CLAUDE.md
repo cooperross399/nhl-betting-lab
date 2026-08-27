@@ -139,6 +139,17 @@ Re-derive rather than trust if the data has moved.
   behaviour and not a failure. `goalie_saves` still cannot produce a
   selection without a confirmed-starter source
   (`docs/goalie_props_need_a_confirmed_starter.md`).
+- **The provider's whole NHL catalogue is either wired or recorded as
+  deferred with its reason** (`docs/periphery_markets_decision.md`,
+  2026-08-27): the six prop alternate ladders and the anytime scorer land on
+  existing approved markets; `team_total` is new, priced off the scoreline
+  matrix, settles from the boxscore, and stays card-excluded until a human
+  receipt names it while its opinions accumulate forward. Period markets and
+  first/last scorer are deferred — no period model, no goal-order data —
+  not silently dropped. The per-event fetch is windowed to the day's slate
+  (`--horizon-days 1`; an unwindowed 32-event August board starved the
+  nearest nine games) and the cap is 320 against the pessimistic bound;
+  an asked-for market nobody quotes costs nothing.
 - **Data**: three seasons cached — 3,936 games, 157,419 player-game rows,
   121 unresolved names (0.08%). A completed boxscore is never refetched.
 - **Calibration** (can rule out, never in): 2.5M walk-forward prop samples,

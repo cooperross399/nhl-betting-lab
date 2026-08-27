@@ -55,10 +55,10 @@ on:
         required: false
         default: false
       props_credit_cap:
-        description: "Hard cap on props credits for this run"
+        description: "Hard cap on per-event credits for this run"
         type: string
         required: false
-        default: "90"
+        default: "320"
       force_post:
         description: "Post the card even if the selections did not change"
         type: boolean
@@ -206,9 +206,16 @@ jobs:
           PYTHONPATH: src
         run: |
           set +e
+          # 320 covers a sixteen-game slate at nineteen asked markets under
+          # the pessimistic bound the cap enforces; the real bill is only
+          # what books actually quote (an unquoted market costs nothing).
+          # The one-day horizon keeps the spend on today's slate — a 32-event
+          # August board once starved the nearest nine games under the old
+          # cap. Ceiling if every market were quoted for every game, both
+          # daily runs: ~700 credits/day; realistic in-season: 250-400.
           python scripts/run_provider_shadow.py --live --props \
-            --overwrite-staging \
-            --credit-cap "${{ inputs.props_credit_cap || '90' }}"
+            --overwrite-staging --horizon-days 1 \
+            --credit-cap "${{ inputs.props_credit_cap || '320' }}"
           code=$?
           set -e
           # 3 means there are no NHL games on the board. The off-season runs
