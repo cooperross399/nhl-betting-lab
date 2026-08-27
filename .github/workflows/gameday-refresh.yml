@@ -41,6 +41,12 @@ on:
     # covers a dropped primary.
     - cron: "30 13 * 1-4,10-12 *"
     - cron: "0 15 * 1-4,10-12 *"
+    # The season does not wait for October: 2026-27 opens September 29 with a
+    # five-game slate the month filter above would silently skip. These two
+    # days and no others, because a daily September schedule would spend real
+    # credits pricing preseason games the card is only going to exclude.
+    - cron: "30 13 29-30 9 *"
+    - cron: "0 15 29-30 9 *"
   workflow_dispatch:
     inputs:
       skip_provider_fetch:
