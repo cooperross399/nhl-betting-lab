@@ -31,10 +31,30 @@ def _prices() -> pd.DataFrame:
     )
 
 
+def _empty_policy(tmp_path: Path):
+    """The allowlisting-nothing policy the repository shipped in — a fixture,
+    so these rule tests keep holding after a human approval changes the
+    shipped file."""
+    path = tmp_path / "data" / "manual" / "staging_provider_policy.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(
+            {
+                "allowed_provider_names": [],
+                "allowed_provider_types": [],
+                "provider_allowlist_entries": {},
+                "max_provider_run_age_hours": 12,
+            }
+        ),
+        encoding="utf-8",
+    )
+    return load_policy(repository_root=tmp_path)
+
+
 def _summary(tmp_path: Path):
     return provider_shadow.build_shadow_summary(
         _prices(),
-        policy=load_policy(),
+        policy=_empty_policy(tmp_path),
         provider_name="the_odds_api",
         events_seen=1,
         events_priced=1,
@@ -45,7 +65,7 @@ def _summary(tmp_path: Path):
     )
 
 
-def test_a_shadow_run_against_the_shipped_policy_makes_nothing_eligible(
+def test_a_shadow_run_against_an_empty_policy_makes_nothing_eligible(
     tmp_path: Path,
 ) -> None:
     summary, eligibility, _ = _summary(tmp_path)
@@ -163,7 +183,10 @@ def test_an_empty_price_frame_produces_a_report_rather_than_a_crash(
     empty = pd.DataFrame(columns=["date", "home_team", "away_team", "market"])
 
     summary, eligibility, discovery = provider_shadow.build_shadow_summary(
-        empty, policy=load_policy(), provider_name="the_odds_api", now=NOW
+        empty,
+        policy=_empty_policy(tmp_path),
+        provider_name="the_odds_api",
+        now=NOW,
     )
 
     assert summary.rows == 0

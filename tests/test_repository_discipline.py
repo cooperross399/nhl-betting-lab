@@ -161,22 +161,45 @@ def test_no_tracked_python_file_imports_a_betting_library() -> None:
     assert offenders == []
 
 
-def test_the_receipts_directory_holds_no_receipt() -> None:
-    """Claude never writes one, not even a draft."""
+def test_every_receipt_on_disk_is_cited_by_the_shipped_policy() -> None:
+    """Claude never writes a receipt, not even a draft — so the only receipt
+    that may exist is one a human wrote and the policy actually cites. An
+    orphan receipt is paperwork nothing verifies, and paperwork nothing
+    verifies is how an approval gets faked."""
+    import json
+
     directory = PROJECT_ROOT / "data" / "manual" / "human_acceptance_receipts"
+    on_disk = {path.stem for path in directory.glob("*.json")}
 
-    assert list(directory.glob("*.json")) == []
+    policy = json.loads(_read("data/manual/staging_provider_policy.json"))
+    cited = {
+        entry.get("evidence_receipt_id")
+        for entry in policy.get("provider_allowlist_entries", {}).values()
+    }
+
+    assert on_disk <= cited, f"orphan receipt(s): {sorted(on_disk - cited)}"
 
 
-def test_the_shipped_policy_allowlists_nothing() -> None:
+def test_the_shipped_policy_is_structurally_disciplined() -> None:
+    """Empty, or a real approval — never anything in between. Every allowed
+    name has exactly one entry, every entry cites a receipt and a human
+    reviewer, and no provider beyond the one the evidence was gathered
+    against ever appears. The PR gate verifies the cited paperwork; this
+    pins the shape."""
     import json
 
     payload = json.loads(
         _read("data/manual/staging_provider_policy.json")
     )
 
-    assert payload["allowed_provider_names"] == []
-    assert payload["provider_allowlist_entries"] == {}
+    names = payload["allowed_provider_names"]
+    entries = payload["provider_allowlist_entries"]
+    assert set(names) <= {"the_odds_api"}
+    assert set(entries) == set(names)
+    for entry in entries.values():
+        assert entry.get("evidence_receipt_id")
+        assert entry.get("reviewer_name")
+        assert entry.get("required_markets")
 
 
 def test_a_probe_does_not_rebuild_the_walk_forward_samples() -> None:

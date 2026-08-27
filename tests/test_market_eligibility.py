@@ -53,14 +53,38 @@ def _policy_allowing(tmp_path: Path, markets: list[str]):
     return load_policy(repository_root=tmp_path)
 
 
-def test_with_the_shipped_policy_nothing_is_eligible() -> None:
-    """The default state of this repository."""
+def _empty_policy(tmp_path: Path):
+    """The allowlisting-nothing policy this repository shipped with.
+
+    Built as a fixture rather than read from disk, because the shipped file
+    changes the day a human approval lands — and the RULE these tests pin
+    (an unallowlisted market is excluded, never a pass) must keep holding
+    on both sides of that day.
+    """
+    path = tmp_path / "data" / "manual" / "staging_provider_policy.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(
+            {
+                "allowed_provider_names": [],
+                "allowed_provider_types": [],
+                "provider_allowlist_entries": {},
+                "max_provider_run_age_hours": 12,
+            }
+        ),
+        encoding="utf-8",
+    )
+    return load_policy(repository_root=tmp_path)
+
+
+def test_with_an_empty_policy_nothing_is_eligible(tmp_path: Path) -> None:
+    """The state this repository shipped in, preserved as a rule."""
     prices = _prices([_row("moneyline"), _row("shots_on_goal")])
 
     report = elig.assess_markets(
         prices,
         slate_games=elig.slate_games_from(prices),
-        policy=load_policy(),
+        policy=_empty_policy(tmp_path),
         provider_name="the_odds_api",
         markets=["moneyline", "shots_on_goal"],
     )
@@ -177,11 +201,13 @@ def test_a_disabled_market_is_excluded_regardless_of_everything_else(
     assert report.eligible_markets == ()
 
 
-def test_an_unknown_market_key_is_disabled_rather_than_crashing() -> None:
+def test_an_unknown_market_key_is_disabled_rather_than_crashing(
+    tmp_path: Path,
+) -> None:
     report = elig.assess_markets(
         _prices([_row("corner_kicks")]),
         slate_games=("2026-10-08 BOS@TOR",),
-        policy=load_policy(),
+        policy=_empty_policy(tmp_path),
         provider_name="the_odds_api",
         markets=["corner_kicks"],
     )
@@ -208,13 +234,15 @@ def test_no_excluded_market_ever_reports_itself_as_a_no_value_call(
     assert all(not item.usable_for_picks for item in report.markets)
 
 
-def test_the_summary_says_plainly_when_nothing_is_eligible() -> None:
+def test_the_summary_says_plainly_when_nothing_is_eligible(
+    tmp_path: Path,
+) -> None:
     prices = _prices([_row("moneyline")])
 
     report = elig.assess_markets(
         prices,
         slate_games=elig.slate_games_from(prices),
-        policy=load_policy(),
+        policy=_empty_policy(tmp_path),
         provider_name="the_odds_api",
         markets=["moneyline"],
     )
@@ -239,12 +267,12 @@ def test_filtering_drops_every_ineligible_row(tmp_path: Path) -> None:
     assert set(filtered["market"]) == {"moneyline"}
 
 
-def test_filtering_an_empty_frame_is_safe() -> None:
+def test_filtering_an_empty_frame_is_safe(tmp_path: Path) -> None:
     empty = pd.DataFrame(columns=["market", "date", "home_team", "away_team"])
     report = elig.assess_markets(
         empty,
         slate_games=(),
-        policy=load_policy(),
+        policy=_empty_policy(tmp_path),
         provider_name="the_odds_api",
         markets=["moneyline"],
     )
@@ -252,12 +280,14 @@ def test_filtering_an_empty_frame_is_safe() -> None:
     assert elig.filter_to_eligible(empty, report).empty
 
 
-def test_the_exclusion_reasons_map_covers_every_excluded_market() -> None:
+def test_the_exclusion_reasons_map_covers_every_excluded_market(
+    tmp_path: Path,
+) -> None:
     prices = _prices([_row("moneyline"), _row("points")])
     report = elig.assess_markets(
         prices,
         slate_games=elig.slate_games_from(prices),
-        policy=load_policy(),
+        policy=_empty_policy(tmp_path),
         provider_name="the_odds_api",
         markets=["moneyline", "points"],
     )
