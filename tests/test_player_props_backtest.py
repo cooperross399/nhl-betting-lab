@@ -573,6 +573,16 @@ def _aho_samples() -> pd.DataFrame:
     return frame
 
 
+#: Fixture team map: CI has no boxscore cache to derive one from, and an
+#: empty map makes every shared name unresolvable — the production fallback,
+#: but not what these tests are testing.
+TEAM_NAMES = {
+    "carolina hurricanes": "CAR",
+    "new york islanders": "NYI",
+    "boston bruins": "BOS",
+}
+
+
 def _aho_price(home: str, away: str) -> pd.DataFrame:
     return _prices(
         [
@@ -599,6 +609,7 @@ def test_a_shared_name_settles_against_the_player_in_the_priced_game() -> None:
         _aho_price("Carolina Hurricanes", "Boston Bruins"),
         _aho_samples(),
         edge_threshold=0.01,
+        team_names=TEAM_NAMES,
     )
 
     assert len(report.bets) == 1
@@ -611,6 +622,7 @@ def test_the_other_ahos_game_settles_against_the_other_aho() -> None:
         _aho_price("New York Islanders", "Boston Bruins"),
         _aho_samples(),
         edge_threshold=0.01,
+        team_names=TEAM_NAMES,
     )
 
     # NYI Aho: mean 1.2 — the model holds no over-2.5 edge, so no bet; what
@@ -624,6 +636,7 @@ def test_both_ahos_in_one_game_resolves_to_neither() -> None:
         _aho_price("Carolina Hurricanes", "New York Islanders"),
         _aho_samples(),
         edge_threshold=0.01,
+        team_names=TEAM_NAMES,
     )
 
     assert len(report.bets) == 0
@@ -707,6 +720,7 @@ def test_a_lone_candidate_on_the_wrong_team_is_a_void_not_a_match() -> None:
         _aho_price("New York Islanders", "Boston Bruins"),  # the NYI game
         samples,
         edge_threshold=0.01,
+        team_names=TEAM_NAMES,
     )
 
     assert len(report.bets) == 0

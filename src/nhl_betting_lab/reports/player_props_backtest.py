@@ -166,6 +166,7 @@ def run_backtest(
     unmeasurable_markets: Mapping[str, str] | None = None,
     window_label: str = "",
     correct: Any = None,
+    team_names: Mapping[str, str] | None = None,
 ) -> BacktestReport:
     """Measure the props model against historically-bought prices.
 
@@ -213,10 +214,14 @@ def run_backtest(
             model_by_key.setdefault(
                 (str(row.date)[:10], str(row.market), alias), {}
             )[player_id] = entry
-    # Built lazily on the first genuine collision: scanning four thousand
-    # boxscores to disambiguate names costs seconds, and most runs (and every
-    # small test fixture) never hit one.
-    team_map: dict[str, str] | None = None
+    # Supplied by the caller, or built lazily on the first genuine collision
+    # — scanning four thousand boxscores costs seconds and most runs never
+    # hit one. A checkout with no boxscore cache (CI) yields an empty map, so
+    # resolution finds no teams and shared names resolve to neither: the
+    # conservative direction, and the reason the caller may pass one in.
+    team_map: dict[str, str] | None = (
+        dict(team_names) if team_names is not None else None
+    )
 
     unmatched: set[str] = set()
     for row in prices.itertuples():
