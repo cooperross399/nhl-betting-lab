@@ -112,12 +112,17 @@ def test_the_workflow_says_it_places_no_bet_and_edits_no_policy() -> None:
     assert "allowlisted no provider" in text
 
 
-def test_the_workflow_can_post_issue_comments_and_nothing_more() -> None:
+def test_the_workflow_can_post_comments_and_publish_the_card_feed() -> None:
+    """Issue comments deliver the card; the card-feed branch lets the cloud
+    routines read it over plain git. Those two are the whole write surface —
+    the branch-scope of the push is pinned in
+    test_repository_discipline.py::test_no_workflow_grants_write_access_to_contents.
+    """
     text = _workflow_text()
 
     assert "issues: write" in text
-    assert "contents: read" in text
-    assert "contents: write" not in text
+    assert "contents: write" in text
+    assert "card-feed" in text
 
 
 def test_claude_md_records_every_contract_string() -> None:
