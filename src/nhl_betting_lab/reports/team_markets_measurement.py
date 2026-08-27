@@ -46,7 +46,7 @@ from nhl_betting_lab.models.value import (
     american_to_implied,
     profit_on_win,
 )
-from nhl_betting_lab.season import game_date
+from nhl_betting_lab.season import row_game_date
 from nhl_betting_lab.stats import (
     NO_DEMONSTRATED_EDGE,
     ROI_TABLE_HEADER,
@@ -77,10 +77,39 @@ class MarketMeasurement:
     reliability: list[Any] = field(default_factory=list)
     verdict: str = ""
     priced: RoiInterval | None = None
+    #: Where every priced row of this market landed: seen, unmatched,
+    #: unparseable, below_threshold. Bets and pushes are on `priced`.
+    accounting: dict[str, int] = field(default_factory=dict)
 
     @property
     def has_price_evidence(self) -> bool:
         return self.priced is not None and self.priced.bets > 0
+
+    def reconciliation_line(self) -> str:
+        seen = self.accounting.get("seen", 0)
+        if not seen:
+            return ""
+        bets = (self.priced.bets if self.priced else 0)
+        accounted = (
+            self.accounting.get("unmatched", 0)
+            + self.accounting.get("unparseable", 0)
+            + self.accounting.get("below_threshold", 0)
+            + bets
+        )
+        matched = seen - self.accounting.get("unmatched", 0)
+        base = (
+            f"`{self.market}`: {seen:,} prices seen, "
+            f"{self.accounting.get('unmatched', 0):,} unmatched "
+            f"({matched / seen:.0%} matched), "
+            f"{self.accounting.get('below_threshold', 0):,} below threshold, "
+            f"{bets:,} bets."
+        )
+        if accounted == seen:
+            return base
+        return base + (
+            f" **DOES NOT RECONCILE**: {seen - accounted:,} row(s) dropped by "
+            "a path with no counter."
+        )
 
 
 @dataclass
@@ -171,8 +200,16 @@ def measure_prices(
     edge_threshold: float = MIN_EDGE,
     team_names: Mapping[str, str] | None = None,
     looks: int = 1,
+    accounting: dict[str, int] | None = None,
 ) -> RoiInterval | None:
-    """Flat-stake ROI against historical team prices, or None if there are none."""
+    """Flat-stake ROI against historical team prices, or None if there are none.
+
+    `accounting`, when given, receives per-bucket counts for every priced row
+    of this market — seen, unmatched, unparseable, below threshold, bets. An
+    unmatched price that lands in no counter is invisible exactly when the
+    sample grid drifts away from the lines the books hang, which is how a
+    third of the bought totals silently left this measurement.
+    """
     if prices.empty or samples.empty:
         return None
     priced = prices[prices["market"].astype(str) == market]
@@ -212,9 +249,7 @@ def measure_prices(
         if market == "puck_line":
             selection, line = _puck_line_selection(selection, line)
         key = (
-            game_date(
-                getattr(row, "commence_time", "") or getattr(row, "date", "")
-            ),
+            row_game_date(row),
             resolve_team(getattr(row, "home_team", ""), names)
             or str(getattr(row, "home_team", "")),
             resolve_team(getattr(row, "away_team", ""), names)
@@ -222,16 +257,26 @@ def measure_prices(
             selection,
             line,
         )
+        if accounting is not None:
+            accounting["seen"] = accounting.get("seen", 0) + 1
         found = lookup.get(key)
         if found is None:
+            if accounting is not None:
+                accounting["unmatched"] = accounting.get("unmatched", 0) + 1
             continue
         probability, won, push = found
         try:
             implied = american_to_implied(getattr(row, "american_odds"))
             price = float(getattr(row, "american_odds"))
         except (OddsError, TypeError, ValueError):
+            if accounting is not None:
+                accounting["unparseable"] = accounting.get("unparseable", 0) + 1
             continue
         if probability - implied < edge_threshold:
+            if accounting is not None:
+                accounting["below_threshold"] = (
+                    accounting.get("below_threshold", 0) + 1
+                )
             continue
         if push:
             returns.append(0.0)
@@ -280,6 +325,7 @@ def build_team_measurement(
             edge_threshold=edge_threshold,
             team_names=team_names,
             looks=looks,
+            accounting=measurement.accounting,
         )
         report.markets.append(measurement)
 
@@ -393,7 +439,31 @@ def render_team_measurement(report: TeamMeasurementReport) -> str:
         lines.append("")
         for item in measured:
             lines.append(f"- `{item.market}`: {item.priced.verdict()}")
-        lines.extend(["", "### How much data would settle it", "", detection_table(), ""])
+        lines.extend(
+            [
+                "",
+                "### Where every price landed",
+                "",
+                (
+                    "An unmatched price is one the sample grid could not "
+                    "score — a line the books hang that the grid does not "
+                    "carry, or a warm-up-window game no sample covers. It is "
+                    "counted, because a third of the bought totals once "
+                    "vanished this way with nothing saying so."
+                ),
+                "",
+                *[
+                    f"- {item.reconciliation_line()}"
+                    for item in report.markets
+                    if item.reconciliation_line()
+                ],
+                "",
+                "### How much data would settle it",
+                "",
+                detection_table(),
+                "",
+            ]
+        )
     else:
         lines.extend(
             [
@@ -440,6 +510,7 @@ def save_team_measurement(
                 "corrected_brier": item.corrected_brier,
                 "verdict": item.verdict,
                 "has_price_evidence": item.has_price_evidence,
+                "accounting": dict(item.accounting),
                 "bets": item.priced.bets if item.priced else 0,
                 "roi": item.priced.roi if item.priced else None,
                 "low": item.priced.low if item.priced else None,

@@ -440,12 +440,22 @@ class TeamModel:
 
         A model that let an overtime winner cover -1.5 would be systematically
         too optimistic on every favourite.
+
+        A whole-number line pushes on an exact margin, and the sport makes the
+        ±1 line special: every game that leaves regulation tied finishes with
+        a final margin of exactly one, so the ±1 push probability includes the
+        whole overtime mass — split evenly between the sides, the same stated
+        assumption the moneyline makes. Each returned probability is
+        P(win | no push), which is what a book pays on.
         """
         size = abs(float(line))
+        whole = float(size).is_integer()
         matrix = self.scoreline_matrix(
             home_team, away_team, home_b2b=home_b2b, away_b2b=away_b2b
         )
         home_covers = away_covers = 0.0
+        margin_high = margin_low = 0.0  # mass at exactly +size / -size
+        tie = 0.0
         total = 0.0
         for i, row in enumerate(matrix):
             for j, mass in enumerate(row):
@@ -455,15 +465,40 @@ class TeamModel:
                     home_covers += mass
                 elif -margin > size:
                     away_covers += mass
+                if whole and margin == size:
+                    margin_high += mass
+                if whole and -margin == size:
+                    margin_low += mass
+                if margin == 0:
+                    tie += mass
         if total <= 0:
-            return {"home_favourite": 0.0, "away_favourite": 0.0}
-        # The +1.5 side of each is the complement: a one-goal loss, a tie
-        # taken to overtime, or any win all cover +1.5.
+            return {
+                "home_minus": 0.0,
+                "home_plus": 0.0,
+                "away_minus": 0.0,
+                "away_plus": 0.0,
+            }
+        home_covers /= total
+        away_covers /= total
+        push_high = margin_high / total
+        push_low = margin_low / total
+        if whole and size == 1.0:
+            # A regulation tie resolves to a final margin of exactly one, on
+            # whichever side wins the extra hockey.
+            push_high += (tie / total) / 2.0
+            push_low += (tie / total) / 2.0
+
+        def conditioned(win: float, push: float) -> float:
+            remaining = 1.0 - push
+            return win / remaining if remaining > 0 else 0.0
+
+        # The plus side of each is the complement of the other side's minus,
+        # within the same no-push conditioning.
         return {
-            "home_minus": home_covers / total,
-            "home_plus": 1.0 - away_covers / total,
-            "away_minus": away_covers / total,
-            "away_plus": 1.0 - home_covers / total,
+            "home_minus": conditioned(home_covers, push_high),
+            "home_plus": conditioned(1.0 - away_covers - push_low, push_low),
+            "away_minus": conditioned(away_covers, push_low),
+            "away_plus": conditioned(1.0 - home_covers - push_high, push_high),
         }
 
     def total_probabilities(

@@ -282,3 +282,38 @@ def test_an_empty_frame_prices_nothing() -> None:
     assert card_pricing.price_team_markets(empty, model) == ({}, [])
     props_model = PlayerPropsModel().fit(sample_logs())
     assert card_pricing.price_props(empty, props_model) == ({}, [])
+
+
+def test_an_unrecognised_selection_produces_no_entry_not_a_zero() -> None:
+    """The map's contract is that absence means no opinion. `.get(x, 0.0)`
+    broke it: a wrong-vocabulary selection became a confident 0% and surfaced
+    under passes as a genuine model judgement."""
+    model = TeamModel().fit(balanced_league())
+    prices = pd.DataFrame(
+        [
+            {
+                "market": "regulation_3_way",
+                "player": "",
+                "home_team": "STR",
+                "away_team": "WEA",
+                # Staged in the provider's vocabulary rather than ours.
+                "selection": "str thrashers",
+                "line": None,
+                "american_odds": -110,
+            },
+            {
+                "market": "moneyline",
+                "player": "",
+                "home_team": "STR",
+                "away_team": "WEA",
+                "selection": "not a side",
+                "line": None,
+                "american_odds": -110,
+            },
+        ]
+    )
+
+    probabilities, _ = card_pricing.price_team_markets(prices, model)
+
+    assert probabilities == {}
+    assert 0.0 not in probabilities.values()

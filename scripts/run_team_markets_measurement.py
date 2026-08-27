@@ -17,10 +17,15 @@ from pathlib import Path
 import pandas as pd
 
 from nhl_betting_lab.backtest import samples_are_current
-from nhl_betting_lab.backtest.team_walk_forward import generate_team_samples
+from nhl_betting_lab.backtest.team_walk_forward import (
+    DEFAULT_TOTAL_LINES,
+    PUCK_LINES,
+    generate_team_samples,
+)
 from nhl_betting_lab.config import MIN_EDGE, OUTPUTS_DIR, PROCESSED_DIR
 from nhl_betting_lab.data.build_datasets import load_team_games
 from nhl_betting_lab.markets import team_market_keys
+from nhl_betting_lab.verdicts import ships
 from nhl_betting_lab.reports.team_markets_measurement import (
     build_team_measurement,
     save_team_measurement,
@@ -56,6 +61,10 @@ def main(argv: list[str] | None = None) -> int:
             cached,
             known_markets=team_market_keys(),
             required_columns=("model_probability", "outcome", "push"),
+            required_lines={
+                "total_goals": DEFAULT_TOTAL_LINES,
+                "puck_line": PUCK_LINES,
+            },
         )
         if current:
             samples = cached
@@ -74,6 +83,9 @@ def main(argv: list[str] | None = None) -> int:
             games,
             refit_days=args.refit_days,
             minimum_history_games=args.minimum_history_games,
+            # What the default measurement describes is the shipped policy,
+            # and what ships is the recorded verdict's call.
+            use_rest=ships("team_b2b"),
         )
         print(walk.summary_line())
         outputs.mkdir(parents=True, exist_ok=True)

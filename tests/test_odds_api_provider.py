@@ -558,3 +558,31 @@ def test_the_empty_slate_check_does_not_depend_on_the_events_endpoint() -> None:
         provider.fetch_team_markets()
 
     assert not any("/events" in url for url in calls)
+
+
+def test_three_way_outcomes_map_to_home_draw_away() -> None:
+    """The fourth join-vocabulary bug: the provider names the sides after the
+    teams, and a row staged that way misses every downstream join — while the
+    card's .get(selection, 0.0) then published a confident 0% for it."""
+    market = {
+        "key": "h2h_3_way",
+        "outcomes": [
+            {"name": "Toronto Maple Leafs", "price": 140},
+            {"name": "Draw", "price": 320},
+            {"name": "Boston Bruins", "price": 190},
+        ],
+    }
+
+    rows = odds_api.normalize_event(_event(markets=[market]), fetched_at="now")
+
+    assert {row["market"] for row in rows} == {"regulation_3_way"}
+    assert {row["selection"] for row in rows} == {"home", "draw", "away"}
+
+
+def test_a_three_way_outcome_that_is_neither_team_nor_draw_is_dropped() -> None:
+    market = {
+        "key": "h2h_3_way",
+        "outcomes": [{"name": "Either Team", "price": -400}],
+    }
+
+    assert odds_api.normalize_event(_event(markets=[market]), fetched_at="now") == []

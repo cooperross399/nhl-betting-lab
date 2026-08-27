@@ -141,26 +141,30 @@ def test_claude_md_carries_a_current_operating_state() -> None:
     assert "No market is allowlisted" in text
 
 
+
 def test_the_operating_state_records_that_the_headline_was_a_defect() -> None:
-    """The +18.1% came from a biased 31% subset, not from the strategy."""
+    """The +18.1% came from a biased subset, not from the strategy."""
     text = _claude_md()
 
-    assert "was a data defect, not a result" in text
-    assert "69% of every price bought was silently discarded" in text
+    assert "were data defects, and stay on the record" in text
+    assert "discarding seven prices in ten" in text
+
 
 
 def test_the_operating_state_records_the_directional_concentration() -> None:
     text = _claude_md()
 
-    assert "on the Under" in text
-    assert "the vigged, publicly-shaded side" in text
+    assert "92% of prop bets lean Under" in text
+    assert "estimation error concentrates" in text
+    assert "Diagnosis, not finding" in text
+
 
 
 def test_the_operating_state_names_the_hard_gated_market() -> None:
     text = _claude_md()
 
-    assert "goalie_saves` cannot reach the card" in text
-    assert "not a no-value judgement" in text
+    assert "goalie_saves` additionally cannot reach a card" in text
+    assert "confirmed-starter source" in text
 
 
 def test_the_honesty_doc_does_not_claim_calibration_is_evidence_of_an_edge() -> None:
@@ -172,29 +176,31 @@ def test_the_honesty_doc_does_not_claim_calibration_is_evidence_of_an_edge() -> 
     assert "will not let the two be" in text
 
 
+
 def test_the_operating_state_records_that_nothing_survives() -> None:
     """The single most important fact about this lab's evidence."""
     text = _claude_md()
 
     assert "nothing survives" in text
     assert "no demonstrated edge" in text
-    assert "4,777 bets" in text
+    assert "4,830 bets" in text
+
 
 
 def test_the_operating_state_records_that_the_pipeline_runs_live() -> None:
-    """A future session should not have to wonder whether it has ever worked."""
     text = _claude_md()
 
-    assert "Gameday Refresh runs green" in text
-    assert "Verified end to end" in text
+    assert "Gameday Refresh runs green end to end" in text
+    assert "an absence, not a fault" in text
+
 
 
 def test_the_operating_state_warns_about_the_bulk_endpoint() -> None:
-    """The trap that cost two rounds of debugging, written down."""
     text = _claude_md()
 
-    assert "per-event markets, not bulk ones" in text
-    assert "total_2_5` mistake" in text
+    assert "per-event markets ride the per-event fetch" in text
+    assert "422s the whole request" in text
+
 
 
 def test_the_operating_state_records_the_index_leak_class() -> None:
@@ -202,31 +208,31 @@ def test_the_operating_state_records_the_index_leak_class() -> None:
     text = _claude_md()
 
     assert "conditioned on what, known when?" in text
-    assert "launders hindsight through a lookup key" in text
+    assert "the only TOI a card can know" in text
+
 
 
 def test_the_card_correction_gate_is_driven_by_the_recorded_verdict() -> None:
     text = _claude_md()
 
-    assert "reads the recorded verdict" in text
-    assert "ships: []" in text
+    assert "What ships is what the recorded verdicts say, through one door" in text
+    assert "verdicts.ships()" in text
 
 
 def test_the_three_in_four_check_is_recorded_as_not_built() -> None:
     """A suggestive cell with a contradicting mirror is what noise looks like,
     and the record of not building something is as load-bearing as the record
-    of building it."""
+    of building it. It lives in docs/, because the first draft was appended
+    to a regenerated output file and lasted exactly one re-run."""
     from nhl_betting_lab.config import PROJECT_ROOT
 
-    # Flattened: asserting on wrapped prose fails on where the line happened
-    # to break, which is a test failing on formatting rather than meaning.
     text = " ".join(
-        (PROJECT_ROOT / "data" / "outputs" / "rest_experiment.md")
+        (PROJECT_ROOT / "docs" / "schedule_states_checked.md")
         .read_text(encoding="utf-8")
         .split()
     )
 
     assert "The mirror cell points the wrong way" in text
     assert "nothing was built" in text
-    assert "closes less than half the gap" in text
+    assert "closes less than half the team gap" in text
     assert "recorded rather than chased" in text

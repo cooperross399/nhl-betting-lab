@@ -55,8 +55,12 @@ import pandas as pd
 from nhl_betting_lab.backtest.walk_forward import distribution_from
 from nhl_betting_lab.config import MIN_PROP_EDGE, OUTPUTS_DIR
 from nhl_betting_lab.markets import MARKETS_BY_KEY, PROP_MARKETS
-from nhl_betting_lab.models.player_props import normalize_player_name
-from nhl_betting_lab.season import game_date
+from nhl_betting_lab.models.player_props import player_name_aliases
+from nhl_betting_lab.providers.team_names import (
+    build_team_name_map,
+    resolve_team,
+)
+from nhl_betting_lab.season import clean_text, row_game_date
 from nhl_betting_lab.models.value import (
     OddsError,
     american_to_implied,
@@ -108,6 +112,15 @@ class BacktestReport:
     priced_outcomes: int = 0
     outcomes_without_a_model_opinion: int = 0
     outcomes_below_threshold: int = 0
+    #: Rows whose line or odds could not be parsed. Zero on the shipped data,
+    #: and counted anyway: an uncounted drop is invisible exactly when a
+    #: provider format change makes it large, which is the shape of the
+    #: UTC-join defect that once discarded seven prices in ten.
+    outcomes_unparseable: int = 0
+    #: Rows whose player name matched two different players that both dressed
+    #: that night and could not be separated by team — the same-game Aho
+    #: case. Settled against neither rather than against a coin flip.
+    outcomes_ambiguous: int = 0
     unmatched_players: list[str] = field(default_factory=list)
     retention_note: str = ""
     unmeasurable_markets: dict[str, str] = field(default_factory=dict)
@@ -153,6 +166,7 @@ def run_backtest(
     unmeasurable_markets: Mapping[str, str] | None = None,
     window_label: str = "",
     correct: Any = None,
+    team_names: Mapping[str, str] | None = None,
 ) -> BacktestReport:
     """Measure the props model against historically-bought prices.
 
@@ -173,17 +187,18 @@ def run_backtest(
     if prices.empty or samples.empty:
         return report
 
-    # One entry per player-game-market, carrying the fitted distribution. Any
-    # line the provider offers can be priced from it exactly, including
-    # alternate ladders the calibration sweep never named.
-    model_by_key: dict[tuple[str, str, str], tuple[Any, float, float]] = {}
+    # One entry per player-game-market, indexed under every legitimate
+    # spelling (`player_name_aliases`), carrying the player's identity and
+    # team so a shared name can be resolved rather than last-write-won. The
+    # flat version of this index settled Carolina's Sebastian Aho prices
+    # against the Islanders' Sebastian Aho's games on the 123 nights both
+    # dressed, and dropped every "A.J." spelling of a registry "(AJ)" name.
+    model_by_key: dict[
+        tuple[str, str, str], dict[int, tuple[str, Any, float, float]]
+    ] = {}
     for row in samples.itertuples():
-        key = (
-            str(row.date)[:10],
-            str(row.market),
-            normalize_player_name(row.player),
-        )
-        model_by_key[key] = (
+        entry = (
+            str(getattr(row, "team", "")).strip().upper(),
             distribution_from(row.mean, getattr(row, "dispersion_r", None)),
             float(row.actual),
             # Expected TOI where the samples carry it: the correction must be
@@ -194,6 +209,19 @@ def run_backtest(
                 or 0
             ),
         )
+        player_id = int(getattr(row, "player_id", 0) or 0)
+        for alias in player_name_aliases(row.player):
+            model_by_key.setdefault(
+                (str(row.date)[:10], str(row.market), alias), {}
+            )[player_id] = entry
+    # Supplied by the caller, or built lazily on the first genuine collision
+    # — scanning four thousand boxscores costs seconds and most runs never
+    # hit one. A checkout with no boxscore cache (CI) yields an empty map, so
+    # resolution finds no teams and shared names resolve to neither: the
+    # conservative direction, and the reason the caller may pass one in.
+    team_map: dict[str, str] | None = (
+        dict(team_names) if team_names is not None else None
+    )
 
     unmatched: set[str] = set()
     for row in prices.itertuples():
@@ -204,23 +232,52 @@ def run_backtest(
         try:
             line = float(getattr(row, "line"))
         except (TypeError, ValueError):
+            report.outcomes_unparseable += 1
             continue
         # The game date, not the UTC date of puck drop. An evening North
         # American game commences on the *next* UTC day, so joining on the raw
         # commence date silently discarded roughly seven prices in ten — and
         # the survivors were disproportionately matinees, which is a
         # systematically different set of fixtures.
-        date_text = game_date(
-            getattr(row, "commence_time", "") or getattr(row, "date", "")
-        )
-        key = (date_text, market, normalize_player_name(player))
-
-        model = model_by_key.get(key)
-        if model is None:
+        date_text = row_game_date(row)
+        candidates: dict[int, tuple[str, Any, float, float]] = {}
+        for alias in player_name_aliases(player):
+            candidates.update(
+                model_by_key.get((date_text, market, alias), {})
+            )
+        if not candidates:
             unmatched.add(player)
             report.outcomes_without_a_model_opinion += 1
             continue
-        distribution, actual, toi_seconds = model
+        # The price row names the game, so the side that plays in it wins the
+        # join — and the check runs on a *single* candidate too, because a
+        # lone candidate can still be the wrong same-named player when the
+        # right one did not dress that night. A lone candidate whose team is
+        # not in the priced game is an unmatched price (a void), not a match.
+        home_label = clean_text(getattr(row, "home_team", ""))
+        away_label = clean_text(getattr(row, "away_team", ""))
+        if home_label or away_label:
+            if team_map is None:
+                team_map = build_team_name_map()
+            game_teams = {
+                resolve_team(home_label, team_map),
+                resolve_team(away_label, team_map),
+            }
+            game_teams.discard(None)
+            if game_teams:
+                candidates = {
+                    player_id: entry
+                    for player_id, entry in candidates.items()
+                    if entry[0] in game_teams
+                }
+        if len(candidates) > 1:
+            report.outcomes_ambiguous += 1
+            continue
+        if not candidates:
+            unmatched.add(player)
+            report.outcomes_without_a_model_opinion += 1
+            continue
+        _, distribution, actual, toi_seconds = next(iter(candidates.values()))
         over_probability = distribution.over_probability(line)
         if correct is not None:
             # The hook receives the market, the game date, the player's ice
@@ -235,6 +292,7 @@ def run_backtest(
             implied = american_to_implied(getattr(row, "american_odds"))
             price = float(getattr(row, "american_odds"))
         except (OddsError, TypeError, ValueError):
+            report.outcomes_unparseable += 1
             continue
 
         # The model prices the Over. The Under's model probability is its
@@ -310,6 +368,31 @@ def _side_of(bet: PlacedBet) -> str:
     """Which way a bet points, normalising `yes`/`no` onto over/under."""
     side = str(bet.selection).strip().lower()
     return "over" if side in {"over", "yes"} else "under"
+
+
+def _reconciliation_line(report: "BacktestReport") -> str:
+    """Every priced outcome must land in exactly one bucket.
+
+    A drop that lands in no bucket is invisible exactly when a provider
+    format change makes it large, so the identity is printed — and printed
+    loudly when it fails, because a report that does not reconcile is
+    describing a subset it cannot name.
+    """
+    accounted = (
+        report.outcomes_without_a_model_opinion
+        + report.outcomes_below_threshold
+        + report.outcomes_unparseable
+        + report.outcomes_ambiguous
+        + len(report.bets)
+    )
+    if accounted == report.priced_outcomes:
+        return "- Accounted for: all of them."
+    return (
+        f"- **DOES NOT RECONCILE**: {report.priced_outcomes:,} outcomes seen, "
+        f"{accounted:,} accounted for. {report.priced_outcomes - accounted:,} "
+        "row(s) were dropped by a path with no counter, and whatever they "
+        "have in common is missing from this measurement."
+    )
 
 
 def _standing_notes() -> list[str]:
@@ -529,7 +612,13 @@ def render_backtest(report: BacktestReport) -> str:
                     "- Below the edge threshold: "
                     f"{report.outcomes_below_threshold:,}"
                 ),
+                f"- Unparseable line or odds: {report.outcomes_unparseable:,}",
+                (
+                    "- Ambiguous player name, dropped: "
+                    f"{report.outcomes_ambiguous:,}"
+                ),
                 f"- Bets placed: {len(report.bets):,}",
+                _reconciliation_line(report),
                 "",
             ]
         )
@@ -614,6 +703,8 @@ def save_backtest(
         "generated_at": report.generated_at,
         "edge_threshold": report.edge_threshold,
         "priced_outcomes": report.priced_outcomes,
+        "outcomes_unparseable": report.outcomes_unparseable,
+        "outcomes_ambiguous": report.outcomes_ambiguous,
         "outcomes_without_a_model_opinion": report.outcomes_without_a_model_opinion,
         "outcomes_below_threshold": report.outcomes_below_threshold,
         "bets": len(report.bets),

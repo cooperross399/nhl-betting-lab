@@ -99,3 +99,33 @@ def test_current_samples_with_the_right_schema_are_reused() -> None:
     )
 
     assert current is True, reason
+
+
+def test_a_cache_missing_a_newly_priced_line_is_stale() -> None:
+    """The CI state artifact restores the previous run's samples forever, so
+    a pre-widening cache would keep reproducing the biased two-thirds
+    measurement the widening closed."""
+    cached = _samples(["total_goals"] * 4)
+    cached["line"] = [4.5, 5.5, 6.5, 7.5]  # the pre-fix grid
+
+    current, reason = samples_are_current(
+        cached,
+        known_markets=("total_goals",),
+        required_lines={"total_goals": (4.5, 5.0, 5.5, 6.0, 6.5, 7.0, 7.5)},
+    )
+
+    assert current is False
+    assert "predate a grid widening" in reason
+
+
+def test_a_cache_carrying_the_full_grid_is_reusable() -> None:
+    cached = _samples(["total_goals"] * 7)
+    cached["line"] = [4.5, 5.0, 5.5, 6.0, 6.5, 7.0, 7.5]
+
+    current, _ = samples_are_current(
+        cached,
+        known_markets=("total_goals",),
+        required_lines={"total_goals": (4.5, 5.0, 5.5, 6.0, 6.5, 7.0, 7.5)},
+    )
+
+    assert current is True

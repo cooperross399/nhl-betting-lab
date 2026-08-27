@@ -2,90 +2,99 @@
 
 Moneyline, puck line and totals — calibrated walk-forward, and measured against real prices wherever any have been bought.
 
-- Generated: 2026-08-26T04:56:57+00:00
-- 62,186 walk-forward samples across 4 market(s) and 3,658 games; 3 market(s) have any price-based evidence.
+- Generated: 2026-08-27T05:40:56+00:00
+- 142,662 walk-forward samples across 4 market(s) and 3,658 games; 3 market(s) have any price-based evidence.
 
 ## Calibration
 
 | Market | Samples | Brier raw | Brier corrected | Correction |
 |:-------|--------:|----------:|----------------:|:-----------|
-| `moneyline` (Moneyline) | 7,114 | 0.2430 | 0.2429 | intercept +0.000, slope 0.792 (fitted on 7254 samples) |
-| `puck_line` (Puck line (-1.5 / +1.5)) | 14,400 | 0.2066 | 0.2057 | intercept +0.000, slope 0.832 (fitted on 14484 samples) |
-| `regulation_3_way` (Regulation result (3-way)) | 10,749 | 0.2144 | 0.2121 | intercept -0.234, slope 0.633 (fitted on 10911 samples) |
-| `total_goals` (Total goals) | 29,032 | 0.2136 | 0.2137 | intercept +0.000, slope 1.005 (fitted on 29016 samples) |
+| `moneyline` (Moneyline) | 7,114 | 0.2423 | 0.2422 | intercept -0.000, slope 0.811 (fitted on 7254 samples) |
+| `puck_line` (Puck line (-1.5 / +1.5)) | 68,528 | 0.1554 | 0.1547 | intercept +0.000, slope 0.879 (fitted on 68100 samples) |
+| `regulation_3_way` (Regulation result (3-way)) | 10,749 | 0.2142 | 0.2118 | intercept -0.232, slope 0.637 (fitted on 10911 samples) |
+| `total_goals` (Total goals) | 46,930 | 0.2177 | 0.2178 | intercept -0.000, slope 0.990 (fitted on 46902 samples) |
 
 ### `moneyline`
 
-- Over 7,114 held-out samples the correction makes no material difference to the Brier score (0.2430 raw, 0.2429 corrected, delta +0.00016). Calibration can rule this model out; it cannot rule it in. Whether the market disagrees with it profitably is a separate question, answered only by prices.
+- Over 7,114 held-out samples the correction makes no material difference to the Brier score (0.2423 raw, 0.2422 corrected, delta +0.00012). Calibration can rule this model out; it cannot rule it in. Whether the market disagrees with it profitably is a separate question, answered only by prices.
 
 | Bucket | Samples | Predicted | Observed | 95% on observed |
 |:-------|--------:|----------:|---------:|:----------------|
-| 10%-20% | 9 | 18.7% | 0.0% | 0.0% .. 29.9% |
-| 20%-30% | 212 | 26.6% | 32.1% | 26.2% .. 38.6% |
-| 30%-40% | 1,023 | 36.1% | 37.6% | 34.7% .. 40.6% |
-| 40%-50% | 2,313 | 45.4% | 47.5% | 45.4% .. 49.5% |
-| 50%-60% | 2,313 | 54.6% | 52.5% | 50.5% .. 54.6% |
-| 60%-70% | 1,023 | 63.9% | 62.4% | 59.4% .. 65.3% |
-| 70%-80% | 212 | 73.4% | 67.9% | 61.4% .. 73.8% |
-| 80%-90% | 9 | 81.3% | 100.0% | 70.1% .. 100.0% |
+| 10%-20% | 10 | 18.3% | 0.0% | 0.0% .. 27.8% |
+| 20%-30% | 229 | 26.5% | 32.3% | 26.6% .. 38.6% |
+| 30%-40% | 1,054 | 36.1% | 37.4% | 34.5% .. 40.3% |
+| 40%-50% | 2,264 | 45.4% | 47.3% | 45.2% .. 49.3% |
+| 50%-60% | 2,264 | 54.6% | 52.7% | 50.7% .. 54.8% |
+| 60%-70% | 1,054 | 63.9% | 62.6% | 59.7% .. 65.5% |
+| 70%-80% | 229 | 73.5% | 67.7% | 61.4% .. 73.4% |
+| 80%-90% | 10 | 81.7% | 100.0% | 72.2% .. 100.0% |
 
 ### `puck_line`
 
-- Over 14,400 held-out samples the correction improves the Brier score from 0.2066 to 0.2057 (delta +0.00091). Calibration can rule this model out; it cannot rule it in. Whether the market disagrees with it profitably is a separate question, answered only by prices.
+- Over 68,528 held-out samples the correction improves the Brier score from 0.1554 to 0.1547 (delta +0.00072). Calibration can rule this model out; it cannot rule it in. Whether the market disagrees with it profitably is a separate question, answered only by prices.
 
 | Bucket | Samples | Predicted | Observed | 95% on observed |
 |:-------|--------:|----------:|---------:|:----------------|
-| 0%-10% | 94 | 8.5% | 8.5% | 4.4% .. 15.9% |
-| 10%-20% | 1,397 | 16.3% | 21.5% | 19.4% .. 23.7% |
-| 20%-30% | 3,098 | 25.0% | 29.1% | 27.6% .. 30.8% |
-| 30%-40% | 1,935 | 34.2% | 34.0% | 31.9% .. 36.1% |
-| 40%-50% | 676 | 44.0% | 46.3% | 42.6% .. 50.1% |
-| 50%-60% | 676 | 56.0% | 53.7% | 49.9% .. 57.4% |
-| 60%-70% | 1,935 | 65.8% | 66.0% | 63.9% .. 68.1% |
-| 70%-80% | 3,098 | 75.0% | 70.9% | 69.2% .. 72.4% |
-| 80%-90% | 1,397 | 83.7% | 78.5% | 76.3% .. 80.6% |
-| 90%-100% | 94 | 91.5% | 91.5% | 84.1% .. 95.6% |
+| 0%-10% | 9,569 | 4.8% | 5.2% | 4.8% .. 5.6% |
+| 10%-20% | 9,517 | 15.1% | 20.0% | 19.2% .. 20.8% |
+| 20%-30% | 7,856 | 24.7% | 28.3% | 27.3% .. 29.3% |
+| 30%-40% | 4,678 | 34.4% | 36.1% | 34.8% .. 37.5% |
+| 40%-50% | 2,644 | 44.6% | 43.2% | 41.3% .. 45.1% |
+| 50%-60% | 2,644 | 55.4% | 56.8% | 54.9% .. 58.7% |
+| 60%-70% | 4,678 | 65.6% | 63.9% | 62.5% .. 65.2% |
+| 70%-80% | 7,856 | 75.3% | 71.7% | 70.7% .. 72.7% |
+| 80%-90% | 9,517 | 84.9% | 80.0% | 79.2% .. 80.8% |
+| 90%-100% | 9,569 | 95.2% | 94.8% | 94.4% .. 95.2% |
 
 ### `regulation_3_way`
 
-- Over 10,749 held-out samples the correction improves the Brier score from 0.2144 to 0.2121 (delta +0.00233). Calibration can rule this model out; it cannot rule it in. Whether the market disagrees with it profitably is a separate question, answered only by prices.
+- Over 10,749 held-out samples the correction improves the Brier score from 0.2142 to 0.2118 (delta +0.00232). Calibration can rule this model out; it cannot rule it in. Whether the market disagrees with it profitably is a separate question, answered only by prices.
 
 | Bucket | Samples | Predicted | Observed | 95% on observed |
 |:-------|--------:|----------:|---------:|:----------------|
-| 10%-20% | 3,691 | 15.9% | 22.0% | 20.7% .. 23.3% |
-| 20%-30% | 833 | 26.4% | 25.7% | 22.8% .. 28.8% |
-| 30%-40% | 2,187 | 35.6% | 35.4% | 33.5% .. 37.5% |
-| 40%-50% | 2,452 | 44.8% | 40.9% | 38.9% .. 42.8% |
-| 50%-60% | 1,246 | 54.3% | 48.2% | 45.5% .. 51.0% |
-| 60%-70% | 295 | 63.9% | 51.2% | 45.5% .. 56.8% |
-| 70%-80% | 45 | 72.5% | 64.4% | 49.8% .. 76.8% |
+| 0%-10% | 1 | 9.9% | 100.0% | 20.7% .. 100.0% |
+| 10%-20% | 3,697 | 15.9% | 22.0% | 20.7% .. 23.3% |
+| 20%-30% | 861 | 26.3% | 25.4% | 22.6% .. 28.4% |
+| 30%-40% | 2,150 | 35.5% | 35.5% | 33.5% .. 37.6% |
+| 40%-50% | 2,411 | 44.8% | 40.6% | 38.6% .. 42.5% |
+| 50%-60% | 1,266 | 54.4% | 48.6% | 45.8% .. 51.3% |
+| 60%-70% | 310 | 63.9% | 51.9% | 46.4% .. 57.4% |
+| 70%-80% | 53 | 72.6% | 62.3% | 48.8% .. 74.1% |
 
 ### `total_goals`
 
-- Over 29,032 held-out samples the correction makes no material difference to the Brier score (0.2136 raw, 0.2137 corrected, delta -0.00010). Calibration can rule this model out; it cannot rule it in. Whether the market disagrees with it profitably is a separate question, answered only by prices.
+- Over 46,930 held-out samples the correction makes no material difference to the Brier score (0.2177 raw, 0.2178 corrected, delta -0.00013). Calibration can rule this model out; it cannot rule it in. Whether the market disagrees with it profitably is a separate question, answered only by prices.
 
 | Bucket | Samples | Predicted | Observed | 95% on observed |
 |:-------|--------:|----------:|---------:|:----------------|
-| 10%-20% | 1,368 | 17.8% | 20.3% | 18.3% .. 22.5% |
-| 20%-30% | 4,595 | 24.7% | 23.3% | 22.1% .. 24.5% |
-| 30%-40% | 2,999 | 35.3% | 35.3% | 33.6% .. 37.0% |
-| 40%-50% | 5,554 | 45.3% | 46.6% | 45.3% .. 47.9% |
-| 50%-60% | 5,554 | 54.7% | 53.4% | 52.1% .. 54.7% |
-| 60%-70% | 2,999 | 64.7% | 64.7% | 63.0% .. 66.4% |
-| 70%-80% | 4,595 | 75.3% | 76.7% | 75.5% .. 77.9% |
-| 80%-90% | 1,368 | 82.2% | 79.7% | 77.5% .. 81.7% |
+| 10%-20% | 1,580 | 17.9% | 20.3% | 18.3% .. 22.3% |
+| 20%-30% | 7,021 | 25.1% | 25.0% | 24.0% .. 26.0% |
+| 30%-40% | 5,892 | 35.0% | 33.6% | 32.4% .. 34.8% |
+| 40%-50% | 8,972 | 45.3% | 46.6% | 45.6% .. 47.7% |
+| 50%-60% | 8,972 | 54.7% | 53.4% | 52.3% .. 54.4% |
+| 60%-70% | 5,892 | 65.0% | 66.4% | 65.2% .. 67.6% |
+| 70%-80% | 7,021 | 74.9% | 75.0% | 74.0% .. 76.0% |
+| 80%-90% | 1,580 | 82.1% | 79.7% | 77.7% .. 81.7% |
 
 ## Measured against real prices
 
 | Market | Bets | Profit | ROI | 95% interval | Corrected for the search | Survives |
 |:-------|-----:|-------:|----:|:-------------|:-------------------------|:---------|
-| `moneyline` | 1536 | -50.5u | -3.3% | -8.8% .. +2.2% | -10.3% .. +3.7% | no |
-| `puck_line` | 1563 | -71.3u | -4.6% | -8.9% .. -0.2% | -10.1% .. +1.0% | no |
-| `total_goals` | 823 | -1.2u | -0.1% | -6.7% .. +6.4% | -8.5% .. +8.2% | no |
+| `moneyline` | 1504 | -36.5u | -2.4% | -8.0% .. +3.1% | -9.5% .. +4.6% | no |
+| `puck_line` | 1541 | -66.4u | -4.3% | -8.7% .. +0.1% | -9.9% .. +1.3% | no |
+| `total_goals` | 1150 | -5.9u | -0.5% | -6.0% .. +5.0% | -7.5% .. +6.4% | no |
 
-- `moneyline`: -3.3% over 1536 bets, 95% interval -8.8% to +2.2%. The interval includes zero, which means **no demonstrated edge**.
-- `puck_line`: -4.6% over 1563 bets, 95% interval -8.9% to -0.2%. The interval excludes zero, so this sample is losing beyond chance — at this sample size and on this data, which is not the same as an edge that will persist. But correcting for the 4 markets tested widens it to -10.1% to +1.0%, which includes zero — so on the family of tests actually run, **no demonstrated edge**.
-- `total_goals`: -0.1% over 823 bets, 95% interval -6.7% to +6.4%. The interval includes zero, which means **no demonstrated edge**.
+- `moneyline`: -2.4% over 1504 bets, 95% interval -8.0% to +3.1%. The interval includes zero, which means **no demonstrated edge**.
+- `puck_line`: -4.3% over 1541 bets, 95% interval -8.7% to +0.1%. The interval includes zero, which means **no demonstrated edge**.
+- `total_goals`: -0.5% over 1150 bets, 95% interval -6.0% to +5.0%. The interval includes zero, which means **no demonstrated edge**.
+
+### Where every price landed
+
+An unmatched price is one the sample grid could not score — a line the books hang that the grid does not carry, or a warm-up-window game no sample covers. It is counted, because a third of the bought totals once vanished this way with nothing saying so.
+
+- `moneyline`: 8,298 prices seen, 338 unmatched (96% matched), 6,456 below threshold, 1,504 bets.
+- `puck_line`: 7,858 prices seen, 342 unmatched (96% matched), 5,975 below threshold, 1,541 bets.
+- `total_goals`: 8,136 prices seen, 340 unmatched (96% matched), 6,646 below threshold, 1,150 bets.
 
 ### How much data would settle it
 

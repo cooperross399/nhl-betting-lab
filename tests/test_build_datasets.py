@@ -297,3 +297,122 @@ def test_the_build_reads_no_network(tmp_path: Path, monkeypatch) -> None:
     )
 
     assert result.games_used == 1
+
+
+def test_an_empty_build_never_replaces_a_populated_dataset(tmp_path: Path) -> None:
+    """An absent raw cache produces empty frames without an error; writing
+    them would replace 750k accumulated rows with headers. The price CSVs
+    grew this guard after exactly that accident, and this path had not."""
+    _cache(tmp_path, boxscore_payload(game_state="OFF"))
+    processed = tmp_path / "processed"
+    builder.build_datasets(raw_dir=tmp_path, processed_dir=processed)
+    before = (processed / builder.PLAYER_LOGS_FILENAME).read_text()
+    teams_before = (processed / builder.TEAM_GAMES_FILENAME).read_text()
+
+    empty_raw = tmp_path / "nowhere"
+    with pytest.raises(ValueError, match="Refusing to shrink"):
+        builder.build_datasets(raw_dir=empty_raw, processed_dir=processed)
+
+    assert (processed / builder.PLAYER_LOGS_FILENAME).read_text() == before
+    assert (processed / builder.TEAM_GAMES_FILENAME).read_text() == teams_before
+
+
+def test_the_guard_protects_the_team_file_on_its_own(tmp_path: Path) -> None:
+    """The first guard checked one of the two files it writes: with the
+    player file deleted to force a rebuild, a populated team_games.csv was
+    still clobbered by an empty build."""
+    _cache(tmp_path, boxscore_payload(game_state="OFF"))
+    processed = tmp_path / "processed"
+    builder.build_datasets(raw_dir=tmp_path, processed_dir=processed)
+    (processed / builder.PLAYER_LOGS_FILENAME).unlink()
+    teams_before = (processed / builder.TEAM_GAMES_FILENAME).read_text()
+
+    with pytest.raises(ValueError, match="team games"):
+        builder.build_datasets(
+            raw_dir=tmp_path / "nowhere", processed_dir=processed
+        )
+
+    assert (processed / builder.TEAM_GAMES_FILENAME).read_text() == teams_before
+
+
+def test_a_tiny_build_cannot_silently_replace_a_full_one(tmp_path: Path) -> None:
+    """The guard's own motivating scenario is a wrongly-pointed cache, which
+    usually holds a few games rather than zero. One game where thousands
+    existed is refused the same as none."""
+    for game_id in (2024020001, 2024020002, 2024020003, 2024020004):
+        _cache(tmp_path, boxscore_payload(game_id=game_id, game_state="OFF"))
+    processed = tmp_path / "processed"
+    builder.build_datasets(raw_dir=tmp_path, processed_dir=processed)
+
+    with pytest.raises(ValueError, match="shrink an accumulated dataset"):
+        builder.build_datasets(
+            raw_dir=tmp_path,
+            processed_dir=processed,
+            game_ids=[2024020001],
+        )
+
+
+def test_a_deliberate_shrink_is_permitted_with_the_flag(tmp_path: Path) -> None:
+    for game_id in (2024020001, 2024020002, 2024020003, 2024020004):
+        _cache(tmp_path, boxscore_payload(game_id=game_id, game_state="OFF"))
+    processed = tmp_path / "processed"
+    builder.build_datasets(raw_dir=tmp_path, processed_dir=processed)
+
+    _, teams, _ = builder.build_datasets(
+        raw_dir=tmp_path,
+        processed_dir=processed,
+        game_ids=[2024020001],
+        allow_shrink=True,
+    )
+
+    assert len(teams) == 1
+
+
+def test_a_repeated_empty_build_is_an_idempotent_no_op(tmp_path: Path) -> None:
+    """The first version raised falsely here: it treated the header-only file
+    its own first run wrote as "already holds data"."""
+    processed = tmp_path / "processed"
+    builder.build_datasets(raw_dir=tmp_path / "nowhere", processed_dir=processed)
+
+    players, _, _ = builder.build_datasets(
+        raw_dir=tmp_path / "nowhere", processed_dir=processed
+    )
+
+    assert players.empty
+
+
+def test_the_cli_surfaces_the_refusal_without_a_traceback(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch
+) -> None:
+    import importlib.util
+    import sys as _sys
+
+    from nhl_betting_lab.config import PROJECT_ROOT
+
+    spec = importlib.util.spec_from_file_location(
+        "_script_build_datasets_guard", PROJECT_ROOT / "scripts" / "build_datasets.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    _sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+
+    def refuse(**kwargs):
+        raise ValueError("This build produced 0 rows ... Refusing to shrink")
+
+    monkeypatch.setattr(module, "build_datasets", refuse)
+    code = module.main([])
+
+    assert code == 1
+    err = capsys.readouterr().err
+    assert err.startswith("Refused:")
+    assert "Traceback" not in err
+
+
+def test_an_empty_build_into_an_empty_directory_is_allowed(tmp_path: Path) -> None:
+    """First run on a fresh checkout: nothing to destroy, nothing refused."""
+    players, teams, _ = builder.build_datasets(
+        raw_dir=tmp_path / "nowhere", processed_dir=tmp_path / "processed"
+    )
+
+    assert players.empty
+    assert (tmp_path / "processed" / builder.PLAYER_LOGS_FILENAME).is_file()

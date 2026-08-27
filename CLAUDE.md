@@ -42,112 +42,93 @@ Every number below is measured, walk-forward, and carries its sample size.
 Re-derive rather than trust if the data has moved.
 
 - **Props are measured on two seasons and nothing survives.** 192 events
-  bought, 90,594 price rows, **4,777 bets**. Pooled: **+1.2% over 4,777 bets,
-  95% interval −1.7% to +4.0% — no demonstrated edge**, and no market clears
-  once the seven figures computed from the same data are counted.
-  `blocked_shots` is the only naive survivor (+11.8% over 555) and it dies on
-  correction (−0.1% to +23.7%).
-- **The earlier +18.1% on `shots_on_goal` was a data defect, not a result.**
-  The backtest joined prices to results on the provider's UTC timestamp while
-  the NHL dates a game by the day it is played. An evening face-off is the
-  next day in UTC, so **69% of every price bought was silently discarded** and
-  the survivors were disproportionately matinees. With the join fixed,
-  `shots_on_goal` is +3.0% over 1,925 bets on 2024-25 and +0.6% over 551 on
-  2025-26. The rule now lives in `season.py` and nowhere else.
-- **The fixed line grid was the second defect.** Samples priced five goalie
-  saves lines against ten on offer, and two goals lines against three, so
-  three quarters of the saves prices could not be scored at all. Samples now
-  store the fitted distribution — mean and dispersion — so any line the
-  provider offers is priced exactly.
-- **92% of every bet is on the Under.** Not because the model under-predicts —
-  the walk-forward means run within ±5% of the actuals on every market — but
-  because books hang the vigged, publicly-shaded side on the Over, so the
-  model's disagreements point Under. And the claimed edge on selected bets
-  (+9.4%) realises as +1.2% because bets are selected exactly where the
-  model's estimation error concentrates.
-- **Hits is priced live and not retained historically.** Measured across 256
-  events spanning both sampled seasons: zero rows from any book. It can reach
-  a future card once approved; it can never be backtested. Its evidence must
-  accumulate forward. Cost of establishing that: 2,600 credits.
-- **Neither calibration correction ships, and the reason is a new leak
-  class.** The pooled Platt lost the price backtest outright (−97.0u — the
-  EPL lesson to the letter). The by-TOI correction appeared to win +162.8u
-  when bucketed on *actual* ice time and loses −37.6u bucketed on *expected*
-  ice time — the only ice time a card can know. Actual TOI is partly an
-  outcome (blowouts, injuries, overtime, pulled goalies), so indexing a
-  correction by it launders hindsight through a lookup key. The standard for
-  any conditioned quantity is now: **conditioned on what, known when?**
-  `docs/why_the_toi_correction_does_not_ship.md`. The card's gate reads the
-  recorded verdict (`ships: []`) from disk.
-- **The back-to-back adjustment ships.** The model missed away back-to-backs
-  by 8.5 points over 574 games; fatigue is causal and rest is schedule
-  information, known before puck drop. Constrained to preserve the expected
-  total — fatigue shifts who scores, not how much hockey happens; the
-  unconstrained version lost 19.7u on totals where the mechanism made no
-  claim. Price backtest: +18.4u, improving moneyline and puck line. Ships
-  under the must-not-lose bar; explicitly not evidence of an edge.
-- **The price CSVs are derived data.** Every bought response is cached raw and
-  the CSVs are rebuilt from the cache on every purchase run — because a
-  purchase that bought nothing once overwrote the accumulated file with an
-  empty frame, and the raw cache turned an 11,000-credit loss into a
-  five-minute recovery.
-- **Team markets are measured now too, and none shows an edge.** 40 bulk
-  snapshots across both seasons cost 1,200 credits and produced 24,292 price
-  rows: moneyline **−3.3% over 1,536 bets**, puck line **−4.6% over 1,563**,
-  totals **−0.1% over 823** — every interval includes zero after correcting
-  for the family. The regulation three-way has no historical prices, because
-  `h2h_3_way` is per-event only; like hits, its evidence accumulates forward.
-- **The puck line was silently unmeasured until its join was fixed** — the
-  provider says `home` at line −1.5 where the samples say `home_minus`. That
-  is the third join-vocabulary mismatch this repository has found, after team
-  names and game dates. Every join between bought prices and model output now
-  has a test that runs one real row end to end.
+  bought, 90,594 price rows, **4,830 bets** under the shipped policy. Pooled:
+  **+1.4%, 95% interval −1.4% to +4.2% — no demonstrated edge**, and no
+  market clears once the seven figures computed from the same data are
+  counted. Every priced outcome reconciles into exactly one bucket, and the
+  report says so — or shouts when it cannot.
+- **Team markets show no edge either.** Under the shipped policy: moneyline
+  −2.4% over 1,504 bets, puck line −4.3% over 1,541, totals −0.5% over 1,150
+  — every interval includes zero after the family correction. Match rate
+  against the bought prices is 96% per market (was 66% on totals before the
+  sample grid covered the whole-number lines the books actually hang); the
+  remaining 4% are warm-up-window games, counted as exactly that. Whole-number
+  spreads and totals push on exact margins, the ±1 push includes the entire
+  overtime mass, and both the model and settlement price it.
+- **What ships is what the recorded verdicts say, through one door.**
+  `verdicts.ships()` reads each experiment's `ships` list;
+  the card and the default sample generators consult it rather than asserting
+  policy in code. In force now: the **team back-to-back adjustment**
+  (+19.4u on the corrected joins, must-not-lose, not an edge) and the **props
+  back-to-back adjustment** (+11.4u, same bar — own-side scoring −6%,
+  opponent-side +5%, both-tired cancelling, the tired team's goalie busier,
+  across seven independent settlement columns). Not in force: **every
+  calibration correction** — the pooled Platt improved calibration and lost
+  −97.0u; the by-TOI correction won +162.8u bucketed on *actual* ice time and
+  loses −37.6u on *expected* ice time, the only TOI a card can know. The
+  standard for any conditioned quantity: **conditioned on what, known when?**
+  `docs/why_the_toi_correction_does_not_ship.md`.
+- **The third game in four nights was checked and not built.** One suggestive
+  cell (−7.4 over 232) with a contradicting mirror (−2.3 where fatigue
+  predicts positive) is what noise looks like.
+  `docs/schedule_states_checked.md` holds that record — in `docs/`, because
+  its first draft was appended to a regenerated output and lasted one re-run.
+- **The join-vocabulary bug family is at five members, all fixed and all
+  tested by reproduction**: provider team names vs abbreviations, UTC dates
+  vs league game dates (69% of all bought prices silently discarded), `home
+  −1.5` vs `home_minus`, `h2h_3_way` outcomes staged as team names, and a
+  CSV round-trip turning empty players into the truthy string `"nan"` on one
+  side of a hand-built key. One `selection_key` function now builds every
+  join key on every side, the fixtures use it too, and `season.clean_text` /
+  `row_game_date` are the only readers of CSV-borne text and dates.
+- **The backtest joins players by identity, not by string.** Every alias of
+  a name (including initials collapsed: "J.T." meets "JT"), disambiguated by
+  the teams in the priced game; a lone candidate on the wrong team is a void,
+  not a match; a parenthesised birth year — the provider's own disambiguator
+  for the two Elias Petterssons — never aliases to the bare name. The two
+  Sebastian Ahos settle against their own games on all 123 nights both
+  dressed.
+- **The earlier headline numbers were data defects, and stay on the record as
+  such**: +18.1% shots_on_goal came from the UTC join discarding seven prices
+  in ten (survivors were matinees); the goalie-saves "miscalibration" was
+  relief appearances nobody can bet; the fixed line grid threw away a third
+  of the bought totals. Each fix is tested by reproducing the defect.
+- **92% of prop bets lean Under, and the claimed edge shrinks on
+  realisation** — books hang the vigged, publicly-shaded side on the Over, and
+  bets are selected exactly where estimation error concentrates. Diagnosis,
+  not finding; stated in the backtest report.
+- **Hits and the regulation three-way accumulate evidence forward.** Hits is
+  served live and retained by no book historically (256 events probed, 2,600
+  credits). The three-way is per-event only — and was wired end to end
+  without ever being *requested* until the dead-code test caught it; every
+  declared market must now appear in a fetch list.
+- **The price CSVs are derived data**; every bought response is cached raw
+  and the CSVs rebuild from the cache. `build_datasets` refuses to shrink an
+  accumulated table by more than half (each file guarded on its own, rows not
+  existence, `--allow-shrink` as the deliberate override).
+- **Caches are checked before reuse, four ways**: renamed market, added
+  market, schema change, and a widened line grid — the last because the CI
+  state artifact restores the previous run's samples forever, which would
+  have reproduced the biased totals measurement indefinitely.
 - **The measured historical rate is ten credits per market returned per
-  event.** The documentation was ambiguous between one and ten; the
-  pessimistic reading was right. Quota: **88,527 of 100,000 remaining**;
-  11,473 spent on the two measurement windows and the live runs.
-- **Gameday Refresh runs green and fetches live prices.** Verified end to end
-  on 2026-08-26: 578 team-market rows from 32 events, models fitted on 2,811
-  cached games, card correctly blocked because nothing is allowlisted, comment
-  posted to the operating home. Player props return no rows yet — books have
-  not posted them this far out — which is an absence, not a fault.
-- **The alternate ladders are per-event markets, not bulk ones.** Asking for
-  them on the bulk endpoint makes the provider refuse the whole request with a
-  422 naming nothing, which looked exactly like an off-season for two rounds
-  of debugging because the season had also not started. They are fetched per
-  event now and must stay fetched: the complete line lives in the ladder, and
-  writing a market off after checking only the bulk endpoint is the EPL
-  `total_2_5` mistake.
-- **No market is allowlisted.** `data/manual/staging_provider_policy.json`
-  allowlists nothing, so the card produces no selection, no lean, no pass and
-  no stake. It lists every market with its reason. That is correct behaviour.
+  event.** Quota: **88,527 of 100,000 remaining** as of 2026-08-26.
+- **Gameday Refresh runs green end to end** (verified 2026-08-26: live team
+  prices staged, models fitted, card correctly blocked, comment posted).
+  Props return no rows this far from the season — an absence, not a fault.
+  The alternate ladders and all per-event markets ride the per-event fetch;
+  asking the bulk endpoint for them 422s the whole request.
+- **No market is allowlisted.** The card produces no selection, no lean, no
+  pass and no stake, and lists every market with its reason. Correct
+  behaviour. `goalie_saves` additionally cannot reach a card without a
+  confirmed-starter source
+  (`docs/goalie_props_need_a_confirmed_starter.md`).
 - **Data**: three seasons cached — 3,936 games, 157,419 player-game rows,
   121 unresolved names (0.08%). A completed boxscore is never refetched.
-- **Props calibration**: 1,889,685 walk-forward samples over 3,658 games
-  (2023-11-22 to 2026-04-16), 63 refits. `data/outputs/props_calibration.md`.
-- **Every skater market is bent by ice time, and one Platt curve cannot fix
-  it.** Shots on goal under twelve minutes: pooled predicts 12.9% against 7.7%
-  observed on 74,588 samples. The ice-time-conditional correction predicts
-  7.6% and straightens every bucket, on all six markets. The mechanism —
-  ice-time quantity without ice-time quality, plus shrinkage toward a baseline
-  dominated by well-deployed players — is in
-  `docs/why_ice_time_gets_its_own_correction.md`.
-- **Neither correction is in force.** The card prices props with the raw
-  model. Calibration cannot rule a model in, and the price-based backtest that
-  would decide measures nothing yet.
-- **`goalie_saves` cannot reach the card at all**, above and beyond policy: a
-  saves prop is only bettable on the confirmed starter, and this lab has no
-  confirmed-starter source. The card names the market and that reason, and
-  says it is not a no-value judgement.
-  `docs/goalie_props_need_a_confirmed_starter.md`.
-- **Team markets** measured over 51,212 samples across 3,658 games. Moneyline
-  Brier 0.2430, puck line 0.2066, totals 0.2136.
-  `data/outputs/team_markets_measurement.md`.
-- **The team model is overconfident on favourites**, not conservative as its
-  docstring originally argued. Puck line: 75.0% predicted against 70.9%
-  observed on 3,098 samples; 83.7% against 78.5% on 1,397. Fitted slope 0.792
-  on the moneyline. The wrong prediction is left on the record in
-  `models/team_model.py` rather than deleted.
+- **Calibration** (can rule out, never in): 2.5M walk-forward prop samples,
+  every skater market bent by ice time
+  (`docs/why_ice_time_gets_its_own_correction.md`); team model overconfident
+  on favourites (its docstring's opposite prediction left on the record in
+  `models/team_model.py`).
 
 ## Contract strings — never change these
 

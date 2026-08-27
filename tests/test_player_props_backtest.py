@@ -502,3 +502,239 @@ def test_the_report_explains_the_gap_between_claimed_and_realised_edge() -> None
     assert "claimed edge against the realised one" in rendered
     assert "estimation error concentrates" in rendered
     assert "not a fault in the measurement" in rendered
+
+
+# -- the join, done by identity rather than by string -------------------
+
+
+def test_a_dotted_initials_price_matches_a_nickname_registry_name() -> None:
+    """'A.J. Greer' bought, '(AJ) Greer' in the registry: twenty real priced
+    outcomes went unmatched on exactly this shape."""
+    samples = pd.DataFrame(
+        [_sample("2025-01-05", "shots_on_goal", "Anthony-John (AJ) Greer", 3.0, 4.0)]
+    )
+    prices = _prices(
+        [
+            {
+                "date": "2025-01-05",
+                "commence_time": "2025-01-06T00:10:00Z",
+                "market": "shots_on_goal",
+                "player": "A.J. Greer",
+                "selection": "over",
+                "line": 2.5,
+                "american_odds": 150,
+                "book": "DraftKings",
+            }
+        ]
+    )
+
+    report = bt.run_backtest(prices, samples, edge_threshold=0.01)
+
+    assert len(report.bets) == 1
+    assert report.outcomes_without_a_model_opinion == 0
+
+
+def test_a_dotless_initials_price_matches_a_dotted_registry_name() -> None:
+    samples = pd.DataFrame(
+        [_sample("2025-01-05", "shots_on_goal", "J.T. Miller", 3.4, 4.0)]
+    )
+    prices = _prices(
+        [
+            {
+                "date": "2025-01-05",
+                "commence_time": "2025-01-06T00:10:00Z",
+                "market": "shots_on_goal",
+                "player": "JT Miller",
+                "selection": "over",
+                "line": 2.5,
+                "american_odds": 150,
+                "book": "DraftKings",
+            }
+        ]
+    )
+
+    report = bt.run_backtest(prices, samples, edge_threshold=0.01)
+
+    assert len(report.bets) == 1
+
+
+def _aho_samples() -> pd.DataFrame:
+    """Both Sebastian Ahos dressed on the same night."""
+    frame = pd.DataFrame(
+        [
+            _sample("2025-01-05", "shots_on_goal", "Sebastian Aho", 4.5, 6.0),
+            _sample("2025-01-05", "shots_on_goal", "Sebastian Aho", 1.2, 0.0),
+        ]
+    )
+    frame.loc[0, "player_id"] = 8478427
+    frame.loc[0, "team"] = "CAR"
+    frame.loc[1, "player_id"] = 8480222
+    frame.loc[1, "team"] = "NYI"
+    return frame
+
+
+#: Fixture team map: CI has no boxscore cache to derive one from, and an
+#: empty map makes every shared name unresolvable — the production fallback,
+#: but not what these tests are testing.
+TEAM_NAMES = {
+    "carolina hurricanes": "CAR",
+    "new york islanders": "NYI",
+    "boston bruins": "BOS",
+}
+
+
+def _aho_price(home: str, away: str) -> pd.DataFrame:
+    return _prices(
+        [
+            {
+                "date": "2025-01-05",
+                "commence_time": "2025-01-06T00:10:00Z",
+                "market": "shots_on_goal",
+                "player": "Sebastian Aho",
+                "selection": "over",
+                "line": 2.5,
+                "american_odds": 150,
+                "home_team": home,
+                "away_team": away,
+                "book": "DraftKings",
+            }
+        ]
+    )
+
+
+def test_a_shared_name_settles_against_the_player_in_the_priced_game() -> None:
+    """The flat join settled Carolina's Aho prices against the Islanders'
+    Aho's games on the 123 nights both dressed — a coin flip per night."""
+    report = bt.run_backtest(
+        _aho_price("Carolina Hurricanes", "Boston Bruins"),
+        _aho_samples(),
+        edge_threshold=0.01,
+        team_names=TEAM_NAMES,
+    )
+
+    assert len(report.bets) == 1
+    # The Carolina Aho's game: mean 4.5, actual 6 — the over wins.
+    assert report.bets[0].won is True
+
+
+def test_the_other_ahos_game_settles_against_the_other_aho() -> None:
+    report = bt.run_backtest(
+        _aho_price("New York Islanders", "Boston Bruins"),
+        _aho_samples(),
+        edge_threshold=0.01,
+        team_names=TEAM_NAMES,
+    )
+
+    # NYI Aho: mean 1.2 — the model holds no over-2.5 edge, so no bet; what
+    # matters is that it did NOT match the Carolina distribution.
+    assert len(report.bets) == 0
+    assert report.outcomes_ambiguous == 0
+
+
+def test_both_ahos_in_one_game_resolves_to_neither() -> None:
+    report = bt.run_backtest(
+        _aho_price("Carolina Hurricanes", "New York Islanders"),
+        _aho_samples(),
+        edge_threshold=0.01,
+        team_names=TEAM_NAMES,
+    )
+
+    assert len(report.bets) == 0
+    assert report.outcomes_ambiguous == 1
+
+
+# -- the accounting identity -------------------------------------------
+
+
+def test_every_priced_outcome_lands_in_exactly_one_bucket() -> None:
+    """priced = no_opinion + below_threshold + unparseable + ambiguous + bets.
+    A drop that lands in no bucket is invisible exactly when a format change
+    makes it large."""
+    samples = _samples()
+    prices = _prices()
+    extra = pd.DataFrame(
+        [
+            {  # unparseable odds, after a successful model match
+                "date": "2025-01-05",
+                "commence_time": "2025-01-06T00:10:00Z",
+                "market": "shots_on_goal",
+                "player": "Auston Matthews",
+                "selection": "over",
+                "line": 3.5,
+                "american_odds": "EVEN",
+                "book": "DraftKings",
+            },
+            {  # unparseable line
+                "date": "2025-01-05",
+                "commence_time": "2025-01-06T00:10:00Z",
+                "market": "shots_on_goal",
+                "player": "Auston Matthews",
+                "selection": "over",
+                "line": "no point",
+                "american_odds": 120,
+                "book": "DraftKings",
+            },
+        ]
+    )
+    prices = pd.concat([prices, extra], ignore_index=True)
+
+    report = bt.run_backtest(prices, samples, edge_threshold=0.05)
+
+    accounted = (
+        report.outcomes_without_a_model_opinion
+        + report.outcomes_below_threshold
+        + report.outcomes_unparseable
+        + report.outcomes_ambiguous
+        + len(report.bets)
+    )
+    assert report.outcomes_unparseable == 2
+    assert accounted == report.priced_outcomes
+
+
+def test_the_report_prints_the_reconciliation() -> None:
+    report = bt.run_backtest(_prices(), _samples(), edge_threshold=0.05)
+
+    rendered = bt.render_backtest(report)
+
+    assert "Accounted for: all of them." in rendered
+    assert "DOES NOT RECONCILE" not in rendered
+
+
+def test_a_gap_in_the_accounting_is_printed_loudly() -> None:
+    report = bt.run_backtest(_prices(), _samples(), edge_threshold=0.05)
+    report.priced_outcomes += 3  # simulate a counterless drop path
+
+    rendered = bt.render_backtest(report)
+
+    assert "DOES NOT RECONCILE" in rendered
+    assert "no counter" in rendered
+
+
+def test_a_lone_candidate_on_the_wrong_team_is_a_void_not_a_match() -> None:
+    """A lone candidate can still be the wrong same-named player when the
+    right one did not dress. The price names the game; a candidate outside
+    it is an unmatched price."""
+    samples = _aho_samples().iloc[[0]]  # only the Carolina Aho dressed
+
+    report = bt.run_backtest(
+        _aho_price("New York Islanders", "Boston Bruins"),  # the NYI game
+        samples,
+        edge_threshold=0.01,
+        team_names=TEAM_NAMES,
+    )
+
+    assert len(report.bets) == 0
+    assert report.outcomes_without_a_model_opinion == 1
+    assert "Sebastian Aho" in report.unmatched_players
+
+
+def test_a_disambiguated_price_never_binds_to_the_bare_name() -> None:
+    samples = _aho_samples()
+    samples.loc[:, "player"] = "Elias Pettersson"
+    prices = _aho_price("Carolina Hurricanes", "Boston Bruins")
+    prices.loc[:, "player"] = "Elias Pettersson (2004)"
+
+    report = bt.run_backtest(prices, samples, edge_threshold=0.01)
+
+    assert len(report.bets) == 0
+    assert report.outcomes_without_a_model_opinion == 1

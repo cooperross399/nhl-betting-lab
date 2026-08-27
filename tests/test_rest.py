@@ -160,4 +160,6 @@ def test_the_card_runner_passes_the_history() -> None:
         encoding="utf-8"
     )
 
-    assert "history=games" in text
+    # Both policies reach the pricers only through the verdict door.
+    assert "history=props_history" in text
+    assert "history=team_history" in text

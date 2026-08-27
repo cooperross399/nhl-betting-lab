@@ -138,18 +138,19 @@ def main(argv: list[str] | None = None) -> int:
         if args.props:
             estimate = provider.estimate_prop_credits(
                 events=events_seen,
-                markets=list(odds_api.PROP_PROVIDER_MARKETS)
+                markets=list(odds_api.PER_EVENT_PROVIDER_MARKETS)
                 + list(odds_api.ALTERNATE_PROVIDER_MARKETS),
             )
             print(
                 f"Per-event markets would cost about {estimate} credits for "
                 f"{events_seen} events; the cap is {args.credit_cap}."
             )
-            # The alternate team ladders ride along with the props, because
-            # they are per-event markets too. Dropping them would repeat the
-            # EPL `total_2_5` mistake: the complete line lives in the
-            # alternate ladder and the bulk endpoint never shows it.
-            per_event = list(odds_api.PROP_PROVIDER_MARKETS) + list(
+            # Every per-event market rides together: the props, the
+            # regulation three-way (which was wired end to end and simply
+            # never requested — dead code on every production path), and the
+            # alternate team ladders, whose absence from a fetch is the EPL
+            # `total_2_5` mistake by another door.
+            per_event = list(odds_api.PER_EVENT_PROVIDER_MARKETS) + list(
                 odds_api.ALTERNATE_PROVIDER_MARKETS
             )
             props = provider.fetch_player_props(

@@ -2,25 +2,25 @@
 
 Generated from the measurement outputs, so it cannot drift from them. The hand-written rules live in `docs/what_we_can_and_cannot_claim.md`.
 
-- Generated: 2026-08-26T04:56:59+00:00
+- Generated: 2026-08-27T05:59:10+00:00
 
 **No demonstrated edge in any market.** 9 market(s) have been measured against real prices. Nothing survives correcting for the number of markets tested and then holds on a window it was not found on.
 
 ## Across every measured market
 
-+1.2% over 4,777 bets. The interval includes zero: **no demonstrated edge**.
++1.4% over 4,830 bets. The interval includes zero: **no demonstrated edge**.
 
 ## Measured against real prices
 
-- `shots_on_goal`: +2.4% over 2,476 bets, 95% interval -1.5% to +6.4%. **No demonstrated edge**.
-- `points`: -4.5% over 913 bets, 95% interval -11.1% to +2.0%. **No demonstrated edge**.
-- `goals`: +14.8% over 37 bets, 95% interval -29.4% to +59.0%. **No demonstrated edge**.
-- `assists`: -6.1% over 386 bets, 95% interval -14.8% to +2.7%. **No demonstrated edge**.
-- `goalie_saves`: -2.5% over 410 bets, 95% interval -11.6% to +6.6%. **No demonstrated edge**.
-- `blocked_shots`: +11.8% over 555 bets, 95% interval +3.2% to +20.5%. Correcting for the 7 markets measured on the same data, it does not exclude zero. **No demonstrated edge**.
-- `moneyline`: -3.3% over 1,536 bets, 95% interval -8.8% to +2.2%. **No demonstrated edge**.
-- `puck_line`: -4.6% over 1,563 bets, 95% interval -8.9% to -0.2%. Correcting for the 4 markets measured on the same data, it does not exclude zero. **No demonstrated edge**.
-- `total_goals`: -0.1% over 823 bets, 95% interval -6.7% to +6.4%. **No demonstrated edge**.
+- `shots_on_goal`: +3.0% over 2,508 bets, 95% interval -0.9% to +7.0%. **No demonstrated edge**.
+- `points`: -5.5% over 940 bets, 95% interval -11.9% to +0.9%. **No demonstrated edge**.
+- `goals`: +10.6% over 34 bets, 95% interval -34.8% to +56.0%. **No demonstrated edge**.
+- `assists`: -4.5% over 403 bets, 95% interval -13.0% to +4.1%. **No demonstrated edge**.
+- `goalie_saves`: -1.7% over 397 bets, 95% interval -10.9% to +7.5%. **No demonstrated edge**.
+- `blocked_shots`: +11.9% over 548 bets, 95% interval +3.2% to +20.6%. Correcting for the 7 markets measured on the same data, it does not exclude zero. **No demonstrated edge**.
+- `moneyline`: -2.4% over 1,504 bets, 95% interval -8.0% to +3.1%. **No demonstrated edge**.
+- `puck_line`: -4.3% over 1,541 bets, 95% interval -8.7% to +0.1%. **No demonstrated edge**.
+- `total_goals`: -0.5% over 1,150 bets, 95% interval -6.0% to +5.0%. **No demonstrated edge**.
 
 ## Not measured against real prices
 

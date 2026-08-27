@@ -290,3 +290,115 @@ def test_team_markets_are_corrected_as_one_family() -> None:
         item.priced is None or item.priced.looks >= 1
         for item in report.markets
     )
+
+
+def test_every_priced_row_lands_in_a_bucket() -> None:
+    """A third of the bought totals once vanished into an uncounted continue."""
+    samples = _samples(400)
+    prices = _prices(
+        [
+            {
+                "date": samples.iloc[0]["date"],
+                "home_team": "TOR",
+                "away_team": "BOS",
+                "market": "moneyline",
+                "selection": "home",
+                "line": None,
+                "american_odds": 150,
+            },
+            {  # a line the grid does not carry -> unmatched, counted
+                "date": samples.iloc[0]["date"],
+                "home_team": "TOR",
+                "away_team": "BOS",
+                "market": "moneyline",
+                "selection": "home",
+                "line": 9.5,
+                "american_odds": 150,
+            },
+            {  # unparseable odds after a match -> counted
+                "date": samples.iloc[0]["date"],
+                "home_team": "TOR",
+                "away_team": "BOS",
+                "market": "moneyline",
+                "selection": "home",
+                "line": None,
+                "american_odds": "EVEN",
+            },
+        ]
+    )
+
+    report = tmm.build_team_measurement(
+        samples, prices, edge_threshold=0.05, minimum_fit_samples=100
+    )
+    moneyline = next(m for m in report.markets if m.market == "moneyline")
+    a = moneyline.accounting
+
+    assert a["seen"] == 3
+    assert a["unmatched"] == 1
+    assert a["unparseable"] == 1
+    bets = moneyline.priced.bets if moneyline.priced else 0
+    assert (
+        a["unmatched"] + a["unparseable"] + a.get("below_threshold", 0) + bets
+        == a["seen"]
+    )
+
+
+def test_the_report_prints_the_match_rate_per_market() -> None:
+    samples = _samples(400)
+    prices = _prices(
+        [
+            {
+                "date": row.date,
+                "home_team": "TOR",
+                "away_team": "BOS",
+                "market": "moneyline",
+                "selection": "home",
+                "line": None,
+                "american_odds": 150,
+            }
+            for row in samples.head(50).itertuples()
+        ]
+    )
+
+    report = tmm.build_team_measurement(
+        samples, prices, edge_threshold=0.05, minimum_fit_samples=100
+    )
+    rendered = tmm.render_team_measurement(report)
+
+    assert "Where every price landed" in rendered
+    assert "prices seen" in rendered
+    assert "DOES NOT RECONCILE" not in rendered
+
+
+def test_the_sample_grid_covers_every_line_the_bought_file_holds() -> None:
+    """The grid drifting away from the books is how the loss began."""
+    from pathlib import Path
+
+    import pandas as pd
+
+    from nhl_betting_lab.backtest.team_walk_forward import (
+        DEFAULT_TOTAL_LINES,
+        PUCK_LINES,
+    )
+    from nhl_betting_lab.config import PROCESSED_DIR
+
+    path = Path(PROCESSED_DIR) / "historical_team_prices.csv"
+    if not path.is_file():
+        import pytest
+
+        pytest.skip("No bought team prices in this checkout.")
+    bought = pd.read_csv(path)
+    totals = set(
+        bought[bought["market"] == "total_goals"]["line"].dropna().unique()
+    )
+    spreads = {
+        abs(v)
+        for v in bought[bought["market"] == "puck_line"]["line"]
+        .dropna()
+        .unique()
+    }
+
+    assert totals <= set(DEFAULT_TOTAL_LINES), sorted(
+        totals - set(DEFAULT_TOTAL_LINES)
+    )
+    assert spreads <= set(PUCK_LINES), sorted(spreads - set(PUCK_LINES))

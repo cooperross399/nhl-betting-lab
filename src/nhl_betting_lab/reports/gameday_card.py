@@ -67,6 +67,8 @@ from nhl_betting_lab.config import (
 )
 from nhl_betting_lab.market_eligibility import EligibilityReport
 from nhl_betting_lab.markets import MARKETS_BY_KEY
+from nhl_betting_lab.reports.card_pricing import selection_key
+from nhl_betting_lab.season import clean_text
 from nhl_betting_lab.models.value import (
     OddsError,
     american_to_implied,
@@ -185,7 +187,7 @@ class GamedayCard:
         keys = sorted(
             f"{row.get('market')}|{row.get('player') or ''}|"
             f"{row.get('home_team')}|{row.get('away_team')}|"
-            f"{row.get('selection')}|{row.get('line')}"
+            f"{row.get('selection')}|{row.get('line')}|{row.get('date')}"
             for row in self.best_bets
         )
         return "\n".join(keys)
@@ -224,7 +226,7 @@ def build_candidates(
     """Split priced rows into `(selections, passes)`.
 
     `probabilities` is keyed by
-    `(market, player_casefold, home, away, selection, line)`. A row with no
+    `card_pricing.selection_key(...)`. A row with no
     key is not a pass — it is a row with no model opinion, and it appears in
     neither list. Passes are genuine judgements about rows the model *did*
     price.
@@ -242,20 +244,16 @@ def build_candidates(
     for row in prices.itertuples():
         market = str(getattr(row, "market", "")).strip()
         selection = str(getattr(row, "selection", "")).strip().lower()
-        player = str(getattr(row, "player", "") or "").strip()
         line_value = getattr(row, "line", None)
         try:
             line = float(line_value) if line_value is not None and not pd.isna(line_value) else None
         except (TypeError, ValueError):
             line = None
-        key = (
-            market,
-            player.casefold(),
-            str(getattr(row, "home_team", "")),
-            str(getattr(row, "away_team", "")),
-            selection,
-            line,
-        )
+        # The same function the probability map was keyed with. Two hand-built
+        # copies of this key disagreed twice — the CSV-NaN player and the
+        # missing game date — and both failures were silent, because a key
+        # mismatch is indistinguishable from "no modelled opinion".
+        key = selection_key(row, market=market, selection=selection, line=line)
         try:
             price = float(getattr(row, "american_odds"))
             american_to_implied(price)
@@ -266,7 +264,7 @@ def build_candidates(
             best[key] = row
 
     for key, row in best.items():
-        market_key, player_key, home, away, selection, line = key
+        market_key, player_key, home, away, selection, line, _day = key
         market = MARKETS_BY_KEY.get(market_key)
         if market is None:
             continue
@@ -284,7 +282,7 @@ def build_candidates(
             away_team=away,
             market=market_key,
             selection=selection,
-            player=str(getattr(row, "player", "") or "").strip(),
+            player=clean_text(getattr(row, "player", "")),
             line=line,
             american_odds=price,
             book=str(getattr(row, "book", "")),

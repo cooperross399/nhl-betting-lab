@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import pandas as pd
@@ -97,25 +96,25 @@ def test_an_unreadable_file_degrades_to_no_correction(tmp_path: Path) -> None:
 
 
 def test_the_card_applies_corrections_only_on_the_recorded_verdict(
-    tmp_path: Path,
+    tmp_path,
 ) -> None:
-    """The decision is read from disk, not asserted in code, so the card's
-    configuration is auditable against the experiment that made it."""
-    import sys
+    """The decision is read from disk through `verdicts.ships`, not asserted
+    in code, so the card's configuration is auditable against the experiment
+    that made it."""
+    import json
 
-    sys.path.insert(0, "tests")
-    from test_scripts import load_script
+    from nhl_betting_lab.verdicts import ships
 
-    module = load_script("run_gameday_card.py")
-
-    assert module._read_experiment(tmp_path) == {}
-
+    assert ships("by_toi", output_dir=tmp_path) is False
     (tmp_path / "correction_experiment.json").write_text(
         json.dumps({"ships": ["by_toi"]}), encoding="utf-8"
     )
-    assert "by_toi" in module._read_experiment(tmp_path)["ships"]
+    assert ships("by_toi", output_dir=tmp_path) is True
 
-    (tmp_path / "correction_experiment.json").write_text(
-        json.dumps({"ships": []}), encoding="utf-8"
+    from nhl_betting_lab.config import PROJECT_ROOT
+
+    runner = (PROJECT_ROOT / "scripts" / "run_gameday_card.py").read_text(
+        encoding="utf-8"
     )
-    assert module._read_experiment(tmp_path)["ships"] == []
+    assert 'ships("by_toi"' in runner
+    assert 'ships("props_b2b"' in runner

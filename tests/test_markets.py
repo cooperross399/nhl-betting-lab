@@ -54,7 +54,15 @@ def test_no_team_market_claims_to_settle_on_a_player_column() -> None:
 def test_every_prop_is_a_per_event_market() -> None:
     """Props cost one credit per market per event; the cost model depends on it."""
     assert all(market.per_event for market in markets.PROP_MARKETS)
-    assert not any(market.per_event for market in markets.TEAM_MARKETS)
+
+
+def test_the_three_way_is_the_one_per_event_team_market() -> None:
+    """Probed 2026-08-26: the bulk endpoint refuses `h2h_3_way` and the
+    per-event endpoint serves it. Without the flag the market was wired end
+    to end and never requested."""
+    per_event_teams = [m.key for m in markets.TEAM_MARKETS if m.per_event]
+
+    assert per_event_teams == ["regulation_3_way"]
 
 
 def test_provider_keys_are_unique() -> None:
@@ -94,10 +102,10 @@ def test_an_unmapped_provider_market_is_ignored_not_an_error() -> None:
     assert markets.market_for_provider_key("") is None
 
 
-def test_per_event_provider_keys_are_exactly_the_prop_keys() -> None:
+def test_per_event_provider_keys_are_the_props_plus_the_three_way() -> None:
     assert set(markets.per_event_provider_keys()) == {
         market.provider_key for market in markets.PROP_MARKETS
-    }
+    } | {"h2h_3_way"}
 
 
 def test_anytime_scorer_is_the_goals_market_at_half() -> None:

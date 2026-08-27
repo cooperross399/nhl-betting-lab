@@ -21,6 +21,9 @@ data/outputs/*
 !data/outputs/correction_experiment.md
 !data/outputs/correction_experiment.json
 !data/outputs/rest_experiment.md
+!data/outputs/rest_experiment.json
+!data/outputs/props_rest_experiment.md
+!data/outputs/props_rest_experiment.json
 data/outputs/archive/
 data/staging/*_staging.csv
 data/staging/staging_provenance.json
