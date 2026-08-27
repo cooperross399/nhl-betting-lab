@@ -97,6 +97,11 @@ SAMPLE_COLUMNS = (
     "dispersion_r",
     "actual",
     "toi_seconds",
+    # The ice time the model *expected* when it priced this game — the only
+    # TOI a live card can know. The by-TOI correction buckets on this rather
+    # than the actual, because a correction tested on information the card
+    # cannot have would ship something other than what was tested.
+    "expected_toi_seconds",
 )
 
 
@@ -232,6 +237,11 @@ def generate_prop_samples(
                 if shape is None:
                     continue
                 priced_any = True
+                rates = (
+                    model.goalies.get(player_id)
+                    if market == "goalie_saves"
+                    else model.skaters.get(player_id)
+                )
                 rows.append(
                     {
                         "date": str(log["date"])[:10],
@@ -251,6 +261,9 @@ def generate_prop_samples(
                         "toi_seconds": int(
                             pd.to_numeric(log["toi_seconds"], errors="coerce")
                             or 0
+                        ),
+                        "expected_toi_seconds": float(
+                            rates.expected_toi_seconds if rates else 0.0
                         ),
                     }
                 )

@@ -217,6 +217,9 @@ def expand_to_lines(
                     "model_probability": shape.over_probability(float(line)),
                     "outcome": bool(float(row.actual) > float(line)),
                     "toi_seconds": int(row.toi_seconds),
+                    "expected_toi_seconds": float(
+                        getattr(row, "expected_toi_seconds", row.toi_seconds)
+                    ),
                 }
             )
     return pd.DataFrame(rows)

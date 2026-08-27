@@ -24,6 +24,7 @@ from nhl_betting_lab.config import OUTPUTS_DIR, PROCESSED_DIR, STAGING_DIR
 from nhl_betting_lab.data.build_datasets import load_player_logs, load_team_games
 from nhl_betting_lab.market_eligibility import assess_markets, slate_games_from
 from nhl_betting_lab.models.player_props import PlayerPropsModel
+from nhl_betting_lab.models.toi_corrections import load_current_corrections
 from nhl_betting_lab.models.team_model import TeamModel
 from nhl_betting_lab.providers import odds_api
 from nhl_betting_lab.providers.team_names import (
@@ -33,6 +34,20 @@ from nhl_betting_lab.providers.team_names import (
 from nhl_betting_lab.reports.card_pricing import price_props, price_team_markets
 from nhl_betting_lab.reports.gameday_card import build_card, save_card
 from nhl_betting_lab.staging_provider_policy import load_policy
+
+
+def _read_experiment(outputs: Path) -> dict:
+    """The correction experiment's recorded verdict, or nothing."""
+    import json
+
+    path = outputs / "correction_experiment.json"
+    if not path.is_file():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return {}
+    return payload if isinstance(payload, dict) else {}
 
 
 def _staged_prices(staging_dir: Path) -> pd.DataFrame:
@@ -122,14 +137,28 @@ def main(argv: list[str] | None = None) -> int:
         try:
             props_model = PlayerPropsModel().fit(logs)
             print(props_model.report.summary_line())
-            # No calibration correction is applied. Both the pooled and the
-            # ice-time-conditional corrections beat the raw model on every
-            # market in data/outputs/props_calibration.md — and calibration
-            # cannot rule a model in. Neither correction ships to the card
-            # until a price-based backtest says it should, which is the rule
-            # in CLAUDE.md and the reason this argument is deliberately empty.
+            # The by-TOI correction is applied only because — and only while
+            # — the recorded experiment verdict says it won the price-based
+            # backtest on both measured windows. The pooled correction
+            # improved calibration and lost the backtest, so it is not here.
+            # The decision is read from disk rather than asserted in code, so
+            # the card's configuration is auditable against the experiment
+            # that made it.
+            corrections = None
+            experiment = _read_experiment(outputs)
+            if "by_toi" in experiment.get("ships", []):
+                corrections = load_current_corrections(processed_dir=processed)
+                print(f"Corrections in force: {corrections.describe()}.")
+            else:
+                print(
+                    "No correction is in force: the recorded experiment "
+                    "verdict does not ship one."
+                )
             prop_probabilities, unresolved = price_props(
-                prices, props_model, corrections={}, team_names=team_names
+                prices,
+                props_model,
+                corrections=corrections,
+                team_names=team_names,
             )
             probabilities.update(prop_probabilities)
             unresolved_names.update(unresolved)
@@ -149,8 +178,11 @@ def main(argv: list[str] | None = None) -> int:
         try:
             team_model = TeamModel().fit(games)
             print(team_model.report.summary_line())
+            # `history=games` is what carries the back-to-back flags. The
+            # rest adjustment shipped with rest included; pricing without it
+            # would ship an unmeasured policy under a measured one's name.
             team_probabilities, unresolved = price_team_markets(
-                prices, team_model, team_names=team_names
+                prices, team_model, team_names=team_names, history=games
             )
             probabilities.update(team_probabilities)
             unresolved_names.update(unresolved)

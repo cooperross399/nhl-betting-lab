@@ -141,6 +141,13 @@ this is a spending decision rather than a default.
 # Read-only: it writes no receipt and approves nothing.
 PYTHONPATH=src .venv/bin/python scripts/run_allowlist_evidence.py
 
+# Decide whether a calibration correction ships, against real prices, with
+# the verdict recorded to disk for the card's gate to read.
+PYTHONPATH=src .venv/bin/python scripts/run_correction_experiment.py
+
+# Decide whether the back-to-back rest adjustment ships, the same way.
+PYTHONPATH=src .venv/bin/python scripts/run_rest_experiment.py
+
 # The provider policy PR gate. Exits non-zero when the paperwork does not hold.
 PYTHONPATH=src .venv/bin/python scripts/run_policy_pr_gate.py
 

@@ -69,6 +69,23 @@ Re-derive rather than trust if the data has moved.
   events spanning both sampled seasons: zero rows from any book. It can reach
   a future card once approved; it can never be backtested. Its evidence must
   accumulate forward. Cost of establishing that: 2,600 credits.
+- **Neither calibration correction ships, and the reason is a new leak
+  class.** The pooled Platt lost the price backtest outright (−97.0u — the
+  EPL lesson to the letter). The by-TOI correction appeared to win +162.8u
+  when bucketed on *actual* ice time and loses −37.6u bucketed on *expected*
+  ice time — the only ice time a card can know. Actual TOI is partly an
+  outcome (blowouts, injuries, overtime, pulled goalies), so indexing a
+  correction by it launders hindsight through a lookup key. The standard for
+  any conditioned quantity is now: **conditioned on what, known when?**
+  `docs/why_the_toi_correction_does_not_ship.md`. The card's gate reads the
+  recorded verdict (`ships: []`) from disk.
+- **The back-to-back adjustment ships.** The model missed away back-to-backs
+  by 8.5 points over 574 games; fatigue is causal and rest is schedule
+  information, known before puck drop. Constrained to preserve the expected
+  total — fatigue shifts who scores, not how much hockey happens; the
+  unconstrained version lost 19.7u on totals where the mechanism made no
+  claim. Price backtest: +18.4u, improving moneyline and puck line. Ships
+  under the must-not-lose bar; explicitly not evidence of an edge.
 - **The price CSVs are derived data.** Every bought response is cached raw and
   the CSVs are rebuilt from the cache on every purchase run — because a
   purchase that bought nothing once overwrote the accumulated file with an

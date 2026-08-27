@@ -29,6 +29,7 @@ from datetime import date, timedelta
 import pandas as pd
 
 from nhl_betting_lab.models.team_model import TeamModel
+from nhl_betting_lab.rest import played_previous_day
 
 
 #: Total lines the calibration sweep prices. 5.5 is where the NHL headline
@@ -156,6 +157,32 @@ def settle_total(
     return total > float(line), False
 
 
+def _with_back_to_backs(games: pd.DataFrame) -> pd.DataFrame:
+    """Mark whether each side played the previous league day.
+
+    Rest derives from the schedule, which is known before puck drop, so this
+    leaks nothing — a team's previous game is in the past whichever window is
+    being priced. The rule itself lives in `rest.py`, shared with the live
+    card, so the policy the experiment measured and the policy the card ships
+    are one function rather than two copies.
+    """
+    ordered = games.sort_values("date").copy()
+    last_played: dict[str, str] = {}
+    home_flags: list[bool] = []
+    away_flags: list[bool] = []
+    for row in ordered.itertuples():
+        day = str(row.date)[:10]
+        for team, flags in (
+            (str(row.home_team), home_flags),
+            (str(row.away_team), away_flags),
+        ):
+            flags.append(played_previous_day(last_played, team, day))
+            last_played[team] = day
+    ordered["home_b2b"] = home_flags
+    ordered["away_b2b"] = away_flags
+    return ordered
+
+
 def generate_team_samples(
     games: pd.DataFrame,
     *,
@@ -164,13 +191,19 @@ def generate_team_samples(
     minimum_history_games: int = 200,
     start_date: str = "",
     end_date: str = "",
+    use_rest: bool = True,
 ) -> tuple[pd.DataFrame, TeamWalkForwardReport]:
-    """Price every game with a model that could not see it."""
+    """Price every game with a model that could not see it.
+
+    `use_rest=False` prices with rest ignored, which exists so the two
+    policies can be compared on identical games — the comparison that decides
+    whether the back-to-back adjustment ships.
+    """
     report = TeamWalkForwardReport()
     if games.empty:
         return pd.DataFrame(columns=list(SAMPLE_COLUMNS)), report
 
-    frame = games.copy()
+    frame = _with_back_to_backs(games)
     frame["_date"] = frame["date"].map(_as_date)
     frame = frame.dropna(subset=["_date"]).sort_values(["_date", "game_id"])
     for column in ("home_goals", "away_goals"):
@@ -212,6 +245,14 @@ def generate_team_samples(
         for game in window.itertuples():
             home = str(game.home_team)
             away = str(game.away_team)
+            rest_kwargs = (
+                {
+                    "home_b2b": bool(getattr(game, "home_b2b", False)),
+                    "away_b2b": bool(getattr(game, "away_b2b", False)),
+                }
+                if use_rest
+                else {}
+            )
             home_goals = int(game.home_goals)
             away_goals = int(game.away_goals)
             regulation = bool(getattr(game, "regulation", True))
@@ -232,7 +273,9 @@ def generate_team_samples(
             regulation_result = settle_regulation_3_way(
                 home_goals, away_goals, regulation=regulation
             )
-            three_way = model.regulation_3_way_probabilities(home, away)
+            three_way = model.regulation_3_way_probabilities(
+                home, away, **rest_kwargs
+            )
             for side in ("home", "draw", "away"):
                 rows.append(
                     {
@@ -246,7 +289,7 @@ def generate_team_samples(
                     }
                 )
 
-            moneyline = model.moneyline_probabilities(home, away)
+            moneyline = model.moneyline_probabilities(home, away, **rest_kwargs)
             for side in ("home", "away"):
                 rows.append(
                     {
@@ -263,7 +306,9 @@ def generate_team_samples(
             covered = settle_puck_line(
                 home_goals, away_goals, regulation=regulation
             )
-            puck = model.puck_line_probabilities(home, away, line=PUCK_LINE)
+            puck = model.puck_line_probabilities(
+                home, away, line=PUCK_LINE, **rest_kwargs
+            )
             for key, line in (
                 ("home_minus", -PUCK_LINE),
                 ("home_plus", PUCK_LINE),
@@ -284,7 +329,9 @@ def generate_team_samples(
 
             for line in total_lines:
                 over, push = settle_total(home_goals, away_goals, line)
-                totals = model.total_probabilities(home, away, line=line)
+                totals = model.total_probabilities(
+                    home, away, line=line, **rest_kwargs
+                )
                 for side, happened in (("over", over), ("under", not over and not push)):
                     rows.append(
                         {
