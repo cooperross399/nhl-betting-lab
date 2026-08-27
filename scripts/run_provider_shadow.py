@@ -171,7 +171,12 @@ def main(argv: list[str] | None = None) -> int:
             quota = props.quota_remaining or quota
             warnings += props.warnings
             errors += props.errors
-            print(f"Props: {props.summary_line()}")
+            # "Per-event", not "Props": this fetch also carries the
+            # regulation three-way and the alternate team ladders, and in
+            # August it can return plenty of rows while containing zero
+            # player props — a label that says otherwise sends whoever reads
+            # the log hunting for a prop-pricing bug that does not exist.
+            print(f"Per-event markets: {props.summary_line()}")
 
         odds_api.write_provenance(
             odds_api.FetchResult(
