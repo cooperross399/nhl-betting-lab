@@ -152,7 +152,15 @@ def main(argv: list[str] | None = None) -> int:
     (outputs / EXPERIMENT_MARKDOWN).write_text("\n".join(lines), encoding="utf-8")
     (outputs / EXPERIMENT_JSON).write_text(
         json.dumps(
-            {"results": results, "delta": delta, "ships": ships, "verdict": verdict},
+            {
+                # One convention across every experiment: `ships` is the list
+                # of policy names in force, read by `verdicts.ships`. The
+                # boolean it once was made the shared reader see "off".
+                "results": results,
+                "delta_units": delta,
+                "ships": ["team_b2b"] if ships else [],
+                "verdict": verdict,
+            },
             indent=2,
             sort_keys=True,
         )

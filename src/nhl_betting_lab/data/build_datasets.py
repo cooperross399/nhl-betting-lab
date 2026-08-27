@@ -348,6 +348,19 @@ def build_datasets(
     if write:
         directory = Path(processed_dir) if processed_dir else Path(PROCESSED_DIR)
         directory.mkdir(parents=True, exist_ok=True)
+        # A build that saw nothing must never replace files that hold
+        # something. An absent or wrongly-pointed raw cache produces empty
+        # frames without an error, and writing them would replace the
+        # accumulated tables with headers — the destructive-write shape that
+        # once emptied the price CSV, guarded there and not here.
+        if players.empty and (directory / PLAYER_LOGS_FILENAME).is_file():
+            result.games_malformed = result.games_malformed or []
+            raise ValueError(
+                "This build produced zero usable games, but "
+                f"{PLAYER_LOGS_FILENAME} already holds data. Refusing to "
+                "replace an accumulated dataset with an empty one — check "
+                "that data/raw/nhl/boxscore is present and populated."
+            )
         players.to_csv(
             directory / PLAYER_LOGS_FILENAME, index=False, lineterminator="\n"
         )

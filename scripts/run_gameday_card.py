@@ -34,20 +34,7 @@ from nhl_betting_lab.providers.team_names import (
 from nhl_betting_lab.reports.card_pricing import price_props, price_team_markets
 from nhl_betting_lab.reports.gameday_card import build_card, save_card
 from nhl_betting_lab.staging_provider_policy import load_policy
-
-
-def _read_experiment(outputs: Path) -> dict:
-    """The correction experiment's recorded verdict, or nothing."""
-    import json
-
-    path = outputs / "correction_experiment.json"
-    if not path.is_file():
-        return {}
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError):
-        return {}
-    return payload if isinstance(payload, dict) else {}
+from nhl_betting_lab.verdicts import describe as describe_verdicts, ships
 
 
 def _staged_prices(staging_dir: Path) -> pd.DataFrame:
@@ -93,6 +80,7 @@ def main(argv: list[str] | None = None) -> int:
 
     policy = load_policy()
     print(f"Provider policy: {policy.status}")
+    print(f"Recorded policy verdicts: {describe_verdicts(output_dir=outputs)}.")
 
     prices = _staged_prices(staging)
     slate = slate_games_from(prices)
@@ -145,8 +133,7 @@ def main(argv: list[str] | None = None) -> int:
             # the card's configuration is auditable against the experiment
             # that made it.
             corrections = None
-            experiment = _read_experiment(outputs)
-            if "by_toi" in experiment.get("ships", []):
+            if ships("by_toi", output_dir=outputs):
                 corrections = load_current_corrections(processed_dir=processed)
                 print(f"Corrections in force: {corrections.describe()}.")
             else:
@@ -154,12 +141,19 @@ def main(argv: list[str] | None = None) -> int:
                     "No correction is in force: the recorded experiment "
                     "verdict does not ship one."
                 )
+            # Schedule history reaches the props pricer only while the
+            # recorded experiment verdict ships the adjustment. Without it,
+            # every side prices as rested — the un-tested policy is the one
+            # that never moves a price.
+            props_history = (
+                games if ships("props_b2b", output_dir=outputs) else None
+            )
             prop_probabilities, unresolved = price_props(
                 prices,
                 props_model,
                 corrections=corrections,
                 team_names=team_names,
-                history=games,
+                history=props_history,
             )
             probabilities.update(prop_probabilities)
             unresolved_names.update(unresolved)

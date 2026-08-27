@@ -297,3 +297,29 @@ def test_the_build_reads_no_network(tmp_path: Path, monkeypatch) -> None:
     )
 
     assert result.games_used == 1
+
+
+def test_an_empty_build_never_replaces_a_populated_dataset(tmp_path: Path) -> None:
+    """An absent raw cache produces empty frames without an error; writing
+    them would replace 750k accumulated rows with headers. The price CSVs
+    grew this guard after exactly that accident, and this path had not."""
+    _cache(tmp_path, boxscore_payload(game_state="OFF"))
+    processed = tmp_path / "processed"
+    builder.build_datasets(raw_dir=tmp_path, processed_dir=processed)
+    before = (processed / builder.PLAYER_LOGS_FILENAME).read_text()
+
+    empty_raw = tmp_path / "nowhere"
+    with pytest.raises(ValueError, match="Refusing to replace"):
+        builder.build_datasets(raw_dir=empty_raw, processed_dir=processed)
+
+    assert (processed / builder.PLAYER_LOGS_FILENAME).read_text() == before
+
+
+def test_an_empty_build_into_an_empty_directory_is_allowed(tmp_path: Path) -> None:
+    """First run on a fresh checkout: nothing to destroy, nothing refused."""
+    players, teams, _ = builder.build_datasets(
+        raw_dir=tmp_path / "nowhere", processed_dir=tmp_path / "processed"
+    )
+
+    assert players.empty
+    assert (tmp_path / "processed" / builder.PLAYER_LOGS_FILENAME).is_file()

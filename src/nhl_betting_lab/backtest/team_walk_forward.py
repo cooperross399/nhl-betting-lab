@@ -35,11 +35,22 @@ from nhl_betting_lab.rest import played_previous_day
 #: Total lines the calibration sweep prices. 5.5 is where the NHL headline
 #: total sits almost every night; the neighbours are where the alternate
 #: ladder lives.
-DEFAULT_TOTAL_LINES: tuple[float, ...] = (4.5, 5.5, 6.5, 7.5)
+#: Every total line the bought prices actually sit on. The half-line-only
+#: grid silently dropped 2,780 of 8,136 bought totals — 34%, uncounted — and
+#: the drop was biased: books hang 6.0 exactly on the games they judge
+#: closest to six goals, so the measured subset excluded the mid-total
+#: matchups specifically. The same grid-loss shape the props path fixed by
+#: storing distributions; team samples price a fixed grid, so the grid must
+#: cover what the books actually hang.
+DEFAULT_TOTAL_LINES: tuple[float, ...] = (4.5, 5.0, 5.5, 6.0, 6.5, 7.0, 7.5)
 
 #: The puck line. Alternates exist at 2.5 but are thin, so the sweep prices
 #: the one that is always quoted.
 PUCK_LINE = 1.5
+
+#: The alternate spread ladder the bought prices include. ±2.5 rows exist in
+#: the purchased file and joined nothing while the samples carried ±1.5 only.
+PUCK_LINES: tuple[float, ...] = (1.0, 1.5, 2.0, 2.5, 4.5)
 
 SAMPLE_COLUMNS = (
     "date",
@@ -128,22 +139,30 @@ def settle_regulation_3_way(
 
 def settle_puck_line(
     home_goals: int, away_goals: int, *, regulation: bool, line: float = PUCK_LINE
-) -> dict[str, bool]:
-    """Whether each puck-line side covered.
+) -> dict[str, tuple[bool, bool]]:
+    """`(won, push)` for each puck-line side, on the final margin.
 
     An overtime or shootout winner takes the game by exactly one, whatever the
     boxscore's final margin says, because the winning goal is the only one
-    scored after regulation. So a non-regulation game can never cover -1.5.
+    scored after regulation. So a non-regulation game can never cover -1.5 —
+    and on the ±1 line it *pushes*, which whole-number spreads do on any exact
+    margin. A book refunds a push; settling one as a loss would make every
+    whole-number rung look worse than it is.
     """
     margin = int(home_goals) - int(away_goals)
     if not regulation:
         margin = 1 if margin > 0 else -1
     size = abs(float(line))
+
+    def side(win: bool, at: float) -> tuple[bool, bool]:
+        push = float(size).is_integer() and margin == at
+        return (win and not push, push)
+
     return {
-        "home_minus": margin > size,
-        "home_plus": margin > -size,
-        "away_minus": -margin > size,
-        "away_plus": -margin > -size,
+        "home_minus": side(margin > size, size),
+        "home_plus": side(margin > -size, -size),
+        "away_minus": side(-margin > size, -size),
+        "away_plus": side(-margin > -size, size),
     }
 
 
@@ -303,29 +322,32 @@ def generate_team_samples(
                     }
                 )
 
-            covered = settle_puck_line(
-                home_goals, away_goals, regulation=regulation
-            )
-            puck = model.puck_line_probabilities(
-                home, away, line=PUCK_LINE, **rest_kwargs
-            )
-            for key, line in (
-                ("home_minus", -PUCK_LINE),
-                ("home_plus", PUCK_LINE),
-                ("away_minus", -PUCK_LINE),
-                ("away_plus", PUCK_LINE),
-            ):
-                rows.append(
-                    {
-                        **shared,
-                        "market": "puck_line",
-                        "selection": key,
-                        "line": line,
-                        "model_probability": puck[key],
-                        "outcome": covered[key],
-                        "push": False,
-                    }
+            for puck_line in PUCK_LINES:
+                covered = settle_puck_line(
+                    home_goals, away_goals, regulation=regulation,
+                    line=puck_line,
                 )
+                puck = model.puck_line_probabilities(
+                    home, away, line=puck_line, **rest_kwargs
+                )
+                for key, line in (
+                    ("home_minus", -puck_line),
+                    ("home_plus", puck_line),
+                    ("away_minus", -puck_line),
+                    ("away_plus", puck_line),
+                ):
+                    won, push = covered[key]
+                    rows.append(
+                        {
+                            **shared,
+                            "market": "puck_line",
+                            "selection": key,
+                            "line": line,
+                            "model_probability": puck[key],
+                            "outcome": won,
+                            "push": push,
+                        }
+                    )
 
             for line in total_lines:
                 over, push = settle_total(home_goals, away_goals, line)

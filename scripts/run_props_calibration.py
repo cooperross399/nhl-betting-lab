@@ -24,6 +24,7 @@ from nhl_betting_lab.reports.props_calibration import (
     build_calibration_report,
     save_calibration_report,
 )
+from nhl_betting_lab.verdicts import ships
 
 
 SAMPLES_FILENAME = "prop_calibration_samples.csv"
@@ -79,6 +80,9 @@ def main(argv: list[str] | None = None) -> int:
             minimum_history_games=args.minimum_history_games,
             start_date=args.start_date,
             end_date=args.end_date,
+            # The default measurement describes the shipped policy, and what
+            # ships is the recorded verdict's call, not this script's.
+            use_rest=ships("props_b2b", output_dir=outputs),
         )
         print(walk.summary_line())
         outputs.mkdir(parents=True, exist_ok=True)

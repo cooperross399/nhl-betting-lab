@@ -44,30 +44,51 @@ def test_an_overtime_winner_never_covers_minus_one_and_a_half() -> None:
     """The winning goal is the only one scored after regulation."""
     covered = twf.settle_puck_line(5, 3, regulation=False)
 
-    assert covered["home_minus"] is False
-    assert covered["home_plus"] is True
+    assert covered["home_minus"] == (False, False)
+    assert covered["home_plus"] == (True, False)
+
+
+def test_an_overtime_winner_pushes_the_one_goal_line() -> None:
+    """The final margin is exactly one, and a book refunds an exact margin.
+    Settling it as a loss would make the whole-number rung look worse than
+    it is — and every game that leaves regulation lands here."""
+    covered = twf.settle_puck_line(5, 3, regulation=False, line=1.0)
+
+    assert covered["home_minus"] == (False, True)
+    assert covered["away_plus"] == (False, True)
+    assert covered["home_plus"] == (True, False)
+    assert covered["away_minus"] == (False, False)
+
+
+def test_a_regulation_two_goal_win_pushes_the_two_line() -> None:
+    covered = twf.settle_puck_line(4, 2, regulation=True, line=2.0)
+
+    assert covered["home_minus"] == (False, True)
+    assert covered["away_plus"] == (False, True)
+    assert covered["home_plus"] == (True, False)
 
 
 def test_a_regulation_two_goal_win_does_cover_minus_one_and_a_half() -> None:
     covered = twf.settle_puck_line(4, 2, regulation=True)
 
-    assert covered["home_minus"] is True
-    assert covered["away_plus"] is False
+    assert covered["home_minus"] == (True, False)
+    assert covered["away_plus"] == (False, False)
 
 
 def test_a_one_goal_regulation_loss_covers_plus_one_and_a_half() -> None:
     covered = twf.settle_puck_line(2, 3, regulation=True)
 
-    assert covered["away_plus"] is True
-    assert covered["home_plus"] is True
-    assert covered["away_minus"] is False
+    assert covered["away_plus"] == (True, False)
+    assert covered["home_plus"] == (True, False)
+    assert covered["away_minus"] == (False, False)
 
 
 def test_the_puck_line_sides_are_exact_complements() -> None:
+    """On a half-point line exactly one of each opposing pair wins."""
     covered = twf.settle_puck_line(4, 1, regulation=True)
 
-    assert covered["home_minus"] is not covered["away_plus"]
-    assert covered["away_minus"] is not covered["home_plus"]
+    assert covered["home_minus"][0] is not covered["away_plus"][0]
+    assert covered["away_minus"][0] is not covered["home_plus"][0]
 
 
 def test_a_total_settles_on_the_final_score() -> None:

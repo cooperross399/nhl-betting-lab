@@ -148,6 +148,9 @@ PYTHONPATH=src .venv/bin/python scripts/run_correction_experiment.py
 # Decide whether the back-to-back rest adjustment ships, the same way.
 PYTHONPATH=src .venv/bin/python scripts/run_rest_experiment.py
 
+# The same decision for the props side of rest.
+PYTHONPATH=src .venv/bin/python scripts/run_props_rest_experiment.py
+
 # The provider policy PR gate. Exits non-zero when the paperwork does not hold.
 PYTHONPATH=src .venv/bin/python scripts/run_policy_pr_gate.py
 
