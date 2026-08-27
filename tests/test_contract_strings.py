@@ -210,3 +210,23 @@ def test_the_card_correction_gate_is_driven_by_the_recorded_verdict() -> None:
 
     assert "reads the recorded verdict" in text
     assert "ships: []" in text
+
+
+def test_the_three_in_four_check_is_recorded_as_not_built() -> None:
+    """A suggestive cell with a contradicting mirror is what noise looks like,
+    and the record of not building something is as load-bearing as the record
+    of building it."""
+    from nhl_betting_lab.config import PROJECT_ROOT
+
+    # Flattened: asserting on wrapped prose fails on where the line happened
+    # to break, which is a test failing on formatting rather than meaning.
+    text = " ".join(
+        (PROJECT_ROOT / "data" / "outputs" / "rest_experiment.md")
+        .read_text(encoding="utf-8")
+        .split()
+    )
+
+    assert "The mirror cell points the wrong way" in text
+    assert "nothing was built" in text
+    assert "closes less than half the gap" in text
+    assert "recorded rather than chased" in text

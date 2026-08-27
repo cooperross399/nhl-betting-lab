@@ -316,3 +316,13 @@ def test_the_linter_runs_in_ci_not_only_on_one_machine() -> None:
     pyflakes ran locally and nowhere else."""
     assert "pyflakes" in _read(".github/workflows/tests.yml")
     assert "pyflakes" in _read("requirements.txt")
+
+
+def test_the_evidence_bundle_is_assembled_where_the_evidence_is() -> None:
+    """The shadow and coverage reports only exist where live runs happen, so
+    a bundle assembled anywhere else correctly reports itself incomplete —
+    and the authoritative one must therefore come from the workflow."""
+    text = _read(".github/workflows/gameday-refresh.yml")
+
+    assert "run_allowlist_evidence.py" in text
+    assert "allowlist_evidence_bundle.md" in text
