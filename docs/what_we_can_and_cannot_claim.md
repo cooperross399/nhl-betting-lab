@@ -7,15 +7,23 @@ project produces lands in a place that already knows how to read it.
 
 ## The current position, stated plainly
 
-**Nothing in this repository has a demonstrated edge, because nothing has been
-measured against a real price.** No market is allowlisted. No card produces
-selections. The honest answer to "does this work" is: *unknown, and it will
-stay unknown until historical prices are bought and measured against.*
+**No demonstrated edge, and it has now been measured.** Nine markets were
+measured against real bought prices — 4,830 prop bets pooled at +1.4%, 95%
+interval −1.4% to +4.2%; moneyline, puck line and totals all negative — and
+every interval includes zero, before and after the family correction. The
+honest answer to "does this work" is: *the evidence says no edge has been
+demonstrated, on samples large enough to mean it.*
 
-What *has* been measured is calibration, and a lot of it — 1.9 million
-walk-forward prop samples and 51,212 team-market samples across 3,658 games.
-That establishes exactly one thing: the models' probabilities are internally
-sensible, once corrected. It establishes nothing about whether the market
+All 11 markets are allowlisted anyway, as of 2026-08-27, by Cooper's explicit
+approval overriding this document's enable-nothing recommendation — the
+acceptance receipt records that override in his own quoted words. The card
+therefore runs live and its opinions freeze into the forward ledger, which is
+the only way the answer above ever gets to change: out-of-sample, priced,
+settled, and counted.
+
+Calibration was measured too, and heavily — 2.5 million walk-forward prop
+samples. That establishes exactly one thing: the models' probabilities are
+internally sensible. It establishes nothing about whether the market
 disagrees with them profitably, and this document will not let the two be
 confused.
 

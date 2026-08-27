@@ -143,7 +143,11 @@ def test_claude_md_carries_a_current_operating_state() -> None:
 
     assert "## Current operating state" in text
     assert "no demonstrated edge" in text
-    assert "No market is allowlisted" in text
+    # The allowlist state must name its receipt: an operating state that
+    # claims an approval without citing the paperwork is exactly the drift
+    # this test exists to catch.
+    assert "All 11 markets are allowlisted" in text
+    assert "odds_api-20260827T165300-0400-cooperross399" in text
 
 
 
@@ -166,9 +170,11 @@ def test_the_operating_state_records_the_directional_concentration() -> None:
 
 
 def test_the_operating_state_names_the_hard_gated_market() -> None:
+    """Allowlisted or not, goalie saves stays behind the starter gate, and
+    the operating state must keep saying so."""
     text = _claude_md()
 
-    assert "goalie_saves` additionally cannot reach a card" in text
+    assert "goalie_saves` still cannot produce a selection" in text
     assert "confirmed-starter source" in text
 
 

@@ -128,10 +128,16 @@ Re-derive rather than trust if the data has moved.
   Props return no rows this far from the season — an absence, not a fault.
   The alternate ladders and all per-event markets ride the per-event fetch;
   asking the bulk endpoint for them 422s the whole request.
-- **No market is allowlisted.** The card produces no selection, no lean, no
-  pass and no stake, and lists every market with its reason. Correct
-  behaviour. `goalie_saves` additionally cannot reach a card without a
-  confirmed-starter source
+- **All 11 markets are allowlisted, as of 2026-08-27.** Cooper approved
+  everything by explicit instruction, against the evidence's enable-nothing
+  recommendation — the receipt
+  (`odds_api-20260827T165300-0400-cooperross399`) records both facts and its
+  provenance verbatim, and he merged PR #47 himself. The evidence did not
+  change: **no demonstrated edge** stands everywhere it stood. The card now
+  prices every market and recommends only where the measured bars clear; a
+  slate with no qualifying edge is a no-bet card, which remains correct
+  behaviour and not a failure. `goalie_saves` still cannot produce a
+  selection without a confirmed-starter source
   (`docs/goalie_props_need_a_confirmed_starter.md`).
 - **Data**: three seasons cached — 3,936 games, 157,419 player-game rows,
   121 unresolved names (0.08%). A completed boxscore is never refetched.
@@ -256,8 +262,12 @@ PYTHONPATH=src .venv/bin/python -m compileall -q src scripts
 
 Provider automation is **not trusted** unless the provider policy
 (`data/manual/staging_provider_policy.json`), the acceptance checklist, and the
-human acceptance receipt say it is. The default policy allowlists nothing.
-Shadow runs write to `data/staging/`, which the card cannot read.
+human acceptance receipt say it is. The shipped policy allowlists
+`the_odds_api` for the 11 measured markets under receipt
+`odds_api-20260827T165300-0400-cooperross399`; the PR gate re-verifies that
+paperwork — receipt, coverage, evidence checksums — on every policy change.
+Shadow runs still write to `data/staging/`, and eligibility still gates what
+the card may read from there.
 
 ## What Claude decides, and what Cooper decides
 
