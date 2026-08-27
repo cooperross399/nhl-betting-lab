@@ -255,6 +255,12 @@ jobs:
           python scripts/run_team_markets_measurement.py --reuse-samples || \
             python scripts/run_team_markets_measurement.py
           python scripts/run_what_we_can_claim.py
+          # The bundle is assembled here and not on a laptop, because this is
+          # the one place every evidence file exists at once — the shadow
+          # verification and coverage reports only come from live runs, which
+          # only happen where the key lives. A bundle assembled anywhere else
+          # correctly reports itself incomplete.
+          python scripts/run_allowlist_evidence.py
 
       - name: Render the card
         id: card
@@ -339,6 +345,8 @@ jobs:
             data/outputs/player_props_backtest.md
             data/outputs/team_markets_measurement.md
             data/outputs/what_we_can_claim.md
+            data/outputs/allowlist_evidence_bundle.md
+            data/outputs/allowlist_evidence_bundle.json
           if-no-files-found: warn
           retention-days: 30
 

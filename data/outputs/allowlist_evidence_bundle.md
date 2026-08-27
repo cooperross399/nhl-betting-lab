@@ -2,11 +2,11 @@
 
 Everything needed to decide whether to trust `the_odds_api` for a market, in one place.
 
-- Generated: 2026-08-26T01:39:06+00:00
+- Generated: 2026-08-27T00:33:38+00:00
 
 ## Recommendation
 
-**Enable nothing yet.** 3 evidence file(s) are missing, so the picture is incomplete: provider_shadow_verification.md, provider_market_discovery.md, historical_props_retention.json.
+**Enable nothing yet.** 2 evidence file(s) are missing, so the picture is incomplete: provider_shadow_verification.md, provider_market_discovery.md.
 
 ## What the evidence supports, market by market
 
@@ -16,21 +16,23 @@ Everything needed to decide whether to trust `the_odds_api` for a market, in one
 - `assists`: **not supported** — -6.1% over 386 bets. Corrected for the 7 markets measured on the same data it runs -18.1% to +6.0%, which includes zero. No demonstrated edge.
 - `goalie_saves`: **not supported** — -2.5% over 410 bets. Corrected for the 7 markets measured on the same data it runs -14.9% to +9.9%, which includes zero. No demonstrated edge.
 - `blocked_shots`: **not supported** — +11.8% over 555 bets. Corrected for the 7 markets measured on the same data it runs -0.1% to +23.7%, which includes zero. No demonstrated edge.
-- `moneyline`: **not supported** — no price-based measurement exists.
-- `puck_line`: **not supported** — no price-based measurement exists.
-- `total_goals`: **not supported** — no price-based measurement exists.
+- `hits`: **not supported** — no price-based measurement exists; it has been calibration-checked on 616,730 walk-forward samples, which can rule the model out and can never rule it in.
+- `moneyline`: **not supported** — -3.3% over 1,536 bets. No demonstrated edge.
+- `puck_line`: **not supported** — -4.6% over 1,563 bets. No demonstrated edge.
+- `total_goals`: **not supported** — -0.1% over 823 bets. No demonstrated edge.
+- `regulation_3_way`: **not supported** — no price-based measurement exists.
 
 ## The evidence, and exactly which version of it
 
 | File | Size | SHA-256 |
 |:-----|-----:|:--------|
-| `data/outputs/player_props_backtest.md` | 6,380 bytes | `a810da60bae4cddafd3d213f93c02752ed283e1a97b596ae69cac04aa83c50f8` |
-| `data/outputs/props_calibration.md` | 15,403 bytes | `7fa5f0866504e1336ea198d43d253632c611230da1f3754336dfde5a1e31010a` |
-| `data/outputs/team_markets_measurement.md` | 4,675 bytes | `73701c7fcb7761c6a3408b076c44c8ad7f8cce095d4763ff3f7066d47ee4c57e` |
-| `data/outputs/what_we_can_claim.md` | 3,461 bytes | `e92e382d14e9b9a339be27b3c9721a27c34871b67567cb62bf27987317921dbf` |
+| `data/outputs/player_props_backtest.md` | 7,296 bytes | `282b0322ae40fdf8491532a4d39ce003af7a74366db5268ff0b02795323653ef` |
+| `data/outputs/props_calibration.md` | 17,659 bytes | `369b4c14dfcc65e2ad90334f8c041105638e8ae915d99ecdee56349ccba57c6f` |
+| `data/outputs/team_markets_measurement.md` | 6,467 bytes | `34e27414b912eaae97b9550c30b8c3b9643f573dba310025e26b68850acf9f27` |
+| `data/outputs/what_we_can_claim.md` | 4,108 bytes | `986d33612333f460a11b58042234788e393a04026c2c1826e57e061005a5f49c` |
 | `provider_shadow_verification.md` | **missing** | — |
 | `provider_market_discovery.md` | **missing** | — |
-| `historical_props_retention.json` | **missing** | — |
+| `data/outputs/historical_props_retention.json` | 851 bytes | `7b129822ae5c3624299dd78e0812a8d85ed06c06e6f15e33cda15dfb937a377f` |
 
 A missing file is listed rather than omitted. It means that part of the picture has not been produced yet, not that it was reviewed and found unremarkable.
 
@@ -47,19 +49,23 @@ Write the receipt yourself, into `data/manual/human_acceptance_receipts/<receipt
   "evidence": [
     {
       "path": "data/outputs/player_props_backtest.md",
-      "checksum_sha256": "a810da60bae4cddafd3d213f93c02752ed283e1a97b596ae69cac04aa83c50f8"
+      "checksum_sha256": "282b0322ae40fdf8491532a4d39ce003af7a74366db5268ff0b02795323653ef"
     },
     {
       "path": "data/outputs/props_calibration.md",
-      "checksum_sha256": "7fa5f0866504e1336ea198d43d253632c611230da1f3754336dfde5a1e31010a"
+      "checksum_sha256": "369b4c14dfcc65e2ad90334f8c041105638e8ae915d99ecdee56349ccba57c6f"
     },
     {
       "path": "data/outputs/team_markets_measurement.md",
-      "checksum_sha256": "73701c7fcb7761c6a3408b076c44c8ad7f8cce095d4763ff3f7066d47ee4c57e"
+      "checksum_sha256": "34e27414b912eaae97b9550c30b8c3b9643f573dba310025e26b68850acf9f27"
     },
     {
       "path": "data/outputs/what_we_can_claim.md",
-      "checksum_sha256": "e92e382d14e9b9a339be27b3c9721a27c34871b67567cb62bf27987317921dbf"
+      "checksum_sha256": "986d33612333f460a11b58042234788e393a04026c2c1826e57e061005a5f49c"
+    },
+    {
+      "path": "data/outputs/historical_props_retention.json",
+      "checksum_sha256": "7b129822ae5c3624299dd78e0812a8d85ed06c06e6f15e33cda15dfb937a377f"
     }
   ]
 }
