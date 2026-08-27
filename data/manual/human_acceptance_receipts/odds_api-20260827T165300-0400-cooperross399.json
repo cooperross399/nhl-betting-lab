@@ -1,0 +1,46 @@
+{
+  "receipt_id": "odds_api-20260827T165300-0400-cooperross399",
+  "provider_name": "the_odds_api",
+  "reviewer_name": "cooperross399",
+  "reviewed_at": "2026-08-27T16:53:00-04:00",
+  "approved_markets": [
+    "assists",
+    "blocked_shots",
+    "goalie_saves",
+    "goals",
+    "hits",
+    "moneyline",
+    "points",
+    "puck_line",
+    "regulation_3_way",
+    "shots_on_goal",
+    "total_goals"
+  ],
+  "evidence": [
+    {
+      "path": "data/outputs/player_props_backtest.md",
+      "checksum_sha256": "641fa0de7988c6351f9b69f4ca7d9719179e4e76bd48fbcb1fd165998fa9fdf8"
+    },
+    {
+      "path": "data/outputs/props_calibration.md",
+      "checksum_sha256": "8457e54905d9a02c4819c8b22db6df739a82b8dbd3e35121697b4d5b305cf869"
+    },
+    {
+      "path": "data/outputs/what_we_can_claim.md",
+      "checksum_sha256": "9d9da7dca919e041ff845bd0ba7f65a698a5b0171f5605f5e08757c226784fbe"
+    },
+    {
+      "path": "data/outputs/team_markets_measurement.md",
+      "checksum_sha256": "0714ca1705a753a7205639258a4763243fc3d6546bf3cee0a06dfb23bd3a8afa"
+    },
+    {
+      "path": "data/outputs/replication.md",
+      "checksum_sha256": "7a095b75ac30730ffa1de7619f5673eed199a5eb9a576b51068b7fba8543757f"
+    },
+    {
+      "path": "data/outputs/allowlist_evidence_bundle.md",
+      "checksum_sha256": "e9d5197391fd749225a69daca9cde0bc11813acd873ef406e74baaa9003bb491"
+    }
+  ],
+  "reviewer_statement": "Approval given by Cooper Ross (cooperross399) by explicit instruction in the Claude session of 2026-08-27: 'i want to approve everything', then 'do the approval paste block'. The cited evidence was summarized to him beforehand: no demonstrated edge in any measured market (pooled +1.4% over 4,830 bets, 95% interval -1.4% to +4.2%), and the lab's standing recommendation is to enable nothing. He approves all eleven markets anyway so the card runs live and accumulates forward evidence. Selections are opinions to track, not bets to place. This file was written by Claude at his direction; the human act of record is his merge of the pull request that carries it."
+}
