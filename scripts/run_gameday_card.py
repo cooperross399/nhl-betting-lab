@@ -31,8 +31,14 @@ from nhl_betting_lab.providers.team_names import (
     build_team_name_map,
     save_team_name_map,
 )
-from nhl_betting_lab.reports.card_pricing import price_props, price_team_markets
+from nhl_betting_lab.reports.card_pricing import (
+    price_props,
+    price_team_markets,
+    selection_key,
+)
 from nhl_betting_lab.reports.gameday_card import build_card, save_card
+from nhl_betting_lab.forward_evidence import write_snapshot
+from nhl_betting_lab.season import LEAGUE_TIMEZONE
 from nhl_betting_lab.staging_provider_policy import load_policy
 from nhl_betting_lab.verdicts import describe as describe_verdicts, ships
 
@@ -199,6 +205,26 @@ def main(argv: list[str] | None = None) -> int:
         print(
             "A fuzzy match would produce a confident price for a bet nobody "
             "placed, on a row that looks exactly like a correct one."
+        )
+
+    # Freeze today's opinions before anything else can reprice them. The
+    # forward ledger settles these rows against the boxscore later; a
+    # snapshot that already exists for today stands untouched, because the
+    # card's first opinion of the day is the one that counts.
+    snapshot_day = moment.astimezone(LEAGUE_TIMEZONE).date().isoformat()
+    written = write_snapshot(
+        prices,
+        probabilities,
+        key_for=selection_key,
+        verdicts_line=describe_verdicts(output_dir=outputs),
+        snapshot_date=snapshot_day,
+    )
+    if written is not None:
+        print(f"Priced snapshot frozen: {written}")
+    else:
+        print(
+            f"A priced snapshot for {snapshot_day} already stands; the first "
+            "opinion of the day is the one that settles."
         )
 
     card = build_card(

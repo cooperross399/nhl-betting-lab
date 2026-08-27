@@ -270,6 +270,20 @@ jobs:
         run: |
           python scripts/run_gameday_card.py
 
+      - name: Settle the forward ledger
+        # After the card froze today's opinions and results were fetched
+        # earlier in the run, every pending snapshot whose games are final
+        # settles into the accumulating ledger. This is the only possible
+        # price evidence for hits and the regulation three-way, and the
+        # out-of-sample stream for everything else — losing it would mean the
+        # season taught nothing.
+        if: always()
+        continue-on-error: true
+        env:
+          PYTHONPATH: src
+        run: |
+          python scripts/run_forward_evidence.py
+
       - name: Write the card to the run summary
         if: always()
         run: |
@@ -347,6 +361,8 @@ jobs:
             data/outputs/what_we_can_claim.md
             data/outputs/allowlist_evidence_bundle.md
             data/outputs/allowlist_evidence_bundle.json
+            data/outputs/forward_evidence.md
+            data/outputs/forward_evidence.json
           if-no-files-found: warn
           retention-days: 30
 
@@ -366,6 +382,8 @@ jobs:
             data/outputs/gameday_card.json
             data/outputs/prop_calibration_samples.csv
             data/outputs/team_market_samples.csv
+            data/archive/priced_snapshots
+            data/processed/forward_evidence.csv
           if-no-files-found: warn
           retention-days: 90
 
