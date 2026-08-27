@@ -396,8 +396,19 @@ jobs:
               empty_slate: $empty_slate, run_url: $run_url}' > card_status.json
           BLOB_MD=$(git hash-object -w card_comment.md)
           BLOB_JSON=$(git hash-object -w card_status.json)
-          TREE=$(printf '100644 blob %s\tlatest_card_comment.md\n100644 blob %s\tlatest_status.json\n' \
-            "$BLOB_MD" "$BLOB_JSON" | git mktree)
+          ENTRIES=$(printf '100644 blob %s\tlatest_card_comment.md\n100644 blob %s\tlatest_status.json' \
+            "$BLOB_MD" "$BLOB_JSON")
+          # The forward ledger is the season's accumulating out-of-sample
+          # record, and it otherwise lives only in run artifacts no routine
+          # can reach. Published here so the weekly digest can track the
+          # year over plain git. Absent early on a bare repository; that is
+          # a state the readers are told to expect, not an error.
+          if [ -f data/outputs/forward_evidence.md ]; then
+            BLOB_FWD=$(git hash-object -w data/outputs/forward_evidence.md)
+            ENTRIES=$(printf '%s\n100644 blob %s\tlatest_forward_evidence.md' \
+              "$ENTRIES" "$BLOB_FWD")
+          fi
+          TREE=$(printf '%s\n' "$ENTRIES" | git mktree)
           PARENT=""
           if git fetch "$REMOTE" +refs/heads/card-feed:refs/card-feed-tip 2>/dev/null; then
             PARENT=$(git rev-parse refs/card-feed-tip)
