@@ -75,8 +75,14 @@ PYTHONPATH=src .venv/bin/python scripts/run_what_we_can_claim.py
 
 ```bash
 # With the shipped policy this produces no card and no selections, and says
-# why. That is correct behaviour, not a failure.
+# why. That is correct behaviour, not a failure. Every priced opinion is also
+# frozen into data/archive/priced_snapshots/ — the day's first opinion
+# stands, never repriced.
 PYTHONPATH=src .venv/bin/python scripts/run_gameday_card.py
+
+# Settle pending snapshots against final boxscores and rebuild the
+# accumulating forward-evidence report. Offline; only ever appends.
+PYTHONPATH=src .venv/bin/python scripts/run_forward_evidence.py
 
 # Decide whether the card is worth an email and write the comment body.
 PYTHONPATH=src .venv/bin/python scripts/post_card_to_issue.py --out comment.md

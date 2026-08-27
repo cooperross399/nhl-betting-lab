@@ -97,6 +97,17 @@ Re-derive rather than trust if the data has moved.
   realisation** — books hang the vigged, publicly-shaded side on the Over, and
   bets are selected exactly where estimation error concentrates. Diagnosis,
   not finding; stated in the backtest report.
+- **The forward-evidence organ exists and runs in Gameday Refresh.** After
+  the card prices a slate, every opinion is frozen into a dated snapshot —
+  the first opinion of the day stands, never repriced — and once a day's
+  games are all final it settles as a unit into
+  `data/processed/forward_evidence.csv`, by the same identity join and
+  settlement rules as the historical backtest. Voids return the stake;
+  a game with no result inside fourteen days is counted unsettleable, never
+  guessed. `data/outputs/forward_evidence.md` restates what the ledger
+  supports, in the house vocabulary. This is the only possible price
+  evidence for hits and the regulation three-way, and the accumulating
+  out-of-sample test for every market and every shipped policy at once.
 - **Hits and the regulation three-way accumulate evidence forward.** Hits is
   served live and retained by no book historically (256 events probed, 2,600
   credits). The three-way is per-event only — and was wired end to end
