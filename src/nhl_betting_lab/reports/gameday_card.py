@@ -452,21 +452,44 @@ def _label(row: Mapping[str, Any]) -> str:
     return f"{selection}{line_text}".strip()
 
 
+def _start_eastern(row: Mapping[str, Any]) -> str:
+    """The selection's start time, in Eastern, or a dash it cannot fake.
+
+    Every selection row must display its start time, because the reading
+    layer downstream — Cooper's morning-brief task — quarantines any play
+    whose start it cannot confirm *from the card content*. A card without
+    start times would have every play it ever publishes arrive in the email
+    under "unconfirmable — no longer a play", which is the guard working
+    against a card that starved it.
+    """
+    from nhl_betting_lab.puck_drop import parse_commence_time
+    from nhl_betting_lab.season import LEAGUE_TIMEZONE
+
+    parsed = parse_commence_time(row.get("commence_time"))
+    if parsed is None:
+        return "unconfirmed"
+    local = parsed.astimezone(LEAGUE_TIMEZONE)
+    return local.strftime("%b %-d, %-I:%M %p ET")
+
+
 def _rows_table(rows: Sequence[Mapping[str, Any]], *, staked: bool) -> list[str]:
-    header = "| Game | Market | Selection | Model | Edge | Price | Book |"
-    divider = "|:-----|:-------|:----------|------:|-----:|------:|:-----|"
+    header = "| Game | Starts | Market | Selection | Model | Edge | Price | Book |"
+    divider = "|:-----|:-------|:-------|:----------|------:|-----:|------:|:-----|"
     if staked:
         header = (
-            "| Game | Market | Selection | Model | Edge | Price | Book | Units |"
+            "| Game | Starts | Market | Selection | Model | Edge | Price "
+            "| Book | Units |"
         )
         divider = (
-            "|:-----|:-------|:----------|------:|-----:|------:|:-----|------:|"
+            "|:-----|:-------|:-------|:----------|------:|-----:|------:"
+            "|:-----|------:|"
         )
     lines = [header, divider]
     for row in rows:
         game = f"{row.get('away_team', '')} @ {row.get('home_team', '')}".strip(" @")
         cells = (
-            f"| {game or '-'} | `{row.get('market', '-')}` | {_label(row)} "
+            f"| {game or '-'} | {_start_eastern(row)} "
+            f"| `{row.get('market', '-')}` | {_label(row)} "
             f"| {float(row.get('model_probability', 0.0)):.1%} "
             f"| {float(row.get('edge', 0.0)):+.1%} "
             f"| {_price(row.get('american_odds'))} "

@@ -656,3 +656,37 @@ def test_every_tier_has_a_stake_and_none_is_large() -> None:
     """These are positions whose expected value is genuinely uncertain."""
     assert set(card_module.TIER_UNITS) == {"A", "B", "C"}
     assert all(0 < units <= 0.5 for units in card_module.TIER_UNITS.values())
+
+
+def test_every_selection_row_displays_its_start_time_in_eastern() -> None:
+    """The morning-brief reading layer quarantines any play whose start it
+    cannot confirm from the card content. A card without start times would
+    have every play arrive in the email as unconfirmable."""
+    rows = [_price_row(price=150)]
+
+    card = card_module.build_card(
+        _prices(rows),
+        {_key(rows[0]): 0.60},
+        eligibility=_eligibility(["shots_on_goal"]),
+        now=NOW,
+    )
+    rendered = card_module.render_card(card)
+
+    assert "| Starts |" in rendered
+    assert "PM ET" in rendered or "AM ET" in rendered
+
+
+def test_a_missing_start_time_renders_as_unconfirmed_not_blank() -> None:
+    """The guard already quarantines it; the table must say the same word
+    rather than showing a gap a reader might fill charitably."""
+    assert card_module._start_eastern({"commence_time": ""}) == "unconfirmed"
+    assert card_module._start_eastern({}) == "unconfirmed"
+
+
+def test_the_start_time_is_converted_not_relabelled() -> None:
+    """00:10 UTC is 8:10 PM ET the previous evening."""
+    rendered = card_module._start_eastern(
+        {"commence_time": "2026-10-09T00:10:00Z"}
+    )
+
+    assert rendered == "Oct 8, 8:10 PM ET"
