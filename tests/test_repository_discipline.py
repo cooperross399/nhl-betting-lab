@@ -52,12 +52,31 @@ def test_every_workflow_states_its_scope(workflow: str) -> None:
 
 @pytest.mark.parametrize("workflow", WORKFLOWS)
 def test_no_workflow_grants_write_access_to_contents(workflow: str) -> None:
-    """Nothing here needs to push. Read plus issue comments is the whole job."""
+    """One workflow pushes, to one branch. Everything else only reads.
+
+    Gameday Refresh publishes each rendered card to the card-feed branch so
+    the scheduled cloud routines can read it over plain git. That is the
+    entire write surface: every `git push` in that workflow must target
+    `refs/heads/card-feed` explicitly, and no other workflow may hold write
+    access at all.
+    """
     text = (PROJECT_ROOT / ".github" / "workflows" / workflow).read_text(
         encoding="utf-8"
     )
 
-    assert "contents: write" not in text
+    if workflow != "gameday-refresh.yml":
+        assert "contents: write" not in text
+        return
+
+    assert "contents: write" in text
+    pushes = [
+        line.strip()
+        for line in text.splitlines()
+        if re.search(r"\bgit push\b", line)
+    ]
+    assert pushes, "the write grant exists only for the card-feed publish"
+    for line in pushes:
+        assert "refs/heads/card-feed" in line
 
 
 @pytest.mark.parametrize("workflow", WORKFLOWS)

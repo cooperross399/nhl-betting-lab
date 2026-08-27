@@ -172,6 +172,13 @@ card to the pinned issue **NHL Betting Lab — Claude Operating Home**. When the
 selections differ from the previous card, the comment's first paragraph
 contains the phrase `Selections changed`.
 
+Every run — including a "skip" run — also publishes the rendered comment and a
+one-object status file to the **`card-feed` branch**
+(`latest_card_comment.md`, `latest_status.json`). That branch is how the
+scheduled cloud routines read the card without any GitHub API credential: a
+cloud session cloning this repository sees it over plain git. A day with no
+new `card-feed` commit means the workflow itself did not finish.
+
 | Workflow | Trigger | Spends credits |
 |:---------|:--------|:---------------|
 | Tests | every PR and push to main | no |

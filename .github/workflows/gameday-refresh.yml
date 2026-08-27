@@ -4,11 +4,11 @@ name: Gameday Refresh
 # results, fetches prices, rebuilds every report, renders the card, and posts
 # it to the operating-home issue.
 #
-# THE NAME IS A CONTRACT. Cooper's local scheduled tasks hard-code the workflow
-# name "Gameday Refresh", the issue title "NHL Betting Lab — Claude Operating
-# Home", and the marker phrase "Selections changed". Renaming any of them
-# silently breaks his automation, and the breakage looks exactly like the lab
-# going quiet.
+# THE NAME IS A CONTRACT. Cooper's scheduled Claude routines hard-code the
+# workflow name "Gameday Refresh", the issue title "NHL Betting Lab — Claude
+# Operating Home", the marker phrase "Selections changed", and the card-feed
+# branch. Renaming any of them silently breaks his automation, and the
+# breakage looks exactly like the lab going quiet.
 #
 # SCOPE: this refetches prices and rebuilds reports. It does NOT place a bet,
 # allowlist a provider, widen market scope, edit the provider policy, or write
@@ -60,7 +60,11 @@ on:
         default: false
 
 permissions:
-  contents: read
+  # Write, for exactly one ref: the card-feed branch, where each run publishes
+  # the rendered comment and a status line so the cloud morning-brief routine
+  # can read them over plain git. Nothing in this workflow pushes anywhere
+  # else, and main only changes through pull requests.
+  contents: write
   # Read-only, and only so the run can fetch the previous run's state.
   actions: read
   # Lets the run comment the card on an issue, which is what delivers it by
@@ -305,6 +309,7 @@ jobs:
         # the reader to ignore them. But a degraded run always posts, because
         # silence is only safe to read as "nothing moved" if anything going
         # wrong breaks the silence.
+        id: post
         if: always()
         continue-on-error: true
         env:
@@ -323,6 +328,7 @@ jobs:
             --body-out issue_body.md \
             --degraded-file run_degraded.txt --run-url "$RUN_URL" \
             ${{ inputs.force_post == true && '--force' || '' }} | tail -1)
+          echo "decision=$DECISION" >> "$GITHUB_OUTPUT"
           if [ "$DECISION" != "post" ]; then
             echo "Not posting: the run was clean and the selections did not change."
             exit 0
@@ -344,6 +350,61 @@ jobs:
           fi
           gh issue comment "$NUMBER" --body-file card_comment.md
           echo "Card posted to issue #$NUMBER."
+
+      - name: Publish the card to the card-feed branch
+        # The cloud morning-brief routine reads today's card from this branch
+        # with the plain git credential a cloud session already holds for this
+        # repository — no GitHub API call, no extra token, no laptop. Every
+        # run publishes here, including "skip" runs, so a missing commit for
+        # today means the workflow itself did not finish, which is exactly
+        # what the brief should alarm on.
+        #
+        # Plumbing commits on purpose: the working tree is full of generated
+        # files that must never reach a branch, and hash-object/mktree/
+        # commit-tree build the two-file commit without touching it. Each
+        # push parents on the current tip, so it is always a fast-forward —
+        # never a force.
+        if: always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -u
+          # The checkout deliberately drops its credential, so this step
+          # authenticates its two git calls itself. The token is the run's
+          # own, masked in logs, and dies with the runner.
+          REMOTE="https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}"
+          DAY=$(TZ=America/New_York date +%F)
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          DECISION="${{ steps.post.outputs.decision || 'none' }}"
+          if [ ! -f card_comment.md ]; then
+            echo "No card comment was rendered this run." > card_comment.md
+          fi
+          jq -n \
+            --arg date "$DAY" \
+            --arg decision "$DECISION" \
+            --arg degraded "${{ steps.health.outputs.degraded || 'unknown' }}" \
+            --arg empty_slate "${{ steps.prices.outputs.empty_slate || 'false' }}" \
+            --arg run_url "$RUN_URL" \
+            '{date: $date, decision: $decision, degraded: $degraded,
+              empty_slate: $empty_slate, run_url: $run_url}' > card_status.json
+          BLOB_MD=$(git hash-object -w card_comment.md)
+          BLOB_JSON=$(git hash-object -w card_status.json)
+          TREE=$(printf '100644 blob %s\tlatest_card_comment.md\n100644 blob %s\tlatest_status.json\n' \
+            "$BLOB_MD" "$BLOB_JSON" | git mktree)
+          PARENT=""
+          if git fetch "$REMOTE" +refs/heads/card-feed:refs/card-feed-tip 2>/dev/null; then
+            PARENT=$(git rev-parse refs/card-feed-tip)
+          fi
+          export GIT_AUTHOR_NAME="Gameday Refresh" GIT_AUTHOR_EMAIL="actions@github.com"
+          export GIT_COMMITTER_NAME="Gameday Refresh" GIT_COMMITTER_EMAIL="actions@github.com"
+          if [ -n "$PARENT" ]; then
+            COMMIT=$(git commit-tree "$TREE" -p "$PARENT" -m "card $DAY ($DECISION)")
+          else
+            COMMIT=$(git commit-tree "$TREE" -m "card $DAY ($DECISION)")
+          fi
+          git push "$REMOTE" "$COMMIT:refs/heads/card-feed"
+          echo "card-feed updated for $DAY (decision: $DECISION)."
 
       - name: Upload the reports
         if: always()
