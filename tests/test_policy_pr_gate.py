@@ -63,12 +63,17 @@ def _policy(root: Path, *, receipt_id: str, markets: list[str]) -> None:
     )
 
 
-def test_the_shipped_policy_passes_because_it_allows_nothing() -> None:
+def test_the_shipped_policy_passes_the_gate() -> None:
+    """The paperwork must hold in whatever state the repository ships:
+    allowlisting nothing passes as the default and correct state, and an
+    allowlisting policy passes only because its receipt and evidence
+    checksums verify. Either way, a shipped policy that fails its own gate
+    is a broken repository."""
     result = gate.run_gate()
 
-    assert result.passed is True
-    assert result.checked_providers == []
-    assert "default and correct state" in result.summary_line()
+    assert result.passed is True, result.failures
+    if not result.checked_providers:
+        assert "default and correct state" in result.summary_line()
 
 
 def test_a_complete_approval_passes(tmp_path: Path) -> None:
@@ -227,15 +232,21 @@ def test_the_gate_never_claims_a_pass_proves_a_human_signed(
     assert "does not prove a human signed" in result.summary_line()
 
 
-def test_the_receipts_directory_is_documented_and_empty_of_receipts() -> None:
-    """Claude never writes one, so the directory holds only its README."""
+def test_the_receipts_directory_is_documented_and_holds_no_orphan() -> None:
+    """Claude never writes a receipt, so the directory holds its README and,
+    at most, receipts a human wrote that the shipped policy actually cites.
+    A receipt nothing cites is paperwork nothing verifies."""
     from nhl_betting_lab.config import MANUAL_DIR
+    from nhl_betting_lab.staging_provider_policy import load_policy
 
     directory = MANUAL_DIR / gate.RECEIPTS_DIRNAME
-    receipts = list(directory.glob("*.json"))
+    on_disk = {path.stem for path in directory.glob("*.json")}
+    cited = {
+        entry.evidence_receipt_id for entry in load_policy().entries.values()
+    }
 
     assert (directory / "README.md").is_file()
-    assert receipts == []
+    assert on_disk <= cited, f"orphan receipt(s): {sorted(on_disk - cited)}"
 
 
 # -- every malformed receipt shape, each of which must fail the gate ----

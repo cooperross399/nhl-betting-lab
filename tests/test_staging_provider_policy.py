@@ -45,17 +45,21 @@ def _policy(root: Path, **overrides: object) -> dict:
 # -- the shipped policy ------------------------------------------------
 
 
-def test_the_repository_ships_allowlisting_nothing() -> None:
-    """The correct state until a market is measured and a human signs."""
+def test_the_shipped_policy_allows_at_most_the_measured_provider() -> None:
+    """Empty until a market is measured and a human signs; afterwards it may
+    name the one provider the evidence was gathered against — never anyone
+    else. This is the rule that holds on both sides of an approval."""
     loaded = load_policy()
 
-    assert loaded.allowed_provider_names == ()
-    assert loaded.provider_allowed("the_odds_api") is False
-    assert loaded.status == "Nothing allowlisted"
+    assert set(loaded.allowed_provider_names) <= {"the_odds_api"}
+    assert loaded.provider_allowed("some_other_book") is False
+    if not loaded.allowed_provider_names:
+        assert loaded.status == "Nothing allowlisted"
 
 
-def test_the_shipped_policy_is_valid_even_though_it_allows_nothing() -> None:
-    """Empty is a decision, not a malformed file."""
+def test_the_shipped_policy_is_valid() -> None:
+    """Whatever state it ships in — empty is a decision, and an approval must
+    arrive well-formed — the file always loads without blockers."""
     loaded = load_policy()
 
     assert loaded.valid is True
