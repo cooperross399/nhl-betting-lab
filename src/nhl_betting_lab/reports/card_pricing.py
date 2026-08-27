@@ -24,10 +24,12 @@ from collections.abc import Mapping
 import pandas as pd
 
 from nhl_betting_lab.markets import MARKETS_BY_KEY
-from nhl_betting_lab.models.calibration import PlattCalibration
 from nhl_betting_lab.models.player_props import PlayerPropsModel
+from nhl_betting_lab.models.toi_corrections import CurrentCorrections
 from nhl_betting_lab.models.team_model import TeamModel
 from nhl_betting_lab.providers.team_names import resolve_team
+from nhl_betting_lab.rest import last_played_dates, played_previous_day
+from nhl_betting_lab.season import game_date
 
 
 ProbabilityMap = dict[tuple, float]
@@ -47,7 +49,7 @@ def price_props(
     prices: pd.DataFrame,
     model: PlayerPropsModel,
     *,
-    corrections: Mapping[str, PlattCalibration] | None = None,
+    corrections: CurrentCorrections | None = None,
     team_names: Mapping[str, str] | None = None,
 ) -> tuple[ProbabilityMap, list[str]]:
     """Model probabilities for every prop row the model has an opinion on.
@@ -117,9 +119,15 @@ def price_props(
         )
         if over is None:
             continue
-        correction = (corrections or {}).get(market_key)
-        if correction is not None:
-            over = correction.apply(over)
+        if corrections is not None:
+            # Bucketed on the player's *expected* ice time — the only ice
+            # time a card can know — exactly as the winning experiment
+            # variant was measured.
+            over = corrections.apply(
+                market_key,
+                rates.expected_toi_seconds if rates else 0.0,
+                over,
+            )
 
         selection = str(getattr(row, "selection", "")).strip().lower()
         # Keyed on the provider's own labels, because that is what the card
@@ -145,13 +153,26 @@ def price_team_markets(
     model: TeamModel,
     *,
     team_names: Mapping[str, str] | None = None,
+    history: pd.DataFrame | None = None,
 ) -> tuple[ProbabilityMap, list[str]]:
-    """Model probabilities for the team markets, and the names that did not map."""
+    """Model probabilities for the team markets, and the names that did not map.
+
+    `history` is the completed-games table, used for one thing: whether each
+    side played yesterday. The back-to-back adjustment shipped because it won
+    the price backtest *with rest included*, so a card pricing without it
+    would be shipping an unmeasured policy under a measured one's name.
+    Without history every side prices as rested, which is the conservative
+    direction — the adjustment only moves a price when the schedule
+    affirmatively says a side is tired.
+    """
     probabilities: ProbabilityMap = {}
     unresolved: set[str] = set()
     if prices.empty:
         return probabilities, []
     lookup = dict(team_names or {})
+    last_played = (
+        last_played_dates(history) if history is not None else {}
+    )
 
     for row in prices.itertuples():
         market_key = str(getattr(row, "market", "")).strip()
@@ -173,14 +194,22 @@ def price_team_markets(
         line = _line(getattr(row, "line", None))
         key = (market_key, "", home_label, away_label, selection, line)
 
+        day = game_date(getattr(row, "commence_time", "") or getattr(row, "date", ""))
+        rest = {
+            "home_b2b": played_previous_day(last_played, home, day),
+            "away_b2b": played_previous_day(last_played, away, day),
+        }
+
         if market_key == "moneyline":
-            probabilities[key] = model.moneyline_probabilities(home, away).get(
-                selection, 0.0
-            )
+            probabilities[key] = model.moneyline_probabilities(
+                home, away, **rest
+            ).get(selection, 0.0)
         elif market_key == "puck_line":
             if line is None:
                 continue
-            sides = model.puck_line_probabilities(home, away, line=abs(line))
+            sides = model.puck_line_probabilities(
+                home, away, line=abs(line), **rest
+            )
             # A negative line is the side laying the goals; a positive one is
             # the side taking them. Reading the sign wrong would flip every
             # puck-line price on the card.
@@ -190,12 +219,12 @@ def price_team_markets(
                 probabilities[key] = sides["away_minus" if line < 0 else "away_plus"]
         elif market_key == "regulation_3_way":
             probabilities[key] = model.regulation_3_way_probabilities(
-                home, away
+                home, away, **rest
             ).get(selection, 0.0)
         elif market_key == "total_goals":
             if line is None:
                 continue
-            totals = model.total_probabilities(home, away, line=line)
+            totals = model.total_probabilities(home, away, line=line, **rest)
             if selection in totals:
                 probabilities[key] = totals[selection]
 

@@ -65,15 +65,52 @@ def test_the_under_side_is_the_complement_of_the_over() -> None:
 
 
 def test_a_calibration_correction_is_applied_when_supplied() -> None:
+    from nhl_betting_lab.models.toi_corrections import CurrentCorrections
+
     model = PlayerPropsModel().fit(sample_logs())
     prices = _prop_prices()
-    correction = PlattCalibration(intercept=-1.0, slope=1.0, fitted_on=5000)
-
-    raw, _ = card_pricing.price_props(prices, model)
-    fixed, _ = card_pricing.price_props(
-        prices, model, corrections={"shots_on_goal": correction}
+    corrections = CurrentCorrections(
+        pooled={
+            "shots_on_goal": PlattCalibration(
+                intercept=-1.0, slope=1.0, fitted_on=5000
+            )
+        }
     )
 
+    raw, _ = card_pricing.price_props(prices, model)
+    fixed, _ = card_pricing.price_props(prices, model, corrections=corrections)
+
+    assert next(iter(fixed.values())) < next(iter(raw.values()))
+
+
+def test_a_bucketed_correction_wins_over_the_pooled_one_for_its_bucket() -> None:
+    """The by-TOI curve buckets on the player's expected ice time — the only
+    ice time a card can know."""
+    from nhl_betting_lab.models.toi_corrections import CurrentCorrections
+    from nhl_betting_lab.reports.props_calibration import _bucket_for
+
+    model = PlayerPropsModel().fit(sample_logs())
+    rates = model.skaters[1]
+    bucket = _bucket_for(rates.expected_toi_seconds, False)
+    corrections = CurrentCorrections(
+        pooled={
+            "shots_on_goal": PlattCalibration(
+                intercept=+2.0, slope=1.0, fitted_on=5000
+            )
+        },
+        bucketed={
+            ("shots_on_goal", bucket): PlattCalibration(
+                intercept=-2.0, slope=1.0, fitted_on=5000
+            )
+        },
+    )
+
+    raw, _ = card_pricing.price_props(_prop_prices(), model)
+    fixed, _ = card_pricing.price_props(
+        _prop_prices(), model, corrections=corrections
+    )
+
+    # The bucket curve pushes down; if the pooled one had won it would push up.
     assert next(iter(fixed.values())) < next(iter(raw.values()))
 
 

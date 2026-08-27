@@ -74,3 +74,14 @@ improves calibration but loses the backtest does not ship. This correction
 must clear that bar in `data/outputs/player_props_backtest.md` before it
 influences a single selection, and until it has, its status in that report is
 what governs — not the tables above.
+
+
+## Postscript: measured against prices, and it does not ship
+
+The correction described above was taken to the price backtest as the rule
+requires, and the full story is in `why_the_toi_correction_does_not_ship.md`.
+The short version: indexed on actual ice time it appeared to win +162.8u,
+and actual ice time turned out to be hindsight — it encodes blowouts,
+injuries, overtime and pulled goalies. Indexed on expected ice time, the only
+thing a card can know, it loses. The defect this document describes is real;
+this correction is not the fix, and nothing is in force on the card.

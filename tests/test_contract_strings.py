@@ -195,3 +195,18 @@ def test_the_operating_state_warns_about_the_bulk_endpoint() -> None:
 
     assert "per-event markets, not bulk ones" in text
     assert "total_2_5` mistake" in text
+
+
+def test_the_operating_state_records_the_index_leak_class() -> None:
+    """A leak can live in a lookup key as easily as in a fit."""
+    text = _claude_md()
+
+    assert "conditioned on what, known when?" in text
+    assert "launders hindsight through a lookup key" in text
+
+
+def test_the_card_correction_gate_is_driven_by_the_recorded_verdict() -> None:
+    text = _claude_md()
+
+    assert "reads the recorded verdict" in text
+    assert "ships: []" in text

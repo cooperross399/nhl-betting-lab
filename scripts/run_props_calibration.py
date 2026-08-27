@@ -86,6 +86,32 @@ def main(argv: list[str] | None = None) -> int:
 
     report = build_calibration_report(samples)
     paths = save_calibration_report(report, output_dir=outputs)
+
+    # Refresh the live by-TOI correction curves, fitted on everything to
+    # date — which for live pricing is exactly walk-forward: today's games
+    # are not in the fit. Whether the card *applies* them is a separate,
+    # recorded decision; see scripts/run_correction_experiment.py.
+    from datetime import datetime, timezone
+
+    from nhl_betting_lab.models.toi_corrections import (
+        fit_current_corrections,
+        save_current_corrections,
+    )
+    from nhl_betting_lab.reports.props_calibration import expand_to_lines
+
+    grid = (
+        samples
+        if "model_probability" in samples.columns
+        else expand_to_lines(samples)
+    )
+    current = fit_current_corrections(
+        grid,
+        fitted_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+    )
+    corrections_path = save_current_corrections(
+        current, processed_dir=Path(args.processed_dir)
+    )
+    print(f"Live corrections refreshed: {current.describe()} -> {corrections_path}")
     print(report.summary_line())
     for item in report.markets:
         print(f"  {item.market}: {item.verdict}")

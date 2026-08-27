@@ -152,6 +152,7 @@ def run_backtest(
     retention_note: str = "",
     unmeasurable_markets: Mapping[str, str] | None = None,
     window_label: str = "",
+    correct: Any = None,
 ) -> BacktestReport:
     """Measure the props model against historically-bought prices.
 
@@ -175,7 +176,7 @@ def run_backtest(
     # One entry per player-game-market, carrying the fitted distribution. Any
     # line the provider offers can be priced from it exactly, including
     # alternate ladders the calibration sweep never named.
-    model_by_key: dict[tuple[str, str, str], tuple[Any, float]] = {}
+    model_by_key: dict[tuple[str, str, str], tuple[Any, float, float]] = {}
     for row in samples.itertuples():
         key = (
             str(row.date)[:10],
@@ -185,6 +186,13 @@ def run_backtest(
         model_by_key[key] = (
             distribution_from(row.mean, getattr(row, "dispersion_r", None)),
             float(row.actual),
+            # Expected TOI where the samples carry it: the correction must be
+            # applied on information a live card can actually have.
+            float(
+                getattr(row, "expected_toi_seconds", None)
+                or getattr(row, "toi_seconds", 0)
+                or 0
+            ),
         )
 
     unmatched: set[str] = set()
@@ -212,8 +220,16 @@ def run_backtest(
             unmatched.add(player)
             report.outcomes_without_a_model_opinion += 1
             continue
-        distribution, actual = model
+        distribution, actual, toi_seconds = model
         over_probability = distribution.over_probability(line)
+        if correct is not None:
+            # The hook receives the market, the game date, the player's ice
+            # time and the raw P(over), and must be walk-forward on its own
+            # account — the timeline it looks into is fitted only on strictly
+            # earlier dates.
+            over_probability = float(
+                correct(market, date_text, toi_seconds, over_probability)
+            )
 
         try:
             implied = american_to_implied(getattr(row, "american_odds"))
