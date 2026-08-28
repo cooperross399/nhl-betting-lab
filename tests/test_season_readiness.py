@@ -328,3 +328,90 @@ def test_the_scheduled_probe_cannot_spend_without_a_cap() -> None:
         assert "--credit-cap" in block, (
             f"a live call with no cap reachable from a cron: {line.strip()}"
         )
+
+
+# -- October: the logs know last season's club ------------------------
+
+
+def _prop_row(player: str, home: str, away: str) -> pd.DataFrame:
+    return pd.DataFrame(
+        [
+            {
+                "date": "2026-10-08",
+                "commence_time": "2026-10-09T23:00:00Z",
+                "home_team": home,
+                "away_team": away,
+                "market": "shots_on_goal",
+                "player": player,
+                "selection": "over",
+                "line": 2.5,
+                "american_odds": -110,
+                "book": "DraftKings",
+            }
+        ]
+    )
+
+
+class _Rates:
+    def __init__(self, team: str) -> None:
+        self.team = team
+        self.expected_toi_seconds = 1200.0
+
+
+class _StubModel:
+    """Just enough model to exercise the side-of-the-game decision."""
+
+    def __init__(self, player_id: int, logged_team: str) -> None:
+        self.skaters = {player_id: _Rates(logged_team)}
+        self.goalies: dict[int, _Rates] = {}
+        self._player_id = player_id
+        self.asked: list[tuple[str, str]] = []
+
+    def resolve_player_in_game(self, name, *, home, away):
+        return self._player_id
+
+    def over_probability(self, player_id, market, line, *, opponent, venue, **kw):
+        self.asked.append((opponent, venue))
+        return 0.55
+
+
+def test_a_traded_player_prices_against_tonights_opponent() -> None:
+    """His rates travel with him; his opponent comes from tonight's sheet.
+
+    The fitted team is the club of his last cached game, so every October
+    each mover points at the club he left, matches neither side, and produces
+    no opinion at all — a silently thinner opening night that reads exactly
+    like books not posting props.
+    """
+    from nhl_betting_lab.reports.card_pricing import price_props
+
+    model = _StubModel(player_id=8478402, logged_team="EDM")
+    prices = _prop_row("Traded Forward", home="TOR", away="BOS")
+
+    without, unresolved = price_props(prices, model)
+    assert without == {} and unresolved == ["Traded Forward"], (
+        "the stale team must not silently price against a guessed opponent"
+    )
+
+    with_roster, unresolved = price_props(
+        prices, model, rosters={8478402: "TOR"}
+    )
+
+    assert unresolved == []
+    assert with_roster, "the roster puts him on tonight's home side"
+    assert model.asked[-1] == ("BOS", "home")
+
+
+def test_a_roster_naming_a_team_not_in_the_game_still_produces_no_opinion() -> None:
+    """A wrong roster must fail the same safe way a stale log does."""
+    from nhl_betting_lab.reports.card_pricing import price_props
+
+    model = _StubModel(player_id=8478402, logged_team="EDM")
+    prices = _prop_row("Traded Forward", home="TOR", away="BOS")
+
+    probabilities, unresolved = price_props(
+        prices, model, rosters={8478402: "VAN"}
+    )
+
+    assert probabilities == {}
+    assert unresolved == ["Traded Forward"]

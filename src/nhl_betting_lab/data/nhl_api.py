@@ -256,6 +256,90 @@ def fetch_club_season_schedule(
     return CacheEntry(path=path, payload=payload, from_cache=False, complete=False)
 
 
+def fetch_club_roster(
+    team: str,
+    season_id: int,
+    *,
+    requester: Requester | None = None,
+    raw_dir: Path | None = None,
+    refresh: bool = False,
+) -> CacheEntry:
+    """Who is on one club's roster right now.
+
+    The models learn a player's *rates* from his game logs, which is right:
+    shooting travels with the player. They also read his *team* from the last
+    game in those logs, which is right during a season and wrong every
+    October — a summer of trades and free agency leaves every mover pointing
+    at the club he left. The card needs the team only to decide which side of
+    tonight's game he is on, so it asks the roster instead of the history.
+
+    Fetched fresh rather than served from cache when asked to refresh:
+    rosters change on waiver claims and call-ups, and a cached one is a
+    guess about today.
+    """
+    abbrev = str(team).strip().upper()
+    if not TEAM_PATTERN.fullmatch(abbrev):
+        raise NhlApiError(f"{team!r} is not a three-letter NHL team abbreviation.")
+    season = int(season_id)
+    if len(str(season)) != 8:
+        raise NhlApiError(f"{season_id!r} is not an eight-digit NHL season id.")
+    path = _cache_root(raw_dir) / "roster" / f"{abbrev}_{season}.json"
+
+    if not refresh:
+        cached = _read_cache(path)
+        if cached is not None:
+            return CacheEntry(
+                path=path, payload=cached, from_cache=True, complete=False
+            )
+
+    payload = _get_json(
+        f"{API_BASE_URL}/v1/roster/{abbrev}/{season}",
+        requester=requester or _default_requester,
+    )
+    _write_cache(path, payload)
+    return CacheEntry(path=path, payload=payload, from_cache=False, complete=False)
+
+
+#: The roster payload's player groups.
+ROSTER_GROUPS = ("forwards", "defensemen", "goalies")
+
+
+def current_rosters(
+    season_id: int | None = None, *, raw_dir: Path | None = None
+) -> dict[int, str]:
+    """{player id: team} from the cached rosters, newest season cached.
+
+    Empty when nothing is cached, and every caller treats empty as "fall back
+    to the logs" rather than "nobody is on a team" — a missing roster must
+    never be able to unresolve a player who would otherwise price.
+    """
+    directory = _cache_root(raw_dir) / "roster"
+    if not directory.is_dir():
+        return {}
+    files = sorted(directory.glob("*.json"))
+    if season_id is not None:
+        files = [path for path in files if path.stem.endswith(str(int(season_id)))]
+    elif files:
+        newest = max(path.stem.rsplit("_", 1)[-1] for path in files)
+        files = [path for path in files if path.stem.endswith(newest)]
+    rosters: dict[int, str] = {}
+    for path in files:
+        team = path.stem.split("_", 1)[0].upper()
+        payload = _read_cache(path)
+        if not isinstance(payload, dict):
+            continue
+        for group in ROSTER_GROUPS:
+            for player in payload.get(group) or []:
+                if not isinstance(player, dict):
+                    continue
+                try:
+                    player_id = int(player.get("id"))
+                except (TypeError, ValueError):
+                    continue
+                rosters[player_id] = team
+    return rosters
+
+
 def fetch_player_registry(
     season_id: int,
     *,
