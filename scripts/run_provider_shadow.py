@@ -12,8 +12,9 @@ places nothing.
     PYTHONPATH=src .venv/bin/python scripts/run_provider_shadow.py --live
 
     # Live including props. One credit per market per event; the cap is hard.
+    # 19 markets are asked, so a cap of 190 buys ten events.
     PYTHONPATH=src .venv/bin/python scripts/run_provider_shadow.py --live \
-        --props --credit-cap 120
+        --props --credit-cap 190
 
 The credential comes from `NHL_ODDS_API_KEY` in the environment, a gitignored
 `.env`, or a GitHub Secret. It is never accepted as a command argument.
@@ -23,7 +24,7 @@ from __future__ import annotations
 
 import argparse
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pandas as pd
@@ -32,6 +33,7 @@ from nhl_betting_lab.config import OUTPUTS_DIR, STAGING_DIR
 from nhl_betting_lab.providers import odds_api
 from nhl_betting_lab.providers.odds_api import EmptySlateError
 from nhl_betting_lab.providers.env_file import load_provider_env
+from nhl_betting_lab.season import LEAGUE_TIMEZONE
 from nhl_betting_lab.reports.provider_shadow import (
     build_shadow_summary,
     save_shadow_reports,
@@ -71,14 +73,34 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--credit-cap",
         type=int,
-        default=60,
-        help="Hard cap on props credits. The fetch stops rather than exceeding it.",
+        default=190,
+        help=(
+            "Hard cap on per-event credits. The fetch stops rather than "
+            "exceeding it, billing every asked market whether a book quotes "
+            "it or not — so the cap must be read against the number of "
+            "markets asked (19 now, which is ten events at this default). "
+            "The old 60 bought six events when ten markets were asked and "
+            "would buy three today: a starved fetch reads exactly like a "
+            "market nobody quotes."
+        ),
     )
     parser.add_argument(
         "--max-events",
         type=int,
         default=0,
         help="Fetch props for at most this many events. 0 means the whole slate.",
+    )
+    parser.add_argument(
+        "--horizon-days",
+        type=int,
+        default=1,
+        help=(
+            "Fetch per-event markets only for games on this many NHL game "
+            "dates starting today (America/New_York). 1 is today's slate — "
+            "the daily default. 0 removes the window, which is what a probe "
+            "wants and what once let a 32-event August board starve the "
+            "day's own games."
+        ),
     )
     parser.add_argument(
         "--overwrite-staging",
@@ -109,8 +131,28 @@ def main(argv: list[str] | None = None) -> int:
     if args.live:
         provider = odds_api.OddsApiProvider()
         stamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        # ONE window over both fetches, or none over either. The eligibility
+        # gate measures coverage against the slate the staged prices
+        # describe: a bulk fetch covering the whole posted board while the
+        # per-event fetch covers one day would make every prop read
+        # "priced for 9 of 32 games" — INCOMPLETE, excluded from the card,
+        # and indistinguishable from books not posting props at all.
+        league_days = None
+        if args.horizon_days > 0:
+            today = datetime.now(LEAGUE_TIMEZONE).date()
+            league_days = [
+                (today + timedelta(days=offset)).isoformat()
+                for offset in range(args.horizon_days)
+            ]
+            print(
+                "Fetch window (league dates): " + ", ".join(league_days) + "."
+            )
         try:
-            team = provider.fetch_team_markets(fetched_at=stamp)
+            team = provider.fetch_team_markets(
+                fetched_at=stamp,
+                league_days=league_days,
+                max_events=args.max_events,
+            )
         except EmptySlateError as exc:
             # Exit 3 marks a state the caller should not treat as a failure.
             # The off-season lasts four months; a red run every day of it is a
@@ -153,11 +195,16 @@ def main(argv: list[str] | None = None) -> int:
             per_event = list(odds_api.PER_EVENT_PROVIDER_MARKETS) + list(
                 odds_api.ALTERNATE_PROVIDER_MARKETS
             )
+            # The same window the bulk fetch used. The cap spends
+            # front-to-back, so without it the budget buys prices for games
+            # days away while starving the slate this card is actually for;
+            # tomorrow's run fetches tomorrow's games at tomorrow's prices.
             props = provider.fetch_player_props(
                 markets=per_event,
                 max_events=args.max_events,
                 credit_cap=args.credit_cap,
                 fetched_at=stamp,
+                league_days=league_days,
             )
             written.append(
                 odds_api.write_staging(

@@ -36,6 +36,7 @@ is.
 from __future__ import annotations
 
 import json
+import math
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -47,6 +48,7 @@ from nhl_betting_lab.backtest.team_walk_forward import (
     settle_moneyline,
     settle_puck_line,
     settle_regulation_3_way,
+    settle_team_total,
     settle_total,
 )
 from nhl_betting_lab.config import DATA_DIR, MIN_EDGE, MIN_PROP_EDGE, OUTPUTS_DIR
@@ -209,6 +211,22 @@ def _player_index(
     return index
 
 
+def _finite_line(value: object) -> float | None:
+    """The row's line as a real number, or None.
+
+    NaN is the shape a missing CSV field takes, and it is silent poison in a
+    settlement: every comparison against it is False, so an absent line
+    settles "under" as a win and "over" as a loss without raising anything.
+    A market that needs a line and has none is unsettleable — a state this
+    ledger already knows how to record.
+    """
+    try:
+        number = float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+    return None if math.isnan(number) or math.isinf(number) else number
+
+
 def _settle_prop_row(
     row, player_index, game_teams: set[str]
 ) -> tuple[str, float | None, float]:
@@ -234,8 +252,11 @@ def _settle_prop_row(
     actual = actuals.get(market.settles_on)
     if actual is None:
         return "unsettleable", None, 0.0
+    line = _finite_line(row.line)
+    if line is None:
+        return "unsettleable", actual, 0.0
     try:
-        won, push = settle_prop(actual, float(row.line), str(row.selection))
+        won, push = settle_prop(actual, line, str(row.selection))
     except (TypeError, ValueError):
         return "unsettleable", actual, 0.0
     if push:
@@ -271,7 +292,9 @@ def _settle_team_row(row, game) -> tuple[str, float | None, float]:
         won, push = result == selection, False
         actual = float(home_goals - away_goals)
     elif market == "puck_line":
-        line = float(row.line)
+        line = _finite_line(row.line)
+        if line is None:
+            return "unsettleable", None, 0.0
         side = (
             ("home_minus" if line < 0 else "home_plus")
             if selection == "home"
@@ -282,9 +305,26 @@ def _settle_team_row(row, game) -> tuple[str, float | None, float]:
         )[side]
         actual = float(home_goals - away_goals)
     elif market == "total_goals":
-        over, push = settle_total(home_goals, away_goals, float(row.line))
+        line = _finite_line(row.line)
+        if line is None:
+            return "unsettleable", None, 0.0
+        over, push = settle_total(home_goals, away_goals, line)
         won = over if selection == "over" else (not over and not push)
         actual = float(home_goals + away_goals)
+    elif market == "team_total":
+        # The side rides in the selection vocabulary (`home_over` …); a row
+        # outside it cannot be settled and must never be guessed at.
+        side, _, direction = selection.partition("_")
+        line = _finite_line(row.line)
+        if line is None or side not in {"home", "away"} or direction not in {
+            "over",
+            "under",
+        }:
+            return "unsettleable", None, 0.0
+        side_goals = home_goals if side == "home" else away_goals
+        over, push = settle_team_total(side_goals, line)
+        won = over if direction == "over" else (not over and not push)
+        actual = float(side_goals)
     else:
         return "unsettleable", None, 0.0
 
@@ -421,9 +461,23 @@ def settle_snapshots(
     if new_rows:
         ledger_path.parent.mkdir(parents=True, exist_ok=True)
         frame = pd.DataFrame(new_rows, columns=list(LEDGER_COLUMNS))
+        existing_rows = 0
         if ledger_path.is_file():
-            frame = pd.concat(
-                [pd.read_csv(ledger_path), frame], ignore_index=True
+            existing = pd.read_csv(ledger_path)
+            existing_rows = len(existing)
+            frame = pd.concat([existing, frame], ignore_index=True)
+        # The ledger only ever grows: it is an append-only record of opinions
+        # that have already settled, and a season of it cannot be
+        # reconstructed from anywhere else — the prices it settled against
+        # are gone. A write that would shrink it means the file being
+        # concatenated is not the file that was read, and the safe move is to
+        # refuse rather than to publish a shorter history as the whole truth.
+        if len(frame) < existing_rows:
+            raise ValueError(
+                f"Refusing to write a forward ledger of {len(frame)} rows "
+                f"over one holding {existing_rows}. The ledger is "
+                "append-only and cannot be rebuilt; something upstream lost "
+                "rows."
             )
         frame.to_csv(ledger_path, index=False, lineterminator="\n")
     return result

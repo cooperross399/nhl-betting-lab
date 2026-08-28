@@ -141,6 +141,22 @@ TEAM_MARKETS: tuple[Market, ...] = (
         # that could never accumulate.
         per_event=True,
     ),
+    # One team's goals against a line. The scoreline matrix the totals are
+    # computed from already knows each side's distribution, so pricing this
+    # is a marginal of an existing model, not a new one. The side lives in
+    # the selection (`home_over` … `away_under`) because a provider key maps
+    # to exactly one project market and both teams arrive under one key.
+    # Not in any acceptance receipt: the card excludes it until a human
+    # approves it, while its opinions freeze into the forward ledger — the
+    # same road every other market walked.
+    Market(
+        key="team_total",
+        provider_key="team_totals",
+        label="Team total goals",
+        is_prop=False,
+        selections=("home_over", "home_under", "away_over", "away_under"),
+        per_event=True,
+    ),
 )
 
 ALL_MARKETS: tuple[Market, ...] = PROP_MARKETS + TEAM_MARKETS
@@ -160,7 +176,31 @@ PROVIDER_KEY_TO_MARKET: dict[str, str] = {
 ALTERNATE_PROVIDER_KEYS: dict[str, str] = {
     "alternate_spreads": "puck_line",
     "alternate_totals": "total_goals",
+    "alternate_team_totals": "team_total",
+    # The prop ladders: same market, more lines, and the distributions the
+    # samples store price every rung exactly. Each key is drawn from the
+    # provider's own NHL documentation; an asked-for market nobody quotes
+    # costs nothing, so carrying these year-round is free insurance against
+    # writing a line off that only ever lived in the ladder.
+    "player_points_alternate": "points",
+    "player_goals_alternate": "goals",
+    "player_assists_alternate": "assists",
+    "player_shots_on_goal_alternate": "shots_on_goal",
+    "player_blocked_shots_alternate": "blocked_shots",
+    "player_total_saves_alternate": "goalie_saves",
+    # Anytime scorer is goals over 0.5 under another name — one market, one
+    # model, one settlement, exactly so their measurements can never drift
+    # apart. The outcome shape differs (the player arrives in the outcome
+    # name, priced as a yes), which `normalize_event` handles by key.
+    "player_goal_scorer_anytime": "goals",
 }
+
+#: Provider keys whose outcomes name the player directly and price the "yes"
+#: side, rather than the Over/Under-with-description shape every other prop
+#: uses.
+SCORER_YES_PROVIDER_KEYS: frozenset[str] = frozenset(
+    {"player_goal_scorer_anytime"}
+)
 
 #: Where the provider's headline NHL total sits almost every night. Used for
 #: reporting only — the line a price is judged against always comes from the

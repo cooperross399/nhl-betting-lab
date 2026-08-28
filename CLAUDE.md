@@ -123,6 +123,15 @@ Re-derive rather than trust if the data has moved.
   have reproduced the biased totals measurement indefinitely.
 - **The measured historical rate is ten credits per market returned per
   event.** Quota: **88,527 of 100,000 remaining** as of 2026-08-26.
+- **The season fits the quota, measured against the real schedule.** 185
+  game days, 1,344 games, 2026-09-29 to 2027-04-10; a mean of 7.3 games a
+  night and a maximum of 16. At 19 asked per-event markets that is **26,091
+  credits for one fetch a day** and 52,182 for two, against 88,527 remaining.
+  The 320-credit daily cap clips **zero** of the 185 nights (16 games x 19 =
+  304). The second scheduled trigger now stands down when the first already
+  published a clean card to `card-feed`, so the ordinary season costs the
+  one-run figure and the backup still fires whenever the primary did not
+  finish or finished degraded.
 - **Gameday Refresh runs green end to end** (verified 2026-08-26: live team
   prices staged, models fitted, card correctly blocked, comment posted).
   Props return no rows this far from the season — an absence, not a fault.
@@ -139,6 +148,17 @@ Re-derive rather than trust if the data has moved.
   behaviour and not a failure. `goalie_saves` still cannot produce a
   selection without a confirmed-starter source
   (`docs/goalie_props_need_a_confirmed_starter.md`).
+- **The provider's whole NHL catalogue is either wired or recorded as
+  deferred with its reason** (`docs/periphery_markets_decision.md`,
+  2026-08-27): the six prop alternate ladders and the anytime scorer land on
+  existing approved markets; `team_total` is new, priced off the scoreline
+  matrix, settles from the boxscore, and stays card-excluded until a human
+  receipt names it while its opinions accumulate forward. Period markets and
+  first/last scorer are deferred — no period model, no goal-order data —
+  not silently dropped. The per-event fetch is windowed to the day's slate
+  (`--horizon-days 1`; an unwindowed 32-event August board starved the
+  nearest nine games) and the cap is 320 against the pessimistic bound;
+  an asked-for market nobody quotes costs nothing.
 - **Data**: three seasons cached — 3,936 games, 157,419 player-game rows,
   121 unresolved names (0.08%). A completed boxscore is never refetched.
 - **Calibration** (can rule out, never in): 2.5M walk-forward prop samples,

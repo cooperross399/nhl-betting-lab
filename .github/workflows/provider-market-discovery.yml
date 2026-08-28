@@ -22,10 +22,10 @@ on:
         required: false
         default: false
       credit_cap:
-        description: "Hard cap on props credits"
+        description: "Hard cap on per-event credits (19 markets asked; 380 = 20 events)"
         type: string
         required: false
-        default: "60"
+        default: "380"
       probe_every_market:
         description: "Ask about every candidate market individually (~1 credit each)"
         type: boolean
@@ -87,9 +87,29 @@ jobs:
           NHL_ODDS_API_KEY: ${{ secrets.NHL_ODDS_API_KEY }}
           PYTHONPATH: src
         run: |
+          # --horizon-days 0 because this IS the probe: it must ask about
+          # the whole posted board, not today's slate. A windowed probe run
+          # on an off-day would fetch nothing, report every per-event market
+          # at zero coverage, and read as "still not quoted" — writing a
+          # live market off for the wrong reason, which is the exact mistake
+          # this workflow exists to prevent.
+          #
+          # The cap is read against the number of markets asked (19), so a
+          # cap that was six events when ten were asked is three today. A
+          # starved probe and an unquoted market look identical in the
+          # coverage table, so the cap has to be scaled deliberately.
+          # --max-events is what makes the coverage table honest. The cap
+          # buys twenty events; without the same limit on the bulk fetch the
+          # slate would be the whole board and every per-event market would
+          # report "20 of 32 games — incomplete", which reads as "no book
+          # covers the slate" when the truth is "the budget stopped at
+          # twenty". A starved probe and an unquoted market must never look
+          # alike here: telling them apart is the entire job of this
+          # workflow.
           python scripts/run_provider_shadow.py --live --overwrite-staging \
+            --horizon-days 0 --max-events 20 \
             ${{ inputs.include_props == true && '--props' || '' }} \
-            --credit-cap "${{ inputs.credit_cap || '60' }}"
+            --credit-cap "${{ inputs.credit_cap || '380' }}"
 
       - name: Write the coverage report to the run summary
         if: always()

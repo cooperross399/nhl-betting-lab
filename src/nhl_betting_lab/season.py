@@ -101,6 +101,12 @@ def known_regular_season_games(raw_dir=None) -> set[tuple[str, str, str]]:
     known: set[tuple[str, str, str]] = set()
     if not directory.is_dir():
         return known
+    # Every club's own schedule holds every game it plays, so a complete
+    # cache names all thirty-two clubs. An incomplete one is the dangerous
+    # shape: it still yields a plausible date range, so a screen that trusts
+    # it drops every game whose club file never landed — silently, as
+    # "preseason". Callers get the club count and decide; the failure
+    # direction has to be theirs, not a set that cannot say how sure it is.
     for path in directory.glob("*.json"):
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
@@ -117,3 +123,21 @@ def known_regular_season_games(raw_dir=None) -> set[tuple[str, str, str]]:
             if len(day) == 10 and home and away:
                 known.add((day, home, away))
     return known
+
+
+#: The number of clubs a complete `club_schedule` cache holds. A cache with
+#: fewer has games it simply does not know about, and cannot be used to judge
+#: whether a game is preseason.
+EXPECTED_CLUBS = 32
+
+
+def schedule_cache_is_complete(raw_dir=None) -> tuple[bool, int]:
+    """(is complete, clubs found) for the cached club schedules.
+
+    A partial cache is not a smaller truth. It is the same truth with holes,
+    and the holes are indistinguishable from exhibition games to anything
+    that only asks "is this fixture in the set?".
+    """
+    known = known_regular_season_games(raw_dir)
+    clubs = {team for _, home, away in known for team in (home, away)}
+    return len(clubs) >= EXPECTED_CLUBS, len(clubs)

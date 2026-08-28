@@ -42,9 +42,11 @@ from nhl_betting_lab.reports.card_pricing import (
 from nhl_betting_lab.reports.gameday_card import build_card, save_card
 from nhl_betting_lab.forward_evidence import write_snapshot
 from nhl_betting_lab.season import (
+    EXPECTED_CLUBS,
     LEAGUE_TIMEZONE,
     known_regular_season_games,
     row_game_date,
+    schedule_cache_is_complete,
 )
 from nhl_betting_lab.staging_provider_policy import load_policy
 from nhl_betting_lab.verdicts import describe as describe_verdicts, ships
@@ -77,6 +79,15 @@ def main(argv: list[str] | None = None) -> int:
         default="",
         help="ISO instant to treat as now, for reproducing a past card.",
     )
+    parser.add_argument(
+        "--archive-dir",
+        default="",
+        help=(
+            "Where priced snapshots are frozen. Defaults to the real "
+            "evidence archive, EXCEPT when --output-dir is not the default, "
+            "in which case it follows that instead."
+        ),
+    )
     args = parser.parse_args(argv)
 
     moment = (
@@ -91,6 +102,26 @@ def main(argv: list[str] | None = None) -> int:
     processed = Path(args.processed_dir)
     outputs = Path(args.output_dir)
 
+    # A run pointed at a scratch output directory must not write into the
+    # real evidence archive. It did once, in testing: a synthetic card
+    # dated to opening night froze a snapshot there, and because the first
+    # opinion of a day stands and is never repriced, the real opening-night
+    # card would have been unable to freeze its own. Test rows would have
+    # become the season's first forward evidence.
+    #
+    # So the archive follows a non-default output directory unless one is
+    # named explicitly, and the run says out loud which archive it is
+    # writing to whenever that is not the real one.
+    archive_dir: Path | None = Path(args.archive_dir) if args.archive_dir else None
+    if archive_dir is None and outputs.resolve() != OUTPUTS_DIR.resolve():
+        archive_dir = outputs / "archive"
+    if archive_dir is not None:
+        print(
+            f"Snapshots are frozen under {archive_dir}, not the real "
+            "evidence archive, because this run is not writing to the "
+            "default output directory."
+        )
+
     policy = load_policy()
     print(f"Provider policy: {policy.status}")
     print(f"Recorded policy verdicts: {describe_verdicts(output_dir=outputs)}.")
@@ -104,7 +135,26 @@ def main(argv: list[str] | None = None) -> int:
     # is excluded and counted, never guessed at; with no schedule knowledge
     # at all, nothing is excluded and the run says so loudly.
     schedule = known_regular_season_games()
-    if not prices.empty and schedule:
+    schedule_complete, clubs_cached = schedule_cache_is_complete()
+    if not prices.empty and schedule and not schedule_complete:
+        # A partial cache screens like a complete one and is wrong in the
+        # worst possible direction: every game whose club file never landed
+        # reads as "not regular season" and is dropped, the eligibility gate
+        # then measures coverage against what survived, and a card built on
+        # one eighth of the night reports itself complete and green. So the
+        # screen abstains until the cache names every club. A leaked
+        # exhibition game is visible in the card and settles as unsettleable;
+        # a silently truncated slate is invisible.
+        print(
+            f"WARNING: the club-schedule cache names only {clubs_cached} of "
+            f"{EXPECTED_CLUBS} clubs, so it cannot say which games are "
+            "preseason. The preseason screen is skipped rather than run on a "
+            "cache with holes — a hole and an exhibition game look identical "
+            "to it, and dropping real games would shrink the slate the "
+            "eligibility gate measures against. Run "
+            "scripts/fetch_nhl_data.py to complete the cache."
+        )
+    elif not prices.empty and schedule:
         # The screen judges only dates it actually knows. If next season's
         # schedule is not cached yet, every real game would read "unknown"
         # and the screen would exclude the entire opening slate — so outside
@@ -270,6 +320,7 @@ def main(argv: list[str] | None = None) -> int:
         key_for=selection_key,
         verdicts_line=describe_verdicts(output_dir=outputs),
         snapshot_date=snapshot_day,
+        archive_dir=archive_dir,
     )
     if written is not None:
         print(f"Priced snapshot frozen: {written}")

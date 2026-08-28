@@ -176,6 +176,20 @@ def settle_total(
     return total > float(line), False
 
 
+def settle_team_total(side_goals: int, line: float) -> tuple[bool, bool]:
+    """`(over, push)` for one side's goals, on the final score.
+
+    The boxscore's final already contains any overtime goal, so no
+    regulation adjustment applies here — the model carries that reasoning,
+    the settlement just reads the score. Whole-number lines push on an
+    exact hit, the same rule as every other total.
+    """
+    goals = int(side_goals)
+    if float(line).is_integer() and goals == int(line):
+        return False, True
+    return goals > float(line), False
+
+
 def _with_back_to_backs(games: pd.DataFrame) -> pd.DataFrame:
     """Mark whether each side played the previous league day.
 

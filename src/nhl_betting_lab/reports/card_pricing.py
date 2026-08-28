@@ -261,6 +261,19 @@ def price_team_markets(
             sides = model.regulation_3_way_probabilities(home, away, **rest)
             if selection in sides:
                 probabilities[key] = sides[selection]
+        elif market_key == "team_total":
+            # The side rides in the selection (`home_over` … `away_under`)
+            # because both teams arrive under one provider key. Anything not
+            # in that vocabulary produces no entry — absence means no
+            # opinion, never a default.
+            if line is None:
+                continue
+            side, _, direction = selection.partition("_")
+            if side in {"home", "away"} and direction in {"over", "under"}:
+                totals = model.team_total_probabilities(
+                    home, away, line=line, side=side, **rest
+                )
+                probabilities[key] = totals[direction]
         elif market_key == "total_goals":
             if line is None:
                 continue

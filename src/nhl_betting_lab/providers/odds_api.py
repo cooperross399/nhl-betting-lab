@@ -17,8 +17,12 @@ a key shape ever reaches a tracked file.
 ## What a fetch costs
 
 The bulk endpoint serves `h2h`, `spreads` and `totals` for the whole slate for
-a handful of credits. Player props are per-event: **one credit per market per
-event**. Six prop markets across a twelve-game night is 72 credits.
+a handful of credits. Everything else is per-event: **one credit per market
+per event when a book actually quotes it, nothing when none does** — the
+alternate ladders ride along for free until the day a book hangs one. The cap
+is enforced against the pessimistic bound (every asked market billed), so the
+per-event fetch is also filtered to the day's slate; spending the budget on
+games four days out was how a 32-event August board starved the nearest nine.
 
 Every entry point states the cost before spending it and takes a hard cap, so
 a probe cannot become a bill by accident.
@@ -44,10 +48,13 @@ from nhl_betting_lab.config import ODDS_API_SPORT_KEY, STAGING_DIR
 from nhl_betting_lab.markets import (
     ALL_MARKETS,
     ALTERNATE_PROVIDER_KEYS,
+    ANYTIME_SCORER_LINE,
     PROP_MARKETS,
+    SCORER_YES_PROVIDER_KEYS,
     market_for_provider_key,
 )
 from nhl_betting_lab.providers.env_file import redact
+from nhl_betting_lab.season import game_date
 
 
 API_KEY_ENV = "NHL_ODDS_API_KEY"
@@ -162,6 +169,11 @@ def american_price(value: object) -> float | None:
     return price
 
 
+def _commence_key(event: Mapping[str, Any]) -> str:
+    """Sort key for event ordering, shared by both fetches."""
+    return str(event.get("commence_time", "") or "")
+
+
 def _line_of(outcome: Mapping[str, Any]) -> float | None:
     point = outcome.get("point")
     if point is None:
@@ -241,11 +253,53 @@ def normalize_event(
                 if not name:
                     continue
                 player = str(outcome.get("description", "")).strip()
+                selection = name.strip().lower()
+                line_value = _line_of(outcome)
+                if provider_key in SCORER_YES_PROVIDER_KEYS:
+                    # Scorer markets invert the prop shape: the outcome NAME
+                    # is the player and the price is the "yes" side, with no
+                    # line. Both observed layouts are accepted — name=player,
+                    # or name=Yes/No with the player in the description —
+                    # and everything lands as goals over 0.5, which is what
+                    # an anytime scorer is.
+                    #
+                    # It lands in the SAME vocabulary as that rung, too:
+                    # `over`, never `yes`. Both spellings price identically
+                    # and settle identically, but `selection_key` carries the
+                    # selection string, so two spellings are two keys — and
+                    # the card staked one wager twice, published it as two
+                    # independent best bets at two different prices, and
+                    # froze it into the forward ledger twice. The repository
+                    # already holds this rule one layer down ("there is one
+                    # name for this, not two, so the two cannot disagree on
+                    # the same card"); the provider vocabulary has to obey it
+                    # as well, or the collapse to one best price never fires.
+                    if selection in {"yes", "no"}:
+                        if not player:
+                            continue
+                        selection = "over" if selection == "yes" else "under"
+                    else:
+                        player, selection = name, "over"
+                    line_value = ANYTIME_SCORER_LINE
                 if target.is_prop and not player:
                     # A prop outcome with no player is unusable: it cannot be
                     # settled and cannot be matched to a model opinion.
                     continue
-                selection = name.strip().lower()
+                if not target.is_prop and target.key == "team_total":
+                    # Both teams arrive under one provider key, the side in
+                    # the outcome's description and Over/Under in its name.
+                    # Staged in this lab's vocabulary (`home_over` …), for
+                    # the same reason the 3-way is: rows staged in the
+                    # provider's vocabulary silently miss every join.
+                    if selection not in {"over", "under"}:
+                        continue
+                    if player == home:
+                        selection = f"home_{selection}"
+                    elif player == away:
+                        selection = f"away_{selection}"
+                    else:
+                        continue
+                    player = ""
                 if not target.is_prop and target.key == "moneyline":
                     if name == home:
                         selection = "home"
@@ -285,7 +339,7 @@ def normalize_event(
                         "market": target.key,
                         "player": player,
                         "selection": selection,
-                        "line": _line_of(outcome),
+                        "line": line_value,
                         "american_odds": price,
                         "book": book,
                         "fetched_at": fetched_at,
@@ -437,10 +491,24 @@ class OddsApiProvider:
             raise ProviderError("The events list is not a JSON list.")
         return [item for item in payload if isinstance(item, dict)]
 
-    def fetch_team_markets(self, *, fetched_at: str = "") -> FetchResult:
+    def fetch_team_markets(
+        self,
+        *,
+        fetched_at: str = "",
+        league_days: Sequence[str] | None = None,
+        max_events: int = 0,
+    ) -> FetchResult:
         """Bulk team markets for the whole slate.
 
         Cheap: the bulk endpoint bills per market requested, not per event.
+
+        `league_days` must be the **same window the per-event fetch uses**.
+        The eligibility gate measures each market's coverage against the
+        slate the staged prices describe, so a bulk fetch covering the whole
+        posted board while the per-event fetch covers one day would make
+        every prop read "priced for 9 of 32 games" — INCOMPLETE, excluded,
+        and indistinguishable from books not posting props at all. One
+        window over both keeps that measure honest.
 
         Only the markets the bulk endpoint actually serves are requested. The
         alternate ladders are per-event and asking for them here makes the
@@ -500,9 +568,46 @@ class OddsApiProvider:
             credits_spent=len(markets),
             quota_remaining=headers.get("x-requests-remaining", ""),
         )
-        for event in payload:
-            if not isinstance(event, dict):
-                continue
+        events = [item for item in payload if isinstance(item, dict)]
+        if league_days is not None:
+            allowed_days = {str(day).strip() for day in league_days}
+            in_window = [
+                event
+                for event in events
+                if game_date(event.get("commence_time")) in allowed_days
+            ]
+            if events and not in_window:
+                # The board is full of future games and none is today's. That
+                # is an ordinary off-day — the league plays most nights, not
+                # every night — and it reads exactly like the off-season to
+                # everything downstream, which is the correct handling: no
+                # card, no fault, no red run.
+                raise EmptySlateError(
+                    f"The provider lists {len(events)} upcoming NHL game(s) "
+                    f"but none is scheduled on {sorted(allowed_days)}, so "
+                    "there is nothing to price today. Not a fault."
+                )
+            outside = len(events) - len(in_window)
+            if outside:
+                result.warnings.append(
+                    f"{outside} posted event(s) fall outside the fetch "
+                    f"window {sorted(allowed_days)}. Their markets are "
+                    "absent, not empty; the run on their own game day "
+                    "fetches them."
+                )
+            result.events_seen = len(in_window)
+            events = in_window
+        if max_events:
+            # The eligibility gate and the coverage report both derive the
+            # slate from the staged rows, so a bulk fetch of the whole board
+            # beside a capped per-event fetch reports the cap as the
+            # provider's absence: "no book covers the whole slate" when what
+            # actually happened is that the budget ran out at event twenty.
+            # The bulk fetch is therefore truncated to the same first-N
+            # events, by the same ordering.
+            events = sorted(events, key=_commence_key)[:max_events]
+            result.events_seen = len(events)
+        for event in events:
             rows = normalize_event(event, fetched_at=stamp)
             if rows:
                 result.events_priced += 1
@@ -528,6 +633,7 @@ class OddsApiProvider:
         max_events: int = 0,
         credit_cap: int = 0,
         fetched_at: str = "",
+        league_days: Sequence[str] | None = None,
     ) -> FetchResult:
         """Per-event player props, under a hard credit cap.
 
@@ -535,6 +641,13 @@ class OddsApiProvider:
         full-slate fetch is exactly the accident this parameter exists to make
         impossible, so the loop stops the moment the next event would exceed
         it — and says how many events it skipped.
+
+        `league_days` restricts the fetch to events on those NHL game dates
+        (America/New_York). The board holds every posted upcoming game — 32
+        of them one August evening — and the cap spends front-to-back, so an
+        unfiltered fetch starves today's slate to buy prices for games days
+        away that tomorrow's run will fetch again anyway. None means no
+        filter, which is what a probe wants and a daily card must not use.
         """
         self._require_credential()
         stamp = fetched_at or datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -545,7 +658,36 @@ class OddsApiProvider:
 
         events = self.list_events()
         result = FetchResult(fetched_at=stamp, events_seen=len(events))
+        if league_days is not None:
+            allowed_days = {str(day).strip() for day in league_days}
+            in_window = [
+                event
+                for event in events
+                if game_date(event.get("commence_time")) in allowed_days
+            ]
+            outside = len(events) - len(in_window)
+            if outside:
+                result.warnings.append(
+                    f"{outside} posted event(s) fall outside the fetch "
+                    f"window {sorted(allowed_days)} and were not asked "
+                    "about. Their markets are absent, not empty; the run on "
+                    "their own game day fetches them."
+                )
+            events = in_window
+        # Ordered by start time, so "the first N events" means the same N
+        # events here and in the bulk fetch. Truncating two differently
+        # ordered lists to the same length is how a coverage table ends up
+        # measuring one set of games against another.
+        events = sorted(events, key=_commence_key)
         selected = events[:max_events] if max_events else events
+
+        # The primary product, and the fallback target: the markets this lab
+        # models and settles, without the alternate ladders that ride along.
+        core_markets = [
+            market for market in wanted
+            if market in set(PER_EVENT_PROVIDER_MARKETS)
+        ] or list(wanted)
+        degraded_to_core = False
 
         skipped_for_budget = 0
         for event in selected:
@@ -565,8 +707,50 @@ class OddsApiProvider:
                 # One event failing must not lose the rest. A partial props
                 # result surfaces as an incomplete market, never as a
                 # fabricated one.
-                result.errors.append(f"Event {event_id}: {exc}")
-                continue
+                #
+                # A 422 is different in kind, and far more dangerous: it means
+                # the provider refused the market LIST, so it refuses that
+                # same list for every other event too. Nineteen keys ride
+                # together, and one key the provider stops serving would take
+                # every prop on every event with it — a whole season of empty
+                # cards that read exactly like books not posting props. That
+                # is the alternate-ladder 422 that once took down the bulk
+                # fetch, one endpoint over.
+                #
+                # So a 422 falls back once to the core per-event markets,
+                # which are the primary product. Losing the alternate ladders
+                # is a bounded, stated loss; losing everything silently is
+                # not.
+                if "422" in str(exc) and list(wanted) != list(core_markets):
+                    try:
+                        payload, headers = self._get(
+                            f"{self.base_url}/v4/sports/{self.sport_key}/"
+                            f"events/{event_id}/odds",
+                            self._params(
+                                regions=self.regions,
+                                markets=",".join(core_markets),
+                            ),
+                        )
+                    except ProviderError as retry_exc:
+                        result.errors.append(
+                            f"Event {event_id}: {retry_exc}"
+                        )
+                        continue
+                    if not degraded_to_core:
+                        degraded_to_core = True
+                        dropped = sorted(set(wanted) - set(core_markets))
+                        result.warnings.append(
+                            "The provider refused the full per-event market "
+                            f"list with a 422, so this fetch fell back to the "
+                            f"core markets and dropped {dropped}. Those "
+                            "markets are absent from this run, not empty — "
+                            "one of them is a key the provider no longer "
+                            "serves, and it would otherwise have taken every "
+                            "prop on every event with it."
+                        )
+                else:
+                    result.errors.append(f"Event {event_id}: {exc}")
+                    continue
             result.credits_spent += per_event
             if headers.get("x-requests-remaining"):
                 result.quota_remaining = headers["x-requests-remaining"]
