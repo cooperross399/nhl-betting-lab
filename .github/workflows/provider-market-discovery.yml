@@ -98,8 +98,16 @@ jobs:
           # cap that was six events when ten were asked is three today. A
           # starved probe and an unquoted market look identical in the
           # coverage table, so the cap has to be scaled deliberately.
+          # --max-events is what makes the coverage table honest. The cap
+          # buys twenty events; without the same limit on the bulk fetch the
+          # slate would be the whole board and every per-event market would
+          # report "20 of 32 games — incomplete", which reads as "no book
+          # covers the slate" when the truth is "the budget stopped at
+          # twenty". A starved probe and an unquoted market must never look
+          # alike here: telling them apart is the entire job of this
+          # workflow.
           python scripts/run_provider_shadow.py --live --overwrite-staging \
-            --horizon-days 0 \
+            --horizon-days 0 --max-events 20 \
             ${{ inputs.include_props == true && '--props' || '' }} \
             --credit-cap "${{ inputs.credit_cap || '380' }}"
 

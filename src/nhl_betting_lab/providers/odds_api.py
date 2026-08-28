@@ -169,6 +169,11 @@ def american_price(value: object) -> float | None:
     return price
 
 
+def _commence_key(event: Mapping[str, Any]) -> str:
+    """Sort key for event ordering, shared by both fetches."""
+    return str(event.get("commence_time", "") or "")
+
+
 def _line_of(outcome: Mapping[str, Any]) -> float | None:
     point = outcome.get("point")
     if point is None:
@@ -257,11 +262,24 @@ def normalize_event(
                     # or name=Yes/No with the player in the description —
                     # and everything lands as goals over 0.5, which is what
                     # an anytime scorer is.
+                    #
+                    # It lands in the SAME vocabulary as that rung, too:
+                    # `over`, never `yes`. Both spellings price identically
+                    # and settle identically, but `selection_key` carries the
+                    # selection string, so two spellings are two keys — and
+                    # the card staked one wager twice, published it as two
+                    # independent best bets at two different prices, and
+                    # froze it into the forward ledger twice. The repository
+                    # already holds this rule one layer down ("there is one
+                    # name for this, not two, so the two cannot disagree on
+                    # the same card"); the provider vocabulary has to obey it
+                    # as well, or the collapse to one best price never fires.
                     if selection in {"yes", "no"}:
                         if not player:
                             continue
+                        selection = "over" if selection == "yes" else "under"
                     else:
-                        player, selection = name, "yes"
+                        player, selection = name, "over"
                     line_value = ANYTIME_SCORER_LINE
                 if target.is_prop and not player:
                     # A prop outcome with no player is unusable: it cannot be
@@ -478,6 +496,7 @@ class OddsApiProvider:
         *,
         fetched_at: str = "",
         league_days: Sequence[str] | None = None,
+        max_events: int = 0,
     ) -> FetchResult:
         """Bulk team markets for the whole slate.
 
@@ -578,6 +597,16 @@ class OddsApiProvider:
                 )
             result.events_seen = len(in_window)
             events = in_window
+        if max_events:
+            # The eligibility gate and the coverage report both derive the
+            # slate from the staged rows, so a bulk fetch of the whole board
+            # beside a capped per-event fetch reports the cap as the
+            # provider's absence: "no book covers the whole slate" when what
+            # actually happened is that the budget ran out at event twenty.
+            # The bulk fetch is therefore truncated to the same first-N
+            # events, by the same ordering.
+            events = sorted(events, key=_commence_key)[:max_events]
+            result.events_seen = len(events)
         for event in events:
             rows = normalize_event(event, fetched_at=stamp)
             if rows:
@@ -645,7 +674,20 @@ class OddsApiProvider:
                     "their own game day fetches them."
                 )
             events = in_window
+        # Ordered by start time, so "the first N events" means the same N
+        # events here and in the bulk fetch. Truncating two differently
+        # ordered lists to the same length is how a coverage table ends up
+        # measuring one set of games against another.
+        events = sorted(events, key=_commence_key)
         selected = events[:max_events] if max_events else events
+
+        # The primary product, and the fallback target: the markets this lab
+        # models and settles, without the alternate ladders that ride along.
+        core_markets = [
+            market for market in wanted
+            if market in set(PER_EVENT_PROVIDER_MARKETS)
+        ] or list(wanted)
+        degraded_to_core = False
 
         skipped_for_budget = 0
         for event in selected:
@@ -665,8 +707,50 @@ class OddsApiProvider:
                 # One event failing must not lose the rest. A partial props
                 # result surfaces as an incomplete market, never as a
                 # fabricated one.
-                result.errors.append(f"Event {event_id}: {exc}")
-                continue
+                #
+                # A 422 is different in kind, and far more dangerous: it means
+                # the provider refused the market LIST, so it refuses that
+                # same list for every other event too. Nineteen keys ride
+                # together, and one key the provider stops serving would take
+                # every prop on every event with it — a whole season of empty
+                # cards that read exactly like books not posting props. That
+                # is the alternate-ladder 422 that once took down the bulk
+                # fetch, one endpoint over.
+                #
+                # So a 422 falls back once to the core per-event markets,
+                # which are the primary product. Losing the alternate ladders
+                # is a bounded, stated loss; losing everything silently is
+                # not.
+                if "422" in str(exc) and list(wanted) != list(core_markets):
+                    try:
+                        payload, headers = self._get(
+                            f"{self.base_url}/v4/sports/{self.sport_key}/"
+                            f"events/{event_id}/odds",
+                            self._params(
+                                regions=self.regions,
+                                markets=",".join(core_markets),
+                            ),
+                        )
+                    except ProviderError as retry_exc:
+                        result.errors.append(
+                            f"Event {event_id}: {retry_exc}"
+                        )
+                        continue
+                    if not degraded_to_core:
+                        degraded_to_core = True
+                        dropped = sorted(set(wanted) - set(core_markets))
+                        result.warnings.append(
+                            "The provider refused the full per-event market "
+                            f"list with a 422, so this fetch fell back to the "
+                            f"core markets and dropped {dropped}. Those "
+                            "markets are absent from this run, not empty — "
+                            "one of them is a key the provider no longer "
+                            "serves, and it would otherwise have taken every "
+                            "prop on every event with it."
+                        )
+                else:
+                    result.errors.append(f"Event {event_id}: {exc}")
+                    continue
             result.credits_spent += per_event
             if headers.get("x-requests-remaining"):
                 result.quota_remaining = headers["x-requests-remaining"]

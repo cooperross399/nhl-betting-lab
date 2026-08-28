@@ -149,7 +149,9 @@ def main(argv: list[str] | None = None) -> int:
             )
         try:
             team = provider.fetch_team_markets(
-                fetched_at=stamp, league_days=league_days
+                fetched_at=stamp,
+                league_days=league_days,
+                max_events=args.max_events,
             )
         except EmptySlateError as exc:
             # Exit 3 marks a state the caller should not treat as a failure.

@@ -461,9 +461,23 @@ def settle_snapshots(
     if new_rows:
         ledger_path.parent.mkdir(parents=True, exist_ok=True)
         frame = pd.DataFrame(new_rows, columns=list(LEDGER_COLUMNS))
+        existing_rows = 0
         if ledger_path.is_file():
-            frame = pd.concat(
-                [pd.read_csv(ledger_path), frame], ignore_index=True
+            existing = pd.read_csv(ledger_path)
+            existing_rows = len(existing)
+            frame = pd.concat([existing, frame], ignore_index=True)
+        # The ledger only ever grows: it is an append-only record of opinions
+        # that have already settled, and a season of it cannot be
+        # reconstructed from anywhere else — the prices it settled against
+        # are gone. A write that would shrink it means the file being
+        # concatenated is not the file that was read, and the safe move is to
+        # refuse rather than to publish a shorter history as the whole truth.
+        if len(frame) < existing_rows:
+            raise ValueError(
+                f"Refusing to write a forward ledger of {len(frame)} rows "
+                f"over one holding {existing_rows}. The ledger is "
+                "append-only and cannot be rebuilt; something upstream lost "
+                "rows."
             )
         frame.to_csv(ledger_path, index=False, lineterminator="\n")
     return result

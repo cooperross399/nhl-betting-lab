@@ -162,7 +162,7 @@ def test_anytime_scorer_is_goals_over_half_whichever_shape_arrives() -> None:
 
     for rows in (name_shape, yes_shape):
         assert [(r["market"], r["player"], r["selection"], r["line"]) for r in rows] == [
-            ("goals", "Auston Matthews", "yes", ANYTIME_SCORER_LINE)
+            ("goals", "Auston Matthews", "over", ANYTIME_SCORER_LINE)
         ]
 
 
@@ -391,7 +391,13 @@ def test_one_window_covers_both_fetches_or_props_read_as_incomplete() -> None:
 
     # One window, built once, passed to both fetches.
     assert text.count("args.horizon_days > 0") == 1
-    assert "fetch_team_markets(\n                fetched_at=stamp, league_days=league_days\n            )" in text
+    # The invariant, not the formatting: whatever the call looks like, the
+    # bulk fetch must receive the same window AND the same event cap the
+    # per-event fetch uses. Two fetches over two different event sets make
+    # the eligibility gate measure coverage against games nobody priced.
+    call = text.split("provider.fetch_team_markets(", 1)[1].split(")", 1)[0]
+    assert "league_days=league_days" in call
+    assert "max_events=args.max_events" in call
     assert "league_days=league_days," in text
 
 

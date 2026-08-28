@@ -123,6 +123,15 @@ Re-derive rather than trust if the data has moved.
   have reproduced the biased totals measurement indefinitely.
 - **The measured historical rate is ten credits per market returned per
   event.** Quota: **88,527 of 100,000 remaining** as of 2026-08-26.
+- **The season fits the quota, measured against the real schedule.** 185
+  game days, 1,344 games, 2026-09-29 to 2027-04-10; a mean of 7.3 games a
+  night and a maximum of 16. At 19 asked per-event markets that is **26,091
+  credits for one fetch a day** and 52,182 for two, against 88,527 remaining.
+  The 320-credit daily cap clips **zero** of the 185 nights (16 games x 19 =
+  304). The second scheduled trigger now stands down when the first already
+  published a clean card to `card-feed`, so the ordinary season costs the
+  one-run figure and the backup still fires whenever the primary did not
+  finish or finished degraded.
 - **Gameday Refresh runs green end to end** (verified 2026-08-26: live team
   prices staged, models fitted, card correctly blocked, comment posted).
   Props return no rows this far from the season — an absence, not a fault.

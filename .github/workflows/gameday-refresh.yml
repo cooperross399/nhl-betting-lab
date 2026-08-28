@@ -82,8 +82,59 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  precheck:
+    # The second scheduled trigger exists only to cover a dropped first one,
+    # and when the first one worked it has nothing to add: it would refetch
+    # the same slate for the same credits, then republish the same card. Over
+    # a 185-day season that duplicate is 26,091 credits — half the entire
+    # season's budget — spent to learn nothing.
+    #
+    # So a scheduled run first asks the card-feed branch whether today's card
+    # is already published and clean. If it is, the whole job is skipped. A
+    # manual dispatch never skips: asking for a run by hand means run it.
+    name: Already published?
+    runs-on: ubuntu-latest
+    outputs:
+      already: ${{ steps.feed.outputs.already }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+      - id: feed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -u
+          if [ "${{ github.event_name }}" != "schedule" ]; then
+            echo "already=false" >> "$GITHUB_OUTPUT"
+            echo "Manual run: never skipped."
+            exit 0
+          fi
+          DAY=$(TZ=America/New_York date +%F)
+          REMOTE="https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}"
+          if ! git fetch "$REMOTE" +refs/heads/card-feed:refs/card-feed-tip 2>/dev/null; then
+            echo "already=false" >> "$GITHUB_OUTPUT"
+            echo "No card-feed branch yet; running."
+            exit 0
+          fi
+          STATUS=$(git show refs/card-feed-tip:latest_status.json 2>/dev/null || echo '{}')
+          FEED_DAY=$(printf '%s' "$STATUS" | jq -r '.date // ""')
+          DEGRADED=$(printf '%s' "$STATUS" | jq -r '.degraded // "unknown"')
+          # Only a CLEAN card for today counts. A degraded run is exactly the
+          # case the backup trigger exists for, so it must not satisfy it.
+          if [ "$FEED_DAY" = "$DAY" ] && [ "$DEGRADED" = "false" ]; then
+            echo "already=true" >> "$GITHUB_OUTPUT"
+            echo "Today's card ($DAY) is already published and clean. Skipping."
+          else
+            echo "already=false" >> "$GITHUB_OUTPUT"
+            echo "Feed day '$FEED_DAY' (degraded=$DEGRADED) is not a clean card for $DAY. Running."
+          fi
+
   refresh:
     name: Gameday Refresh
+    needs: precheck
+    if: needs.precheck.outputs.already != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
@@ -151,6 +202,25 @@ jobs:
           fi
           find data/raw/nhl/boxscore -name '*.json' 2>/dev/null | wc -l \
             | xargs echo "Cached boxscores restored:"
+          # If the chain broke, take the ledger from the card-feed branch
+          # rather than starting the season's record over. Restoring a
+          # slightly stale ledger is harmless — settlement is idempotent and
+          # keyed by snapshot date, so it simply re-settles what it must —
+          # while starting empty destroys evidence that cannot be rebuilt.
+          if [ ! -f data/processed/forward_evidence.csv ]; then
+            if git fetch "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}" \
+                 +refs/heads/card-feed:refs/card-feed-tip 2>/dev/null \
+               && git cat-file -e refs/card-feed-tip:forward_evidence.csv 2>/dev/null; then
+              mkdir -p data/processed
+              git show refs/card-feed-tip:forward_evidence.csv \
+                > data/processed/forward_evidence.csv
+              echo "::warning::The state artifact carried no forward ledger; restored it from the card-feed branch. The artifact chain broke somewhere."
+              wc -l < data/processed/forward_evidence.csv \
+                | xargs echo "Ledger rows restored from card-feed:"
+            else
+              echo "No forward ledger in the artifact or on card-feed. If this is not the first run, the season's ledger is gone."
+            fi
+          fi
 
       - name: Check the provider credential
         # Fails fast and legibly if the key was rotated without updating the
@@ -415,6 +485,18 @@ jobs:
             ENTRIES=$(printf '%s\n100644 blob %s\tlatest_forward_evidence.md' \
               "$ENTRIES" "$BLOB_FWD")
           fi
+          # The ledger itself, not just its report. It is carried between
+          # runs only by the state artifact, and that chain has a single
+          # point of failure: one restore that silently comes back empty and
+          # the next upload replaces a season of settled opinions with a
+          # day's. The prices those rows settled against are gone, so the
+          # history cannot be rebuilt from anything. Here it survives a
+          # broken chain, and the restore step reads it back.
+          if [ -f data/processed/forward_evidence.csv ]; then
+            BLOB_LEDGER=$(git hash-object -w data/processed/forward_evidence.csv)
+            ENTRIES=$(printf '%s\n100644 blob %s\tforward_evidence.csv' \
+              "$ENTRIES" "$BLOB_LEDGER")
+          fi
           TREE=$(printf '%s\n' "$ENTRIES" | git mktree)
           PARENT=""
           if git fetch "$REMOTE" +refs/heads/card-feed:refs/card-feed-tip 2>/dev/null; then
@@ -481,12 +563,18 @@ jobs:
           echo "This job refetched results and prices and rebuilt reports."
           echo "It placed no bet, edited no policy, wrote no receipt,"
           echo "allowlisted no provider, and widened no market scope."
-          if [ "${{ steps.prices.outputs.empty_slate }}" = "true" ]; then
-            echo "::notice::No NHL games were scheduled. Nothing to price, and nothing wrong."
-            exit 0
-          fi
+          # Degraded is checked FIRST, and an empty slate does not excuse it.
+          # An in-season dark night is an ordinary empty slate — the league
+          # does not play every night — and the empty-slate exit used to run
+          # before this check, so a night with no games and a broken results
+          # fetch finished green and silent. Half the season's nights are
+          # dark; a fault that hides on them is a fault that hides.
           if [ "${{ steps.health.outputs.degraded }}" = "true" ]; then
-            echo "::error::This run was degraded. The card was still built and posted; see the job summary."
+            echo "::error::This run was degraded. See the job summary."
             exit 1
+          fi
+          if [ "${{ steps.prices.outputs.empty_slate }}" = "true" ]; then
+            echo "::notice::No NHL games on the slate. Nothing to price, and nothing wrong."
+            exit 0
           fi
           echo "Clean run."
