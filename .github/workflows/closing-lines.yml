@@ -21,11 +21,20 @@ name: Closing Lines
 
 on:
   schedule:
-    # 23:00-03:00 UTC is 19:00-23:00 Eastern: the whole puck-drop window,
-    # hourly. A generous month range on purpose — an off-day costs a handful
-    # of credits to discover and exits quietly.
-    - cron: "0 23 * 1-5,9-12 *"
-    - cron: "0 0,1,2,3 * 1-5,9-12 *"
+    # The window has to cover every puck drop in BOTH daylight regimes, and
+    # the first version did not: 23:00 UTC is 19:00 ET only in EDT — in EST
+    # it is 18:00, so on 116 EDT nights the 19:00 ET games had no capture
+    # before they started, and afternoon games never did in any month. About
+    # 29% of games were losing their close, and not at random: the missing
+    # set was the matinees and the whole opening block.
+    #
+    # 17:00 and 20:00 UTC catch weekend and holiday matinees; 22:00 UTC sits
+    # 60-120 minutes before a 19:00 ET start under either regime; 04:00 UTC
+    # restores the late block in EST. Month 6 covers the Final. A dark night
+    # exits quietly on the empty-slate path, which is what makes a generous
+    # grid cheap.
+    - cron: "0 15,16,17,20,22,23 * 1-6,9-12 *"
+    - cron: "0 0,1,2,3,4 * 1-6,9-12 *"
   workflow_dispatch:
     inputs:
       credit_cap:
@@ -73,10 +82,23 @@ jobs:
           set -u
           REMOTE="https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}"
           mkdir -p data/processed
-          if git fetch "$REMOTE" +refs/heads/closing-lines:refs/closing-tip 2>/dev/null \
-             && git cat-file -e refs/closing-tip:closing_line_captures.csv 2>/dev/null; then
-            git show refs/closing-tip:closing_line_captures.csv \
-              > data/processed/closing_line_captures.csv
+          # Two very different situations used to take the same branch: "the
+          # store does not exist yet" and "the fetch failed". The second one
+          # then published a single night's rows over the whole append-only
+          # history, as a perfectly legal fast-forward. So the ref is probed
+          # first, and anything but a genuinely absent branch is a hard stop.
+          if git ls-remote --exit-code --heads "$REMOTE" closing-lines >/dev/null 2>&1; then
+            git fetch "$REMOTE" +refs/heads/closing-lines:refs/closing-tip || {
+              echo "::error::The closing-lines branch exists but could not be fetched. Refusing to run: publishing now would replace the season's captures with this one run."
+              exit 1
+            }
+            git show refs/closing-tip:closing_line_captures.csv > restored.csv || {
+              echo "::error::The closing-lines branch carries no capture file. Refusing to overwrite it blindly."
+              exit 1
+            }
+            # Through a temp file: a half-written store that becomes the next
+            # baseline is the same data loss by a slower route.
+            mv restored.csv data/processed/closing_line_captures.csv
             wc -l < data/processed/closing_line_captures.csv \
               | xargs echo "Capture rows restored:"
           else
@@ -110,18 +132,25 @@ jobs:
         run: |
           set -u
           REMOTE="https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}"
-          BLOB=$(git hash-object -w data/processed/closing_line_captures.csv)
-          TREE=$(printf '100644 blob %s\tclosing_line_captures.csv\n' "$BLOB" | git mktree)
           export GIT_AUTHOR_NAME="Closing Lines" GIT_AUTHOR_EMAIL="actions@github.com"
           export GIT_COMMITTER_NAME="Closing Lines" GIT_COMMITTER_EMAIL="actions@github.com"
-          # Retried against a freshly fetched tip: hourly captures and a
-          # human dispatch can overlap, and a lost capture cannot be
-          # recovered once the game has started.
+          cp data/processed/closing_line_captures.csv mine.csv
+          # The tree is rebuilt inside the loop, not hashed once outside it.
+          # Hashing before the loop meant a retry after a rejected push
+          # re-offered the same content, silently discarding whatever capture
+          # had landed in between — the one thing the retry exists to stop.
           for attempt in 1 2 3; do
             PARENT=""
             if git fetch "$REMOTE" +refs/heads/closing-lines:refs/closing-tip 2>/dev/null; then
               PARENT=$(git rev-parse refs/closing-tip)
+              if git show refs/closing-tip:closing_line_captures.csv > theirs.csv 2>/dev/null; then
+                PYTHONPATH=src python scripts/merge_capture_store.py \
+                  --mine mine.csv --theirs theirs.csv \
+                  --out data/processed/closing_line_captures.csv || exit 1
+              fi
             fi
+            BLOB=$(git hash-object -w data/processed/closing_line_captures.csv)
+            TREE=$(printf '100644 blob %s\tclosing_line_captures.csv\n' "$BLOB" | git mktree)
             if [ -n "$PARENT" ]; then
               COMMIT=$(git commit-tree "$TREE" -p "$PARENT" -m "captures $(date -u +%FT%TZ)")
             else
@@ -131,7 +160,7 @@ jobs:
               echo "Capture store published (attempt $attempt)."
               exit 0
             fi
-            echo "Push rejected; refetching the tip and retrying."
+            echo "Push rejected; refetching the tip and re-merging."
           done
           echo "::error::Could not publish the capture store after three attempts."
           exit 1

@@ -241,7 +241,9 @@ def test_a_team_market_fetch_stages_rows_and_counts_credits() -> None:
     result = provider.fetch_team_markets(fetched_at="now")
 
     assert len(result.rows) == 2
-    assert result.credits_spent == len(odds_api.BULK_PROVIDER_MARKETS)
+    assert result.credits_spent == len(
+        odds_api.BULK_PROVIDER_MARKETS
+    ) * provider.region_count
     assert result.quota_remaining == "19000"
 
 
@@ -312,13 +314,21 @@ def test_a_slate_with_no_usable_prices_warns_rather_than_inventing() -> None:
 # -- props and cost ----------------------------------------------------
 
 
-def test_the_props_cost_is_one_credit_per_market_per_event() -> None:
-    provider = odds_api.OddsApiProvider(environment=ENVIRONMENT)
+def test_the_props_cost_is_one_credit_per_market_per_region_per_event() -> None:
+    """The region factor is not cosmetic: the hard cap is enforced against
+    this number, so an estimate blind to it stops being the pessimistic
+    bound the moment a second region is asked for."""
+    one = odds_api.OddsApiProvider(environment=ENVIRONMENT, regions="us")
+    two = odds_api.OddsApiProvider(environment=ENVIRONMENT, regions="us,us2")
 
-    assert provider.estimate_prop_credits(events=12) == 12 * len(
+    assert one.estimate_prop_credits(events=12) == 12 * len(
         odds_api.PROP_PROVIDER_MARKETS
     )
-    assert provider.estimate_prop_credits(events=3, markets=["player_points"]) == 3
+    assert one.estimate_prop_credits(events=3, markets=["player_points"]) == 3
+    assert two.estimate_prop_credits(events=3, markets=["player_points"]) == 6
+    assert two.estimate_prop_credits(events=12) == 2 * one.estimate_prop_credits(
+        events=12
+    )
 
 
 def _props_requester(events: int) -> RecordingRequester:
@@ -365,7 +375,8 @@ def test_max_events_limits_the_fetch_independently_of_the_cap() -> None:
         markets=["player_points"], max_events=2, credit_cap=100
     )
 
-    assert result.credits_spent == 2
+    # One market across the default region set, for two events.
+    assert result.credits_spent == 2 * provider.region_count
 
 
 def test_one_failing_event_does_not_lose_the_rest() -> None:

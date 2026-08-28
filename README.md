@@ -128,6 +128,11 @@ PYTHONPATH=src .venv/bin/python scripts/run_provider_shadow.py --live --props \
 # the last capture strictly before its start.
 PYTHONPATH=src .venv/bin/python scripts/capture_closing_lines.py --live \
     --credit-cap 400
+
+# Merge two copies of the capture store without losing a row. Used by the
+# workflow when a push collides with a capture that landed first.
+PYTHONPATH=src .venv/bin/python scripts/merge_capture_store.py \
+    --mine mine.csv --theirs theirs.csv --out store.csv
 ```
 
 # Rebuild the price CSVs from the raw cached responses. Free, and the reason
