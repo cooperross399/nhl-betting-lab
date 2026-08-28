@@ -9,6 +9,8 @@ allowlist door every other market walked.
 
 from __future__ import annotations
 
+import pathlib
+
 import pandas as pd
 import pytest
 
@@ -370,3 +372,168 @@ def test_the_per_event_fetch_spends_only_on_the_days_it_is_for() -> None:
     assert len(asked) == 1
     assert "today1" in asked[0]
     assert any("outside the fetch window" in note for note in result.warnings)
+
+
+# -- what the review found, pinned so it cannot come back --------------
+
+
+def test_one_window_covers_both_fetches_or_props_read_as_incomplete() -> None:
+    """The gate measures coverage against the slate the staged prices
+    describe. Windowing the per-event fetch while the bulk fetch stages the
+    whole posted board makes every prop "priced for 9 of 32 games" —
+    INCOMPLETE, excluded from the card, and indistinguishable from books
+    not posting props at all. Found by review before it ever ran."""
+    text = (
+        pathlib.Path(__file__).resolve().parents[1]
+        / "scripts"
+        / "run_provider_shadow.py"
+    ).read_text(encoding="utf-8")
+
+    # One window, built once, passed to both fetches.
+    assert text.count("args.horizon_days > 0") == 1
+    assert "fetch_team_markets(\n                fetched_at=stamp, league_days=league_days\n            )" in text
+    assert "league_days=league_days," in text
+
+
+def test_the_bulk_fetch_reports_an_off_day_as_an_empty_slate() -> None:
+    """A board full of future games with nothing today is an ordinary
+    off-night, not a fault and not a card."""
+    board = [
+        {
+            "id": "far",
+            "commence_time": "2026-10-12T23:00:00Z",
+            "home_team": HOME,
+            "away_team": AWAY,
+            "bookmakers": [],
+        }
+    ]
+
+    def requester(url: str, **kwargs):  # noqa: ANN001, ANN202
+        return _Response(board)
+
+    provider = odds_api.OddsApiProvider(
+        environment={"NHL_ODDS_API_KEY": "k" * 24}, requester=requester
+    )
+
+    with pytest.raises(odds_api.EmptySlateError, match="none is scheduled"):
+        provider.fetch_team_markets(
+            fetched_at="x", league_days=["2026-10-09"]
+        )
+
+
+def test_the_windowed_bulk_fetch_counts_only_what_it_fetched() -> None:
+    """`events_seen` feeds the credit estimate and the coverage ratio. Left
+    at the board size it describes games the run never fetched."""
+    board = [
+        {
+            "id": "today",
+            "commence_time": "2026-10-09T23:00:00Z",
+            "home_team": HOME,
+            "away_team": AWAY,
+            "bookmakers": [
+                {
+                    "key": "dk",
+                    "title": "DraftKings",
+                    "markets": [
+                        {
+                            "key": "h2h",
+                            "outcomes": [
+                                {"name": HOME, "price": -140},
+                                {"name": AWAY, "price": 120},
+                            ],
+                        }
+                    ],
+                }
+            ],
+        },
+        {
+            "id": "far",
+            "commence_time": "2026-10-12T23:00:00Z",
+            "home_team": AWAY,
+            "away_team": HOME,
+            "bookmakers": [],
+        },
+    ]
+
+    provider = odds_api.OddsApiProvider(
+        environment={"NHL_ODDS_API_KEY": "k" * 24},
+        requester=lambda url, **kwargs: _Response(board),
+    )
+
+    result = provider.fetch_team_markets(
+        fetched_at="x", league_days=["2026-10-09"]
+    )
+
+    assert result.events_seen == 1
+    assert result.events_priced == 1
+    assert {row["provider_event_id"] for row in result.rows} == {"today"}
+    assert any("outside the fetch window" in note for note in result.warnings)
+
+
+def test_the_probe_workflow_asks_about_the_whole_board() -> None:
+    """The discovery workflow IS the probe. Windowed to today it would
+    report every per-event market at zero coverage on any off-day — a live
+    market written off for the wrong reason, which is the exact mistake the
+    workflow exists to prevent."""
+    text = (
+        pathlib.Path(__file__).resolve().parents[1]
+        / ".github"
+        / "workflows"
+        / "provider-market-discovery.yml"
+    ).read_text(encoding="utf-8")
+
+    assert "--horizon-days 0" in text
+
+
+def test_every_credit_cap_is_scaled_to_the_number_of_markets_asked() -> None:
+    """The cap bills every asked market whether a book quotes it or not, so
+    a cap set when ten markets were asked buys half the events once
+    nineteen are. A starved fetch and an unquoted market look identical."""
+    asked = len(odds_api.PER_EVENT_PROVIDER_MARKETS) + len(
+        odds_api.ALTERNATE_PROVIDER_MARKETS
+    )
+    root = pathlib.Path(__file__).resolve().parents[1]
+    gameday = (root / ".github/workflows/gameday-refresh.yml").read_text(
+        encoding="utf-8"
+    )
+    discovery = (
+        root / ".github/workflows/provider-market-discovery.yml"
+    ).read_text(encoding="utf-8")
+
+    # Each default cap must buy a real slate's worth of events, not three.
+    assert 320 // asked >= 16, "the gameday cap no longer covers a full slate"
+    assert "'320'" in gameday
+    assert 380 // asked >= 20, "the probe cap no longer covers a real probe"
+    assert "'380'" in discovery
+
+
+def test_a_missing_line_is_unsettleable_rather_than_an_under_that_won() -> None:
+    """NaN is what a missing CSV field becomes, and every comparison against
+    it is False — so an absent line quietly settles `under` as a win and
+    `over` as a loss. Refuse instead."""
+    game = (
+        pd.DataFrame([{"home_goals": 4, "away_goals": 2, "regulation": True}])
+        .itertuples()
+        .__next__()
+    )
+    for market, selection in (
+        ("total_goals", "under"),
+        ("team_total", "home_under"),
+        ("puck_line", "home"),
+    ):
+        row = (
+            pd.DataFrame(
+                [
+                    {
+                        "market": market,
+                        "selection": selection,
+                        "line": float("nan"),
+                        "american_odds": -110,
+                    }
+                ]
+            )
+            .itertuples()
+            .__next__()
+        )
+
+        assert _settle_team_row(row, game)[0] == "unsettleable", market

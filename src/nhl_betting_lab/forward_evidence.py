@@ -36,6 +36,7 @@ is.
 from __future__ import annotations
 
 import json
+import math
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -210,6 +211,22 @@ def _player_index(
     return index
 
 
+def _finite_line(value: object) -> float | None:
+    """The row's line as a real number, or None.
+
+    NaN is the shape a missing CSV field takes, and it is silent poison in a
+    settlement: every comparison against it is False, so an absent line
+    settles "under" as a win and "over" as a loss without raising anything.
+    A market that needs a line and has none is unsettleable — a state this
+    ledger already knows how to record.
+    """
+    try:
+        number = float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+    return None if math.isnan(number) or math.isinf(number) else number
+
+
 def _settle_prop_row(
     row, player_index, game_teams: set[str]
 ) -> tuple[str, float | None, float]:
@@ -235,8 +252,11 @@ def _settle_prop_row(
     actual = actuals.get(market.settles_on)
     if actual is None:
         return "unsettleable", None, 0.0
+    line = _finite_line(row.line)
+    if line is None:
+        return "unsettleable", actual, 0.0
     try:
-        won, push = settle_prop(actual, float(row.line), str(row.selection))
+        won, push = settle_prop(actual, line, str(row.selection))
     except (TypeError, ValueError):
         return "unsettleable", actual, 0.0
     if push:
@@ -272,7 +292,9 @@ def _settle_team_row(row, game) -> tuple[str, float | None, float]:
         won, push = result == selection, False
         actual = float(home_goals - away_goals)
     elif market == "puck_line":
-        line = float(row.line)
+        line = _finite_line(row.line)
+        if line is None:
+            return "unsettleable", None, 0.0
         side = (
             ("home_minus" if line < 0 else "home_plus")
             if selection == "home"
@@ -283,17 +305,24 @@ def _settle_team_row(row, game) -> tuple[str, float | None, float]:
         )[side]
         actual = float(home_goals - away_goals)
     elif market == "total_goals":
-        over, push = settle_total(home_goals, away_goals, float(row.line))
+        line = _finite_line(row.line)
+        if line is None:
+            return "unsettleable", None, 0.0
+        over, push = settle_total(home_goals, away_goals, line)
         won = over if selection == "over" else (not over and not push)
         actual = float(home_goals + away_goals)
     elif market == "team_total":
         # The side rides in the selection vocabulary (`home_over` …); a row
         # outside it cannot be settled and must never be guessed at.
         side, _, direction = selection.partition("_")
-        if side not in {"home", "away"} or direction not in {"over", "under"}:
+        line = _finite_line(row.line)
+        if line is None or side not in {"home", "away"} or direction not in {
+            "over",
+            "under",
+        }:
             return "unsettleable", None, 0.0
         side_goals = home_goals if side == "home" else away_goals
-        over, push = settle_team_total(side_goals, float(row.line))
+        over, push = settle_team_total(side_goals, line)
         won = over if direction == "over" else (not over and not push)
         actual = float(side_goals)
     else:

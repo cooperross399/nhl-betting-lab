@@ -12,8 +12,9 @@ places nothing.
     PYTHONPATH=src .venv/bin/python scripts/run_provider_shadow.py --live
 
     # Live including props. One credit per market per event; the cap is hard.
+    # 19 markets are asked, so a cap of 190 buys ten events.
     PYTHONPATH=src .venv/bin/python scripts/run_provider_shadow.py --live \
-        --props --credit-cap 120
+        --props --credit-cap 190
 
 The credential comes from `NHL_ODDS_API_KEY` in the environment, a gitignored
 `.env`, or a GitHub Secret. It is never accepted as a command argument.
@@ -72,8 +73,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--credit-cap",
         type=int,
-        default=60,
-        help="Hard cap on props credits. The fetch stops rather than exceeding it.",
+        default=190,
+        help=(
+            "Hard cap on per-event credits. The fetch stops rather than "
+            "exceeding it, billing every asked market whether a book quotes "
+            "it or not — so the cap must be read against the number of "
+            "markets asked (19 now, which is ten events at this default). "
+            "The old 60 bought six events when ten markets were asked and "
+            "would buy three today: a starved fetch reads exactly like a "
+            "market nobody quotes."
+        ),
     )
     parser.add_argument(
         "--max-events",
@@ -122,8 +131,26 @@ def main(argv: list[str] | None = None) -> int:
     if args.live:
         provider = odds_api.OddsApiProvider()
         stamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        # ONE window over both fetches, or none over either. The eligibility
+        # gate measures coverage against the slate the staged prices
+        # describe: a bulk fetch covering the whole posted board while the
+        # per-event fetch covers one day would make every prop read
+        # "priced for 9 of 32 games" — INCOMPLETE, excluded from the card,
+        # and indistinguishable from books not posting props at all.
+        league_days = None
+        if args.horizon_days > 0:
+            today = datetime.now(LEAGUE_TIMEZONE).date()
+            league_days = [
+                (today + timedelta(days=offset)).isoformat()
+                for offset in range(args.horizon_days)
+            ]
+            print(
+                "Fetch window (league dates): " + ", ".join(league_days) + "."
+            )
         try:
-            team = provider.fetch_team_markets(fetched_at=stamp)
+            team = provider.fetch_team_markets(
+                fetched_at=stamp, league_days=league_days
+            )
         except EmptySlateError as exc:
             # Exit 3 marks a state the caller should not treat as a failure.
             # The off-season lasts four months; a red run every day of it is a
@@ -166,23 +193,10 @@ def main(argv: list[str] | None = None) -> int:
             per_event = list(odds_api.PER_EVENT_PROVIDER_MARKETS) + list(
                 odds_api.ALTERNATE_PROVIDER_MARKETS
             )
-            # The board holds every posted upcoming game, and the cap
-            # spends front-to-back — an unfiltered per-event fetch buys
-            # prices for games days away while starving today's slate. The
-            # horizon restricts spend to the game days this card is for;
-            # tomorrow's run fetches tomorrow's games at today's freshness.
-            league_days = None
-            if args.horizon_days > 0:
-                today = datetime.now(LEAGUE_TIMEZONE).date()
-                league_days = [
-                    (today + timedelta(days=offset)).isoformat()
-                    for offset in range(args.horizon_days)
-                ]
-                print(
-                    "Per-event fetch window: "
-                    + ", ".join(league_days)
-                    + " (league dates)."
-                )
+            # The same window the bulk fetch used. The cap spends
+            # front-to-back, so without it the budget buys prices for games
+            # days away while starving the slate this card is actually for;
+            # tomorrow's run fetches tomorrow's games at tomorrow's prices.
             props = provider.fetch_player_props(
                 markets=per_event,
                 max_events=args.max_events,

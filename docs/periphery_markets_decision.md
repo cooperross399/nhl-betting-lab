@@ -44,12 +44,35 @@ the day it exists, at which point it is exactly what we wanted.
   market walked. Approving it later is a receipt amendment in Cooper's
   hands, once the forward sample says something.
 
-Alongside the wiring, the per-event fetch gained a **one-day horizon**: the
-board holds every posted upcoming game (32 of them one August evening) and
-the credit cap spends front-to-back, so an unwindowed fetch starves today's
-slate to buy prices tomorrow's run would refetch anyway. The workflow cap
-rose to 320 — sixteen games at nineteen asked markets under the pessimistic
-bound — while the realistic bill stays what books actually quote.
+Alongside the wiring, the daily fetch gained a **one-day horizon**: the board
+holds every posted upcoming game (32 of them one August evening) and the
+credit cap spends front-to-back, so an unwindowed fetch starves today's slate
+to buy prices tomorrow's run would refetch anyway.
+
+Three things the adversarial review caught about that window, each now
+pinned by a test in `tests/test_periphery_markets.py`:
+
+1. **The window must cover both fetches or neither.** The eligibility gate
+   measures each market's coverage against the slate the *staged prices*
+   describe. A bulk fetch covering the whole board while the per-event fetch
+   covered one day would have made every prop read "priced for 9 of 32
+   games" — INCOMPLETE, excluded from every card, and indistinguishable from
+   books not posting props. One window, built once, passed to both.
+2. **A board with nothing on today is an empty slate, not a fault.** The
+   league plays most nights, not every night; the windowed bulk fetch raises
+   `EmptySlateError` on an off-day, which the workflow already reads as "no
+   games today, pipeline healthy".
+3. **The probe must never be windowed.** `provider-market-discovery.yml`
+   passes `--horizon-days 0`: a windowed probe run on an off-day would fetch
+   nothing and report every per-event market at zero coverage, writing a
+   live market off for exactly the reason this lab keeps warning about.
+
+Caps scale with the number of markets asked, because the cap bills every
+asked market whether a book quotes it or not: nineteen markets now, so the
+gameday cap is 320 (sixteen games, the largest possible slate) and the probe
+cap 380 (twenty events). The old 60 bought six events when ten markets were
+asked and would buy three today — and a starved fetch reads exactly like a
+market nobody quotes.
 
 ## Deferred, with the reason on the record
 

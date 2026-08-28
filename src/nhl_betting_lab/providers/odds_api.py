@@ -473,10 +473,23 @@ class OddsApiProvider:
             raise ProviderError("The events list is not a JSON list.")
         return [item for item in payload if isinstance(item, dict)]
 
-    def fetch_team_markets(self, *, fetched_at: str = "") -> FetchResult:
+    def fetch_team_markets(
+        self,
+        *,
+        fetched_at: str = "",
+        league_days: Sequence[str] | None = None,
+    ) -> FetchResult:
         """Bulk team markets for the whole slate.
 
         Cheap: the bulk endpoint bills per market requested, not per event.
+
+        `league_days` must be the **same window the per-event fetch uses**.
+        The eligibility gate measures each market's coverage against the
+        slate the staged prices describe, so a bulk fetch covering the whole
+        posted board while the per-event fetch covers one day would make
+        every prop read "priced for 9 of 32 games" — INCOMPLETE, excluded,
+        and indistinguishable from books not posting props at all. One
+        window over both keeps that measure honest.
 
         Only the markets the bulk endpoint actually serves are requested. The
         alternate ladders are per-event and asking for them here makes the
@@ -536,9 +549,36 @@ class OddsApiProvider:
             credits_spent=len(markets),
             quota_remaining=headers.get("x-requests-remaining", ""),
         )
-        for event in payload:
-            if not isinstance(event, dict):
-                continue
+        events = [item for item in payload if isinstance(item, dict)]
+        if league_days is not None:
+            allowed_days = {str(day).strip() for day in league_days}
+            in_window = [
+                event
+                for event in events
+                if game_date(event.get("commence_time")) in allowed_days
+            ]
+            if events and not in_window:
+                # The board is full of future games and none is today's. That
+                # is an ordinary off-day — the league plays most nights, not
+                # every night — and it reads exactly like the off-season to
+                # everything downstream, which is the correct handling: no
+                # card, no fault, no red run.
+                raise EmptySlateError(
+                    f"The provider lists {len(events)} upcoming NHL game(s) "
+                    f"but none is scheduled on {sorted(allowed_days)}, so "
+                    "there is nothing to price today. Not a fault."
+                )
+            outside = len(events) - len(in_window)
+            if outside:
+                result.warnings.append(
+                    f"{outside} posted event(s) fall outside the fetch "
+                    f"window {sorted(allowed_days)}. Their markets are "
+                    "absent, not empty; the run on their own game day "
+                    "fetches them."
+                )
+            result.events_seen = len(in_window)
+            events = in_window
+        for event in events:
             rows = normalize_event(event, fetched_at=stamp)
             if rows:
                 result.events_priced += 1
