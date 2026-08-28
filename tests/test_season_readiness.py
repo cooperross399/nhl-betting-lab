@@ -305,3 +305,26 @@ def test_the_forward_ledger_survives_a_broken_artifact_chain() -> None:
     publish = text.index("BLOB_LEDGER")
     restore = text.index("refs/card-feed-tip:forward_evidence.csv")
     assert restore < publish, "the restore reads what an earlier run published"
+
+
+def test_the_scheduled_probe_cannot_spend_without_a_cap() -> None:
+    """The discovery workflow now runs on a cron, so nobody is watching it.
+
+    A schedule turns a spending decision into a standing one, and the only
+    thing standing between that and an unbounded bill is the cap. The
+    expensive purchase workflow stays manual (pinned separately); this one
+    may run itself precisely because every live invocation is capped.
+    """
+    text = _workflow("provider-market-discovery.yml")
+
+    assert "schedule:" in text
+    live_calls = [
+        line for line in text.splitlines() if "--live" in line
+    ]
+    assert live_calls
+    for line in live_calls:
+        block = text[text.index(line):]
+        block = block[: block.index("\n\n")]
+        assert "--credit-cap" in block, (
+            f"a live call with no cap reachable from a cron: {line.strip()}"
+        )

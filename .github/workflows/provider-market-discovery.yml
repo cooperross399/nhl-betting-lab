@@ -14,6 +14,16 @@ name: Provider Market Discovery
 #
 # COST: the bulk fetch is a handful of credits. Props are opt-in and capped.
 on:
+  # One scheduled probe, in season, when the board is real. The decision
+  # record in docs/periphery_markets_decision.md ends with "run the
+  # discovery workflow in-season (October) and read what is actually
+  # quoted" — and every deferred market there was deferred on August
+  # evidence, six weeks before books hang props, ladders or team totals.
+  # A revisit that depends on somebody remembering is a revisit that does
+  # not happen, so it is a cron: mid-October, once, capped, and it writes
+  # nothing but a report.
+  schedule:
+    - cron: "0 16 15 10 *"
   workflow_dispatch:
     inputs:
       include_props:
