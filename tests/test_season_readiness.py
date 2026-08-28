@@ -12,7 +12,6 @@ import json
 from pathlib import Path
 
 import pandas as pd
-import pytest
 
 from conftest import FakeResponse, RecordingRequester
 from nhl_betting_lab.config import PROJECT_ROOT
