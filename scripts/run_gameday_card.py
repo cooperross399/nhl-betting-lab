@@ -77,6 +77,15 @@ def main(argv: list[str] | None = None) -> int:
         default="",
         help="ISO instant to treat as now, for reproducing a past card.",
     )
+    parser.add_argument(
+        "--archive-dir",
+        default="",
+        help=(
+            "Where priced snapshots are frozen. Defaults to the real "
+            "evidence archive, EXCEPT when --output-dir is not the default, "
+            "in which case it follows that instead."
+        ),
+    )
     args = parser.parse_args(argv)
 
     moment = (
@@ -90,6 +99,26 @@ def main(argv: list[str] | None = None) -> int:
     staging = Path(args.staging_dir)
     processed = Path(args.processed_dir)
     outputs = Path(args.output_dir)
+
+    # A run pointed at a scratch output directory must not write into the
+    # real evidence archive. It did once, in testing: a synthetic card
+    # dated to opening night froze a snapshot there, and because the first
+    # opinion of a day stands and is never repriced, the real opening-night
+    # card would have been unable to freeze its own. Test rows would have
+    # become the season's first forward evidence.
+    #
+    # So the archive follows a non-default output directory unless one is
+    # named explicitly, and the run says out loud which archive it is
+    # writing to whenever that is not the real one.
+    archive_dir: Path | None = Path(args.archive_dir) if args.archive_dir else None
+    if archive_dir is None and outputs.resolve() != OUTPUTS_DIR.resolve():
+        archive_dir = outputs / "archive"
+    if archive_dir is not None:
+        print(
+            f"Snapshots are frozen under {archive_dir}, not the real "
+            "evidence archive, because this run is not writing to the "
+            "default output directory."
+        )
 
     policy = load_policy()
     print(f"Provider policy: {policy.status}")
@@ -270,6 +299,7 @@ def main(argv: list[str] | None = None) -> int:
         key_for=selection_key,
         verdicts_line=describe_verdicts(output_dir=outputs),
         snapshot_date=snapshot_day,
+        archive_dir=archive_dir,
     )
     if written is not None:
         print(f"Priced snapshot frozen: {written}")

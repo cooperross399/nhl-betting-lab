@@ -537,3 +537,34 @@ def test_a_missing_line_is_unsettleable_rather_than_an_under_that_won() -> None:
         )
 
         assert _settle_team_row(row, game)[0] == "unsettleable", market
+
+
+def test_a_scratch_run_cannot_freeze_into_the_real_evidence_archive(
+    tmp_path,
+) -> None:
+    """Found by running the card end to end against synthetic prices: with
+    `--output-dir` pointed at a scratch directory, the snapshot still froze
+    into the real archive — dated to opening night. Because the first
+    opinion of a day stands and is never repriced, the real opening-night
+    card could then never have frozen its own, and test rows would have
+    become the season's first forward evidence."""
+    from nhl_betting_lab.config import DATA_DIR
+
+    from tests.test_scripts import load_script
+
+    module = load_script("run_gameday_card.py")
+    real_archive = DATA_DIR / "archive" / "priced_snapshots"
+    before = set(real_archive.glob("*")) if real_archive.is_dir() else set()
+
+    code = module.main(
+        [
+            "--staging-dir", str(tmp_path / "staging"),
+            "--processed-dir", str(tmp_path / "processed"),
+            "--output-dir", str(tmp_path / "outputs"),
+            "--now", "2026-10-08T18:00:00+00:00",
+        ]
+    )
+
+    after = set(real_archive.glob("*")) if real_archive.is_dir() else set()
+    assert code == 0
+    assert after == before, "a scratch run wrote into the real archive"
