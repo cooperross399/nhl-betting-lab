@@ -93,6 +93,10 @@ PYTHONPATH=src .venv/bin/python scripts/run_gameday_card.py
 # accumulating forward-evidence report. Offline; only ever appends.
 PYTHONPATH=src .venv/bin/python scripts/run_forward_evidence.py
 
+# Score every frozen opinion against the market's last word before puck drop.
+# Offline: it reads the capture store, fetches nothing, spends nothing.
+PYTHONPATH=src .venv/bin/python scripts/run_closing_line_value.py
+
 # Decide whether the card is worth an email and write the comment body.
 PYTHONPATH=src .venv/bin/python scripts/post_card_to_issue.py --out comment.md
 ```
@@ -117,7 +121,13 @@ PYTHONPATH=src .venv/bin/python scripts/run_provider_shadow.py
 # Live shadow fetch. Team markets are a handful of credits; props are one
 # credit per market per event and the cap is hard.
 PYTHONPATH=src .venv/bin/python scripts/run_provider_shadow.py --live --props \
-    --credit-cap 60
+    --credit-cap 190
+
+# Record the market's current best price on every selection, for closing-line
+# value. Run repeatedly through the evening; the closing price for a game is
+# the last capture strictly before its start.
+PYTHONPATH=src .venv/bin/python scripts/capture_closing_lines.py --live \
+    --credit-cap 400
 ```
 
 # Rebuild the price CSVs from the raw cached responses. Free, and the reason
@@ -181,6 +191,14 @@ card to the pinned issue **NHL Betting Lab — Claude Operating Home**. When the
 selections differ from the previous card, the comment's first paragraph
 contains the phrase `Selections changed`.
 
+**Closing Lines** (`.github/workflows/closing-lines.yml`) runs hourly through
+the puck-drop window and records the best price on every selection into its
+own **`closing-lines` branch**. Gameday Refresh reads that store and writes
+`data/outputs/closing_line_value.md`: beat-the-close rate, CLV%, and the
+de-vigged expected value at the closing line, for opinions and for bets
+separately. It is the earliest honest signal that the model is finding
+something — and it is not profit, which the report says out loud.
+
 Every run — including a "skip" run — also publishes the rendered comment, a
 one-object status file, and the forward-evidence report to the **`card-feed`
 branch** (`latest_card_comment.md`, `latest_status.json`,
@@ -195,6 +213,7 @@ finish.
 | Tests | every PR and push to main | no |
 | Provider Policy PR Gate | PRs touching policy or receipts | no |
 | Gameday Refresh | daily in season, and on demand | yes, capped |
+| Closing Lines | hourly through the evening in season | yes, capped |
 | Provider Market Discovery | on demand | yes, capped |
 | Historical Props Purchase | on demand only, never scheduled | yes, capped, required cap |
 

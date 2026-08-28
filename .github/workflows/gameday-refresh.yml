@@ -371,6 +371,28 @@ jobs:
         run: |
           python scripts/run_forward_evidence.py
 
+      - name: Report closing-line value
+        # Reads the capture store the Closing Lines workflow publishes and
+        # scores every frozen opinion against the market's last word. Offline
+        # and read-only: it fetches no prices and spends nothing.
+        if: always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PYTHONPATH: src
+        run: |
+          set -u
+          REMOTE="https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}"
+          mkdir -p data/processed
+          if git fetch "$REMOTE" +refs/heads/closing-lines:refs/closing-tip 2>/dev/null \
+             && git cat-file -e refs/closing-tip:closing_line_captures.csv 2>/dev/null; then
+            git show refs/closing-tip:closing_line_captures.csv \
+              > data/processed/closing_line_captures.csv
+          else
+            echo "No capture store yet; the report will say so rather than guess."
+          fi
+          python scripts/run_closing_line_value.py
+
       - name: Write the card to the run summary
         if: always()
         run: |
@@ -492,6 +514,11 @@ jobs:
           # day's. The prices those rows settled against are gone, so the
           # history cannot be rebuilt from anything. Here it survives a
           # broken chain, and the restore step reads it back.
+          if [ -f data/outputs/closing_line_value.md ]; then
+            BLOB_CLV=$(git hash-object -w data/outputs/closing_line_value.md)
+            ENTRIES=$(printf '%s\n100644 blob %s\tlatest_closing_line_value.md' \
+              "$ENTRIES" "$BLOB_CLV")
+          fi
           if [ -f data/processed/forward_evidence.csv ]; then
             BLOB_LEDGER=$(git hash-object -w data/processed/forward_evidence.csv)
             ENTRIES=$(printf '%s\n100644 blob %s\tforward_evidence.csv' \
@@ -530,6 +557,7 @@ jobs:
             data/outputs/allowlist_evidence_bundle.json
             data/outputs/forward_evidence.md
             data/outputs/forward_evidence.json
+            data/outputs/closing_line_value.md
           if-no-files-found: warn
           retention-days: 30
 

@@ -71,7 +71,16 @@ PROVIDER_KEY = "odds_api"
 PROVIDER_NAME = "the_odds_api"
 PROVIDER_TYPE = "odds_api"
 
-DEFAULT_REGIONS = "us"
+#: Which regions' books to ask for. Credits scale with the number of regions
+#: (markets x regions x events), which is why this was one region for as long
+#: as the quota was the binding constraint.
+#:
+#: `us2` is the provider's second tranche of **US** books. It is included
+#: because the card quotes the best reachable price, and a price at a book
+#: Cooper cannot open is not reachable — which is also why the overseas
+#: regions stay out. A wider net of books he cannot bet at would manufacture
+#: edges that cannot be taken, which is worse than a narrower one.
+DEFAULT_REGIONS = os.environ.get("NHL_ODDS_REGIONS", "us,us2").strip() or "us,us2"
 
 #: Markets the bulk endpoint serves for the whole slate at once.
 BULK_PROVIDER_MARKETS: tuple[str, ...] = ("h2h", "spreads", "totals")

@@ -1,0 +1,143 @@
+name: Closing Lines
+
+# Captures what the market is showing, repeatedly, through the evening. The
+# closing price for a game is the last capture strictly before its start, and
+# NHL puck drops run from 19:00 to 22:30 Eastern — so one fetch would be a
+# closing line for the early games and a three-hour-early one for the rest.
+#
+# SCOPE: this records prices. It builds no card, places no bet, allowlists
+# nothing, edits no policy, and cannot change a selection. Every capture
+# happens hours after the card's opinion was already frozen, which is exactly
+# what makes the comparison meaningful.
+#
+# WHY IT IS WORTH THE CREDITS: the price backtest needs thousands of settled
+# bets before its interval stops including zero. Closing-line value answers a
+# narrower question on a fraction of the sample, and it is the earliest
+# honest signal that a model is finding something — or that a winning month
+# is variance.
+#
+# It writes to its own branch, never to card-feed, so it can never race the
+# daily card publish.
+
+on:
+  schedule:
+    # 23:00-03:00 UTC is 19:00-23:00 Eastern: the whole puck-drop window,
+    # hourly. A generous month range on purpose — an off-day costs a handful
+    # of credits to discover and exits quietly.
+    - cron: "0 23 * 1-5,9-12 *"
+    - cron: "0 0,1,2,3 * 1-5,9-12 *"
+  workflow_dispatch:
+    inputs:
+      credit_cap:
+        description: "Hard cap on per-event credits for this capture"
+        type: string
+        required: false
+        default: "400"
+
+permissions:
+  # Write, for exactly one ref: the closing-lines branch, which is this
+  # workflow's own store. It never touches card-feed or main.
+  contents: write
+
+concurrency:
+  group: closing-lines
+  cancel-in-progress: false
+
+jobs:
+  capture:
+    name: Capture closing lines
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install project
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install -e .
+
+      - name: Restore the capture store
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -u
+          REMOTE="https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}"
+          mkdir -p data/processed
+          if git fetch "$REMOTE" +refs/heads/closing-lines:refs/closing-tip 2>/dev/null \
+             && git cat-file -e refs/closing-tip:closing_line_captures.csv 2>/dev/null; then
+            git show refs/closing-tip:closing_line_captures.csv \
+              > data/processed/closing_line_captures.csv
+            wc -l < data/processed/closing_line_captures.csv \
+              | xargs echo "Capture rows restored:"
+          else
+            echo "No capture store yet. This run establishes it."
+          fi
+
+      - name: Capture
+        id: capture
+        env:
+          NHL_ODDS_API_KEY: ${{ secrets.NHL_ODDS_API_KEY }}
+          PYTHONPATH: src
+        run: |
+          set +e
+          python scripts/capture_closing_lines.py --live \
+            --credit-cap "${{ inputs.credit_cap || '400' }}"
+          code=$?
+          set -e
+          # 3 means no games today. The league does not play every night and
+          # a red run on every dark night is a red nobody reads in April.
+          if [ "$code" -eq 3 ]; then
+            echo "empty_slate=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::No NHL games today, so there was nothing to capture."
+            exit 0
+          fi
+          exit "$code"
+
+      - name: Publish the store
+        if: steps.capture.outputs.empty_slate != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -u
+          REMOTE="https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}"
+          BLOB=$(git hash-object -w data/processed/closing_line_captures.csv)
+          TREE=$(printf '100644 blob %s\tclosing_line_captures.csv\n' "$BLOB" | git mktree)
+          export GIT_AUTHOR_NAME="Closing Lines" GIT_AUTHOR_EMAIL="actions@github.com"
+          export GIT_COMMITTER_NAME="Closing Lines" GIT_COMMITTER_EMAIL="actions@github.com"
+          # Retried against a freshly fetched tip: hourly captures and a
+          # human dispatch can overlap, and a lost capture cannot be
+          # recovered once the game has started.
+          for attempt in 1 2 3; do
+            PARENT=""
+            if git fetch "$REMOTE" +refs/heads/closing-lines:refs/closing-tip 2>/dev/null; then
+              PARENT=$(git rev-parse refs/closing-tip)
+            fi
+            if [ -n "$PARENT" ]; then
+              COMMIT=$(git commit-tree "$TREE" -p "$PARENT" -m "captures $(date -u +%FT%TZ)")
+            else
+              COMMIT=$(git commit-tree "$TREE" -m "captures $(date -u +%FT%TZ)")
+            fi
+            if git push "$REMOTE" "$COMMIT:refs/heads/closing-lines"; then
+              echo "Capture store published (attempt $attempt)."
+              exit 0
+            fi
+            echo "Push rejected; refetching the tip and retrying."
+          done
+          echo "::error::Could not publish the capture store after three attempts."
+          exit 1
+
+      - name: Report the outcome
+        if: always()
+        run: |
+          echo "This job recorded prices. It placed no bet, built no card,"
+          echo "allowlisted nothing, and changed no selection."
