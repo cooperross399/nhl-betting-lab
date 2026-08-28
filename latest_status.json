@@ -1,7 +1,7 @@
 {
-  "date": "2026-08-27",
-  "decision": "post",
+  "date": "2026-08-28",
+  "decision": "none",
   "degraded": "false",
-  "empty_slate": "false",
-  "run_url": "https://github.com/cooperross399/nhl-betting-lab/actions/runs/33123705858"
+  "empty_slate": "true",
+  "run_url": "https://github.com/cooperross399/nhl-betting-lab/actions/runs/33142173149"
 }

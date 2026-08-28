@@ -2,7 +2,7 @@
 
 The opinion the live card actually held, written down before puck drop, settled against the boxscore after, never revised. This is the only possible price evidence for the markets no book retains historically — hits and the regulation three-way — and the accumulating out-of-sample test for everything else.
 
-- Generated: 2026-08-27T22:58:42+00:00
+- Generated: 2026-08-28T04:49:24+00:00
 - Ledger rows: 0
 
 ## Nothing settled yet
