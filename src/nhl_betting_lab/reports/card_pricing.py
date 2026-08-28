@@ -84,6 +84,7 @@ def price_props(
     corrections: CurrentCorrections | None = None,
     team_names: Mapping[str, str] | None = None,
     history: pd.DataFrame | None = None,
+    rosters: Mapping[int, str] | None = None,
 ) -> tuple[ProbabilityMap, list[str]]:
     """Model probabilities for every prop row the model has an opinion on.
 
@@ -94,6 +95,7 @@ def price_props(
     probabilities: ProbabilityMap = {}
     unresolved: set[str] = set()
     lookup = dict(team_names or {})
+    rosters = dict(rosters or {})
     # Rest flags for props, from the completed-games table — the same rule
     # and the same reason as the team markets: the adjustment ships only in
     # the shape it was measured, and without history every side prices as
@@ -138,9 +140,20 @@ def price_props(
 
         # Which side the player is on decides his opponent and venue, and
         # getting it backwards applies the wrong concession factor to every
-        # prop in the game. The fitted model knows his team.
+        # prop in the game.
+        #
+        # The fitted model knows the team he last played a game for, which is
+        # right in March and wrong every October: a summer of trades and free
+        # agency leaves every mover pointing at the club he left, matching
+        # neither side of tonight's game, and producing no opinion at all
+        # until his first game of the new season. So the roster wins where it
+        # has him, and the logs are the fallback. His rates are untouched
+        # either way — shooting travels with the player; only the opponent
+        # comes from tonight's sheet.
         rates = model.skaters.get(player_id) or model.goalies.get(player_id)
-        team = rates.team if rates else ""
+        team = str(rosters.get(player_id, "") or "").strip().upper() or (
+            rates.team if rates else ""
+        )
         if team and team == home:
             opponent, venue = away, "home"
         elif team and team == away:

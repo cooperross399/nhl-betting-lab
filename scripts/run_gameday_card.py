@@ -24,6 +24,7 @@ import pandas as pd
 
 from nhl_betting_lab.config import OUTPUTS_DIR, PROCESSED_DIR, STAGING_DIR
 from nhl_betting_lab.data.build_datasets import load_player_logs, load_team_games
+from nhl_betting_lab.data.nhl_api import current_rosters
 from nhl_betting_lab.market_eligibility import assess_markets, slate_games_from
 from nhl_betting_lab.models.player_props import PlayerPropsModel
 from nhl_betting_lab.models.toi_corrections import load_current_corrections
@@ -256,12 +257,27 @@ def main(argv: list[str] | None = None) -> int:
             props_history = (
                 games if ships("props_b2b", output_dir=outputs) else None
             )
+            rosters = current_rosters()
+            if rosters:
+                print(
+                    f"Rosters: {len(rosters)} players across "
+                    f"{len(set(rosters.values()))} clubs decide which side "
+                    "each player is on."
+                )
+            else:
+                print(
+                    "No rosters are cached, so each player's side comes from "
+                    "his last cached game. In October that is last season's "
+                    "club for everyone who moved, and those props produce no "
+                    "opinion. Run scripts/fetch_nhl_data.py."
+                )
             prop_probabilities, unresolved = price_props(
                 prices,
                 props_model,
                 corrections=corrections,
                 team_names=team_names,
                 history=props_history,
+                rosters=rosters,
             )
             probabilities.update(prop_probabilities)
             unresolved_names.update(unresolved)

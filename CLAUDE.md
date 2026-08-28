@@ -123,6 +123,16 @@ Re-derive rather than trust if the data has moved.
   have reproduced the biased totals measurement indefinitely.
 - **The measured historical rate is ten credits per market returned per
   event.** Quota: **88,527 of 100,000 remaining** as of 2026-08-26.
+- **A player's side comes from the roster, not from his last game.** The
+  models learn rates from game logs and that is right — shooting travels with
+  the player — but the logs also carry the club he last played for, which in
+  October is the club he left. Measured on the real 2026-27 rosters against
+  the fitted model: **166 of 815 priced players (20.4%) had changed clubs**,
+  and each one matched neither side of tonight's game, so each produced no
+  opinion at all. A fifth of the pool missing from opening night, looking
+  exactly like books not posting props. `current_rosters()` decides the side
+  now; the logs are the fallback, and a roster naming a club not in the game
+  fails the same safe way a stale log does.
 - **The season fits the quota, measured against the real schedule.** 185
   game days, 1,344 games, 2026-09-29 to 2027-04-10; a mean of 7.3 games a
   night and a maximum of 16. At 19 asked per-event markets that is **26,091

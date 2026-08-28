@@ -24,6 +24,7 @@ from nhl_betting_lab.config import DEFAULT_SEASONS, REGULAR_SEASON_GAME_TYPE
 from nhl_betting_lab.data.nhl_api import (
     NhlApiError,
     fetch_boxscore,
+    fetch_club_roster,
     fetch_club_season_schedule,
     fetch_player_registry,
     fetch_schedule_day,
@@ -105,6 +106,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--from", dest="start", default="", help="ISO start date.")
     parser.add_argument("--to", dest="end", default="", help="ISO end date.")
     parser.add_argument(
+        "--skip-rosters",
+        action="store_true",
+        help="Do not refresh club rosters (which decide each player's side).",
+    )
+    parser.add_argument(
         "--skip-registry",
         action="store_true",
         help="Do not refresh the playerId to full-name registry.",
@@ -147,6 +153,25 @@ def main(argv: list[str] | None = None) -> int:
             ids |= _game_ids_for_season(season, polite_seconds=args.polite_seconds)
 
     print(f"{len(ids)} regular-season game ids in scope.")
+
+    if not args.skip_rosters:
+        # Refreshed every run, never served from cache: the card reads these
+        # to decide which side of tonight's game each player is on, and in
+        # October the game logs still have every mover on the club he left.
+        # Thirty-two free requests to keep opening night from silently
+        # dropping every traded player's props.
+        season = max(seasons)
+        fetched = failed = 0
+        for team in TEAMS:
+            try:
+                fetch_club_roster(team, season, refresh=True)
+            except NhlApiError as exc:
+                failed += 1
+                print(f"  roster {team}: {exc}", file=sys.stderr)
+                continue
+            fetched += 1
+            time.sleep(args.polite_seconds)
+        print(f"Rosters {season}: {fetched} clubs refreshed, {failed} failed.")
 
     if not args.skip_registry:
         for season in seasons:
