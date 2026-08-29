@@ -41,12 +41,34 @@ Every session, in this order. These replace chat history as project memory.
 Every number below is measured, walk-forward, and carries its sample size.
 Re-derive rather than trust if the data has moved.
 
-- **Props are measured on two seasons and nothing survives.** 192 events
-  bought, 90,594 price rows, **4,830 bets** under the shipped policy. Pooled:
-  **+1.4%, 95% interval −1.4% to +4.2% — no demonstrated edge**, and no
-  market clears once the seven figures computed from the same data are
-  counted. Every priced outcome reconciles into exactly one bucket, and the
-  report says so — or shouts when it cannot.
+- **The full two-season population is bought, and the model loses on it.**
+  2,710 events, 1,261,440 price rows, **73,918 bets**: **−1.6%, 95% interval
+  −2.3% to −0.8%**, which excludes zero on the *negative* side and survives
+  correcting for the seven markets tested (−2.5% to −0.6%). The earlier
+  +1.4% came from a 192-event sample thirty times smaller; it was noise, and
+  it is on the record as noise.
+  Per market: `points` −5.2% (16,421), `goalie_saves` −4.7% (5,335),
+  `shots_on_goal` −0.5% (38,037, spans zero), `assists` −1.6% (6,810, spans
+  zero), `goals` −8.4% (576, spans zero). `blocked_shots` is the only
+  positive at +4.7% over 6,739 — and it **failed replication**: same
+  direction on the unseen window (+4.5% over 2,950) but its own interval
+  includes zero, and a window that merely fails to contradict is not
+  confirmation. The only result that survives correction *and* replicates is
+  `points` at **−6.6% over 9,047** — a demonstrated deficit, not an edge.
+- **A duplicated store does not look wrong, it looks significant.** The
+  purchase deduplicated on the whole row, timestamps included, so two buys of
+  the same window wrote every quote twice under two snapshot labels. ROI is
+  unchanged by exact duplication and the interval narrows by root two — the
+  first clean run reported 144,060 bets and an interval half again too tight.
+  `stores.dedupe_prices` keys on the quote (event, market, player, selection,
+  line, book) and never on when it was fetched.
+- **`what_we_can_claim` announced a replicated loss as good news.** Its
+  headline predicate tested measured + survives-correction + replicated and
+  never read the sign, so `points` at −6.6% triggered "at least one survived
+  the correction and then replicated". The one document whose job is to stop
+  a number being misread must not be the thing misreading it; it now
+  separates a demonstrated edge from a demonstrated deficit and names the
+  deficit.
 - **Team markets show no edge either.** Under the shipped policy: moneyline
   −2.4% over 1,504 bets, puck line −4.3% over 1,541, totals −0.5% over 1,150
   — every interval includes zero after the family correction. Match rate

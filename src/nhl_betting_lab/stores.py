@@ -61,3 +61,36 @@ def read_store(
                 "branch that carries it, then re-run."
             ) from exc
         return empty
+
+
+#: What makes a historical price row the same quote as another. Deliberately
+#: excludes the timestamps: `snapshot` is the moment that was *asked* for and
+#: `fetched_at` the moment it was written, and neither changes which price a
+#: book was showing for which selection.
+PRICE_IDENTITY = (
+    "provider_event_id",
+    "market",
+    "player",
+    "selection",
+    "line",
+    "book",
+)
+
+
+def dedupe_prices(frame: "pd.DataFrame") -> "pd.DataFrame":
+    """One row per quote, whatever the timestamps say.
+
+    The store deduplicated on the whole row and called itself idempotent. It
+    was not: two purchases of the same window labelled the same quotes with
+    two different snapshot strings, nothing collapsed, and the file came back
+    holding every price exactly twice. The backtest then counted every bet
+    twice — which leaves the ROI unchanged and shrinks its confidence
+    interval by a factor of root two, so a duplicated store does not look
+    wrong. It looks *significant*.
+    """
+    if frame.empty:
+        return frame
+    keys = [column for column in PRICE_IDENTITY if column in frame.columns]
+    if not keys:
+        return frame.drop_duplicates()
+    return frame.drop_duplicates(subset=keys, keep="last").reset_index(drop=True)

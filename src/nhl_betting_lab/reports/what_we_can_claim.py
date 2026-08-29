@@ -113,15 +113,39 @@ class ClaimsReport:
     allowlisted_markets: tuple[str, ...] = ()
     notes: list[str] = field(default_factory=list)
 
-    @property
-    def anything_demonstrated(self) -> bool:
-        """Nothing counts until it survives the search and then replicates."""
-        return any(
-            claim.measured
+    def _replicated(self, *, positive: bool) -> list["MarketClaim"]:
+        """Claims that survived the search, replicated, and point the way asked.
+
+        The sign is not a detail. A market the model reliably *loses* on
+        satisfies "measured, survives correction, replicated" exactly as well
+        as one it wins on — and this document once announced that as
+        "at least one survived the correction and then replicated", which
+        reads as good news and was a loss of 6.6% over nine thousand bets.
+        The one document whose job is to stop a number being misread must not
+        be the thing misreading it.
+        """
+        return [
+            claim
+            for claim in self.claims
+            if claim.measured
             and claim.survives_correction
             and claim.replication.lstrip("*").startswith("Replicated")
-            for claim in self.claims
-        )
+            and claim.roi is not None
+            and ((claim.roi > 0) if positive else (claim.roi < 0))
+        ]
+
+    @property
+    def demonstrated_edges(self) -> list["MarketClaim"]:
+        return self._replicated(positive=True)
+
+    @property
+    def demonstrated_deficits(self) -> list["MarketClaim"]:
+        return self._replicated(positive=False)
+
+    @property
+    def anything_demonstrated(self) -> bool:
+        """An *edge*. A replicated loss is demonstrated too, and is not this."""
+        return bool(self.demonstrated_edges)
 
     def headline(self) -> str:
         measured = [claim for claim in self.claims if claim.measured]
@@ -132,16 +156,26 @@ class ClaimsReport:
                 "That is a statement about the evidence, not about the models."
             )
         if not self.anything_demonstrated:
-            return (
+            base = (
                 f"**{NO_DEMONSTRATED_EDGE.capitalize()} in any market.** "
                 f"{len(measured)} market(s) have been measured against real "
                 "prices. Nothing survives correcting for the number of "
                 "markets tested and then holds on a window it was not found "
                 "on."
             )
+            deficits = self.demonstrated_deficits
+            if deficits:
+                names = ", ".join(f"`{claim.market}`" for claim in deficits)
+                base += (
+                    f" What *has* survived both tests is a loss: {names}. "
+                    "A replicated deficit is a finding, not a null result, "
+                    "and it is the finding the model has."
+                )
+            return base
         return (
             f"{len(measured)} market(s) measured against real prices, and at "
-            "least one survived the correction and then replicated on an "
+            "least one **profitable** result survived the correction and then "
+            "replicated on an "
             "unseen window. Read the per-market lines and the sample sizes "
             "before doing anything with that."
         )

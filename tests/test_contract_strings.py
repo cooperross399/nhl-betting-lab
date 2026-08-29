@@ -188,13 +188,17 @@ def test_the_honesty_doc_does_not_claim_calibration_is_evidence_of_an_edge() -> 
 
 
 
-def test_the_operating_state_records_that_nothing_survives() -> None:
-    """The single most important fact about this lab's evidence."""
+def test_the_operating_state_records_what_the_full_sample_showed() -> None:
+    """The single most important fact about this lab's evidence, and it
+    changed: the full population says the model loses, where a sample thirty
+    times smaller had said nothing at all."""
     text = _claude_md()
 
-    assert "nothing survives" in text
-    assert "no demonstrated edge" in text
-    assert "4,830 bets" in text
+    assert "73,918 bets" in text
+    assert "failed replication" in text
+    # The one result that survives both tests is a loss, and the operating
+    # state has to name it rather than leave a reader to infer an edge.
+    assert "demonstrated deficit" in text
 
 
 
