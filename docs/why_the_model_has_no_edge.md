@@ -95,3 +95,65 @@ The lab was built to answer this honestly, and it did — on 284,493 opinions
 rather than the 4,830 that had previously said "no demonstrated edge" while
 pointing mildly upward. The wrong version of this project ships that +1.4%
 and finds out with real money over a season.
+
+## What else was tried, on 2026-08-29
+
+Three of them, and the count matters: every additional hypothesis tested
+against the same data raises the chance that one looks significant by
+accident. None did, which at least makes the arithmetic easy — but a
+positive here would have needed the family correction and a replication
+before it meant anything, and that bar is why they are listed together
+rather than one at a time.
+
+### 1. Line shopping — does the best available price beat the other books?
+
+Model-free, and the most promising of the three, because it needs nobody to
+be right about hockey. It needs only the books to disagree with each other.
+
+Each book's two-sided quote was de-vigged into that book's own fair view.
+For every quote, the consensus of the **other** books — leave-one-out, or the
+test is circular — became the fair probability, and the quote's expected
+value was measured against it. 161,891 quotes had at least three other books
+to form a consensus.
+
+| bar | realised ROI | 95% interval | n |
+|:--|--:|:--|--:|
+| EV > 0% | −3.37% | −8.79% to +2.05% | 1,557 |
+| EV > 1% | −4.16% | −11.71% to +3.38% | 834 |
+| EV > 2% | −8.55% | −19.14% to +2.05% | 441 |
+
+Every interval spans zero: **no demonstrated edge**. Split by season it is
+noise in both directions (−8.0% then +1.75%).
+
+The more interesting number is the sample size. Of 161,891 quotes, only
+**1,557 — under one percent —** were positive-EV against the other books'
+de-vigged consensus at all. These eight books are tightly aligned on NHL
+props at this snapshot; the dispersion a line-shopper needs is not there.
+
+### 2. Alternate-ladder staleness — untestable on this data
+
+The idea was that a book which moves its main line and leaves the ladder
+behind is internally inconsistent, which needs no view on the player at all.
+The historical purchase bought the standard markets, not the ladders: of
+647,126 player-game-book combinations only **3,208** carry three or more
+rungs. That is too thin to test and the honest answer is "not yet", not
+"no". The live fetch now asks for the ladders, so forward data accumulates
+and the question becomes answerable later.
+
+### 3. Confirmed starters and lineup latency — not testable without a feed
+
+Both need information the lab does not collect. `goalie_saves` is gated on
+exactly this and stays gated.
+
+## The judgement this supports
+
+The NHL prop market, as this lab can observe it — one pre-game snapshot,
+eight books, the standard markets — is efficient against everything the lab
+can compute. The model's disagreements are error, and the books'
+disagreements with each other are too small to harvest.
+
+**Searching the same data for a fourth or fifth hypothesis is now the wrong
+move**, and would be the multiple-comparisons trap this project has warned
+about from its first document: test enough ideas against one dataset and one
+will look profitable. What remains is not a cleverer statistic. It is either
+information the market lacks, or nothing.
