@@ -495,3 +495,29 @@ def test_the_price_store_deduplicates_on_the_quote_not_the_timestamp() -> None:
 
     assert len(out) == 2, "one quote per book, whatever the timestamps say"
     assert set(out["book"]) == {"DraftKings", "BetMGM"}
+
+
+def test_a_superseded_receipt_approves_nothing() -> None:
+    """A withdrawn approval is kept as a record and must never be readable as
+    a live one. It is not an orphan either — it is filed, deliberately."""
+    from nhl_betting_lab.config import MANUAL_DIR
+    from nhl_betting_lab.staging_provider_policy import load_policy
+
+    directory = MANUAL_DIR / "human_acceptance_receipts"
+    superseded = directory / "superseded"
+
+    assert not list(directory.glob("*.json")), (
+        "a receipt sitting beside the live ones reads as live"
+    )
+    if superseded.is_dir():
+        assert (superseded / "README.md").is_file(), (
+            "the archive has to say why these approve nothing"
+        )
+        cited = {
+            entry.evidence_receipt_id
+            for entry in load_policy().entries.values()
+        }
+        for path in superseded.glob("*.json"):
+            assert path.stem not in cited, (
+                f"{path.stem} is superseded and still cited by the policy"
+            )
