@@ -2,22 +2,22 @@
 
 Generated from the measurement outputs, so it cannot drift from them. The hand-written rules live in `docs/what_we_can_and_cannot_claim.md`.
 
-- Generated: 2026-08-27T05:59:10+00:00
+- Generated: 2026-08-29T00:21:37+00:00
 
-**No demonstrated edge in any market.** 9 market(s) have been measured against real prices. Nothing survives correcting for the number of markets tested and then holds on a window it was not found on.
+**No demonstrated edge in any market.** 9 market(s) have been measured against real prices. Nothing survives correcting for the number of markets tested and then holds on a window it was not found on. What *has* survived both tests is a loss: `points`. A replicated deficit is a finding, not a null result, and it is the finding the model has.
 
 ## Across every measured market
 
-+1.4% over 4,830 bets. The interval includes zero: **no demonstrated edge**.
+-3.2% over 36,449 bets. The interval excludes zero on this sample.
 
 ## Measured against real prices
 
-- `shots_on_goal`: +3.0% over 2,508 bets, 95% interval -0.9% to +7.0%. **No demonstrated edge**.
-- `points`: -5.5% over 940 bets, 95% interval -11.9% to +0.9%. **No demonstrated edge**.
-- `goals`: +10.6% over 34 bets, 95% interval -34.8% to +56.0%. **No demonstrated edge**.
-- `assists`: -4.5% over 403 bets, 95% interval -13.0% to +4.1%. **No demonstrated edge**.
-- `goalie_saves`: -1.7% over 397 bets, 95% interval -10.9% to +7.5%. **No demonstrated edge**.
-- `blocked_shots`: +11.9% over 548 bets, 95% interval +3.2% to +20.6%. Correcting for the 7 markets measured on the same data, it does not exclude zero. **No demonstrated edge**.
+- `shots_on_goal`: -2.2% over 16,925 bets, 95% interval -3.8% to -0.7%. The interval excludes zero even after correcting for the 7 markets measured on the same data — which is not the same as an edge that will persist, and means nothing until it replicates on a window it was not found on.
+- `points`: -6.6% over 9,047 bets, 95% interval -8.6% to -4.6%. **Replicated** on the player_props_backtest_2025-26 window.
+- `goals`: -3.8% over 282 bets, 95% interval -18.1% to +10.6%. **No demonstrated edge**.
+- `assists`: -3.6% over 4,127 bets, 95% interval -6.2% to -1.0%. Correcting for the 7 markets measured on the same data, it does not exclude zero. **No demonstrated edge**.
+- `goalie_saves`: -5.7% over 3,118 bets, 95% interval -9.0% to -2.3%. The interval excludes zero even after correcting for the 7 markets measured on the same data — which is not the same as an edge that will persist, and means nothing until it replicates on a window it was not found on.
+- `blocked_shots`: +4.5% over 2,950 bets, 95% interval +0.7% to +8.3%. Measured again on the player_props_backtest_2025-26 window and **not confirmed** there, so **no demonstrated edge**.
 - `moneyline`: -2.4% over 1,504 bets, 95% interval -8.0% to +3.1%. **No demonstrated edge**.
 - `puck_line`: -4.3% over 1,541 bets, 95% interval -8.7% to +0.1%. **No demonstrated edge**.
 - `total_goals`: -0.5% over 1,150 bets, 95% interval -6.0% to +5.0%. **No demonstrated edge**.
@@ -26,6 +26,7 @@ Generated from the measurement outputs, so it cannot drift from them. The hand-w
 
 - `hits` has **no price-based measurement**: Not offered in any historical snapshot across 256 probed events spanning two seasons, so it cannot be measured against past prices. It is served live; its evidence must accumulate forward. It has been calibration-checked on 616,730 walk-forward samples, which can rule the model out and can never rule it in. That is not evidence of an edge and is not offered as any.
 - `regulation_3_way` has **no price-based measurement**: the provider serves it per-event only, with no bulk history; its evidence accumulates forward once the season starts.
+- `team_total` has **no price-based measurement**: no historical prices have been bought for it yet.
 
 A market in this list is **not** a market judged to have no value. It is a market with no price-based evidence either way, and nothing in this repository will present the two as the same thing.
 
@@ -42,8 +43,8 @@ The NHL's advantage over a smaller league is volume: about 1,312 regular-season 
 
 ## What the card is actually allowed to use
 
-- Provider policy: **Nothing allowlisted**
-- Allowlisted markets: **none**
+- Provider policy: **Allowlisted**
+- Allowlisted markets: **assists, blocked_shots, goalie_saves, goals, hits, moneyline, points, puck_line, regulation_3_way, shots_on_goal, total_goals**
 
 ## Standing notes
 

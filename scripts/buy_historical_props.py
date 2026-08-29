@@ -45,7 +45,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from nhl_betting_lab.stores import read_store
+from nhl_betting_lab.stores import dedupe_prices, read_store
 
 from nhl_betting_lab.config import OUTPUTS_DIR, PROCESSED_DIR, RAW_DIR
 from nhl_betting_lab.markets import PROP_MARKETS
@@ -367,7 +367,9 @@ def main(argv: list[str] | None = None) -> int:
         # add to rather than replace. Deduplicated on the whole row so a
         # re-run is idempotent.
         existing = read_store(target, for_append=True)
-        frame = pd.concat([existing, frame], ignore_index=True).drop_duplicates()
+        frame = dedupe_prices(
+            pd.concat([existing, frame], ignore_index=True)
+        )
     if frame.empty and target.is_file():
         # A run that bought nothing must never replace a file that holds
         # something. This exact write once emptied eleven thousand credits of

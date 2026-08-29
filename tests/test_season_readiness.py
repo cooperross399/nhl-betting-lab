@@ -460,3 +460,38 @@ def test_the_purchase_restores_the_prices_it_already_bought() -> None:
     restore = text.index("--name historical-props")
     upload = text.index("name: historical-props\n")
     assert restore < upload, "the restore must read what an earlier run wrote"
+
+
+def test_the_price_store_deduplicates_on_the_quote_not_the_timestamp() -> None:
+    """The store deduplicated on the whole row and called itself idempotent.
+    It was not: two purchases of the same window labelled the same quotes with
+    two different snapshot strings, nothing collapsed, and every price landed
+    twice. The backtest then counted every bet twice — which leaves ROI
+    unchanged and shrinks the interval by root two, so a duplicated store does
+    not look wrong, it looks *significant*."""
+    from nhl_betting_lab.stores import dedupe_prices
+
+    quote = {
+        "provider_event_id": "evt1",
+        "market": "shots_on_goal",
+        "player": "Auston Matthews",
+        "selection": "over",
+        "line": 2.5,
+        "book": "DraftKings",
+        "american_odds": -115.0,
+    }
+    frame = pd.DataFrame(
+        [
+            {**quote, "snapshot": "2025-10-18T15:05:39Z",
+             "fetched_at": "2025-10-18T15:05:39Z"},
+            {**quote, "snapshot": "2025-10-18T15:10:00Z",
+             "fetched_at": "2025-10-18T15:10:00Z"},
+            {**quote, "book": "BetMGM", "snapshot": "2025-10-18T15:10:00Z",
+             "fetched_at": "2025-10-18T15:10:00Z"},
+        ]
+    )
+
+    out = dedupe_prices(frame)
+
+    assert len(out) == 2, "one quote per book, whatever the timestamps say"
+    assert set(out["book"]) == {"DraftKings", "BetMGM"}

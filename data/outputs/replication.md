@@ -2,30 +2,30 @@
 
 Did a result found on one window hold on another? No amount of extra precision on the first window can answer that — a result measured more carefully on the data that produced it is still that data.
 
-- Generated: 2026-08-27T05:59:10+00:00
-- Discovery window: **2024-25**
-- Test window: **2025-26**
+- Generated: 2026-08-29T00:20:43+00:00
+- Discovery window: **player_props_backtest_2024-25**
+- Test window: **player_props_backtest_2025-26**
 
-Nothing survived correction on **2024-25**, so there is no result to replicate. That is not a failure of the test window.
+`points` held on **player_props_backtest_2025-26** as well as **player_props_backtest_2024-25**. Two windows agreeing is worth considerably more than one window measured precisely, and it is still two windows.
 
 | Market | Discovery | Test | Verdict |
 |:-------|:----------|:-----|:--------|
-| `assists` | -1.0% / 220 bets | -12.8% / 166 bets | **untestable** |
-| `blocked_shots` | +13.4% / 411 bets | +7.4% / 144 bets | **untestable** |
-| `goalie_saves` | -3.3% / 257 bets | -1.2% / 153 bets | **untestable** |
-| `goals` | +20.4% / 26 bets | +1.6% / 11 bets | **untestable** |
-| `points` | +0.0% / 611 bets | -13.6% / 302 bets | **untestable** |
-| `shots_on_goal` | +3.0% / 1925 bets | +0.6% / 551 bets | **untestable** |
+| `assists` | +1.4% / 2683 bets | -3.6% / 4127 bets | **untestable** |
+| `blocked_shots` | +4.8% / 3789 bets ✓ | +4.5% / 2950 bets | **not confirmed** |
+| `goalie_saves` | -3.3% / 2217 bets | -5.7% / 3118 bets ✓ | **untestable** |
+| `goals` | -12.9% / 294 bets | -3.8% / 282 bets | **untestable** |
+| `points` | -3.5% / 7374 bets ✓ | -6.6% / 9047 bets ✓ | **replicated** |
+| `shots_on_goal` | +0.8% / 21112 bets | -2.2% / 16925 bets ✓ | **untestable** |
 
 ✓ marks an interval that excludes zero after correcting for the markets tested in that window.
 
 ## Market by market
 
 - `assists`: Nothing survived correction on the first window, so there is no result here to replicate.
-- `blocked_shots`: Nothing survived correction on the first window, so there is no result here to replicate.
+- `blocked_shots`: Same direction (+4.5% over 2950 bets) but the interval does not exclude zero on its own. A window that merely fails to contradict is not confirmation — most windows fail to contradict most things. No demonstrated edge.
 - `goalie_saves`: Nothing survived correction on the first window, so there is no result here to replicate.
 - `goals`: Nothing survived correction on the first window, so there is no result here to replicate.
-- `points`: Nothing survived correction on the first window, so there is no result here to replicate.
+- `points`: -6.6% over 9047 bets, same direction, and the interval excludes zero on its own after correction.
 - `shots_on_goal`: Nothing survived correction on the first window, so there is no result here to replicate.
 
 ## How much data would settle it

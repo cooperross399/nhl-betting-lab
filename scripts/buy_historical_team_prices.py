@@ -27,7 +27,7 @@ from datetime import date, timedelta
 
 import pandas as pd
 
-from nhl_betting_lab.stores import read_store
+from nhl_betting_lab.stores import dedupe_prices, read_store
 
 from nhl_betting_lab.config import PROCESSED_DIR, RAW_DIR
 from nhl_betting_lab.providers import historical_team_prices as team
@@ -106,7 +106,7 @@ def main(argv: list[str] | None = None) -> int:
     frame = pd.DataFrame(buy.rows)
     if target.is_file() and not frame.empty:
         existing = read_store(target, for_append=True)
-        frame = pd.concat([existing, frame], ignore_index=True).drop_duplicates()
+        frame = dedupe_prices(pd.concat([existing, frame], ignore_index=True))
     if frame.empty and target.is_file():
         # A run that bought nothing must never replace a file that holds
         # something. This exact write once emptied eleven thousand credits of
