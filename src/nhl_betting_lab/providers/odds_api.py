@@ -71,7 +71,16 @@ PROVIDER_KEY = "odds_api"
 PROVIDER_NAME = "the_odds_api"
 PROVIDER_TYPE = "odds_api"
 
-DEFAULT_REGIONS = "us"
+#: Which regions' books to ask for. Credits scale with the number of regions
+#: (markets x regions x events), which is why this was one region for as long
+#: as the quota was the binding constraint.
+#:
+#: `us2` is the provider's second tranche of **US** books. It is included
+#: because the card quotes the best reachable price, and a price at a book
+#: Cooper cannot open is not reachable — which is also why the overseas
+#: regions stay out. A wider net of books he cannot bet at would manufacture
+#: edges that cannot be taken, which is worse than a narrower one.
+DEFAULT_REGIONS = os.environ.get("NHL_ODDS_REGIONS", "us,us2").strip() or "us,us2"
 
 #: Markets the bulk endpoint serves for the whole slate at once.
 BULK_PROVIDER_MARKETS: tuple[str, ...] = ("h2h", "spreads", "totals")
@@ -365,6 +374,15 @@ class OddsApiProvider:
         self.requester = requester or _default_requester
         self.sport_key = (sport_key or ODDS_API_SPORT_KEY).strip()
         self.regions = (regions or DEFAULT_REGIONS).strip()
+        # The provider bills markets x regions, so asking two regions costs
+        # twice what one does. Every estimate and every cap in this adapter
+        # multiplies by this; without it the pessimistic bound the cap is
+        # enforced against stopped being pessimistic the moment a second
+        # region was added, and the run would overspend a cap it believed
+        # it was respecting.
+        self.region_count = max(
+            1, len([part for part in self.regions.split(",") if part.strip()])
+        )
         self.bookmakers = str(bookmakers or "").strip()
         self.timeout_seconds = float(timeout_seconds)
         self._validate_configuration()
@@ -565,7 +583,7 @@ class OddsApiProvider:
         result = FetchResult(
             fetched_at=stamp,
             events_seen=len(payload),
-            credits_spent=len(markets),
+            credits_spent=len(markets) * self.region_count,
             quota_remaining=headers.get("x-requests-remaining", ""),
         )
         events = [item for item in payload if isinstance(item, dict)]
@@ -622,9 +640,11 @@ class OddsApiProvider:
     def estimate_prop_credits(
         self, *, events: int, markets: Sequence[str] | None = None
     ) -> int:
-        """One credit per market per event. Stated before it is spent."""
+        """One credit per market **per region** per event, stated before it
+        is spent. The region factor is not cosmetic: the cap is enforced
+        against this number."""
         count = len(list(markets)) if markets is not None else len(PROP_PROVIDER_MARKETS)
-        return int(events) * count
+        return int(events) * count * self.region_count
 
     def fetch_player_props(
         self,
@@ -654,7 +674,7 @@ class OddsApiProvider:
         wanted = list(markets) if markets is not None else list(PROP_PROVIDER_MARKETS)
         if not wanted:
             raise ProviderError("A props fetch needs at least one market.")
-        per_event = len(wanted)
+        per_event = len(wanted) * self.region_count
 
         events = self.list_events()
         result = FetchResult(fetched_at=stamp, events_seen=len(events))

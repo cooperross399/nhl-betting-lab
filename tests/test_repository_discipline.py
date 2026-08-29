@@ -64,7 +64,15 @@ def test_no_workflow_grants_write_access_to_contents(workflow: str) -> None:
         encoding="utf-8"
     )
 
-    if workflow != "gameday-refresh.yml":
+    #: Each writing workflow, and the one ref it may push. Separate refs on
+    #: purpose: the hourly capture job and the daily card publish would
+    #: otherwise contend for the same branch, and a lost capture cannot be
+    #: recovered once the game has started.
+    writers = {
+        "gameday-refresh.yml": "refs/heads/card-feed",
+        "closing-lines.yml": "refs/heads/closing-lines",
+    }
+    if workflow not in writers:
         assert "contents: write" not in text
         return
 
@@ -76,7 +84,7 @@ def test_no_workflow_grants_write_access_to_contents(workflow: str) -> None:
     ]
     assert pushes, "the write grant exists only for the card-feed publish"
     for line in pushes:
-        assert "refs/heads/card-feed" in line
+        assert writers[workflow] in line
 
 
 @pytest.mark.parametrize("workflow", WORKFLOWS)
