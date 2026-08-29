@@ -55,6 +55,18 @@ Re-derive rather than trust if the data has moved.
   includes zero, and a window that merely fails to contradict is not
   confirmation. The only result that survives correction *and* replicates is
   `points` at **−6.6% over 9,047** — a demonstrated deficit, not an edge.
+- **The reason it loses is that the model's disagreement with the market
+  carries no information.** Fitting its bias on 2024-25 and testing on the
+  145,751 opinions of 2025-26 it had not seen: raw error −6.34%, corrected
+  −0.63%, market −2.11% — so the model *can* be made calibrated. Then
+  `outcome ~ market_implied + (corrected_model − market_implied)` puts the
+  coefficient on the disagreement at **+0.032, interval [−0.037, +0.102]**.
+  Zero. The market's error stays flat near −1% however loudly the model
+  disagrees, while the model's error grows in proportion to the disagreement
+  (−3.6% at ±3%, −19.5% at +15% and above). This rules out every fix that is
+  a re-weighting of the same signal: a higher bar is worse because higher
+  claimed edge is where it is more wrong, and shrinking toward the market is
+  arithmetically the same as raising the bar. `docs/why_the_model_has_no_edge.md`.
 - **A duplicated store does not look wrong, it looks significant.** The
   purchase deduplicated on the whole row, timestamps included, so two buys of
   the same window wrote every quote twice under two snapshot labels. ROI is
