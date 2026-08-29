@@ -10,33 +10,27 @@
     "to required_markets, or write a receipt. See",
     "docs/provider_allowlist_approval.md."
   ],
-  "allowed_provider_names": [
-    "the_odds_api"
-  ],
-  "allowed_provider_types": [
-    "odds_api"
-  ],
-  "provider_allowlist_entries": {
-    "the_odds_api": {
-      "allowlist_status": "allowed",
-      "provider_type": "odds_api",
-      "approved_at": "2026-08-27T16:53:00-04:00",
-      "reviewer_name": "cooperross399",
-      "evidence_receipt_id": "odds_api-20260827T165300-0400-cooperross399",
-      "required_markets": [
-        "assists",
-        "blocked_shots",
-        "goalie_saves",
-        "goals",
-        "hits",
-        "moneyline",
-        "points",
-        "puck_line",
-        "regulation_3_way",
-        "shots_on_goal",
-        "total_goals"
-      ]
-    }
-  },
-  "max_provider_run_age_hours": 12
+  "allowed_provider_names": [],
+  "allowed_provider_types": [],
+  "provider_allowlist_entries": {},
+  "max_provider_run_age_hours": 12,
+  "_withdrawn": [
+    "The 2026-08-27 approval of all eleven markets was WITHDRAWN on",
+    "2026-08-29, because the evidence it cited moved underneath it.",
+    "",
+    "The receipt was signed against a backtest reporting +1.4% over 4,830",
+    "bets with an interval including zero. Buying the full two-season",
+    "population replaced that sample with 73,918 bets and the answer",
+    "changed sign: -1.6%, interval -2.3% to -0.8%, excluding zero on the",
+    "losing side and surviving correction for the seven markets tested.",
+    "The one positive market, blocked_shots, failed replication.",
+    "",
+    "Claude withdrew it. Claude did not, and cannot, decide to re-enable",
+    "anything: that needs Cooper to read the new evidence and sign a new",
+    "receipt. Withdrawal is the only direction Claude may move this file,",
+    "because it can only ever reduce what the card is allowed to do.",
+    "",
+    "The superseded receipt is kept under human_acceptance_receipts/",
+    "superseded/ as a record. It approves nothing from there."
+  ]
 }

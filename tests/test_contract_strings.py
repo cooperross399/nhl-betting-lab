@@ -146,7 +146,11 @@ def test_claude_md_carries_a_current_operating_state() -> None:
     # The allowlist state must name its receipt: an operating state that
     # claims an approval without citing the paperwork is exactly the drift
     # this test exists to catch.
-    assert "All 11 markets are allowlisted" in text
+    # The allowlist state must name its paperwork either way: an operating
+    # state claiming an approval without citing the receipt, or hiding that
+    # one was withdrawn, is exactly the drift this test exists to catch.
+    assert "No market is allowlisted" in text
+    assert "withdrawn on 2026-08-29" in text
     assert "odds_api-20260827T165300-0400-cooperross399" in text
 
 
