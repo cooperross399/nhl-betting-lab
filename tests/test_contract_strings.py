@@ -146,7 +146,11 @@ def test_claude_md_carries_a_current_operating_state() -> None:
     # The allowlist state must name its receipt: an operating state that
     # claims an approval without citing the paperwork is exactly the drift
     # this test exists to catch.
-    assert "All 11 markets are allowlisted" in text
+    # The allowlist state must name its paperwork either way: an operating
+    # state claiming an approval without citing the receipt, or hiding that
+    # one was withdrawn, is exactly the drift this test exists to catch.
+    assert "No market is allowlisted" in text
+    assert "withdrawn on 2026-08-29" in text
     assert "odds_api-20260827T165300-0400-cooperross399" in text
 
 
@@ -251,3 +255,13 @@ def test_the_three_in_four_check_is_recorded_as_not_built() -> None:
     assert "nothing was built" in text
     assert "closes less than half the team gap" in text
     assert "recorded rather than chased" in text
+
+
+def test_the_operating_state_records_why_the_model_loses() -> None:
+    """Losing is a number; *why* it loses is the finding, and it is the one
+    thing that tells a future session which fixes are already ruled out."""
+    text = _claude_md()
+
+    assert "carries no information" in text
+    assert "+0.032" in text
+    assert "docs/why_the_model_has_no_edge.md" in text

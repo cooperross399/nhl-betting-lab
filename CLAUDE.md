@@ -55,6 +55,18 @@ Re-derive rather than trust if the data has moved.
   includes zero, and a window that merely fails to contradict is not
   confirmation. The only result that survives correction *and* replicates is
   `points` at **−6.6% over 9,047** — a demonstrated deficit, not an edge.
+- **The reason it loses is that the model's disagreement with the market
+  carries no information.** Fitting its bias on 2024-25 and testing on the
+  145,751 opinions of 2025-26 it had not seen: raw error −6.34%, corrected
+  −0.63%, market −2.11% — so the model *can* be made calibrated. Then
+  `outcome ~ market_implied + (corrected_model − market_implied)` puts the
+  coefficient on the disagreement at **+0.032, interval [−0.037, +0.102]**.
+  Zero. The market's error stays flat near −1% however loudly the model
+  disagrees, while the model's error grows in proportion to the disagreement
+  (−3.6% at ±3%, −19.5% at +15% and above). This rules out every fix that is
+  a re-weighting of the same signal: a higher bar is worse because higher
+  claimed edge is where it is more wrong, and shrinking toward the market is
+  arithmetically the same as raising the bar. `docs/why_the_model_has_no_edge.md`.
 - **A duplicated store does not look wrong, it looks significant.** The
   purchase deduplicated on the whole row, timestamps included, so two buys of
   the same window wrote every quote twice under two snapshot labels. ROI is
@@ -155,6 +167,34 @@ Re-derive rather than trust if the data has moved.
   exactly like books not posting props. `current_rosters()` decides the side
   now; the logs are the fallback, and a roster naming a club not in the game
   fails the same safe way a stale log does.
+- **The season fits the quota, measured against the real schedule.** 185
+  game days, 1,344 games, 2026-09-29 to 2027-04-10; a mean of 7.3 games a
+  night and a maximum of 16. At 19 asked per-event markets that is **26,091
+  credits for one fetch a day** and 52,182 for two, against 88,527 remaining.
+  The 320-credit daily cap clips **zero** of the 185 nights (16 games x 19 =
+  304). The second scheduled trigger now stands down when the first already
+  published a clean card to `card-feed`, so the ordinary season costs the
+  one-run figure and the backup still fires whenever the primary did not
+  finish or finished degraded.
+- **Gameday Refresh runs green end to end** (verified 2026-08-26: live team
+  prices staged, models fitted, card correctly blocked, comment posted).
+  Props return no rows this far from the season — an absence, not a fault.
+  The alternate ladders and all per-event markets ride the per-event fetch;
+  asking the bulk endpoint for them 422s the whole request.
+- **No market is allowlisted. The 2026-08-27 approval was withdrawn on
+  2026-08-29**, because the evidence it cited moved underneath it: the
+  receipt was signed against +1.4% over 4,830 bets, and the full population
+  says -1.6% over 73,918. The gate caught it on its own — the receipt's
+  evidence checksums stopped matching — which is exactly what that check is
+  for. Claude withdrew it, which is the only direction Claude may move that
+  file, because withdrawal can only ever reduce what the card may do.
+  **Re-enabling anything needs Cooper to read the current evidence and sign
+  a new receipt**, and the superseded one is kept under
+  `data/manual/human_acceptance_receipts/superseded/` as the record of a
+  decision that was really made. The card therefore produces no selection,
+  no lean, no pass and no stake, and says why. `goalie_saves` still cannot
+  produce a selection even if allowlisted, for want of a confirmed-starter
+  source (`docs/goalie_props_need_a_confirmed_starter.md`).
 - **The season fits the quota, measured against the real schedule.** 185
   game days, 1,344 games, 2026-09-29 to 2027-04-10; a mean of 7.3 games a
   night and a maximum of 16. At 19 asked per-event markets that is **26,091
