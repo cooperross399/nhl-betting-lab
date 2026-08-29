@@ -27,6 +27,8 @@ from datetime import date, timedelta
 
 import pandas as pd
 
+from nhl_betting_lab.stores import read_store
+
 from nhl_betting_lab.config import PROCESSED_DIR, RAW_DIR
 from nhl_betting_lab.providers import historical_team_prices as team
 from nhl_betting_lab.providers.env_file import load_provider_env
@@ -103,7 +105,7 @@ def main(argv: list[str] | None = None) -> int:
     target = processed / HISTORICAL_TEAM_PRICES_FILENAME
     frame = pd.DataFrame(buy.rows)
     if target.is_file() and not frame.empty:
-        existing = pd.read_csv(target)
+        existing = read_store(target, for_append=True)
         frame = pd.concat([existing, frame], ignore_index=True).drop_duplicates()
     if frame.empty and target.is_file():
         # A run that bought nothing must never replace a file that holds

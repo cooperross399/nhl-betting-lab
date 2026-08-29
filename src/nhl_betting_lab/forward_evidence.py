@@ -44,6 +44,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from nhl_betting_lab.stores import read_store
+
 from nhl_betting_lab.backtest.team_walk_forward import (
     settle_moneyline,
     settle_puck_line,
@@ -463,7 +465,9 @@ def settle_snapshots(
         frame = pd.DataFrame(new_rows, columns=list(LEDGER_COLUMNS))
         existing_rows = 0
         if ledger_path.is_file():
-            existing = pd.read_csv(ledger_path)
+            existing = read_store(
+                ledger_path, columns=LEDGER_COLUMNS, for_append=True
+            )
             existing_rows = len(existing)
             frame = pd.concat([existing, frame], ignore_index=True)
         # The ledger only ever grows: it is an append-only record of opinions

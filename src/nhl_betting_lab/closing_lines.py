@@ -36,6 +36,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from nhl_betting_lab.stores import read_store
+
 from nhl_betting_lab.config import PROCESSED_DIR
 from nhl_betting_lab.models.value import (
     OddsError,
@@ -158,7 +160,7 @@ def append_captures(
     combined = frame
     existing_rows = 0
     if path.is_file():
-        existing = pd.read_csv(path)
+        existing = read_store(path, columns=CAPTURE_COLUMNS, for_append=True)
         existing_rows = len(existing)
         combined = pd.concat([existing, frame], ignore_index=True)
     if len(combined) < existing_rows:
@@ -174,13 +176,7 @@ def load_captures(processed_dir: Path | None = None) -> pd.DataFrame:
     path = captures_path(processed_dir)
     if not path.is_file():
         return pd.DataFrame(columns=list(CAPTURE_COLUMNS))
-    try:
-        return pd.read_csv(path)
-    except (pd.errors.EmptyDataError, pd.errors.ParserError):
-        # A zero-byte or half-written store is an absent one, and the report
-        # says so. Crashing here would take the card run down with it, and
-        # the store is restored from a branch that can be interrupted.
-        return pd.DataFrame(columns=list(CAPTURE_COLUMNS))
+    return read_store(path, columns=CAPTURE_COLUMNS)
 
 
 def _key_of(row) -> tuple:

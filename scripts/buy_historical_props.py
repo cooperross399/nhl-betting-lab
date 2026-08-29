@@ -45,6 +45,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from nhl_betting_lab.stores import read_store
+
 from nhl_betting_lab.config import OUTPUTS_DIR, PROCESSED_DIR, RAW_DIR
 from nhl_betting_lab.markets import PROP_MARKETS
 from nhl_betting_lab.providers import historical_props as hist
@@ -364,7 +366,7 @@ def main(argv: list[str] | None = None) -> int:
         # Historical prices never change, so an existing file is evidence to
         # add to rather than replace. Deduplicated on the whole row so a
         # re-run is idempotent.
-        existing = pd.read_csv(target)
+        existing = read_store(target, for_append=True)
         frame = pd.concat([existing, frame], ignore_index=True).drop_duplicates()
     if frame.empty and target.is_file():
         # A run that bought nothing must never replace a file that holds
