@@ -1,0 +1,120 @@
+name: Line Movement Capture
+
+# Collects what a single daily snapshot cannot show: how prices move.
+#
+# WHY THIS EXISTS. After the model was measured to have no edge, three ideas
+# remained. Two of them — a book leaving its alternate ladder behind when it
+# moves the main line, and a book lagging the market on lineup news — are
+# untestable on everything this lab owns, for the same reason: every price it
+# has ever held was taken once, four hours before puck drop. Movement cannot
+# be seen in one observation.
+#
+# Like forward evidence, this cannot be collected retroactively. A night that
+# is not captured is gone, so it runs through the season and the analysis
+# waits.
+#
+# SCOPE: it writes only under data/processed/line_movement/. It does not touch
+# data/staging/ (which the card reads), the forward ledger, the policy, or the
+# card. It places no bet, allowlists nothing, and decides nothing.
+#
+# COST: 19 per-event markets across a night's games, several times a day —
+# roughly a thousand credits on a busy day, against a monthly allowance in the
+# millions. The cap is still hard, because an unbounded fetch is how a quota
+# becomes a bill.
+on:
+  schedule:
+    # Through the day and across every time zone's puck drop, so a line has
+    # somewhere to move between observations. In season only.
+    - cron: "0 14 * 1-4,10-12 *"
+    - cron: "0 18 * 1-4,10-12 *"
+    - cron: "0 21 * 1-4,10-12 *"
+    - cron: "0 23 * 1-4,10-12 *"
+    - cron: "0 1 * 1-4,10-12 *"
+    # Opening week does not wait for October.
+    - cron: "0 18 29-30 9 *"
+    - cron: "0 23 29-30 9 *"
+  workflow_dispatch:
+    inputs:
+      credit_cap:
+        description: "Hard cap on credits for this capture"
+        type: string
+        required: false
+        default: "600"
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: line-movement
+  cancel-in-progress: false
+
+jobs:
+  capture:
+    name: Capture
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install project
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install -e .
+
+      - name: Restore today's captures
+        # Each capture appends to the day's file, so the day's earlier
+        # captures have to come back or every run writes the first line of a
+        # new file and the movement is lost.
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -u
+          DAY=$(TZ=America/New_York date +%F)
+          previous=$(gh run list --workflow line-movement.yml --status success \
+            --limit 1 --json databaseId --jq '.[0].databaseId // empty')
+          if [ -z "$previous" ]; then
+            echo "No previous capture; this run starts the file."
+            exit 0
+          fi
+          mkdir -p data/processed
+          gh run download "$previous" --name line-movement --dir data/processed \
+            || echo "Nothing to restore; continuing."
+          ls -la "data/processed/line_movement/$DAY.csv" 2>/dev/null \
+            || echo "No file for $DAY yet; this is the day's first capture."
+
+      - name: Capture
+        env:
+          NHL_ODDS_API_KEY: ${{ secrets.NHL_ODDS_API_KEY }}
+          PYTHONPATH: src
+        run: |
+          python scripts/capture_line_movement.py --live \
+            --credit-cap "${{ inputs.credit_cap || '600' }}"
+
+      - name: Keep the captures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: line-movement
+          path: data/processed/line_movement
+          if-no-files-found: warn
+          retention-days: 90
+          overwrite: true
+
+      - name: Say what this run did not do
+        if: always()
+        run: |
+          echo "This job captured prices for later analysis."
+          echo "It wrote no staging file, froze no opinion, edited no policy,"
+          echo "allowlisted no provider, and placed no bet."
