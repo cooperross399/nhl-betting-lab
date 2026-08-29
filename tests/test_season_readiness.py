@@ -415,3 +415,48 @@ def test_a_roster_naming_a_team_not_in_the_game_still_produces_no_opinion() -> N
 
     assert probabilities == {}
     assert unresolved == ["Traded Forward"]
+
+
+# -- an empty file and a broken one are not the same thing ----------------
+
+
+def test_an_empty_store_reads_as_empty_for_readers_and_writers(tmp_path) -> None:
+    """A zero-byte file has nothing to lose, so neither path should refuse
+    it. This one crashed a purchase after 157,870 credits had been spent."""
+    from nhl_betting_lab.stores import read_store
+
+    path = tmp_path / "store.csv"
+    path.write_text("", encoding="utf-8")
+
+    assert read_store(path, columns=("a",)).empty
+    assert read_store(path, columns=("a",), for_append=True).empty
+
+
+def test_a_damaged_store_is_readable_as_absent_but_never_appendable(
+    tmp_path,
+) -> None:
+    """Something IS in there. A reader may report it as absent; a writer that
+    did would replace a damaged file with a shorter one, turning a
+    recoverable problem into a permanent one."""
+    import pytest
+
+    from nhl_betting_lab.stores import CorruptStoreError, read_store
+
+    path = tmp_path / "store.csv"
+    path.write_text('a,b\n1,2\n"unterminated,3\n4,5,6,7,8\n', encoding="utf-8")
+
+    read_store(path, columns=("a", "b"))  # tolerated: reports nothing
+
+    with pytest.raises(CorruptStoreError):
+        read_store(path, columns=("a", "b"), for_append=True)
+
+
+def test_the_purchase_restores_the_prices_it_already_bought() -> None:
+    """Every purchase uploaded its bought cache and none restored it, so each
+    run re-bought what the last one owned."""
+    text = _workflow("historical-props-purchase.yml")
+
+    assert "--name historical-props" in text
+    restore = text.index("--name historical-props")
+    upload = text.index("name: historical-props\n")
+    assert restore < upload, "the restore must read what an earlier run wrote"
