@@ -67,6 +67,17 @@ Re-derive rather than trust if the data has moved.
   a re-weighting of the same signal: a higher bar is worse because higher
   claimed edge is where it is more wrong, and shrinking toward the market is
   arithmetically the same as raising the bar. `docs/why_the_model_has_no_edge.md`.
+- **Line shopping was tested too, and there is nothing to harvest.**
+  De-vigging each book and pricing every quote against the leave-one-out
+  consensus of the *other* books: of 161,891 quotes only **1,557 (under 1%)**
+  were positive-EV at all, and those realised −3.4% with an interval spanning
+  zero. The eight books are tightly aligned on NHL props at this snapshot.
+  Ladder staleness is **untestable** on bought history (3,208 of 647,126
+  player-game-book combinations carry 3+ rungs) and becomes answerable only
+  as the live fetch accumulates. Three hypotheses have now been tested
+  against this one dataset; a fourth would be fishing, and the honest
+  position is that what remains is information the market lacks, not a
+  cleverer statistic. `docs/why_the_model_has_no_edge.md`.
 - **A duplicated store does not look wrong, it looks significant.** The
   purchase deduplicated on the whole row, timestamps included, so two buys of
   the same window wrote every quote twice under two snapshot labels. ROI is

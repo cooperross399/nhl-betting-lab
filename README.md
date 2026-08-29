@@ -18,15 +18,28 @@ before believing any number this repository produces.
 
 ## The current answer to "does this work"
 
-**No demonstrated edge, measured thoroughly.** Nine markets have been measured
-against real bought prices — 4,830 prop bets pooled at +1.4% with a 95%
-interval of −1.4% to +4.2%, three team markets all negative — and every
-interval includes zero. The card runs live anyway, by Cooper's explicit
-approval overriding the evidence's enable-nothing recommendation (receipt
-`odds_api-20260827T165300-0400-cooperross399`), so the forward ledger can
-accumulate genuinely out-of-sample evidence. `data/outputs/what_we_can_claim.md`
-is regenerated from the measurements every run and always says what they
-actually support.
+**No, and it has now been measured at full population.** Buying every
+retained event rather than a sample took the props measurement from 4,830
+bets to **73,918**, and the answer changed sign: **−1.6%, 95% interval −2.3%
+to −0.8%**, excluding zero on the losing side and surviving correction for
+the seven markets tested. The earlier +1.4% was a small sample and a
+duplicated store, not a finding.
+
+The mechanism is understood rather than merely observed. The model is
+**overconfident by 9 to 12 points on exactly the bets it selects** — it says
+65%, the truth is 53% — while being calibrated overall, which is the
+signature of a selection effect rather than a broken model. Regressing the
+outcome on both views gives the market a coefficient of 0.97 and the model
+0.03 with an interval spanning zero: **when the two disagree, the market is
+right and the model's disagreement carries no information.** Line shopping
+across eight books was tested too and there is nothing to harvest.
+
+`data/manual/staging_provider_policy.json` therefore allowlists nothing, the
+card produces no selection, and re-enabling anything needs a fresh human
+receipt signed against the evidence as it now reads. The full account is in
+[`docs/why_the_model_has_no_edge.md`](docs/why_the_model_has_no_edge.md);
+`data/outputs/what_we_can_claim.md` is regenerated every run and always says
+what the measurements actually support.
 
 ## Setup
 
@@ -139,6 +152,13 @@ PYTHONPATH=src .venv/bin/python scripts/merge_capture_store.py \
 # a clobbered file is a five-minute recovery rather than a re-purchase.
 PYTHONPATH=src .venv/bin/python scripts/rebuild_price_files.py
 
+# Capture today's board again, so line MOVEMENT becomes observable. Every
+# price this lab ever held was taken once, four hours before puck drop, and
+# a single observation cannot show a line moving. Writes only under
+# data/processed/line_movement/ — never staging, never the ledger.
+PYTHONPATH=src .venv/bin/python scripts/capture_line_movement.py --live \
+    --credit-cap 600
+
 ### Historical prices — the expensive one
 
 ```bash
@@ -221,6 +241,7 @@ finish.
 | Closing Lines | hourly through the evening in season | yes, capped |
 | Provider Market Discovery | on demand | yes, capped |
 | Historical Props Purchase | on demand only, never scheduled | yes, capped, required cap |
+| Line Movement Capture | several times daily in season | yes, capped |
 
 ## Safety boundaries
 

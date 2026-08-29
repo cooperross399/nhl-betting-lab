@@ -20,21 +20,13 @@ name: Closing Lines
 # daily card publish.
 
 on:
-  schedule:
-    # The window has to cover every puck drop in BOTH daylight regimes, and
-    # the first version did not: 23:00 UTC is 19:00 ET only in EDT — in EST
-    # it is 18:00, so on 116 EDT nights the 19:00 ET games had no capture
-    # before they started, and afternoon games never did in any month. About
-    # 29% of games were losing their close, and not at random: the missing
-    # set was the matinees and the whole opening block.
-    #
-    # 17:00 and 20:00 UTC catch weekend and holiday matinees; 22:00 UTC sits
-    # 60-120 minutes before a 19:00 ET start under either regime; 04:00 UTC
-    # restores the late block in EST. Month 6 covers the Final. A dark night
-    # exits quietly on the empty-slate path, which is what makes a generous
-    # grid cheap.
-    - cron: "0 15,16,17,20,22,23 * 1-6,9-12 *"
-    - cron: "0 0,1,2,3,4 * 1-6,9-12 *"
+  # SCHEDULE RETIRED 2026-08-29. Line Movement Capture now performs one
+  # fetch and writes both stores: every book's every rung for movement
+  # analysis, and the best price per selection for this one. Two
+  # schedules were asking the provider the same question and paying
+  # twice. This workflow stays dispatchable so a capture can still be
+  # forced by hand, and the history of why the old grid looked the way
+  # it did is in git rather than in a comment above a dead trigger.
   workflow_dispatch:
     inputs:
       credit_cap:
