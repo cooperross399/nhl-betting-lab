@@ -255,3 +255,13 @@ def test_the_three_in_four_check_is_recorded_as_not_built() -> None:
     assert "nothing was built" in text
     assert "closes less than half the team gap" in text
     assert "recorded rather than chased" in text
+
+
+def test_the_operating_state_records_why_the_model_loses() -> None:
+    """Losing is a number; *why* it loses is the finding, and it is the one
+    thing that tells a future session which fixes are already ruled out."""
+    text = _claude_md()
+
+    assert "carries no information" in text
+    assert "+0.032" in text
+    assert "docs/why_the_model_has_no_edge.md" in text
