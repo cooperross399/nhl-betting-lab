@@ -171,6 +171,18 @@ Re-derive rather than trust if the data has moved.
   realisation** — books hang the vigged, publicly-shaded side on the Over, and
   bets are selected exactly where estimation error concentrates. Diagnosis,
   not finding; stated in the backtest report.
+- **This lab has an end date, decided before the data existed: 2027-04-25.**
+  Everything measurable on bought history has been measured and comes back
+  null. The single open question is whether the model beats prices on data
+  that did not exist when it was built, which only the forward ledger can
+  answer. The rule is pre-registered in `docs/when_this_ends.md`: a corrected
+  interval spanning zero or negative means **stop** — archive both labs and
+  disable the routines; positive on one season is a candidate needing a
+  second season, never a green light; under 3,000 settled opinions means the
+  pipeline failed rather than the model. **Nothing about the model, the edge
+  bar or the market list may change before that date.** Defect fixes may,
+  each recorded here with its date, because a fix that silently alters what
+  is being measured is indistinguishable from tuning.
 - **The forward-evidence organ exists and runs in Gameday Refresh.** After
   the card prices a slate, every opinion is frozen into a dated snapshot —
   the first opinion of the day stands, never repriced — and once a day's
