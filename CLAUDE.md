@@ -41,6 +41,18 @@ Every session, in this order. These replace chat history as project memory.
 Every number below is measured, walk-forward, and carries its sample size.
 Re-derive rather than trust if the data has moved.
 
+- **Book access is worth +0.68 points and saturates by five books.** ROI at
+  the shipped bar as reachable books grow: 1 → −1.02%, 2 → −0.81%, 3 →
+  −0.59%, 5 → −0.40%, 8 → −0.34%; the last three books add 0.06 between them.
+  No single book is positive alone (best Bovada −0.67%, worst Caesars
+  −3.68%). **Opening more accounts cannot close the gap.**
+- **The −0.34% headline assumes perfect shopping, which is the most
+  favourable assumption available.** It takes the best of eight books on
+  every wager, while real prop limits are small, books restrict winners, and
+  the best price is disproportionately the stale one about to move. The
+  honest bracket is **−1.6% (every quote, average price) to −0.34% (perfect
+  shopping)**, and a real result sits nearer the middle. Quoting −0.34% as
+  *the* number overstates what is reachable exactly as −1.6% understated it.
 - **The lab measures one thing and ships another, by five and a half hours.**
   Every historical price was bought at a median **4.0 hours** before face-off
   (p10 4.0, p90 4.0). The production card runs **9.5 hours** before a 19:00
