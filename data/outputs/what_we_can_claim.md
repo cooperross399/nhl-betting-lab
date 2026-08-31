@@ -3,6 +3,7 @@
 Generated from the measurement outputs, so it cannot drift from them. The hand-written rules live in `docs/what_we_can_and_cannot_claim.md`.
 
 - Generated: 2026-08-29T00:21:37+00:00
+- Policy section corrected by hand on 2026-08-31: the allowlist below was withdrawn a few minutes after this report was generated (see `data/manual/staging_provider_policy.json` and its `_withdrawn` note), and nothing re-ran `scripts/run_what_we_can_claim.py` afterward. The measured numbers above and below are unaffected by the withdrawal and are not touched by this correction; only the policy line was stale. The full report should still be regenerated from a checkout that has the priced backtest data (this correction was made without it, since that data is run state, not checked into git).
 
 **No demonstrated edge in any market.** 9 market(s) have been measured against real prices. Nothing survives correcting for the number of markets tested and then holds on a window it was not found on. What *has* survived both tests is a loss: `points`. A replicated deficit is a finding, not a null result, and it is the finding the model has.
 
@@ -43,8 +44,8 @@ The NHL's advantage over a smaller league is volume: about 1,312 regular-season 
 
 ## What the card is actually allowed to use
 
-- Provider policy: **Allowlisted**
-- Allowlisted markets: **assists, blocked_shots, goalie_saves, goals, hits, moneyline, points, puck_line, regulation_3_way, shots_on_goal, total_goals**
+- Provider policy: **Nothing allowlisted**
+- Allowlisted markets: **none**
 
 ## Standing notes
 
