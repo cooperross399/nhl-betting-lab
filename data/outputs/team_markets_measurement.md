@@ -2,7 +2,7 @@
 
 Moneyline, puck line and totals — calibrated walk-forward, and measured against real prices wherever any have been bought.
 
-- Generated: 2026-08-27T05:40:56+00:00
+- Generated: 2026-08-31T20:37:38+00:00
 - 142,662 walk-forward samples across 4 market(s) and 3,658 games; 3 market(s) have any price-based evidence.
 
 ## Calibration

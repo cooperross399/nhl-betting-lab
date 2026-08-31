@@ -687,8 +687,15 @@ def test_every_priced_outcome_lands_in_exactly_one_bucket() -> None:
         + report.outcomes_ambiguous
         + len(report.bets)
     )
-    assert report.outcomes_unparseable == 2
+    # One, not two. The "EVEN" quote sits on a wager another book prices at a
+    # real number, and one wager is one bet at the best price a card could
+    # take — so that wager is bettable, not unparseable. The row with the
+    # unparseable LINE is a different wager and still counts.
+    assert report.outcomes_unparseable == 1
     assert accounted == report.priced_outcomes
+    # The identity is over wagers now, and the collapse must not lose any.
+    assert report.wagers == report.priced_outcomes
+    assert report.quotes_seen > report.wagers
 
 
 def test_the_report_prints_the_reconciliation() -> None:
@@ -738,3 +745,31 @@ def test_a_disambiguated_price_never_binds_to_the_bare_name() -> None:
 
     assert len(report.bets) == 0
     assert report.outcomes_without_a_model_opinion == 1
+
+
+def test_one_wager_quoted_by_three_books_is_one_bet_at_the_best_price() -> None:
+    """The defect this reproduces published a demonstrated loss that was not one.
+
+    The store holds every book's quote on the same selection. Counting each
+    as its own bet measured a strategy the card would never run — every book
+    at the average price, rather than one bet at the best — and made every
+    interval about sqrt(2.8) too narrow, because eight quotes on one outcome
+    are eight copies of one coin flip.
+    """
+    samples = _samples()
+    base = _prices()
+    one = base.iloc[0].to_dict()
+    quotes = pd.DataFrame(
+        [{**one, "american_odds": odds, "book": book}
+         for odds, book in ((-130, "BetMGM"), (+145, "Bovada"), (-110, "DraftKings"))]
+    )
+
+    report = bt.run_backtest(quotes, samples, edge_threshold=0.0)
+
+    assert report.quotes_seen == 3
+    assert report.wagers == 1
+    assert len(report.bets) <= 1
+    if report.bets:
+        # +145 pays more than -110, which pays more than -130. American odds
+        # are not ordered by magnitude, so the ranking must be on the payout.
+        assert report.bets[0].american_odds == 145
