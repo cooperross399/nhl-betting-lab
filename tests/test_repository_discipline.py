@@ -71,6 +71,11 @@ def test_no_workflow_grants_write_access_to_contents(workflow: str) -> None:
     writers = {
         "gameday-refresh.yml": "refs/heads/card-feed",
         "closing-lines.yml": "refs/heads/closing-lines",
+        # Pushes a branch so a moved verdict becomes a pull request a human
+        # reads. It may never push main and may never edit a live verdict in
+        # place: a scheduled job that rewrites the card's policy on its own
+        # is tuning by another name, and it would corrupt the forward test.
+        "experiment-refresh.yml": "$BRANCH",
     }
     if workflow not in writers:
         assert "contents: write" not in text
@@ -85,6 +90,11 @@ def test_no_workflow_grants_write_access_to_contents(workflow: str) -> None:
     assert pushes, "the write grant exists only for the card-feed publish"
     for line in pushes:
         assert writers[workflow] in line
+        assert "main" not in line
+    if workflow == "experiment-refresh.yml":
+        assert "gh pr create" in text, (
+            "a branch push with no pull request is a change nobody reads"
+        )
 
 
 @pytest.mark.parametrize("workflow", WORKFLOWS)

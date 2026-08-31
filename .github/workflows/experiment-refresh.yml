@@ -1,0 +1,140 @@
+name: Experiment Refresh
+
+# Does the lab still believe what it believed?
+#
+# The card's behaviour follows `verdicts.ships()`, which reads decisions from
+# tracked JSON files. Every experiment that produced those decisions has only
+# ever been run BY HAND, so a policy that stopped being right in November
+# would keep shipping until somebody happened to re-run it. Over a season
+# that is the difference between a lab that improves as evidence accumulates
+# and one that improves when someone remembers.
+#
+# So every experiment re-runs weekly against everything known by then, and
+# the verdicts it produces are compared with the verdicts in the repository.
+#
+# WHAT IT WILL NOT DO. It does not edit the live verdicts, and it does not
+# touch the card. A scheduled job that silently rewrites the card's policy
+# mid-season is indistinguishable from tuning, and it would corrupt the
+# forward-evidence test that runs until 2027-04-25 (docs/when_this_ends.md).
+# A moved verdict opens a PULL REQUEST carrying the evidence, and a human
+# decides. Detection is automatic; application is not.
+on:
+  schedule:
+    # Mondays, after the weekend's results are in and settled.
+    - cron: "0 16 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: read
+
+concurrency:
+  group: experiment-refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    name: Re-decide everything
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install project
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install -e .
+
+      - name: Restore the accumulated state
+        # The experiments need the boxscore cache, the processed tables and
+        # the bought prices. Without them this job re-decides nothing on no
+        # data and reports a false "nothing moved".
+        id: restore
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -u
+          for wf in gameday-refresh.yml historical-props-purchase.yml; do
+            run=$(gh run list --workflow "$wf" --status success --limit 1 \
+              --json databaseId --jq '.[0].databaseId // empty')
+            [ -z "$run" ] && continue
+            for name in gameday-state historical-props; do
+              gh run download "$run" --name "$name" --dir data 2>/dev/null || true
+            done
+          done
+          games=$(find data/raw/nhl/boxscore -name '*.json' 2>/dev/null | wc -l)
+          echo "Boxscores restored: $games"
+          if [ "$games" -lt 500 ]; then
+            echo "::error::Only $games boxscores restored. Re-deciding on a thin cache would report a verdict change that is really a data shortage."
+            exit 1
+          fi
+
+      - name: Re-run every experiment
+        env:
+          PYTHONPATH: src
+        run: |
+          set -u
+          python scripts/build_datasets.py || true
+          for s in run_correction_experiment run_rest_experiment run_props_rest_experiment; do
+            echo "::group::$s"
+            python "scripts/$s.py" || echo "::warning::$s did not complete"
+            echo "::endgroup::"
+          done
+
+      - name: Has anything changed its mind?
+        id: drift
+        env:
+          PYTHONPATH: src
+        run: |
+          set +e
+          python scripts/check_verdict_drift.py
+          echo "moved=$?" >> "$GITHUB_OUTPUT"
+          set -e
+
+      - name: Open a pull request when a verdict moved
+        # The evidence goes to a human, never straight to the card.
+        if: steps.drift.outputs.moved == '1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -u
+          BRANCH="verdict-drift-$(TZ=America/New_York date +%F)"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add data/outputs/*_experiment.json data/outputs/*_experiment.md \
+                  data/outputs/verdict_drift.md 2>/dev/null || true
+          git commit -m "A recorded verdict moved on the accumulated data" \
+            -m "$(cat data/outputs/verdict_drift.md)" || exit 0
+          git push -u origin "$BRANCH"
+          gh pr create --title "A recorded verdict moved on the accumulated data" \
+            --body-file data/outputs/verdict_drift.md
+
+      - name: Keep the evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: experiment-refresh
+          path: |
+            data/outputs/verdict_drift.md
+            data/outputs/*_experiment.md
+            data/outputs/*_experiment.json
+          if-no-files-found: warn
+          retention-days: 90
+
+      - name: Say what this run did not do
+        if: always()
+        run: |
+          echo "This job re-decided every experiment on the data known today."
+          echo "It placed no bet, edited no live policy, allowlisted nothing,"
+          echo "and changed the card not at all. A moved verdict is a pull"
+          echo "request for a human, never an automatic edit."

@@ -218,6 +218,11 @@ PYTHONPATH=src .venv/bin/python scripts/run_props_rest_experiment.py
 # The provider policy PR gate. Exits non-zero when the paperwork does not hold.
 PYTHONPATH=src .venv/bin/python scripts/run_policy_pr_gate.py
 
+# Do the experiments still decide what the repository says they decided?
+# Compares the verdicts produced now against the ones committed. Reads and
+# reports; never edits a live verdict. Exit 1 means something moved.
+PYTHONPATH=src .venv/bin/python scripts/check_verdict_drift.py
+
 PYTHONPATH=src .venv/bin/python -m pytest -q
 PYTHONPATH=src .venv/bin/python -m compileall -q src scripts
 ```
@@ -256,6 +261,7 @@ finish.
 | Provider Market Discovery | on demand | yes, capped |
 | Historical Props Purchase | on demand only, never scheduled | yes, capped, required cap |
 | Line Movement Capture | several times daily in season | yes, capped |
+| Experiment Refresh | weekly | no |
 
 ## Safety boundaries
 
