@@ -773,3 +773,37 @@ def test_one_wager_quoted_by_three_books_is_one_bet_at_the_best_price() -> None:
         # +145 pays more than -110, which pays more than -130. American odds
         # are not ordered by magnitude, so the ranking must be on the payout.
         assert report.bets[0].american_odds == 145
+
+
+def test_one_wager_priced_at_two_moments_is_two_questions() -> None:
+    """A card-time quote and a near-face-off quote must never collapse.
+
+    The best-price rule takes the better of the quotes on a wager. If the
+    store holds the same wager priced four hours out and nine hours out, that
+    rule silently takes the better MOMENT as well as the better book — a
+    price nobody could have taken, inflating the measured edge invisibly.
+    The sibling football lab documents this defect; this one lacked the
+    guard until a second snapshot was about to be bought.
+    """
+    samples = _samples()
+    base = _prices()
+    one = base.iloc[0].to_dict()
+    commence = "2025-01-06T00:10:00Z"
+    both = pd.DataFrame([
+        {**one, "commence_time": commence, "snapshot": "2025-01-05T20:10:00Z",
+         "american_odds": -130},                       # 4 hours out: the card
+        {**one, "commence_time": commence, "snapshot": "2025-01-05T14:40:00Z",
+         "american_odds": +180},                       # 9.5 hours out: earlier
+    ])
+
+    with pytest.raises(ValueError, match="more than one window"):
+        bt.run_backtest(both, samples, edge_threshold=0.0)
+
+    report = bt.run_backtest(both, samples, edge_threshold=0.0, phase="late")
+
+    assert report.phase == "late"
+    assert report.quotes_seen == 1, "the earlier moment must not be in scope"
+    if report.bets:
+        assert report.bets[0].american_odds == -130, (
+            "taking +180 from a different moment is a price nobody could have had"
+        )

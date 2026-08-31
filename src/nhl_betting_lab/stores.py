@@ -130,3 +130,41 @@ def best_price_per_wager(frame, key):
         .first()
         .drop(columns=["_payout"])
     )
+
+
+#: How far before puck drop a snapshot was taken decides what it can measure.
+#: A card-time price and a near-kickoff price are different questions, and
+#: mixing them is not a smaller error than mixing two books — it is worse,
+#: because the best of two moments is a price nobody could have taken.
+PHASE_BOUNDS = {"late": 6.0, "card": 12.0}
+
+
+def label_phases(frame):
+    """Add `hours_before` and `phase` from the snapshot and the face-off.
+
+    Derived rather than stored, so it is correct for prices already bought.
+    Everything at or inside six hours is `late`; out to twelve is `card`;
+    anything earlier is `early`. A row missing either timestamp gets
+    `unknown` and is never silently folded in with the rest.
+
+    The sibling football lab learned this the expensive way: without a phase
+    label the best-price collapse takes the better of a card-time quote and a
+    closing quote for one wager, which inflates every measured edge by an
+    amount nobody can see.
+    """
+    import pandas as pd
+
+    out = frame.copy()
+    if "commence_time" not in out.columns or "snapshot" not in out.columns:
+        out["hours_before"] = float("nan")
+        out["phase"] = "unknown"
+        return out
+    commence = pd.to_datetime(out["commence_time"], errors="coerce", utc=True)
+    snapshot = pd.to_datetime(out["snapshot"], errors="coerce", utc=True)
+    hours = (commence - snapshot).dt.total_seconds() / 3600.0
+    out["hours_before"] = hours
+    out["phase"] = "early"
+    out.loc[hours <= PHASE_BOUNDS["card"], "phase"] = "card"
+    out.loc[hours <= PHASE_BOUNDS["late"], "phase"] = "late"
+    out.loc[hours.isna(), "phase"] = "unknown"
+    return out
