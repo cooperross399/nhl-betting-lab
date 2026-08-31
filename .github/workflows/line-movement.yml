@@ -1,6 +1,7 @@
 name: Line Movement Capture
 
-# Collects what a single daily snapshot cannot show: how prices move.
+# Collects what a single daily snapshot cannot show: how prices move, and
+# when the lineup that moves them becomes public.
 #
 # WHY THIS EXISTS. After the model was measured to have no edge, three ideas
 # remained. Two of them — a book leaving its alternate ladder behind when it
@@ -94,7 +95,7 @@ jobs:
           ls -la "data/processed/line_movement/$DAY.csv" 2>/dev/null \
             || echo "No file for $DAY yet; this is the day's first capture."
 
-      - name: Capture
+      - name: Capture prices
         env:
           NHL_ODDS_API_KEY: ${{ secrets.NHL_ODDS_API_KEY }}
           PYTHONPATH: src
@@ -102,12 +103,30 @@ jobs:
           python scripts/capture_line_movement.py --live \
             --credit-cap "${{ inputs.credit_cap || '600' }}"
 
+      - name: Capture deployment
+        # Taken in the SAME run as the prices, so the two share an instant and
+        # can be joined. That is the whole design: the question worth asking
+        # is not "who was scratched" but "was the scratch public before the
+        # market moved", and only a shared timestamp can answer it.
+        #
+        # Free and inside the NHL API licence the lab already relies on. It
+        # spends no provider credits, so it runs even when the price capture
+        # is capped or fails.
+        if: always()
+        continue-on-error: true
+        env:
+          PYTHONPATH: src
+        run: |
+          python scripts/capture_deployment.py
+
       - name: Keep the captures
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: line-movement
-          path: data/processed/line_movement
+          path: |
+            data/processed/line_movement
+            data/processed/deployment
           if-no-files-found: warn
           retention-days: 90
           overwrite: true

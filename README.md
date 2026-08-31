@@ -167,6 +167,12 @@ PYTHONPATH=src .venv/bin/python scripts/rebuild_price_files.py
 PYTHONPATH=src .venv/bin/python scripts/capture_line_movement.py --live \
     --credit-cap 600
 
+# Capture who is NOT playing, and when that became knowable. Free: the NHL's
+# own API, no provider credits. Runs in the same job as the price capture so
+# the two share an instant and can be joined — which is what makes "was the
+# scratch public before the market moved?" answerable a season from now.
+PYTHONPATH=src .venv/bin/python scripts/capture_deployment.py
+
 ### Historical prices — the expensive one
 
 ```bash
