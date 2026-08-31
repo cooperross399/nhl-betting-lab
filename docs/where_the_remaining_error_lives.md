@@ -171,3 +171,47 @@ This collects. It does not fix anything, it is wired into no card, and it
 changes no number. Like forward evidence, it cannot be gathered
 retroactively, which is the only reason it starts now rather than when the
 question is asked.
+
+## What every measured lever is worth
+
+Recorded so the arithmetic is in one place and nobody has to re-derive it.
+
+| lever | worth | status |
+|:--|--:|:--|
+| the model's own selection | **+2.35 points** | captured |
+| book access, one account to eight | **+0.68 points** | captured, and saturating |
+| card timing, 4h against 9.5h | unknown | being bought |
+| deployment information (oracle) | ~+5 points | not obtainable pre-game |
+| better statistics on the same data | **negative** | measured, dead |
+| thirteen external data inputs | **zero** | measured, dead |
+| 1,175 structural rules | **zero** | measured, dead |
+
+### Book access, measured
+
+ROI at the 6% bar, one bet per wager, as the number of books you can reach
+grows:
+
+| reachable books | ROI |
+|:--|--:|
+| 1 (DraftKings alone) | −1.02% |
+| 2 | −0.81% |
+| 3 | −0.59% |
+| 5 | −0.40% |
+| **8** | **−0.34%** |
+
+Opening accounts is worth **+0.68 points** and the curve is flat by five —
+the last three books add 0.06 between them. **More accounts cannot close the
+remaining gap.** No single book is positive alone; the best is Bovada at
+−0.67%, the worst Caesars at −3.68%.
+
+### The execution caveat that governs the headline
+
+The −0.34% assumes the best of eight books is taken on **every** wager. That
+is the most favourable assumption available and it is not how betting works:
+prop limits are small, books restrict winners quickly, and the best price is
+disproportionately the stale one about to move or be pulled.
+
+So the honest bracket runs from about **−1.6%** (every quote counted, average
+price) to **−0.34%** (perfect shopping), and a real-world result sits nearer
+the middle than the top. Quoting −0.34% as *the* number overstates what is
+reachable, in the same way quoting −1.6% understated it.
