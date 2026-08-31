@@ -60,6 +60,7 @@ from nhl_betting_lab.providers.team_names import (
     build_team_name_map,
     resolve_team,
 )
+from nhl_betting_lab.stores import best_price_per_wager
 from nhl_betting_lab.season import clean_text, row_game_date
 from nhl_betting_lab.models.value import (
     OddsError,
@@ -161,28 +162,6 @@ def settle(actual: float, line: float, selection: str) -> tuple[bool, bool]:
 
 
 
-def _one_bet_per_wager(prices: pd.DataFrame) -> pd.DataFrame:
-    """Collapse every book's quote on one selection to the best price.
-
-    The key is the wager a person would actually place: a date, a player, a
-    market, a line and a side. Whichever book pays most on it is the price a
-    card would have taken.
-    """
-    key = ["date", "market", "player", "line", "selection"]
-    if not set(key) <= set(prices.columns) or "american_odds" not in prices:
-        return prices
-    odds = pd.to_numeric(prices["american_odds"], errors="coerce")
-    # American odds are not ordered by magnitude: +150 pays more than -110,
-    # which pays more than -200. Rank on the decimal payout instead.
-    payout = odds.where(odds < 0, odds / 100.0)
-    payout = payout.where(odds > 0, -100.0 / odds)
-    ordered = prices.assign(_payout=payout).sort_values("_payout", ascending=False)
-    return (
-        ordered.groupby(key, as_index=False, dropna=False)
-        .first()
-        .drop(columns=["_payout"])
-    )
-
 def run_backtest(
     prices: pd.DataFrame,
     samples: pd.DataFrame,
@@ -235,7 +214,9 @@ def run_backtest(
     # truth rather than one replacing the other. The pessimistic bracket is
     # kept and reported beside this one.
     report.quotes_seen = len(prices)
-    prices = _one_bet_per_wager(prices)
+    prices = best_price_per_wager(
+        prices, ["date", "market", "player", "line", "selection"]
+    )
     report.wagers = len(prices)
 
     # One entry per player-game-market, indexed under every legitimate

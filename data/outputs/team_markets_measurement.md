@@ -2,7 +2,7 @@
 
 Moneyline, puck line and totals — calibrated walk-forward, and measured against real prices wherever any have been bought.
 
-- Generated: 2026-08-31T20:37:38+00:00
+- Generated: 2026-08-31T20:42:56+00:00
 - 142,662 walk-forward samples across 4 market(s) and 3,658 games; 3 market(s) have any price-based evidence.
 
 ## Calibration
@@ -80,21 +80,21 @@ Moneyline, puck line and totals — calibrated walk-forward, and measured agains
 
 | Market | Bets | Profit | ROI | 95% interval | Corrected for the search | Survives |
 |:-------|-----:|-------:|----:|:-------------|:-------------------------|:---------|
-| `moneyline` | 1504 | -36.5u | -2.4% | -8.0% .. +3.1% | -9.5% .. +4.6% | no |
-| `puck_line` | 1541 | -66.4u | -4.3% | -8.7% .. +0.1% | -9.9% .. +1.3% | no |
-| `total_goals` | 1150 | -5.9u | -0.5% | -6.0% .. +5.0% | -7.5% .. +6.4% | no |
+| `moneyline` | 175 | -9.0u | -5.2% | -21.8% .. +11.4% | -26.3% .. +16.0% | no |
+| `puck_line` | 198 | -12.0u | -6.1% | -18.6% .. +6.5% | -22.0% .. +9.9% | no |
+| `total_goals` | 217 | +19.7u | +9.1% | -3.6% .. +21.8% | -7.1% .. +25.2% | no |
 
-- `moneyline`: -2.4% over 1504 bets, 95% interval -8.0% to +3.1%. The interval includes zero, which means **no demonstrated edge**.
-- `puck_line`: -4.3% over 1541 bets, 95% interval -8.7% to +0.1%. The interval includes zero, which means **no demonstrated edge**.
-- `total_goals`: -0.5% over 1150 bets, 95% interval -6.0% to +5.0%. The interval includes zero, which means **no demonstrated edge**.
+- `moneyline`: -5.2% over 175 bets, 95% interval -21.8% to +11.4%. The interval includes zero, which means **no demonstrated edge**.
+- `puck_line`: -6.1% over 198 bets, 95% interval -18.6% to +6.5%. The interval includes zero, which means **no demonstrated edge**.
+- `total_goals`: +9.1% over 217 bets, 95% interval -3.6% to +21.8%. The interval includes zero, which means **no demonstrated edge**.
 
 ### Where every price landed
 
 An unmatched price is one the sample grid could not score — a line the books hang that the grid does not carry, or a warm-up-window game no sample covers. It is counted, because a third of the bought totals once vanished this way with nothing saying so.
 
-- `moneyline`: 8,298 prices seen, 338 unmatched (96% matched), 6,456 below threshold, 1,504 bets.
-- `puck_line`: 7,858 prices seen, 342 unmatched (96% matched), 5,975 below threshold, 1,541 bets.
-- `total_goals`: 8,136 prices seen, 340 unmatched (96% matched), 6,646 below threshold, 1,150 bets.
+- `moneyline`: 824 prices seen, 32 unmatched (96% matched), 617 below threshold, 175 bets.
+- `puck_line`: 850 prices seen, 36 unmatched (96% matched), 616 below threshold, 198 bets.
+- `total_goals`: 1,316 prices seen, 48 unmatched (96% matched), 1,051 below threshold, 217 bets.
 
 ### How much data would settle it
 

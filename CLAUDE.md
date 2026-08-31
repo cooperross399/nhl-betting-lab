@@ -107,14 +107,21 @@ Re-derive rather than trust if the data has moved.
   a number being misread must not be the thing misreading it; it now
   separates a demonstrated edge from a demonstrated deficit and names the
   deficit.
-- **Team markets show no edge either.** Under the shipped policy: moneyline
-  −2.4% over 1,504 bets, puck line −4.3% over 1,541, totals −0.5% over 1,150
-  — every interval includes zero after the family correction. Match rate
-  against the bought prices is 96% per market (was 66% on totals before the
-  sample grid covered the whole-number lines the books actually hang); the
-  remaining 4% are warm-up-window games, counted as exactly that. Whole-number
-  spreads and totals push on exact margins, the ±1 push includes the entire
-  overtime mass, and both the model and settlement price it.
+- **Team markets show no demonstrated edge, and are measured far more
+  thinly than they looked.** At one bet per wager and the card's best price:
+  moneyline **−5.2% over 175 bets** (−21.8% to +11.4%), puck line **−6.1%
+  over 198** (−18.6% to +6.5%), totals **+9.1% over 217** (−3.6% to +21.8%).
+  Every interval includes zero. An earlier version reported these as −2.4%
+  over 1,504, −4.3% over 1,541 and −0.5% over 1,150 — those counts were book
+  quotes, not wagers, so the real sample is roughly **eight times smaller**
+  than published and every interval was correspondingly too tight.
+  **Totals moving from −0.5% to +9.1% is not a finding, it is the sample
+  being small**: 217 bets with an interval spanning zero, on a best-of-N
+  price that is optimistically biased by construction. Match rate against
+  the bought prices is 96% per market; the remaining 4% are warm-up-window
+  games, counted as exactly that. Whole-number spreads and totals push on
+  exact margins, the ±1 push includes the entire overtime mass, and both the
+  model and settlement price it.
 - **What ships is what the recorded verdicts say, through one door.**
   `verdicts.ships()` reads each experiment's `ships` list;
   the card and the default sample generators consult it rather than asserting

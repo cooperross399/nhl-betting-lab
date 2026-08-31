@@ -93,7 +93,7 @@ def test_a_matched_price_above_the_threshold_becomes_a_bet() -> None:
                 "line": None,
                 "american_odds": 150,  # implied 40%, model says 55%
             }
-            for row in samples.head(50).itertuples()
+            for row in samples.drop_duplicates(subset=['date']).itertuples()
         ]
     )
 
@@ -103,7 +103,10 @@ def test_a_matched_price_above_the_threshold_becomes_a_bet() -> None:
     moneyline = report.markets[0]
 
     assert moneyline.has_price_evidence is True
-    assert moneyline.priced.bets == 50
+    # One bet per wager: the fixture cycles 27 dates for one matchup, so
+    # 50 price rows were 50 quotes on 27 real games. Counting them as 50
+    # bets is the defect this collapse exists to remove.
+    assert moneyline.priced.bets == 27
 
 
 def test_a_price_below_the_threshold_produces_no_bet() -> None:
@@ -170,7 +173,7 @@ def test_a_push_returns_the_stake_rather_than_losing_it() -> None:
                 "line": 6.0,
                 "american_odds": 150,
             }
-            for row in samples.head(50).itertuples()
+            for row in samples.drop_duplicates(subset=['date']).itertuples()
         ]
     )
 
@@ -181,7 +184,9 @@ def test_a_push_returns_the_stake_rather_than_losing_it() -> None:
 
     assert totals.priced is not None
     assert totals.priced.profit == pytest.approx(0.0)
-    assert totals.priced.pushes == 50
+    # 27, not 50: the fixture cycles 27 dates for one matchup, so 50
+    # price rows are 50 quotes on 27 wagers.
+    assert totals.priced.pushes == 27
 
 
 def test_pushes_are_excluded_from_the_calibration_measurement() -> None:
@@ -315,8 +320,12 @@ def test_every_priced_row_lands_in_a_bucket() -> None:
                 "line": 9.5,
                 "american_odds": 150,
             },
-            {  # unparseable odds after a match -> counted
-                "date": samples.iloc[0]["date"],
+            {  # unparseable odds after a match -> counted.
+                # Its own date: sharing a wager with the valid row above
+                # would mean the collapse keeps the good price, which is
+                # right (that wager is bettable) but leaves this bucket
+                # untested.
+                "date": samples.iloc[1]["date"],
                 "home_team": "TOR",
                 "away_team": "BOS",
                 "market": "moneyline",
@@ -356,7 +365,7 @@ def test_the_report_prints_the_match_rate_per_market() -> None:
                 "line": None,
                 "american_odds": 150,
             }
-            for row in samples.head(50).itertuples()
+            for row in samples.drop_duplicates(subset=['date']).itertuples()
         ]
     )
 
