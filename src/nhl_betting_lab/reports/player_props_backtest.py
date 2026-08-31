@@ -60,7 +60,7 @@ from nhl_betting_lab.providers.team_names import (
     build_team_name_map,
     resolve_team,
 )
-from nhl_betting_lab.stores import best_price_per_wager
+from nhl_betting_lab.stores import best_price_per_wager, label_phases
 from nhl_betting_lab.season import clean_text, row_game_date
 from nhl_betting_lab.models.value import (
     OddsError,
@@ -114,6 +114,10 @@ class BacktestReport:
     #: selection quoted by eight books is one bet, not eight.
     quotes_seen: int = 0
     wagers: int = 0
+    #: Which snapshot window was measured, and its median hours before
+    #: face-off. A number without this is not comparable to another number.
+    phase: str = ""
+    phase_hours: float = 0.0
     priced_outcomes: int = 0
     outcomes_without_a_model_opinion: int = 0
     outcomes_below_threshold: int = 0
@@ -173,6 +177,7 @@ def run_backtest(
     window_label: str = "",
     correct: Any = None,
     team_names: Mapping[str, str] | None = None,
+    phase: str = "auto",
 ) -> BacktestReport:
     """Measure the props model against historically-bought prices.
 
@@ -213,6 +218,43 @@ def run_backtest(
     # price is the likeliest to be stale), so the two numbers bracket the
     # truth rather than one replacing the other. The pessimistic bracket is
     # kept and reported beside this one.
+    # One phase at a time. The store may hold the same wager priced at more
+    # than one moment before face-off, and the best-price collapse below
+    # would otherwise take the better of two moments — a price nobody could
+    # have taken, which inflates the measured edge invisibly.
+    if phase:
+        labelled = label_phases(prices)
+        present = [
+            p for p in labelled["phase"].unique() if str(p) != "unknown"
+        ]
+        # Auto-detect rather than trust a default. A hardcoded window that
+        # matches nothing falls through silently and measures the mixture it
+        # was added to prevent — which is exactly what happened the first
+        # time this guard was written.
+        if phase == "auto":
+            if len(present) > 1:
+                raise ValueError(
+                    "This store holds prices from more than one window "
+                    f"({sorted(present)}). A wager priced at two distances "
+                    "from face-off is two different questions and the better "
+                    "of the two is a price nobody could have taken. Name the "
+                    "window explicitly."
+                )
+            phase = str(present[0]) if present else ""
+        kept = labelled[labelled["phase"] == phase] if phase else labelled.iloc[0:0]
+        if not kept.empty:
+            report.phase = str(phase)
+            report.phase_hours = float(kept["hours_before"].median())
+            dropped = len(labelled) - len(kept)
+            if dropped:
+                report.notes.append(
+                    f"{dropped:,} price row(s) outside the `{phase}` window "
+                    "were excluded. A wager priced at two different moments "
+                    "is two different questions, and the better of the two is "
+                    "a price nobody could have taken."
+                )
+            prices = kept.drop(columns=["hours_before", "phase"])
+
     report.quotes_seen = len(prices)
     prices = best_price_per_wager(
         prices, ["date", "market", "player", "line", "selection"]
@@ -463,6 +505,15 @@ def render_backtest(report: BacktestReport) -> str:
             else []
         ),
         f"- Edge threshold: **{report.edge_threshold:.1%}**",
+        (
+            f"- Priced **{report.phase_hours:.1f} hours before face-off** "
+            f"(`{report.phase}` window). A return measured at one distance "
+            "from the puck is not comparable to one measured at another: the "
+            "lineup is known at four hours and guessed at nine."
+            if report.phase else
+            "- No snapshot window was filtered, so this number may mix prices "
+            "taken at different distances from face-off."
+        ),
         f"- {report.summary_line()}",
         "",
     ]
