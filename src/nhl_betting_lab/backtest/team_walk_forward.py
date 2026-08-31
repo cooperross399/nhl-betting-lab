@@ -42,7 +42,17 @@ from nhl_betting_lab.rest import played_previous_day
 #: matchups specifically. The same grid-loss shape the props path fixed by
 #: storing distributions; team samples price a fixed grid, so the grid must
 #: cover what the books actually hang.
-DEFAULT_TOTAL_LINES: tuple[float, ...] = (4.5, 5.0, 5.5, 6.0, 6.5, 7.0, 7.5)
+# Every total the bought store actually holds, not the handful the books hang
+# most often. Buying both seasons in full surfaced lines from 2.0 to 13.5:
+# the deep ones are thin (4 rows at 2.0, 10 at 13.0) but a line the grid does
+# not carry is a price the measurement silently discards, which is precisely
+# how a third of the bought totals once vanished. The discipline test
+# `test_the_sample_grid_covers_every_line_the_bought_file_holds` fails the
+# build when the store outgrows this tuple again.
+DEFAULT_TOTAL_LINES: tuple[float, ...] = (
+    2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 6.5, 7.0, 7.5, 8.0, 8.5,
+    9.0, 9.5, 10.0, 10.5, 11.0, 11.5, 12.0, 13.0, 13.5,
+)
 
 #: The puck line. Alternates exist at 2.5 but are thin, so the sweep prices
 #: the one that is always quoted.
@@ -50,7 +60,9 @@ PUCK_LINE = 1.5
 
 #: The alternate spread ladder the bought prices include. ±2.5 rows exist in
 #: the purchased file and joined nothing while the samples carried ±1.5 only.
-PUCK_LINES: tuple[float, ...] = (1.0, 1.5, 2.0, 2.5, 4.5)
+PUCK_LINES: tuple[float, ...] = (
+    1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.5,
+)
 
 SAMPLE_COLUMNS = (
     "date",

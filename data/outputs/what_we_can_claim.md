@@ -2,7 +2,7 @@
 
 Generated from the measurement outputs, so it cannot drift from them. The hand-written rules live in `docs/what_we_can_and_cannot_claim.md`.
 
-- Generated: 2026-08-31T20:37:52+00:00
+- Generated: 2026-08-31T21:05:36+00:00
 
 **No demonstrated edge in any market.** 9 market(s) have been measured against real prices. Nothing survives correcting for the number of markets tested and then holds on a window it was not found on. What *has* survived both tests is a loss: `points`. A replicated deficit is a finding, not a null result, and it is the finding the model has.
 
@@ -18,9 +18,9 @@ Generated from the measurement outputs, so it cannot drift from them. The hand-w
 - `assists`: -1.4% over 3,762 bets, 95% interval -4.2% to +1.3%. **No demonstrated edge**.
 - `goalie_saves`: -2.5% over 1,733 bets, 95% interval -6.9% to +2.0%. **No demonstrated edge**.
 - `blocked_shots`: +5.0% over 4,293 bets, 95% interval +1.8% to +8.1%. Measured again on the player_props_backtest_2025-26 window and **not confirmed** there, so **no demonstrated edge**.
-- `moneyline`: -2.4% over 1,504 bets, 95% interval -8.0% to +3.1%. **No demonstrated edge**.
-- `puck_line`: -4.3% over 1,541 bets, 95% interval -8.7% to +0.1%. **No demonstrated edge**.
-- `total_goals`: -0.5% over 1,150 bets, 95% interval -6.0% to +5.0%. **No demonstrated edge**.
+- `moneyline`: +0.0% over 1,366 bets, 95% interval -8.2% to +8.2%. **No demonstrated edge**.
+- `puck_line`: -1.3% over 1,762 bets, 95% interval -5.7% to +3.2%. **No demonstrated edge**.
+- `total_goals`: -2.5% over 2,201 bets, 95% interval -6.5% to +1.6%. **No demonstrated edge**.
 
 ## Not measured against real prices
 

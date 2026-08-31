@@ -107,21 +107,28 @@ Re-derive rather than trust if the data has moved.
   a number being misread must not be the thing misreading it; it now
   separates a demonstrated edge from a demonstrated deficit and names the
   deficit.
-- **Team markets show no demonstrated edge, and are measured far more
-  thinly than they looked.** At one bet per wager and the card's best price:
-  moneyline **−5.2% over 175 bets** (−21.8% to +11.4%), puck line **−6.1%
-  over 198** (−18.6% to +6.5%), totals **+9.1% over 217** (−3.6% to +21.8%).
-  Every interval includes zero. An earlier version reported these as −2.4%
-  over 1,504, −4.3% over 1,541 and −0.5% over 1,150 — those counts were book
-  quotes, not wagers, so the real sample is roughly **eight times smaller**
-  than published and every interval was correspondingly too tight.
-  **Totals moving from −0.5% to +9.1% is not a finding, it is the sample
-  being small**: 217 bets with an interval spanning zero, on a best-of-N
-  price that is optimistically biased by construction. Match rate against
-  the bought prices is 96% per market; the remaining 4% are warm-up-window
-  games, counted as exactly that. Whole-number spreads and totals push on
-  exact margins, the ±1 push includes the entire overtime mass, and both the
-  model and settlement price it.
+- **Team markets are now bought in full, and show no demonstrated edge.**
+  16,920 credits bought every snapshot of both seasons: **308,944 price rows
+  over 398 game dates from 21 books**, up from 24,292 rows over 77 dates. At
+  one bet per wager: moneyline **+0.0% over 1,366** (−8.2% to +8.2%), puck
+  line **−1.3% over 1,762** (−5.7% to +3.2%), totals **−2.5% over 2,201**
+  (−6.5% to +1.6%). Every interval includes zero. Match rate is 96% on all
+  three after the line grid was widened to every line the full buy actually
+  holds — totals from 2.0 to 13.5, puck lines to 6.5 — because a line the
+  grid does not carry is a price the measurement silently discards, which is
+  how a third of the bought totals once vanished.
+- **The thin sample's +9.1% totals was noise, and the full buy proves it.**
+  On 217 wagers totals read +9.1%; on 2,201 it reads −2.5%. That is what a
+  small sample does when repriced, and it is the reason a number is never a
+  finding until the sample can carry it.
+- **The same data counted per QUOTE says all three are demonstrated losses.**
+  Run without the collapse, the full store gives moneyline −7.3% over 17,937,
+  puck line −5.4% over 19,418, totals −5.0% over 14,971 — every interval
+  excluding zero and surviving the family correction. Per wager, all three
+  span zero. Twenty-one books quoting one game is not twenty-one bets, and
+  the distortion is large enough to manufacture three demonstrated losses out
+  of three null results. It is the clearest demonstration in this repository
+  of why `stores.best_price_per_wager` exists.
 - **What ships is what the recorded verdicts say, through one door.**
   `verdicts.ships()` reads each experiment's `ships` list;
   the card and the default sample generators consult it rather than asserting
