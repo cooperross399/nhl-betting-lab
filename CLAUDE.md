@@ -41,6 +41,67 @@ Every session, in this order. These replace chat history as project memory.
 Every number below is measured, walk-forward, and carries its sample size.
 Re-derive rather than trust if the data has moved.
 
+- **The lab measures one thing and ships another, by five and a half hours.**
+  Every historical price was bought at a median **4.0 hours** before face-off
+  (p10 4.0, p90 4.0). The production card runs **9.5 hours** before a 19:00
+  ET face-off, its backup 8.0. So every number here describes a window the
+  card does not operate in. It is the stale-minutes finding in structural
+  form: at four hours the lineup is largely known, at nine and a half it is
+  guessed, and the card is priced in the poorer window while the measurement
+  was taken in the richer one. Being bought and measured, not argued about.
+- **A store holding two windows now refuses to be measured as one.**
+  `stores.label_phases` derives hours-before-face-off from the snapshot, the
+  backtest auto-detects the window and **raises** if the store holds more
+  than one, and every report states the window it describes. Without it the
+  best-price collapse would take the better of a four-hour and a nine-hour
+  quote for one wager — a price nobody could have taken. The first version of
+  this guard hardcoded a window that matched nothing and fell through
+  silently, measuring the mixture it was written to prevent; it now
+  auto-detects.
+- **The model is 0.34 points from break-even, and the remaining loss is one
+  cell.** Betting every wager it has an opinion on returns −2.70% over
+  100,805; its own selection returns −0.34% over 26,091, so the selection is
+  worth **+2.35 points**. An earlier version of this file said the model
+  carried no information — that was true of the *magnitude* of its
+  disagreement and false of the model, and the two were conflated.
+- **The loss is stale ice time, measured to four times the size of the loss
+  itself.** Split the card by whether a player's near-future usage rises or
+  falls against the model's trailing-ten estimate: usage about to fall
+  +5.82%/+3.22%, stable −0.13%, **usage about to rise by >2 minutes −6.44%
+  over 5,661 bets, −364.6u** — 98% of them unders, against a card that loses
+  89.6u in total. Substituting next-three-game mean TOI takes the card to
+  **+4.63%**, and realised TOI to +5.16%; both are **oracles** that use
+  information from after the card is built and are quoted as an upper bound,
+  never as an achievable figure. Every prior-only reshuffle of box-score
+  history lands between −0.30% and +0.02%, and a box-score proxy for the
+  coming shift has R²=0.080 — **the information is not in the box score**.
+- **Thirteen candidate inputs were investigated and none survived.**
+  MoneyPuck xG and per-shot files, per-game PP time on ice, linemates from
+  shift charts, opposing goalie identity and quality, shot-danger share,
+  scratches, ESPN opening lines. Several are real, free, per-game and cover
+  both bought seasons; none beats the price. The confirmed-goalie idea was
+  **inverted**: the card already has the starter implicitly, because books
+  only post goalie props for the goalie they expect to start.
+- **Two textbook fixes made the card worse, which is the point.** Per-player
+  rates are over-shrunk (out-of-sample slopes 1.32 assists, 1.26 shots, 1.21
+  points, 1.80 hits) and dispersion is mis-specified (one league-wide
+  variance-to-mean ratio). Correcting either is statistically right and moved
+  the card to −1.27% and −0.47%/−0.93% respectively. **The market already
+  holds the corrected view**, so improving agreement with a reality that is
+  already priced buys nothing. `docs/where_the_remaining_error_lives.md`.
+- **Both leakage-free attacks on the stale-minutes cell are dead, measured.**
+  Teammate absence — the mechanical cause of a role expanding, and knowable
+  from participation history with no new source — moves R² on the *shift*
+  from 0.0117 to 0.0117, flags 175 of 49,857 player-games and catches 1.3%
+  of real rises. Pre-game ice-time volatility does not separate the bad bets
+  either: five equal bands run −1.33%, +0.59%, −0.40%, +0.68%, −1.30%, every
+  one spanning zero with no gradient, and dropping the two most volatile
+  bands takes the card from −0.35% to −0.38%. **Nothing knowable before puck
+  drop from this lab's data predicts the shift.** The only remaining path is
+  an external projected-lineup feed, which has no historical archive for the
+  bought seasons and therefore cannot be measured before it is used — it
+  would have to be collected forward from opening night and judged a season
+  later. `docs/where_the_remaining_error_lives.md`.
 - **The full two-season population is bought, and the model shows no
   demonstrated edge on it — in either direction.** 2,710 events, 1,261,440
   price rows collapsing to **25,949 distinct wagers** at the shipped bar:
