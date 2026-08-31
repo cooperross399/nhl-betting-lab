@@ -88,3 +88,58 @@ model* is shown. That it is **unpriced** is not — books reprice on every
 lineup release, and this lab's own documentation says so. The realistic prize
 is not beating the close. It is **not making 5,661 bets a year that are pure
 error**.
+
+## Two leakage-free attacks on the stale-minutes cell, both dead
+
+Written 2026-08-31, after the error map, because the obvious fixes should be
+closed with numbers rather than left as things someone will suggest again.
+
+### Teammate absence
+
+The mechanical cause of a role expanding is that somebody above the player is
+out. That is knowable before puck drop from participation history alone: a
+teammate who played in games N−8..N−4 and is missing from N−3..N−1 is
+probably still missing. No new source, no licence, no leakage.
+
+Predicting a player's ice-time **level** is easy and irrelevant — trailing-10
+alone gives R² = 0.8865, because minutes are stable. The money is in the
+**shift**, actual minus assumed. On that target:
+
+| | R² on the shift |
+|:--|--:|
+| own history only | 0.0117 |
+| **with teammate absence** | **0.0117** |
+
+The absence coefficient is +0.0005 seconds of own ice time per second of
+absent teammate baseline. It flags 175 player-games out of 49,857 and catches
+**1.3%** of the 10,680 real rises. High precision (82%) on a rounding error's
+worth of coverage.
+
+### Pre-game ice-time volatility
+
+If the *direction* of a shift cannot be predicted, perhaps the *risk* can:
+a player whose recent minutes bounce around should carry a wider
+distribution, which would thin out exactly the confident unders that lose.
+Volatility is a property of the player, known before the card is built — this
+is not excluding the losing cell after the fact.
+
+Card ROI by pre-game coefficient of variation of trailing-10 ice time, five
+equal bands of ~5,200 bets each: −1.33%, +0.59%, −0.40%, +0.68%, −1.30%.
+**Every band spans zero and there is no gradient.** Dropping the two most
+volatile bands moves the card from −0.35% to −0.38%.
+
+### What this settles
+
+The usage shift is real, it is expensive, and **nothing knowable before puck
+drop from this lab's data predicts it**. Not the player's own history, not
+his teammates' absences, not his volatility. The oracle is worth five points
+and the information genuinely is not there.
+
+That leaves one path: an external **projected-lineup feed** published before
+puck drop. And it carries a cost that has to be stated before anyone starts
+building it — **no archive of past projections exists for the bought
+seasons**, so its value cannot be measured historically. Under this lab's own
+rule that the price backtest decides, it cannot ship on a hope. It would have
+to be **collected forward from opening night and measured a season later**,
+which is the same shape of wait as the forward ledger and for the same
+reason.

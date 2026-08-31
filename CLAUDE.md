@@ -188,6 +188,19 @@ Re-derive rather than trust if the data has moved.
   never as an achievable figure. Every prior-only reshuffle of box-score
   history lands between −0.30% and +0.02%, and a box-score proxy for the
   coming shift has R²=0.080 — **the information is not in the box score**.
+- **Both leakage-free attacks on the stale-minutes cell are dead, measured.**
+  Teammate absence — the mechanical cause of a role expanding, and knowable
+  from participation history with no new source — moves R² on the *shift*
+  from 0.0117 to 0.0117, flags 175 of 49,857 player-games and catches 1.3%
+  of real rises. Pre-game ice-time volatility does not separate the bad bets
+  either: five equal bands run −1.33%, +0.59%, −0.40%, +0.68%, −1.30%, every
+  one spanning zero with no gradient, and dropping the two most volatile
+  bands takes the card from −0.35% to −0.38%. **Nothing knowable before puck
+  drop from this lab's data predicts the shift.** The only remaining path is
+  an external projected-lineup feed, which has no historical archive for the
+  bought seasons and therefore cannot be measured before it is used — it
+  would have to be collected forward from opening night and judged a season
+  later. `docs/where_the_remaining_error_lives.md`.
 - **Thirteen candidate inputs were investigated and none survived.**
   MoneyPuck xG and per-shot files, per-game PP time on ice, linemates from
   shift charts, opposing goalie identity and quality, shot-danger share,
