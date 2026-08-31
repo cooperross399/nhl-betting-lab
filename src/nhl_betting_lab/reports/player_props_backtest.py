@@ -60,6 +60,7 @@ from nhl_betting_lab.providers.team_names import (
     build_team_name_map,
     resolve_team,
 )
+from nhl_betting_lab.stores import best_price_per_wager
 from nhl_betting_lab.season import clean_text, row_game_date
 from nhl_betting_lab.models.value import (
     OddsError,
@@ -109,6 +110,10 @@ class BacktestReport:
     overall: RoiInterval | None = None
     by_side: dict[str, RoiInterval] = field(default_factory=dict)
     looks: int = 1
+    #: Book quotes seen, and the distinct wagers they collapse to. One
+    #: selection quoted by eight books is one bet, not eight.
+    quotes_seen: int = 0
+    wagers: int = 0
     priced_outcomes: int = 0
     outcomes_without_a_model_opinion: int = 0
     outcomes_below_threshold: int = 0
@@ -156,6 +161,7 @@ def settle(actual: float, line: float, selection: str) -> tuple[bool, bool]:
     raise ValueError(f"Unknown prop selection {selection!r}.")
 
 
+
 def run_backtest(
     prices: pd.DataFrame,
     samples: pd.DataFrame,
@@ -186,6 +192,32 @@ def run_backtest(
 
     if prices.empty or samples.empty:
         return report
+
+    # ONE WAGER IS ONE BET, AT THE BEST PRICE A CARD COULD HAVE TAKEN.
+    #
+    # The store holds every book's quote on the same selection — 2.8 of them
+    # on average — and counting each as its own bet measured a strategy this
+    # lab would never run: betting all eight books at their average price
+    # rather than taking the one best price, which is exactly what
+    # `gameday_card.build_candidates` does. It also made every interval about
+    # sqrt(2.8) too narrow, because eight quotes on one outcome are eight
+    # copies of one coin flip, not eight flips.
+    #
+    # Together those two errors published "-1.55% over 73,918 bets, interval
+    # excluding zero" — a demonstrated loss — where the card's own policy over
+    # the same data gives -0.34% over 26,091 bets, spanning zero. The sibling
+    # football lab already collapses to distinct wagers and says so in its
+    # own report; this lab did not.
+    #
+    # Best-of-N is optimistically biased in the other direction (the best
+    # price is the likeliest to be stale), so the two numbers bracket the
+    # truth rather than one replacing the other. The pessimistic bracket is
+    # kept and reported beside this one.
+    report.quotes_seen = len(prices)
+    prices = best_price_per_wager(
+        prices, ["date", "market", "player", "line", "selection"]
+    )
+    report.wagers = len(prices)
 
     # One entry per player-game-market, indexed under every legitimate
     # spelling (`player_name_aliases`), carrying the player's identity and

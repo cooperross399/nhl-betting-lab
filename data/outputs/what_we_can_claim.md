@@ -2,22 +2,22 @@
 
 Generated from the measurement outputs, so it cannot drift from them. The hand-written rules live in `docs/what_we_can_and_cannot_claim.md`.
 
-- Generated: 2026-08-29T00:21:37+00:00
+- Generated: 2026-08-31T20:37:52+00:00
 
 **No demonstrated edge in any market.** 9 market(s) have been measured against real prices. Nothing survives correcting for the number of markets tested and then holds on a window it was not found on. What *has* survived both tests is a loss: `points`. A replicated deficit is a finding, not a null result, and it is the finding the model has.
 
 ## Across every measured market
 
--3.2% over 36,449 bets. The interval excludes zero on this sample.
+-0.3% over 25,949 bets. The interval includes zero: **no demonstrated edge**.
 
 ## Measured against real prices
 
-- `shots_on_goal`: -2.2% over 16,925 bets, 95% interval -3.8% to -0.7%. The interval excludes zero even after correcting for the 7 markets measured on the same data — which is not the same as an edge that will persist, and means nothing until it replicates on a window it was not found on.
-- `points`: -6.6% over 9,047 bets, 95% interval -8.6% to -4.6%. **Replicated** on the player_props_backtest_2025-26 window.
-- `goals`: -3.8% over 282 bets, 95% interval -18.1% to +10.6%. **No demonstrated edge**.
-- `assists`: -3.6% over 4,127 bets, 95% interval -6.2% to -1.0%. Correcting for the 7 markets measured on the same data, it does not exclude zero. **No demonstrated edge**.
-- `goalie_saves`: -5.7% over 3,118 bets, 95% interval -9.0% to -2.3%. The interval excludes zero even after correcting for the 7 markets measured on the same data — which is not the same as an edge that will persist, and means nothing until it replicates on a window it was not found on.
-- `blocked_shots`: +4.5% over 2,950 bets, 95% interval +0.7% to +8.3%. Measured again on the player_props_backtest_2025-26 window and **not confirmed** there, so **no demonstrated edge**.
+- `shots_on_goal`: +1.3% over 9,395 bets, 95% interval -0.8% to +3.4%. **No demonstrated edge**.
+- `points`: -4.4% over 6,202 bets, 95% interval -6.9% to -1.9%. **Replicated** on the player_props_backtest_2025-26 window.
+- `goals`: -6.8% over 564 bets, 95% interval -17.2% to +3.7%. **No demonstrated edge**.
+- `assists`: -1.4% over 3,762 bets, 95% interval -4.2% to +1.3%. **No demonstrated edge**.
+- `goalie_saves`: -2.5% over 1,733 bets, 95% interval -6.9% to +2.0%. **No demonstrated edge**.
+- `blocked_shots`: +5.0% over 4,293 bets, 95% interval +1.8% to +8.1%. Measured again on the player_props_backtest_2025-26 window and **not confirmed** there, so **no demonstrated edge**.
 - `moneyline`: -2.4% over 1,504 bets, 95% interval -8.0% to +3.1%. **No demonstrated edge**.
 - `puck_line`: -4.3% over 1,541 bets, 95% interval -8.7% to +0.1%. **No demonstrated edge**.
 - `total_goals`: -0.5% over 1,150 bets, 95% interval -6.0% to +5.0%. **No demonstrated edge**.
@@ -43,8 +43,8 @@ The NHL's advantage over a smaller league is volume: about 1,312 regular-season 
 
 ## What the card is actually allowed to use
 
-- Provider policy: **Allowlisted**
-- Allowlisted markets: **assists, blocked_shots, goalie_saves, goals, hits, moneyline, points, puck_line, regulation_3_way, shots_on_goal, total_goals**
+- Provider policy: **Nothing allowlisted**
+- Allowlisted markets: **none**
 
 ## Standing notes
 

@@ -46,6 +46,7 @@ from nhl_betting_lab.models.value import (
     american_to_implied,
     profit_on_win,
 )
+from nhl_betting_lab.stores import best_price_per_wager
 from nhl_betting_lab.season import row_game_date
 from nhl_betting_lab.stats import (
     NO_DEMONSTRATED_EDGE,
@@ -213,6 +214,16 @@ def measure_prices(
     if prices.empty or samples.empty:
         return None
     priced = prices[prices["market"].astype(str) == market]
+    # One bet per wager, at the best price a card could have taken. The store
+    # holds every book's quote on the same selection, and counting each as a
+    # separate bet measures a strategy no card runs while narrowing every
+    # interval by roughly the square root of the number of books. The props
+    # backtest carried the identical defect and published a demonstrated loss
+    # that was not one.
+    priced = best_price_per_wager(
+        priced,
+        ["date", "home_team", "away_team", "market", "selection", "line"],
+    )
     if priced.empty:
         return None
     # The provider says "Toronto Maple Leafs"; the samples say "TOR".

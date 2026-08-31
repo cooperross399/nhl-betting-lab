@@ -2,30 +2,30 @@
 
 Does the model beat a price that was actually for sale? Calibration cannot answer that; this can, to the extent the sample allows.
 
-- Generated: 2026-08-29T00:43:55+00:00
-- Edge threshold: **0.0%**
-- -3.5% over 284493 bets, 95% interval -3.8% to -3.1%. The interval excludes zero, so this sample is losing beyond chance — at this sample size and on this data, which is not the same as an edge that will persist. It also survives correcting for the 7 markets tested (-4.0% to -3.0%), which is worth more than the uncorrected number.
+- Generated: 2026-08-31T20:34:13+00:00
+- Edge threshold: **6.0%**
+- -0.3% over 25949 bets, 95% interval -1.5% to +0.9%. The interval includes zero, which means **no demonstrated edge**.
 
 ## Result
 
 | Market | Bets | Profit | ROI | 95% interval | Corrected for the search | Survives |
 |:-------|-----:|-------:|----:|:-------------|:-------------------------|:---------|
-| **All props** | 284493 | -9838.1u | -3.5% | -3.8% .. -3.1% | -4.0% .. -3.0% | yes |
-| `assists` (Assists) | 41913 | -1476.3u | -3.5% | -4.4% .. -2.7% | -4.7% .. -2.3% | yes |
-| `blocked_shots` (Blocked shots) | 13863 | +213.2u | +1.5% | -0.1% .. +3.2% | -0.8% .. +3.8% | no |
-| `goalie_saves` (Goalie saves) | 9361 | -383.5u | -4.1% | -6.0% .. -2.2% | -6.7% .. -1.5% | yes |
-| `goals` (Goals (incl. anytime scorer)) | 10638 | -717.0u | -6.7% | -9.8% .. -3.7% | -11.0% .. -2.5% | yes |
-| `points` (Points) | 77275 | -4224.1u | -5.5% | -6.2% .. -4.8% | -6.4% .. -4.5% | yes |
-| `shots_on_goal` (Shots on goal) | 131443 | -3250.3u | -2.5% | -3.0% .. -1.9% | -3.2% .. -1.7% | yes |
+| **All props** | 25949 | -76.7u | -0.3% | -1.5% .. +0.9% | -2.0% .. +1.4% | no |
+| `assists` (Assists) | 3762 | -54.1u | -1.4% | -4.2% .. +1.3% | -5.2% .. +2.3% | no |
+| `blocked_shots` (Blocked shots) | 4293 | +213.0u | +5.0% | +1.8% .. +8.1% | +0.6% .. +9.3% | yes |
+| `goalie_saves` (Goalie saves) | 1733 | -43.1u | -2.5% | -6.9% .. +2.0% | -8.6% .. +3.6% | no |
+| `goals` (Goals (incl. anytime scorer)) | 564 | -38.1u | -6.8% | -17.2% .. +3.7% | -21.1% .. +7.6% | no |
+| `points` (Points) | 6202 | -273.9u | -4.4% | -6.9% .. -1.9% | -7.8% .. -1.0% | yes |
+| `shots_on_goal` (Shots on goal) | 9395 | +119.5u | +1.3% | -0.8% .. +3.4% | -1.6% .. +4.1% | no |
 
 ### What each row means
 
-- `assists`: -3.5% over 41913 bets, 95% interval -4.4% to -2.7%. The interval excludes zero, so this sample is losing beyond chance — at this sample size and on this data, which is not the same as an edge that will persist. It also survives correcting for the 7 markets tested (-4.7% to -2.3%), which is worth more than the uncorrected number.
-- `blocked_shots`: +1.5% over 13863 bets, 95% interval -0.1% to +3.2%. The interval includes zero, which means **no demonstrated edge**.
-- `goalie_saves`: -4.1% over 9361 bets, 95% interval -6.0% to -2.2%. The interval excludes zero, so this sample is losing beyond chance — at this sample size and on this data, which is not the same as an edge that will persist. It also survives correcting for the 7 markets tested (-6.7% to -1.5%), which is worth more than the uncorrected number.
-- `goals`: -6.7% over 10638 bets, 95% interval -9.8% to -3.7%. The interval excludes zero, so this sample is losing beyond chance — at this sample size and on this data, which is not the same as an edge that will persist. It also survives correcting for the 7 markets tested (-11.0% to -2.5%), which is worth more than the uncorrected number.
-- `points`: -5.5% over 77275 bets, 95% interval -6.2% to -4.8%. The interval excludes zero, so this sample is losing beyond chance — at this sample size and on this data, which is not the same as an edge that will persist. It also survives correcting for the 7 markets tested (-6.4% to -4.5%), which is worth more than the uncorrected number.
-- `shots_on_goal`: -2.5% over 131443 bets, 95% interval -3.0% to -1.9%. The interval excludes zero, so this sample is losing beyond chance — at this sample size and on this data, which is not the same as an edge that will persist. It also survives correcting for the 7 markets tested (-3.2% to -1.7%), which is worth more than the uncorrected number.
+- `assists`: -1.4% over 3762 bets, 95% interval -4.2% to +1.3%. The interval includes zero, which means **no demonstrated edge**.
+- `blocked_shots`: +5.0% over 4293 bets, 95% interval +1.8% to +8.1%. The interval excludes zero, so this sample is profitable beyond chance — at this sample size and on this data, which is not the same as an edge that will persist. It also survives correcting for the 7 markets tested (+0.6% to +9.3%), which is worth more than the uncorrected number.
+- `goalie_saves`: -2.5% over 1733 bets, 95% interval -6.9% to +2.0%. The interval includes zero, which means **no demonstrated edge**.
+- `goals`: -6.8% over 564 bets, 95% interval -17.2% to +3.7%. The interval includes zero, which means **no demonstrated edge**.
+- `points`: -4.4% over 6202 bets, 95% interval -6.9% to -1.9%. The interval excludes zero, so this sample is losing beyond chance — at this sample size and on this data, which is not the same as an edge that will persist. It also survives correcting for the 7 markets tested (-7.8% to -1.0%), which is worth more than the uncorrected number.
+- `shots_on_goal`: +1.3% over 9395 bets, 95% interval -0.8% to +3.4%. The interval includes zero, which means **no demonstrated edge**.
 
 ### Why there are two intervals
 
@@ -35,7 +35,7 @@ The corrected column is Bonferroni, which is crude and conservative. That is the
 
 ### The claimed edge against the realised one
 
-The average selected bet claimed a **+4.3%** edge and the flat-stake return was **-3.5%**. That gap is not a mystery and not a fault in the measurement: bets are selected wherever the model most disagrees with the price, which is exactly where the model's own estimation error concentrates. A threshold on estimated edge harvests real edge and estimation error together, and the realised number is what is left after the error washes out.
+The average selected bet claimed a **+9.4%** edge and the flat-stake return was **-0.3%**. That gap is not a mystery and not a fault in the measurement: bets are selected wherever the model most disagrees with the price, which is exactly where the model's own estimation error concentrates. A threshold on estimated edge harvests real edge and estimation error together, and the realised number is what is left after the error washes out.
 
 The mean predictions themselves are close to unbiased — the walk-forward means run within a few percent of the actuals on every market — so the gap lives in the tails and in selection, not in the rates.
 
@@ -45,10 +45,10 @@ This is the most important structural fact in the report, and it is not visible 
 
 | Side | Bets | Profit | ROI | 95% interval |
 |:-----|-----:|-------:|----:|:-------------|
-| over | 53685 | -2513.2u | -4.7% | -5.7% .. -3.6% |
-| under | 230808 | -7324.9u | -3.2% | -3.6% .. -2.8% |
+| over | 2572 | -115.3u | -4.5% | -8.9% .. -0.1% |
+| under | 23377 | +38.6u | +0.2% | -1.1% .. +1.4% |
 
-**81% of every bet is on the under.** That is one directional disagreement with the market, not many independent ones: the model thinks these counts land below where the line sits, across the board. Per-market results that point in opposite directions are therefore harder to read as separate findings than the table suggests, because they rest on the same underlying bias.
+**90% of every bet is on the under.** That is one directional disagreement with the market, not many independent ones: the model thinks these counts land below where the line sits, across the board. Per-market results that point in opposite directions are therefore harder to read as separate findings than the table suggests, because they rest on the same underlying bias.
 
 
 Every number above is a point estimate from a finite sample. An interval that includes zero means **no demonstrated edge** — not 'promising', not 'trending positive'.
@@ -66,12 +66,12 @@ Order-of-magnitude guidance rather than a precise power calculation. Its job is 
 
 ## Where the bets came from
 
-- Priced outcomes seen: 1,261,440
-- Without a model opinion: 128,182
-- Below the edge threshold: 847,359
+- Priced outcomes seen: 551,228
+- Without a model opinion: 74,381
+- Below the edge threshold: 450,294
 - Unparseable line or odds: 0
-- Ambiguous player name, dropped: 1,406
-- Bets placed: 284,493
+- Ambiguous player name, dropped: 604
+- Bets placed: 25,949
 - Accounted for: all of them.
 
 Players whose prices could not be matched to a model opinion (first 50). A name here is a bet that was not measured, not a bet that lost:

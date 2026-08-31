@@ -94,3 +94,39 @@ def dedupe_prices(frame: "pd.DataFrame") -> "pd.DataFrame":
     if not keys:
         return frame.drop_duplicates()
     return frame.drop_duplicates(subset=keys, keep="last").reset_index(drop=True)
+
+
+def best_price_per_wager(frame, key):
+    """One bet per wager, at the best price any book quoted on it.
+
+    `dedupe_prices` removes duplicate QUOTES. This removes duplicate BETS,
+    which is a different and less obvious problem: eight books quoting one
+    selection are eight quotes on one wager, and counting each as its own
+    bet measures a strategy no card runs — every book at its average price —
+    while narrowing every interval by about the square root of the number of
+    books, because those eight rows share a single outcome.
+
+    That defect published "-1.6% over 73,918 bets, interval excluding zero"
+    as a demonstrated loss where the card's own policy over the same data
+    gives -0.3% over 25,949 wagers, spanning zero.
+
+    `key` is the wager as a person would place it. American odds are ranked
+    by payout rather than by magnitude, because +150 pays more than -110,
+    which pays more than -200.
+    """
+    import pandas as pd
+
+    columns = [column for column in key if column in frame.columns]
+    if len(columns) != len(key) or "american_odds" not in frame.columns:
+        return frame
+    odds = pd.to_numeric(frame["american_odds"], errors="coerce")
+    payout = odds.where(odds < 0, odds / 100.0)
+    payout = payout.where(odds > 0, -100.0 / odds)
+    ordered = frame.assign(_payout=payout).sort_values(
+        "_payout", ascending=False, kind="mergesort"
+    )
+    return (
+        ordered.groupby(columns, as_index=False, dropna=False)
+        .first()
+        .drop(columns=["_payout"])
+    )

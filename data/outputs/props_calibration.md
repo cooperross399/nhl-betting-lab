@@ -2,7 +2,7 @@
 
 When the model says 62%, does it happen 62% of the time? That is the only question this report answers. Whether the model beats a price is a different question, answered in `data/outputs/player_props_backtest.md`.
 
-- Generated: 2026-08-27T05:41:51+00:00
+- Generated: 2026-08-31T20:34:33+00:00
 - 2,508,315 walk-forward samples across 7 market(s); 7 have enough samples to say anything about.
 
 ## Headline, per market

@@ -41,20 +41,35 @@ Every session, in this order. These replace chat history as project memory.
 Every number below is measured, walk-forward, and carries its sample size.
 Re-derive rather than trust if the data has moved.
 
-- **The full two-season population is bought, and the model loses on it.**
-  2,710 events, 1,261,440 price rows, **73,918 bets**: **−1.6%, 95% interval
-  −2.3% to −0.8%**, which excludes zero on the *negative* side and survives
-  correcting for the seven markets tested (−2.5% to −0.6%). The earlier
-  +1.4% came from a 192-event sample thirty times smaller; it was noise, and
-  it is on the record as noise.
-  Per market: `points` −5.2% (16,421), `goalie_saves` −4.7% (5,335),
-  `shots_on_goal` −0.5% (38,037, spans zero), `assists` −1.6% (6,810, spans
-  zero), `goals` −8.4% (576, spans zero). `blocked_shots` is the only
-  positive at +4.7% over 6,739 — and it **failed replication**: same
-  direction on the unseen window (+4.5% over 2,950) but its own interval
-  includes zero, and a window that merely fails to contradict is not
-  confirmation. The only result that survives correction *and* replicates is
-  `points` at **−6.6% over 9,047** — a demonstrated deficit, not an edge.
+- **The full two-season population is bought, and the model shows no
+  demonstrated edge on it — in either direction.** 2,710 events, 1,261,440
+  price rows collapsing to **25,949 distinct wagers** at the shipped bar:
+  **−0.3%, 95% interval −1.5% to +0.9%**, which includes zero. The earlier
+  +1.4% came from a 192-event sample thirty times smaller and was noise.
+- **An earlier version of this bullet said −1.6% over 73,918 bets, interval
+  excluding zero, and called it a demonstrated loss. That was wrong, and how
+  it was wrong is worth keeping.** The price store holds every book's quote
+  on the same selection — 2.83 of them on average — and `run_backtest`
+  counted each as an independent bet. That measured a strategy this lab
+  would never run (every book at its average price, rather than the one best
+  price `gameday_card.build_candidates` actually takes) and made every
+  interval about √2.83 too narrow, because eight quotes on one outcome are
+  eight copies of one coin flip. One wager is now one bet at the best price.
+  The sibling football lab already did this and says so in its own report;
+  this one did not, which is the cost of two labs that share no code.
+  **Best-of-N is optimistically biased in the other direction** — the best
+  price is the likeliest to be stale — so −0.3% and −1.6% bracket the truth
+  rather than one replacing the other. Both ends are ≤ 0.
+  Per market at one bet per wager: `points` **−4.4% (6,202)** still excludes
+  zero and still survives correction; `goalie_saves` −2.5% (1,733) now
+  **spans zero**, where per-quote counting had it as a demonstrated loss;
+  `shots_on_goal` +1.3% (9,395, spans zero); `assists` −1.4% (3,762, spans
+  zero); `goals` −6.8% (564, spans zero). `blocked_shots` is the only
+  positive at +5.0% over 4,293 — and it **failed replication**: same
+  direction on the unseen window but its own interval includes zero, and a
+  window that merely fails to contradict is not confirmation. The only
+  result that survives correction *and* replicates is `points`, a
+  demonstrated deficit rather than an edge.
 - **The reason it loses is that the model's disagreement with the market
   carries no information.** Fitting its bias on 2024-25 and testing on the
   145,751 opinions of 2025-26 it had not seen: raw error −6.34%, corrected
@@ -92,14 +107,21 @@ Re-derive rather than trust if the data has moved.
   a number being misread must not be the thing misreading it; it now
   separates a demonstrated edge from a demonstrated deficit and names the
   deficit.
-- **Team markets show no edge either.** Under the shipped policy: moneyline
-  −2.4% over 1,504 bets, puck line −4.3% over 1,541, totals −0.5% over 1,150
-  — every interval includes zero after the family correction. Match rate
-  against the bought prices is 96% per market (was 66% on totals before the
-  sample grid covered the whole-number lines the books actually hang); the
-  remaining 4% are warm-up-window games, counted as exactly that. Whole-number
-  spreads and totals push on exact margins, the ±1 push includes the entire
-  overtime mass, and both the model and settlement price it.
+- **Team markets show no demonstrated edge, and are measured far more
+  thinly than they looked.** At one bet per wager and the card's best price:
+  moneyline **−5.2% over 175 bets** (−21.8% to +11.4%), puck line **−6.1%
+  over 198** (−18.6% to +6.5%), totals **+9.1% over 217** (−3.6% to +21.8%).
+  Every interval includes zero. An earlier version reported these as −2.4%
+  over 1,504, −4.3% over 1,541 and −0.5% over 1,150 — those counts were book
+  quotes, not wagers, so the real sample is roughly **eight times smaller**
+  than published and every interval was correspondingly too tight.
+  **Totals moving from −0.5% to +9.1% is not a finding, it is the sample
+  being small**: 217 bets with an interval spanning zero, on a best-of-N
+  price that is optimistically biased by construction. Match rate against
+  the bought prices is 96% per market; the remaining 4% are warm-up-window
+  games, counted as exactly that. Whole-number spreads and totals push on
+  exact margins, the ±1 push includes the entire overtime mass, and both the
+  model and settlement price it.
 - **What ships is what the recorded verdicts say, through one door.**
   `verdicts.ships()` reads each experiment's `ships` list;
   the card and the default sample generators consult it rather than asserting
