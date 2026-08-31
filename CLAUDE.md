@@ -171,6 +171,37 @@ Re-derive rather than trust if the data has moved.
   realisation** — books hang the vigged, publicly-shaded side on the Over, and
   bets are selected exactly where estimation error concentrates. Diagnosis,
   not finding; stated in the backtest report.
+- **The model is 0.34 points from break-even, and the remaining loss is one
+  cell.** Betting every wager it has an opinion on returns −2.70% over
+  100,805; its own selection returns −0.34% over 26,091, so the selection is
+  worth **+2.35 points**. An earlier version of this file said the model
+  carried no information — that was true of the *magnitude* of its
+  disagreement and false of the model, and the two were conflated.
+- **The loss is stale ice time, measured to four times the size of the loss
+  itself.** Split the card by whether a player's near-future usage rises or
+  falls against the model's trailing-ten estimate: usage about to fall
+  +5.82%/+3.22%, stable −0.13%, **usage about to rise by >2 minutes −6.44%
+  over 5,661 bets, −364.6u** — 98% of them unders, against a card that loses
+  89.6u in total. Substituting next-three-game mean TOI takes the card to
+  **+4.63%**, and realised TOI to +5.16%; both are **oracles** that use
+  information from after the card is built and are quoted as an upper bound,
+  never as an achievable figure. Every prior-only reshuffle of box-score
+  history lands between −0.30% and +0.02%, and a box-score proxy for the
+  coming shift has R²=0.080 — **the information is not in the box score**.
+- **Thirteen candidate inputs were investigated and none survived.**
+  MoneyPuck xG and per-shot files, per-game PP time on ice, linemates from
+  shift charts, opposing goalie identity and quality, shot-danger share,
+  scratches, ESPN opening lines. Several are real, free, per-game and cover
+  both bought seasons; none beats the price. The confirmed-goalie idea was
+  **inverted**: the card already has the starter implicitly, because books
+  only post goalie props for the goalie they expect to start.
+- **Two textbook fixes made the card worse, which is the point.** Per-player
+  rates are over-shrunk (out-of-sample slopes 1.32 assists, 1.26 shots, 1.21
+  points, 1.80 hits) and dispersion is mis-specified (one league-wide
+  variance-to-mean ratio). Correcting either is statistically right and moved
+  the card to −1.27% and −0.47%/−0.93% respectively. **The market already
+  holds the corrected view**, so improving agreement with a reality that is
+  already priced buys nothing. `docs/where_the_remaining_error_lives.md`.
 - **This lab has an end date, decided before the data existed: 2027-04-25.**
   Everything measurable on bought history has been measured and comes back
   null. The single open question is whether the model beats prices on data
