@@ -172,11 +172,63 @@ def append_captures(
     return len(frame)
 
 
-def load_captures(processed_dir: Path | None = None) -> pd.DataFrame:
-    path = captures_path(processed_dir)
-    if not path.is_file():
+#: Where the line-movement capture writes. It runs five times a day in
+#: season and records every field a closing price needs, so a separate
+#: closing-line capture would re-buy data this lab already pays for.
+MOVEMENT_DIRNAME = "line_movement"
+
+
+def load_movement_captures(processed_dir: Path | None = None) -> pd.DataFrame:
+    """Closing-line captures, taken from the line-movement store.
+
+    The dedicated closing-line capture and this one ask the provider the same
+    question. The movement capture already runs five times a day through the
+    evening — including a snapshot at face-off for a 19:00 ET start — and
+    writes `captured_at` beside every price, which is the only column the
+    closing rule needs. Scheduling a second job to fetch the same board again
+    would cost about 24,600 credits a season to collect what is already on
+    disk, and would add a scheduled surface that would need firing and fixing
+    like every other one in this repository.
+
+    So CLV reads the movement store when the dedicated one is empty. The
+    closing rule is unchanged: the last price captured strictly before the
+    face-off, chosen by `closing_prices`.
+    """
+    root = (
+        Path(processed_dir) if processed_dir else PROCESSED_DIR
+    ) / MOVEMENT_DIRNAME
+    if not root.is_dir():
         return pd.DataFrame(columns=list(CAPTURE_COLUMNS))
-    return read_store(path, columns=CAPTURE_COLUMNS)
+    frames = []
+    for path in sorted(root.glob("*.csv")):
+        try:
+            frame = pd.read_csv(path)
+        except (OSError, pd.errors.EmptyDataError, pd.errors.ParserError):
+            continue
+        missing = [c for c in CAPTURE_COLUMNS if c not in frame.columns]
+        if missing:
+            # A day's file that predates a schema change is skipped rather
+            # than half-read: a capture missing `captured_at` cannot be
+            # ordered against face-off and would silently become "closing".
+            continue
+        frames.append(frame[list(CAPTURE_COLUMNS)])
+    if not frames:
+        return pd.DataFrame(columns=list(CAPTURE_COLUMNS))
+    return pd.concat(frames, ignore_index=True)
+
+
+def load_captures(processed_dir: Path | None = None) -> pd.DataFrame:
+    """The dedicated capture store, falling back to the movement store.
+
+    Both hold the same kind of row. The dedicated one wins when it has
+    anything, so an explicit closing-line run is never ignored.
+    """
+    path = captures_path(processed_dir)
+    if path.is_file():
+        dedicated = read_store(path, columns=CAPTURE_COLUMNS)
+        if not dedicated.empty:
+            return dedicated
+    return load_movement_captures(processed_dir)
 
 
 def _key_of(row) -> tuple:
