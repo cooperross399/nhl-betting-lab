@@ -84,15 +84,25 @@ jobs:
           # disk" and the run still reported "nothing moved". A refresh that
           # cannot re-decide must fail here rather than produce a clean bill
           # from stale files.
-          for required in \
-            data/processed/historical_prop_prices.csv \
-            data/outputs/prop_calibration_samples.csv; do
-            if [ ! -s "$required" ]; then
-              echo "::error::$required did not restore. Every experiment needs it, so this run could re-decide nothing. That is a broken refresh, not a clean one."
-              exit 1
-            fi
-            echo "restored $(wc -l < "$required") lines of $required"
-          done
+          # The bought prices cannot be regenerated - they were paid for -
+          # so their absence is fatal. The walk-forward samples CAN be, and
+          # depending on another workflow having left them in an artifact is
+          # what made the first firing re-decide nothing. A refresh that can
+          # build its own inputs does not need anyone else to have run.
+          if [ ! -s data/processed/historical_prop_prices.csv ]; then
+            echo "::error::The bought prices did not restore. They cannot be regenerated, so this run could re-decide nothing. That is a broken refresh, not a clean one."
+            exit 1
+          fi
+          echo "restored $(wc -l < data/processed/historical_prop_prices.csv) lines of bought prices"
+          if [ ! -s data/outputs/prop_calibration_samples.csv ]; then
+            echo "::warning::The walk-forward samples did not restore; building them. This is slower but self-sufficient."
+            PYTHONPATH=src python scripts/run_props_calibration.py || true
+          fi
+          if [ ! -s data/outputs/prop_calibration_samples.csv ]; then
+            echo "::error::The walk-forward samples are absent and could not be built, so every experiment would exit without deciding. Broken refresh."
+            exit 1
+          fi
+          echo "samples: $(wc -l < data/outputs/prop_calibration_samples.csv) lines"
 
       - name: Re-run every experiment
         env:
