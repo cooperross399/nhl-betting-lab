@@ -53,6 +53,32 @@ Re-derive rather than trust if the data has moved.
   honest bracket is **−1.6% (every quote, average price) to −0.34% (perfect
   shopping)**, and a real result sits nearer the middle. Quoting −0.34% as
   *the* number overstates what is reachable exactly as −1.6% understated it.
+- **The card's hour costs nothing, measured. The mismatch was a
+  documentation problem, not a performance one.** The same 2,555–2,887
+  wagers, same outcomes, priced at both moments: **T−4.0h +4.41% [+0.47%,
+  +8.35%]** against **T−9.5h +4.18% [+0.45%, +7.90%]** — the card's window is
+  worth **−0.23 points**, inside noise. Compared on the wagers present in
+  BOTH buys, because the 4h purchase predates the alternate ladders and a raw
+  comparison would confound *when* with *what*. So the published numbers do
+  transfer to production, and the last measured lever with an unknown answer
+  is closed.
+- **Those overlap figures are +4% and are NOT a finding.** The overlap is
+  featured lines only. Splitting the full card window into featured and
+  alternate rungs gives featured +1.50% [−0.50%, +3.49%] over 9,570 and
+  alternate −2.45% over **270** — too few to say anything either way. Three
+  slices of one dataset read +4.41%, +1.50% and −0.34%; the full population
+  is −0.34% and the rest is what subsetting does. Recorded so nobody quotes
+  the +4.4%.
+- **A credit cap that could not hold, and now does.** The purchase estimates
+  cost from the market keys asked for, but the provider bills per market
+  *returned* and every alternate ladder bills on its own. A run capped at
+  200,000 spent **289,984** — 107 credits an event against a predicted 70 —
+  while the code and its test both asserted the cap "cannot be breached".
+  The estimate stays at the documented 10x, because a guess dressed as a
+  bound is worse than a guess; the cap is now enforced against the
+  **measured running total** read from `x-requests-last`, which is the gate
+  that cannot be mis-specified. The test that asserted the false promise was
+  replaced rather than satisfied.
 - **The lab measures one thing and ships another, by five and a half hours.**
   Every historical price was bought at a median **4.0 hours** before face-off
   (p10 4.0, p90 4.0). The production card runs **9.5 hours** before a 19:00

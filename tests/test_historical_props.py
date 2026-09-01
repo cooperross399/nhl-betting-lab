@@ -53,10 +53,16 @@ def _provider(responses: dict) -> OddsApiProvider:
 # -- cost --------------------------------------------------------------
 
 
-def test_the_upper_bound_is_pessimistic_on_purpose() -> None:
-    """The provider documents 10x for the bulk historical endpoint and is
-    ambiguous about the per-event one. Assuming the expensive reading means
-    the cap can only ever be over-respected."""
+def test_the_upper_bound_is_the_documented_rate_and_is_not_a_guarantee() -> None:
+    """Ten is what the provider documents. It is not an upper bound.
+
+    A production run asked for seven markets, predicted 70 credits an event
+    on this reading, and was charged 107, because every alternate ladder
+    bills as its own market. The constant stays at the documented rate — a
+    guess dressed as a bound is worse than a guess — and the cap is enforced
+    against measured spend as well, which is the gate that cannot be
+    mis-specified.
+    """
     assert hist.HISTORICAL_CREDITS_UPPER_BOUND_PER_MARKET == 10
 
 
@@ -71,10 +77,23 @@ def test_the_cost_note_states_a_range_rather_than_a_number() -> None:
     assert "720 credits" in note
     assert "ambiguous" in note
     assert "x-requests-last" in note
+    # The note must not repeat the claim that a documented rate bounds the
+    # spend. It does not: a run capped at 200,000 spent 289,984.
+    assert "cannot be breached" not in note
+    assert "measured running total" in note
 
 
-def test_the_cost_note_says_the_cap_cannot_be_breached() -> None:
-    assert "cannot be breached" in hist.cost_note(events=1, markets=1)
+def test_the_cost_note_no_longer_promises_what_it_cannot_deliver() -> None:
+    """It used to say the cap "cannot be breached". A run capped at 200,000
+    spent 289,984, because the estimate is built from the market keys asked
+    for while the provider bills per market returned — and every alternate
+    ladder bills on its own. The note now says the range has been too low in
+    production and names the second gate that actually holds."""
+    note = hist.cost_note(events=1, markets=1)
+
+    assert "cannot be breached" not in note
+    assert "too low in production" in note
+    assert "measured running total" in note
 
 
 def test_the_measured_cost_is_read_from_the_response_header(
@@ -682,3 +701,25 @@ def test_the_market_fingerprint_ignores_ordering() -> None:
         ["b", "a"]
     )
     assert hist._markets_fingerprint(["a"]) != hist._markets_fingerprint(["a", "b"])
+
+
+def test_the_cap_holds_when_the_estimate_is_too_low() -> None:
+    """A production run capped at 200,000 spent 289,984.
+
+    The per-event estimate is built from the market KEYS asked for, but the
+    provider bills per market RETURNED and every alternate ladder bills on
+    its own. So the estimate can be wrong, and when it is, the only gate that
+    still works is the one reading what was actually charged.
+    """
+    from nhl_betting_lab.providers import historical_props as hp
+
+    source = (
+        Path(__file__).resolve().parents[1] / "src" / "nhl_betting_lab"
+        / "providers" / "historical_props.py"
+    ).read_text(encoding="utf-8")
+
+    assert "buy.credits_spent >= credit_cap" in source, (
+        "the cap must be enforced against measured spend, not only an estimate"
+    )
+    # And the estimate itself must no longer claim to be a guarantee.
+    assert "can only ever be over-respected, never breached" not in source
