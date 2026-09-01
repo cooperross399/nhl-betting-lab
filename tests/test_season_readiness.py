@@ -521,3 +521,30 @@ def test_a_superseded_receipt_approves_nothing() -> None:
             assert path.stem not in cited, (
                 f"{path.stem} is superseded and still cited by the policy"
             )
+
+
+def test_a_refresh_that_cannot_re_decide_never_reports_a_clean_bill() -> None:
+    """The first firing of Experiment Refresh reported "nothing moved" while
+    every experiment had failed for want of the bought prices.
+
+    That is the defect this lab keeps finding — a check reporting success
+    because it never looked at the thing that failed — occurring inside the
+    job built to catch exactly that. So the drift check now distinguishes a
+    verdict that is unchanged from one that was never re-decided, and the
+    workflow fails on the second.
+    """
+    source = (PROJECT_ROOT / "scripts" / "check_verdict_drift.py").read_text(
+        encoding="utf-8"
+    )
+    assert "--since" in source
+    assert "not re-decided" in source
+    # The clean bill must be unreachable while anything is stale.
+    assert "elif not stale:" in source
+
+    workflow = _workflow("experiment-refresh.yml")
+    assert "historical_prop_prices.csv" in workflow, (
+        "the restore must verify the inputs every experiment needs"
+    )
+    assert "steps.drift.outputs.moved == '2'" in workflow, (
+        "exit 2 is a broken refresh and must fail the run"
+    )
