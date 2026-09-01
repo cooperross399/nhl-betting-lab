@@ -111,6 +111,15 @@ jobs:
           fi
           echo "samples: $(wc -l < data/outputs/prop_calibration_samples.csv) lines"
 
+      - name: Note when this run started
+        # BEFORE the experiments, which is the only placement that means
+        # anything. Its own name said "when this run started" and it sat
+        # after the work, so every verdict file predated it and all three
+        # read as "not re-decided" — including the one experiment that had
+        # just completed successfully and written its report.
+        id: started
+        run: echo "at=$(date +%s)" >> "$GITHUB_OUTPUT"
+
       - name: Re-run every experiment
         env:
           PYTHONPATH: src
@@ -122,10 +131,6 @@ jobs:
             python "scripts/$s.py" || echo "::warning::$s did not complete"
             echo "::endgroup::"
           done
-
-      - name: Note when this run started
-        id: started
-        run: echo "at=$(date +%s)" >> "$GITHUB_OUTPUT"
 
       - name: Has anything changed its mind?
         id: drift
