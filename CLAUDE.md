@@ -270,6 +270,30 @@ Re-derive rather than trust if the data has moved.
   realisation** — books hang the vigged, publicly-shaded side on the Over, and
   bets are selected exactly where estimation error concentrates. Diagnosis,
   not finding; stated in the backtest report.
+- **The weekly Experiment Refresh works, and it took six firings to get
+  there.** It re-runs every experiment against everything known that week and
+  compares the verdicts it produces with the ones committed; a moved verdict
+  opens a pull request rather than editing the card's policy, because a job
+  that rewrites policy on its own is tuning by another name. **Its first
+  firing reported a clean bill having re-decided nothing.** The six defects,
+  in order: (1) a false "nothing moved" while all three experiments had
+  failed; (2) the bought prices and walk-forward samples never restored;
+  (3) the samples could not be built because the processed tables came from a
+  later step; (4) the experiments hit the phase guard, since the store now
+  holds two snapshot windows and they named neither; (5) one experiment
+  genuinely re-decided while the step named "Note when this run started" sat
+  *after* the work, so fresh files read as stale; (6) green, and correct.
+  **Five of the six failed in the direction of reporting that nothing had
+  changed.** Every one would have first appeared on a Monday in season.
+- **On the current data, all three recorded verdicts still hold**: `by_toi`
+  off, `props_b2b` in force, `team_b2b` in force — re-decided rather than
+  assumed, and now measured in the window the card actually runs in.
+- **A guard that has never fired is an assumption**, and this lab has now
+  proved that twice. Fire every scheduled workflow at least once before
+  trusting its silence. `closing-lines.yml` has **no cron at all** — it works
+  when dispatched and would never capture on its own, so the CLV machinery is
+  dormant until Cooper decides whether a standing ~24,600-credit season is
+  worth a diagnostic.
 - **This lab has an end date, decided before the data existed: 2027-04-25.**
   Everything measurable on bought history has been measured and comes back
   null. The single open question is whether the model beats prices on data
