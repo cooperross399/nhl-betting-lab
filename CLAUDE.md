@@ -290,10 +290,17 @@ Re-derive rather than trust if the data has moved.
   assumed, and now measured in the window the card actually runs in.
 - **A guard that has never fired is an assumption**, and this lab has now
   proved that twice. Fire every scheduled workflow at least once before
-  trusting its silence. `closing-lines.yml` has **no cron at all** — it works
-  when dispatched and would never capture on its own, so the CLV machinery is
-  dormant until Cooper decides whether a standing ~24,600-credit season is
-  worth a diagnostic.
+  trusting its silence.
+- **`closing-lines.yml` stays unscheduled on purpose, and CLV works anyway.**
+  It was about to be given a cron for ~24,600 credits a season before the
+  obvious question got asked: the line-movement capture already runs **five
+  times a day** in season, writes every column a closing price needs, and its
+  23:00 UTC snapshot lands at face-off for a 19:00 ET start. A second job
+  would have re-bought the same board and added another scheduled surface to
+  fire and fix. `closing_lines.load_captures` now falls back to the movement
+  store, the dedicated store still wins when it holds anything, and the
+  closing rule is unchanged — the last price captured strictly before the
+  face-off.
 - **This lab has an end date, decided before the data existed: 2027-04-25.**
   Everything measurable on bought history has been measured and comes back
   null. The single open question is whether the model beats prices on data
