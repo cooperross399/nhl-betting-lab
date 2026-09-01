@@ -106,3 +106,52 @@ what is actually quoted, and promote a deferred market only through the full
 pipeline: model, walk-forward measurement, price backtest where history
 exists, forward evidence where it does not, and a human receipt before the
 card may touch it.
+
+## Re-probed 2026-09-01, and three deferrals rested on a wrong fact
+
+The revisit mechanism this document describes was run: 43 candidate markets,
+each asked for individually against a real opening-night event, 32 on the
+board.
+
+**Only six are refused outright** (HTTP 422): `outrights`, `totals_3_way`,
+`player_penalty_minutes`, `player_time_on_ice`, `player_giveaways`,
+`player_takeaways`.
+
+**Three markets this document recorded as "refused by the probe" are not
+refused.** `player_power_play_points`, `player_faceoffs_won` and
+`player_shots` are **valid keys** that simply carry no price on this event —
+which in the off-season is what every player prop looks like, including the
+six this lab already models. The August wording conflated *the provider
+rejects this market* with *no book has posted it yet*, and those are
+different facts with different consequences. The deferral may still be right;
+the reason given for it was wrong.
+
+**The period markets are served and priced now**, which the August text
+anticipated for `h2h_p1` alone:
+
+| market | books | lines |
+|:--|--:|:--|
+| `h2h_p1` | 2 | — |
+| `h2h_3_way_p1` | 2 | — |
+| `spreads_p1` / `_p2` / `_p3` | 1 each | ±0.5 |
+| `totals_p1` / `_p2` / `_p3` | 1 each | 0.5 |
+
+### What this changes, and what it does not
+
+It does **not** change the decision to defer. Every reason that was actually
+load-bearing still holds: **no period model exists**, and a first-period
+price derived by scaling the full-game model would be an unmeasured model
+shipped under a measured one's name. First and last goal scorer still need
+goal order, which the cached box scores do not carry.
+
+It does change the *reason on the record* for three prop markets, and it
+sharpens what a period market would be worth if anyone built one. One or two
+books quoting a market cuts both ways: thin coverage means poor line
+shopping and, usually, small limits — but it is also where soft prices live,
+because a market two books quote is a market nobody is arbitraging. Which of
+those dominates is not knowable without buying period prices and measuring,
+and that is a real experiment rather than a wiring job: a period model would
+have to be fitted walk-forward, calibrated, and measured against prices
+before it could honestly appear anywhere.
+
+Recorded here so the next revisit starts from what is true.
