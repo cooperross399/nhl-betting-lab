@@ -85,6 +85,14 @@ def main(argv: list[str] | None = None) -> int:
         "moved, which is the thing this lab is supposed to notice."
     )
     lines.append("")
+    lines.append(
+        "**Read a moved verdict against the window it was measured in.** The "
+        "price store holds more than one snapshot window, and a verdict "
+        "re-decided on a different window from the one that first decided it "
+        "has not seen new evidence — it has been asked a different question. "
+        "The experiments name their window explicitly for this reason."
+    )
+    lines.append("")
     lines.append("| policy | committed | now | moved |")
     lines.append("|:--|:--|:--|:--|")
 
