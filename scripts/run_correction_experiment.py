@@ -55,6 +55,16 @@ WINDOWS = (
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--edge-threshold", type=float, default=MIN_PROP_EDGE)
+    parser.add_argument(
+        "--phase",
+        default="card",
+        help=(
+            "Which snapshot window to measure. The store holds more than "
+            "one and mixing them takes the better of two moments, which "
+            "is a price nobody could have taken. Defaults to the window "
+            "the card actually runs in."
+        ),
+    )
     parser.add_argument("--processed-dir", default=str(PROCESSED_DIR))
     parser.add_argument("--output-dir", default=str(OUTPUTS_DIR))
     args = parser.parse_args(argv)
@@ -99,11 +109,19 @@ def main(argv: list[str] | None = None) -> int:
         window_prices = prices[(dates >= start) & (dates <= end)]
         results[label] = {}
         for name, correct in variants.items():
+            # The window is named rather than inferred. The store now holds
+            # the card's own hour (T-9.5h) beside the originally bought
+            # T-4h, and `phase="auto"` refuses to choose — correctly, since
+            # the better of two moments is a price nobody could have taken.
+            # `card` is the right basis because these verdicts govern the
+            # card, and the two windows were measured as equivalent
+            # (-0.23 points, inside noise) before this was changed.
             report = run_backtest(
                 window_prices,
                 samples,
                 edge_threshold=args.edge_threshold,
                 correct=correct,
+                phase=args.phase,
             )
             overall = report.overall
             results[label][name] = {
