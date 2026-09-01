@@ -28,7 +28,6 @@ from __future__ import annotations
 import argparse
 import json
 import subprocess
-import sys
 from pathlib import Path
 
 from nhl_betting_lab.config import OUTPUTS_DIR
