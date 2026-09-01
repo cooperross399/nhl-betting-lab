@@ -62,6 +62,17 @@ def main(argv: list[str] | None = None) -> int:
         default="",
         help="Name for this window, written into the report and its filenames.",
     )
+    parser.add_argument(
+        "--phase",
+        default="auto",
+        choices=("auto", "card", "late", "early", "all"),
+        help=(
+            "Which snapshot window to measure. `auto` refuses when the store "
+            "holds more than one, which is what it is for. The guard used to "
+            "say 'name the window explicitly' and this flag did not exist, so "
+            "the only way to follow the instruction was to edit the source."
+        ),
+    )
     parser.add_argument("--processed-dir", default=str(PROCESSED_DIR))
     parser.add_argument("--output-dir", default=str(OUTPUTS_DIR))
     args = parser.parse_args(argv)
@@ -129,6 +140,7 @@ def main(argv: list[str] | None = None) -> int:
         prices,
         samples,
         edge_threshold=args.edge_threshold,
+        phase="" if args.phase == "all" else args.phase,
         retention_note=retention_note,
         unmeasurable_markets=unmeasurable,
         window_label=args.label

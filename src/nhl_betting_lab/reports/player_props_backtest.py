@@ -238,7 +238,8 @@ def run_backtest(
                     f"({sorted(present)}). A wager priced at two distances "
                     "from face-off is two different questions and the better "
                     "of the two is a price nobody could have taken. Name the "
-                    "window explicitly."
+                    "window explicitly: --phase card (or late/early), or "
+                    "--phase all to measure the mixture on purpose."
                 )
             phase = str(present[0]) if present else ""
         kept = labelled[labelled["phase"] == phase] if phase else labelled.iloc[0:0]

@@ -96,6 +96,24 @@ Re-derive rather than trust if the data has moved.
   this guard hardcoded a window that matched nothing and fell through
   silently, measuring the mixture it was written to prevent; it now
   auto-detects.
+- **That guard then told the operator to do something the CLI could not do.**
+  It raises "name the window explicitly" — and `run_player_props_backtest.py`
+  had no `--phase` flag, so the only way to obey was to edit the source. This
+  went unnoticed while the store held one window and fired the moment the
+  line-movement capture added a second, which is the worst possible timing: an
+  error instructing an impossible action reads as operator error and sends the
+  reader hunting their own mistake. The flag exists now, and a test asserts the
+  message names a flag the runner actually accepts.
+- **`dedupe_prices` deduplicated on whatever identity columns it was handed.**
+  `PRICE_IDENTITY` includes `provider_event_id`; a frame read without it has
+  nothing telling one date from another, so every night's quote on the same
+  player-market-line-book collapsed onto one row. Asked to dedupe the real
+  2,675,428-row store that way it returned **64,253** rows and reported
+  success — silent 40x data loss inside the one function whose entire job is to
+  be trusted. The live measurement path never hit it (`run_backtest` uses
+  `best_price_per_wager` on a full key, and both buy scripts pass whole rows),
+  so this was a trap rather than a live defect, and it was found by an analysis
+  script walking into it. It now raises and names the missing column.
 - **The model is 0.34 points from break-even, and the remaining loss is one
   cell.** Betting every wager it has an opinion on returns −2.70% over
   100,805; its own selection returns −0.34% over 26,091, so the selection is
