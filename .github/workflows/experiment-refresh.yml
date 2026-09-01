@@ -96,6 +96,13 @@ jobs:
           echo "restored $(wc -l < data/processed/historical_prop_prices.csv) lines of bought prices"
           if [ ! -s data/outputs/prop_calibration_samples.csv ]; then
             echo "::warning::The walk-forward samples did not restore; building them. This is slower but self-sufficient."
+            # The processed tables first: the calibration reads player game
+            # logs, which build_datasets writes from the boxscore cache. The
+            # previous attempt tried to build samples before the table they
+            # are built from existed, and reported "No player logs" — a
+            # dependency chain surfaced one layer per firing, which is what
+            # firing a never-run workflow is for.
+            PYTHONPATH=src python scripts/build_datasets.py || true
             PYTHONPATH=src python scripts/run_props_calibration.py || true
           fi
           if [ ! -s data/outputs/prop_calibration_samples.csv ]; then
