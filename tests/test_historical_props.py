@@ -711,8 +711,6 @@ def test_the_cap_holds_when_the_estimate_is_too_low() -> None:
     its own. So the estimate can be wrong, and when it is, the only gate that
     still works is the one reading what was actually charged.
     """
-    from nhl_betting_lab.providers import historical_props as hp
-
     source = (
         Path(__file__).resolve().parents[1] / "src" / "nhl_betting_lab"
         / "providers" / "historical_props.py"
