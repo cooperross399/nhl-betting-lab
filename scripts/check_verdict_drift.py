@@ -20,7 +20,9 @@ because a scheduled job that silently rewrites the card's policy mid-season
 is indistinguishable from tuning, and this lab's whole discipline is that
 what ships is auditable against the experiment that decided it.
 
-Exit codes: 0 nothing moved, 1 something moved (so a workflow can branch).
+Exit codes: 0 nothing moved, 1 something moved, **2 the refresh was broken**
+— an experiment produced no file this run, so nothing was compared and
+"nothing moved" would be a false statement rather than a clean bill.
 """
 
 from __future__ import annotations
@@ -61,10 +63,21 @@ def ships_of(payload: dict | None) -> list[str]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", default=str(OUTPUTS_DIR))
+    parser.add_argument(
+        "--since",
+        default="",
+        help=(
+            "Unix timestamp the run started. A verdict file older than this "
+            "was not produced by this run, so its experiment did not "
+            "actually re-decide anything and 'unchanged' would be a lie."
+        ),
+    )
     args = parser.parse_args(argv)
     outputs = Path(args.output_dir)
 
+    since = float(args.since) if args.since else 0.0
     moved: list[str] = []
+    stale: list[str] = []
     lines = ["# Verdict drift", ""]
     lines.append(
         "What the experiments decide **now**, against what the repository has "
@@ -90,7 +103,13 @@ def main(argv: list[str] | None = None) -> int:
         current = "in force" if policy in now_ships else "off"
         if now is None:
             current = "not produced"
-        changed = was != current
+        # A file that predates this run was not re-decided. Reading it as
+        # "unchanged" reports a stale belief as a confirmed one, which is the
+        # exact failure this script exists to catch — one level up.
+        elif since and path.stat().st_mtime < since:
+            current = "**not re-decided** (file predates this run)"
+            stale.append(policy)
+        changed = was != current and policy not in stale
         if changed:
             moved.append(policy)
         lines.append(
@@ -98,6 +117,16 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     lines.append("")
+    if stale:
+        lines.append(
+            f"**{len(stale)} verdict(s) were not re-decided: "
+            + ", ".join(f"`{s}`" for s in stale)
+            + ".** Their experiments did not produce a file during this run, "
+            "so nothing was compared for them. This is a broken refresh, not "
+            "a clean one: a job that cannot re-decide must never report that "
+            "nothing changed, because on more data it might have."
+        )
+        lines.append("")
     if moved:
         lines.append(
             f"**{len(moved)} verdict(s) moved: "
@@ -107,7 +136,7 @@ def main(argv: list[str] | None = None) -> int:
             "that rewrites the card's policy on its own is indistinguishable "
             "from tuning. A human reads the evidence and merges, or does not."
         )
-    else:
+    elif not stale:
         lines.append(
             "**Nothing moved.** Every recorded verdict still says what it said "
             "when it was committed, on more data than it had then."
@@ -116,6 +145,11 @@ def main(argv: list[str] | None = None) -> int:
     report = "\n".join(lines) + "\n"
     (outputs / "verdict_drift.md").write_text(report, encoding="utf-8")
     print(report)
+    # 2 is a broken refresh and 1 is a real finding. Collapsing them would
+    # make a job that failed to run indistinguishable from one that ran and
+    # found nothing, which is the whole defect.
+    if stale:
+        return 2
     return 1 if moved else 0
 
 

@@ -77,6 +77,22 @@ jobs:
             echo "::error::Only $games boxscores restored. Re-deciding on a thin cache would report a verdict change that is really a data shortage."
             exit 1
           fi
+          # Boxscores alone are not enough and the first firing proved it:
+          # every experiment needs the BOUGHT PRICES and the walk-forward
+          # samples, neither of which arrived, so all three exited with
+          # "Need both the walk-forward samples and the bought prices on
+          # disk" and the run still reported "nothing moved". A refresh that
+          # cannot re-decide must fail here rather than produce a clean bill
+          # from stale files.
+          for required in \
+            data/processed/historical_prop_prices.csv \
+            data/outputs/prop_calibration_samples.csv; do
+            if [ ! -s "$required" ]; then
+              echo "::error::$required did not restore. Every experiment needs it, so this run could re-decide nothing. That is a broken refresh, not a clean one."
+              exit 1
+            fi
+            echo "restored $(wc -l < "$required") lines of $required"
+          done
 
       - name: Re-run every experiment
         env:
@@ -90,15 +106,28 @@ jobs:
             echo "::endgroup::"
           done
 
+      - name: Note when this run started
+        id: started
+        run: echo "at=$(date +%s)" >> "$GITHUB_OUTPUT"
+
       - name: Has anything changed its mind?
         id: drift
         env:
           PYTHONPATH: src
         run: |
           set +e
-          python scripts/check_verdict_drift.py
+          python scripts/check_verdict_drift.py --since "${{ steps.started.outputs.at }}"
           echo "moved=$?" >> "$GITHUB_OUTPUT"
           set -e
+
+      - name: Fail if the refresh could not re-decide
+        # Exit 2 means an experiment produced no file this run. Reporting
+        # that as "nothing moved" is how a stale belief gets confirmed by a
+        # job built to catch stale beliefs.
+        if: steps.drift.outputs.moved == '2'
+        run: |
+          echo "::error::The refresh re-decided nothing — at least one experiment produced no verdict file. Its 'nothing moved' is not a clean bill."
+          exit 1
 
       - name: Open a pull request when a verdict moved
         # The evidence goes to a human, never straight to the card.
