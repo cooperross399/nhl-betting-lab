@@ -497,6 +497,46 @@ def test_the_price_store_deduplicates_on_the_quote_not_the_timestamp() -> None:
     assert set(out["book"]) == {"DraftKings", "BetMGM"}
 
 
+def test_deduplicating_without_the_event_id_is_refused_not_guessed() -> None:
+    """It used to dedupe on whatever identity columns the caller passed.
+
+    A frame read without `provider_event_id` has nothing telling one date
+    from another, so every night's quote on the same player-market-line-book
+    looks like one repeated quote. Asked to dedupe the real 2,675,428-row
+    store that way it returned 64,253 rows and reported success: a silent 40x
+    data loss inside the one function whose entire job is to be trusted.
+    Refusing is the only safe answer, because the caller cannot see the loss.
+    """
+    import pytest
+
+    from nhl_betting_lab.stores import dedupe_prices
+
+    quote = {
+        "market": "shots_on_goal",
+        "player": "Auston Matthews",
+        "selection": "over",
+        "line": 2.5,
+        "book": "DraftKings",
+        "american_odds": -115.0,
+    }
+    # Two genuinely different nights. Identical on every column but the event.
+    frame = pd.DataFrame(
+        [
+            {**quote, "date": "2025-10-18", "provider_event_id": "evt1"},
+            {**quote, "date": "2025-10-21", "provider_event_id": "evt2"},
+        ]
+    )
+
+    assert len(dedupe_prices(frame)) == 2, "two nights are two quotes"
+
+    with pytest.raises(ValueError) as caught:
+        dedupe_prices(frame.drop(columns=["provider_event_id"]))
+
+    message = str(caught.value)
+    assert "provider_event_id" in message, "say which column is missing"
+    assert "usecols" in message, "say how to fix it"
+
+
 def test_a_superseded_receipt_approves_nothing() -> None:
     """A withdrawn approval is kept as a record and must never be readable as
     a live one. It is not an orphan either — it is filed, deliberately."""

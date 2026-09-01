@@ -87,13 +87,31 @@ def dedupe_prices(frame: "pd.DataFrame") -> "pd.DataFrame":
     twice — which leaves the ROI unchanged and shrinks its confidence
     interval by a factor of root two, so a duplicated store does not look
     wrong. It looks *significant*.
+
+    **Every identity column is required.** This used to dedupe on whatever
+    subset of `PRICE_IDENTITY` the caller happened to pass, which is a far
+    worse failure than the one it was written to fix: a frame read without
+    `provider_event_id` has nothing telling one date from another, so every
+    night's quote on the same player-market-line-book collapses onto a
+    single row. Asked to dedupe 2,675,428 rows that way it returned 64,253
+    and reported success. Silent 40x data loss inside a function whose whole
+    job is to be trusted is not a fallback, it is a trap. Read the store
+    with all of `PRICE_IDENTITY` in `usecols`.
     """
     if frame.empty:
         return frame
-    keys = [column for column in PRICE_IDENTITY if column in frame.columns]
-    if not keys:
-        return frame.drop_duplicates()
-    return frame.drop_duplicates(subset=keys, keep="last").reset_index(drop=True)
+    missing = [c for c in PRICE_IDENTITY if c not in frame.columns]
+    if missing:
+        raise ValueError(
+            "dedupe_prices needs every identity column and is missing "
+            f"{missing}. Deduplicating on the remaining subset would "
+            "collapse rows that are genuinely different quotes and report "
+            f"success. Read the store with usecols covering "
+            f"{list(PRICE_IDENTITY)}."
+        )
+    return frame.drop_duplicates(
+        subset=list(PRICE_IDENTITY), keep="last"
+    ).reset_index(drop=True)
 
 
 def best_price_per_wager(frame, key):

@@ -807,3 +807,53 @@ def test_one_wager_priced_at_two_moments_is_two_questions() -> None:
         assert report.bets[0].american_odds == -130, (
             "taking +180 from a different moment is a price nobody could have had"
         )
+
+
+def test_the_window_guard_names_a_flag_the_runner_actually_accepts() -> None:
+    """The guard said "name the window explicitly" and no such flag existed.
+
+    The store now genuinely holds two windows, because the line-movement
+    capture writes five snapshots a day. So the guard fires on the real store,
+    tells the operator to name a window, and until this test the only way to
+    obey was to edit the source and call `run_backtest` by hand. An error that
+    instructs an impossible action is worse than no error: it reads as
+    operator error and sends the reader looking for their own mistake.
+    """
+    import importlib.util
+    import io
+    import sys
+    from contextlib import redirect_stdout
+    from pathlib import Path
+
+    samples = _samples()
+    one = _prices().iloc[0].to_dict()
+    commence = "2025-01-06T00:10:00Z"
+    both = pd.DataFrame([
+        {**one, "commence_time": commence, "snapshot": "2025-01-05T20:10:00Z",
+         "american_odds": -130},
+        {**one, "commence_time": commence, "snapshot": "2025-01-05T14:40:00Z",
+         "american_odds": +180},
+    ])
+
+    with pytest.raises(ValueError) as caught:
+        bt.run_backtest(both, samples, edge_threshold=0.0)
+    message = str(caught.value)
+
+    assert "--phase" in message, "the guard must name the remedy"
+
+    script = Path(__file__).resolve().parents[1] / "scripts"
+    script = script / "run_player_props_backtest.py"
+    spec = importlib.util.spec_from_file_location("_runner_phase", script)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+
+    buffer = io.StringIO()
+    with pytest.raises(SystemExit) as exit_info, redirect_stdout(buffer):
+        module.main(["--help"])
+
+    assert exit_info.value.code == 0
+    assert "--phase" in buffer.getvalue(), (
+        "the guard names --phase, so the runner has to have one"
+    )
