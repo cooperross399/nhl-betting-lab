@@ -183,11 +183,20 @@ class HistoricalBuy:
 
 
 def estimate_credits(*, events: int, markets: int) -> int:
-    """The pessimistic upper bound, used to decide whether to start a request.
+    """A bound used to decide whether to start a request. **Not a guarantee.**
 
-    Not a prediction. The provider's documentation is ambiguous about the
-    per-event historical rate, so this assumes the expensive reading — which
-    means the cap can only ever be over-respected, never breached.
+    Not a prediction either. The provider's documentation is ambiguous about
+    the per-event historical rate, so this assumes the expensive reading.
+
+    An earlier version of this docstring said the cap "can only ever be
+    over-respected, never breached". That was wrong and a production run
+    proved it: seven markets at the assumed ten credits each predicted 70 an
+    event and the provider charged **107**, so a run capped at 200,000 spent
+    289,984. Asking for seven market KEYS can return more than seven BILLABLE
+    markets, because every alternate ladder bills on its own — so a bound
+    computed from the keys asked for is not an upper bound on what is
+    charged. The caller therefore also enforces the cap against MEASURED
+    spend, which is the gate that cannot be mis-specified.
     """
     return (
         int(events) * int(markets) * HISTORICAL_CREDITS_UPPER_BOUND_PER_MARKET
@@ -199,12 +208,15 @@ def cost_note(*, events: int, markets: int) -> str:
     lower = int(events) * int(markets)
     return (
         f"{events} event(s) x {markets} market(s): between **{lower:,}** and "
-        f"**{upper:,} credits**. The provider documents "
-        f"{HISTORICAL_CREDITS_UPPER_BOUND_PER_MARKET}x per market for the "
-        "bulk historical endpoint and is ambiguous about the per-event one, "
-        "so the true figure is somewhere in that range and is read from "
-        "`x-requests-last` as it is spent. The cap is enforced against the "
-        "upper bound, so it cannot be breached."
+        f"**{upper:,} credits**. The provider documents 10x per market for "
+        "the bulk historical endpoint and is ambiguous about the per-event "
+        f"one, so the true figure is somewhere in that range and is read "
+        "from `x-requests-last` as it is spent. **This range has been too "
+        "low in production**: a run asking seven markets was charged 107 "
+        "credits an event, not 70, because every alternate ladder bills as "
+        "its own market. The cap is therefore enforced against **both** this "
+        "estimate and the measured running total — the second because the "
+        "first has already been wrong."
     )
 
 
@@ -423,9 +435,30 @@ def buy_historical_props(
         path = _cache_path(event_id, snapshot, raw_dir=raw_dir, markets=wanted)
         payload = _read_cache(path)
         if payload is None:
+            # Two gates, because one of them has already failed in
+            # production. The estimate said 70 credits an event (7 markets x
+            # a "pessimistic" 10) and the provider charged 107, so a run
+            # capped at 200,000 spent 289,984. Asking for seven market KEYS
+            # can return more than seven BILLABLE markets — every alternate
+            # ladder bills on its own — so an estimate built from the keys
+            # asked for is not an upper bound at all.
+            #
+            # The second gate is the one that cannot be wrong: what the
+            # provider says it has actually charged, read from
+            # `x-requests-last` as it is spent. An estimate can be
+            # mis-specified; a running total of measured spend cannot.
             if worst_case_spent + worst_case_per_event > credit_cap:
                 buy.events_skipped_for_budget += 1
                 continue
+            if buy.credits_spent >= credit_cap:
+                buy.events_skipped_for_budget += 1
+                buy.errors.append(
+                    f"Stopped at the {credit_cap:,}-credit cap on MEASURED "
+                    f"spend ({buy.credits_spent:,} charged). The per-event "
+                    "estimate was too low, which is exactly what this second "
+                    "gate exists for."
+                )
+                break
             try:
                 payload, headers = provider._get(  # noqa: SLF001
                     f"{provider.base_url}/v4/historical/sports/"
