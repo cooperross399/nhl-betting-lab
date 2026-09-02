@@ -131,6 +131,46 @@ Re-derive rather than trust if the data has moved.
   never as an achievable figure. Every prior-only reshuffle of box-score
   history lands between −0.30% and +0.02%, and a box-score proxy for the
   coming shift has R²=0.080 — **the information is not in the box score**.
+- **The venue route is closed, measured rather than assumed.** The model
+  recovers ~87% of the toll it pays and stops 0.29 points short, so a venue
+  charging less would close the gap with no model change. Priced on one event
+  where every venue is comparable at the same instant (130 credits, run
+  33629672530): **Pinnacle charges 7.18% on NHL props against DraftKings'
+  6.31%** — 1.08 points *dearer* than the toll already paid, pricing like
+  BetMGM. Its reduced juice is a main-markets fact (3.00% moneyline vs a 4.47%
+  field) that does not reach props. And **no exchange lists NHL props at all**:
+  Novig, ProphetX, Betfair, Matchbook and Smarkets returned the moneyline and
+  nothing else, the prop calls billing zero. Already visible in owned data —
+  LowVig.ag holds 18,102 NHL team-market rows and zero prop rows. The `us,us2`
+  string now stands on measurement, not on the reachability argument in
+  `odds_api.py`. `docs/the_venue_route_is_closed.md`.
+- **No book is materially sharper than any other.** On a common slate of
+  21,642 markets the seven major books forecast within **0.0006 log loss**
+  (0.0003 Brier) of one another; FanDuel leads on points but the lead does not
+  separate from BetOnline.ag under a date-cluster bootstrap and **reverses in
+  2025-26**. The raw full-sample ranking is a schedule artifact — it tracks
+  each book's base rate (0.26 to 0.50), so a book quoting mostly 0.5-line goal
+  props scores well for free. There is no sharp book here to use as truth.
+- **Betting the outlier against the consensus loses.** Full population
+  **−5.84% [−6.09%, −5.61%] over 642,947 quotes**; zero of 40 credible cells
+  positive before or after correction; the one positive-pointing season cell
+  (2025-26 +2.84%, spans zero) inverts to −6.94% in 2024-25. The premise fails
+  too: where a book diverges from consensus, the outlier forecasts at least as
+  well as the consensus does.
+- **Boosts are real money and the model is mostly redundant to them.** The
+  break-even profit boost on the canonical population is **3.2%** (3.7%
+  clustered by date), so any boost of 10% or more is positive with the
+  interval excluding zero (10% → +4.55% [+3.27%, +5.80%]). That is mechanical,
+  not a forecasting result: a roughly fair-priced population is handed B ×
+  0.484 per unit. **Within its own bets the model cannot rank better than a
+  free market devig** (paired top-quartile difference +1.59% [−1.94%, +5.03%],
+  spans zero) and the market's probability is the better-calibrated one
+  (Brier +0.0084 [+0.0069, +0.0099] in the market's favour). The binding
+  constraint is the menu: books boost **overs on stars**, and this model
+  favours the over on 20.6% of markets with a card-grade over edge on **0.5%**.
+  Priced at stated assumptions, boosts are worth **$0.3k–$1.6k a season** at
+  $25–$50 caps — a separate, capped, book-rationed income, **not a change to
+  the card's edge**.
 - **Thirteen candidate inputs were investigated and none survived.**
   MoneyPuck xG and per-shot files, per-game PP time on ice, linemates from
   shift charts, opposing goalie identity and quality, shot-danger share,
