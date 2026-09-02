@@ -184,6 +184,10 @@ PYTHONPATH=src .venv/bin/python scripts/buy_historical_props.py \
 PYTHONPATH=src .venv/bin/python scripts/buy_historical_props.py \
     --probe --live --credit-cap 60
 
+# Free: which (event, snapshot) pairs the raw cache holds. Pick one the
+# store has, so the venues are compared at the same moment.
+PYTHONPATH=src .venv/bin/python scripts/probe_low_vig_venues.py --list-events
+
 # Free: print what the venue probe would ask, and its worst case, and stop.
 PYTHONPATH=src .venv/bin/python scripts/probe_low_vig_venues.py
 

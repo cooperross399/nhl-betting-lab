@@ -25,6 +25,14 @@ on:
         type: string
         required: false
         default: "us_ex,eu,uk,au"
+      event_id:
+        description: "Provider event id to ask about. Locally, `probe_low_vig_venues.py --list-events` prints the cached pairs; pick one the store holds. No default on purpose: the id is key-shaped and never sits in a tracked file."
+        type: string
+        required: true
+      snapshot:
+        description: "ISO instant to price at, e.g. 2025-01-14T20:10:00Z — the same snapshot the store holds for that event"
+        type: string
+        required: true
 
 permissions:
   contents: read
@@ -75,7 +83,8 @@ jobs:
         run: |
           echo "Hard credit cap: ${{ inputs.credit_cap }}"
           echo "Regions: ${{ inputs.regions }}"
-          python scripts/probe_low_vig_venues.py --regions "${{ inputs.regions }}"
+          python scripts/probe_low_vig_venues.py --regions "${{ inputs.regions }}" \
+            --event-id "${{ inputs.event_id }}" --snapshot "${{ inputs.snapshot }}"
 
       - name: Probe the venues
         env:
@@ -84,7 +93,8 @@ jobs:
         run: |
           python scripts/probe_low_vig_venues.py --live \
             --credit-cap "${{ inputs.credit_cap }}" \
-            --regions "${{ inputs.regions }}"
+            --regions "${{ inputs.regions }}" \
+            --event-id "${{ inputs.event_id }}" --snapshot "${{ inputs.snapshot }}"
 
       - name: Write the result to the run summary
         if: always()

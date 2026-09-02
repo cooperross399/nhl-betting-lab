@@ -46,6 +46,9 @@ def _snapshot(markets: list[str]) -> dict:
 
 def _provider(responses: dict) -> OddsApiProvider:
     return OddsApiProvider(
+        # One region, stated. The tests below reason at ten credits a
+        # request; that is the one-region figure, and the default is two.
+        regions="us",
         environment=ENVIRONMENT, requester=RecordingRequester(responses)
     )
 

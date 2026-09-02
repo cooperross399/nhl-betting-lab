@@ -14,6 +14,11 @@ from nhl_betting_lab.providers.odds_api import OddsApiProvider
 
 
 SECRET = "venue-secret-must-not-be-written"
+#: A fake id on purpose. A real provider event id is a bare 32-hex string —
+#: the shape of the credential — and the secrets scan rightly refuses it.
+EVENT = "evt-venue-1"
+SNAPSHOT = "2025-01-14T20:10:00Z"
+WHICH = ["--event-id", EVENT, "--snapshot", SNAPSHOT]
 ENVIRONMENT = {"NHL_ODDS_API_KEY": SECRET}
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "probe_low_vig_venues.py"
 
@@ -39,7 +44,7 @@ def _event(books: dict[str, dict[str, list[dict]]]) -> dict:
     return {
         "timestamp": "2025-01-14T20:10:00Z",
         "data": {
-            "id": "534946a43ead305dc7d5f9fa6916984b",
+            "id": EVENT,
             "bookmakers": [
                 {
                     "key": book,
@@ -77,13 +82,14 @@ def test_a_dry_run_sends_nothing_and_writes_nothing(
     provider, requester = _provider()
 
     code = module.main(
-        ["--raw-dir", str(tmp_path), "--output-dir", str(tmp_path)],
+        [*WHICH, "--raw-dir", str(tmp_path), "--output-dir", str(tmp_path)],
         provider=provider,
     )
     out = capsys.readouterr().out
 
     assert code == 0
     assert "Nothing was sent" in out
+    assert EVENT in out
     assert "worst case" in out.lower()
     assert requester.calls == []
     assert not any(tmp_path.rglob("*"))
@@ -104,7 +110,7 @@ def test_no_credential_means_no_request(tmp_path: Path) -> None:
     provider = OddsApiProvider(environment={}, requester=requester)
 
     code = module.main(
-        ["--live", "--credit-cap", "100", "--raw-dir", str(tmp_path),
+        ["--live", "--credit-cap", "100", *WHICH, "--raw-dir", str(tmp_path),
          "--output-dir", str(tmp_path)],
         provider=provider,
     )
@@ -134,7 +140,7 @@ def test_a_venue_with_the_moneyline_and_no_props_is_reported_as_such(
     provider, requester = _provider(cost="10", event=event)
 
     code = module.main(
-        ["--live", "--credit-cap", "400", "--regions", "eu",
+        ["--live", "--credit-cap", "400", "--regions", "eu", *WHICH,
          "--raw-dir", str(tmp_path), "--output-dir", str(tmp_path)],
         provider=provider,
     )
@@ -159,7 +165,7 @@ def test_nothing_returned_is_the_decisive_negative(tmp_path: Path) -> None:
     provider, _ = _provider(cost="0", event=_event({}))
 
     module.main(
-        ["--live", "--credit-cap", "400", "--regions", "eu",
+        ["--live", "--credit-cap", "400", "--regions", "eu", *WHICH,
          "--raw-dir", str(tmp_path), "--output-dir", str(tmp_path)],
         provider=provider,
     )
@@ -179,7 +185,7 @@ def test_the_cap_is_enforced_against_measured_spend_before_each_call(
     provider, requester = _provider(cost="60", event=_event({}))
 
     module.main(
-        ["--live", "--credit-cap", "100", "--regions", "eu,uk",
+        ["--live", "--credit-cap", "100", "--regions", "eu,uk", *WHICH,
          "--raw-dir", str(tmp_path), "--output-dir", str(tmp_path)],
         provider=provider,
     )
@@ -199,7 +205,7 @@ def test_a_short_quota_stops_the_probe_before_it_asks(tmp_path: Path) -> None:
     provider, requester = _provider(remaining="50", event=_event({}))
 
     code = module.main(
-        ["--live", "--credit-cap", "400", "--raw-dir", str(tmp_path),
+        ["--live", "--credit-cap", "400", *WHICH, "--raw-dir", str(tmp_path),
          "--output-dir", str(tmp_path)],
         provider=provider,
     )
@@ -216,7 +222,7 @@ def test_the_credential_never_reaches_disk_or_stdout(
     provider, _ = _provider(event=event)
 
     module.main(
-        ["--live", "--credit-cap", "400", "--regions", "eu",
+        ["--live", "--credit-cap", "400", "--regions", "eu", *WHICH,
          "--raw-dir", str(tmp_path), "--output-dir", str(tmp_path)],
         provider=provider,
     )
@@ -235,8 +241,8 @@ def test_the_reference_comparison_reads_the_stores_own_cache(tmp_path: Path) -> 
     module = _load()
     cache = tmp_path / "historical_props"
     cache.mkdir(parents=True)
-    compact = module.PROBE_SNAPSHOT.replace("-", "").replace(":", "")
-    (cache / f"{module.PROBE_EVENT_ID}_{compact}.json").write_text(
+    compact = SNAPSHOT.replace("-", "").replace(":", "")
+    (cache / f"{EVENT}_{compact}.json").write_text(
         json.dumps(_event({"draftkings": {"player_points": _quote("Tom Wilson", 0.5, -115, -115)}})),
         encoding="utf-8",
     )
@@ -244,7 +250,7 @@ def test_the_reference_comparison_reads_the_stores_own_cache(tmp_path: Path) -> 
     provider, _ = _provider(event=event)
 
     module.main(
-        ["--live", "--credit-cap", "400", "--regions", "eu",
+        ["--live", "--credit-cap", "400", "--regions", "eu", *WHICH,
          "--raw-dir", str(tmp_path), "--output-dir", str(tmp_path)],
         provider=provider,
     )
@@ -254,3 +260,42 @@ def test_the_reference_comparison_reads_the_stores_own_cache(tmp_path: Path) -> 
     assert "draftkings" in result["reference"]["books"]
     assert "against the store's best" in result["verdict"]
     assert "points" in result["verdict"]
+
+
+def test_the_event_is_never_a_literal_but_comes_from_the_cache_or_the_caller(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A provider event id is a bare 32-hex string, the shape of the key, and
+    the secrets scan cannot tell them apart. So the script carries none:
+    it reads the raw cache, or it is told. With neither, it refuses."""
+    module = _load()
+    provider, requester = _provider()
+
+    code = module.main(
+        ["--live", "--credit-cap", "400", "--raw-dir", str(tmp_path),
+         "--output-dir", str(tmp_path)],
+        provider=provider,
+    )
+
+    assert code == 2
+    assert "No event to ask about" in capsys.readouterr().err
+    assert requester.calls == []
+
+    cache = tmp_path / "historical_props"
+    cache.mkdir(parents=True)
+    hexid = "0123456789abcdef" * 2
+    (cache / f"{hexid}_20250114T201000Z.json").write_text("{}", encoding="utf-8")
+    (cache / f"{hexid}_20250114T201000Z_8785e9c0.json").write_text("{}", encoding="utf-8")
+    (cache / f"{'fedcba9876543210' * 2}_20241001T160000Z.json").write_text("{}", encoding="utf-8")
+
+    code = module.main(["--list-events", "--raw-dir", str(tmp_path)])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "2 cached event(s)" in out, "two ids, whatever the hash suffix"
+    assert out.index(hexid) < out.index("fedcba"), "newest snapshot first"
+    assert "--snapshot 2025-01-14T20:10:00Z" in out
+
+    code = module.main(["--raw-dir", str(tmp_path), "--output-dir", str(tmp_path)])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert f"event {hexid} at 2025-01-14T20:10:00Z" in out, "defaults to the newest"

@@ -39,6 +39,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -52,11 +53,15 @@ from nhl_betting_lab.providers.env_file import load_provider_env, redact
 from nhl_betting_lab.providers.odds_api import OddsApiProvider, ProviderError
 
 
-#: Anaheim @ Washington, face-off 2025-01-15T00:10Z, priced four hours out.
-#: Already in the store at this exact snapshot, which is what makes the
-#: margin comparison like with like rather than venue-versus-moment.
-PROBE_EVENT_ID = "534946a43ead305dc7d5f9fa6916984b"
-PROBE_SNAPSHOT = "2025-01-14T20:10:00Z"
+#: The event is an input, never a literal. A provider event id is a bare
+#: 32-hex string — the exact shape of the credential — and the secrets scan
+#: in `tests/test_no_secrets_committed.py` cannot tell the two apart on the
+#: page, which is the point of it. So the id comes from the raw cache
+#: (`--list-events` prints what is on disk, free) or is passed explicitly,
+#: as the workflow requires. Pick an event the 14-book store already holds
+#: at the same snapshot, so the margins compare like with like rather than
+#: venue-versus-moment.
+CACHE_NAME = re.compile(r"^(?P<event>[0-9a-f]{32})_(?P<stamp>\d{8}T\d{6}Z)(?:_[0-9a-f]+)?\.json$")
 
 #: The provider's own region keys for the venues in question. `us_ex` is
 #: the US exchanges; Pinnacle is served in `eu` only.
@@ -129,12 +134,30 @@ def margins_by_book(payload: Any) -> dict[str, dict[str, dict[str, Any]]]:
     return out
 
 
-def _reference_from_cache(raw_dir: Path) -> dict[str, Any]:
+def _stamp(snapshot: str) -> str:
+    return snapshot.replace("-", "").replace(":", "")
+
+
+def _unstamp(stamp: str) -> str:
+    return f"{stamp[0:4]}-{stamp[4:6]}-{stamp[6:8]}T{stamp[9:11]}:{stamp[11:13]}:{stamp[13:15]}Z"
+
+
+def cached_events(raw_dir: Path) -> list[tuple[str, str]]:
+    """Every (event_id, snapshot) the raw cache holds, newest snapshot first.
+    Read from the filenames, which is free and needs no parsing."""
+    seen: set[tuple[str, str]] = set()
+    for path in (raw_dir / "historical_props").glob("*.json"):
+        match = CACHE_NAME.match(path.name)
+        if match:
+            seen.add((match.group("event"), _unstamp(match.group("stamp"))))
+    return sorted(seen, key=lambda pair: (pair[1], pair[0]), reverse=True)
+
+
+def _reference_from_cache(raw_dir: Path, event_id: str, snapshot: str) -> dict[str, Any]:
     """The 14-book store's own quotes on this event and snapshot, if the raw
     cache is on disk. Absent in CI, where the cache is an artifact rather
     than a checkout; the comparison is then done locally afterwards."""
-    compact = PROBE_SNAPSHOT.replace("-", "").replace(":", "")
-    matches = sorted((raw_dir / "historical_props").glob(f"{PROBE_EVENT_ID}_{compact}*.json"))
+    matches = sorted((raw_dir / "historical_props").glob(f"{event_id}_{_stamp(snapshot)}*.json"))
     if not matches:
         return {"available": False, "books": {}}
     try:
@@ -231,11 +254,37 @@ def main(argv: list[str] | None = None, *, provider: OddsApiProvider | None = No
     parser.add_argument("--live", action="store_true", help="Actually spend credits. Requires --credit-cap.")
     parser.add_argument("--credit-cap", type=int, default=0, help="Hard cap, enforced against measured spend before every request.")
     parser.add_argument("--regions", default=DEFAULT_REGIONS, help="Comma-separated provider regions to try, one call each.")
+    parser.add_argument("--event-id", default="", help="Provider event id to ask about. Defaults to the newest event in the local raw cache.")
+    parser.add_argument("--snapshot", default="", help="ISO instant to price at. Defaults to that event's cached snapshot.")
+    parser.add_argument("--list-events", action="store_true", help="Print the (event, snapshot) pairs the local raw cache holds, free, and stop.")
     parser.add_argument("--raw-dir", default=str(RAW_DIR))
     parser.add_argument("--output-dir", default=str(OUTPUTS_DIR))
     args = parser.parse_args(argv)
     if args.live and args.credit_cap <= 0:
         parser.error("--live needs a positive --credit-cap.")
+
+    raw_dir = Path(args.raw_dir)
+    if args.list_events:
+        pairs = cached_events(raw_dir)
+        print(f"{len(pairs)} cached event(s) in {raw_dir / 'historical_props'}:")
+        for event_id, snapshot in pairs:
+            print(f"  --event-id {event_id} --snapshot {snapshot}")
+        return 0
+
+    event_id = str(args.event_id).strip()
+    snapshot = str(args.snapshot).strip()
+    if not event_id:
+        pairs = cached_events(raw_dir)
+        if pairs:
+            event_id, cached_snapshot = pairs[0]
+            snapshot = snapshot or cached_snapshot
+    if not event_id or not snapshot:
+        print(
+            "No event to ask about: the raw cache holds none and --event-id/"
+            "--snapshot were not given. --list-events shows what is on disk.",
+            file=sys.stderr,
+        )
+        return 2
 
     regions = [r.strip() for r in str(args.regions).split(",") if r.strip()]
     prop_keys = _prop_keys()
@@ -243,7 +292,7 @@ def main(argv: list[str] | None = None, *, provider: OddsApiProvider | None = No
     worst_total = sum(int(p["worst_case"]) for p in plan)
 
     if not args.live:
-        print(f"Dry run. {len(plan)} call(s) planned on event {PROBE_EVENT_ID} at {PROBE_SNAPSHOT}:")
+        print(f"Dry run. {len(plan)} call(s) planned on event {event_id} at {snapshot}:")
         for p in plan:
             where = p.get("regions") or f"bookmakers={p['bookmakers']}"
             print(f"  {p['step']:<18} {where:<60} worst case {p['worst_case']:>4}")
@@ -257,7 +306,6 @@ def main(argv: list[str] | None = None, *, provider: OddsApiProvider | None = No
         print("No NHL_ODDS_API_KEY is configured. Nothing was sent.", file=sys.stderr)
         return 2
 
-    raw_dir = Path(args.raw_dir)
     cache_dir = raw_dir / "historical_props" / CACHE_DIRNAME
     cache_dir.mkdir(parents=True, exist_ok=True)
     spent = 0
@@ -275,7 +323,7 @@ def main(argv: list[str] | None = None, *, provider: OddsApiProvider | None = No
         print(f"Only {before} credits remain, below the {args.credit_cap} cap. Nothing was asked.", file=sys.stderr)
         return 3
 
-    url = f"{provider.base_url}/v4/historical/sports/{provider.sport_key}/events/{PROBE_EVENT_ID}/odds"
+    url = f"{provider.base_url}/v4/historical/sports/{provider.sport_key}/events/{event_id}/odds"
     responses: dict[str, Any] = {}
     for p in plan:
         record: dict[str, Any] = {"step": p["step"]}
@@ -283,7 +331,7 @@ def main(argv: list[str] | None = None, *, provider: OddsApiProvider | None = No
             record["skipped"] = f"would breach the cap ({spent} spent + {p['worst_case']} worst case > {args.credit_cap})"
             calls.append(record)
             continue
-        extra: dict[str, str] = {"markets": ",".join(p["markets"]), "date": PROBE_SNAPSHOT}
+        extra: dict[str, str] = {"markets": ",".join(p["markets"]), "date": snapshot}
         if p.get("regions"):
             extra["regions"] = str(p["regions"])
         else:
@@ -320,11 +368,11 @@ def main(argv: list[str] | None = None, *, provider: OddsApiProvider | None = No
                 if key in prop_keys:
                     venues[book]["prop_markets"][key] = detail
 
-    reference = _reference_from_cache(raw_dir)
+    reference = _reference_from_cache(raw_dir, event_id, snapshot)
     result = {
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        "event_id": PROBE_EVENT_ID,
-        "snapshot": PROBE_SNAPSHOT,
+        "event_id": event_id,
+        "snapshot": snapshot,
         "regions": regions,
         "markets_asked": prop_keys,
         "credit_cap": args.credit_cap,

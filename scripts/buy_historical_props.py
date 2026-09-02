@@ -94,10 +94,6 @@ def _events_in_window(
     independent information than a hundred spread across a season.
     """
     events: list[dict[str, str]] = []
-    # Built once, up front, and keyless: constructing it sends nothing. The
-    # dry-run cost quote needs its region count, and the region count is
-    # exactly what the old quote left out.
-    provider = OddsApiProvider()
     listing_cost = 0
     seen: set[str] = set()
     cursor = start
@@ -237,6 +233,10 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     events: list[dict[str, str]] = []
+    # Built once, up front, and keyless: constructing it sends nothing. The
+    # dry-run cost quote needs its region count, and the region count is
+    # exactly what the old quote left out.
+    provider = OddsApiProvider()
     listing_cost = 0
     if args.events_file:
         events = json.loads(Path(args.events_file).read_text(encoding="utf-8"))
