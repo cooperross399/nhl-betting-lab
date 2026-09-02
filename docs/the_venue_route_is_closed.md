@@ -5,9 +5,15 @@
 ## The question
 
 The props model finishes **−0.29% over 25,947 wagers** (95% −1.5% to +0.9%,
-**no demonstrated edge**) against a **−2.70%** null baseline. It therefore
-recovers about 2.4 of the 2.7 points of margin it pays — roughly 87% of the
-toll — and stops a third of a point short of break-even.
+**no demonstrated edge**). Against a direction-neutral baseline — both sides
+of every two-sided market at the best price, **−5.74%** — it recovers about
+5.45 points and stops a third of a point short of break-even.
+
+*(Corrected 2026-09-02: this read "against a −2.70% null … roughly 87% of the
+toll". That null was every wager with a positive model edge, a population
+already 77.6% unders, so it silently contained the model's own direction. The
+conclusion below is unaffected — the toll is what it is regardless of the
+baseline the model is scored against.)*
 
 Thirteen external inputs and nine feature families have failed to forecast
 better. That left one arithmetically obvious route that had never been tested:
@@ -71,6 +77,26 @@ The `us,us2` region string stays. The comment in
 Cooper cannot open is not reachable" — which was always looser than it read,
 since offshore books are already in the store. It is now justified on
 measurement instead: the excluded regions were priced, and they are worse.
+
+## One correction to scope, 2026-09-02
+
+"No exchange lists NHL player props" is true of **this provider's feed** and
+false of the world. Kalshi runs four NHL player-prop series — `KXNHLPTS`,
+`KXNHLAST`, `KXNHLSAVES`, `KXNHLGOAL`, settling off NHL.com — which The Odds
+API's `us_ex` region does not relay. Verified against Kalshi's public API.
+
+It does not reopen the route, for a reason specific to its fee design. Kalshi
+charges a **quadratic** fee (`fee_type: quadratic`, confirmed on the series
+record), which is **maximised at a 50/50 price** — precisely where NHL props
+sit. At even money the taker fee runs about 3.5% of stake, against a per-side
+6.27% ÷ 2 ≈ **3.1%** at DraftKings. So as a taker the exchange is *dearer*
+than the book already in use, and the sub-1% figure applies only to the maker
+side — which means quoting into exactly the stale-ice-time adverse selection
+that `docs/where_the_remaining_error_lives.md` identifies as this model's
+largest residual error. There were no open markets to measure at the time of
+writing (off-season), so spread and depth are untested.
+
+Worth a forward look once the season opens; not a route on current evidence.
 
 Reproduce with `scripts/probe_low_vig_venues.py` (`--list-events` prints the
 cached events; the workflow is **Venue Probe**, manual dispatch, capped).

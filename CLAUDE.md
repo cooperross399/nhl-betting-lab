@@ -114,12 +114,66 @@ Re-derive rather than trust if the data has moved.
   `best_price_per_wager` on a full key, and both buy scripts pass whole rows),
   so this was a trap rather than a live defect, and it was found by an analysis
   script walking into it. It now raises and names the missing column.
-- **The model is 0.34 points from break-even, and the remaining loss is one
-  cell.** Betting every wager it has an opinion on returns −2.70% over
-  100,805; its own selection returns −0.34% over 26,091, so the selection is
-  worth **+2.35 points**. An earlier version of this file said the model
-  carried no information — that was true of the *magnitude* of its
-  disagreement and false of the model, and the two were conflated.
+- **The −2.70% null was misdocumented, and the error flattered the model.**
+  "Betting every wager it has an opinion on" meant every wager with a
+  **positive** model edge — a population already **77.6% unders**, so the null
+  already contained the model's direction. Betting literally every wager
+  returns **−27.45% over 475,395**, wrecked by 153,320 longshot alternate-line
+  overs at implied <0.10 returning −71.6%. The −2.70% reproduces exactly
+  (−2.63%, n=99,931) under the correct reading. Quoting it as "the model
+  recovers 87% of the vig" was wrong in the model's favour and that phrasing
+  reached two external reviews before it was caught.
+- **The honest decomposition, which is better for the model than the wrong
+  one was.** Anchored on a direction-neutral baseline (bet both sides of every
+  two-sided market, best price): −5.74% → blind unders −3.90% → the model's
+  90.1/9.9 side mix −4.26% → the shipped card −0.29%. So **direction is worth
+  +1.85 points, side mix is worth −0.37, and within-side selection is worth
+  +3.97** — the three reconcile exactly. Selection carries all of the weight.
+- **The model's selection is real and survives a placebo, which nothing else
+  in this project has.** Its unders beat a size-matched random draw of unders
+  it did not pick by +4.75 points, and **+3.34 points [+1.04%, +5.71%]** after
+  matching on market × line × 5-point price bucket (107 cells, 99.9% of the
+  card). Bonferroni-corrected for 7 markets: [+0.14%, +6.54%]. It reproduces
+  in both seasons (+2.90, +4.05) — including 2025-26, where the over-shade
+  disappears entirely (+0.0032, includes zero), which is the strongest
+  available evidence that the selection is not the direction in disguise.
+  **Not redundant is not profitable:** the card is still −0.29% over 25,947,
+  95% [−1.76%, +1.19%], **no demonstrated edge**.
+- **Above its own 6-point bar the edge ranks nothing.** ROI slope on claimed
+  edge inside the unders +0.337 [−0.081, +0.734]; inside the overs −0.352
+  [−1.357, +0.701]. Both include zero. Ranking the card's own bets by claimed
+  edge does not beat ranking them at random (top-1000 permutation p=0.069).
+  The 6% bar is a **gate that works and a ranking that does not** — do not
+  size by edge, do not trim to a top decile, and do not read 6% as a measured
+  optimum. Below the bar the edge does rank, within fixed price buckets
+  (+6.61 points top vs bottom quintile), so the ranking is real and exhausted
+  by the time the gate fires.
+- **No threshold rescues the model, and not for the reason it looked like.**
+  Realised over-edge regressed on model–market disagreement gives a slope of
+  **0.18**, so a 6-point disagreement is worth ~1.1 points of true edge
+  against a 2.70-point toll; clearing the toll needs ~15 points of
+  disagreement, which **does occur** (3.0% of markets, n=6,474). But every
+  threshold from 0% to 25% has an interval including zero, the sweep is
+  **flat, not decreasing** (so there is no winner's curse — the curse is a
+  uniform 24% haircut on claimed edge, not a reversal), and the swept optimum
+  of 16% (+4.55%) sits at the 64th percentile of a permutation null
+  (p=0.36) and collapses to **−0.00% held out**.
+- **The model anticipates price movement, but negligibly.** Its disagreement
+  with the card price predicts the direction of the move to the late window:
+  +0.0112 logit per unit [+0.0095, +0.0127], **after** controlling for mean
+  reversion, and 0 of 200 permutations that destroy only its player-level
+  information reach that coefficient (z=58.8). But reversion is ~17× stronger,
+  and the effect is worth about 0.06 probability points per standard
+  deviation. Real, and not worth money on its own.
+- **The over side is a measured drag.** The card's 2,572 overs return
+  **−4.48%** and cost 0.37 points. Dropping the over side entirely is the one
+  change this analysis actively supports — it was not pre-registered, so it is
+  a hypothesis for a forward test, not a finding.
+- **The store holds no line-movement capture yet, only two fixed windows**
+  (card ~9.5h, late ~4.07h; median gap 5.50h with an IQR of exactly
+  5.50–5.50h). The shipped bets were struck at the **later** of the two, so
+  beat-the-close is undefined rather than negative, and any event study of
+  price reaction is a forward exercise from 2026-09-29 onward.
 - **The loss is stale ice time, measured to four times the size of the loss
   itself.** Split the card by whether a player's near-future usage rises or
   falls against the model's trailing-ten estimate: usage about to fall
