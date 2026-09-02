@@ -300,6 +300,7 @@ finish.
 | [`docs/nhl_data_sources.md`](docs/nhl_data_sources.md) | Every source, and what it cannot tell us |
 | [`docs/puck_drop_guard.md`](docs/puck_drop_guard.md) | Why a started game can never be a play |
 | [`docs/when_this_ends.md`](docs/when_this_ends.md) | The pre-registered stopping rule, and the date |
+| [`docs/the_venue_route_is_closed.md`](docs/the_venue_route_is_closed.md) | Pinnacle and the exchanges, priced: dearer, or no props at all |
 | [`docs/goalie_props_need_a_confirmed_starter.md`](docs/goalie_props_need_a_confirmed_starter.md) | A measurement that was asking the wrong question |
 | [`docs/why_ice_time_gets_its_own_correction.md`](docs/why_ice_time_gets_its_own_correction.md) | The mechanism behind the conditional correction |
 | [`docs/provider_allowlist_approval.md`](docs/provider_allowlist_approval.md) | How a market becomes trusted |
