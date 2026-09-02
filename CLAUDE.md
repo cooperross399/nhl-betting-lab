@@ -231,9 +231,26 @@ Re-derive rather than trust if the data has moved.
   and the effect is worth about 0.06 probability points per standard
   deviation. Real, and not worth money on its own.
 - **The over side is a measured drag.** The card's 2,572 overs return
-  **−4.48%** and cost 0.37 points. Dropping the over side entirely is the one
-  change this analysis actively supports — it was not pre-registered, so it is
-  a hypothesis for a forward test, not a finding.
+  **−4.48%** [−8.92%, −0.10%] and cost 0.37 points. Dropping the over side is
+  the one change the analysis actively supports — but it was not
+  pre-registered, so it is now written down as a hypothesis with a forward
+  test and a decision rule (`docs/pre_registered_over_side_drop.md`, 2026-09-02).
+  **The card is not changed:** both sides keep being priced and frozen,
+  because dropping the side now would destroy the only sample that could test
+  it, and a rule that removes its own evidence can never be wrong.
+- **The promotion half of the deployment signal is now collected.**
+  `capture_deployment.py` records who is OUT; `capture_line_combinations.py`
+  records who moved UP — first line, top power-play unit — which is the
+  "usage about to rise" event that costs −6.44% over 5,661 bets. Both run in
+  the Line Movement job beside the price capture, so all three share an
+  instant. Rehearsed 2026-09-02: 32 teams, 1,236 role rows, 655 players.
+  **Every row carries two timestamps and they are not interchangeable:**
+  `source_updated_at` is the source's claim about freshness, `retrieved_at` is
+  when this lab held the value, and `line_combinations.usable_before` gates on
+  the second and never the first. Gating on the source's own stamp would let a
+  page fetched tonight count as available this afternoon, which would
+  manufacture a deployment edge out of information nobody had. It cannot be
+  collected retroactively — the source keeps no archive.
 - **The store holds no line-movement capture yet, only two fixed windows**
   (card ~9.5h, late ~4.07h; median gap 5.50h with an IQR of exactly
   5.50–5.50h). The shipped bets were struck at the **later** of the two, so

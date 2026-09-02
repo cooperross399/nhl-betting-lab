@@ -92,8 +92,10 @@ jobs:
           mkdir -p data/processed
           gh run download "$previous" --name line-movement --dir data/processed \
             || echo "Nothing to restore; continuing."
-          ls -la "data/processed/line_movement/$DAY.csv" 2>/dev/null \
-            || echo "No file for $DAY yet; this is the day's first capture."
+          for store in line_movement deployment line_combinations; do
+            ls -la "data/processed/$store/$DAY.csv" 2>/dev/null \
+              || echo "No $store file for $DAY yet; this run starts it."
+          done
 
       - name: Capture prices
         env:
@@ -119,6 +121,24 @@ jobs:
         run: |
           python scripts/capture_deployment.py
 
+      - name: Capture line combinations
+        # The other half of the deployment signal. `capture_deployment.py`
+        # records who is OUT; this records who moved UP -- promoted to the
+        # first line or onto the top power-play unit, which is exactly the
+        # "usage about to rise" event that costs the model -6.44% over 5,661
+        # bets. Same run as the prices, so the two share an instant.
+        #
+        # Free, no provider credits, so it runs even when the price capture
+        # is capped or fails. It CANNOT be collected retroactively: the
+        # source publishes only its current lines and keeps no archive, so a
+        # night not captured is gone.
+        if: always()
+        continue-on-error: true
+        env:
+          PYTHONPATH: src
+        run: |
+          python scripts/capture_line_combinations.py
+
       - name: Keep the captures
         if: always()
         uses: actions/upload-artifact@v4
@@ -127,6 +147,7 @@ jobs:
           path: |
             data/processed/line_movement
             data/processed/deployment
+            data/processed/line_combinations
           if-no-files-found: warn
           retention-days: 90
           overwrite: true
