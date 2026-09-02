@@ -41,6 +41,13 @@ on:
         type: string
         required: false
         default: "600"
+      rehearse_lines:
+        description: >-
+          Fetch line combinations even with no games today. Proves a GitHub
+          runner can still reach the source; costs no provider credits.
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
@@ -137,7 +144,15 @@ jobs:
         env:
           PYTHONPATH: src
         run: |
-          python scripts/capture_line_combinations.py
+          # A source that blocks cloud IPs would look exactly like a quiet
+          # night, and the first game day is the worst time to find out. The
+          # rehearsal flag exists so the fetch path can be proven from a
+          # runner before the season, not assumed.
+          if [ "${{ inputs.rehearse_lines }}" = "true" ]; then
+            python scripts/capture_line_combinations.py --ignore-schedule
+          else
+            python scripts/capture_line_combinations.py
+          fi
 
       - name: Keep the captures
         if: always()
