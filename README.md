@@ -183,6 +183,19 @@ PYTHONPATH=src .venv/bin/python scripts/buy_historical_props.py \
 # One event: find out which prop markets the provider retains at all.
 PYTHONPATH=src .venv/bin/python scripts/buy_historical_props.py \
     --probe --live --credit-cap 60
+
+# Free: which (event, snapshot) pairs the raw cache holds. Pick one the
+# store has, so the venues are compared at the same moment.
+PYTHONPATH=src .venv/bin/python scripts/probe_low_vig_venues.py --list-events
+
+# Free: print what the venue probe would ask, and its worst case, and stop.
+PYTHONPATH=src .venv/bin/python scripts/probe_low_vig_venues.py
+
+# One event, one snapshot, capped: do Pinnacle, Novig, ProphetX and Betfair
+# quote NHL player props at all, and at what margin? The venues outside
+# `us,us2`. Also runnable as the manual-dispatch Venue Probe workflow.
+PYTHONPATH=src .venv/bin/python scripts/probe_low_vig_venues.py \
+    --live --credit-cap 400
 ```
 
 # Team markets, from the bulk endpoint — far cheaper, per snapshot not per event
@@ -260,6 +273,7 @@ finish.
 | Closing Lines | hourly through the evening in season | yes, capped |
 | Provider Market Discovery | on demand | yes, capped |
 | Historical Props Purchase | on demand only, never scheduled | yes, capped, required cap |
+| Venue Probe | on demand only, never scheduled | yes, capped, required cap |
 | Line Movement Capture | several times daily in season | yes, capped |
 | Experiment Refresh | weekly | no |
 

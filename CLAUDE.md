@@ -356,7 +356,23 @@ Re-derive rather than trust if the data has moved.
   state artifact restores the previous run's samples forever, which would
   have reproduced the biased totals measurement indefinitely.
 - **The measured historical rate is ten credits per market returned per
-  event.** Quota: **88,527 of 100,000 remaining** as of 2026-08-26.
+  event, per region.** One provider account funds every lab, and its quota
+  is **3,635,739 remaining of 5,000,000** as of 2026-09-02 (1,364,261 used
+  this cycle; read from the sibling lab's scheduled quota check). This line
+  said "88,527 of 100,000" until 2026-09-02 — a figure from before the plan
+  changed, forty times too small, and the denominator under every "fits the
+  quota" sentence below. Those conclusions still hold; the margin is simply
+  far wider than they state.
+- **The props cost estimate omitted the region multiplier for its whole
+  life.** `historical_props.estimate_credits` computed `events x markets x
+  10` while the provider bills `10 x markets returned x regions` and the lab
+  asks for `us,us2`. So the "107 an event against a predicted 70" above was
+  not the documented rule being wrong: it was the rule with the region factor
+  applied (10 x ~5.35 returned x 2) and the estimate leaving it out. The
+  sibling `historical_team_prices.estimate_credits` carried the factor from
+  the day it was written. The measured-spend gate meant nothing overspent
+  because of it, but every dry-run quote was half the real figure. Callers
+  now pass `provider.region_count`.
 - **A player's side comes from the roster, not from his last game.** The
   models learn rates from game logs and that is right — shooting travels with
   the player — but the logs also carry the club he last played for, which in

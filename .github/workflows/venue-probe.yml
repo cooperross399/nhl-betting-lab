@@ -1,0 +1,126 @@
+name: Venue Probe
+
+# Asks one question of one past event: do the low-vig venues — Pinnacle, the
+# US exchanges Novig and ProphetX, Betfair — quote NHL player props at all,
+# and at what margin? The props model is 0.29 points short of break-even
+# while recovering most of the toll it pays, so a venue with a smaller toll
+# is the last untested route. Every one of those venues sits outside the
+# `us,us2` region string this lab has always asked for.
+#
+# THIS SPENDS CREDITS. The historical per-event endpoint bills ten per
+# market returned per region, so a venue returning no props bills nothing
+# and the negative answer is nearly free; the positive one is bounded by the
+# cap, which is enforced against the measured running total before every
+# request. Manual-dispatch only; it will never be put on a schedule.
+on:
+  workflow_dispatch:
+    inputs:
+      credit_cap:
+        description: "Hard cap on credits for this run. Required."
+        type: string
+        required: true
+        default: "400"
+      regions:
+        description: "Comma-separated provider regions to try, one call each"
+        type: string
+        required: false
+        default: "us_ex,eu,uk,au"
+      event_id:
+        description: "Provider event id to ask about. Locally, `probe_low_vig_venues.py --list-events` prints the cached pairs; pick one the store holds. No default on purpose: the id is key-shaped and never sits in a tracked file."
+        type: string
+        required: true
+      snapshot:
+        description: "ISO instant to price at, e.g. 2025-01-14T20:10:00Z — the same snapshot the store holds for that event"
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    name: Low-vig venue probe
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install project
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install -e .
+
+      - name: Check the provider credential
+        env:
+          NHL_ODDS_API_KEY: ${{ secrets.NHL_ODDS_API_KEY }}
+          PYTHONPATH: src
+        run: |
+          python scripts/check_provider_credential.py
+
+      - name: Report the quota before spending any of it
+        env:
+          NHL_ODDS_API_KEY: ${{ secrets.NHL_ODDS_API_KEY }}
+          PYTHONPATH: src
+        run: |
+          python scripts/check_provider_quota.py \
+            --fail-under "${{ inputs.credit_cap }}"
+
+      - name: State the cost before spending it
+        env:
+          PYTHONPATH: src
+        run: |
+          echo "Hard credit cap: ${{ inputs.credit_cap }}"
+          echo "Regions: ${{ inputs.regions }}"
+          python scripts/probe_low_vig_venues.py --regions "${{ inputs.regions }}" \
+            --event-id "${{ inputs.event_id }}" --snapshot "${{ inputs.snapshot }}"
+
+      - name: Probe the venues
+        env:
+          NHL_ODDS_API_KEY: ${{ secrets.NHL_ODDS_API_KEY }}
+          PYTHONPATH: src
+        run: |
+          python scripts/probe_low_vig_venues.py --live \
+            --credit-cap "${{ inputs.credit_cap }}" \
+            --regions "${{ inputs.regions }}" \
+            --event-id "${{ inputs.event_id }}" --snapshot "${{ inputs.snapshot }}"
+
+      - name: Write the result to the run summary
+        if: always()
+        run: |
+          {
+            echo "## Low-vig venue probe"
+            echo
+            cat data/outputs/low_vig_venue_probe.md 2>/dev/null \
+              || echo "No probe report was produced."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload what came back
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: venue-probe
+          path: |
+            data/outputs/low_vig_venue_probe.json
+            data/outputs/low_vig_venue_probe.md
+            data/raw/historical_props/venue_probe
+          if-no-files-found: warn
+          retention-days: 90
+
+      - name: Confirm the boundary
+        if: always()
+        run: |
+          echo "This job asked one event which venues quote its props."
+          echo "It placed no bet, edited no policy, wrote no receipt, and"
+          echo "allowlisted no venue or market."

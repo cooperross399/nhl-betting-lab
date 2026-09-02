@@ -14,6 +14,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import sys
+import types
 from pathlib import Path
 from types import ModuleType
 
@@ -403,7 +404,9 @@ def test_an_empty_purchase_never_replaces_a_file_that_holds_something(
 
     with mock.patch.object(module.hist, "buy_historical_props", BuysNothing()):
         with mock.patch.object(module, "OddsApiProvider") as provider:
-            provider.return_value = object()
+            # main reads the region count for the cost quote before the
+            # buy, so the stand-in has to look that much like a provider.
+            provider.return_value = types.SimpleNamespace(region_count=1)
             module.main(
                 [
                     "--live",
