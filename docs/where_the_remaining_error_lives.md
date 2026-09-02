@@ -1,9 +1,24 @@
 # Where the remaining error lives
 
-The model recovers most of the vig and stops short. Betting every wager it
-has an opinion on returns **−2.70%** over 100,805; its own 6% selection
-returns **−0.34%** over 26,091. The selection is worth **+2.35 points**. This
-document is about the 0.34 that is left, and it is not a mystery any more.
+The model recovers most of the vig and stops short.
+
+**Corrected 2026-09-02.** This paragraph used to read "betting every wager it
+has an opinion on returns −2.70% over 100,805". That population is every
+wager with a **positive** model edge, and it is already 77.6% unders — so the
+null quoted here already contained the model's own direction, and "the
+selection is worth +2.35 points" credited the model with a gap it had partly
+been handed. Betting literally every wager returns **−27.45% over 475,395**.
+
+Against a direction-neutral baseline the honest arithmetic is: both sides of
+every two-sided market **−5.74%** → blind unders **−3.90%** → the model's
+90.1/9.9 side mix **−4.26%** → the shipped card **−0.29%** over 25,947, 95%
+[−1.76%, +1.19%], **no demonstrated edge**. Direction is worth +1.85 points,
+side mix −0.37, and **within-side selection +3.97** — which is where the real
+skill is, and it survives matching on market × line × price bucket
+(+3.34 points [+1.04%, +5.71%], both seasons).
+
+This document is about the third of a point that is left, and it is not a
+mystery any more.
 
 ## The loss is one cell, and it is four times the size of the whole loss
 
