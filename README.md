@@ -173,6 +173,13 @@ PYTHONPATH=src .venv/bin/python scripts/capture_line_movement.py --live \
 # scratch public before the market moved?" answerable a season from now.
 PYTHONPATH=src .venv/bin/python scripts/capture_deployment.py
 
+# Capture who was PROMOTED, and when that became knowable. The other half of
+# the deployment signal: scratches say who is out, this says who moved up to
+# the first line or the top power-play unit — the "usage about to rise" event
+# that costs the model -6.44% over 5,661 bets. Free, no provider credits,
+# game days only, polite delay. CANNOT be collected retroactively.
+PYTHONPATH=src .venv/bin/python scripts/capture_line_combinations.py
+
 ### Historical prices — the expensive one
 
 ```bash
@@ -301,6 +308,7 @@ finish.
 | [`docs/puck_drop_guard.md`](docs/puck_drop_guard.md) | Why a started game can never be a play |
 | [`docs/when_this_ends.md`](docs/when_this_ends.md) | The pre-registered stopping rule, and the date |
 | [`docs/the_venue_route_is_closed.md`](docs/the_venue_route_is_closed.md) | Pinnacle and the exchanges, priced: dearer, or no props at all |
+| [`docs/pre_registered_over_side_drop.md`](docs/pre_registered_over_side_drop.md) | A hypothesis registered before the season, and what would settle it |
 | [`docs/goalie_props_need_a_confirmed_starter.md`](docs/goalie_props_need_a_confirmed_starter.md) | A measurement that was asking the wrong question |
 | [`docs/why_ice_time_gets_its_own_correction.md`](docs/why_ice_time_gets_its_own_correction.md) | The mechanism behind the conditional correction |
 | [`docs/provider_allowlist_approval.md`](docs/provider_allowlist_approval.md) | How a market becomes trusted |
