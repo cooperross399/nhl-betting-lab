@@ -70,6 +70,56 @@ def test_the_estimate_is_the_upper_bound_not_a_prediction() -> None:
     assert hist.estimate_credits(events=12, markets=6) == 720
 
 
+def test_the_estimate_multiplies_by_the_regions_asked_for() -> None:
+    """The provider bills `10 x markets returned x regions`, and the lab asks
+    for `us,us2`. This estimate left the region factor out for its whole
+    life, which is why "107 an event against a predicted 70" read as the
+    documentation being wrong: it was the rule with the factor applied and
+    the estimate without it. The team-prices twin has carried it since it
+    was written."""
+    assert hist.estimate_credits(events=12, markets=6, regions=2) == 1440
+    assert hist.estimate_credits(events=12, markets=6, regions=1) == 720
+    # A nonsense region count is treated as one, never as zero: an estimate
+    # of nothing would let a request start against an unbounded cap.
+    assert hist.estimate_credits(events=12, markets=6, regions=0) == 720
+
+
+def test_the_cost_note_carries_the_region_factor() -> None:
+    note = hist.cost_note(events=12, markets=6, regions=2)
+
+    assert "between **144**" in note
+    assert "1,440 credits" in note or "1440 credits" in note
+
+
+def test_the_probe_estimate_uses_the_provider_region_count(tmp_path: Path) -> None:
+    """The estimate is the pessimistic bound a request is allowed to start
+    against. With `us,us2` it has to be twice the one-region figure, or the
+    bound stops being pessimistic the moment a second region is asked for."""
+    requester = RecordingRequester(
+        {
+            "/historical/": FakeResponse(
+                _snapshot(["player_points"]),
+                headers={"x-requests-last": "2", "x-requests-remaining": "4998"},
+            )
+        }
+    )
+    provider = OddsApiProvider(
+        environment=ENVIRONMENT, requester=requester, regions="us,us2"
+    )
+
+    probe = hist.probe_retention(
+        provider,
+        event_id="evt1",
+        snapshot="2025-01-05T19:00:00Z",
+        markets=["player_points"],
+        raw_dir=tmp_path,
+    )
+
+    assert provider.region_count == 2
+    assert probe.credits_estimated == 20, "one market, ten a region, two regions"
+    assert probe.credits_spent == 2
+
+
 def test_the_cost_note_states_a_range_rather_than_a_number() -> None:
     note = hist.cost_note(events=12, markets=6)
 

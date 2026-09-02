@@ -182,7 +182,7 @@ class HistoricalBuy:
         )
 
 
-def estimate_credits(*, events: int, markets: int) -> int:
+def estimate_credits(*, events: int, markets: int, regions: int = 1) -> int:
     """A bound used to decide whether to start a request. **Not a guarantee.**
 
     Not a prediction either. The provider's documentation is ambiguous about
@@ -197,15 +197,26 @@ def estimate_credits(*, events: int, markets: int) -> int:
     computed from the keys asked for is not an upper bound on what is
     charged. The caller therefore also enforces the cap against MEASURED
     spend, which is the gate that cannot be mis-specified.
+
+    `regions` is the multiplier this function omitted for its whole life.
+    The provider bills `10 x markets returned x regions`, and the lab asks
+    for `us,us2` -- two regions. So the measured 107 an event was not the
+    documented rule being wrong; it was the documented rule with the region
+    factor applied (10 x ~5.35 returned x 2) and this estimate leaving it
+    out. The sibling `historical_team_prices.estimate_credits` has carried
+    the factor since it was written. Callers pass `provider.region_count`.
     """
     return (
-        int(events) * int(markets) * HISTORICAL_CREDITS_UPPER_BOUND_PER_MARKET
+        int(events)
+        * int(markets)
+        * max(1, int(regions))
+        * HISTORICAL_CREDITS_UPPER_BOUND_PER_MARKET
     )
 
 
-def cost_note(*, events: int, markets: int) -> str:
-    upper = estimate_credits(events=events, markets=markets)
-    lower = int(events) * int(markets)
+def cost_note(*, events: int, markets: int, regions: int = 1) -> str:
+    upper = estimate_credits(events=events, markets=markets, regions=regions)
+    lower = int(events) * int(markets) * max(1, int(regions))
     return (
         f"{events} event(s) x {markets} market(s): between **{lower:,}** and "
         f"**{upper:,} credits**. The provider documents 10x per market for "
@@ -349,7 +360,9 @@ def probe_retention(
         snapshot=str(snapshot),
         markets_requested=wanted,
     )
-    probe.credits_estimated = estimate_credits(events=1, markets=len(wanted))
+    probe.credits_estimated = estimate_credits(
+        events=1, markets=len(wanted), regions=provider.region_count
+    )
     path = _cache_path(event_id, snapshot, raw_dir=raw_dir, markets=wanted)
     payload = _read_cache(path)
     if payload is None:
@@ -422,7 +435,9 @@ def buy_historical_props(
     # The cap is checked against the pessimistic bound so a request that
     # *might* breach it is never started; spend is then accounted at the real
     # rate the headers report. The two differ on purpose.
-    worst_case_per_event = estimate_credits(events=1, markets=len(wanted))
+    worst_case_per_event = estimate_credits(
+        events=1, markets=len(wanted), regions=provider.region_count
+    )
     buy = HistoricalBuy(events_requested=len(events))
     worst_case_spent = 0
 

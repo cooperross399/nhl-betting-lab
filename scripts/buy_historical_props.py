@@ -94,6 +94,10 @@ def _events_in_window(
     independent information than a hundred spread across a season.
     """
     events: list[dict[str, str]] = []
+    # Built once, up front, and keyless: constructing it sends nothing. The
+    # dry-run cost quote needs its region count, and the region count is
+    # exactly what the old quote left out.
+    provider = OddsApiProvider()
     listing_cost = 0
     seen: set[str] = set()
     cursor = start
@@ -245,7 +249,6 @@ def main(argv: list[str] | None = None) -> int:
             )
             return 0
         try:
-            provider = OddsApiProvider()
             events, listing_cost = _events_in_window(
                 provider,
                 date.fromisoformat(args.start),
@@ -278,7 +281,11 @@ def main(argv: list[str] | None = None) -> int:
         events = events[::step][: args.probe_events]
 
     print(
-        hist.cost_note(events=len(events), markets=len(markets))
+        hist.cost_note(
+            events=len(events),
+            markets=len(markets),
+            regions=provider.region_count,
+        )
         if events
         else "No events in scope."
     )
@@ -291,7 +298,6 @@ def main(argv: list[str] | None = None) -> int:
     if not events:
         return 0
 
-    provider = OddsApiProvider()
     outputs = Path(args.output_dir)
     outputs.mkdir(parents=True, exist_ok=True)
 
