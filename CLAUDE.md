@@ -79,14 +79,15 @@ Re-derive rather than trust if the data has moved.
   **measured running total** read from `x-requests-last`, which is the gate
   that cannot be mis-specified. The test that asserted the false promise was
   replaced rather than satisfied.
-- **The lab measures one thing and ships another, by five and a half hours.**
-  Every historical price was bought at a median **4.0 hours** before face-off
-  (p10 4.0, p90 4.0). The production card runs **9.5 hours** before a 19:00
-  ET face-off, its backup 8.0. So every number here describes a window the
-  card does not operate in. It is the stale-minutes finding in structural
-  form: at four hours the lineup is largely known, at nine and a half it is
-  guessed, and the card is priced in the poorer window while the measurement
-  was taken in the richer one. Being bought and measured, not argued about.
+- **The lab measured one thing and shipped another, by five and a half hours;
+  it now holds both.** The first purchase bought every historical price at a
+  median **4.0 hours** before face-off (p10 4.0, p90 4.0), while the
+  production card runs **9.5 hours** before a 19:00 ET face-off, its backup
+  8.0 — so every number here described a window the card does not operate in.
+  It is the stale-minutes finding in structural form: at four hours the lineup
+  is largely known, at nine and a half it is guessed. The second purchase
+  bought the card's own window, and both are on disk and separately measured.
+  Being bought and measured, not argued about.
 - **A store holding two windows now refuses to be measured as one.**
   `stores.label_phases` derives hours-before-face-off from the snapshot, the
   backtest auto-detects the window and **raises** if the store holds more
@@ -104,6 +105,70 @@ Re-derive rather than trust if the data has moved.
   error instructing an impossible action reads as operator error and sends the
   reader hunting their own mistake. The flag exists now, and a test asserts the
   message names a flag the runner actually accepts.
+- **And naming a window the store did not have measured every window at
+  once.** The phase filter was applied only `if not kept.empty`, so
+  `--phase card` against a store holding nothing but four-hour prices left the
+  whole frame in scope and reported it under no label — the same silent
+  fall-through the auto-detect was written to remove, still live on the path
+  where a window is named. It had never fired because nothing named a window;
+  both workflows now do, on every run. A named window that matches nothing
+  measures nothing and says so. The three instalments of this guard —
+  hardcoded and matching nothing, an error naming a flag that did not exist,
+  and a named window falling through — are one lesson: **a filter that does
+  nothing when it matches nothing is not a filter.**
+- **The second window then overwrote the first, and 89.5% of the measured
+  population was deleted without a word.** `PRICE_IDENTITY` carries no
+  timestamp — correctly, because two labels of one moment are one quote — so
+  when the 9.5-hour purchase was appended to a store already holding the same
+  2,710 events at 4.0 hours, every card-window quote landed on the identity of
+  the four-hour quote it matched and `keep="last"` gave the collision to the
+  newcomer. **1,126,739 of the 1,259,312 four-hour rows were destroyed**,
+  leaving 132,573 — only the quotes whose line or book happened not to recur.
+  Nothing raised, the store still held 2,675,428 rows, and
+  `player_props_backtest.md` went on reporting "−0.3% over 25,947 bets, 4.0
+  hours before face-off" against a store that could produce 8,007. Replaying
+  the append on the real files reproduces the store on disk **to the row**
+  (2,675,428) under the old key and keeps 3,802,164 under the new one. The key
+  is now the quote **plus the window** `label_phases` derives, which is the
+  granularity every measurement here already slices on: over-collapsing inside
+  a window costs nothing the backtest can see, under-collapsing across windows
+  costs a window.
+- **It was recoverable, because the raw cache is the evidence and the CSV is
+  not.** Every response was still in `data/raw/historical_props` — 5,688
+  event-odds files, 2,723 events, both windows — so `rebuild_price_files.py`
+  reconstructed the store: **3,804,233 rows**, and the rebuilt four-hour
+  window is identical on the quote identity to the store the purchase run
+  uploaded minutes before the clobber (1,259,309 quotes, zero rows different
+  in either direction). The local checkout held 516 of those 6,252 cached
+  files and the rest were in the CI artifacts; both have been restored to
+  disk. This is the second time the raw cache has turned a destroyed price
+  file into a five-minute recovery.
+- **Both windows are now measured, and neither shows a demonstrated edge.**
+  `late` (T−4.07h, 1,259,312 rows, 2,704 events, 8 books, 6 markets):
+  **25,009 bets, −0.2%, 95% interval −1.5% to +1.0%**. `card` (T−9.57h,
+  2,544,921 rows, 2,722 events, 14 books, 7 markets): **27,286 bets, −0.0%,
+  95% interval −1.2% to +1.2%**. Both include zero. Per market in the card
+  window: `points` −4.3% (5,933) and `blocked_shots` +8.4% (2,894) both still
+  exclude zero and survive the family correction; `shots_on_goal` +1.5%
+  (8,899), `assists` −1.0% (3,609), `hits` −1.2% (5,021), `goals` −2.6%
+  (820), `goalie_saves` −2.1% (110) all span zero. In the late window
+  `points` −4.5% (5,984) and `blocked_shots` +5.2% (4,126) survive; the rest
+  span zero. **These two rows are not a window comparison.** The 9.5-hour buy
+  asked a second region and got six more books, so its best-of-N is taken
+  across fourteen rather than eight; it carries `hits`, which the four-hour
+  buy has none of; and it holds almost no `goalie_saves` (110 bets against
+  1,680), because at nine and a half hours the books have not yet posted them.
+  The window question was already answered on the matched overlap — +4.41%
+  against +4.18%, −0.23 points — and that comparison stands.
+- **The canonical 25,947 does not reproduce from anything that still
+  exists.** The rebuilt four-hour window gives 25,009 bets, and so does the
+  purchase artifact that preceded the clobber; the 2026-08-29 artifact gives
+  25,050. **24,996 of the canonical report's 25,947 bets reproduce exactly** —
+  same book, same odds, model probability identical to the last bit — 951 do
+  not, and 13 are new. So the recorded headline described a local store that
+  no artifact, cache or branch now holds. The verdict is unchanged in every
+  version, which is why this is a bookkeeping failure rather than a result
+  changing: no demonstrated edge, at every population that can be assembled.
 - **`dedupe_prices` deduplicated on whatever identity columns it was handed.**
   `PRICE_IDENTITY` includes `provider_event_id`; a frame read without it has
   nothing telling one date from another, so every night's quote on the same
@@ -253,10 +318,15 @@ Re-derive rather than trust if the data has moved.
   would have to be collected forward from opening night and judged a season
   later. `docs/where_the_remaining_error_lives.md`.
 - **The full two-season population is bought, and the model shows no
-  demonstrated edge on it — in either direction.** 2,710 events, 1,261,440
-  price rows collapsing to **25,949 distinct wagers** at the shipped bar:
-  **−0.3%, 95% interval −1.5% to +0.9%**, which includes zero. The earlier
+  demonstrated edge on it — in either direction.** 2,704 events and 1,259,312
+  four-hour price rows collapsing to **25,009 distinct wagers** at the shipped
+  bar: **−0.2%, 95% interval −1.5% to +1.0%**, which includes zero. The earlier
   +1.4% came from a 192-event sample thirty times smaller and was noise.
+  This bullet used to read "1,261,440 price rows collapsing to 25,949 distinct
+  wagers: −0.3%, −1.5% to +0.9%", and every other count of this population in
+  this file — 26,091, 25,949, 25,947 — is the same local store, which no
+  longer exists and cannot be rebuilt. The figure above is what the raw cache
+  reproduces. Nothing about the verdict moves.
 - **An earlier version of this bullet said −1.6% over 73,918 bets, interval
   excluding zero, and called it a demonstrated loss. That was wrong, and how
   it was wrong is worth keeping.** The price store holds every book's quote
@@ -271,16 +341,19 @@ Re-derive rather than trust if the data has moved.
   **Best-of-N is optimistically biased in the other direction** — the best
   price is the likeliest to be stale — so −0.3% and −1.6% bracket the truth
   rather than one replacing the other. Both ends are ≤ 0.
-  Per market at one bet per wager: `points` **−4.4% (6,202)** still excludes
-  zero and still survives correction; `goalie_saves` −2.5% (1,733) now
-  **spans zero**, where per-quote counting had it as a demonstrated loss;
-  `shots_on_goal` +1.3% (9,395, spans zero); `assists` −1.4% (3,762, spans
-  zero); `goals` −6.8% (564, spans zero). `blocked_shots` is the only
-  positive at +5.0% over 4,293 — and it **failed replication**: same
-  direction on the unseen window but its own interval includes zero, and a
-  window that merely fails to contradict is not confirmation. The only
-  result that survives correction *and* replicates is `points`, a
-  demonstrated deficit rather than an edge.
+  Per market at one bet per wager, on the four-hour window the raw cache
+  reproduces: `points` **−4.5% (5,984)** still excludes zero and still
+  survives correction; `goalie_saves` −2.3% (1,680) now **spans zero**, where
+  per-quote counting had it as a demonstrated loss; `shots_on_goal` +1.4%
+  (9,043, spans zero); `assists` −1.3% (3,630, spans zero); `goals` −6.6%
+  (546, spans zero). `blocked_shots` is the only positive at +5.2% over
+  4,126 — and it **failed replication**: same direction on the unseen window
+  but its own interval includes zero, and a window that merely fails to
+  contradict is not confirmation. The only result that survives correction
+  *and* replicates is `points`, a demonstrated deficit rather than an edge.
+  (These counts read 6,202 / 1,733 / 9,395 / 3,762 / 564 / 4,293 until
+  2026-09-02, against the same population the headline lost; the ROIs move by
+  a tenth of a point and no verdict moves at all.)
 - **The reason it loses is that the model's disagreement with the market
   carries no information.** Fitting its bias on 2024-25 and testing on the
   145,751 opinions of 2025-26 it had not seen: raw error −6.34%, corrected
@@ -436,11 +509,26 @@ Re-derive rather than trust if the data has moved.
   supports, in the house vocabulary. This is the only possible price
   evidence for hits and the regulation three-way, and the accumulating
   out-of-sample test for every market and every shipped policy at once.
-- **Hits and the regulation three-way accumulate evidence forward.** Hits is
-  served live and retained by no book historically (256 events probed, 2,600
-  credits). The three-way is per-event only — and was wired end to end
-  without ever being *requested* until the dead-code test caught it; every
-  declared market must now appear in a fetch list.
+- **Hits is retained historically after all, and "no book keeps it" was a
+  region artifact.** The 256-event probe that concluded hits could not be
+  measured (2,600 credits) asked **one region**, and both books that quote it
+  — ESPN BET and theScore Bet — are in the second. The 9.5-hour purchase,
+  which asked `us,us2`, came back with **16,048 hits rows over 1,218 events**
+  from those two books, 2025-10-14 to 2026-04-19, settling **5,021 wagers at
+  −1.2%, 95% interval −3.9% to +1.5%** — no demonstrated edge, and the first
+  price evidence hits has ever had. The backtest now retires an unmeasurable
+  verdict for any market the same run measures, because printing both in one
+  document is the report contradicting itself — and **retention is no longer
+  a paid snapshot that can go stale.** `buy_historical_props.py --from-cache`
+  derives it from every response ever bought: 5,432 responses over 2,723
+  events, for **zero credits and no network**, against the 256 a probe could
+  afford. All seven prop markets are measurable on that evidence
+  (`player_hits` seen in 1,218 of 5,432), and only responses that requested
+  exactly the market list are read, because a market missing from a request
+  that never mentioned it is not evidence of anything. **The regulation three-way
+  still accumulates forward**: it is per-event only, and it was wired end to
+  end without ever being *requested* until the dead-code test caught it, so
+  every declared market must appear in a fetch list.
 - **The price CSVs are derived data**; every bought response is cached raw
   and the CSVs rebuild from the cache. `build_datasets` refuses to shrink an
   accumulated table by more than half (each file guarded on its own, rows not
@@ -480,7 +568,10 @@ Re-derive rather than trust if the data has moved.
 - **The season fits the quota, measured against the real schedule.** 185
   game days, 1,344 games, 2026-09-29 to 2027-04-10; a mean of 7.3 games a
   night and a maximum of 16. At 19 asked per-event markets that is **26,091
-  credits for one fetch a day** and 52,182 for two, against 88,527 remaining.
+  credits for one fetch a day** and 52,182 for two, against the 3,635,739
+  remaining read on 2026-09-02. (This line said "88,527 remaining" until
+  2026-09-02, a figure from before the plan changed and forty times too
+  small. The conclusion held anyway; the margin is far wider than it said.)
   The 320-credit daily cap clips **zero** of the 185 nights (16 games x 19 =
   304). The second scheduled trigger now stands down when the first already
   published a clean card to `card-feed`, so the ordinary season costs the
@@ -505,31 +596,18 @@ Re-derive rather than trust if the data has moved.
   no lean, no pass and no stake, and says why. `goalie_saves` still cannot
   produce a selection even if allowlisted, for want of a confirmed-starter
   source (`docs/goalie_props_need_a_confirmed_starter.md`).
-- **The season fits the quota, measured against the real schedule.** 185
-  game days, 1,344 games, 2026-09-29 to 2027-04-10; a mean of 7.3 games a
-  night and a maximum of 16. At 19 asked per-event markets that is **26,091
-  credits for one fetch a day** and 52,182 for two, against 88,527 remaining.
-  The 320-credit daily cap clips **zero** of the 185 nights (16 games x 19 =
-  304). The second scheduled trigger now stands down when the first already
-  published a clean card to `card-feed`, so the ordinary season costs the
-  one-run figure and the backup still fires whenever the primary did not
-  finish or finished degraded.
-- **Gameday Refresh runs green end to end** (verified 2026-08-26: live team
-  prices staged, models fitted, card correctly blocked, comment posted).
-  Props return no rows this far from the season — an absence, not a fault.
-  The alternate ladders and all per-event markets ride the per-event fetch;
-  asking the bulk endpoint for them 422s the whole request.
-- **All 11 markets are allowlisted, as of 2026-08-27.** Cooper approved
-  everything by explicit instruction, against the evidence's enable-nothing
-  recommendation — the receipt
-  (`odds_api-20260827T165300-0400-cooperross399`) records both facts and its
-  provenance verbatim, and he merged PR #47 himself. The evidence did not
-  change: **no demonstrated edge** stands everywhere it stood. The card now
-  prices every market and recommends only where the measured bars clear; a
-  slate with no qualifying edge is a no-bet card, which remains correct
-  behaviour and not a failure. `goalie_saves` still cannot produce a
-  selection without a confirmed-starter source
-  (`docs/goalie_props_need_a_confirmed_starter.md`).
+  **The withdrawal cited a number this file now records as wrong, and it
+  still stands.** "−1.6% over 73,918" was per-quote counting, and the
+  reproducible figure is −0.2% over 25,009 — which spans zero, so it
+  demonstrates no edge either. The correction therefore reinstates nothing on
+  its own: withdrawal only ever reduces what the card may do, and only Cooper
+  reading the current evidence and signing a new receipt can move it back.
+  `data/manual/staging_provider_policy.json` is the state that governs, and
+  it allowlists nothing. **An earlier version of this file also carried a
+  bullet saying all eleven markets were allowlisted**, contradicting this one
+  forty lines further down, alongside a verbatim duplicate of the quota
+  paragraph. Both are gone. Two bullets disagreeing about whether the card
+  may bet is the worst possible thing for this file to be unsure of.
 - **The provider's whole NHL catalogue is either wired or recorded as
   deferred with its reason** (`docs/periphery_markets_decision.md`,
   2026-08-27): the six prop alternate ladders and the anytime scorer land on

@@ -473,6 +473,7 @@ def test_the_price_store_deduplicates_on_the_quote_not_the_timestamp() -> None:
 
     quote = {
         "provider_event_id": "evt1",
+        "commence_time": "2025-10-18T19:10:00Z",
         "market": "shots_on_goal",
         "player": "Auston Matthews",
         "selection": "over",
@@ -495,6 +496,78 @@ def test_the_price_store_deduplicates_on_the_quote_not_the_timestamp() -> None:
 
     assert len(out) == 2, "one quote per book, whatever the timestamps say"
     assert set(out["book"]) == {"DraftKings", "BetMGM"}
+
+
+def test_a_second_snapshot_window_does_not_overwrite_the_first() -> None:
+    """Two moments are two quotes, and merging them cost 89.5% of a window.
+
+    A purchase priced 2,710 events at 9.5 hours before face-off into a store
+    already holding the same events at 4.0 hours. `PRICE_IDENTITY` carries no
+    timestamp, so every 9.5-hour quote landed on the identity of the 4.0-hour
+    quote it matched and `keep="last"` gave the collision to the new window:
+    1,126,739 of 1,259,312 four-hour rows were overwritten, leaving 132,573.
+    Nothing raised, the store still held 2.7 million rows, and the canonical
+    report went on naming a population that was no longer on disk.
+    """
+    from nhl_betting_lab.stores import dedupe_prices
+
+    quote = {
+        "provider_event_id": "evt1",
+        "commence_time": "2025-10-18T19:10:00Z",
+        "market": "shots_on_goal",
+        "player": "Auston Matthews",
+        "selection": "over",
+        "line": 2.5,
+        "book": "DraftKings",
+    }
+    # The same wager, at the same book, on two different boards: the card is
+    # built at 9.5 hours and the measurement was bought at 4.0.
+    card = {**quote, "snapshot": "2025-10-18T09:40:00Z", "american_odds": -105.0}
+    late = {**quote, "snapshot": "2025-10-18T15:10:00Z", "american_odds": -130.0}
+
+    out = dedupe_prices(pd.DataFrame([late, card]))
+
+    assert len(out) == 2, (
+        "a nine-hour quote is not a re-label of a four-hour one; collapsing "
+        "them silently deletes the window that was bought first"
+    )
+    assert sorted(out["american_odds"]) == [-130.0, -105.0]
+
+
+def test_deduplicating_prices_that_cannot_be_dated_is_refused() -> None:
+    """Without both timestamps the two windows are indistinguishable.
+
+    Guessing here is the expensive direction: the guess that looked right
+    merged a nine-hour board into a four-hour one and reported success.
+    """
+    import pytest
+
+    from nhl_betting_lab.stores import dedupe_prices
+
+    frame = pd.DataFrame(
+        [
+            {
+                "provider_event_id": "evt1",
+                "commence_time": "2025-10-18T19:10:00Z",
+                "snapshot": "2025-10-18T15:10:00Z",
+                "market": "shots_on_goal",
+                "player": "Auston Matthews",
+                "selection": "over",
+                "line": 2.5,
+                "book": "DraftKings",
+                "american_odds": -115.0,
+            }
+        ]
+    )
+
+    assert len(dedupe_prices(frame)) == 1
+
+    with pytest.raises(ValueError) as caught:
+        dedupe_prices(frame.drop(columns=["commence_time"]))
+
+    message = str(caught.value)
+    assert "commence_time" in message, "say which column is missing"
+    assert "usecols" in message, "say how to fix it"
 
 
 def test_deduplicating_without_the_event_id_is_refused_not_guessed() -> None:
@@ -522,8 +595,12 @@ def test_deduplicating_without_the_event_id_is_refused_not_guessed() -> None:
     # Two genuinely different nights. Identical on every column but the event.
     frame = pd.DataFrame(
         [
-            {**quote, "date": "2025-10-18", "provider_event_id": "evt1"},
-            {**quote, "date": "2025-10-21", "provider_event_id": "evt2"},
+            {**quote, "date": "2025-10-18", "provider_event_id": "evt1",
+             "commence_time": "2025-10-18T19:10:00Z",
+             "snapshot": "2025-10-18T15:10:00Z"},
+            {**quote, "date": "2025-10-21", "provider_event_id": "evt2",
+             "commence_time": "2025-10-21T19:10:00Z",
+             "snapshot": "2025-10-21T15:10:00Z"},
         ]
     )
 
@@ -535,6 +612,145 @@ def test_deduplicating_without_the_event_id_is_refused_not_guessed() -> None:
     message = str(caught.value)
     assert "provider_event_id" in message, "say which column is missing"
     assert "usecols" in message, "say how to fix it"
+
+
+def test_a_measured_market_is_not_also_reported_unmeasurable() -> None:
+    """The report measured `hits` and called it unmeasurable in one document.
+
+    A retention probe of 256 events found `player_hits` at no book and wrote
+    "cannot be measured against past prices". It asked one region. Both books
+    that quote hits — ESPN BET and theScore Bet — are in the second, so the
+    9.5-hour purchase came back with 16,048 rows and the backtest settled
+    5,021 wagers on them, under a section still saying the market could not
+    be measured. The measurement is the evidence; the probe is the stale side.
+    """
+    from nhl_betting_lab.reports.player_props_backtest import run_backtest
+
+    prices = pd.DataFrame(
+        [
+            {
+                "date": "2025-10-18",
+                "commence_time": "2025-10-18T19:10:00Z",
+                "snapshot": "2025-10-18T09:40:00Z",
+                "provider_event_id": "evt1",
+                "home_team": "Toronto Maple Leafs",
+                "away_team": "Ottawa Senators",
+                "market": "hits",
+                "player": "Auston Matthews",
+                "selection": "over",
+                "line": 1.5,
+                "american_odds": 200.0,
+                "book": "ESPN BET",
+            }
+        ]
+    )
+    samples = pd.DataFrame(
+        [
+            {
+                "date": "2025-10-18",
+                "market": "hits",
+                "player": "Auston Matthews",
+                "player_id": 1,
+                "team": "TOR",
+                "line": 1.5,
+                "mean": 2.4,
+                "dispersion_r": None,
+                "actual": 3.0,
+            }
+        ]
+    )
+
+    report = run_backtest(
+        prices,
+        samples,
+        edge_threshold=0.0,
+        phase="card",
+        unmeasurable_markets={"hits": "Not offered in any of 256 probed events."},
+    )
+
+    assert report.by_market.get("hits"), "the fixture must actually measure hits"
+    assert "hits" not in report.unmeasurable_markets, (
+        "a market this run measured must not also be named unmeasurable"
+    )
+    assert any("stale" in note for note in report.notes), (
+        "retiring the verdict silently is the same failure in the other "
+        "direction — say the probe was contradicted"
+    )
+
+
+def test_the_operating_docs_agree_with_the_policy_about_what_may_bet() -> None:
+    """CLAUDE.md carried both "no market is allowlisted" and "all 11 are".
+
+    Forty lines apart, in the file whose first rule is that it overrides
+    everything else, about the one question that decides whether the card may
+    recommend a bet. `data/manual/staging_provider_policy.json` is the state
+    that actually governs; prose that disagrees with it is not a second
+    opinion, it is a false one — and the direction of the error matters,
+    because a reader who believes the stale bullet believes the card is
+    live.
+    """
+    from nhl_betting_lab.config import MANUAL_DIR
+    from nhl_betting_lab.providers.odds_api import PROVIDER_NAME
+    from nhl_betting_lab.staging_provider_policy import load_policy
+
+    root = Path(MANUAL_DIR).resolve().parents[1]
+    policy = load_policy()
+    allowed = policy.allowed_markets(PROVIDER_NAME)
+
+    claims_nothing = "**No market is allowlisted."
+    claims_everything = "**All 11 markets are allowlisted"
+    for name in ("CLAUDE.md", "docs/what_we_can_and_cannot_claim.md"):
+        prose = (root / name).read_text(encoding="utf-8")
+        if allowed:
+            assert claims_nothing not in prose, (
+                f"{name} says no market is allowlisted, and the policy "
+                f"allowlists {sorted(allowed)}"
+            )
+        else:
+            assert claims_everything not in prose, (
+                f"{name} says every market is allowlisted, and the policy "
+                "allowlists nothing. The policy governs."
+            )
+    assert not (
+        claims_nothing in (root / "CLAUDE.md").read_text(encoding="utf-8")
+        and claims_everything in (root / "CLAUDE.md").read_text(encoding="utf-8")
+    ), "CLAUDE.md must not hold both answers at once"
+
+
+def test_the_operating_file_does_not_repeat_itself_verbatim() -> None:
+    """A duplicated paragraph is how a stale figure survives its correction.
+
+    The quota paragraph appeared twice, word for word, and the correction
+    landed on one copy. Anything long enough to be a claim should appear
+    once, so that fixing it fixes it.
+    """
+    from nhl_betting_lab.config import MANUAL_DIR
+
+    root = Path(MANUAL_DIR).resolve().parents[1]
+    for name in ("CLAUDE.md", "docs/what_we_can_and_cannot_claim.md"):
+        lines = (root / name).read_text(encoding="utf-8").splitlines()
+        bullets: list[str] = []
+        current: list[str] = []
+        for line in lines:
+            if line.startswith("- **"):
+                if current:
+                    bullets.append(" ".join(current))
+                current = [line.strip()]
+            elif current and line.startswith("  "):
+                current.append(line.strip())
+            elif current:
+                bullets.append(" ".join(current))
+                current = []
+        if current:
+            bullets.append(" ".join(current))
+        seen: dict[str, int] = {}
+        for bullet in bullets:
+            seen[bullet] = seen.get(bullet, 0) + 1
+        repeated = sorted(text for text, count in seen.items() if count > 1)
+        assert not repeated, (
+            f"{name} repeats {len(repeated)} bullet(s) verbatim; the first is "
+            f"{repeated[0][:120]!r}"
+        )
 
 
 def test_a_superseded_receipt_approves_nothing() -> None:

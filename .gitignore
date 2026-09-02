@@ -13,6 +13,10 @@ data/processed/*.csv
 data/outputs/*
 !data/outputs/.gitkeep
 !data/outputs/player_props_backtest.md
+# The card's own window, beside the contract filename. Two windows
+# measured separately is the point; keeping only one of them tracked
+# is how a store that holds both gets described by half of itself.
+!data/outputs/player_props_backtest_card.md
 !data/outputs/props_calibration.md
 !data/outputs/what_we_can_claim.md
 !data/outputs/team_markets_measurement.md

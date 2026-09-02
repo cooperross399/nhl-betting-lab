@@ -406,6 +406,83 @@ def probe_retention(
     return probe
 
 
+def retention_from_cache(
+    *,
+    raw_dir: Path | None = None,
+    markets: Sequence[str] | None = None,
+) -> list[RetentionProbe]:
+    """Retention read from the responses already bought. Costs nothing.
+
+    A probe is a paid question, and its answer is only ever as wide as the
+    query that asked it. `player_hits` was recorded here as "not offered in
+    any of 256 events" and therefore unmeasurable; that probe asked one
+    region, both books that quote hits are in the second, and the next
+    purchase came back with 16,048 hits rows over 1,218 events. The verdict
+    was not wrong about what it saw. It was wrong about what it meant, and
+    nothing existed to refresh it.
+
+    The cache is the better witness and it is free. Every response ever
+    bought is on disk, and its filename carries the market list that was
+    requested — so "asked for and not returned" is answerable over thousands
+    of events instead of hundreds, and the answer is derived from the
+    evidence rather than recorded once beside it. A retention record built
+    this way cannot go stale while the cache grows.
+
+    **Only responses that requested exactly `markets` are read.** A market
+    missing from a response that never asked for it is not evidence of
+    anything, and counting it as absence is how a narrow query becomes a
+    claim about the provider. That is what the fingerprint in the cache
+    filename is for.
+
+    Nothing here touches the network: no provider is constructed and no
+    request is made. It reads files.
+    """
+    wanted = tuple(
+        markets
+        if markets is not None
+        else (market.provider_key for market in PROP_MARKETS)
+    )
+    directory = (Path(raw_dir) if raw_dir else Path(RAW_DIR)) / CACHE_DIRNAME
+    if not directory.is_dir():
+        return []
+    fingerprint = _markets_fingerprint(wanted)
+    probes: list[RetentionProbe] = []
+    for path in sorted(directory.glob(f"*_{fingerprint}.json")):
+        if path.name.startswith("events_"):
+            continue
+        payload = _read_cache(path)
+        data = payload.get("data") if isinstance(payload, Mapping) else None
+        event = data if isinstance(data, Mapping) else payload
+        if not isinstance(event, Mapping):
+            continue
+        returned: set[str] = set()
+        books: set[str] = set()
+        for bookmaker in event.get("bookmakers", []) or []:
+            if not isinstance(bookmaker, Mapping):
+                continue
+            books.add(str(bookmaker.get("title") or bookmaker.get("key") or ""))
+            for market in bookmaker.get("markets", []) or []:
+                if isinstance(market, Mapping):
+                    returned.add(str(market.get("key", "")).strip())
+        probes.append(
+            RetentionProbe(
+                event_id=str(event.get("id", "")) or path.name[:32],
+                snapshot=str(
+                    payload.get("timestamp", "")
+                    if isinstance(payload, Mapping)
+                    else ""
+                ),
+                markets_requested=wanted,
+                markets_returned=tuple(sorted(returned & set(wanted))),
+                books_returned=tuple(sorted(book for book in books if book)),
+                # Already paid for. Reporting it again would double-count a
+                # spend that happened once.
+                credits_spent=0,
+            )
+        )
+    return probes
+
+
 def buy_historical_props(
     provider: OddsApiProvider,
     *,

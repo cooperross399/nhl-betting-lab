@@ -774,3 +774,88 @@ def test_the_cap_holds_when_the_estimate_is_too_low() -> None:
     )
     # And the estimate itself must no longer claim to be a guarantee.
     assert "can only ever be over-respected, never breached" not in source
+
+
+def test_retention_is_rebuilt_from_the_cache_without_spending_a_credit(
+    tmp_path: Path,
+) -> None:
+    """A probe's verdict is only as wide as the query that asked it.
+
+    `player_hits` was recorded as "not offered in any of 256 events" and
+    therefore unmeasurable. The probe asked one region; both books that quote
+    hits are in the second; the next purchase returned 16,048 hits rows over
+    1,218 events and the backtest settled 5,021 wagers on them, under a
+    section still saying the market could not be measured. The record was
+    written once and nothing refreshed it.
+
+    So retention is derived from the cache instead: every response ever
+    bought, free, and current by construction.
+    """
+    import json
+
+    wanted = ["player_shots_on_goal", "player_hits"]
+    cache = tmp_path / hist.CACHE_DIRNAME
+    cache.mkdir(parents=True)
+    fingerprint = hist._markets_fingerprint(wanted)
+
+    # Two responses that asked for exactly this list. Only one carries hits,
+    # which is what "measurable" means: seen at least once, not seen always.
+    (cache / f"evt1_20250105T190000Z_{fingerprint}.json").write_text(
+        json.dumps(_snapshot(["player_shots_on_goal"])), encoding="utf-8"
+    )
+    (cache / f"evt2_20250106T190000Z_{fingerprint}.json").write_text(
+        json.dumps(_snapshot(["player_shots_on_goal", "player_hits"])),
+        encoding="utf-8",
+    )
+    # A response that asked for a narrower list. It must be ignored: a market
+    # missing from a request that never mentioned it is not evidence at all,
+    # and counting it as absence is how a narrow query becomes a claim about
+    # the provider.
+    (cache / "evt3_20250107T190000Z_deadbeef.json").write_text(
+        json.dumps(_snapshot(["player_shots_on_goal"])), encoding="utf-8"
+    )
+
+    probes = hist.retention_from_cache(raw_dir=tmp_path, markets=wanted)
+
+    assert len(probes) == 2, "only responses that asked for this list count"
+    assert all(probe.credits_spent == 0 for probe in probes), (
+        "these responses were paid for once; charging for them again would "
+        "double-count a spend that already happened"
+    )
+    table = hist.retention_table(probes)
+    assert "player_hits" in table
+    assert "not offered" not in table, (
+        "a market seen even once is measurable, and calling it absent is the "
+        "verdict this rebuild exists to retire"
+    )
+    assert hist.unmeasurable_markets(probes) == {}
+
+
+def test_rebuilding_retention_from_the_cache_touches_no_network(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The point of reading the cache is that it cannot spend anything.
+
+    A path that says it is free must be unable to become expensive, so this
+    fails if any request is attempted at all rather than trusting the reading.
+    """
+    import json
+
+    def explode(*args: object, **kwargs: object) -> None:
+        raise AssertionError("the cache path must never make a request")
+
+    monkeypatch.setattr(OddsApiProvider, "_get", explode)
+
+    wanted = ["player_shots_on_goal"]
+    cache = tmp_path / hist.CACHE_DIRNAME
+    cache.mkdir(parents=True)
+    fingerprint = hist._markets_fingerprint(wanted)
+    (cache / f"evt1_20250105T190000Z_{fingerprint}.json").write_text(
+        json.dumps(_snapshot(wanted)), encoding="utf-8"
+    )
+
+    probes = hist.retention_from_cache(raw_dir=tmp_path, markets=wanted)
+
+    assert len(probes) == 1
+    assert probes[0].markets_returned == ("player_shots_on_goal",)
+

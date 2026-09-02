@@ -809,6 +809,120 @@ def test_one_wager_priced_at_two_moments_is_two_questions() -> None:
         )
 
 
+def test_the_report_does_not_contradict_its_own_retention_table() -> None:
+    """It printed "none of them is established" under the table establishing them.
+
+    The sentence was the `else` of "are any markets unmeasurable?", so once
+    the retention rebuild found every market measurable it appeared directly
+    beneath a table saying so. Same family as the market measured and named
+    unmeasurable in one document: the report disagreeing with itself, in the
+    section whose whole job is to say what the evidence covers.
+    """
+    samples = _samples()
+    prices = _prices()
+    table = (
+        "| Provider market | Events probed | Seen in | Verdict |\n"
+        "|:----------------|--------------:|--------:|:--------|\n"
+        "| `player_hits` | 5432 | 1218 | measurable (1218/5432) |"
+    )
+
+    report = bt.run_backtest(
+        prices, samples, edge_threshold=0.0, phase="", retention_note=table
+    )
+    rendered = bt.render_backtest(report)
+
+    assert "measurable (1218/5432)" in rendered, "the table must still print"
+    assert "Until a retention probe has run" not in rendered, (
+        "a table that establishes retention is exactly the probe this "
+        "sentence says has not run"
+    )
+    assert "### Named as unmeasurable" not in rendered, (
+        "nothing was unmeasurable, so there is no such section"
+    )
+    assert "none was found to be unmeasurable" in rendered, (
+        "the standing note points at that section, so it must account for "
+        "the section being absent rather than dangling"
+    )
+
+    # With no retention evidence at all, the honest sentence comes back.
+    unknown = bt.run_backtest(prices, samples, edge_threshold=0.0, phase="")
+    assert "Until a retention probe has run" in bt.render_backtest(unknown)
+
+
+def test_a_named_window_that_matches_nothing_measures_nothing() -> None:
+    """Naming an absent window used to measure every window at once.
+
+    The filter was applied only when it matched something, so `--phase card`
+    against a store holding nothing but four-hour prices left the whole frame
+    in scope and reported it with no window label — the same silent
+    fall-through the auto-detect was written to remove, still live wherever a
+    window is named. It fires only when the operator asks for a window the
+    store does not have, which is the moment a wrong number is least likely to
+    be questioned. Both workflows now name a window, so this path is walked on
+    every run.
+    """
+    samples = _samples()
+    one = _prices().iloc[0].to_dict()
+    late_only = pd.DataFrame([
+        {**one, "commence_time": "2025-01-06T00:10:00Z",
+         "snapshot": "2025-01-05T20:10:00Z", "american_odds": -130},
+    ])
+
+    report = bt.run_backtest(late_only, samples, edge_threshold=0.0, phase="card")
+
+    assert report.phase == "card", "the report must say which window was asked for"
+    assert report.quotes_seen == 0, (
+        "a four-hour quote is not a card-window quote; measuring it under the "
+        "card label is the defect"
+    )
+    assert not report.bets
+    assert any("`card` window" in note for note in report.notes), (
+        "say the window was empty rather than returning a silent zero"
+    )
+
+    # And the same call against a store that does hold the window still works.
+    both = pd.concat([
+        late_only,
+        pd.DataFrame([
+            {**one, "commence_time": "2025-01-06T00:10:00Z",
+             "snapshot": "2025-01-05T14:40:00Z", "american_odds": 180},
+        ]),
+    ], ignore_index=True)
+    measured = bt.run_backtest(both, samples, edge_threshold=0.0, phase="card")
+    assert measured.quotes_seen == 1
+
+
+def test_both_workflows_name_the_window_they_measure() -> None:
+    """`--phase auto` raises on the two-window store, and both callers are soft.
+
+    The purchase workflow and Gameday Refresh each run the backtest under
+    `continue-on-error`, so an unnamed window would have failed quietly and
+    left the previous report standing as though it were current. The contract
+    filename is written by every run, so the window that should own it must
+    run last.
+    """
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    for name in ("historical-props-purchase.yml", "gameday-refresh.yml"):
+        text = (root / ".github/workflows" / name).read_text(encoding="utf-8")
+        calls = [
+            line.strip()
+            for line in text.splitlines()
+            if "run_player_props_backtest.py" in line
+        ]
+        assert calls, f"{name} must still rebuild the backtest"
+        for call in calls:
+            assert "--phase" in call, (
+                f"{name} runs the backtest without naming a window; "
+                "`--phase auto` raises on a store holding two"
+            )
+        assert "--phase late" in calls[-1], (
+            f"{name} must run the contract window last, because every run "
+            "also writes player_props_backtest.md"
+        )
+
+
 def test_the_window_guard_names_a_flag_the_runner_actually_accepts() -> None:
     """The guard said "name the window explicitly" and no such flag existed.
 

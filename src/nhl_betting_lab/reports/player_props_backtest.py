@@ -242,19 +242,37 @@ def run_backtest(
                     "--phase all to measure the mixture on purpose."
                 )
             phase = str(present[0]) if present else ""
-        kept = labelled[labelled["phase"] == phase] if phase else labelled.iloc[0:0]
-        if not kept.empty:
+        # A NAMED WINDOW FILTERS WHETHER OR NOT IT MATCHED ANYTHING. The
+        # filter used to be skipped when the named window came back empty,
+        # which left the full mixture in `prices` and measured every window at
+        # once under no label — the same silent fall-through the auto-detect
+        # was added to remove, still live on the path where a window is named.
+        # It fires only when the operator asks for a window the store does not
+        # have, which is exactly when a wrong number is least likely to be
+        # questioned. A named window that matches nothing now measures
+        # nothing. `phase` empty is a different thing and keeps the old
+        # behaviour: it means the store carries no window information at all,
+        # not that a window was asked for and missed.
+        if phase:
+            kept = labelled[labelled["phase"] == phase]
             report.phase = str(phase)
-            report.phase_hours = float(kept["hours_before"].median())
-            dropped = len(labelled) - len(kept)
-            if dropped:
-                report.notes.append(
-                    f"{dropped:,} price row(s) outside the `{phase}` window "
-                    "were excluded. A wager priced at two different moments "
-                    "is two different questions, and the better of the two is "
-                    "a price nobody could have taken."
-                )
             prices = kept.drop(columns=["hours_before", "phase"])
+            if kept.empty:
+                report.notes.append(
+                    f"No price row is in the `{phase}` window, so nothing was "
+                    "measured against a real price. The window(s) this store "
+                    f"does hold: {sorted(present) or 'none'}."
+                )
+            else:
+                report.phase_hours = float(kept["hours_before"].median())
+                dropped = len(labelled) - len(kept)
+                if dropped:
+                    report.notes.append(
+                        f"{dropped:,} price row(s) outside the `{phase}` "
+                        "window were excluded. A wager priced at two different "
+                        "moments is two different questions, and the better of "
+                        "the two is a price nobody could have taken."
+                    )
 
     report.quotes_seen = len(prices)
     prices = best_price_per_wager(
@@ -436,6 +454,25 @@ def run_backtest(
             for side in ("over", "under")
             if any(_side_of(bet) == side for bet in report.bets)
         }
+
+    # A market this run measured is not unmeasurable, whatever an older probe
+    # concluded. `hits` was recorded as "not offered in any of 256 events" and
+    # then settled 5,021 wagers in the 9.5-hour window, because the probe
+    # asked one region and both books that quote it — ESPN BET and theScore
+    # Bet — are in the second. Printing a market's measurement and calling it
+    # unmeasurable four sections later is the report contradicting itself,
+    # which is the exact failure this document exists to prevent. The stale
+    # verdict is retired here, and the contradiction is stated rather than
+    # quietly dropped.
+    for market in sorted(set(report.unmeasurable_markets) & set(report.by_market)):
+        report.unmeasurable_markets.pop(market, None)
+        report.notes.append(
+            f"`{market}` was named unmeasurable by an earlier retention probe "
+            f"and this run measured {report.by_market[market].bets:,} bets on "
+            "it. The probe is the stale side of that disagreement — it was "
+            "run against a narrower set of books — so its verdict is retired "
+            "here rather than printed beside the measurement refuting it."
+        )
     return report
 
 
@@ -482,8 +519,9 @@ def _standing_notes() -> list[str]:
         "A player who did not dress produces no bet, matching how a book "
         "voids a prop on a player who never enters.",
         "A market the provider does not retain historically cannot be "
-        "measured historically. Those markets are named below as "
-        "unmeasurable. A calibration number is not offered in their place.",
+        "measured historically. Any such market is named below as "
+        "unmeasurable, and a calibration number is not offered in its place; "
+        "when no market is named there, none was found to be unmeasurable.",
         "This report decides. A change that improves calibration and loses "
         "here does not ship.",
     ]
@@ -749,7 +787,11 @@ def render_backtest(report: BacktestReport) -> str:
                 "",
             ]
         )
-    else:
+    elif not report.retention_note:
+        # Only while retention is genuinely unknown. This sentence used to
+        # print unconditionally, so it appeared directly beneath a table
+        # establishing all seven markets as measurable — the report saying
+        # "none of them is established" under its own establishment of them.
         priced = ", ".join(f"`{market.key}`" for market in PROP_MARKETS)
         lines.extend(
             [
