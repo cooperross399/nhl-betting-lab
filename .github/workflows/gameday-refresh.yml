@@ -338,7 +338,13 @@ jobs:
         run: |
           python scripts/run_props_calibration.py --reuse-samples || \
             python scripts/run_props_calibration.py
-          python scripts/run_player_props_backtest.py
+          # The window is named because the store holds two — 4.0 hours before
+          # face-off and 9.5 — and `--phase auto` refuses to measure the
+          # mixture. This step is soft, so an unnamed window would have left
+          # the previous report in place looking current. `late` runs last on
+          # purpose: every run writes the contract filename too.
+          python scripts/run_player_props_backtest.py --phase card --label card
+          python scripts/run_player_props_backtest.py --phase late
           python scripts/run_team_markets_measurement.py --reuse-samples || \
             python scripts/run_team_markets_measurement.py
           python scripts/run_what_we_can_claim.py

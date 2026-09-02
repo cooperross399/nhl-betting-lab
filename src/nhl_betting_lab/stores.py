@@ -63,10 +63,32 @@ def read_store(
         return empty
 
 
-#: What makes a historical price row the same quote as another. Deliberately
-#: excludes the timestamps: `snapshot` is the moment that was *asked* for and
-#: `fetched_at` the moment it was written, and neither changes which price a
-#: book was showing for which selection.
+def existing_row_count(path: Path | str) -> int:
+    """Data rows in an existing CSV, cheaply: line count minus the header.
+
+    Lives here because every shrink guard in the repository needs it and
+    there must be one of it. "The file exists" is not "the file holds data" —
+    a header-only file left by a permitted first empty build once made a
+    guard raise falsely on the second.
+    """
+    target = Path(path)
+    if not target.is_file():
+        return 0
+    try:
+        with target.open("r", encoding="utf-8") as handle:
+            return max(0, sum(1 for _ in handle) - 1)
+    except OSError:
+        return 0
+
+
+#: What makes a historical price row the same quote as another *within one
+#: snapshot window*. Deliberately excludes the timestamps: `snapshot` is the
+#: moment that was asked for and `fetched_at` the moment it was written, and
+#: two labels of the same moment are one quote, not two.
+#:
+#: It is not the whole key. Across windows the window itself is part of the
+#: identity — see `dedupe_prices` — because a quote at four hours and a quote
+#: at nine and a half are two different prices on two different boards.
 PRICE_IDENTITY = (
     "provider_event_id",
     "market",
@@ -75,6 +97,11 @@ PRICE_IDENTITY = (
     "line",
     "book",
 )
+
+#: What `label_phases` needs to say which window a row belongs to. Without
+#: both, two windows are indistinguishable and deduplication silently keeps
+#: one of them.
+PRICE_WINDOW_INPUTS = ("commence_time", "snapshot")
 
 
 def dedupe_prices(frame: "pd.DataFrame") -> "pd.DataFrame":
@@ -97,6 +124,28 @@ def dedupe_prices(frame: "pd.DataFrame") -> "pd.DataFrame":
     and reported success. Silent 40x data loss inside a function whose whole
     job is to be trusted is not a fallback, it is a trap. Read the store
     with all of `PRICE_IDENTITY` in `usecols`.
+
+    **The window is part of the identity, and leaving it out cost 89.5% of a
+    window.** `PRICE_IDENTITY` is right that two timestamp *labels* of one
+    moment are one quote. It is wrong that two *moments* are. On 2026-08-31 a
+    second purchase priced the same 2,710 events at 9.5 hours before face-off
+    where the first had priced them at 4.0, appended it to the same store, and
+    every 9.5-hour quote landed on the identity of the 4.0-hour quote it
+    matched. `keep="last"` handed the collision to the new window: 1,126,739
+    of the 1,259,312 four-hour rows were overwritten, leaving 132,573 — only
+    the quotes whose line or book happened not to recur. Nothing raised,
+    nothing shrank suspiciously, and the store still held 2.7 million rows.
+    The canonical report went on naming a population that no longer existed
+    on disk, and the 4.0-hour window was recoverable only because every
+    response is cached raw.
+
+    So the key is `PRICE_IDENTITY` **plus the window** `label_phases` derives.
+    That is the granularity every measurement in this repository already
+    slices on, which is what makes it the right one: two quotes it treats as
+    one window are two quotes the backtest would collapse to one bet anyway,
+    and two quotes it treats as different windows are exactly the pair that
+    must never be merged. Over-collapsing inside a window costs the
+    measurement nothing; under-collapsing across windows costs it a window.
     """
     if frame.empty:
         return frame
@@ -109,9 +158,21 @@ def dedupe_prices(frame: "pd.DataFrame") -> "pd.DataFrame":
             f"success. Read the store with usecols covering "
             f"{list(PRICE_IDENTITY)}."
         )
-    return frame.drop_duplicates(
-        subset=list(PRICE_IDENTITY), keep="last"
-    ).reset_index(drop=True)
+    undated = [c for c in PRICE_WINDOW_INPUTS if c not in frame.columns]
+    if undated:
+        raise ValueError(
+            f"dedupe_prices cannot tell one snapshot window from another "
+            f"without {undated}, so a second window appended to this store "
+            "would overwrite the first on the shared quote identity — which "
+            "is how 1,126,739 of 1,259,312 four-hour rows were lost. Read "
+            f"the store with usecols covering {list(PRICE_WINDOW_INPUTS)}."
+        )
+    work = frame.reset_index(drop=True)
+    windowed = label_phases(work)
+    keep = windowed.drop_duplicates(
+        subset=[*PRICE_IDENTITY, "phase"], keep="last"
+    ).index
+    return work.loc[keep].reset_index(drop=True)
 
 
 def best_price_per_wager(frame, key):

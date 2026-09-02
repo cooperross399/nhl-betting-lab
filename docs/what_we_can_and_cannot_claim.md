@@ -7,19 +7,66 @@ project produces lands in a place that already knows how to read it.
 
 ## The current position, stated plainly
 
-**No demonstrated edge, and it has now been measured.** Nine markets were
-measured against real bought prices — 4,830 prop bets pooled at +1.4%, 95%
-interval −1.4% to +4.2%; moneyline, puck line and totals all negative — and
-every interval includes zero, before and after the family correction. The
-honest answer to "does this work" is: *the evidence says no edge has been
+**No demonstrated edge, and it has now been measured twice, in two windows.**
+The props store holds every quote bought for both seasons at two distances
+from face-off, and each is measured on its own because a wager priced at two
+moments is two questions:
+
+| Window | When | Wagers | ROI | 95% interval | Verdict |
+|:-------|:-----|-------:|----:|:-------------|:--------|
+| `late` | T−4.07h | 25,009 | −0.2% | −1.5% .. +1.0% | no demonstrated edge |
+| `card` | T−9.57h | 27,286 | −0.0% | −1.2% .. +1.2% | no demonstrated edge |
+
+The team markets say the same: moneyline +0.0% over 1,366, puck line −1.3%
+over 1,762, totals −2.5% over 2,201, every interval spanning zero. The honest
+answer to "does this work" is: *the evidence says no edge has been
 demonstrated, on samples large enough to mean it.*
 
-All 11 markets are allowlisted anyway, as of 2026-08-27, by Cooper's explicit
-approval overriding this document's enable-nothing recommendation — the
-acceptance receipt records that override in his own quoted words. The card
-therefore runs live and its opinions freeze into the forward ledger, which is
-the only way the answer above ever gets to change: out-of-sample, priced,
-settled, and counted.
+**Those two rows are not a comparison of the windows.** The nine-and-a-half
+hour purchase asked a second region and came back with fourteen books where
+the four-hour one had eight, it carries `hits` and the earlier buy does not,
+and it holds almost no `goalie_saves` because the books have not posted them
+that far out. The window question was answered separately, on the wagers
+priced in both: +4.41% against +4.18%, a difference of −0.23 points, inside
+noise.
+
+**An earlier version of this section read "4,830 prop bets pooled at +1.4%,
+95% interval −1.4% to +4.2%".** That sample was thirty times smaller than the
+population now bought and the figure was noise; it is recorded here rather
+than deleted, because a number this document once published is part of what it
+is for.
+
+**Nothing is allowlisted.** Cooper approved all eleven markets on 2026-08-27,
+overriding this document's enable-nothing recommendation in his own quoted
+words; the approval was withdrawn on 2026-08-29 when the evidence it cited
+moved, and `data/manual/staging_provider_policy.json` has allowlisted nothing
+since. The superseded receipt is kept as the record of a decision that was
+really made. So the card prices every market, recommends nothing, and says
+why — and the only way the answer above ever changes is the forward ledger:
+out-of-sample, priced, settled, and counted.
+
+## A population is not a result until it exists on disk
+
+On 2026-08-31 a second purchase priced the same 2,710 events at 9.5 hours and
+was appended to a store already holding them at 4.0. The append deduplicated
+on the quote and not on the window, so **1,126,739 of the 1,259,312 four-hour
+rows were overwritten** and 132,573 survived. Nothing raised; the store still
+held 2.7 million rows; and `data/outputs/player_props_backtest.md` went on
+reporting −0.3% over 25,947 bets at the four-hour window against a store that
+could produce 8,007 of them.
+
+It was recovered from the raw cache, which is why the raw cache exists. But
+one thing did not survive: **the canonical 25,947 reproduces from nothing that
+still exists.** 24,996 of those bets rebuild exactly — same book, same odds,
+model probability identical to the last bit — and 951 do not. The reproducible
+four-hour population is 25,009 bets at −0.2%.
+
+So this document adds a rule to the ones below:
+
+**A recorded number must name a population that can be rebuilt.** Not one that
+was on someone's disk when the report ran. The price CSVs are derived data;
+the raw responses are the evidence; and a headline that cannot be reproduced
+from the evidence is a claim about a file, not about the market.
 
 Calibration was measured too, and heavily — 2.5 million walk-forward prop
 samples. That establishes exactly one thing: the models' probabilities are
@@ -101,6 +148,16 @@ not a statement that the market is bad.
 Until that probe has run, the honest state is **unknown**: not "all six
 markets are retained" and not "none are". `data/outputs/player_props_backtest.md`
 says so in those words.
+
+**And a probe's absence is only as wide as the probe.** `hits` sat in this
+category for weeks on the strength of 256 events in which no book quoted it.
+The probe asked one region; both books that quote hits are in the second, and
+the purchase that asked for two came back with 16,048 rows over 1,218 events —
+5,021 settled wagers at −1.2%, interval −3.9% to +1.5%, no demonstrated edge.
+"Not offered in any of 256 events" was true and "cannot be measured" was not.
+The backtest now retires an unmeasurable verdict for any market the same run
+measures, because a report that prints a market's ROI and calls it
+unmeasurable four sections later is the thing this document exists to prevent.
 
 ## Two things calibration has already ruled out
 

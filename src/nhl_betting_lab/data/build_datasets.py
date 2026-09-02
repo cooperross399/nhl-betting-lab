@@ -30,6 +30,7 @@ from typing import Any
 import pandas as pd
 
 from nhl_betting_lab.config import PROCESSED_DIR
+from nhl_betting_lab.stores import existing_row_count
 from nhl_betting_lab.data.nhl_api import (
     _cache_root,
     _read_cache,
@@ -297,22 +298,6 @@ def team_row_from_boxscore(payload: Mapping[str, Any]) -> dict[str, Any] | None:
     }
 
 
-def _existing_row_count(path: Path) -> int:
-    """Data rows in an existing CSV, cheaply: line count minus the header.
-
-    "The file exists" is not "the file holds data" — a header-only file left
-    by a permitted first empty build made the guard raise falsely on the
-    second.
-    """
-    if not path.is_file():
-        return 0
-    try:
-        with path.open("r", encoding="utf-8") as handle:
-            return max(0, sum(1 for _ in handle) - 1)
-    except OSError:
-        return 0
-
-
 def build_datasets(
     *,
     raw_dir: Path | None = None,
@@ -381,7 +366,7 @@ def build_datasets(
             (players, PLAYER_LOGS_FILENAME, "player log"),
             (teams, TEAM_GAMES_FILENAME, "team games"),
         ):
-            existing_rows = _existing_row_count(directory / filename)
+            existing_rows = existing_row_count(directory / filename)
             shrunk = existing_rows and len(frame) < max(1, existing_rows // 2)
             if shrunk and not allow_shrink:
                 raise ValueError(

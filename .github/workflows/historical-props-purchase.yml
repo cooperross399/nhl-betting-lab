@@ -282,12 +282,23 @@ jobs:
           python scripts/run_team_markets_measurement.py
 
       - name: Rebuild the backtest with whatever was bought
+        # NAME THE WINDOW. The store holds two: 4.0 hours before face-off,
+        # which every recorded number describes, and 9.5, which is when the
+        # card actually runs. `--phase auto` refuses a two-window store on
+        # purpose, and this step is `continue-on-error`, so leaving the flag
+        # off would have failed quietly and left the previous report standing
+        # as though it were current. `card` is written beside the contract
+        # report so the two windows stay comparable. THE ORDER IS
+        # LOAD-BEARING: every run also writes `player_props_backtest.md`, so
+        # `late` goes last and keeps the filename that
+        # `run_what_we_can_claim.py` and the operating docs read.
         if: always()
         continue-on-error: true
         env:
           PYTHONPATH: src
         run: |
-          python scripts/run_player_props_backtest.py
+          python scripts/run_player_props_backtest.py --phase card --label card
+          python scripts/run_player_props_backtest.py --phase late
           python scripts/run_what_we_can_claim.py
 
       - name: Write the result to the run summary

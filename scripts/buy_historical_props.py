@@ -142,6 +142,77 @@ def _events_in_window(
     return events, listing_cost
 
 
+def _write_retention_from_cache(
+    *, raw_dir: Path, output_dir: Path, markets: list[str]
+) -> int:
+    """Rebuild the retention record from the responses already on disk.
+
+    `historical_props_retention.json` was written once by a paid probe and
+    then never refreshed, so a verdict reached over 256 events under one
+    region outlived the purchases that contradicted it: `player_hits` stood
+    as "cannot be measured against past prices" while the store held 16,048
+    hits rows and the backtest settled 5,021 wagers on them. The retention
+    record is derived data, like the price CSVs, and this is the door that
+    derives it.
+    """
+    probes = hist.retention_from_cache(raw_dir=raw_dir, markets=markets)
+    if not probes:
+        print(
+            f"No cached response in {raw_dir} asked for exactly these "
+            f"{len(markets)} market(s), so retention cannot be rebuilt from "
+            "the cache. The file is left as it is rather than replaced with "
+            "an emptier answer than the one it holds.",
+            file=sys.stderr,
+        )
+        return 2
+    table = hist.retention_table(probes)
+    print(table)
+    provider_to_key = {market.provider_key: market.key for market in PROP_MARKETS}
+    unmeasurable = {
+        provider_to_key.get(provider_key, provider_key): reason
+        for provider_key, reason in hist.unmeasurable_markets(probes).items()
+    }
+    snapshots = sorted({probe.snapshot for probe in probes if probe.snapshot})
+    output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / RETENTION_FILENAME).write_text(
+        json.dumps(
+            {
+                "events_probed": len(probes),
+                "source": (
+                    "Derived from the raw response cache, not from a paid "
+                    "probe. Every response that requested exactly this market "
+                    "list was read."
+                ),
+                "note": (
+                    f"{len(probes)} cached response(s) covering "
+                    f"{len({probe.event_id for probe in probes})} event(s). "
+                    "This replaces a 256-event probe whose verdict of "
+                    "'player_hits not offered in any of 256 events' was true "
+                    "of what it saw and false about the provider: it asked "
+                    "one region, and both books that quote hits are in the "
+                    "second."
+                ),
+                "snapshot_range": [snapshots[0], snapshots[-1]] if snapshots else [],
+                "markets_seen": sorted(
+                    {market for probe in probes for market in probe.markets_returned}
+                ),
+                "credits_spent": 0,
+                "table": table,
+                "unmeasurable": unmeasurable,
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    print(
+        f"Retention rebuilt from {len(probes):,} cached response(s) for 0 "
+        f"credits, written to {output_dir / RETENTION_FILENAME}."
+    )
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--from", dest="start", default="", help="ISO start date.")
@@ -170,6 +241,16 @@ def main(argv: list[str] | None = None) -> int:
         help=(
             "How many events to probe. Below the floor, a market that does "
             "not appear is reported as unseen rather than as unmeasurable."
+        ),
+    )
+    parser.add_argument(
+        "--from-cache",
+        action="store_true",
+        help=(
+            "Rebuild the retention record from responses already bought, "
+            "instead of paying for a fresh probe. Reads files, touches no "
+            "network, spends nothing — and sees every event ever bought "
+            "rather than the handful a probe can afford."
         ),
     )
     parser.add_argument(
@@ -230,6 +311,17 @@ def main(argv: list[str] | None = None) -> int:
         parser.error(
             f"{unknown} are not markets this lab prices, so nothing could "
             "settle them. Add them to markets.py first."
+        )
+
+    if args.from_cache:
+        # Deliberately before the provider exists, so this path cannot reach
+        # the network even by accident. A retention verdict is only as wide as
+        # the query behind it, and the widest query this lab has already paid
+        # for is everything in the cache.
+        return _write_retention_from_cache(
+            raw_dir=Path(args.raw_dir),
+            output_dir=Path(args.output_dir),
+            markets=markets,
         )
 
     events: list[dict[str, str]] = []
@@ -370,8 +462,11 @@ def main(argv: list[str] | None = None) -> int:
     frame = pd.DataFrame(buy.rows)
     if target.is_file() and not frame.empty:
         # Historical prices never change, so an existing file is evidence to
-        # add to rather than replace. Deduplicated on the whole row so a
-        # re-run is idempotent.
+        # add to rather than replace. Deduplicated on the quote AND the
+        # snapshot window, so a re-run of the same window is idempotent and a
+        # purchase of a second window is added rather than substituted. The
+        # window used to be left out: buying 9.5 hours into a store already
+        # holding 4.0 overwrote 1,126,739 of its 1,259,312 rows in silence.
         existing = read_store(target, for_append=True)
         frame = dedupe_prices(
             pd.concat([existing, frame], ignore_index=True)

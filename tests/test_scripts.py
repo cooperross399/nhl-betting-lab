@@ -255,6 +255,37 @@ def test_a_live_purchase_without_a_cap_is_refused(tmp_path: Path) -> None:
     assert exit_info.value.code != 0
 
 
+def test_rebuilding_retention_from_an_empty_cache_refuses_rather_than_thins(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A thinner answer is not an update, and this file is read by the report.
+
+    `historical_props_retention.json` supplies the backtest's retention table
+    and its unmeasurable list. Overwriting a record built from thousands of
+    responses with one built from none would turn every market into "not
+    seen", which reads as a finding.
+    """
+    module = load_script("buy_historical_props.py")
+    out = tmp_path / "out"
+    out.mkdir()
+    kept = out / "historical_props_retention.json"
+    kept.write_text('{"events_probed": 5432}', encoding="utf-8")
+
+    code = module.main(
+        [
+            "--from-cache",
+            "--raw-dir",
+            str(tmp_path / "empty"),
+            "--output-dir",
+            str(out),
+        ]
+    )
+
+    assert code == 2
+    assert "cannot be rebuilt" in capsys.readouterr().err
+    assert kept.read_text(encoding="utf-8") == '{"events_probed": 5432}'
+
+
 def test_a_purchase_with_no_window_and_no_probe_is_refused() -> None:
     module = load_script("buy_historical_props.py")
 
@@ -486,3 +517,87 @@ def test_the_rebuild_script_reconstructs_the_csv_from_the_raw_cache(
     rebuilt = pd.read_csv(tmp_path / "out" / "historical_prop_prices.csv")
     assert len(rebuilt) == 1
     assert rebuilt.iloc[0]["player"] == "Auston Matthews"
+
+
+def test_a_partial_cache_cannot_shrink_an_accumulated_price_file(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The rebuild wrote whatever it produced, and a partial cache is quiet.
+
+    The local checkout held 516 of 6,252 cached responses because the rest
+    lived in CI artifacts. Rebuilding against it would have replaced a
+    2,675,428-row store with 90,594 rows and printed success — the same
+    silent shortfall this script exists to repair, running backwards, over
+    prices whose credits are already spent. `build_datasets` has refused a
+    shrink below half for exactly this reason; this door did not.
+    """
+    import json
+
+    import pandas as pd
+
+    module = load_script("rebuild_price_files.py")
+    cache = tmp_path / "historical_props"
+    cache.mkdir(parents=True)
+    (cache / "evt1_x_abc.json").write_text(
+        json.dumps(
+            {
+                "timestamp": "2025-01-05T19:00:00Z",
+                "data": {
+                    "id": "evt1",
+                    "commence_time": "2025-01-06T00:10:00Z",
+                    "home_team": "Toronto Maple Leafs",
+                    "away_team": "Boston Bruins",
+                    "bookmakers": [
+                        {
+                            "key": "draftkings",
+                            "title": "DraftKings",
+                            "markets": [
+                                {
+                                    "key": "player_shots_on_goal",
+                                    "outcomes": [
+                                        {
+                                            "name": "Over",
+                                            "description": "Auston Matthews",
+                                            "price": -115,
+                                            "point": 3.5,
+                                        }
+                                    ],
+                                }
+                            ],
+                        }
+                    ],
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    out = tmp_path / "out"
+    out.mkdir()
+    accumulated = pd.DataFrame(
+        [
+            {
+                "date": "2025-01-05",
+                "market": "shots_on_goal",
+                "player": f"Player {index}",
+                "line": 2.5,
+                "selection": "over",
+                "american_odds": -110,
+                "book": "DraftKings",
+            }
+            for index in range(100)
+        ]
+    )
+    target = out / "historical_prop_prices.csv"
+    accumulated.to_csv(target, index=False, lineterminator="\n")
+
+    code = module.main(["--raw-dir", str(tmp_path), "--processed-dir", str(out)])
+
+    assert code == 1, "a refusal must be visible to a workflow, not just to a reader"
+    assert "Refused" in capsys.readouterr().err
+    assert len(pd.read_csv(target)) == 100, "the accumulated file must be untouched"
+
+    # And the override still works, because sometimes the shrink is the point.
+    assert module.main(
+        ["--raw-dir", str(tmp_path), "--processed-dir", str(out), "--allow-shrink"]
+    ) == 0
+    assert len(pd.read_csv(target)) == 1
