@@ -238,6 +238,43 @@ Re-derive rather than trust if the data has moved.
   **The card is not changed:** both sides keep being priced and frozen,
   because dropping the side now would destroy the only sample that could test
   it, and a rule that removes its own evidence can never be wrong.
+- **A lineup feed cannot fix the stale-ice-time cell, and there is no
+  detector specification to hold one to.** Sweeping an 11x11 sensitivity x
+  specificity grid on the target a feed can see — a role change that persists
+  past tonight — **all 121 cells span zero**, including the corner: a
+  *perfect* detector leaves the card at **+0.26% [-1.45%, +1.86%]** over
+  20,855 bets. The cell is three groups and a feed sees the wrong two: rises
+  that persist −9.98% (n=2,662, visible), one-off big nights −7.22%
+  (n=5,160, **invisible** — two thirds of the cell's 638 lost units sit here,
+  and it is tonight's game variance, not deployment), and players whose role
+  IS expanding but who were quiet tonight **+5.57%** (n=2,430) — whom a feed
+  would tell you to abstain from. `docs/why_a_lineup_feed_cannot_fix_the_cell.md`.
+- **The oracle ceiling was an outcome filter, not a line-label result.**
+  Abstaining above a 2-minute realised rise gives +3.11% [+1.39%, +4.80%] and
+  a random-removal placebo reaches only −0.30% (z=8.3), so the cell is
+  genuinely special — but realised ice time correlates with tonight's settled
+  stat (+0.175 shots, +0.163 blocks), so "abstain when minutes were high" is
+  substantially "abstain when the under was going to lose". A **one-bit
+  placebo** carrying only the SIGN of the ice-time move — no band, no rank,
+  no minutes — reproduces it (+3.05% vs +3.12%, difference +0.07
+  [-1.04, +1.31]), and league-wide quantile bins with no line structure
+  **beat** it by 1.77 points. It also fails replication: +5.23% in 2024-25,
+  +0.76% [-1.76%, +3.17%] in 2025-26.
+- **The feasible role-to-minutes translator is worth nothing, and is built
+  anyway.** `models/role_minutes.py` maps a line label to a predictive
+  distribution over minutes, walk-forward, wired into nothing. Re-pricing the
+  card with the best label inferable from a player's own history returns
+  **−0.02 points [-0.84, +0.81]** — any label derived from a player's history
+  is a coarsening of that history. It scores AUC 0.568 at seeing the rise
+  against 0.560 for a plain trailing read (a perfect label scores 0.839), and
+  **47.5% of >2-minute rises involve no band change at all**. Trailing-10
+  beats it at predicting minutes outright, MAE 1.984 vs 2.551.
+- **Collection continues regardless, as a cheap option and not a thesis.**
+  Every number above uses realised ice-time RANK as a stand-in for a line
+  label, because no real label exists for these two seasons. A posted line
+  states intent before the game and carries no same-game leakage, which is a
+  reason to keep the option open and not a reason to expect it to pay. The
+  forward test is pre-registered with its decision rule.
 - **The promotion half of the deployment signal is now collected.**
   `capture_deployment.py` records who is OUT; `capture_line_combinations.py`
   records who moved UP — first line, top power-play unit — which is the

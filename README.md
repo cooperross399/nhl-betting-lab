@@ -309,6 +309,7 @@ finish.
 | [`docs/when_this_ends.md`](docs/when_this_ends.md) | The pre-registered stopping rule, and the date |
 | [`docs/the_venue_route_is_closed.md`](docs/the_venue_route_is_closed.md) | Pinnacle and the exchanges, priced: dearer, or no props at all |
 | [`docs/pre_registered_over_side_drop.md`](docs/pre_registered_over_side_drop.md) | A hypothesis registered before the season, and what would settle it |
+| [`docs/why_a_lineup_feed_cannot_fix_the_cell.md`](docs/why_a_lineup_feed_cannot_fix_the_cell.md) | The deployment route, priced before it was bought: no detector specification exists |
 | [`docs/goalie_props_need_a_confirmed_starter.md`](docs/goalie_props_need_a_confirmed_starter.md) | A measurement that was asking the wrong question |
 | [`docs/why_ice_time_gets_its_own_correction.md`](docs/why_ice_time_gets_its_own_correction.md) | The mechanism behind the conditional correction |
 | [`docs/provider_allowlist_approval.md`](docs/provider_allowlist_approval.md) | How a market becomes trusted |
