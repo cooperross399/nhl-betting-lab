@@ -380,3 +380,100 @@ def test_the_capture_merge_refuses_to_shrink_the_remote_store() -> None:
     with pytest.raises(ValueError, match="Refusing a merge"):
         merge(pd.DataFrame(columns=list(cl.CAPTURE_COLUMNS)),
               pd.concat([theirs, theirs], ignore_index=True))
+
+
+def _merge_script():
+    import sys
+
+    sys.path.insert(0, str(cl.Path(__file__).resolve().parents[1] / "scripts"))
+    import merge_capture_store
+
+    return merge_capture_store
+
+
+def _ragged_store(path, rows: int) -> None:
+    """A real-looking store with one row that cannot be parsed."""
+    frame = pd.DataFrame([_capture(selection=f"s{i}") for i in range(rows)])
+    text = frame.to_csv(index=False, lineterminator="\n")
+    lines = text.splitlines()
+    # One extra field on a middle row: the shape a partial write or a bad
+    # concurrent append leaves behind.
+    lines[rows // 2] = lines[rows // 2] + ",extra,extra,extra"
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def test_a_damaged_remote_store_is_refused_rather_than_read_as_empty(tmp_path):
+    """THE BUG THAT DESTROYED CAPTURES. `_read` used to swallow ParserError and
+    return an empty frame, so the shrink guard's floor became the zero it had
+    just failed to read. A damaged remote store must raise."""
+    from nhl_betting_lab.stores import CorruptStoreError
+    import pytest
+
+    script = _merge_script()
+    theirs = tmp_path / "theirs.csv"
+    _ragged_store(theirs, rows=50)
+
+    with pytest.raises(CorruptStoreError):
+        script._read(theirs)
+
+
+def test_the_exact_reproduction_a_ragged_remote_never_becomes_a_one_row_store(tmp_path):
+    """500 remote rows with one ragged line, one local row, and the old code
+    wrote a one-row store over the top and exited 0. It must now refuse, and
+    it must not have written the output at all."""
+    from nhl_betting_lab.stores import CorruptStoreError
+    import pytest
+
+    script = _merge_script()
+    theirs = tmp_path / "theirs.csv"
+    mine = tmp_path / "mine.csv"
+    out = tmp_path / "out.csv"
+    _ragged_store(theirs, rows=500)
+    pd.DataFrame([_capture()]).to_csv(mine, index=False, lineterminator="\n")
+
+    with pytest.raises(CorruptStoreError):
+        script.main(["--mine", str(mine), "--theirs", str(theirs), "--out", str(out)])
+
+    assert not out.exists(), "a refused merge must leave nothing behind to push"
+
+
+def test_the_shrink_floor_is_the_file_not_the_parse():
+    """Even if a reader ever again handed back fewer rows than the file holds,
+    the floor is counted from the file. A guard whose floor comes from the
+    read it is guarding can never fire."""
+    import pytest
+
+    script = _merge_script()
+    empty = pd.DataFrame(columns=list(cl.CAPTURE_COLUMNS))
+    mine = pd.DataFrame([_capture()])
+
+    with pytest.raises(ValueError, match="remote store holds 500"):
+        script.merge(mine, empty, remote_rows=500)
+
+
+def test_a_missing_or_empty_remote_still_merges(tmp_path):
+    """The first push has no remote store, and an empty one has nothing to
+    lose. Refusing those would break the one case the retry is for."""
+    script = _merge_script()
+    mine = pd.DataFrame([_capture()])
+
+    missing = script._read(tmp_path / "absent.csv")
+    assert len(script.merge(mine, missing, remote_rows=0)) == 1
+
+    empty = tmp_path / "empty.csv"
+    empty.write_text("", encoding="utf-8")
+    assert len(script.merge(mine, script._read(empty), remote_rows=0)) == 1
+
+
+def test_the_file_floor_agrees_with_the_parse_on_a_clean_store(tmp_path):
+    """The two floors must agree on a healthy store, or a correct merge would
+    be refused every time. CAPTURE_COLUMNS holds no field that can carry a
+    newline, which is what makes a line count a row count here."""
+    from nhl_betting_lab.stores import existing_row_count
+
+    script = _merge_script()
+    theirs = tmp_path / "theirs.csv"
+    frame = pd.DataFrame([_capture(selection=f"s{i}") for i in range(40)])
+    frame.to_csv(theirs, index=False, lineterminator="\n")
+
+    assert existing_row_count(theirs) == len(script._read(theirs)) == 40
