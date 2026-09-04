@@ -695,6 +695,7 @@ breaks his automation, and the breakage looks like the lab going quiet.
 | Props backtest output | `data/outputs/player_props_backtest.md` |
 | Props calibration output | `data/outputs/props_calibration.md` |
 | Claims output | `data/outputs/what_we_can_claim.md` |
+| Required status check | `Full test suite` — the `name:` of the job in `.github/workflows/tests.yml`; branch protection matches it literally |
 
 The issue title uses an em dash (—), not a hyphen. The marker phrase is matched
 literally.
@@ -727,10 +728,29 @@ literally.
   a market.
 - **Never print, write, compare, or commit an API key.** `tests/test_no_secrets_committed.py`
   enforces this; do not weaken it. The production credential is the GitHub
-  secret `NHL_ODDS_API_KEY`; `.env` is local-only.
+  secret `NHL_ODDS_API_KEY`; `.env` is local-only. The guard scans every
+  tracked path, symlink target and text body, keyed on the shape of a key and
+  of an assignment rather than on a spelling, and it names what it still
+  cannot see in `test_the_gaps_this_guard_still_has_are_the_ones_written_down`
+  rather than claiming to be closed. `tests/test_the_guards_exist.py` and the
+  collection hook in `tests/conftest.py` make deleting, renaming or
+  deselecting it a red build rather than a smaller green one.
 - **Never weaken a gate**, and never sign a human acceptance receipt on
   Cooper's behalf.
-- **Never merge with failing CI**, and never force-push.
+- **Never merge with failing CI**, and never force-push. This repository is
+  public and branch protection requires the status check **`Full test suite`**
+  — the `name:` of the job in `.github/workflows/tests.yml` — so nothing merges
+  with it red. `tests/test_workflows.py` pins that job to the whole suite:
+  it parses the workflow with `yaml.safe_load`, demands exactly one job with
+  that name, no `if:`, no `continue-on-error`, no shell override, no
+  narrowing flag or positional on the pytest line, no `PYTEST_ADDOPTS`
+  anywhere, an unfiltered `pull_request` trigger — and then executes every
+  run block of that job under stubs and reads the exit code, which is what
+  catches `if ! pytest; then echo; fi` and every future rewording. Inside the
+  suite, a skip, an xfail or an xpass exits 1 (`tests/conftest.py`), and a
+  guard module that collected nothing exits 1 before a test runs. (The CBB
+  lab is the exception while it is private: protection is not enforced
+  there.)
 - **Never enable cron** for anything that spends API credits beyond the
   reviewed Gameday Refresh budget, and never run a live provider fetch outside
   that budget without asking.

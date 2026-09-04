@@ -31,6 +31,7 @@ from typing import Any
 
 import pandas as pd
 
+from nhl_betting_lab.backtest.team_walk_forward import DEFAULT_TOTAL_LINES, PUCK_LINES
 from nhl_betting_lab.config import MIN_EDGE, OUTPUTS_DIR
 from nhl_betting_lab.markets import MARKETS_BY_KEY
 from nhl_betting_lab.models.calibration import (
@@ -300,6 +301,39 @@ def measure_prices(
     return roi_interval(returns, wins=wins, pushes=pushes, looks=looks)
 
 
+def lines_outside_the_grid(prices: pd.DataFrame) -> dict[str, list[float]]:
+    """Every bought line the sample grid cannot score, by market.
+
+    The grid is `DEFAULT_TOTAL_LINES` for totals and `PUCK_LINES` (either
+    sign) for the puck line. A bought line off the grid joins nothing, lands
+    in `unmatched`, and the measurement never sees the price — which is how a
+    third of the bought totals silently left an earlier measurement. This
+    is the runtime half of that lesson: the report NAMES the drift in its
+    standing notes, so it is visible in the tracked measurement document
+    rather than waiting on a test that can only run where the bought file is.
+    """
+    if prices is None or prices.empty or "market" not in prices or "line" not in prices:
+        return {}
+    grids = {
+        "total_goals": {float(value) for value in DEFAULT_TOTAL_LINES},
+        "puck_line": {float(value) for value in PUCK_LINES},
+    }
+    outside: dict[str, list[float]] = {}
+    for market, grid in grids.items():
+        lines = prices.loc[prices["market"].astype(str) == market, "line"].dropna()
+        seen: set[float] = set()
+        for value in lines:
+            try:
+                number = float(value)
+            except (TypeError, ValueError):
+                continue
+            seen.add(abs(number) if market == "puck_line" else number)
+        missing = sorted(seen - grid)
+        if missing:
+            outside[market] = missing
+    return outside
+
+
 def build_team_measurement(
     samples: pd.DataFrame,
     prices: pd.DataFrame | None = None,
@@ -340,7 +374,15 @@ def build_team_measurement(
         )
         report.markets.append(measurement)
 
+    drift = lines_outside_the_grid(price_frame)
     report.notes = [
+        *[
+            f"{len(lines)} bought `{market}` line(s) sit outside the sample "
+            f"grid and were scored by nothing: {', '.join(f'{line:g}' for line in lines)}. "
+            "Widen the grid in `backtest/team_walk_forward.py`; an unmatched "
+            "price is a price this measurement never saw."
+            for market, lines in sorted(drift.items())
+        ],
         "Team markets are not the point of this lab. They are measured to the "
         "same standard anyway, because a market nobody prices is a market "
         "where nobody can find an edge.",

@@ -244,8 +244,18 @@ PYTHONPATH=src .venv/bin/python scripts/run_policy_pr_gate.py
 PYTHONPATH=src .venv/bin/python scripts/check_verdict_drift.py
 
 PYTHONPATH=src .venv/bin/python -m pytest -q
-PYTHONPATH=src .venv/bin/python -m compileall -q src scripts
+PYTHONPATH=src .venv/bin/python -m compileall -q -f src scripts tests
 ```
+
+`pytest -q` over the whole suite is the only run there is. A subset run — a
+path, `-k`, `--ignore`, `--deselect`, or the same through `PYTEST_ADDOPTS` —
+exits 1 before a test runs, because a hard-rule guard that collected nothing
+is a gate that was never reached (`tests/conftest.py`,
+`tests/test_the_guards_exist.py`). A run with a skip, an xfail or an xpass in
+it exits 1 as well; there is no exemption list. CI's required status check is
+the job named **`Full test suite`**, and `tests/test_workflows.py` pins that
+job to this same invocation by parsing the workflow and executing its run
+blocks under stubs.
 
 ## Where the card comes from
 

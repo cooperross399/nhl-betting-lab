@@ -53,8 +53,18 @@ jobs:
         # A module can be syntactically invalid and still pass the suite if no
         # test imports it. In the EPL lab one sat broken for over a month that
         # way, failing only the scheduled job nobody reads.
+        #
+        # Each directory is asserted to exist first, because
+        # `python -m compileall -q missing/` prints "Can't list" and exits 0 —
+        # measured, not assumed — so a renamed directory would compile nothing
+        # and pass. `-f` because a stale .pyc makes a broken module look
+        # compiled. tests/test_workflows.py runs this block under stubs with
+        # the directories absent and demands a non-zero exit.
         run: |
-          python -m compileall -q src scripts
+          for directory in src scripts tests; do
+            test -d "$directory" || { echo "::error::$directory is missing"; exit 1; }
+          done
+          python -m compileall -q -f src scripts tests
 
       - name: Run the full test suite
         # No credential is provided on purpose: every test must pass without
