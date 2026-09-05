@@ -408,3 +408,90 @@ def test_every_wired_market_is_actually_fetched_somewhere() -> None:
             f"{market.key} is wired but never fetched"
         )
     assert "PER_EVENT_PROVIDER_MARKETS" in shadow
+
+
+def _script_invocations(text: str) -> list[tuple[str, str]]:
+    """Every `python scripts/<name>.py …` in a workflow, with its argument tail.
+
+    Backslash continuations are joined first, because a workflow splits a long
+    invocation across lines and a per-line scan would read half of one.
+    """
+    joined = re.sub(r"\\\s*\n\s*", " ", text)
+    found = []
+    for match in re.finditer(
+        r"python\s+(?:-m\s+\S+\s+)?scripts/(\w+)\.py([^\n|&;]*)", joined
+    ):
+        found.append((match.group(1), match.group(2)))
+    return found
+
+
+def _declared_flags(source: str) -> set[str]:
+    return set(re.findall(r"""add_argument\(\s*["'](--[\w-]+)["']""", source))
+
+
+def test_every_flag_a_workflow_passes_is_one_its_script_declares() -> None:
+    """An argument error is otherwise only discoverable at run time.
+
+    The sibling football lab lost a whole season of watchdog coverage to this
+    exact shape: a step fetched `--only schedule` where the feed is named
+    `schedules`, so the fetch failed on every run since the workflow was
+    written. A `|| true` swallowed the exit code, and the watchdog went on
+    comparing the ledger against a frozen calendar while reporting the week
+    intact. Neither half was visible without running it.
+
+    Argparse rejects an undeclared flag, so this is a real failure every time
+    — it simply happens where nobody is looking. A test is the only place the
+    two halves, the workflow and the parser, are ever compared.
+
+    Known blind spot, stated rather than papered over: a flag assembled into a
+    shell variable (`MARKETS="--markets …"`, then `$MARKETS`) is invisible
+    here, because resolving it means executing the shell. This checks every
+    flag written literally at the call site, which is nearly all of them.
+    """
+    offenders: list[str] = []
+    for workflow in WORKFLOWS:
+        text = (PROJECT_ROOT / ".github" / "workflows" / workflow).read_text(
+            encoding="utf-8"
+        )
+        for script, tail in _script_invocations(text):
+            path = PROJECT_ROOT / "scripts" / f"{script}.py"
+            if not path.is_file():
+                offenders.append(f"{workflow}: scripts/{script}.py does not exist")
+                continue
+            declared = _declared_flags(path.read_text(encoding="utf-8"))
+            for flag in re.findall(r"(--[\w-]+)", tail):
+                if flag not in declared:
+                    offenders.append(
+                        f"{workflow}: scripts/{script}.py is passed {flag}, "
+                        f"which it does not declare. It declares: "
+                        f"{sorted(declared)}"
+                    )
+
+    assert offenders == [], "workflow passes a flag its script rejects: " + "; ".join(
+        offenders
+    )
+
+
+def test_the_flag_check_would_catch_the_football_defect() -> None:
+    """The guard above is worthless if it cannot fire. This is the sibling
+    lab's real bug, reproduced in miniature: the feed is `schedules` and the
+    workflow asks for `--only`, a flag the script never declared."""
+    declared = _declared_flags(
+        'parser.add_argument("--seasons")\nparser.add_argument("--polite-seconds")'
+    )
+
+    assert "--only" not in declared
+
+    # Split across a continuation, because that is how a workflow writes it
+    # and a per-line scan would see only the first half.
+    found = _script_invocations(
+        "run: |\n  python scripts/fetch_nhl_data.py --only schedule \\\n"
+        "    --seasons 20242025\n"
+    )
+
+    assert [script for script, _ in found] == ["fetch_nhl_data"]
+    passed = re.findall(r"(--[\w-]+)", found[0][1])
+    assert passed == ["--only", "--seasons"], "the continuation must be joined"
+    assert [flag for flag in passed if flag not in declared] == ["--only"], (
+        "the undeclared flag is the one the guard must report"
+    )
