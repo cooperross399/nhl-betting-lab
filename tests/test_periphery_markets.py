@@ -24,10 +24,12 @@ from nhl_betting_lab.providers.odds_api import normalize_event
 from nhl_betting_lab.reports.card_pricing import price_team_markets, selection_key
 
 # Imported as a bare module, not as `tests.test_team_model`: the package
-# spelling only resolves because the repository root happens to be on
-# `sys.path`, and the suite step now runs under `PYTHONSAFEPATH=1` so that a
-# root `coverage.py` cannot shadow the tool the workflow launches. pytest puts
-# `tests/` on the path itself, so this spelling works either way.
+# spelling resolves only because the repository root happens to be on
+# `sys.path`, and CI's job now runs under `PYTHONSAFEPATH=1` so that a root
+# `coverage.py` does not shadow the tools its steps launch. That variable is
+# set by the workflow, not by Python, so the root is still on `sys.path` in a
+# local run. pytest puts `tests/` on the path itself, so this spelling works
+# either way.
 from test_team_model import balanced_league
 
 

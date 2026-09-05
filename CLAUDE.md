@@ -744,11 +744,14 @@ literally.
   it parses the workflow with `yaml.safe_load`, demands exactly one job with
   that name, no `if:`, no `needs:`, no `strategy:`, no `continue-on-error`,
   no shell override, no `if:` on any OTHER job in that file for a `needs:`
-  to point at, an unfiltered `pull_request` trigger, `PYTHONSAFEPATH: "1"` on
-  the suite step, a whitelist of the arguments the suite line may carry
-  (`-q`, `-rs`, `--color=no` — because `--version` narrows nothing, is in no
-  blocklist, and exits 0 having run no test), and each of the job's four tool
-  lines pinned as a whole command — and then executes every run block under
+  to point at, an unfiltered `pull_request` trigger, `PYTHONSAFEPATH: "1"` in
+  effect on every step of that job that starts an interpreter (not the suite
+  step alone: `python -m pyflakes` resolves against the working directory too,
+  and a `pyflakes.py` at the root was measured to satisfy the lint step), a
+  whitelist of the arguments the suite line may carry (`-q`, `-rs`,
+  `--color=no` — because `--version` narrows nothing, is in no blocklist, and
+  exits 0 having run no test), and every line in `PINNED_TOOL_LINES` pinned as
+  a whole command — and then executes every run block under
   stubs and reads the exit code, which is what catches
   `if ! pytest; then echo; fi`, `: python -m coverage report`, and every
   future rewording. Inside the suite, a skip, an xfail or an xpass exits 1,

@@ -37,9 +37,9 @@ The suite line's arguments, the required job's tool lines, and the job keys
 are now enumerations of what is ALLOWED.
 
 Ported from the NCAAF lab's linter, mechanism by mechanism, and scoped to what
-this repository's nine workflows actually are. The template lab has two
-workflows and neither tolerates a failure; this one has seven OPERATIONAL
-workflows that tolerate failure by design — a state restore that finds no
+this repository's workflow directory actually holds rather than to a count of
+it. The template lab's workflows tolerate no failure; most of this one's are
+OPERATIONAL and tolerate failure by design — a state restore that finds no
 artifact, a slate with no games, a provider that answers 422 — and pin that
 tolerance with `continue-on-error`, `set +e` and `if git fetch …; then`. Those
 are not gates and are not graded as gates. The two workflows that GATE a pull
@@ -263,16 +263,23 @@ PINNED_TOOL_LINES: frozenset[str] = frozenset(
 PINNED_TOOL_WORDS = frozenset({"pyflakes", "compileall", "coverage", "pytest"})
 
 #: `PYTHONSAFEPATH` keeps the checked-out repository out of `sys.path`. Without
-#: it `python -m coverage run -m pytest -q` resolves `coverage` against the
-#: working directory first, so a `coverage.py` at the repository root shadows
-#: the tool: measured, a three-line one printing a pass count and exiting 0
-#: satisfied the whole step. Required on the suite step, as the string "1".
+#: it `python -m <tool>` resolves <tool> against the working directory first,
+#: so a file at the repository root shadows the tool: measured, a three-line
+#: `coverage.py` printing a pass count and exiting 0 satisfied the suite step,
+#: and a `pyflakes.py` printing one clean line satisfied the lint step over a
+#: module holding an unused import and an undefined name. Required in effect —
+#: workflow, job or step `env:` — on EVERY step of the required job whose block
+#: names an interpreter, as the string "1".
 SAFE_PATH_VARIABLE = "PYTHONSAFEPATH"
 
-#: (The names a shadowing file could take — `pytest.py`, `coverage.py`,
-#: `sitecustomize.py`, `usercustomize.py` — are refused at the TRACKED level by
-#: `tests/test_the_guards_exist.py`, which is where a `git ls-files` scan
-#: belongs. This file's half of that shape is the variable above.)
+#: What this variable does NOT do, so that the rule below is not read as more
+#: than it is. It drops the working directory; it leaves an explicit
+#: `PYTHONPATH` entry in place, so `src/coverage.py` is still imported ahead of
+#: the real tool with it set — measured, exit 0 and a fabricated pass line.
+#: `tests/test_the_guards_exist.py` refuses a TRACKED name that shadows at
+#: either place, which is where a `git ls-files` scan belongs; an UNTRACKED one
+#: on the `PYTHONPATH` entry is closed by neither half, and is executed as a
+#: known gap in that file rather than described as covered here.
 
 #: The only `if:` a step in the suite job may carry. `always()` WIDENS when a
 #: step runs; every other expression can evaluate false.
@@ -1332,7 +1339,7 @@ def check_the_suite_line_carries_only_permitted_arguments(path: Path) -> None:
     `test_the_control_is_the_shape_of_the_real_workflow`, which pins the real
     suite line as a whole string and would have been edited alongside it. So
     the question the rule asks is inverted: not "is this argument known to be
-    bad" but "is this argument one of the three the suite may carry".
+    bad" but "is this argument in `PERMITTED_SUITE_ARGUMENTS`".
     """
     _, job = _the_required_job(path)
     for step in steps_of(job):
@@ -1370,38 +1377,101 @@ def check_the_suite_line_carries_only_permitted_arguments(path: Path) -> None:
             )
 
 
-def check_the_suite_step_keeps_the_checkout_off_the_import_path(path: Path) -> None:
-    """`PYTHONSAFEPATH: "1"` on the suite step, read off the parse.
+#: A command word that starts a Python interpreter, either directly or as a
+#: console script that is one. `pip` is here because `python -m pip install -e
+#: .` runs a build backend in an interpreter that inherits this environment.
+INTERPRETER_COMMAND = re.compile(r"^(?:python[0-9.]*|pip[0-9.]*|pytest|coverage|pyflakes)$")
 
-    `python -m coverage run -m pytest -q` resolves `coverage` against the
-    working directory before site-packages. A `coverage.py` at the repository
-    root therefore IS the suite: measured in a clone of this branch, a
-    three-line one printing `1521 passed in 0.01s` and exiting 0 satisfied the
-    step, and no rule in this file could see it, because nothing about the
-    workflow changed. `tests/test_the_guards_exist.py` refuses such a file at
-    the tracked level; this is the other half, and it is the half that also
-    covers a file an earlier step wrote.
+
+def interpreter_words(block: str) -> list[str]:
+    """Every word in the block that names an interpreter, or a script that is one.
+
+    Read over every word of every logical line rather than over command
+    positions only, so `xargs python -m pytest` and `env X=1 python ...` are
+    both seen. It over-collects — a step that merely passes the word `python`
+    to something else is graded too — and over-collecting costs one harmless
+    environment variable, while under-collecting costs a gate.
     """
+    return sorted(
+        {
+            word
+            for line in commands(block)
+            for word in line.split()
+            if INTERPRETER_COMMAND.match(word.strip("\"'"))
+        }
+    )
+
+
+def _effective_environment(document: Any, job: dict, step: dict) -> dict[str, object]:
+    """Workflow `env:`, then job, then step — the order GitHub resolves them in.
+
+    Read as a merge rather than off the step alone, so `PYTHONSAFEPATH` set
+    once for the whole job satisfies every step, and a step that overrides it
+    to "0" is still caught.
+    """
+    merged: dict[str, object] = {}
+    for layer in (document, job, step):
+        environment = layer.get("env") if isinstance(layer, dict) else None
+        if isinstance(environment, dict):
+            for key, value in environment.items():
+                merged[str(key).strip().upper()] = value
+    return merged
+
+
+def check_every_interpreter_step_keeps_the_checkout_off_the_import_path(path: Path) -> None:
+    """`PYTHONSAFEPATH: "1"` in effect on every step of the required job that
+    starts an interpreter — not on the suite step alone.
+
+    `python -m <tool>` resolves <tool> against the working directory before
+    site-packages, and that is true of every step, not only the one that runs
+    pytest. Measured on this branch while the variable sat on the suite step
+    alone: a tracked three-line `pyflakes.py` at the repository root printed
+    one clean line and exited 0 while a module under `src/` held an unused
+    import and an undefined name, and a tracked `compileall/` package did the
+    same to the compile step over a syntax error. The full suite was green
+    with both files committed.
+
+    What this rule reaches: the required job's steps, graded on the effective
+    environment. What it does not: a step that starts an interpreter under a
+    name `INTERPRETER_COMMAND` does not match — a shell script, another
+    project's console script — and every workflow file other than the required
+    one. `tests/test_the_guards_exist.py` refuses the tracked half of the same
+    shape; neither half sees an untracked file, and neither removes an
+    explicit `PYTHONPATH` entry.
+    """
+    document = load(path)
     _, job = _the_required_job(path)
+
+    graded: list[dict] = []
     for step in steps_of(job):
         block = step.get("run")
-        if not isinstance(block, str) or not pytest_lines_in(block):
+        if not isinstance(block, str) or not interpreter_words(block):
             continue
-        environment = step.get("env")
+        graded.append(step)
         name = step.get("name", "<unnamed step>")
-        assert isinstance(environment, dict), (
-            f"{path.name}: the suite step {name!r} declares no `env:`, so it "
-            f"cannot be setting {SAFE_PATH_VARIABLE}."
+        effective = _effective_environment(document, job, step)
+        assert str(effective.get(SAFE_PATH_VARIABLE, "")) == "1", (
+            f"{path.name}: step {name!r} starts an interpreter without "
+            f"`{SAFE_PATH_VARIABLE}: \"1\"` in effect (workflow, job and step "
+            f"env resolve to {effective!r}). Without it a file in the checkout "
+            "named for the tool the step launches IS that tool."
         )
-        declared = {
-            str(key).strip().upper(): value for key, value in environment.items()
-        }
-        assert str(declared.get(SAFE_PATH_VARIABLE, "")) == "1", (
-            f"{path.name}: the suite step {name!r} does not set "
-            f"`{SAFE_PATH_VARIABLE}: \"1\"` "
-            f"(env is {environment!r}). Without it a `coverage.py` or "
-            "`pytest.py` in the checkout shadows the tool this line launches."
-        )
+
+    assert graded, (
+        f"{path.name}: no step in the required job was graded, so this rule "
+        "passed by seeing nothing. `interpreter_words` matched no run block."
+    )
+    ungraded = [
+        step.get("name", "<unnamed step>")
+        for step in steps_of(job)
+        if isinstance(step.get("run"), str)
+        and any(line in step["run"] for line in PINNED_TOOL_LINES)
+        and step not in graded
+    ]
+    assert not ungraded, (
+        f"{path.name}: steps running a pinned tool line escaped the rule: "
+        f"{ungraded}. That is the rule failing to see, not the workflow passing."
+    )
 
 
 def check_every_pinned_tool_line_is_spelled_and_reached(path: Path) -> None:
@@ -1569,7 +1639,7 @@ REQUIRED_CHECKS: dict[str, Callable[[Path], None]] = {
     "the_compile_step_refuses_a_missing_directory": check_the_compile_step_refuses_a_missing_directory,
     "no_job_in_the_required_workflow_is_conditional": check_no_job_in_the_required_workflow_is_conditional,
     "the_suite_line_carries_only_permitted_arguments": check_the_suite_line_carries_only_permitted_arguments,
-    "the_suite_step_keeps_the_checkout_off_the_import_path": check_the_suite_step_keeps_the_checkout_off_the_import_path,
+    "every_interpreter_step_keeps_the_checkout_off_the_import_path": check_every_interpreter_step_keeps_the_checkout_off_the_import_path,
     "every_pinned_tool_line_is_spelled_and_reached": check_every_pinned_tool_line_is_spelled_and_reached,
 }
 
@@ -1681,6 +1751,8 @@ jobs:
   pytest:
     name: Full test suite
     runs-on: ubuntu-latest
+    env:
+      PYTHONSAFEPATH: "1"
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -1705,7 +1777,6 @@ jobs:
       - name: Run the full test suite
         env:
           PYTHONPATH: src
-          PYTHONSAFEPATH: "1"
         run: |
           python -m coverage run -m pytest -q
       - name: Check coverage has not collapsed
@@ -1721,7 +1792,9 @@ jobs:
 
 SUITE_LINE = "python -m coverage run -m pytest -q"
 SUITE_STEP_HEADER = "      - name: Run the full test suite\n"
-SAFE_PATH_LINE = '          PYTHONSAFEPATH: "1"\n'
+JOB_ENV_BLOCK = '    env:\n      PYTHONSAFEPATH: "1"\n'
+JOB_SAFE_PATH_LINE = '      PYTHONSAFEPATH: "1"\n'
+STEP_SAFE_PATH_LINE = '          PYTHONSAFEPATH: "1"\n'
 LINT_LINE = "python -m pyflakes src scripts tests"
 COVERAGE_REPORT_LINE = "python -m coverage report"
 COMPILE_LINE = "python -m compileall -q -f src scripts tests"
@@ -1892,8 +1965,12 @@ REPRODUCTIONS: dict[str, tuple[str, str]] = {
         mutate("permissions:\n", "env:\n  PYTEST_ADDOPTS: -x\npermissions:\n"),
     ),
     "PYTEST_ADDOPTS at job level": (
+        # Written into the job's existing `env:` rather than inserted as a
+        # second one: PyYAML keeps the LAST of two duplicate keys, so an
+        # inserted block would have been silently discarded and the
+        # reproduction would have proved nothing.
         "the_suite_is_never_narrowed",
-        mutate(JOB_NAME_LINE, JOB_NAME_LINE + "    env:\n      PYTEST_ADDOPTS: -x\n"),
+        mutate(JOB_SAFE_PATH_LINE, JOB_SAFE_PATH_LINE + "      PYTEST_ADDOPTS: -x\n"),
     ),
     "pytest_addopts lower-cased": (
         "the_suite_is_never_narrowed",
@@ -2143,20 +2220,40 @@ REPRODUCTIONS: dict[str, tuple[str, str]] = {
             f"          {COVERAGE_REPORT_LINE} --include=src/nhl_betting_lab/config.py\n",
         ),
     ),
-    # -- a tracked shadow module defeats the suite line ------------------------
-    "PYTHONSAFEPATH dropped from the suite step": (
-        "the_suite_step_keeps_the_checkout_off_the_import_path",
-        mutate(SAFE_PATH_LINE, ""),
+    # -- a shadow module in the checkout defeats a step's tool ----------------
+    # Each of these leaves at least one step of the required job resolving
+    # `python -m <tool>` against the working directory. The shape that shipped
+    # on this branch is the last one: the variable on the suite step and
+    # nowhere else, which left the lint and compile steps open.
+    "PYTHONSAFEPATH dropped from the job": (
+        "every_interpreter_step_keeps_the_checkout_off_the_import_path",
+        mutate(JOB_ENV_BLOCK, ""),
     ),
-    "PYTHONSAFEPATH set to 0": (
-        "the_suite_step_keeps_the_checkout_off_the_import_path",
-        mutate(SAFE_PATH_LINE, '          PYTHONSAFEPATH: "0"\n'),
+    "PYTHONSAFEPATH set to 0 for the job": (
+        "every_interpreter_step_keeps_the_checkout_off_the_import_path",
+        mutate(JOB_SAFE_PATH_LINE, '      PYTHONSAFEPATH: "0"\n'),
     ),
-    "the suite step env removed entirely": (
-        "the_suite_step_keeps_the_checkout_off_the_import_path",
+    "PYTHONSAFEPATH overridden to 0 on the suite step": (
+        "every_interpreter_step_keeps_the_checkout_off_the_import_path",
         mutate(
-            "        env:\n          PYTHONPATH: src\n" + SAFE_PATH_LINE,
-            "",
+            "          PYTHONPATH: src\n",
+            '          PYTHONPATH: src\n          PYTHONSAFEPATH: "0"\n',
+        ),
+    ),
+    "PYTHONSAFEPATH overridden to 0 on the lint step": (
+        "every_interpreter_step_keeps_the_checkout_off_the_import_path",
+        mutate(
+            "      - name: Lint for dead names\n        run: |\n",
+            "      - name: Lint for dead names\n        env:\n"
+            '          PYTHONSAFEPATH: "0"\n        run: |\n',
+        ),
+    ),
+    "PYTHONSAFEPATH on the suite step only, which is what this branch shipped": (
+        "every_interpreter_step_keeps_the_checkout_off_the_import_path",
+        mutate(JOB_ENV_BLOCK, "").replace(
+            "          PYTHONPATH: src\n",
+            "          PYTHONPATH: src\n" + STEP_SAFE_PATH_LINE,
+            1,
         ),
     ),
 }
@@ -2271,18 +2368,27 @@ def test_the_disclosed_holes_are_real(tmp_path: Path) -> None:
        token in every block — so the narrowing has to live in a file),
        or `pip install`s a plugin that disables the conftest, changes what
        `python -m pytest -q` does without changing a character of the suite
-       line. Two shapes that used to be on this list are now closed rather
-       than disclosed: a `conftest.py` dropped at the repository root, and a
-       `coverage.py`/`pytest.py`/`sitecustomize.py` shadowing the tools the
-       suite line launches. `tests/test_the_guards_exist.py` refuses those
-       names at the tracked level, and `PYTHONSAFEPATH: "1"` on the suite
-       step keeps the working directory off `sys.path` for the untracked
-       half. What is left of the runner's filesystem — an installed plugin, a
-       `$GITHUB_PATH` shim written from a file — is still outside anything a
-       file-reading test can see, and `PYTHONSAFEPATH` does not touch the
-       explicit `PYTHONPATH: src`, which is why `src/sitecustomize.py` is
-       refused by name rather than left to the variable. The pip-install
-       shape is written out below and observed to pass.
+       line. The pip-install shape is written out below and observed to pass.
+
+       A shadow module — a file in the checkout named for a tool a step
+       launches — is NARROWED rather than closed, and the halves are worth
+       naming separately, because a reader who takes "closed" at face value
+       stops looking. TRACKED: `tests/test_the_guards_exist.py` refuses a
+       tracked top-level name at the repository root or at any `PYTHONPATH`
+       entry `tests.yml` declares, when that name is one the job launches with
+       `python -m`, a start-up hook, or a stdlib top-level name.
+       WORKING DIRECTORY: `PYTHONSAFEPATH: "1"`, which this file now requires
+       on every step of the required job that starts an interpreter rather
+       than on the suite step alone, takes the checkout root off `sys.path`
+       whether the file is tracked or not. STILL OPEN: an UNTRACKED file on
+       the explicit `PYTHONPATH: src` entry, which `PYTHONSAFEPATH` does not
+       remove and `git ls-files` cannot see — measured, exit 0 and a
+       fabricated pass line with the variable set — and any file an earlier
+       step writes onto the runner. Those two are executed as items 4 and 5 of
+       `tests/test_the_guards_exist.py::
+       test_the_gaps_these_guards_still_have_are_the_ones_written_down`. A
+       `conftest.py` dropped at the repository root is genuinely closed and is
+       not part of this paragraph.
     2. A script file beside the suite. `run: bash scripts/ci.sh` before the
        real suite line passes every rule, because the narrowing is in a file
        the rule never opens. It cannot BE the suite step — pytest has to
@@ -2300,15 +2406,17 @@ def test_the_disclosed_holes_are_real(tmp_path: Path) -> None:
     4. `cd` reached through a sourced file (`. ./enter.sh`) or a variable is
        invisible to the command-word scanner. `working-directory:` and a
        literal `cd`/`pushd` are closed.
-    5. The seven operational workflows are held to the corpus rules only. A
+    5. The operational workflows — every file in the directory that is not one
+       of `GATE_WORKFLOWS` — are held to the corpus rules only. A
        swallowed failure in Gameday Refresh is not a gate failing open — it is
        a card not posting, which the workflow reports as degraded — and it is
        not graded here.
     6. The `needs:`/`if:` and pinned-tool-line rules are scoped to
        `tests.yml`, because that is the only file carrying a required status
-       check context (read from the API on 2026-09-04:
-       `required_status_checks.contexts == ["Full test suite"]`, repository
-       public). A `needs:` on a job in `provider-policy-pr-gate.yml` would
+       check context (read from the API on 2026-09-05, and on 2026-09-04
+       before that: `required_status_checks.contexts == ["Full test suite"]`,
+       repository public — `gh api repos/cooperross399/nhl-betting-lab/
+       branches/main/protection`). A `needs:` on a job in `provider-policy-pr-gate.yml` would
        skip that job, and GitHub would report it Success — but nothing
        requires it, so the merge it would have to fool is not gated on it.
        Widen `REQUIRED_CHECKS` on the day a second context is required, and

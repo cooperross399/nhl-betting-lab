@@ -21,15 +21,19 @@ Four mechanisms close that, and they are checked from different directions:
   which any required module contributed zero COLLECTED items, AND one in which
   any test function such a module defines on disk was not collected. The
   per-TEST arm is what a per-module floor cannot do: deselecting exactly one
-  guard test left the count above zero and the whole suite green at
-  1520 passed, 1 deselected — measured on this branch before the arm existed;
+  guard test left the count above zero and the whole suite green — measured on
+  this branch before the arm existed;
 * this file refuses a tracked file whose basename is `pytest.py`,
-  `coverage.py`, `sitecustomize.py` or `usercustomize.py`, or a tracked
-  `pytest`/`coverage` package on any import root the workflow declares. A
-  `coverage.py` at the repository root IS `python -m coverage`: a three-line
-  one printing `1521 passed in 0.01s` was measured to satisfy the whole suite
-  step. `tests/test_workflows.py` requires `PYTHONSAFEPATH: "1"` on that step
-  for the untracked half of the same shape.
+  `coverage.py`, `sitecustomize.py` or `usercustomize.py` at any depth, and a
+  tracked top-level name at any import root the workflow declares that
+  collides with a module `tests.yml` launches, a start-up hook, or a stdlib
+  top-level name. A `coverage.py` at the repository root IS `python -m
+  coverage`: a three-line one printing a fabricated pass count was measured to
+  satisfy the whole suite step, and a `pyflakes.py` did the same to the lint
+  step while the suite stayed green. `tests/test_workflows.py` requires
+  `PYTHONSAFEPATH: "1"` in effect on every step of the required job that
+  starts an interpreter, which is the untracked half of the same shape and
+  holds only where something sets that variable.
 
 This module is in the manifest itself, so removing the manifest is caught by
 the hook, and removing the hook is caught by
@@ -44,17 +48,19 @@ entry point — could monkeypatch `pytest.exit` or rewrite
 `--noconftest` on the required job, and the per-test floor makes a plugin that
 merely removes items visible, but a plugin that disarms the hooks themselves is
 outside what any test in this suite can see. `PYTHONSAFEPATH` keeps the working
-directory off `sys.path`; it does not remove `PYTHONPATH: src`, so a
-`src/sitecustomize.py` would still be imported before pytest — which is why
-that name is refused at the tracked level here rather than left to the
-variable. A guard hollowed to five `pass` bodies keeps its five names and its
-five collected items and is caught by neither the count nor the floor.
+directory off `sys.path`; it does not remove `PYTHONPATH: src`, so an
+UNTRACKED `src/coverage.py` is still imported before the real tool — measured
+with the variable set, exit 0 and a fabricated pass line — and the tracked
+half of that route is what the root-scoped scan here refuses. A guard hollowed
+to five `pass` bodies keeps its five names and its five collected items and is
+caught by neither the count nor the floor.
 """
 
 from __future__ import annotations
 
 import ast
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -510,22 +516,36 @@ def test_no_other_pytest_configuration_file_is_tracked() -> None:
     )
 
 
-#: Basenames that would BE the suite. `python -m coverage run -m pytest -q`
-#: resolves `coverage` against the working directory before site-packages, so a
-#: `coverage.py` at the repository root is the tool the workflow launches:
-#: measured in a clone of this branch, a three-line one printing
-#: `1521 passed in 0.01s` and exiting 0 satisfied the whole step, and no test
-#: in this suite saw it. `sitecustomize.py` and `usercustomize.py` are worse in
+#: Basenames that would BE the suite wherever git tracks them. `python -m
+#: coverage run -m pytest -q` resolves `coverage` against the working directory
+#: before site-packages, so a `coverage.py` at the repository root is the tool
+#: the workflow launches: measured in a clone of this branch, a three-line one
+#: printing a pass count and exiting 0 satisfied the whole step, and no test in
+#: this suite saw it. `sitecustomize.py` and `usercustomize.py` are worse in
 #: kind: Python imports them at interpreter start-up, before pytest and before
-#: any conftest, so one on `PYTHONPATH` can set `PYTEST_ADDOPTS` for the run
-#: that is about to happen — measured too, at `src/sitecustomize.py`, which
-#: deselected a guard test and left the run green at 1520 passed.
+#: any conftest, so one on ANY `sys.path` entry can set `PYTEST_ADDOPTS` for
+#: the run that is about to happen — measured too, at `src/sitecustomize.py`,
+#: which deselected a guard test and left the run green.
+#:
+#: This set is refused at any tracked depth, which is wider than the import
+#: rules require: `docs/notes/pytest.py` shadows nothing. The width is
+#: deliberate for these four names and these four only. Everything else is
+#: scoped to an actual import root by the rule below.
 SHADOWING_BASENAMES = frozenset(
     {"pytest.py", "coverage.py", "sitecustomize.py", "usercustomize.py"}
 )
 
-#: The same shadowing as a package rather than as a module.
-SHADOWING_DIRECTORIES = frozenset({"pytest", "coverage"})
+#: Imported by the interpreter itself, before the command line is looked at.
+#: They appear in no `python -m` line, so they cannot be read off the workflow.
+STARTUP_HOOK_MODULES = frozenset({"sitecustomize", "usercustomize"})
+
+#: `-m <name>` on a line that names an interpreter. Read as two pieces rather
+#: than as one `python\s+-m\s+(\w+)` pattern because `python -m coverage run
+#: -m pytest -q` launches BOTH, and the second `-m` has `run` in front of it,
+#: not `python` — a single-pattern first draft matched `coverage` alone and
+#: left `pytest.py` unrefused, which the scan's own proof caught.
+INTERPRETER_ON_THE_LINE = re.compile(r"\bpython[0-9.]*\b")
+LAUNCHED_MODULE = re.compile(r"(?:^|\s)-m\s+([A-Za-z_][A-Za-z0-9_]*)")
 
 
 def _tracked_paths() -> list[str]:
@@ -533,6 +553,12 @@ def _tracked_paths() -> list[str]:
         ["git", "ls-files", "-z"], cwd=PROJECT_ROOT, capture_output=True, check=True
     )
     return [name for name in result.stdout.decode("utf-8").split("\0") if name]
+
+
+def _workflow_document() -> object:
+    return yaml.safe_load(
+        (PROJECT_ROOT / ".github" / "workflows" / "tests.yml").read_text("utf-8")
+    )
 
 
 def _import_path_roots() -> list[str]:
@@ -544,9 +570,6 @@ def _import_path_roots() -> list[str]:
     is always in the list: it is the working directory, which `python -m` puts
     on `sys.path` first unless `PYTHONSAFEPATH` says otherwise.
     """
-    document = yaml.safe_load(
-        (PROJECT_ROOT / ".github" / "workflows" / "tests.yml").read_text("utf-8")
-    )
     roots = {""}
 
     def walk(node: object) -> None:
@@ -563,19 +586,101 @@ def _import_path_roots() -> list[str]:
             for item in node:
                 walk(item)
 
-    walk(document)
+    walk(_workflow_document())
     return sorted(roots)
+
+
+def _modules_the_workflow_launches() -> frozenset[str]:
+    """Every module name `tests.yml` hands to `python -m`, read off the file.
+
+    Hard-coding the list would go stale the day a step is added. Reading it
+    means a new tool in the workflow is covered on the same commit that adds
+    it — and a tool REMOVED from the workflow stops being refused, which is
+    the right direction: the name matters because the job launches it.
+    """
+    launched: set[str] = set()
+
+    def walk(node: object) -> None:
+        if isinstance(node, dict):
+            block = node.get("run")
+            if isinstance(block, str):
+                for line in block.replace("\\\n", " ").splitlines():
+                    if INTERPRETER_ON_THE_LINE.search(line):
+                        launched.update(LAUNCHED_MODULE.findall(line))
+            for value in node.values():
+                walk(value)
+        elif isinstance(node, list):
+            for item in node:
+                walk(item)
+
+    walk(_workflow_document())
+    return frozenset(launched)
+
+
+def _shadowable_module_names() -> frozenset[str]:
+    """What a tracked top-level name at an import root must not be called.
+
+    Three sources, none of them a hand-written list of four:
+
+    * every module `tests.yml` launches with `python -m` — `pip`, `pyflakes`,
+      `compileall`, `coverage`, `pytest` as the workflow stands;
+    * the two start-up hooks, which no command line mentions;
+    * `sys.stdlib_module_names`, because those tools import the standard
+      library: a shadow of `struct` or `token` reaches `compileall` just as a
+      shadow of `compileall` does.
+    """
+    return (
+        frozenset(sys.stdlib_module_names)
+        | _modules_the_workflow_launches()
+        | STARTUP_HOOK_MODULES
+    )
+
+
+def _top_level_importables(
+    tracked: list[str], roots: list[str]
+) -> list[tuple[str, str, str]]:
+    """`(root, tracked path, module name)` for every top-level import a root has.
+
+    A path only shadows from a root it sits directly under: `src/coverage.py`
+    is `coverage` when `src` is on the path, while `src/nhl_betting_lab/types.py`
+    is `nhl_betting_lab.types` from that same root and shadows nothing. A
+    DIRECTORY is listed whether or not it holds `__init__.py`: without one it
+    is a namespace package, which loses to site-packages today and wins the
+    moment somebody adds the file.
+    """
+    found: list[tuple[str, str, str]] = []
+    for name in tracked:
+        parts = Path(name).parts
+        for root in roots:
+            prefix = tuple(part for part in root.split("/") if part)
+            if parts[: len(prefix)] != prefix:
+                continue
+            remainder = parts[len(prefix) :]
+            if not remainder:
+                continue
+            head = remainder[0]
+            if len(remainder) == 1:
+                if head.endswith(".py"):
+                    found.append((root, name, head[:-3]))
+            else:
+                found.append((root, name, head))
+    return found
 
 
 def test_no_tracked_file_shadows_the_tools_the_suite_line_launches() -> None:
     """No tracked file is named for pytest, coverage or a start-up hook.
 
-    The workflow linter requires `PYTHONSAFEPATH: "1"` on the suite step,
-    which keeps the working directory off `sys.path`. This is the other half,
-    and it is the half that still holds on a laptop, where nobody exports
-    that variable — and the half that covers `PYTHONPATH: src`, which
-    `PYTHONSAFEPATH` does not touch: an explicit entry stays on the path, so
-    `src/sitecustomize.py` would still run before pytest.
+    What this covers: the four basenames above, at any tracked depth. What it
+    does not cover is every other shadowing name — that is the root-scoped
+    rule below, and the two together are what the workflow's `env:` comment
+    points at.
+
+    Neither reaches a file git does not track. `PYTHONSAFEPATH: "1"` on the CI
+    job keeps the working directory off `sys.path` there, which is the
+    untracked half on the runner and only on the runner: on a laptop nobody
+    exports it, and it never removes an explicit `PYTHONPATH` entry on either.
+    That residue is executed, not asserted in prose, in
+    `test_the_gaps_these_guards_still_have_are_the_ones_written_down`.
 
     Asked of git rather than of the filesystem: an untracked file is not what
     CI checks out, and a tracked one is.
@@ -593,67 +698,97 @@ def test_no_tracked_file_shadows_the_tools_the_suite_line_launches() -> None:
     )
 
 
-def test_no_tracked_directory_shadows_those_tools_on_any_declared_import_root() -> None:
-    """The package spelling of the same shadow, at every root the run has.
+def test_no_tracked_name_shadows_a_launched_or_stdlib_module_at_an_import_root() -> None:
+    """The general shape: a tracked top-level name at a root the job declares.
 
-    The roots come from `env.PYTHONPATH` in `tests.yml`, split on `:`, plus
-    the repository root itself. Reading them out of the workflow rather than
-    hard-coding `src` means a second entry added there is covered here on the
-    same commit.
+    Covered: every module `tests.yml` hands to `python -m`, the two start-up
+    hooks, and every name in `sys.stdlib_module_names` — as a `.py` file or as
+    a directory — at the top of the repository root or of any `PYTHONPATH`
+    entry the workflow sets. Both lists are read at run time, the roots off
+    `env.PYTHONPATH` and the tools off the `run:` blocks, so a step added to
+    the workflow is covered by this test on the same commit that adds it.
+
+    Not covered, said plainly: a name nested inside a package, which is an
+    attribute of that package rather than a top-level module; a root nothing
+    in `tests.yml` declares; and any file git does not track.
+
+    This is the rule that was missing when the suite stayed green with a
+    tracked `pyflakes.py` at the repository root — measured on this branch
+    before the rule existed, with the lint step's own module holding an unused
+    import and an undefined name.
     """
     roots = _import_path_roots()
-
     assert "src" in roots and "" in roots, roots
+    launched = _modules_the_workflow_launches()
+    assert {"pip", "pyflakes", "compileall", "coverage", "pytest"} <= launched, (
+        "tests.yml no longer launches the tools this rule was written for: "
+        f"{sorted(launched)}"
+    )
     tracked = _tracked_paths()
     assert tracked, "git ls-files returned nothing; this guard would be vacuous"
-    offenders: list[str] = []
-    for name in tracked:
-        parts = Path(name).parts
-        for root in roots:
-            prefix = tuple(part for part in root.split("/") if part)
-            if parts[: len(prefix)] != prefix:
-                continue
-            remainder = parts[len(prefix) :]
-            if len(remainder) > 1 and remainder[0] in SHADOWING_DIRECTORIES:
-                offenders.append(name)
+
+    forbidden = _shadowable_module_names()
+    offenders = sorted(
+        {
+            (root, name, module)
+            for root, name, module in _top_level_importables(tracked, roots)
+            if module in forbidden
+        }
+    )
 
     assert not offenders, (
-        f"tracked packages that shadow the suite's tools: {sorted(set(offenders))} "
-        f"on import roots {roots}."
+        f"tracked names that shadow a module the required job needs: {offenders}. "
+        f"Import roots read from tests.yml: {roots}."
     )
 
 
-def test_the_shadow_scan_would_notice_one(tmp_path: Path) -> None:
+def test_the_shadow_scan_would_notice_one() -> None:
     """The scan's own proof that it fires, since the repository is clean.
 
-    Both arms are pointed at a synthetic tracked list: the module spelling at
-    the root and under `src`, and the package spelling at both. A guard whose
-    corpus is clean has never been watched fail, and this is the mutation
-    that watches it.
+    A guard whose corpus is clean has never been watched fail. The names below
+    were run against a real interpreter first: a `pyflakes.py` in the working
+    directory made `python -m pyflakes src scripts tests` print one clean line
+    and exit 0 over a module holding an unused import and an undefined name,
+    and a `pyflakes/` package with an `__main__.py` did the same. Both
+    spellings are here, at both roots.
     """
     roots = _import_path_roots()
-    for name in ("coverage.py", "pytest.py", "src/sitecustomize.py", "a/b/pytest.py"):
-        assert Path(name).name in SHADOWING_BASENAMES, name
+    forbidden = _shadowable_module_names()
+
+    def offenders(tracked: list[str]) -> list[str]:
+        return [
+            name
+            for _, name, module in _top_level_importables(tracked, roots)
+            if module in forbidden
+        ]
+
+    for shadow in (
+        "coverage.py",
+        "pytest.py",
+        "pyflakes.py",
+        "compileall.py",
+        "pip.py",
+        "src/sitecustomize.py",
+        "src/struct.py",
+        "pyflakes/__init__.py",
+        "compileall/__main__.py",
+        "src/coverage/__init__.py",
+    ):
+        assert offenders([shadow]) == [shadow], shadow
+
+    for clean in (
+        "tests/test_coverage_report.py",
+        "src/nhl_betting_lab/config.py",
+        "src/nhl_betting_lab/types.py",
+        "docs/coverage/notes.md",
+        "scripts/pytest_helpers.py",
+    ):
+        assert offenders([clean]) == [], clean
+
+    for named in ("coverage.py", "pytest.py", "src/sitecustomize.py", "a/b/pytest.py"):
+        assert Path(named).name in SHADOWING_BASENAMES, named
     for clean in ("tests/test_coverage_report.py", "src/nhl_betting_lab/config.py"):
         assert Path(clean).name not in SHADOWING_BASENAMES, clean
-
-    def package_offenders(tracked: list[str]) -> list[str]:
-        found = []
-        for name in tracked:
-            parts = Path(name).parts
-            for root in roots:
-                prefix = tuple(part for part in root.split("/") if part)
-                if parts[: len(prefix)] != prefix:
-                    continue
-                remainder = parts[len(prefix) :]
-                if len(remainder) > 1 and remainder[0] in SHADOWING_DIRECTORIES:
-                    found.append(name)
-        return found
-
-    assert package_offenders(["coverage/__init__.py"]) == ["coverage/__init__.py"]
-    assert package_offenders(["src/pytest/__init__.py"]) == ["src/pytest/__init__.py"]
-    assert package_offenders(["tests/coverage_helpers.py"]) == []
-    assert package_offenders(["docs/coverage/notes.md"]) == []
 
 
 def test_a_root_coverage_module_is_observed_to_be_the_suite(tmp_path: Path) -> None:
@@ -737,10 +872,17 @@ def test_the_gaps_these_guards_still_have_are_the_ones_written_down(
        is not, and is outside what a tracked-file scan can see.
     3. A `collect_ignore` in a conftest silently drops a module that is not in
        the manifest. Only the five listed guards have a floor.
-    4. `PYTHONSAFEPATH` is set on the CI suite step, not on a laptop. The
-       shadowing basenames are refused at the tracked level for exactly that
-       reason, but an UNTRACKED `coverage.py` in a working copy still shadows a
-       local `python -m coverage run -m pytest -q`.
+    4. `PYTHONSAFEPATH` is set on the CI job, not on a laptop. The shadowing
+       names are refused at the tracked level for exactly that reason, but an
+       UNTRACKED `coverage.py` in a working copy still shadows a local
+       `python -m coverage run -m pytest -q`.
+    5. `PYTHONSAFEPATH` never removes an explicit `PYTHONPATH` entry, so an
+       untracked `src/coverage.py` shadows the tool WITH the variable set —
+       on the runner as much as on a laptop. Nothing in this suite closes
+       that: a `git ls-files` scan cannot see an untracked file, and the
+       variable is not aimed at that entry. What would close it is a step that
+       refuses a working tree holding an untracked shadow, and no such step
+       exists; until one does this sentence is the whole of the coverage.
     """
     # 1. deletion is invisible to the floor, and the count is what is left.
     _synthetic_suite(tmp_path, tests_per_guard=2)
@@ -796,14 +938,14 @@ def test_the_gaps_these_guards_still_have_are_the_ones_written_down(
     assert dropped.returncode == 0, dropped.stdout + dropped.stderr
     assert "test_unprotected" not in dropped.stdout
 
-    # 4. the shadow is closed by a variable the workflow sets, not by Python:
-    #    a run that does not set it is still shadowed by an UNTRACKED file,
-    #    which no `git ls-files` scan can reach. Observed in a subprocess with
-    #    the variable explicitly removed, so the verdict is the same whether
-    #    this suite is running on CI (where the workflow sets it) or on a
-    #    laptop (where nothing does). The first version of this line asserted
-    #    on the AMBIENT environment instead and passed locally while failing
-    #    on CI — the exact shape this file exists to refuse.
+    # 4. the working-directory shadow is closed by a variable the workflow
+    #    sets, not by Python: a run that does not set it is still shadowed by
+    #    an UNTRACKED file, which no `git ls-files` scan can reach. Observed in
+    #    a subprocess with the variable explicitly removed, so the verdict is
+    #    the same whether this suite is running on CI (where the workflow sets
+    #    it) or on a laptop (where nothing does). The first version of this
+    #    line asserted on the AMBIENT environment instead and passed locally
+    #    while failing on CI — the exact shape this file exists to refuse.
     (tmp_path / "untracked_shadow").mkdir()
     (tmp_path / "untracked_shadow" / "coverage.py").write_text(
         "import sys\n\nprint('9999 passed in 0.01s')\nsys.exit(0)\n", encoding="utf-8"
@@ -828,3 +970,28 @@ def test_the_gaps_these_guards_still_have_are_the_ones_written_down(
     )
     assert shadowed.returncode == 0, shadowed.stdout + shadowed.stderr
     assert "9999 passed" in shadowed.stdout, shadowed.stdout
+
+    # 5. and the variable does not reach an explicit PYTHONPATH entry. Same
+    #    shadow, moved one directory across, with PYTHONSAFEPATH="1" set the
+    #    way the workflow sets it: still exit 0, still a fabricated pass line.
+    #    This is the route that stays open on the runner, and it is why the
+    #    tracked scan above covers `src` rather than only the root.
+    (tmp_path / "path_shadow" / "src").mkdir(parents=True)
+    (tmp_path / "path_shadow" / "src" / "coverage.py").write_text(
+        "import sys\n\nprint('9999 passed in 0.01s')\nsys.exit(0)\n", encoding="utf-8"
+    )
+    (tmp_path / "path_shadow" / "test_truth.py").write_text(
+        "def test_fails() -> None:\n    raise AssertionError('the suite ran')\n",
+        encoding="utf-8",
+    )
+    on_the_path = subprocess.run(
+        [sys.executable, "-m", "coverage", "run", "-m", "pytest", "-q",
+         "-p", "no:cacheprovider"],
+        cwd=tmp_path / "path_shadow",
+        env=dict(bare, PYTHONSAFEPATH="1", PYTHONPATH="src"),
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    assert on_the_path.returncode == 0, on_the_path.stdout + on_the_path.stderr
+    assert "9999 passed" in on_the_path.stdout, on_the_path.stdout

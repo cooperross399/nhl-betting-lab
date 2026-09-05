@@ -268,9 +268,15 @@ CI's required status check is the job named **`Full test suite`**, and
 workflow and executing its run blocks under stubs: the suite line may carry
 only `-q`, `-rs` or `--color=no` and must be launched by `python -m coverage
 run -m pytest`; the job may carry no `if:`, `needs:` or `strategy:`, and no
-other job in that file may carry an `if:` for a `needs:` to point at; and each
-of its four tool lines is pinned as a whole command and observed under stubs to
-be reached.
+other job in that file may carry an `if:` for a `needs:` to point at; every
+line in that file's `PINNED_TOOL_LINES` is pinned as a whole command and
+observed under stubs to be reached; and every step of the job that starts an
+interpreter must have `PYTHONSAFEPATH: "1"` in effect, which keeps the checkout
+ROOT off `sys.path` so a `coverage.py` or `pyflakes.py` sitting there is not
+the tool that runs. It does not touch the explicit `PYTHONPATH: src`.
+`tests/test_the_guards_exist.py` refuses the TRACKED half of both places; an
+untracked file on the `PYTHONPATH` entry is reached by neither, and is executed
+as a known gap there rather than described as covered.
 
 ## Where the card comes from
 
