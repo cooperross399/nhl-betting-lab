@@ -44,7 +44,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from nhl_betting_lab.stores import read_store
+from nhl_betting_lab.stores import existing_row_count, read_store
 
 from nhl_betting_lab.backtest.team_walk_forward import (
     settle_moneyline,
@@ -468,7 +468,25 @@ def settle_snapshots(
             existing = read_store(
                 ledger_path, columns=LEDGER_COLUMNS, for_append=True
             )
-            existing_rows = len(existing)
+            # THE FLOOR IS NOT THE PARSE. `len(existing)` is what pandas
+            # managed to read; `existing_row_count` is a line count taken
+            # straight off the file. A guard whose floor comes from the same
+            # read it is protecting cannot catch that read going wrong — it
+            # simply lowers the bar to match, and a short write sails
+            # through. `merge_capture_store` published a one-row file over a
+            # five-hundred-row store that way and exited 0, because its floor
+            # was the zero a failed read had just returned.
+            #
+            # `read_store(for_append=True)` already raises on a damaged file,
+            # which closes the loud version of that. This closes the quiet
+            # one: `stat` failing, or any future path that returns a short
+            # frame without raising. The two observations fail for unrelated
+            # reasons, so the maximum of them is only wrong if both are, and
+            # `existing_row_count` says in its own docstring that every
+            # shrink guard here needs it. This one did not use it.
+            existing_rows = max(
+                len(existing), existing_row_count(ledger_path)
+            )
             frame = pd.concat([existing, frame], ignore_index=True)
         # The ledger only ever grows: it is an append-only record of opinions
         # that have already settled, and a season of it cannot be
