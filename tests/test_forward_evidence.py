@@ -365,3 +365,54 @@ def test_an_empty_snapshot_settles_exactly_once(tmp_path: Path) -> None:
 
     assert first.snapshots_settled == 1
     assert second.snapshots_seen == 0
+
+
+def test_the_ledger_floor_is_not_taken_from_the_read_it_protects(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A shrink guard whose floor comes from its own read cannot catch that
+    read going wrong: it lowers the bar to match, and the short write sails
+    through. `merge_capture_store` published a one-row file over a
+    five-hundred-row store exactly that way and exited 0, because its floor
+    was the zero a failed read had just returned.
+
+    Here the parse comes back short WITHOUT raising — the quiet failure, not
+    the loud one `read_store(for_append=True)` already covers by raising. The
+    line count taken off the file is an unrelated observation, so the guard
+    still sees the rows that are really there and refuses.
+    """
+    from nhl_betting_lab.stores import existing_row_count
+
+    _snapshot(tmp_path, [_price_row()])
+    processed = tmp_path / "processed"
+    processed.mkdir(parents=True, exist_ok=True)
+    ledger = processed / fe.LEDGER_FILENAME
+    real = pd.DataFrame(
+        [{column: "" for column in fe.LEDGER_COLUMNS} for _ in range(40)]
+    )
+    real.to_csv(ledger, index=False, lineterminator="\n")
+
+    assert existing_row_count(ledger) == 40, "the file really holds 40 rows"
+
+    monkeypatch.setattr(
+        fe, "read_store", lambda *args, **kwargs: real.head(3).copy()
+    )
+
+    with pytest.raises(ValueError, match="append-only"):
+        _settle(tmp_path, _logs(shots=5.0), _games())
+
+    assert existing_row_count(ledger) == 40, (
+        "the ledger on disk must be untouched after a refused write"
+    )
+
+
+def test_the_floor_still_permits_an_honest_append(tmp_path: Path) -> None:
+    """A guard that refuses correct work is a guard somebody deletes, so the
+    accept direction is pinned beside the reject one."""
+    from nhl_betting_lab.stores import existing_row_count
+
+    _snapshot(tmp_path, [_price_row()])
+    _settle(tmp_path, _logs(shots=5.0), _games())
+    ledger = tmp_path / "processed" / fe.LEDGER_FILENAME
+
+    assert existing_row_count(ledger) == 1, "an honest first write is allowed"
