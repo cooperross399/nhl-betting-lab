@@ -18,6 +18,30 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
+    # PYTHONSAFEPATH keeps the checked-out repository OUT of sys.path. It is
+    # declared for the whole job rather than on the suite step, because
+    # `python -m <tool>` resolves <tool> against the working directory before
+    # site-packages on EVERY step that starts an interpreter. Measured on this
+    # branch: a three-line `pyflakes.py` at the repository root, printing one
+    # clean line and exiting 0, satisfied the lint step while a module under
+    # `src/` held an unused import and an undefined name; a `compileall.py` did
+    # the same to the compile step with a syntax error sitting in `src/`. Set
+    # here, a step added later inherits it, and the linter in
+    # tests/test_workflows.py requires it in effect on every step whose block
+    # names an interpreter -- wherever it is declared.
+    #
+    # It does NOT drop an explicit PYTHONPATH entry. `src/coverage.py` is still
+    # imported ahead of the real tool with this set: measured, exit 0 and a
+    # fabricated pass line. tests/test_the_guards_exist.py refuses a TRACKED
+    # file or directory at the top of any import root this file declares whose
+    # name is one this job launches with `python -m`, a start-up hook, or a
+    # stdlib top-level name. Neither half reaches a file git does not track --
+    # one an earlier step writes onto the runner, or one sitting in a working
+    # copy. That residue is run, not argued, in tests/test_the_guards_exist.py
+    # ::test_the_gaps_these_guards_still_have_are_the_ones_written_down.
+    env:
+      PYTHONSAFEPATH: "1"
+
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -53,13 +77,36 @@ jobs:
         # A module can be syntactically invalid and still pass the suite if no
         # test imports it. In the EPL lab one sat broken for over a month that
         # way, failing only the scheduled job nobody reads.
+        #
+        # Each directory is asserted to exist first, because
+        # `python -m compileall -q missing/` prints "Can't list" and exits 0 —
+        # measured, not assumed — so a renamed directory would compile nothing
+        # and pass. `-f` because a stale .pyc makes a broken module look
+        # compiled. tests/test_workflows.py runs this block under stubs with
+        # the directories absent and demands a non-zero exit.
         run: |
-          python -m compileall -q src scripts
+          for directory in src scripts tests; do
+            test -d "$directory" || { echo "::error::$directory is missing"; exit 1; }
+          done
+          python -m compileall -q -f src scripts tests
 
       - name: Run the full test suite
         # No credential is provided on purpose: every test must pass without
         # one. A test that needed a live key would make the suite unrunnable on
         # a fork and would risk exposing the key in a log.
+        #
+        # The shadowing this line is exposed to, and what covers which half of
+        # it, is written out on the job's `env:` above. PYTHONSAFEPATH comes
+        # from there.
+        #
+        # PYTHONPATH is per-step rather than job-wide. It is not that only
+        # these steps NEED it — the Install step runs `pip install -e .`, after
+        # which nothing needs it: measured 2026-09-05 in a clone installed the
+        # way this job installs it, `env -u PYTHONPATH PYTHONSAFEPATH=1 python
+        # -m coverage run -m pytest -q` passes the whole suite and reports the
+        # same coverage total. It is per-step so that a step which should be
+        # importing the INSTALLED package cannot silently satisfy itself from
+        # the checkout instead, which is the failure `src` on the path invites.
         env:
           PYTHONPATH: src
         run: |

@@ -26,6 +26,21 @@ def _read(relative: str) -> str:
     return (PROJECT_ROOT / relative).read_text(encoding="utf-8")
 
 
+def test_the_two_globs_this_module_is_parametrised_over_are_not_empty() -> None:
+    """A per-script or per-workflow rule over an empty list checks nothing.
+
+    Both lists are built by a glob at import time, and a glob over a moved or
+    renamed directory is an empty list, not an error. Every parametrised test
+    below would then collect zero cases and this module would report green
+    over a repository it never read. Absence is never a pass.
+    """
+    assert SCRIPTS, "no scripts/*.py found — the per-script rules ran over nothing"
+    assert WORKFLOWS, (
+        "no .github/workflows/*.yml found — the per-workflow rules ran over "
+        "nothing"
+    )
+
+
 @pytest.mark.parametrize("script", SCRIPTS)
 def test_every_script_appears_in_the_command_reference(script: str) -> None:
     """A script nobody documented is a script nobody will run."""
@@ -99,12 +114,21 @@ def test_no_workflow_grants_write_access_to_contents(workflow: str) -> None:
 
 @pytest.mark.parametrize("workflow", WORKFLOWS)
 def test_every_workflow_pins_python_312(workflow: str) -> None:
+    """Every workflow here sets up Python, and every one pins the same minor.
+
+    This used to `pytest.skip` when a workflow carried no `setup-python` step.
+    No workflow in this repository is in that state, so the skip was a branch
+    that had never run and could only ever fire on a workflow that had
+    silently stopped installing the interpreter — which is a finding, not an
+    exemption. The parsed, spelling-independent half of this rule (a string,
+    an exact X.Y) lives in `tests/test_workflows.py`; this keeps the exact
+    minor pinned to the one the lab is measured on.
+    """
     text = (PROJECT_ROOT / ".github" / "workflows" / workflow).read_text(
         encoding="utf-8"
     )
-    if "setup-python" not in text:
-        pytest.skip("This workflow does not run Python.")
 
+    assert "setup-python" in text, f"{workflow} no longer sets up Python"
     assert 'python-version: "3.12"' in text
 
 
@@ -302,8 +326,10 @@ def test_state_restore_names_the_artifact_it_wants(workflow: str) -> None:
     text = (PROJECT_ROOT / ".github" / "workflows" / workflow).read_text(
         encoding="utf-8"
     )
-    if "gh run download" not in text:
-        pytest.skip("This workflow restores no state.")
+    # Both named workflows restore state; that is why they are the two named.
+    # A restore step that disappeared used to be a skip here, which is a rule
+    # that stops checking exactly when the thing it checks is removed.
+    assert "gh run download" in text, f"{workflow} no longer restores state"
 
     for line in text.splitlines():
         if "gh run download" in line:

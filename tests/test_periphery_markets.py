@@ -23,7 +23,14 @@ from nhl_betting_lab.providers import odds_api
 from nhl_betting_lab.providers.odds_api import normalize_event
 from nhl_betting_lab.reports.card_pricing import price_team_markets, selection_key
 
-from tests.test_team_model import balanced_league
+# Imported as a bare module, not as `tests.test_team_model`: the package
+# spelling resolves only because the repository root happens to be on
+# `sys.path`, and CI's job now runs under `PYTHONSAFEPATH=1` so that a root
+# `coverage.py` does not shadow the tools its steps launch. That variable is
+# set by the workflow, not by Python, so the root is still on `sys.path` in a
+# local run. pytest puts `tests/` on the path itself, so this spelling works
+# either way.
+from test_team_model import balanced_league
 
 
 HOME = "Toronto Maple Leafs"
@@ -556,7 +563,7 @@ def test_a_scratch_run_cannot_freeze_into_the_real_evidence_archive(
     become the season's first forward evidence."""
     from nhl_betting_lab.config import DATA_DIR
 
-    from tests.test_scripts import load_script
+    from test_scripts import load_script
 
     module = load_script("run_gameday_card.py")
     real_archive = DATA_DIR / "archive" / "priced_snapshots"

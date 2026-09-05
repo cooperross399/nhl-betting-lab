@@ -379,35 +379,64 @@ def test_the_report_prints_the_match_rate_per_market() -> None:
     assert "DOES NOT RECONCILE" not in rendered
 
 
-def test_the_sample_grid_covers_every_line_the_bought_file_holds() -> None:
-    """The grid drifting away from the books is how the loss began."""
-    from pathlib import Path
+def test_a_bought_line_off_the_sample_grid_is_named_in_the_report() -> None:
+    """The grid drifting away from the books is how the loss began.
 
-    import pandas as pd
-
+    This used to read `data/processed/historical_team_prices.csv` and
+    `pytest.skip` when it was absent. `.gitignore` keeps that file out of
+    every checkout CI makes, so on CI the assertion had never run once — a
+    permanent skip wearing a test's name. The check now lives where the data
+    is: `lines_outside_the_grid` runs inside `build_team_measurement`, so a
+    bought line the grid cannot score is named in the standing notes of the
+    tracked measurement report. Both directions are asserted here on a
+    fixture: a line off the grid is named, and a grid-conformant store adds
+    no note.
+    """
     from nhl_betting_lab.backtest.team_walk_forward import (
         DEFAULT_TOTAL_LINES,
         PUCK_LINES,
     )
-    from nhl_betting_lab.config import PROCESSED_DIR
 
-    path = Path(PROCESSED_DIR) / "historical_team_prices.csv"
-    if not path.is_file():
-        import pytest
+    def bought(total_line: float, puck_line: float) -> pd.DataFrame:
+        return _prices(
+            [
+                {
+                    "date": "2025-01-05",
+                    "home_team": "Toronto Maple Leafs",
+                    "away_team": "Boston Bruins",
+                    "market": "total_goals",
+                    "selection": "over",
+                    "line": total_line,
+                    "american_odds": -110,
+                },
+                {
+                    "date": "2025-01-05",
+                    "home_team": "Toronto Maple Leafs",
+                    "away_team": "Boston Bruins",
+                    "market": "puck_line",
+                    "selection": "away",
+                    "line": puck_line,
+                    "american_odds": -110,
+                },
+            ]
+        )
 
-        pytest.skip("No bought team prices in this checkout.")
-    bought = pd.read_csv(path)
-    totals = set(
-        bought[bought["market"] == "total_goals"]["line"].dropna().unique()
+    assert 14.5 not in DEFAULT_TOTAL_LINES and 7.5 not in PUCK_LINES
+    drifted = tmm.lines_outside_the_grid(bought(14.5, 7.5))
+
+    assert drifted == {"total_goals": [14.5], "puck_line": [7.5]}
+
+    report = tmm.build_team_measurement(_samples(400), bought(14.5, 7.5))
+    rendered = tmm.render_team_measurement(report)
+
+    assert "outside the sample grid" in rendered
+    assert "`total_goals`" in rendered and "14.5" in rendered
+    assert "`puck_line`" in rendered and "7.5" in rendered
+
+    # ...and a store the grid covers — the puck line either sign — is silent.
+    conformant = bought(DEFAULT_TOTAL_LINES[3], -PUCK_LINES[2])
+
+    assert tmm.lines_outside_the_grid(conformant) == {}
+    assert "outside the sample grid" not in tmm.render_team_measurement(
+        tmm.build_team_measurement(_samples(400), conformant)
     )
-    spreads = {
-        abs(v)
-        for v in bought[bought["market"] == "puck_line"]["line"]
-        .dropna()
-        .unique()
-    }
-
-    assert totals <= set(DEFAULT_TOTAL_LINES), sorted(
-        totals - set(DEFAULT_TOTAL_LINES)
-    )
-    assert spreads <= set(PUCK_LINES), sorted(spreads - set(PUCK_LINES))

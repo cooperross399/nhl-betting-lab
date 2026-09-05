@@ -47,8 +47,10 @@ from nhl_betting_lab.rest import played_previous_day
 # the deep ones are thin (4 rows at 2.0, 10 at 13.0) but a line the grid does
 # not carry is a price the measurement silently discards, which is precisely
 # how a third of the bought totals once vanished. The discipline test
-# `test_the_sample_grid_covers_every_line_the_bought_file_holds` fails the
-# build when the store outgrows this tuple again.
+# `reports.team_markets_measurement.lines_outside_the_grid` names every bought
+# line this tuple cannot score in the report's standing notes, so the store
+# outgrowing it is visible in the tracked measurement rather than waiting on
+# a test that could only run where the gitignored bought file is.
 DEFAULT_TOTAL_LINES: tuple[float, ...] = (
     2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 6.5, 7.0, 7.5, 8.0, 8.5,
     9.0, 9.5, 10.0, 10.5, 11.0, 11.5, 12.0, 13.0, 13.5,

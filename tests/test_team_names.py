@@ -139,18 +139,69 @@ def test_loading_without_a_saved_map_rebuilds_from_the_cache(
     assert tn.resolve_team("Toronto Maple Leafs", loaded) == "TOR"
 
 
-def test_the_real_cache_covers_every_current_franchise() -> None:
-    """Thirty-two clubs plus Arizona, which is in the historical seasons."""
-    mapping = tn.build_team_name_map()
-    if not mapping or len(set(mapping.values())) < 30:
-        pytest.skip("The boxscore cache is not populated in this checkout.")
+#: Every current franchise as the boxscore spells it, plus Arizona, which the
+#: historical seasons still carry. (abbrev, placeName, commonName).
+FRANCHISES: tuple[tuple[str, str, str], ...] = (
+    ("ANA", "Anaheim", "Ducks"),
+    ("ARI", "Arizona", "Coyotes"),
+    ("BUF", "Buffalo", "Sabres"),
+    ("CGY", "Calgary", "Flames"),
+    ("CAR", "Carolina", "Hurricanes"),
+    ("CHI", "Chicago", "Blackhawks"),
+    ("COL", "Colorado", "Avalanche"),
+    ("CBJ", "Columbus", "Blue Jackets"),
+    ("DAL", "Dallas", "Stars"),
+    ("DET", "Detroit", "Red Wings"),
+    ("EDM", "Edmonton", "Oilers"),
+    ("FLA", "Florida", "Panthers"),
+    ("LAK", "Los Angeles", "Kings"),
+    ("MIN", "Minnesota", "Wild"),
+    ("MTL", "Montréal", "Canadiens"),
+    ("NSH", "Nashville", "Predators"),
+    ("NJD", "New Jersey", "Devils"),
+    ("NYI", "New York", "Islanders"),
+    ("NYR", "New York", "Rangers"),
+    ("OTT", "Ottawa", "Senators"),
+    ("PHI", "Philadelphia", "Flyers"),
+    ("PIT", "Pittsburgh", "Penguins"),
+    ("SJS", "San Jose", "Sharks"),
+    ("SEA", "Seattle", "Kraken"),
+    ("STL", "St. Louis", "Blues"),
+    ("TBL", "Tampa Bay", "Lightning"),
+    ("TOR", "Toronto", "Maple Leafs"),
+    ("UTA", "Utah", "Mammoth"),
+    ("VAN", "Vancouver", "Canucks"),
+    ("VGK", "Vegas", "Golden Knights"),
+    ("WSH", "Washington", "Capitals"),
+    ("WPG", "Winnipeg", "Jets"),
+)
 
-    assert len(set(mapping.values())) >= 32
+
+def test_a_full_league_cache_covers_every_current_franchise(tmp_path: Path) -> None:
+    """Thirty-two clubs plus Arizona, which is in the historical seasons.
+
+    This used to read the real boxscore cache and `pytest.skip` when it was
+    thin. `.gitignore` makes `data/raw/` untrackable, so on CI the cache is
+    always thin and the assertion had never run there once — a permanent skip
+    wearing a test's name. The cache is built here instead, one boxscore per
+    franchise, so the resolution of every current club is asserted on every
+    run; BOS is the fixed away side in `_cache` and comes out of that.
+    """
+    for index, (abbrev, place, common) in enumerate(FRANCHISES, start=1):
+        _cache(tmp_path, abbrev=abbrev, place=place, common=common, game_id=index)
+
+    mapping = tn.build_team_name_map(tmp_path)
+
+    assert len(FRANCHISES) == 32, "one boxscore per franchise, Arizona included"
+    assert set(mapping.values()) >= {abbrev for abbrev, _, _ in FRANCHISES} | {"BOS"}
+    assert len(set(mapping.values())) >= 33
     for name in (
         "Toronto Maple Leafs",
         "Montreal Canadiens",
         "St Louis Blues",
         "Vegas Golden Knights",
         "Utah Mammoth",
+        "Arizona Coyotes",
+        "Boston Bruins",
     ):
         assert tn.resolve_team(name, mapping) is not None, name

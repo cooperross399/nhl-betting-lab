@@ -40,6 +40,17 @@ def load_script(name: str) -> ModuleType:
 ALL_SCRIPTS = sorted(path.name for path in SCRIPTS_DIR.glob("*.py"))
 
 
+def test_the_script_directory_was_actually_found() -> None:
+    """Every parametrised test below collects nothing if the glob is empty.
+
+    A renamed `scripts/` directory would then pass every per-script check by
+    having no scripts to check — the same fail-open shape as a gate that is
+    never reached. Absence is never a pass.
+    """
+    assert SCRIPTS_DIR.is_dir(), f"{SCRIPTS_DIR} is not a directory"
+    assert ALL_SCRIPTS, f"no *.py under {SCRIPTS_DIR}"
+
+
 @pytest.mark.parametrize("name", ALL_SCRIPTS)
 def test_every_script_imports_and_exposes_main(name: str) -> None:
     module = load_script(name)
