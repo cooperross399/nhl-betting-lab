@@ -25,6 +25,17 @@ So the rules here are of two kinds, and the file says which is which:
   question is not what the block says but whether it can reach its end after
   a command in it failed.
 
+Where a structural rule chooses between a blocklist and a whitelist it is a
+whitelist, because a blocklist proves only that the spellings in it are
+absent. Three rules here were blocklists and were measured to pass a mutation
+nobody had thought of: `pytest --version` narrows nothing, appears in no list
+of narrowing flags, exits 0 having run no test, and was green;
+`: python -m coverage report` contains the whole pinned command and runs none
+of it, and was green; and `needs: prep` beside a `prep` carrying `if: false`
+switches the required job off while GitHub reports it Success, and was green.
+The suite line's arguments, the required job's tool lines, and the job keys
+are now enumerations of what is ALLOWED.
+
 Ported from the NCAAF lab's linter, mechanism by mechanism, and scoped to what
 this repository's nine workflows actually are. The template lab has two
 workflows and neither tolerates a failure; this one has seven OPERATIONAL
@@ -188,9 +199,80 @@ SUITE_LAUNCHERS = frozenset({"python", "python3", "pytest"})
 #: context branch protection looks for, hand its steps to another file, or
 #: switch it off. `strategy` because a matrix job reports as
 #: `Full test suite (3.12)`, which matches nothing.
+#:
+#: `needs` because it is `if: false` reworded. A one-line `needs: prep` on the
+#: required job, where `prep` carries `if: false` or simply fails, means the
+#: required job never runs. GitHub's documentation on troubleshooting required
+#: checks states that a check skipped by a CONDITION is reported as Success,
+#: while one skipped by a PATH filter stays Pending — which is why
+#: `check_the_pull_request_trigger_is_unfiltered` is a separate rule with a
+#: different consequence. That claim is GitHub's and is not re-measured here;
+#: the rule does not rest on it either way, because a required job that did
+#: not run has not run the suite whatever colour the tick is. So the cheapest
+#: way to switch this gate off is not `if:` at all: it is one word naming a
+#: job that is switched off instead.
 DISQUALIFYING_JOB_KEYS = frozenset(
-    {"if", "continue-on-error", "uses", "strategy", "defaults", "container"}
+    {"if", "continue-on-error", "uses", "strategy", "defaults", "container", "needs"}
 )
+
+#: The complete argument list the suite line may carry, as a WHITELIST. A
+#: blocklist of narrowing flags proves only that those spellings are absent:
+#: `--version`, `-h` and `--help` are in no blocklist, exit 0, and run no test
+#: at all — measured, and the step is green. Anything not named here is
+#: rejected whether or not anyone has thought about what it does.
+#:
+#: `-q` is the shipped invocation. `-rs` and `--color=no` are here because they
+#: change only what is PRINTED; every other reporting flag can wait until
+#: something wants one, since adding to a whitelist is a diff a reviewer reads.
+PERMITTED_SUITE_ARGUMENTS = frozenset({"-q", "-rs", "--color=no"})
+
+#: The words that may stand in front of `pytest` on the suite line, as whole
+#: prefixes rather than as a first word. `python -m coverage run -m pytest` is
+#: this repository's line; the plain forms are here so the rule states the
+#: shape rather than one spelling of it.
+PERMITTED_SUITE_PREFIXES: frozenset[tuple[str, ...]] = frozenset(
+    {
+        ("pytest",),
+        ("python", "-m", "pytest"),
+        ("python3", "-m", "pytest"),
+        ("python", "-m", "coverage", "run", "-m", "pytest"),
+        ("python3", "-m", "coverage", "run", "-m", "pytest"),
+    }
+)
+
+#: Every tool line the required job runs, pinned as a WHOLE command. A rule
+#: that pins a step by substring accepts `: python -m coverage report` — the
+#: `:` builtin ignores its arguments and returns 0 — and the step then reports
+#: success having run nothing. Measured on this workflow: `: ` in front of the
+#: lint line and in front of the coverage-floor line passed every rule in this
+#: file. Each line here is additionally EXECUTED under stubs and required to
+#: reach its command at top level, so a future no-op prefix fails the rule
+#: that reads the parse AND the rule that runs the shell.
+PINNED_TOOL_LINES: frozenset[str] = frozenset(
+    {
+        "python -m pyflakes src scripts tests",
+        "python -m compileall -q -f src scripts tests",
+        "python -m coverage run -m pytest -q",
+        "python -m coverage report",
+    }
+)
+
+#: The words whose presence makes a line one of the pinned ones. A line
+#: mentioning any of these in the required job must be spelled exactly as
+#: `PINNED_TOOL_LINES` has it.
+PINNED_TOOL_WORDS = frozenset({"pyflakes", "compileall", "coverage", "pytest"})
+
+#: `PYTHONSAFEPATH` keeps the checked-out repository out of `sys.path`. Without
+#: it `python -m coverage run -m pytest -q` resolves `coverage` against the
+#: working directory first, so a `coverage.py` at the repository root shadows
+#: the tool: measured, a three-line one printing a pass count and exiting 0
+#: satisfied the whole step. Required on the suite step, as the string "1".
+SAFE_PATH_VARIABLE = "PYTHONSAFEPATH"
+
+#: (The names a shadowing file could take — `pytest.py`, `coverage.py`,
+#: `sitecustomize.py`, `usercustomize.py` — are refused at the TRACKED level by
+#: `tests/test_the_guards_exist.py`, which is where a `git ls-files` scan
+#: belongs. This file's half of that shape is the variable above.)
 
 #: The only `if:` a step in the suite job may carry. `always()` WIDENS when a
 #: step runs; every other expression can evaluate false.
@@ -1218,6 +1300,175 @@ def check_the_required_job_runs_the_whole_suite(path: Path) -> None:
             )
 
 
+def check_no_job_in_the_required_workflow_is_conditional(path: Path) -> None:
+    """No job in this file carries `if:` — not just the required one.
+
+    `check_the_required_job_is_unconditional_and_undelegated` bans `if:` and
+    `needs:` on the required job. This is the other half: `needs:` is only a
+    switch because the job it points at can be switched off, so a second job
+    carrying `if: false` is one word away from disabling the gate, and the
+    word is not in the required job's own keys where a reviewer looks for it.
+    Banning the condition anywhere in the file leaves nothing for a `needs:`
+    to point at.
+    """
+    for job_id, job in jobs_of(load(path)).items():
+        condition = condition_of(job)
+        assert condition is None, (
+            f"{path.name}: job {job_id!r} carries `if: {condition}`. A "
+            "conditionally-skipped job is reported by GitHub as Success, so "
+            "one `needs:` naming this job would switch the required check off "
+            "while it went on reporting green."
+        )
+
+
+def check_the_suite_line_carries_only_permitted_arguments(path: Path) -> None:
+    """A WHITELIST of the suite line's arguments, and of what launches it.
+
+    A blocklist proves that the spellings in it are absent and nothing else.
+    `pytest --version`, `-h` and `--help` narrow nothing, appear in no
+    blocklist, and exit 0 having collected no test. Measured against this
+    repository's `tests.yml` on 2026-09-04, each of the three passed every
+    rule in `CHECKS`; the only thing that objected was
+    `test_the_control_is_the_shape_of_the_real_workflow`, which pins the real
+    suite line as a whole string and would have been edited alongside it. So
+    the question the rule asks is inverted: not "is this argument known to be
+    bad" but "is this argument one of the three the suite may carry".
+    """
+    _, job = _the_required_job(path)
+    for step in steps_of(job):
+        block = step.get("run")
+        if not isinstance(block, str):
+            continue
+        name = step.get("name", "<unnamed step>")
+        for line in pytest_lines_in(block):
+            try:
+                words = shlex.split(line)
+            except ValueError:
+                words = line.split()
+            index = words.index("pytest") if "pytest" in words else -1
+            assert index >= 0, (
+                f"{path.name}: the suite step {name!r} does not carry `pytest` "
+                f"as a word of its own: {line!r}."
+            )
+            prefix = tuple(words[: index + 1])
+            assert prefix in PERMITTED_SUITE_PREFIXES, (
+                f"{path.name}: the suite step {name!r} launches pytest as "
+                f"{list(prefix)}, which is not one of "
+                f"{sorted(PERMITTED_SUITE_PREFIXES)}."
+            )
+            extra = [
+                argument
+                for argument in words[index + 1 :]
+                if argument not in PERMITTED_SUITE_ARGUMENTS
+            ]
+            assert not extra, (
+                f"{path.name}: the suite step {name!r} passes {extra} to "
+                f"pytest: {line!r}. The suite line may carry only "
+                f"{sorted(PERMITTED_SUITE_ARGUMENTS)}. An argument nobody has "
+                "thought about is rejected by default, because `--version` "
+                "exits 0 having run no test and is in no blocklist."
+            )
+
+
+def check_the_suite_step_keeps_the_checkout_off_the_import_path(path: Path) -> None:
+    """`PYTHONSAFEPATH: "1"` on the suite step, read off the parse.
+
+    `python -m coverage run -m pytest -q` resolves `coverage` against the
+    working directory before site-packages. A `coverage.py` at the repository
+    root therefore IS the suite: measured in a clone of this branch, a
+    three-line one printing `1521 passed in 0.01s` and exiting 0 satisfied the
+    step, and no rule in this file could see it, because nothing about the
+    workflow changed. `tests/test_the_guards_exist.py` refuses such a file at
+    the tracked level; this is the other half, and it is the half that also
+    covers a file an earlier step wrote.
+    """
+    _, job = _the_required_job(path)
+    for step in steps_of(job):
+        block = step.get("run")
+        if not isinstance(block, str) or not pytest_lines_in(block):
+            continue
+        environment = step.get("env")
+        name = step.get("name", "<unnamed step>")
+        assert isinstance(environment, dict), (
+            f"{path.name}: the suite step {name!r} declares no `env:`, so it "
+            f"cannot be setting {SAFE_PATH_VARIABLE}."
+        )
+        declared = {
+            str(key).strip().upper(): value for key, value in environment.items()
+        }
+        assert str(declared.get(SAFE_PATH_VARIABLE, "")) == "1", (
+            f"{path.name}: the suite step {name!r} does not set "
+            f"`{SAFE_PATH_VARIABLE}: \"1\"` "
+            f"(env is {environment!r}). Without it a `coverage.py` or "
+            "`pytest.py` in the checkout shadows the tool this line launches."
+        )
+
+
+def check_every_pinned_tool_line_is_spelled_and_reached(path: Path) -> None:
+    """Each tool the required job runs, pinned as a WHOLE command and OBSERVED.
+
+    Two halves, because either alone is defeated:
+
+    * structural — every line in the required job that mentions `pyflakes`,
+      `compileall`, `coverage` or `pytest` must be spelled exactly as
+      `PINNED_TOOL_LINES` has it, and every one of those lines must appear.
+      A rule that pinned a step by substring would accept
+      `: python -m coverage report`, which contains the substring and runs
+      nothing; measured on this workflow, that mutation and the same one on
+      the lint line passed every rule in this file.
+    * executed — the block is run under stubs with that line's own command
+      words failing, and the step must exit non-zero AND record the failure at
+      TOP LEVEL. `:` swallows its arguments, so a neutered line records
+      nothing and the block reaches its end: exit 0, no top-level failure, and
+      the rule fires on both counts.
+    """
+    _, job = _the_required_job(path)
+    seen: set[str] = set()
+    for step in steps_of(job):
+        block = step.get("run")
+        if not isinstance(block, str):
+            continue
+        name = step.get("name", "<unnamed step>")
+        for line in commands(block):
+            words = set(command_words(line)) | set(
+                without_quoted_spans(line).split()
+            )
+            if not (words & PINNED_TOOL_WORDS):
+                continue
+            assert line in PINNED_TOOL_LINES, (
+                f"{path.name}: step {name!r} runs {line!r}, which names a "
+                f"pinned tool but is not one of {sorted(PINNED_TOOL_LINES)}. "
+                "The line is pinned whole, because a rule that only required "
+                "the tool's name in it accepts `: ` in front of the tool."
+            )
+            seen.add(line)
+            with tempfile.TemporaryDirectory() as directory:
+                sandbox = Path(directory)
+                result = run_block_under_stubs(
+                    block,
+                    set(command_words(line)),
+                    sandbox,
+                    populate=STANDARD_DIRECTORIES,
+                )
+            assert not result.unmodelled, (
+                f"{path.name}: step {name!r} could not be modelled: "
+                f"{result.unmodelled}"
+            )
+            assert result.exit_code != 0, (
+                f"{path.name}: step {name!r} exited 0 with {line!r} failing."
+            )
+            assert result.top_level_failures, (
+                f"{path.name}: step {name!r} never reached {line!r} at top "
+                "level — its command was not invoked, so the step passes "
+                "whatever the tool would have said."
+            )
+    missing = sorted(PINNED_TOOL_LINES - seen)
+    assert not missing, (
+        f"{path.name}: the required job no longer runs {missing}. A deleted "
+        "gate step is a smaller green, not a passing one."
+    )
+
+
 def check_the_suite_step_fails_when_pytest_fails(path: Path) -> None:
     """Executed: with every command failing, and with only the command that
     carries pytest failing, the suite step's block must exit non-zero. This is
@@ -1316,6 +1567,10 @@ REQUIRED_CHECKS: dict[str, Callable[[Path], None]] = {
     "the_required_job_runs_the_whole_suite": check_the_required_job_runs_the_whole_suite,
     "the_suite_step_fails_when_pytest_fails": check_the_suite_step_fails_when_pytest_fails,
     "the_compile_step_refuses_a_missing_directory": check_the_compile_step_refuses_a_missing_directory,
+    "no_job_in_the_required_workflow_is_conditional": check_no_job_in_the_required_workflow_is_conditional,
+    "the_suite_line_carries_only_permitted_arguments": check_the_suite_line_carries_only_permitted_arguments,
+    "the_suite_step_keeps_the_checkout_off_the_import_path": check_the_suite_step_keeps_the_checkout_off_the_import_path,
+    "every_pinned_tool_line_is_spelled_and_reached": check_every_pinned_tool_line_is_spelled_and_reached,
 }
 
 CHECKS = {**CORPUS_CHECKS, **GATE_CHECKS, **REQUIRED_CHECKS}
@@ -1438,6 +1693,9 @@ jobs:
       - name: Install project
         run: |
           python -m pip install -r requirements.txt
+      - name: Lint for dead names
+        run: |
+          python -m pyflakes src scripts tests
       - name: Compile every module
         run: |
           for directory in src scripts tests; do
@@ -1447,8 +1705,14 @@ jobs:
       - name: Run the full test suite
         env:
           PYTHONPATH: src
+          PYTHONSAFEPATH: "1"
         run: |
           python -m coverage run -m pytest -q
+      - name: Check coverage has not collapsed
+        env:
+          PYTHONPATH: src
+        run: |
+          python -m coverage report
       - name: Confirm no odds were fetched
         if: always()
         run: |
@@ -1457,6 +1721,9 @@ jobs:
 
 SUITE_LINE = "python -m coverage run -m pytest -q"
 SUITE_STEP_HEADER = "      - name: Run the full test suite\n"
+SAFE_PATH_LINE = '          PYTHONSAFEPATH: "1"\n'
+LINT_LINE = "python -m pyflakes src scripts tests"
+COVERAGE_REPORT_LINE = "python -m coverage report"
 COMPILE_LINE = "python -m compileall -q -f src scripts tests"
 COMPILE_GUARD = (
     "          for directory in src scripts tests; do\n"
@@ -1780,6 +2047,118 @@ REPRODUCTIONS: dict[str, tuple[str, str]] = {
         "parses_and_declares_a_trigger",
         mutate("on:\n  pull_request:\n  push:\n    branches: [main]\n", ""),
     ),
+    # -- `needs:` is `if: false` reworded ------------------------------------
+    # GitHub reports a required check skipped by a CONDITION as Success. A
+    # `needs:` naming a job that is switched off, or that simply fails, skips
+    # the required job — so the one word is worth exactly as much as `if:
+    # false` on the job itself, and it is not where a reviewer looks.
+    "needs: on the required job": (
+        "the_required_job_is_unconditional_and_undelegated",
+        mutate(JOB_NAME_LINE, JOB_NAME_LINE + "    needs: prep\n"),
+    ),
+    "needs: as a list on the required job": (
+        "the_required_job_is_unconditional_and_undelegated",
+        mutate(JOB_NAME_LINE, JOB_NAME_LINE + "    needs: [prep]\n"),
+    ),
+    "a second job carrying if: false for a needs: to point at": (
+        "no_job_in_the_required_workflow_is_conditional",
+        GOOD_WORKFLOW
+        + "  prep:\n    name: Prepare\n    runs-on: ubuntu-latest\n"
+        "    if: false\n    steps:\n      - run: 'true'\n",
+    ),
+    "a second job carrying an if: expression": (
+        "no_job_in_the_required_workflow_is_conditional",
+        GOOD_WORKFLOW
+        + "  prep:\n    name: Prepare\n    runs-on: ubuntu-latest\n"
+        "    if: ${{ github.event_name == 'schedule' }}\n"
+        "    steps:\n      - run: 'true'\n",
+    ),
+    # -- the suite line is a whitelist, not a blocklist -----------------------
+    # Each of these exits 0 having collected no test, and none of them is in
+    # any blocklist of narrowing flags. That is the whole argument for the
+    # whitelist: the rule cannot depend on someone having thought of them.
+    "--version in place of a run": (
+        "the_suite_line_carries_only_permitted_arguments",
+        suite_block(SUITE_LINE + " --version"),
+    ),
+    "-h in place of a run": (
+        "the_suite_line_carries_only_permitted_arguments",
+        suite_block(SUITE_LINE + " -h"),
+    ),
+    "--help in place of a run": (
+        "the_suite_line_carries_only_permitted_arguments",
+        suite_block(SUITE_LINE + " --help"),
+    ),
+    "--fixtures in place of a run": (
+        "the_suite_line_carries_only_permitted_arguments",
+        suite_block(SUITE_LINE + " --fixtures"),
+    ),
+    "an argument nobody has thought about": (
+        "the_suite_line_carries_only_permitted_arguments",
+        suite_block(SUITE_LINE + " --some-plugin-flag=off"),
+    ),
+    "the suite launched through an unpinned prefix": (
+        "the_suite_line_carries_only_permitted_arguments",
+        suite_block("python -m coverage run --append -m pytest -q"),
+    ),
+    # -- a gate line pinned by nothing at all ---------------------------------
+    # `:` ignores its arguments and returns 0, so each of these contains the
+    # tool's whole command and runs none of it. Measured: before this rule, the
+    # lint and coverage-floor mutations passed every rule in this file.
+    "the lint line neutered by a leading colon": (
+        "every_pinned_tool_line_is_spelled_and_reached",
+        mutate(f"          {LINT_LINE}\n", f"          : {LINT_LINE}\n"),
+    ),
+    "the coverage floor neutered by a leading colon": (
+        "every_pinned_tool_line_is_spelled_and_reached",
+        mutate(
+            f"          {COVERAGE_REPORT_LINE}\n",
+            f"          : {COVERAGE_REPORT_LINE}\n",
+        ),
+    ),
+    "the lint line echoed instead of run": (
+        "every_pinned_tool_line_is_spelled_and_reached",
+        mutate(f"          {LINT_LINE}\n", f"          echo {LINT_LINE}\n"),
+    ),
+    "the lint step deleted": (
+        "every_pinned_tool_line_is_spelled_and_reached",
+        mutate(
+            f"      - name: Lint for dead names\n        run: |\n          {LINT_LINE}\n",
+            "",
+        ),
+    ),
+    "the coverage floor step deleted": (
+        "every_pinned_tool_line_is_spelled_and_reached",
+        mutate(
+            "      - name: Check coverage has not collapsed\n        env:\n"
+            "          PYTHONPATH: src\n        run: |\n"
+            f"          {COVERAGE_REPORT_LINE}\n",
+            "",
+        ),
+    ),
+    "the coverage floor narrowed to one module": (
+        "every_pinned_tool_line_is_spelled_and_reached",
+        mutate(
+            f"          {COVERAGE_REPORT_LINE}\n",
+            f"          {COVERAGE_REPORT_LINE} --include=src/nhl_betting_lab/config.py\n",
+        ),
+    ),
+    # -- a tracked shadow module defeats the suite line ------------------------
+    "PYTHONSAFEPATH dropped from the suite step": (
+        "the_suite_step_keeps_the_checkout_off_the_import_path",
+        mutate(SAFE_PATH_LINE, ""),
+    ),
+    "PYTHONSAFEPATH set to 0": (
+        "the_suite_step_keeps_the_checkout_off_the_import_path",
+        mutate(SAFE_PATH_LINE, '          PYTHONSAFEPATH: "0"\n'),
+    ),
+    "the suite step env removed entirely": (
+        "the_suite_step_keeps_the_checkout_off_the_import_path",
+        mutate(
+            "        env:\n          PYTHONPATH: src\n" + SAFE_PATH_LINE,
+            "",
+        ),
+    ),
 }
 
 
@@ -1890,12 +2269,20 @@ def test_the_disclosed_holes_are_real(tmp_path: Path) -> None:
        appends to `$GITHUB_PATH` (a shim spelled inline with the word
        `pytest -x` in it IS caught, by the corpus rule reading every pytest
        token in every block — so the narrowing has to live in a file),
-       or `pip install`s a plugin that disables the conftest, or drops a
-       `conftest.py` at the repository root, changes what `python -m pytest
-       -q` does without changing a character of the suite line. `tests/
-       test_the_guards_exist.py` closes the tracked-conftest half of that;
-       the runner's filesystem is outside anything a file-reading test can
-       see. The pip-install shape is written out below and observed to pass.
+       or `pip install`s a plugin that disables the conftest, changes what
+       `python -m pytest -q` does without changing a character of the suite
+       line. Two shapes that used to be on this list are now closed rather
+       than disclosed: a `conftest.py` dropped at the repository root, and a
+       `coverage.py`/`pytest.py`/`sitecustomize.py` shadowing the tools the
+       suite line launches. `tests/test_the_guards_exist.py` refuses those
+       names at the tracked level, and `PYTHONSAFEPATH: "1"` on the suite
+       step keeps the working directory off `sys.path` for the untracked
+       half. What is left of the runner's filesystem — an installed plugin, a
+       `$GITHUB_PATH` shim written from a file — is still outside anything a
+       file-reading test can see, and `PYTHONSAFEPATH` does not touch the
+       explicit `PYTHONPATH: src`, which is why `src/sitecustomize.py` is
+       refused by name rather than left to the variable. The pip-install
+       shape is written out below and observed to pass.
     2. A script file beside the suite. `run: bash scripts/ci.sh` before the
        real suite line passes every rule, because the narrowing is in a file
        the rule never opens. It cannot BE the suite step — pytest has to
@@ -1903,8 +2290,13 @@ def test_the_disclosed_holes_are_real(tmp_path: Path) -> None:
        cannot un-fail the job, because `continue-on-error` is banned. It can
        do anything else.
     3. PYTEST_ADDOPTS assembled from pieces (`PYTEST_ADD""OPTS=-x`, or through
-       a variable) is invisible to the token rule. The executed rule does
-       not help: the value reaches pytest's environment, not its exit code.
+       a variable) is still invisible to the token rule here, and the executed
+       rule cannot help: the value reaches pytest's environment, not its exit
+       code. It is no longer a way in, because `tests/conftest.py::
+       pytest_configure` reads the variable back off `config` and exits 1 —
+       by then the shell has joined the pieces, so the spelling does not
+       matter. The disclosure is kept, narrowed to what it is: this FILE
+       cannot see it, and the thing that can is one directory away.
     4. `cd` reached through a sourced file (`. ./enter.sh`) or a variable is
        invisible to the command-word scanner. `working-directory:` and a
        literal `cd`/`pushd` are closed.
@@ -1912,6 +2304,15 @@ def test_the_disclosed_holes_are_real(tmp_path: Path) -> None:
        swallowed failure in Gameday Refresh is not a gate failing open — it is
        a card not posting, which the workflow reports as degraded — and it is
        not graded here.
+    6. The `needs:`/`if:` and pinned-tool-line rules are scoped to
+       `tests.yml`, because that is the only file carrying a required status
+       check context (read from the API on 2026-09-04:
+       `required_status_checks.contexts == ["Full test suite"]`, repository
+       public). A `needs:` on a job in `provider-policy-pr-gate.yml` would
+       skip that job, and GitHub would report it Success — but nothing
+       requires it, so the merge it would have to fool is not gated on it.
+       Widen `REQUIRED_CHECKS` on the day a second context is required, and
+       this paragraph goes with it.
 
     Closed this round and kept here as a record, because each was open when
     first tried: pytest inside `bash -c '…'` (single- and multi-line), inside
@@ -1947,3 +2348,16 @@ def test_the_disclosed_holes_are_real(tmp_path: Path) -> None:
         if any("continue-on-error" in mapping for mapping in mappings(load(path)))
     ]
     assert tolerant, "no operational workflow tolerates a failure; widen GATE_WORKFLOWS"
+
+    # 6. the required-check rules run over `tests.yml` and nothing else. A
+    #    `needs:` on the other gate workflow's job is accepted here, and the
+    #    disclosure above says why that is not a hole today.
+    other_gate = sorted(GATE_WORKFLOWS - {REQUIRED_CHECK_WORKFLOW})
+    assert other_gate, "there is no second gate workflow to disclose about"
+    for name in other_gate:
+        document = load(WORKFLOWS_DIR / name)
+        assert not [
+            job_id
+            for job_id, job in jobs_of(document).items()
+            if str(job.get("name", "")).strip() == REQUIRED_CHECK_CONTEXT
+        ], f"{name} now carries the required context; widen REQUIRED_CHECKS"

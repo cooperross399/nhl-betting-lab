@@ -248,14 +248,29 @@ PYTHONPATH=src .venv/bin/python -m compileall -q -f src scripts tests
 ```
 
 `pytest -q` over the whole suite is the only run there is. A subset run — a
-path, `-k`, `--ignore`, `--deselect`, or the same through `PYTEST_ADDOPTS` —
-exits 1 before a test runs, because a hard-rule guard that collected nothing
-is a gate that was never reached (`tests/conftest.py`,
-`tests/test_the_guards_exist.py`). A run with a skip, an xfail or an xpass in
-it exits 1 as well; there is no exemption list. CI's required status check is
-the job named **`Full test suite`**, and `tests/test_workflows.py` pins that
-job to this same invocation by parsing the workflow and executing its run
-blocks under stubs.
+path, `-k`, `-m`, `--ignore`, `--ignore-glob`, `--deselect`, an `addopts` in
+`pyproject.toml`, or the same through `PYTEST_ADDOPTS` — exits 1 before a test
+runs. The narrowing flags are read back off pytest's own configuration rather
+than looked for in a command line, so they read the same however they were
+assembled; a positional path is caught by its effect, when a hard-rule guard
+collects nothing. Losing one test of a guard is caught too: the floor is per
+TEST, comparing what each guard module defines on disk against what the run
+collected (`tests/conftest.py`, `tests/test_the_guards_exist.py`).
+
+A run with a skip, an xfail or an xpass in it exits 1 as well — including a
+skip decided during COLLECTION, which is the shape a module-level
+`pytest.skip(allow_module_level=True)` or `pytest.importorskip` takes and
+which the run-time hook alone was measured not to see. There is no exemption
+list.
+
+CI's required status check is the job named **`Full test suite`**, and
+`tests/test_workflows.py` pins that job to this same invocation by parsing the
+workflow and executing its run blocks under stubs: the suite line may carry
+only `-q`, `-rs` or `--color=no` and must be launched by `python -m coverage
+run -m pytest`; the job may carry no `if:`, `needs:` or `strategy:`, and no
+other job in that file may carry an `if:` for a `needs:` to point at; and each
+of its four tool lines is pinned as a whole command and observed under stubs to
+be reached.
 
 ## Where the card comes from
 

@@ -70,8 +70,17 @@ jobs:
         # No credential is provided on purpose: every test must pass without
         # one. A test that needed a live key would make the suite unrunnable on
         # a fork and would risk exposing the key in a log.
+        #
+        # PYTHONSAFEPATH keeps the checkout OUT of sys.path. `python -m
+        # coverage` puts the working directory first otherwise, so a file named
+        # `coverage.py` at the repository root shadows the tool this line
+        # launches: measured, a three-line one printing "1521 passed in 0.01s"
+        # and exiting 0 satisfied the whole step. The same is true of a root
+        # `pytest.py`. tests/test_the_guards_exist.py refuses such a file at
+        # the tracked level; this closes the untracked half, on the runner.
         env:
           PYTHONPATH: src
+          PYTHONSAFEPATH: "1"
         run: |
           python -m coverage run -m pytest -q
 

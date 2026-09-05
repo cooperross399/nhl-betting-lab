@@ -742,14 +742,22 @@ literally.
   — the `name:` of the job in `.github/workflows/tests.yml` — so nothing merges
   with it red. `tests/test_workflows.py` pins that job to the whole suite:
   it parses the workflow with `yaml.safe_load`, demands exactly one job with
-  that name, no `if:`, no `continue-on-error`, no shell override, no
-  narrowing flag or positional on the pytest line, no `PYTEST_ADDOPTS`
-  anywhere, an unfiltered `pull_request` trigger — and then executes every
-  run block of that job under stubs and reads the exit code, which is what
-  catches `if ! pytest; then echo; fi` and every future rewording. Inside the
-  suite, a skip, an xfail or an xpass exits 1 (`tests/conftest.py`), and a
-  guard module that collected nothing exits 1 before a test runs. (The CBB
-  lab is the exception while it is private: protection is not enforced
+  that name, no `if:`, no `needs:`, no `strategy:`, no `continue-on-error`,
+  no shell override, no `if:` on any OTHER job in that file for a `needs:`
+  to point at, an unfiltered `pull_request` trigger, `PYTHONSAFEPATH: "1"` on
+  the suite step, a whitelist of the arguments the suite line may carry
+  (`-q`, `-rs`, `--color=no` — because `--version` narrows nothing, is in no
+  blocklist, and exits 0 having run no test), and each of the job's four tool
+  lines pinned as a whole command — and then executes every run block under
+  stubs and reads the exit code, which is what catches
+  `if ! pytest; then echo; fi`, `: python -m coverage report`, and every
+  future rewording. Inside the suite, a skip, an xfail or an xpass exits 1,
+  including a skip decided during collection (`tests/conftest.py`); a guard
+  module that collected nothing exits 1 before a test runs, and so does a
+  single guard TEST that was defined but not collected; and a narrowing flag
+  is read back off pytest's own configuration rather than looked for in a
+  command line, so `PYTEST_ADDOPTS` assembled from pieces is caught too. (The
+  CBB lab is the exception while it is private: protection is not enforced
   there.)
 - **Never enable cron** for anything that spends API credits beyond the
   reviewed Gameday Refresh budget, and never run a live provider fetch outside
