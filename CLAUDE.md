@@ -759,9 +759,11 @@ literally.
   module that collected nothing exits 1 before a test runs, and so does a
   single guard TEST that was defined but not collected; and a narrowing flag
   is read back off pytest's own configuration rather than looked for in a
-  command line, so `PYTEST_ADDOPTS` assembled from pieces is caught too. (The
-  CBB lab is the exception while it is private: protection is not enforced
-  there.)
+  command line, so `PYTEST_ADDOPTS` assembled from pieces is caught too. (Measured
+  2026-09-05: all five labs are public and `main` is protected in every one —
+  CBB requires the context `Tests`, with `enforce_admins` on and force-pushes
+  and deletions refused. This used to name CBB as the exception while it was
+  private; it was one for part of 2026-09-04 and is not one now.)
 - **Never enable cron** for anything that spends API credits beyond the
   reviewed Gameday Refresh budget, and never run a live provider fetch outside
   that budget without asking.

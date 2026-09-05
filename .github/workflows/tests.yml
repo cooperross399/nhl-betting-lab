@@ -97,8 +97,16 @@ jobs:
         #
         # The shadowing this line is exposed to, and what covers which half of
         # it, is written out on the job's `env:` above. PYTHONSAFEPATH comes
-        # from there; PYTHONPATH is per-step because only the two coverage
-        # steps need it.
+        # from there.
+        #
+        # PYTHONPATH is per-step rather than job-wide. It is not that only
+        # these steps NEED it — the Install step runs `pip install -e .`, after
+        # which nothing needs it: measured 2026-09-05 in a clone installed the
+        # way this job installs it, `env -u PYTHONPATH PYTHONSAFEPATH=1 python
+        # -m coverage run -m pytest -q` passes the whole suite and reports the
+        # same coverage total. It is per-step so that a step which should be
+        # importing the INSTALLED package cannot silently satisfy itself from
+        # the checkout instead, which is the failure `src` on the path invites.
         env:
           PYTHONPATH: src
         run: |
