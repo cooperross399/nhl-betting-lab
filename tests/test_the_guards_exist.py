@@ -796,8 +796,35 @@ def test_the_gaps_these_guards_still_have_are_the_ones_written_down(
     assert dropped.returncode == 0, dropped.stdout + dropped.stderr
     assert "test_unprotected" not in dropped.stdout
 
-    # 4. the shadow is closed by a variable the workflow sets, not by Python.
-    assert "PYTHONSAFEPATH" not in os.environ or os.environ["PYTHONSAFEPATH"] != "1", (
-        "this assertion describes a local run; if CI ever runs the suite with "
-        "PYTHONSAFEPATH set, say so here instead of leaving the claim"
+    # 4. the shadow is closed by a variable the workflow sets, not by Python:
+    #    a run that does not set it is still shadowed by an UNTRACKED file,
+    #    which no `git ls-files` scan can reach. Observed in a subprocess with
+    #    the variable explicitly removed, so the verdict is the same whether
+    #    this suite is running on CI (where the workflow sets it) or on a
+    #    laptop (where nothing does). The first version of this line asserted
+    #    on the AMBIENT environment instead and passed locally while failing
+    #    on CI — the exact shape this file exists to refuse.
+    (tmp_path / "untracked_shadow").mkdir()
+    (tmp_path / "untracked_shadow" / "coverage.py").write_text(
+        "import sys\n\nprint('9999 passed in 0.01s')\nsys.exit(0)\n", encoding="utf-8"
     )
+    (tmp_path / "untracked_shadow" / "test_truth.py").write_text(
+        "def test_fails() -> None:\n    raise AssertionError('the suite ran')\n",
+        encoding="utf-8",
+    )
+    bare = {
+        key: value
+        for key, value in os.environ.items()
+        if not key.startswith("PYTEST") and key != "PYTHONSAFEPATH"
+    }
+    shadowed = subprocess.run(
+        [sys.executable, "-m", "coverage", "run", "-m", "pytest", "-q",
+         "-p", "no:cacheprovider"],
+        cwd=tmp_path / "untracked_shadow",
+        env=bare,
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    assert shadowed.returncode == 0, shadowed.stdout + shadowed.stderr
+    assert "9999 passed" in shadowed.stdout, shadowed.stdout
