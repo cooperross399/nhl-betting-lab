@@ -1,0 +1,703 @@
+{
+ "generatedAt": "2026-11-14T14:20:00Z",
+ "season": "2026–27",
+ "slateDate": "2026-11-14",
+ "cardSlot": "morning",
+ "notice": null,
+ "unitDollars": 25,
+ "record": {
+  "markets": [
+   {
+    "market": "spread",
+    "label": "Spread",
+    "bets": 212,
+    "roiPct": 1.9,
+    "ciLowPct": -11.2,
+    "ciHighPct": 15,
+    "verdict": "no demonstrated edge"
+   },
+   {
+    "market": "total",
+    "label": "Total",
+    "bets": 188,
+    "roiPct": -2.4,
+    "ciLowPct": -16.1,
+    "ciHighPct": 11.3,
+    "verdict": "no demonstrated edge"
+   },
+   {
+    "market": "moneyline",
+    "label": "Moneyline",
+    "bets": 74,
+    "roiPct": 6.7,
+    "ciLowPct": -15.8,
+    "ciHighPct": 29.2,
+    "verdict": "no demonstrated edge"
+   }
+  ],
+  "clvPoints": 0.12,
+  "beatClosePct": 51.4,
+  "opinionsNeeded": 10000,
+  "opinionsSoFar": 474
+ },
+ "teams": {
+  "DUKE": {
+   "name": "Duke",
+   "short": "Duke",
+   "color": "#003087",
+   "fg": "#fff"
+  },
+  "UNC": {
+   "name": "North Carolina",
+   "short": "North Carolina",
+   "color": "#7BAFD4",
+   "fg": "#000"
+  },
+  "KU": {
+   "name": "Kansas",
+   "short": "Kansas",
+   "color": "#0051BA",
+   "fg": "#fff"
+  },
+  "UK": {
+   "name": "Kentucky",
+   "short": "Kentucky",
+   "color": "#0033A0",
+   "fg": "#fff"
+  },
+  "UCONN": {
+   "name": "UConn",
+   "short": "UConn",
+   "color": "#000E2F",
+   "fg": "#fff"
+  },
+  "PUR": {
+   "name": "Purdue",
+   "short": "Purdue",
+   "color": "#CEB888",
+   "fg": "#000"
+  },
+  "HOU": {
+   "name": "Houston",
+   "short": "Houston",
+   "color": "#C8102E",
+   "fg": "#fff"
+  },
+  "GONZ": {
+   "name": "Gonzaga",
+   "short": "Gonzaga",
+   "color": "#041E42",
+   "fg": "#fff"
+  },
+  "ALA": {
+   "name": "Alabama",
+   "short": "Alabama",
+   "color": "#9E1B32",
+   "fg": "#fff"
+  },
+  "TENN": {
+   "name": "Tennessee",
+   "short": "Tennessee",
+   "color": "#FF8200",
+   "fg": "#000"
+  },
+  "ARIZ": {
+   "name": "Arizona",
+   "short": "Arizona",
+   "color": "#CC0033",
+   "fg": "#fff"
+  },
+  "MICH": {
+   "name": "Michigan",
+   "short": "Michigan",
+   "color": "#00274C",
+   "fg": "#fff"
+  },
+  "AUB": {
+   "name": "Auburn",
+   "short": "Auburn",
+   "color": "#0C2340",
+   "fg": "#fff"
+  },
+  "ISU": {
+   "name": "Iowa State",
+   "short": "Iowa State",
+   "color": "#C8102E",
+   "fg": "#fff"
+  },
+  "MSU": {
+   "name": "Michigan St",
+   "short": "Michigan St",
+   "color": "#18453B",
+   "fg": "#fff"
+  },
+  "TEX": {
+   "name": "Texas",
+   "short": "Texas",
+   "color": "#BF5700",
+   "fg": "#fff"
+  },
+  "ND": {
+   "name": "Notre Dame",
+   "short": "Notre Dame",
+   "color": "#0C2340",
+   "fg": "#fff"
+  },
+  "NOVA": {
+   "name": "Villanova",
+   "short": "Villanova",
+   "color": "#00205B",
+   "fg": "#fff"
+  },
+  "CREI": {
+   "name": "Creighton",
+   "short": "Creighton",
+   "color": "#005CA9",
+   "fg": "#fff"
+  },
+  "SDSU": {
+   "name": "San Diego St",
+   "short": "San Diego St",
+   "color": "#A6192E",
+   "fg": "#fff"
+  }
+ },
+ "games": [
+  {
+   "id": "1",
+   "tip": "2026-11-14T17:00:00Z",
+   "venue": "Purcell Pavilion",
+   "city": "South Bend, IN",
+   "tv": "Peacock",
+   "started": false,
+   "cardSlot": "morning",
+   "away": {
+    "abbr": "NOVA",
+    "record": "1–1",
+    "projPts": 70.4,
+    "winProb": 0.36
+   },
+   "home": {
+    "abbr": "ND",
+    "record": "2–0",
+    "projPts": 74.8,
+    "winProb": 0.64
+   },
+   "moneyline": {
+    "open": {
+     "away": 130,
+     "home": -155
+    },
+    "current": {
+     "away": 135,
+     "home": -160
+    },
+    "fair": {
+     "away": 142,
+     "home": -178
+    }
+   },
+   "spread": {
+    "open": -3.5,
+    "current": -4,
+    "proj": -4.4,
+    "homePrice": -110
+   },
+   "total": {
+    "open": 144.5,
+    "current": 145,
+    "proj": 145.2,
+    "overPrice": -110
+   },
+   "pick": {
+    "kind": "lean",
+    "market": "Spread",
+    "label": "Notre Dame −4",
+    "price": -110,
+    "book": "DraftKings",
+    "edgePct": 3.8
+   }
+  },
+  {
+   "id": "2",
+   "tip": "2026-11-14T19:00:00Z",
+   "venue": "Gampel Pavilion",
+   "city": "Storrs, CT",
+   "tv": "FS1",
+   "started": false,
+   "cardSlot": "morning",
+   "away": {
+    "abbr": "CREI",
+    "record": "2–0",
+    "projPts": 71.1,
+    "winProb": 0.31
+   },
+   "home": {
+    "abbr": "UCONN",
+    "record": "2–0",
+    "projPts": 76.9,
+    "winProb": 0.69
+   },
+   "moneyline": {
+    "open": {
+     "away": 180,
+     "home": -220
+    },
+    "current": {
+     "away": 190,
+     "home": -230
+    },
+    "fair": {
+     "away": 186,
+     "home": -222
+    }
+   },
+   "spread": {
+    "open": -5.5,
+    "current": -6,
+    "proj": -5.8,
+    "homePrice": -110
+   },
+   "total": {
+    "open": 147.5,
+    "current": 148,
+    "proj": 148,
+    "overPrice": -110
+   },
+   "pick": {
+    "kind": "pass",
+    "market": "Total",
+    "label": "Under 148",
+    "price": -110,
+    "book": "FanDuel",
+    "edgePct": 0.4
+   }
+  },
+  {
+   "id": "3",
+   "tip": "2026-11-14T21:00:00Z",
+   "venue": "Cameron Indoor Stadium",
+   "city": "Durham, NC",
+   "tv": "ESPN",
+   "started": false,
+   "cardSlot": "morning",
+   "away": {
+    "abbr": "MICH",
+    "record": "2–0",
+    "projPts": 72.3,
+    "winProb": 0.28
+   },
+   "home": {
+    "abbr": "DUKE",
+    "record": "2–0",
+    "projPts": 79.6,
+    "winProb": 0.72
+   },
+   "moneyline": {
+    "open": {
+     "away": 240,
+     "home": -300
+    },
+    "current": {
+     "away": 250,
+     "home": -310
+    },
+    "fair": {
+     "away": 220,
+     "home": -257
+    }
+   },
+   "spread": {
+    "open": -7.5,
+    "current": -7.5,
+    "proj": -7.3,
+    "homePrice": -110
+   },
+   "total": {
+    "open": 151.5,
+    "current": 152,
+    "proj": 151.9,
+    "overPrice": -110
+   },
+   "pick": null
+  },
+  {
+   "id": "4",
+   "tip": "2026-11-14T22:00:00Z",
+   "venue": "McKale Center",
+   "city": "Tucson, AZ",
+   "tv": "ESPN2",
+   "started": false,
+   "cardSlot": "morning",
+   "away": {
+    "abbr": "SDSU",
+    "record": "1–1",
+    "projPts": 66.8,
+    "winProb": 0.25
+   },
+   "home": {
+    "abbr": "ARIZ",
+    "record": "2–0",
+    "projPts": 75.2,
+    "winProb": 0.75
+   },
+   "moneyline": {
+    "open": {
+     "away": 290,
+     "home": -360
+    },
+    "current": {
+     "away": 300,
+     "home": -380
+    },
+    "fair": {
+     "away": 275,
+     "home": -333
+    }
+   },
+   "spread": {
+    "open": -8.5,
+    "current": -9,
+    "proj": -8.4,
+    "homePrice": -110
+   },
+   "total": {
+    "open": 141.5,
+    "current": 142,
+    "proj": 142,
+    "overPrice": -110
+   },
+   "pick": {
+    "kind": "lean",
+    "market": "Spread",
+    "label": "San Diego St +9",
+    "price": -110,
+    "book": "DraftKings",
+    "edgePct": 2.6
+   }
+  },
+  {
+   "id": "5",
+   "tip": "2026-11-15T00:00:00Z",
+   "venue": "Rupp Arena",
+   "city": "Lexington, KY",
+   "tv": "ESPN",
+   "started": false,
+   "cardSlot": "evening",
+   "away": {
+    "abbr": "KU",
+    "record": "2–0",
+    "projPts": 75.9,
+    "winProb": 0.46
+   },
+   "home": {
+    "abbr": "UK",
+    "record": "2–0",
+    "projPts": 77.1,
+    "winProb": 0.54
+   },
+   "moneyline": {
+    "open": {
+     "away": 105,
+     "home": -125
+    },
+    "current": {
+     "away": 100,
+     "home": -120
+    },
+    "fair": {
+     "away": 108,
+     "home": -118
+    }
+   },
+   "spread": {
+    "open": -1.5,
+    "current": -1,
+    "proj": -1.2,
+    "homePrice": -110
+   },
+   "total": {
+    "open": 152.5,
+    "current": 153,
+    "proj": 153,
+    "overPrice": -110
+   },
+   "pick": {
+    "kind": "lean",
+    "market": "Moneyline",
+    "label": "Kansas ML",
+    "price": 100,
+    "book": "FanDuel",
+    "edgePct": 3.2
+   }
+  },
+  {
+   "id": "6",
+   "tip": "2026-11-15T00:00:00Z",
+   "venue": "Coleman Coliseum",
+   "city": "Tuscaloosa, AL",
+   "tv": "ESPNU",
+   "started": false,
+   "cardSlot": "evening",
+   "away": {
+    "abbr": "TENN",
+    "record": "2–0",
+    "projPts": 76.2,
+    "winProb": 0.34
+   },
+   "home": {
+    "abbr": "ALA",
+    "record": "1–1",
+    "projPts": 81.5,
+    "winProb": 0.66
+   },
+   "moneyline": {
+    "open": {
+     "away": 165,
+     "home": -195
+    },
+    "current": {
+     "away": 170,
+     "home": -205
+    },
+    "fair": {
+     "away": 160,
+     "home": -190
+    }
+   },
+   "spread": {
+    "open": -4.5,
+    "current": -5,
+    "proj": -5.3,
+    "homePrice": -110
+   },
+   "total": {
+    "open": 157.5,
+    "current": 158,
+    "proj": 157.7,
+    "overPrice": -110
+   },
+   "pick": {
+    "kind": "pass",
+    "market": "Spread",
+    "label": "Alabama −5",
+    "price": -110,
+    "book": "DraftKings",
+    "edgePct": 1.3
+   }
+  },
+  {
+   "id": "7",
+   "tip": "2026-11-15T01:00:00Z",
+   "venue": "Fertitta Center",
+   "city": "Houston, TX",
+   "tv": "ESPN2",
+   "started": false,
+   "cardSlot": "evening",
+   "away": {
+    "abbr": "PUR",
+    "record": "2–0",
+    "projPts": 64.7,
+    "winProb": 0.34
+   },
+   "home": {
+    "abbr": "HOU",
+    "record": "2–0",
+    "projPts": 68.9,
+    "winProb": 0.66
+   },
+   "moneyline": {
+    "open": {
+     "away": 165,
+     "home": -195
+    },
+    "current": {
+     "away": 175,
+     "home": -210
+    },
+    "fair": {
+     "away": 160,
+     "home": -190
+    }
+   },
+   "spread": {
+    "open": -4.5,
+    "current": -5,
+    "proj": -4.2,
+    "homePrice": -110
+   },
+   "total": {
+    "open": 133.5,
+    "current": 134,
+    "proj": 133.6,
+    "overPrice": -110
+   },
+   "pick": {
+    "kind": "lean",
+    "market": "Total",
+    "label": "Under 134",
+    "price": -110,
+    "book": "FanDuel",
+    "edgePct": 2.2
+   }
+  },
+  {
+   "id": "8",
+   "tip": "2026-11-15T02:00:00Z",
+   "venue": "McCarthey Athletic Center",
+   "city": "Spokane, WA",
+   "tv": "ESPN",
+   "started": false,
+   "cardSlot": "evening",
+   "away": {
+    "abbr": "MSU",
+    "record": "1–1",
+    "projPts": 70,
+    "winProb": 0.26
+   },
+   "home": {
+    "abbr": "GONZ",
+    "record": "2–0",
+    "projPts": 77.8,
+    "winProb": 0.74
+   },
+   "moneyline": {
+    "open": {
+     "away": 270,
+     "home": -340
+    },
+    "current": {
+     "away": 280,
+     "home": -350
+    },
+    "fair": {
+     "away": 265,
+     "home": -320
+    }
+   },
+   "spread": {
+    "open": -7.5,
+    "current": -8,
+    "proj": -7.8,
+    "homePrice": -110
+   },
+   "total": {
+    "open": 147.5,
+    "current": 148,
+    "proj": 147.8,
+    "overPrice": -110
+   },
+   "pick": null
+  },
+  {
+   "id": "9",
+   "tip": "2026-11-15T02:00:00Z",
+   "venue": "Moody Center",
+   "city": "Austin, TX",
+   "tv": "ESPN+",
+   "started": false,
+   "cardSlot": "evening",
+   "away": {
+    "abbr": "ISU",
+    "record": "2–0",
+    "projPts": 68.4,
+    "winProb": 0.45
+   },
+   "home": {
+    "abbr": "TEX",
+    "record": "1–1",
+    "projPts": 70.2,
+    "winProb": 0.55
+   },
+   "moneyline": {
+    "open": {
+     "away": 110,
+     "home": -130
+    },
+    "current": {
+     "away": 105,
+     "home": -125
+    },
+    "fair": {
+     "away": 104,
+     "home": -114
+    }
+   },
+   "spread": {
+    "open": -2.5,
+    "current": -2,
+    "proj": -1.8,
+    "homePrice": -110
+   },
+   "total": {
+    "open": 138.5,
+    "current": 139,
+    "proj": 138.6,
+    "overPrice": -110
+   },
+   "pick": {
+    "kind": "pass",
+    "market": "Moneyline",
+    "label": "Iowa State ML",
+    "price": 105,
+    "book": "DraftKings",
+    "edgePct": 0.8
+   }
+  },
+  {
+   "id": "10",
+   "tip": "2026-11-15T02:30:00Z",
+   "venue": "Dean E. Smith Center",
+   "city": "Chapel Hill, NC",
+   "tv": "ACC Network",
+   "started": false,
+   "cardSlot": "evening",
+   "away": {
+    "abbr": "AUB",
+    "record": "2–0",
+    "projPts": 77.5,
+    "winProb": 0.44
+   },
+   "home": {
+    "abbr": "UNC",
+    "record": "2–0",
+    "projPts": 79.3,
+    "winProb": 0.56
+   },
+   "moneyline": {
+    "open": {
+     "away": 115,
+     "home": -135
+    },
+    "current": {
+     "away": 120,
+     "home": -140
+    },
+    "fair": {
+     "away": 102,
+     "home": -112
+    }
+   },
+   "spread": {
+    "open": -2.5,
+    "current": -3,
+    "proj": -1.8,
+    "homePrice": -110
+   },
+   "total": {
+    "open": 156.5,
+    "current": 157,
+    "proj": 156.8,
+    "overPrice": -110
+   },
+   "pick": {
+    "kind": "lean",
+    "market": "Moneyline",
+    "label": "Auburn ML",
+    "price": 120,
+    "book": "FanDuel",
+    "edgePct": 4.1
+   }
+  }
+ ]
+}
