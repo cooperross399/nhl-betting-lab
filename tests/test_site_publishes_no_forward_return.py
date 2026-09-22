@@ -139,15 +139,42 @@ def test_accuracy_records_are_still_published(tmp_path: Path) -> None:
     assert record["puckLine"] == {"w": 0, "l": 0, "p": 0}
 
 
+#: The one page whose forward return is sealed. Scoped deliberately.
+#:
+#: The seal protects NHL's **pre-registered** measurement: its pooled
+#: forward return is the test decided on 2027-04-25
+#: (docs/when_this_ends.md), and putting a running total on a public page
+#: turns that test into a scoreboard.
+#:
+#: The sibling boards are a different case and must not be caught by this.
+#: The EPL page shows its card's own settled record — that market is
+#: allowlisted, it publishes selections, and hiding how they have done
+#: would be the dishonest choice. The CBB page shows the historical
+#: measurement per tier, intervals and all, including the two demonstrated
+#: deficits. Neither is a pre-registered forward test, and an earlier
+#: version of this test globbed every `*.dc.html` and would have forced
+#: both of them blank.
+SEALED_PAGE = "NHL Projections.dc.html"
+
+
 def test_no_page_renders_a_forward_return() -> None:
-    """The renderer is the other half; sealing the data is not enough."""
-    for page in (PROJECT_ROOT / "web").glob("*.dc.html"):
-        text = page.read_text(encoding="utf-8")
-        for field in ("roiPct", "ciLow", "ciHigh", "clvPct"):
-            assert field not in text, (
-                f"{page.name} renders {field}, which load_record no longer "
-                "supplies and must not start supplying."
-            )
+    """The renderer is the other half; sealing the data is not enough.
+
+    The unsealed branch has now arrived in three separate design drops, so
+    this is the guard that keeps catching it.
+    """
+    page = PROJECT_ROOT / "web" / SEALED_PAGE
+    assert page.is_file(), (
+        f"{SEALED_PAGE} is missing. A renamed page would make this test "
+        "pass by checking nothing, so the name is asserted rather than "
+        "globbed."
+    )
+    text = page.read_text(encoding="utf-8")
+    for field in ("roiPct", "ciLow", "ciHigh", "clvPct"):
+        assert field not in text, (
+            f"{SEALED_PAGE} renders {field}, which load_record does not "
+            "supply and must not start supplying."
+        )
 
 
 def test_the_schedule_fetch_sends_a_user_agent() -> None:
