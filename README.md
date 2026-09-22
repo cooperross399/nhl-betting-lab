@@ -321,6 +321,9 @@ finish.
 | Venue Probe | on demand only, never scheduled | yes, capped, required cap |
 | Line Movement Capture | several times daily in season | yes, capped |
 | Experiment Refresh | weekly | no |
+| Publish Site | daily, and after each Gameday Refresh | no |
+
+The public site is deployed from `web/` by **Publish Site**, which reads the lab's own outputs and the NHL's free schedule API, and deploys through the Pages API without pushing to any branch. It publishes what the card publishes — which, while nothing is allowlisted, is a slate and no selections.
 
 ## Safety boundaries
 

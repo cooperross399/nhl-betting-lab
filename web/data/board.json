@@ -1,0 +1,47 @@
+{
+  "generatedAt": "2026-09-22T21:10:00Z",
+  "season": "2026–27",
+  "phase": "preseason",
+  "boardDate": "2026-09-22",
+  "notice": "Exhibition slate. The model is fitted on regular-season games only and prices nothing before opening night on September 29. Tonight shows the schedule; projections, lines and picks arrive with the first regular-season card.",
+  "record": {
+    "straightUp": { "w": 0, "l": 0 },
+    "puckLine": { "w": 0, "l": 0, "p": 0 },
+    "totals": { "w": 0, "l": 0, "p": 0 },
+    "forward": null
+  },
+  "teams": {
+    "CBJ": { "name": "Columbus Blue Jackets", "short": "Blue Jackets", "color": "#002654", "fg": "#FFFFFF" },
+    "BUF": { "name": "Buffalo Sabres", "short": "Sabres", "color": "#003087", "fg": "#FFFFFF" },
+    "DET": { "name": "Detroit Red Wings", "short": "Red Wings", "color": "#CE1126", "fg": "#FFFFFF" },
+    "PIT": { "name": "Pittsburgh Penguins", "short": "Penguins", "color": "#FCB514", "fg": "#000000" },
+    "FLA": { "name": "Florida Panthers", "short": "Panthers", "color": "#C8102E", "fg": "#FFFFFF" },
+    "CAR": { "name": "Carolina Hurricanes", "short": "Hurricanes", "color": "#CC0000", "fg": "#FFFFFF" },
+    "NYI": { "name": "New York Islanders", "short": "Islanders", "color": "#00539B", "fg": "#FFFFFF" },
+    "NYR": { "name": "New York Rangers", "short": "Rangers", "color": "#0038A8", "fg": "#FFFFFF" },
+    "PHI": { "name": "Philadelphia Flyers", "short": "Flyers", "color": "#F74902", "fg": "#FFFFFF" },
+    "BOS": { "name": "Boston Bruins", "short": "Bruins", "color": "#FFB81C", "fg": "#000000" },
+    "EDM": { "name": "Edmonton Oilers", "short": "Oilers", "color": "#FF4C00", "fg": "#FFFFFF" },
+    "WPG": { "name": "Winnipeg Jets", "short": "Jets", "color": "#041E42", "fg": "#FFFFFF" },
+    "TBL": { "name": "Tampa Bay Lightning", "short": "Lightning", "color": "#002868", "fg": "#FFFFFF" },
+    "NSH": { "name": "Nashville Predators", "short": "Predators", "color": "#FFB81C", "fg": "#000000" },
+    "VAN": { "name": "Vancouver Canucks", "short": "Canucks", "color": "#00205B", "fg": "#FFFFFF" },
+    "CGY": { "name": "Calgary Flames", "short": "Flames", "color": "#C8102E", "fg": "#FFFFFF" },
+    "UTA": { "name": "Utah Mammoth", "short": "Mammoth", "color": "#6CACE4", "fg": "#000000" },
+    "LAK": { "name": "Los Angeles Kings", "short": "Kings", "color": "#111111", "fg": "#FFFFFF" },
+    "VGK": { "name": "Vegas Golden Knights", "short": "Golden Knights", "color": "#B4975A", "fg": "#000000" },
+    "SJS": { "name": "San Jose Sharks", "short": "Sharks", "color": "#006D75", "fg": "#FFFFFF" }
+  },
+  "games": [
+    { "id": "2026010041", "startUtc": "2026-09-22T23:00:00Z", "venue": "KeyBank Center", "city": "Buffalo, NY", "tv": "Local / ESPN+", "away": { "abbr": "CBJ" }, "home": { "abbr": "BUF" }, "pick": null },
+    { "id": "2026010042", "startUtc": "2026-09-22T23:00:00Z", "venue": "PPG Paints Arena", "city": "Pittsburgh, PA", "tv": "Local / ESPN+", "away": { "abbr": "DET" }, "home": { "abbr": "PIT" }, "pick": null },
+    { "id": "2026010043", "startUtc": "2026-09-22T23:00:00Z", "venue": "Lenovo Center", "city": "Raleigh, NC", "tv": "Local / ESPN+", "away": { "abbr": "FLA" }, "home": { "abbr": "CAR" }, "pick": null },
+    { "id": "2026010044", "startUtc": "2026-09-22T23:00:00Z", "venue": "Madison Square Garden", "city": "New York, NY", "tv": "Local / ESPN+", "away": { "abbr": "NYI" }, "home": { "abbr": "NYR" }, "pick": null },
+    { "id": "2026010045", "startUtc": "2026-09-22T23:00:00Z", "venue": "TD Garden", "city": "Boston, MA", "tv": "Local / ESPN+", "away": { "abbr": "PHI" }, "home": { "abbr": "BOS" }, "pick": null },
+    { "id": "2026010046", "startUtc": "2026-09-23T00:00:00Z", "venue": "Canada Life Centre", "city": "Winnipeg, MB", "tv": "Local / ESPN+", "away": { "abbr": "EDM" }, "home": { "abbr": "WPG" }, "pick": null },
+    { "id": "2026010047", "startUtc": "2026-09-23T00:00:00Z", "venue": "Bridgestone Arena", "city": "Nashville, TN", "tv": "Local / ESPN+", "away": { "abbr": "TBL" }, "home": { "abbr": "NSH" }, "pick": null },
+    { "id": "2026010048", "startUtc": "2026-09-23T01:00:00Z", "venue": "Scotiabank Saddledome", "city": "Calgary, AB", "tv": "Local / ESPN+", "away": { "abbr": "VAN" }, "home": { "abbr": "CGY" }, "pick": null },
+    { "id": "2026010049", "startUtc": "2026-09-23T02:00:00Z", "venue": "Crypto.com Arena", "city": "Los Angeles, CA", "tv": "Local / ESPN+", "away": { "abbr": "UTA" }, "home": { "abbr": "LAK" }, "pick": null },
+    { "id": "2026010050", "startUtc": "2026-09-23T02:00:00Z", "venue": "SAP Center", "city": "San Jose, CA", "tv": "Local / ESPN+", "away": { "abbr": "VGK" }, "home": { "abbr": "SJS" }, "pick": null }
+  ]
+}
