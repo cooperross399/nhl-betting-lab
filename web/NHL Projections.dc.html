@@ -23,7 +23,7 @@
   <div style="max-width:1240px;margin:0 auto;padding:0 24px 80px;">
 
     <header style="border-top:4px solid #14151a;border-bottom:1px solid #14151a;padding:14px 0 12px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">
-      <a href="https://maverickhightower.com" style="display:flex;align-items:center;gap:12px;" title="All models">
+      <a href="https://maverickhightower.com/" style="display:flex;align-items:center;gap:12px;">
         <span style="width:36px;height:36px;background:#14151a;color:#f4f2ee;display:grid;place-items:center;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:18px;letter-spacing:.04em;">MH</span>
         <span style="display:flex;flex-direction:column;line-height:1.1;">
           <span style="font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#6b6e7a;">Maverick Hightower</span>
@@ -34,9 +34,9 @@
         <a href="NHL Projections.dc.html" style="border-bottom:2px solid #14151a;padding-bottom:2px;">Board</a>
         <a href="NHL Results.dc.html">Results</a>
         <a href="NHL Graphic.dc.html">Graphic view</a>
-        <a href="EPL Projections.dc.html" style="margin-left:10px;padding-left:22px;border-left:1px solid #d6d3cc;">EPL</a>
-        <a href="CBB Projections.dc.html">CBB</a>
-        <a href="CBB Projections.dc.html">CBB</a>
+        <a href="https://epl.maverickhightower.com/" style="margin-left:10px;padding-left:22px;border-left:1px solid #d6d3cc;">EPL</a>
+        <a href="https://cbb.maverickhightower.com/">CBB</a>
+        <a href="https://cbb.maverickhightower.com/">CBB</a>
       </nav>
     </header>
 
@@ -248,8 +248,9 @@ class Component extends DCLogic {
         totProj: tot && tot.proj != null ? tot.proj.toFixed(1) : dash,
         regAway: reg ? regCell(reg.away, reg.prices && reg.prices.away) : dash, regDraw: reg ? regCell(reg.draw, reg.prices && reg.prices.draw) : dash, regHome: reg ? regCell(reg.home, reg.prices && reg.prices.home) : dash,
         hasPick: !!g.pick, noPick: !g.pick,
-        // Not "no market clears the edge bar": eligibility is decided before
-        // edge and nothing is allowlisted, so the card never reaches the bar.
+        // Eligibility is decided before edge and nothing is allowlisted, so
+        // the card never reaches the bar. Naming the bar would report a
+        // model judgement where a permission gate is what happened.
         noPickLabel: pre ? "Exhibition · model abstains" : "No market is allowlisted for selection",
         pickLabel: g.pick ? g.pick.label : "", pickMarket: g.pick ? g.pick.market : "", pickEdge: g.pick ? `${F.fmtSigned(g.pick.edgePct)}%` : "",
       });
@@ -264,13 +265,11 @@ class Component extends DCLogic {
       suRec: F.recStr(r.straightUp), suRate: F.winRate(r.straightUp.w, r.straightUp.l),
       plRec: F.recStr(r.puckLine), plRate: F.winRate(r.puckLine.w, r.puckLine.l, r.puckLine.p),
       totRec: F.recStr(r.totals), totRate: F.winRate(r.totals.w, r.totals.l, r.totals.p),
-      // No unsealed branch. `load_record` always returns sealed:true and
-      // never emits the return fields, so a branch reading them is
-      // unreachable today and a live route back to publishing the return
-      // tomorrow. NHL's pooled forward return IS the pre-registered test
-      // decided 2027-04-25 (docs/when_this_ends.md); rendering it before
-      // then turns that test into a scoreboard. This is the third time the
-      // branch has arrived in a design drop, which is why a test pins it.
+      // No unsealed branch, on purpose, for the fourth time. `load_record`
+      // always returns sealed:true and never emits the return fields, so
+      // this branch is unreachable today and a live route back to
+      // publishing the return tomorrow. NHL's pooled forward return IS the
+      // test decided 2027-04-25 (docs/when_this_ends.md).
       //
       // `rows` is build_forward_report's len(ledger): every frozen opinion,
       // settled or not. It is not called "settled".

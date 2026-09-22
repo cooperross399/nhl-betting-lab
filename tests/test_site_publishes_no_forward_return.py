@@ -217,3 +217,40 @@ def test_the_schedule_fetch_sends_a_user_agent() -> None:
         "refuses with a 403"
     )
     assert "python-urllib" not in str(captured["agent"]).lower()
+
+
+def test_the_empty_state_names_the_gate_that_actually_stopped_the_pick() -> None:
+    """Reverted by three separate design drops, so it is pinned now.
+
+    "No market clears the edge bar" reports a model judgement. What
+    actually happens is a permission gate: `assess_markets` decides
+    eligibility from the allowlist *before* edge is consulted, and
+    `staging_provider_policy.json` allowlists nothing, so the card never
+    reaches the bar to fail it.
+
+    Naming the bar tells a visitor the model looked and found nothing. The
+    truth is that nothing was allowed to be looked at.
+    """
+    page = PROJECT_ROOT / "web" / SEALED_PAGE
+    text = page.read_text(encoding="utf-8")
+    assert "No market is allowlisted for selection" in text
+    assert "No market clears the edge bar" not in text, (
+        "the empty state blames the edge bar; eligibility is decided before "
+        "edge and nothing is allowlisted"
+    )
+
+
+def test_every_published_page_links_the_favicon() -> None:
+    """Also dropped by three drops in a row.
+
+    Cheap to lose, invisible in review, and the only symptom is a blank
+    tab — which nobody reports as a bug.
+    """
+    web = PROJECT_ROOT / "web"
+    assert (web / "favicon.svg").is_file(), "favicon.svg is missing from web/"
+    missing = [
+        p.name
+        for p in sorted(web.glob("*.html"))
+        if 'rel="icon"' not in p.read_text(encoding="utf-8")
+    ]
+    assert not missing, f"pages with no favicon link: {missing}"
