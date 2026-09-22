@@ -1,0 +1,100 @@
+name: Publish Site
+
+# Builds the public NHL Projections site and deploys it to GitHub Pages.
+#
+# Runs every morning on its own clock — including preseason and dark nights,
+# when Gameday Refresh does not run — and again whenever Gameday Refresh
+# finishes, so a regular-season card reaches the site within minutes.
+#
+# It reads the lab's outputs from the latest `gameday-state` artifact and the
+# NHL's public schedule API. It fetches no odds, spends no credits, edits no
+# policy, and places no bet. The only thing it writes is the `gh-pages`
+# branch, which also carries `data/history/` so each day's published opinion
+# is frozen and can be settled the next morning.
+on:
+  schedule:
+    - cron: "45 14 * * *"   # 10:45 New York, after the 09:30 card
+  workflow_run:
+    workflows: ["Gameday Refresh"]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: publish-site
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install project
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install -e .
+
+      - name: Restore the lab's latest state
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -u
+          previous=$(gh run list --workflow gameday-refresh.yml --status success \
+            --limit 1 --json databaseId --jq '.[0].databaseId // empty')
+          if [ -n "$previous" ]; then
+            mkdir -p data
+            gh run download "$previous" --name gameday-state --dir data || echo "No state artifact."
+            gh run download "$previous" --name gameday-reports --dir data/outputs || echo "No reports artifact."
+          else
+            echo "No successful Gameday Refresh yet; building schedule-only."
+          fi
+
+      - name: Check out the published site
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -u
+          REMOTE="https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}"
+          if git fetch "$REMOTE" +refs/heads/gh-pages:refs/remotes/pages 2>/dev/null; then
+            git worktree add dist refs/remotes/pages
+          else
+            mkdir dist && git -C dist init -q && git -C dist checkout -q --orphan gh-pages
+          fi
+          rm -rf dist/*.html dist/support.js dist/lib
+          cp -R site/. dist/
+
+      - name: Build today's board and yesterday's results
+        env:
+          PYTHONPATH: src
+        run: |
+          python site/build_site_json.py --lab . --out dist/data
+
+      - name: Deploy
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -u
+          REMOTE="https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}"
+          cd dist
+          rm -f build_site_json.py publish-site.yml README.md
+          touch .nojekyll
+          git add -A
+          git -c user.name="Publish Site" -c user.email="actions@github.com" \
+            commit -q -m "site $(TZ=America/New_York date +%F)" || { echo "Nothing changed."; exit 0; }
+          git push "$REMOTE" HEAD:refs/heads/gh-pages
+          echo "Deployed."
