@@ -52,7 +52,19 @@ EVIDENCE_FILENAMES: tuple[str, ...] = (
     "provider_shadow_verification.md",
     "provider_market_discovery.md",
     "historical_props_retention.json",
+    # Required, not optional. A market that cleared its first window and was
+    # then not confirmed on a held-out one is the exact shape this lab keeps
+    # retracting, and a bundle that cannot see the replication record cannot
+    # see that shape. `blocked_shots` was reported "supported" here while
+    # replication.json recorded it "not confirmed".
+    "replication.md",
 )
+
+#: Replication verdicts that permit a market to be called supported. Only
+#: one does. "not confirmed" is not a neutral absence -- the second window
+#: was run and it declined to confirm -- and "untestable" means there was
+#: never a first-window result to replicate.
+REPLICATED = "replicated"
 
 #: A market needs at least this many measured bets before the bundle will
 #: describe its evidence as anything other than "too thin to read". Set from
@@ -132,13 +144,14 @@ class EvidenceBundle:
             f"{', '.join(f'`{m}`' for m in self.supported_markets)}. That is "
             "not a recommendation to do so — it is a statement that the "
             "measurement does not rule them out.\n\n"
-            "**It has not been replicated.** Everything above comes from one "
-            "sampled window of one season, scored by a model that has never "
-            "been tested on a season it did not help fit. A result that "
-            "survives on a second, unseen window is worth far more than the "
-            "same result measured more precisely on this one — and buying "
-            "that window is the cheapest decisive thing left to do. The "
-            "decision is yours either way."
+            "**Each listed market cleared a held-out window as well as the "
+            "one it was found on**, which is the bar a market must now pass "
+            "to appear here at all — a positive result on one window is a "
+            "candidate and this sentence used to be printed about markets "
+            "that had never faced a second. Two windows agreeing is worth "
+            "considerably more than one measured precisely, and it is still "
+            "two windows, scored by a model that has never been tested on a "
+            "season it did not help fit. The decision is yours either way."
         )
 
 
@@ -188,6 +201,16 @@ def assess_markets(*, output_dir: Path) -> list[MarketVerdict]:
         for item in calibration.get("markets", [])
         if isinstance(item, dict)
     }
+    # The held-out window's verdict, keyed by market. A market absent from
+    # this record has no replication result at all, which is not the same as
+    # passing one -- `.get` therefore yields None and the market cannot be
+    # supported.
+    replication = {
+        str(item.get("market")): str(item.get("state", "")).strip()
+        for item in (_read_json(output_dir / "replication.json").get("markets") or [])
+        if isinstance(item, dict)
+    }
+
     prop_results = props.get("by_market") or {}
     team_results = {
         str(item.get("market")): item
@@ -252,6 +275,12 @@ def assess_markets(*, output_dir: Path) -> list[MarketVerdict]:
         # deficit branch, which states the uncertainty rather than assuming
         # the favourable reading.
         conclusive_and_positive = survives and roi_value is not None and roi_value > 0
+        # A positive result on one window is a candidate, not a finding. The
+        # held-out window is the whole point of the replication step, so a
+        # market it did not confirm cannot be reported as supported however
+        # well it did the first time.
+        replication_state = replication.get(market.key)
+        replicated = replication_state == REPLICATED
 
         if bets < MINIMUM_BETS_TO_READ:
             reason = (
@@ -300,12 +329,25 @@ def assess_markets(*, output_dir: Path) -> list[MarketVerdict]:
                 f"{roi_value:+.1%} over {bets:,} bets, and the interval "
                 f"excludes zero even after correcting for the {looks} markets "
                 "measured on the same data. That is the strongest thing this "
-                "repository can currently say. It rests on one sampled window "
-                "of one season and has not been replicated."
+                "repository can currently say, and it rests on one sampled "
+                "window of one season."
                 if roi_value is not None
                 else f"{bets:,} bets, and the corrected interval excludes zero."
             )
-            supported = True
+            supported = replicated
+            if replicated:
+                reason += (
+                    " **A held-out window confirmed it.** Two windows "
+                    "agreeing is worth considerably more than one measured "
+                    "precisely, and it is still two windows."
+                )
+            else:
+                reason += (
+                    f" **The held-out window did not confirm it "
+                    f"({replication_state or 'no replication record'}).** "
+                    "One window is a candidate; two agreeing is a finding. "
+                    "This is the first."
+                )
 
         verdicts.append(
             MarketVerdict(

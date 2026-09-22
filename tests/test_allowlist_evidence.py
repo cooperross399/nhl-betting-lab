@@ -144,6 +144,11 @@ def test_a_large_sample_excluding_zero_is_supported_but_hedged(
             }
         },
     )
+    # Required now. Before the replication record was read, this test passed
+    # without one — which is how a market that failed its held-out window
+    # could be listed as supported.
+    _write(tmp_path, "replication.json",
+           {"markets": [{"market": "shots_on_goal", "state": "replicated"}]})
 
     bundle = ev.build_bundle(
         provider_name="the_odds_api", output_dir=tmp_path, repository_root=tmp_path
@@ -152,7 +157,7 @@ def test_a_large_sample_excluding_zero_is_supported_but_hedged(
     assert bundle.supported_markets == ("shots_on_goal",)
     assert "not a recommendation to do so" in bundle.recommendation()
     assert "The decision is yours" in bundle.recommendation()
-    assert "has not been replicated" in bundle.recommendation()
+    assert "cleared a held-out window" in bundle.recommendation()
 
 
 def test_a_team_market_is_read_from_its_own_report(tmp_path: Path) -> None:
@@ -335,9 +340,15 @@ def test_a_result_that_does_not_survive_the_search_is_not_supported(
     assert "includes zero" in points.reason
 
 
-def test_a_supported_market_still_says_it_is_not_replicated(
+def test_a_supported_market_says_a_held_out_window_confirmed_it(
     tmp_path: Path,
 ) -> None:
+    """This test used to assert the opposite, and that was the bug.
+
+    It read `assert "has not been replicated" in shots.reason` on a market
+    marked supported — encoding, as a passing test, that a market could be
+    recommended for enabling without ever facing a second window.
+    """
     _all_evidence_present(tmp_path)
     _write(
         tmp_path,
@@ -354,6 +365,8 @@ def test_a_supported_market_still_says_it_is_not_replicated(
             }
         },
     )
+    _write(tmp_path, "replication.json",
+           {"markets": [{"market": "shots_on_goal", "state": "replicated"}]})
 
     bundle = ev.build_bundle(
         provider_name="the_odds_api", output_dir=tmp_path, repository_root=tmp_path
@@ -361,7 +374,8 @@ def test_a_supported_market_still_says_it_is_not_replicated(
     shots = next(v for v in bundle.verdicts if v.market == "shots_on_goal")
 
     assert shots.supported is True
-    assert "has not been replicated" in shots.reason
+    assert "held-out window confirmed" in shots.reason
+    assert "one sampled window of one season" in shots.reason
 
 
 def test_a_conclusive_LOSS_is_never_reported_as_supported(tmp_path: Path) -> None:
@@ -439,6 +453,8 @@ def test_a_conclusive_WIN_is_still_reported_as_supported(tmp_path: Path) -> None
             }
         },
     )
+    _write(tmp_path, "replication.json",
+           {"markets": [{"market": "blocked_shots", "state": "replicated"}]})
     bundle = ev.build_bundle(
         provider_name="the_odds_api", output_dir=tmp_path, repository_root=tmp_path
     )
@@ -481,3 +497,106 @@ def test_a_conclusive_interval_with_an_unreadable_return_is_not_supported(
     verdict = next(v for v in bundle.verdicts if v.market == "assists")
     assert verdict.supported is False
     assert "sign is unknown" in verdict.reason
+
+
+def _replication(directory: Path, market: str, state: str) -> None:
+    _write(directory, "replication.json", {"markets": [{"market": market, "state": state}]})
+
+
+def test_a_market_the_held_out_window_did_not_confirm_is_not_supported(
+    tmp_path: Path,
+) -> None:
+    """The second defect found while preparing the NHL allowlist.
+
+    `replication.json` was not in EVIDENCE_FILENAMES and the bundle never
+    read it. `blocked_shots` measured +4.9% over 4,293 bets on the discovery
+    window and was reported **supported** — while the replication record
+    recorded it `not confirmed`, because the held-out window returned +4.5%
+    over 2,950 bets with an interval that does not exclude zero on its own.
+
+    A window that merely fails to contradict is not confirmation. It was the
+    only market the bundle would have greenlit.
+    """
+    _all_evidence_present(tmp_path)
+    _write(
+        tmp_path,
+        "player_props_backtest.json",
+        {
+            "by_market": {
+                "blocked_shots": {
+                    "bets": 4293, "roi": 0.049, "includes_zero": False,
+                    "survives_correction": True, "looks": 7,
+                    "adjusted_low": 0.008, "adjusted_high": 0.090,
+                }
+            }
+        },
+    )
+    _replication(tmp_path, "blocked_shots", "not confirmed")
+    bundle = ev.build_bundle(
+        provider_name="the_odds_api", output_dir=tmp_path, repository_root=tmp_path
+    )
+
+    verdict = next(v for v in bundle.verdicts if v.market == "blocked_shots")
+    assert verdict.supported is False
+    assert "did not confirm" in verdict.reason
+    assert "blocked_shots" not in bundle.supported_markets
+
+
+def test_a_replicated_positive_is_still_supported(tmp_path: Path) -> None:
+    """The fix must not make `supported` unreachable."""
+    _all_evidence_present(tmp_path)
+    _write(
+        tmp_path,
+        "player_props_backtest.json",
+        {
+            "by_market": {
+                "blocked_shots": {
+                    "bets": 4293, "roi": 0.049, "includes_zero": False,
+                    "survives_correction": True, "looks": 7,
+                    "adjusted_low": 0.008, "adjusted_high": 0.090,
+                }
+            }
+        },
+    )
+    _replication(tmp_path, "blocked_shots", "replicated")
+    bundle = ev.build_bundle(
+        provider_name="the_odds_api", output_dir=tmp_path, repository_root=tmp_path
+    )
+
+    verdict = next(v for v in bundle.verdicts if v.market == "blocked_shots")
+    assert verdict.supported is True
+    assert "held-out window confirmed" in verdict.reason
+
+
+def test_a_market_with_no_replication_record_is_not_supported(tmp_path: Path) -> None:
+    """Never tested is not the same as passed.
+
+    Absence of a replication entry must not read as absence of a problem,
+    which is the default every flattering bug in this repository has had.
+    """
+    _all_evidence_present(tmp_path)
+    _write(
+        tmp_path,
+        "player_props_backtest.json",
+        {
+            "by_market": {
+                "blocked_shots": {
+                    "bets": 4293, "roi": 0.049, "includes_zero": False,
+                    "survives_correction": True, "looks": 7,
+                }
+            }
+        },
+    )
+    _write(tmp_path, "replication.json", {"markets": []})
+    bundle = ev.build_bundle(
+        provider_name="the_odds_api", output_dir=tmp_path, repository_root=tmp_path
+    )
+
+    verdict = next(v for v in bundle.verdicts if v.market == "blocked_shots")
+    assert verdict.supported is False
+    assert "no replication record" in verdict.reason
+
+
+def test_the_replication_record_is_required_evidence(tmp_path: Path) -> None:
+    """Its absence blocks a recommendation rather than being ignored."""
+    assert "replication.md" in ev.EVIDENCE_FILENAMES
