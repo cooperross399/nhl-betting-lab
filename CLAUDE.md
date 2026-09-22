@@ -249,6 +249,20 @@ Re-derive rather than trust if the data has moved.
   and it is tonight's game variance, not deployment), and players whose role
   IS expanding but who were quiet tonight **+5.57%** (n=2,430) — whom a feed
   would tell you to abstain from. `docs/why_a_lineup_feed_cannot_fix_the_cell.md`.
+- **The last open route is registered, not being tried.** Alternate-ladder
+  staleness was recorded as "not yet" rather than "no", because
+  `scripts/buy_historical_props.py` never bought the alternate ladders and
+  the store therefore offers **83 comparable rung pairs in two seasons** —
+  one violation, which is a sample, not a rate. The forward capture does
+  request them, so the question becomes answerable for the first time this
+  season. Registered 2026-09-22 with its tiers, placebo, cluster floor and a
+  2026-12-01 feasibility checkpoint fixed in advance:
+  `docs/pre_registered_ladder_coherence.md`. The detector
+  (`src/nhl_betting_lab/ladder_coherence.py`) is deliberately unreachable
+  from the card and from the forward ledger — the ledger is written *before*
+  the eligibility gate, so anything reaching the probability map would
+  contaminate the 2027-04-25 measurement.
+  `tests/test_ladder_route_cannot_reach_the_ledger.py` holds that apart.
 - **The oracle ceiling was an outcome filter, not a line-label result.**
   Abstaining above a 2-minute realised rise gives +3.11% [+1.39%, +4.80%] and
   a random-removal placebo reaches only −0.30% (z=8.3), so the cell is
