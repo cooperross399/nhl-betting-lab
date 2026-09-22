@@ -231,11 +231,27 @@ def assess_markets(*, output_dir: Path) -> list[MarketVerdict]:
         # measured on one body of data, so the uncorrected number for whichever
         # cleared 95% describes a search rather than a finding.
         survives = bool(entry.get("survives_correction", not includes_zero))
+        # An interval that excludes zero is conclusive. It is not therefore
+        # FAVOURABLE, and this bundle exists to inform a decision about
+        # enabling a market, so the two must never be conflated.
+        #
+        # `points` measures -4.4% over 6,202 bets with a corrected interval
+        # excluding zero. Before this line existed it was labelled
+        # "supported", and once the two missing evidence files were produced
+        # `recommendation()` would have read "the evidence is consistent with
+        # enabling `points`" -- about a market demonstrated to lose money.
+        # A demonstrated deficit is the strongest possible argument AGAINST
+        # enabling, and it was being rendered as the argument for.
         looks = int(entry.get("looks", 1) or 1)
         adjusted_low = entry.get("adjusted_low")
         adjusted_high = entry.get("adjusted_high")
         roi = entry.get("roi")
         roi_value = float(roi) if isinstance(roi, (int, float)) else None
+        # An ROI that cannot be read is not a positive one. A market whose
+        # interval excludes zero but whose sign is unknown falls to the
+        # deficit branch, which states the uncertainty rather than assuming
+        # the favourable reading.
+        conclusive_and_positive = survives and roi_value is not None and roi_value > 0
 
         if bets < MINIMUM_BETS_TO_READ:
             reason = (
@@ -243,6 +259,24 @@ def assess_markets(*, output_dir: Path) -> list[MarketVerdict]:
                 f"{MINIMUM_BETS_TO_READ} needed before a result is worth "
                 f"reading. Separating a +10% edge from zero takes about "
                 f"{bets_needed_to_detect(0.10):,} bets."
+            )
+            supported = False
+        elif not conclusive_and_positive and survives:
+            # Conclusive, and conclusively bad.
+            reason = (
+                (
+                    f"**{roi_value:+.1%} over {bets:,} bets, and the "
+                    "corrected interval excludes zero on the LOSING side.**"
+                    if roi_value is not None
+                    else (
+                        f"**{bets:,} bets, and the corrected interval "
+                        "excludes zero, but the return could not be read, so "
+                        "the sign is unknown.**"
+                    )
+                )
+                + " This is a demonstrated deficit, not an unproven edge: the"
+                " measurement does not fail to support enabling this market,"
+                " it argues against it."
             )
             supported = False
         elif not survives:
