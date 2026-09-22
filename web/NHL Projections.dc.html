@@ -73,7 +73,7 @@
         <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#2a2d3a;margin-top:6px;">{{ totRate }} win rate</div>
       </div>
       <div style="padding:22px 0 22px 24px;">
-        <div style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#6b6e7a;">Forward ledger</div>
+        <div style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#6b6e7a;">{{ fwLabel }}</div>
         <div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:44px;line-height:1;margin-top:8px;">{{ roi }}</div>
         <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#2a2d3a;margin-top:6px;">{{ ci }}</div>
       </div>
@@ -244,11 +244,11 @@ class Component extends DCLogic {
         totProj: tot && tot.proj != null ? tot.proj.toFixed(1) : dash,
         regAway: reg ? regCell(reg.away, reg.prices && reg.prices.away) : dash, regDraw: reg ? regCell(reg.draw, reg.prices && reg.prices.draw) : dash, regHome: reg ? regCell(reg.home, reg.prices && reg.prices.home) : dash,
         hasPick: !!g.pick, noPick: !g.pick,
-        // Not "no market clears the edge bar": the card never reaches the bar,
-      // because eligibility is decided before edge and nothing is allowlisted.
-      // Saying the bar was the reason would report a model judgement where a
-      // permission gate is what actually happened.
-      noPickLabel: pre ? "Exhibition · model abstains" : "No market is allowlisted for selection",
+        // Not "no market clears the edge bar": the card never reaches the
+        // bar, because eligibility is decided before edge and nothing is
+        // allowlisted. Naming the bar would report a model judgement where
+        // a permission gate is what actually happened.
+        noPickLabel: pre ? "Exhibition · model abstains" : "No market is allowlisted for selection",
         pickLabel: g.pick ? g.pick.label : "", pickMarket: g.pick ? g.pick.market : "", pickEdge: g.pick ? `${F.fmtSigned(g.pick.edgePct)}%` : "",
       });
     }
@@ -262,16 +262,26 @@ class Component extends DCLogic {
       suRec: F.recStr(r.straightUp), suRate: F.winRate(r.straightUp.w, r.straightUp.l),
       plRec: F.recStr(r.puckLine), plRate: F.winRate(r.puckLine.w, r.puckLine.l, r.puckLine.p),
       totRec: F.recStr(r.totals), totRate: F.winRate(r.totals.w, r.totals.l, r.totals.p),
-      // The forward ledger's RETURN is not published before its decision
-      // date. A pre-registered test with a running total on a public page
-      // every morning is a test someone is watching, which is what the
-      // registration exists to prevent. What is shown is how far it has
-      // got: rows, markets, span. See docs/when_this_ends.md.
-      roi: fw && fw.sealed ? "sealed" : dash,
+      // There is no unsealed branch, on purpose. `load_record` always
+      // returns sealed:true and never emits the return fields, so a branch
+      // reading them would be unreachable today and a live route back to
+      // publishing the return tomorrow -- one line elsewhere flipping the
+      // flag, with nobody reviewing it. (Those four field names are not
+      // spelled out here: test_no_page_renders_a_forward_return greps this
+      // file for them, and a comment promising not to use a thing reads to
+      // a grep exactly like using it. Same reason the Publish Site header
+      // does not spell out the write grant it disclaims.) The return is decided
+      // on 2027-04-25 (docs/when_this_ends.md) and rendering it before then
+      // turns a pre-registered test into a scoreboard.
+      //
+      // `rows` is build_forward_report's len(ledger): every frozen opinion,
+      // settled or not. It is not called "settled".
+      fwLabel: "Forward ledger · sealed",
+      roi: fw && fw.rows ? String(fw.rows) : dash,
       ci: !fw ? "No forward ledger yet"
         : fw.rows
-          ? `${fw.rows} opinion${fw.rows === 1 ? "" : "s"} frozen across ${fw.markets} market${fw.markets === 1 ? "" : "s"}${fw.firstDate ? `, ${fw.firstDate} to ${fw.lastDate}` : ""} · return sealed until ${fw.decisionDate}`
-          : `Nothing settled yet · return sealed until ${fw.decisionDate}`,
+          ? `opinions frozen across ${fw.markets} market${fw.markets === 1 ? "" : "s"}${fw.firstDate ? `, ${fw.firstDate} to ${fw.lastDate}` : ""} · return decided ${F.fmtDateOnly(fw.decisionDate)}, not before`
+          : `Nothing frozen yet · return decided ${F.fmtDateOnly(fw.decisionDate)}, not before`,
     };
   }
 }
