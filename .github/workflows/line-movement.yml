@@ -154,6 +154,42 @@ jobs:
             python scripts/capture_line_combinations.py
           fi
 
+      - name: Scan the captured ladders
+        # The 2026-10-15 checkpoint in docs/pre_registered_ladder_coherence.md
+        # reads rung DEPTH, and this puts that number in every run summary
+        # rather than on one date. The reason is the failure it detects.
+        #
+        # A 422 from the provider drops all ten alternate keys and falls back
+        # to the nine core markets. That fallback is correct -- losing the
+        # ladders is a bounded loss where losing every prop on every event is
+        # not -- and it warns. But the job stays green, and nothing else
+        # asserts a rung ever arrived. If it fires on opening night it fires
+        # for every event of every run, the season's ladder collection is
+        # zero, and every workflow above is still green. That is this repo's
+        # recorded "a green step can be one that never ran".
+        #
+        # Free: it reads files this job already wrote and spends no credit.
+        if: always()
+        continue-on-error: true
+        env:
+          PYTHONPATH: src
+        run: |
+          python scripts/run_ladder_coherence.py || true
+          if [ -f data/outputs/ladder_coherence.json ]; then
+            DEPTH=$(python -c "import json;print(json.load(open('data/outputs/ladder_coherence.json')).get('ladders_with_two_rungs',0))")
+            LADDERS=$(python -c "import json;print(json.load(open('data/outputs/ladder_coherence.json')).get('ladders',0))")
+            echo "### Ladder depth: $DEPTH" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "Ladders with two or more de-viggable rungs, out of $LADDERS scanned." >> "$GITHUB_STEP_SUMMARY"
+            echo "Two seasons of bought history produced 57. The 2026-10-15 checkpoint wants 2,000." >> "$GITHUB_STEP_SUMMARY"
+            if [ "$DEPTH" = "0" ] && [ "$LADDERS" != "0" ]; then
+              echo "" >> "$GITHUB_STEP_SUMMARY"
+              echo "> **Depth is zero while $LADDERS ladders were scanned.** Read this as the alternate keys not arriving -- check this run's capture warnings for a 422 -- and NOT as books being coherent. The two are indistinguishable here." >> "$GITHUB_STEP_SUMMARY"
+            fi
+          else
+            echo "### Ladder scan wrote no report" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
       - name: Keep the captures
         if: always()
         uses: actions/upload-artifact@v4
@@ -163,6 +199,8 @@ jobs:
             data/processed/line_movement
             data/processed/deployment
             data/processed/line_combinations
+            data/outputs/ladder_coherence.json
+            data/outputs/ladder_coherence.md
           if-no-files-found: warn
           retention-days: 90
           overwrite: true
