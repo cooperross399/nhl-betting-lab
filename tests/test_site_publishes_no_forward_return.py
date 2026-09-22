@@ -148,3 +148,45 @@ def test_no_page_renders_a_forward_return() -> None:
                 f"{page.name} renders {field}, which load_record no longer "
                 "supplies and must not start supplying."
             )
+
+
+def test_the_schedule_fetch_sends_a_user_agent() -> None:
+    """api-web.nhle.com answers the default urllib agent with 403.
+
+    The first deployment of this site failed on exactly that, with a
+    traceback that reads like a network outage. Any agent string gets a 200,
+    so this is a one-line fix that is impossible to rediscover from the
+    error — which is why it is pinned rather than left to a comment.
+    """
+    module = _module()
+    captured: dict = {}
+
+    class _Resp:
+        def read(self) -> bytes:
+            return b"{}"
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc: object) -> bool:
+            return False
+
+    def _urlopen(request: object, timeout: float = 0) -> object:
+        captured["agent"] = request.get_header("User-agent")
+        return _Resp()
+
+    original = module.urllib.request.urlopen
+    original_load = module.json.load
+    module.urllib.request.urlopen = _urlopen
+    module.json.load = lambda handle: {}
+    try:
+        module.fetch_json("https://api-web.nhle.com/v1/schedule/2026-09-29")
+    finally:
+        module.urllib.request.urlopen = original
+        module.json.load = original_load
+
+    assert captured.get("agent"), (
+        "the request went out with no User-Agent, which api-web.nhle.com "
+        "refuses with a 403"
+    )
+    assert "python-urllib" not in str(captured["agent"]).lower()

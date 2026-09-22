@@ -82,8 +82,24 @@ def team_entry(abbr: str) -> dict:
     return {"name": name, "short": short, "color": color, "fg": fg}
 
 
+#: api-web.nhle.com answers `User-Agent: Python-urllib/3.12` with **403
+#: Forbidden**. Any other agent gets a 200 — this is not authentication, a
+#: rate limit, or an outage, and the first deployment failed on it with a
+#: traceback that looked like a network problem and was not.
+#:
+#: The lab's own client (`nhl_betting_lab.data.nhl_api`) never hit this
+#: because it uses `requests`, which sends its own agent. This script stays
+#: stdlib-only on purpose — it builds a static site and must run without
+#: pandas or the lab's dependency tree — so it sets the header itself rather
+#: than growing an import. That is the whole reason for the duplication, and
+#: it is written down here so the next person does not resolve it by
+#: importing the lab.
+USER_AGENT = "nhl-betting-lab-site/1.0 (+https://github.com/cooperross399/nhl-betting-lab)"
+
+
 def fetch_json(url: str) -> dict:
-    with urllib.request.urlopen(url, timeout=30) as resp:  # noqa: S310 - fixed host
+    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    with urllib.request.urlopen(request, timeout=30) as resp:  # noqa: S310 - fixed host
         return json.load(resp)
 
 
@@ -253,8 +269,15 @@ def build_board(day: date, lab: Path, history_dir: Path) -> dict:
     record = load_record(lab / "data" / "outputs" / "forward_evidence.json")
     notice = None
     if preseason:
+        # "and picks" used to be in this sentence. It was not true: the
+        # card selects only from allowlisted markets and
+        # data/manual/staging_provider_policy.json allowlists nothing, so
+        # the card produces no selection on opening night or any night
+        # after it. A public page promising picks that the gate will never
+        # emit is the one thing this repository is built to not do.
         notice = ("Exhibition slate. The model is fitted on regular-season games only and prices nothing before opening night on "
-                  "September 29. Tonight shows the schedule; projections, lines and picks arrive with the first regular-season card.")
+                  "September 29. Tonight shows the schedule; projections and market lines arrive with the first regular-season "
+                  "card. No selections are published: no market is allowlisted, and the model has no demonstrated edge.")
     elif not lab_model:
         notice = "The model's game history was not available to this run, so the board shows the schedule and market lines only."
     board = {

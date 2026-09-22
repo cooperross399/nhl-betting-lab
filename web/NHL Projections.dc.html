@@ -244,7 +244,11 @@ class Component extends DCLogic {
         totProj: tot && tot.proj != null ? tot.proj.toFixed(1) : dash,
         regAway: reg ? regCell(reg.away, reg.prices && reg.prices.away) : dash, regDraw: reg ? regCell(reg.draw, reg.prices && reg.prices.draw) : dash, regHome: reg ? regCell(reg.home, reg.prices && reg.prices.home) : dash,
         hasPick: !!g.pick, noPick: !g.pick,
-        noPickLabel: pre ? "Exhibition · model abstains" : "No market clears the edge bar",
+        // Not "no market clears the edge bar": the card never reaches the bar,
+      // because eligibility is decided before edge and nothing is allowlisted.
+      // Saying the bar was the reason would report a model judgement where a
+      // permission gate is what actually happened.
+      noPickLabel: pre ? "Exhibition · model abstains" : "No market is allowlisted for selection",
         pickLabel: g.pick ? g.pick.label : "", pickMarket: g.pick ? g.pick.market : "", pickEdge: g.pick ? `${F.fmtSigned(g.pick.edgePct)}%` : "",
       });
     }
