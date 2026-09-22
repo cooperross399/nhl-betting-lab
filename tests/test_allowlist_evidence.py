@@ -362,3 +362,122 @@ def test_a_supported_market_still_says_it_is_not_replicated(
 
     assert shots.supported is True
     assert "has not been replicated" in shots.reason
+
+
+def test_a_conclusive_LOSS_is_never_reported_as_supported(tmp_path: Path) -> None:
+    """The defect this file exists to prevent recurring.
+
+    `supported` was set whenever the corrected interval excluded zero, with
+    no reference to which side of zero it excluded. The NHL `points` market
+    measures -4.4% over 6,202 bets with a corrected interval excluding zero,
+    and was therefore labelled **supported** in the one document written to
+    inform the decision about enabling it.
+
+    Worse, it did not stop at the label. `recommendation()` lists
+    `supported_markets` under the sentence "the evidence is consistent with
+    enabling ...", so once the two outstanding evidence files existed the
+    bundle would have recommended enabling a market demonstrated to lose
+    money. It was masked only by those files being absent.
+
+    A conclusive loss is the strongest argument AGAINST enabling a market.
+    It must never be rendered as the argument for.
+    """
+    _all_evidence_present(tmp_path)
+    _write(
+        tmp_path,
+        "player_props_backtest.json",
+        {
+            "by_market": {
+                "points": {
+                    "bets": 6202,
+                    "roi": -0.044,
+                    "includes_zero": False,
+                    "survives_correction": True,
+                    "looks": 7,
+                    "adjusted_low": -0.081,
+                    "adjusted_high": -0.007,
+                }
+            }
+        },
+    )
+    bundle = ev.build_bundle(
+        provider_name="the_odds_api", output_dir=tmp_path, repository_root=tmp_path
+    )
+
+    verdict = next(v for v in bundle.verdicts if v.market == "points")
+    assert verdict.supported is False, (
+        "a market measured at -4.4% with an interval excluding zero was "
+        "reported as supported"
+    )
+    assert "points" not in bundle.supported_markets
+    assert "demonstrated deficit" in verdict.reason
+    assert "consistent with enabling" not in bundle.recommendation()
+
+
+def test_a_conclusive_WIN_is_still_reported_as_supported(tmp_path: Path) -> None:
+    """The fix must not simply disable the branch.
+
+    If requiring a positive sign also suppressed genuine positive results,
+    the bundle would be uninformative in the one direction it exists to
+    inform, and the test above would pass for the wrong reason.
+    """
+    _all_evidence_present(tmp_path)
+    _write(
+        tmp_path,
+        "player_props_backtest.json",
+        {
+            "by_market": {
+                "blocked_shots": {
+                    "bets": 4293,
+                    "roi": 0.049,
+                    "includes_zero": False,
+                    "survives_correction": True,
+                    "looks": 7,
+                    "adjusted_low": 0.008,
+                    "adjusted_high": 0.090,
+                }
+            }
+        },
+    )
+    bundle = ev.build_bundle(
+        provider_name="the_odds_api", output_dir=tmp_path, repository_root=tmp_path
+    )
+
+    verdict = next(v for v in bundle.verdicts if v.market == "blocked_shots")
+    assert verdict.supported is True
+    assert "blocked_shots" in bundle.supported_markets
+    assert "consistent with enabling" in bundle.recommendation()
+
+
+def test_a_conclusive_interval_with_an_unreadable_return_is_not_supported(
+    tmp_path: Path,
+) -> None:
+    """Unknown sign falls to the deficit branch, not the favourable one.
+
+    A bundle that assumes the good reading when it cannot tell is a bundle
+    that flatters by default, and every flattering default in this
+    repository has eventually been wrong.
+    """
+    _all_evidence_present(tmp_path)
+    _write(
+        tmp_path,
+        "player_props_backtest.json",
+        {
+            "by_market": {
+                "assists": {
+                    "bets": 3761,
+                    "roi": None,
+                    "includes_zero": False,
+                    "survives_correction": True,
+                    "looks": 7,
+                }
+            }
+        },
+    )
+    bundle = ev.build_bundle(
+        provider_name="the_odds_api", output_dir=tmp_path, repository_root=tmp_path
+    )
+
+    verdict = next(v for v in bundle.verdicts if v.market == "assists")
+    assert verdict.supported is False
+    assert "sign is unknown" in verdict.reason
