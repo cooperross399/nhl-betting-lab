@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <title>NHL Projections — Maverick Hightower</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    html, body { margin: 0; padding: 0; background: #f4f2ee; color: #14151a; font-family: "IBM Plex Sans", Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+    * { box-sizing: border-box; }
+    a { color: #14151a; text-decoration: none; }
+    a:hover { color: #2a2d3a; text-decoration: underline; text-underline-offset: 3px; }
+  </style>
+</helmet>
+<div data-screen-label="Board" style="min-height:100vh;background:#f4f2ee;color:#14151a;">
+  <div style="max-width:1240px;margin:0 auto;padding:0 24px 80px;">
+
+    <header style="border-top:4px solid #14151a;border-bottom:1px solid #14151a;padding:14px 0 12px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">
+      <a href="NHL Projections.dc.html" style="display:flex;align-items:center;gap:12px;">
+        <span style="width:36px;height:36px;background:#14151a;color:#f4f2ee;display:grid;place-items:center;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:18px;letter-spacing:.04em;">MH</span>
+        <span style="display:flex;flex-direction:column;line-height:1.1;">
+          <span style="font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#6b6e7a;">Maverick Hightower</span>
+          <span style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:22px;letter-spacing:.02em;text-transform:uppercase;">NHL Projections</span>
+        </span>
+      </a>
+      <nav style="display:flex;gap:22px;font-size:13px;letter-spacing:.1em;text-transform:uppercase;font-weight:500;">
+        <a href="NHL Projections.dc.html" style="border-bottom:2px solid #14151a;padding-bottom:2px;">Board</a>
+        <a href="NHL Results.dc.html">Results</a>
+        <a href="NHL Graphic.dc.html">Graphic view</a>
+      </nav>
+    </header>
+
+    <section style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:24px 40px;align-items:end;padding:40px 0 28px;border-bottom:1px solid #14151a;">
+      <div style="min-width:0;">
+        <div style="font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:#6b6e7a;margin-bottom:10px;">{{ season }} NHL · <span hint-placeholder="Tuesday, October 13">{{ boardDateLabel }}</span></div>
+        <h1 style="margin:0;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:clamp(56px,9vw,112px);line-height:.9;letter-spacing:-.01em;text-transform:uppercase;">Tonight's<br>Board.</h1>
+        <p style="margin:18px 0 0;max-width:560px;font-size:17px;line-height:1.5;color:#2a2d3a;text-wrap:pretty;">Model-projected scores, win probabilities and market context for every game on tonight's slate.</p>
+      </div>
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;line-height:1.7;color:#6b6e7a;text-align:right;">
+        <div style="text-transform:uppercase;letter-spacing:.1em;">Updated</div>
+        <div style="color:#14151a;">{{ updatedLabel }}</div>
+        <div>Times shown in {{ tz }}</div>
+      </div>
+    </section>
+
+    <sc-if value="{{ hasNotice }}" hint-placeholder-val="{{ false }}">
+      <div style="display:grid;grid-template-columns:auto minmax(0,1fr);gap:20px;align-items:start;padding:18px 0;border-bottom:1px solid #14151a;">
+        <span style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:14px;letter-spacing:.14em;text-transform:uppercase;background:#14151a;color:#f4f2ee;padding:5px 9px;">{{ phaseLabel }}</span>
+        <p style="margin:0;font-size:15px;line-height:1.5;color:#2a2d3a;max-width:760px;text-wrap:pretty;">{{ notice }}</p>
+      </div>
+    </sc-if>
+
+    <section style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));border-bottom:1px solid #14151a;">
+      <div style="padding:22px 24px 22px 0;border-right:1px solid #d6d3cc;">
+        <div style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#6b6e7a;">Straight up</div>
+        <div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:44px;line-height:1;margin-top:8px;">{{ suRec }}</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#2a2d3a;margin-top:6px;">{{ suRate }} win rate</div>
+      </div>
+      <div style="padding:22px 24px;border-right:1px solid #d6d3cc;">
+        <div style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#6b6e7a;">Against the puck line</div>
+        <div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:44px;line-height:1;margin-top:8px;">{{ plRec }}</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#2a2d3a;margin-top:6px;">{{ plRate }} win rate</div>
+      </div>
+      <div style="padding:22px 24px;border-right:1px solid #d6d3cc;">
+        <div style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#6b6e7a;">Totals</div>
+        <div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:44px;line-height:1;margin-top:8px;">{{ totRec }}</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#2a2d3a;margin-top:6px;">{{ totRate }} win rate</div>
+      </div>
+      <div style="padding:22px 0 22px 24px;">
+        <div style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#6b6e7a;">Forward ledger · ROI</div>
+        <div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:44px;line-height:1;margin-top:8px;">{{ roi }}</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#2a2d3a;margin-top:6px;">{{ ci }}</div>
+      </div>
+    </section>
+
+    <section style="padding-top:44px;">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:16px;flex-wrap:wrap;border-bottom:3px solid #14151a;padding-bottom:10px;">
+        <h2 style="margin:0;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:34px;line-height:1;text-transform:uppercase;letter-spacing:.01em;">Model projections</h2>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#6b6e7a;">Showing {{ gameCount }} games · Open and Current list the market favorite · Fair is the model's no-vig price</div>
+      </div>
+
+      <sc-for list="{{ days }}" as="day" hint-placeholder-count="1">
+        <div style="display:flex;align-items:baseline;gap:14px;padding:26px 0 10px;border-bottom:1px solid #14151a;">
+          <h3 style="margin:0;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:26px;text-transform:uppercase;letter-spacing:.02em;">{{ day.label }}</h3>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#6b6e7a;">{{ day.countLabel }}</span>
+        </div>
+
+        <sc-for list="{{ day.games }}" as="g" hint-placeholder-count="4">
+          <article style="display:grid;grid-template-columns:120px minmax(280px,1.4fr) minmax(0,2fr);gap:0 28px;padding:20px 0;border-bottom:1px solid #d6d3cc;align-items:start;">
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;line-height:1.6;color:#6b6e7a;">
+              <div style="color:#14151a;font-weight:600;font-size:15px;">{{ g.time }}</div>
+              <div>{{ g.tv }}</div>
+              <div style="margin-top:8px;font-size:11px;">{{ g.venue }}</div>
+              <div style="font-size:11px;">{{ g.city }}</div>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:10px;min-width:0;">
+              <div style="display:flex;align-items:center;gap:12px;">
+                <span style="width:38px;height:38px;border-radius:50%;flex:none;display:grid;place-items:center;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:15px;letter-spacing:.02em;background:{{ g.away.color }};color:{{ g.away.fg }};">{{ g.away.abbr }}</span>
+                <div style="flex:1;min-width:0;">
+                  <div style="display:flex;align-items:center;gap:8px;">
+                    <span style="font-weight:600;font-size:16px;">{{ g.away.name }}</span>
+                    <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#6b6e7a;">{{ g.away.record }}</span>
+                    <sc-if value="{{ g.away.b2b }}" hint-placeholder-val="{{ false }}"><span style="font-size:10px;letter-spacing:.1em;font-weight:600;border:1px solid #14151a;padding:1px 5px;">B2B</span></sc-if>
+                  </div>
+                  <sc-if value="{{ showGoalies }}" hint-placeholder-val="{{ true }}"><div style="font-size:12px;color:#6b6e7a;">G · {{ g.away.goalieLine }}</div></sc-if>
+                </div>
+                <div style="text-align:right;flex:none;">
+                  <div style="font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:22px;line-height:1;">{{ g.away.proj }}</div>
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#6b6e7a;margin-top:3px;">{{ g.away.win }}</div>
+                </div>
+              </div>
+              <div style="display:flex;align-items:center;gap:12px;">
+                <span style="width:38px;height:38px;border-radius:50%;flex:none;display:grid;place-items:center;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:15px;letter-spacing:.02em;background:{{ g.home.color }};color:{{ g.home.fg }};">{{ g.home.abbr }}</span>
+                <div style="flex:1;min-width:0;">
+                  <div style="display:flex;align-items:center;gap:8px;">
+                    <span style="font-weight:600;font-size:16px;">{{ g.home.name }}</span>
+                    <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#6b6e7a;">{{ g.home.record }}</span>
+                    <sc-if value="{{ g.home.b2b }}" hint-placeholder-val="{{ false }}"><span style="font-size:10px;letter-spacing:.1em;font-weight:600;border:1px solid #14151a;padding:1px 5px;">B2B</span></sc-if>
+                  </div>
+                  <sc-if value="{{ showGoalies }}" hint-placeholder-val="{{ true }}"><div style="font-size:12px;color:#6b6e7a;">G · {{ g.home.goalieLine }}</div></sc-if>
+                </div>
+                <div style="text-align:right;flex:none;">
+                  <div style="font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:22px;line-height:1;">{{ g.home.proj }}</div>
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#6b6e7a;margin-top:3px;">{{ g.home.win }}</div>
+                </div>
+              </div>
+              <sc-if value="{{ g.modelled }}" hint-placeholder-val="{{ true }}">
+                <div style="height:4px;display:flex;background:#d6d3cc;margin-top:2px;">
+                  <div style="width:{{ g.away.winWidth }};background:{{ g.away.color }};"></div>
+                  <div style="flex:1;background:{{ g.home.color }};"></div>
+                </div>
+              </sc-if>
+            </div>
+
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));gap:14px 18px;min-width:0;">
+              <div style="border-top:2px solid #14151a;padding-top:8px;">
+                <div style="font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#6b6e7a;">Moneyline</div>
+                <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;line-height:1.7;margin-top:6px;">
+                  <div style="display:flex;justify-content:space-between;gap:8px;"><span style="color:#6b6e7a;">Open</span><span>{{ g.mlOpen }}</span></div>
+                  <div style="display:flex;justify-content:space-between;gap:8px;"><span style="color:#6b6e7a;">Current</span><span>{{ g.mlCur }}</span></div>
+                  <div style="display:flex;justify-content:space-between;gap:8px;"><span style="color:#6b6e7a;">Fair</span><span style="font-weight:600;">{{ g.mlFair }}</span></div>
+                </div>
+              </div>
+              <div style="border-top:2px solid #14151a;padding-top:8px;">
+                <div style="font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#6b6e7a;">Puck line</div>
+                <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;line-height:1.7;margin-top:6px;">
+                  <div style="display:flex;justify-content:space-between;gap:8px;"><span style="color:#6b6e7a;">Line</span><span>{{ g.plLine }}</span></div>
+                  <div style="display:flex;justify-content:space-between;gap:8px;"><span style="color:#6b6e7a;">Price</span><span>{{ g.plPrice }}</span></div>
+                  <div style="display:flex;justify-content:space-between;gap:8px;"><span style="color:#6b6e7a;">Cover</span><span style="font-weight:600;">{{ g.plCover }}</span></div>
+                </div>
+              </div>
+              <div style="border-top:2px solid #14151a;padding-top:8px;">
+                <div style="font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#6b6e7a;">Total goals</div>
+                <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;line-height:1.7;margin-top:6px;">
+                  <div style="display:flex;justify-content:space-between;gap:8px;"><span style="color:#6b6e7a;">Open</span><span>{{ g.totOpen }}</span></div>
+                  <div style="display:flex;justify-content:space-between;gap:8px;"><span style="color:#6b6e7a;">Current</span><span>{{ g.totCur }}</span></div>
+                  <div style="display:flex;justify-content:space-between;gap:8px;"><span style="color:#6b6e7a;">Proj</span><span style="font-weight:600;">{{ g.totProj }}</span></div>
+                </div>
+              </div>
+              <sc-if value="{{ showRegulation }}" hint-placeholder-val="{{ true }}">
+                <div style="border-top:2px solid #14151a;padding-top:8px;">
+                  <div style="font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#6b6e7a;">Regulation 3-way</div>
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;line-height:1.7;margin-top:6px;">
+                    <div style="display:flex;justify-content:space-between;gap:8px;"><span style="color:#6b6e7a;">{{ g.away.abbr }}</span><span>{{ g.regAway }}</span></div>
+                    <div style="display:flex;justify-content:space-between;gap:8px;"><span style="color:#6b6e7a;">Draw</span><span>{{ g.regDraw }}</span></div>
+                    <div style="display:flex;justify-content:space-between;gap:8px;"><span style="color:#6b6e7a;">{{ g.home.abbr }}</span><span>{{ g.regHome }}</span></div>
+                  </div>
+                </div>
+              </sc-if>
+              <div style="border-top:2px solid #14151a;padding-top:8px;">
+                <div style="font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#6b6e7a;">Model pick</div>
+                <sc-if value="{{ g.hasPick }}" hint-placeholder-val="{{ true }}">
+                  <div style="margin-top:8px;background:#14151a;color:#f4f2ee;padding:8px 10px;">
+                    <div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:20px;line-height:1;text-transform:uppercase;letter-spacing:.02em;">{{ g.pickLabel }}</div>
+                    <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;margin-top:5px;color:#c9c7c0;">{{ g.pickMarket }} · edge {{ g.pickEdge }}</div>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ g.noPick }}" hint-placeholder-val="{{ false }}">
+                  <div style="margin-top:8px;border:1px dashed #6b6e7a;padding:8px 10px;font-family:'IBM Plex Mono',monospace;font-size:11px;line-height:1.5;color:#6b6e7a;">{{ g.noPickLabel }}</div>
+                </sc-if>
+              </div>
+            </div>
+          </article>
+        </sc-for>
+      </sc-for>
+    </section>
+
+    <footer style="margin-top:56px;border-top:1px solid #14151a;padding-top:16px;display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;font-family:'IBM Plex Mono',monospace;font-size:12px;color:#6b6e7a;">
+      <span>© 2026 Maverick Hightower</span>
+      <span>Every number is a model projection. Nothing here is a bet placed.</span>
+    </footer>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;showGoalies&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Board&quot;},&quot;showRegulation&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Board&quot;},&quot;dataUrl&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;./data/board.json&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Data&quot;}}">
+class Component extends DCLogic {
+  state = { data: null, fmt: null };
+  async componentDidMount() {
+    const fmt = await import("./lib/format.js");
+    const url = this.props.dataUrl ?? "./data/board.json";
+    const data = await fetch(url).then((r) => r.json());
+    this.setState({ data, fmt });
+  }
+  renderVals() {
+    const { data, fmt } = this.state;
+    const showGoalies = this.props.showGoalies ?? true;
+    const showRegulation = this.props.showRegulation ?? true;
+    if (!data || !fmt) return { showGoalies, showRegulation, days: [] };
+    const F = fmt, r = data.record, T = data.teams;
+    const pre = data.phase === "preseason";
+    const team = (side) => {
+      const t = T[side.abbr] || {};
+      const modelled = typeof side.projGoals === "number";
+      return {
+        abbr: side.abbr, name: t.short || side.abbr, record: side.record || "", b2b: !!side.b2b,
+        color: t.color || "#14151a", fg: t.fg || "#fff",
+        proj: modelled ? side.projGoals.toFixed(1) : "—", win: modelled ? `${F.pct(side.winProb)} win` : "", winWidth: modelled ? `${Math.round(side.winProb * 100)}%` : "50%",
+        goalieLine: side.goalie ? `${side.goalie.name} (${side.goalie.status === "confirmed" ? "confirmed" : "projected"})` : "TBD",
+      };
+    };
+    const dash = "—";
+    const byDay = new Map();
+    for (const g of data.games) {
+      const key = F.localDayKey(g.startUtc);
+      if (!byDay.has(key)) byDay.set(key, { label: F.fmtDayLong(g.startUtc), games: [] });
+      const ml = g.moneyline, pl = g.puckLine, tot = g.total, reg = g.regulation;
+      const regCell = (p, price) => (p == null ? dash : price == null ? F.pct(p) : `${F.pct(p)} · ${F.fmtOdds(price)}`);
+      byDay.get(key).games.push({
+        time: F.fmtTime(g.startUtc), tv: g.tv || "", venue: g.venue || "", city: g.city || "",
+        away: team(g.away), home: team(g.home), modelled: typeof g.home.projGoals === "number",
+        mlOpen: ml && ml.open ? F.favLine(ml.open, g.away.abbr, g.home.abbr) : dash,
+        mlCur: ml && ml.current ? F.favLine(ml.current, g.away.abbr, g.home.abbr) : dash,
+        mlFair: ml && ml.fair ? F.favLine(ml.fair, g.away.abbr, g.home.abbr) : dash,
+        plLine: pl ? `${pl.favorite} ${F.fmtLine(pl.line)}` : dash, plPrice: pl && pl.price != null ? F.fmtOdds(pl.price) : dash, plCover: pl ? F.pct(pl.coverProb) : dash,
+        totOpen: tot && tot.open != null ? tot.open.toFixed(1) : dash,
+        totCur: tot && tot.current != null ? `${tot.current.toFixed(1)}${tot.overPrice != null ? ` (${F.fmtOdds(tot.overPrice)}/${F.fmtOdds(tot.underPrice)})` : ""}` : dash,
+        totProj: tot && tot.proj != null ? tot.proj.toFixed(1) : dash,
+        regAway: reg ? regCell(reg.away, reg.prices && reg.prices.away) : dash, regDraw: reg ? regCell(reg.draw, reg.prices && reg.prices.draw) : dash, regHome: reg ? regCell(reg.home, reg.prices && reg.prices.home) : dash,
+        hasPick: !!g.pick, noPick: !g.pick,
+        noPickLabel: pre ? "Exhibition · model abstains" : "No market clears the edge bar",
+        pickLabel: g.pick ? g.pick.label : "", pickMarket: g.pick ? g.pick.market : "", pickEdge: g.pick ? `${F.fmtSigned(g.pick.edgePct)}%` : "",
+      });
+    }
+    const fw = r.forward;
+    const days = [...byDay.values()].map((d) => ({ ...d, countLabel: `${d.games.length} game${d.games.length === 1 ? "" : "s"}` }));
+    return {
+      showGoalies, showRegulation, days,
+      season: data.season, boardDateLabel: F.fmtDateOnly(data.boardDate), updatedLabel: F.fmtUpdated(data.generatedAt), tz: F.tzName(),
+      gameCount: data.games.length, hasNotice: !!data.notice, notice: data.notice || "",
+      phaseLabel: pre ? "Preseason" : "Regular season",
+      suRec: F.recStr(r.straightUp), suRate: F.winRate(r.straightUp.w, r.straightUp.l),
+      plRec: F.recStr(r.puckLine), plRate: F.winRate(r.puckLine.w, r.puckLine.l, r.puckLine.p),
+      totRec: F.recStr(r.totals), totRate: F.winRate(r.totals.w, r.totals.l, r.totals.p),
+      roi: fw ? `${F.fmtSigned(fw.roiPct)}%` : dash,
+      ci: fw ? `95% ${F.fmtSigned(fw.ciLow)}% to ${F.fmtSigned(fw.ciHigh)}% · n=${fw.wagers} · CLV ${F.fmtSigned(fw.clvPct)}%` : "No settled opinions yet",
+    };
+  }
+}
+</script>
+</body>
+</html>
