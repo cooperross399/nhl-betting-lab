@@ -96,7 +96,10 @@ jobs:
       - name: Assemble the site
         run: |
           cp -R web/. dist/
-          rm -f dist/build_site_json.py dist/README.md
+          # site_history.py joins the generator already removed here: it
+          # arrived with the shared pages and would otherwise be served
+          # as source next to the board it froze.
+          rm -f dist/*.py dist/README.md
           touch dist/.nojekyll
 
       - name: Build today's board and yesterday's results
@@ -104,6 +107,8 @@ jobs:
           PYTHONPATH: src
         run: |
           python web/build_site_json.py --lab . --out dist/data
+          python web/site_history.py --data dist/data
+          printf '{"sport":"nhl"}' > dist/site.json
 
       - name: Keep the history for tomorrow's settlement
         uses: actions/upload-artifact@v4
