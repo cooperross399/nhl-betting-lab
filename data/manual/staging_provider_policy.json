@@ -10,9 +10,40 @@
     "to required_markets, or write a receipt. See",
     "docs/provider_allowlist_approval.md."
   ],
-  "allowed_provider_names": [],
-  "allowed_provider_types": [],
-  "provider_allowlist_entries": {},
+  "allowed_provider_names": [
+    "the_odds_api"
+  ],
+  "allowed_provider_types": [
+    "odds_api"
+  ],
+  "provider_allowlist_entries": {
+    "the_odds_api": {
+      "allowlist_status": "allowed",
+      "provider_type": "odds_api",
+      "approved_at": "2026-09-23",
+      "reviewer_name": "Cooper Ross",
+      "evidence_receipt_id": "odds_api-20260923-cooperross399",
+      "required_markets": [
+        "assists",
+        "blocked_shots",
+        "goalie_saves",
+        "goals",
+        "hits",
+        "moneyline",
+        "points",
+        "puck_line",
+        "regulation_3_way",
+        "shots_on_goal",
+        "team_total",
+        "total_goals"
+      ],
+      "known_limitations": [
+        "No market is supported by the evidence. `points` is a demonstrated deficit and replicated as one; `blocked_shots` was not confirmed on its held-out window; `hits`, `regulation_3_way` and `team_total` have never been measured against real prices.",
+        "Approved against the bundle's own recommendation on 2026-09-23. The prior approval of the same markets was withdrawn on 2026-08-29 and nothing in the evidence has changed since."
+      ],
+      "max_provider_run_age_hours": 12
+    }
+  },
   "max_provider_run_age_hours": 12,
   "_withdrawn": [
     "The 2026-08-27 approval of all eleven markets was WITHDRAWN on",
