@@ -247,10 +247,18 @@ class Component extends DCLogic {
         totProj: tot && tot.proj != null ? tot.proj.toFixed(1) : dash,
         regAway: reg ? regCell(reg.away, reg.prices && reg.prices.away) : dash, regDraw: reg ? regCell(reg.draw, reg.prices && reg.prices.draw) : dash, regHome: reg ? regCell(reg.home, reg.prices && reg.prices.home) : dash,
         hasPick: !!g.pick, noPick: !g.pick,
-        // Eligibility is decided before edge and nothing is allowlisted, so
-        // the card never reaches the bar. Naming the bar would report a
-        // model judgement where a permission gate is what happened.
-        noPickLabel: pre ? "Exhibition · model abstains" : "No market is allowlisted for selection",
+        // Which gate stopped it depends on the policy, so the board tells
+        // the page rather than the page assuming. With nothing allowlisted
+        // eligibility is decided before edge and the card never reaches the
+        // bar, so naming the bar would report a model judgement where a
+        // permission gate is what happened. With markets allowlisted the bar
+        // is exactly what stopped it, and naming the allowlist would be the
+        // same error pointing the other way.
+        noPickLabel: pre
+          ? "Exhibition · model abstains"
+          : ((data.allowlistedMarkets || []).length
+              ? "No market clears the edge bar"
+              : "No market is allowlisted for selection"),
         pickLabel: g.pick ? g.pick.label : "", pickMarket: g.pick ? g.pick.market : "", pickEdge: g.pick ? `${F.fmtSigned(g.pick.edgePct)}%` : "",
       });
     }

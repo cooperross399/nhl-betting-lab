@@ -233,10 +233,20 @@ def test_the_empty_state_names_the_gate_that_actually_stopped_the_pick() -> None
     """
     page = PROJECT_ROOT / "web" / SEALED_PAGE
     text = page.read_text(encoding="utf-8")
+
+    # This asserted the allowlist wording and BANNED the edge-bar wording.
+    # That was right while the allowlist was empty and wrong the moment it
+    # was not: with markets allowlisted the card does reach the bar, and
+    # blaming the allowlist becomes the same error pointing the other way.
+    #
+    # So the page now carries both and picks by `allowlistedMarkets`, which
+    # the board publishes. What this holds is that both arms exist and that
+    # the choice is made from the data rather than fixed.
     assert "No market is allowlisted for selection" in text
-    assert "No market clears the edge bar" not in text, (
-        "the empty state blames the edge bar; eligibility is decided before "
-        "edge and nothing is allowlisted"
+    assert "No market clears the edge bar" in text
+    assert "allowlistedMarkets" in text, (
+        "the page hard-codes one of the two empty-state labels instead of "
+        "choosing by the published allowlist state"
     )
 
 
