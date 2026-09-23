@@ -10,10 +10,16 @@ const pct = (p) => (typeof p === "number" ? F.pct(p) : dash);
 const w = (p) => `${Math.round((p || 0) * 100)}%`;
 const hoursOld = (iso) => (iso ? (Date.now() - new Date(iso).getTime()) / 36e5 : Infinity);
 
+// `sample` / `sampleResults` are the OFF-DOMAIN fallback: what the pages fetch
+// when site.json is absent, and what the Leans / Empty preview scenarios are
+// derived from. They must point at files that exist IN THAT LAB'S REPO. EPL and
+// CBB keep theirs under data/sample/; NHL commits its board at the live path.
+// Shipped pointing at data/epl/ and data/cbb/, which exist in neither repo, so
+// every offline load and both preview scenarios fell through to a 404.
 export const SPORTS = {
   nhl: { key: "nhl", name: "NHL", longName: "NHL Projections", host: "https://nhl.maverickhightower.com/", sample: "./data/board.json", sampleResults: "./data/results.json", scoreWord: "goals", timeWord: "Puck drop", staleAfterHours: 30 },
-  epl: { key: "epl", name: "EPL", longName: "EPL Projections", host: "https://epl.maverickhightower.com/", sample: "./data/epl/board.json", sampleResults: "./data/epl/results.json", scoreWord: "goals", timeWord: "Kick-off", staleAfterHours: 30 },
-  cbb: { key: "cbb", name: "CBB", longName: "CBB Projections", host: "https://cbb.maverickhightower.com/", sample: "./data/cbb/board.json", sampleResults: "./data/cbb/results.json", scoreWord: "points", timeWord: "Tip", staleAfterHours: 30 },
+  epl: { key: "epl", name: "EPL", longName: "EPL Projections", host: "https://epl.maverickhightower.com/", sample: "./data/sample/board.json", sampleResults: "./data/sample/results.json", scoreWord: "goals", timeWord: "Kick-off", staleAfterHours: 30 },
+  cbb: { key: "cbb", name: "CBB", longName: "CBB Projections", host: "https://cbb.maverickhightower.com/", sample: "./data/sample/board.json", sampleResults: "./data/sample/results.json", scoreWord: "points", timeWord: "Tip", staleAfterHours: 30 },
 };
 export const ORDER = ["nhl", "epl", "cbb"];
 
