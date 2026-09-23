@@ -254,3 +254,29 @@ def test_every_published_page_links_the_favicon() -> None:
         if 'rel="icon"' not in p.read_text(encoding="utf-8")
     ]
     assert not missing, f"pages with no favicon link: {missing}"
+
+
+def test_no_page_lists_the_same_nav_destination_twice() -> None:
+    """Two pages shipped with the CBB link in the nav twice.
+
+    It renders as "EPL CBB CBB", which is only visible if someone looks at
+    the rendered page rather than at a 200. Every check up to that point
+    passed: the file was served, the link worked, the suite was green.
+
+    Cheap to introduce in a hand-written nav and cheap to pin here.
+    """
+    import re
+
+    web = PROJECT_ROOT / "web"
+    offenders: dict[str, list[str]] = {}
+    for page in sorted(web.glob("*.html")):
+        text = page.read_text(encoding="utf-8")
+        hrefs = re.findall(
+            r'<a[^>]+href="(https://[a-z]+\.maverickhightower\.com/?[^"]*)"',
+            text,
+        )
+        seen: set[str] = set()
+        twice = sorted({h for h in hrefs if h in seen or seen.add(h)})
+        if twice:
+            offenders[page.name] = twice
+    assert not offenders, f"nav destinations listed more than once: {offenders}"
