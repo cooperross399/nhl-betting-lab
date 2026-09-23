@@ -143,13 +143,33 @@ def test_claude_md_carries_a_current_operating_state() -> None:
 
     assert "## Current operating state" in text
     assert "no demonstrated edge" in text
-    # The allowlist state must name its receipt: an operating state that
-    # claims an approval without citing the paperwork is exactly the drift
-    # this test exists to catch.
-    # The allowlist state must name its paperwork either way: an operating
+    # The allowlist state must name its paperwork EITHER WAY: an operating
     # state claiming an approval without citing the receipt, or hiding that
     # one was withdrawn, is exactly the drift this test exists to catch.
-    assert "No market is allowlisted" in text
+    #
+    # That comment was already here. The assertion under it was
+    # `"No market is allowlisted" in text` — one of the two ways, written as
+    # a constant, so the first signed approval would have made this red and
+    # the only route back would have been to weaken it in the same commit as
+    # the signature. It now holds both ways.
+    from nhl_betting_lab.staging_provider_policy import load_policy
+
+    policy = load_policy()
+    if policy.allowed_provider_names:
+        cited = [
+            entry.evidence_receipt_id for entry in policy.entries.values()
+        ]
+        for receipt_id in cited:
+            assert receipt_id in text, (
+                "the operating state claims an approval and does not cite its "
+                f"receipt `{receipt_id}`"
+            )
+        assert "allowlisted" in text
+    else:
+        assert "No market is allowlisted" in text
+
+    # The withdrawal stays on the record whatever happens next: a superseded
+    # approval that stops being mentioned is a decision quietly unmade.
     assert "withdrawn on 2026-08-29" in text
     assert "odds_api-20260827T165300-0400-cooperross399" in text
 

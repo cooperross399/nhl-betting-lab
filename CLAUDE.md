@@ -650,7 +650,16 @@ Re-derive rather than trust if the data has moved.
   Props return no rows this far from the season — an absence, not a fault.
   The alternate ladders and all per-event markets ride the per-event fetch;
   asking the bulk endpoint for them 422s the whole request.
-- **No market is allowlisted. The 2026-08-27 approval was withdrawn on
+- **Twelve markets are allowlisted as of 2026-09-23, against the evidence
+  bundle's own recommendation**, which supports enabling nothing: `points`
+  is a demonstrated deficit and replicated as one, `blocked_shots` was not
+  confirmed on its held-out window, seven show no demonstrated edge, and
+  `hits`, `regulation_3_way` and `team_total` have never been measured
+  against real prices. The receipt says so in its own reviewer statement.
+  Allowlisting says a market's prices may be used; it is not a claim that
+  the model beats them, and every report continues to say it does not.
+  The receipt is `odds_api-20260923-cooperross399`.
+- **The 2026-08-27 approval of the same markets was withdrawn on
   2026-08-29**, because the evidence it cited moved underneath it: the
   receipt was signed against +1.4% over 4,830 bets, and the full population
   says -1.6% over 73,918. The gate caught it on its own — the receipt's

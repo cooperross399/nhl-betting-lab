@@ -762,8 +762,25 @@ def test_a_superseded_receipt_approves_nothing() -> None:
     directory = MANUAL_DIR / "human_acceptance_receipts"
     superseded = directory / "superseded"
 
-    assert not list(directory.glob("*.json")), (
-        "a receipt sitting beside the live ones reads as live"
+    # This asserted the live directory was EMPTY. That is the state the
+    # repository was in, not the property being protected: the moment Cooper
+    # signs, a receipt must sit there for the policy to cite, and the only
+    # route back to green would be to weaken this — in the same commit as the
+    # signature.
+    #
+    # "A receipt sitting beside the live ones reads as live" is about an
+    # UNCITED receipt. A cited one is supposed to be there. So the invariant
+    # is that every receipt in the live directory is cited by the policy, and
+    # no superseded one is.
+    cited_live = {
+        entry.evidence_receipt_id for entry in load_policy().entries.values()
+    }
+    orphans = sorted(
+        path.stem for path in directory.glob("*.json") if path.stem not in cited_live
+    )
+    assert not orphans, (
+        f"receipts sit beside the live ones that no allowlist entry cites: "
+        f"{orphans}. An uncited receipt reads as live and approves nothing."
     )
     if superseded.is_dir():
         assert (superseded / "README.md").is_file(), (
