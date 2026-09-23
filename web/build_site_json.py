@@ -267,22 +267,34 @@ def build_board(day: date, lab: Path, history_dir: Path) -> dict:
         out_games.append(row)
 
     record = load_record(lab / "data" / "outputs" / "forward_evidence.json")
+    # Published so the page can name the gate that ACTUALLY stopped a pick.
+    # With nothing allowlisted the card never reaches the edge bar, so saying
+    # it failed the bar reports a model judgement where a permission gate is
+    # what happened. With markets allowlisted the bar is exactly what stopped
+    # it. The page cannot tell which without being told.
+    allowlisted = allowlisted_markets(lab)
     notice = None
     if preseason:
-        # "and picks" used to be in this sentence. It was not true: the
-        # card selects only from allowlisted markets and
-        # data/manual/staging_provider_policy.json allowlists nothing, so
-        # the card produces no selection on opening night or any night
-        # after it. A public page promising picks that the gate will never
-        # emit is the one thing this repository is built to not do.
+        # "and picks" used to be in this sentence and was not true, because
+        # the card selects only from allowlisted markets. The allowlist is no
+        # longer empty, so the clause is read rather than asserted — and
+        # "no demonstrated edge" is NOT read, because approving a market says
+        # its prices may be used and says nothing about whether the model
+        # beats them.
+        gate = (
+            f"{len(allowlisted)} market(s) are allowlisted"
+            if allowlisted
+            else "No market is allowlisted"
+        )
         notice = ("Exhibition slate. The model is fitted on regular-season games only and prices nothing before opening night on "
                   "September 29. Tonight shows the schedule; projections and market lines arrive with the first regular-season "
-                  "card. No selections are published: no market is allowlisted, and the model has no demonstrated edge.")
+                  f"card. {gate}, and the model has no demonstrated edge.")
     elif not lab_model:
         notice = "The model's game history was not available to this run, so the board shows the schedule and market lines only."
     board = {
         "generatedAt": now, "season": "2026–27", "phase": "preseason" if preseason else "regular",
         "boardDate": day.isoformat(), "notice": notice, "record": record, "teams": teams, "games": out_games,
+        "allowlistedMarkets": allowlisted,
     }
     history_dir.mkdir(parents=True, exist_ok=True)
     frozen = history_dir / f"{day.isoformat()}.json"
@@ -311,6 +323,43 @@ def pick_label(c: dict, home: str, away: str) -> str:
 #: The date the forward test is decided (docs/when_this_ends.md). Until
 #: then the ledger's return is not published, here or anywhere.
 FORWARD_DECISION_DATE = "2027-04-25"
+
+
+def allowlisted_markets(lab: Path) -> list[str]:
+    """What the card may actually select from, read rather than asserted.
+
+    The notice below used to state "no market is allowlisted" as a constant.
+    That is a fact about data/manual/staging_provider_policy.json, which
+    Cooper changes by signing a receipt, and a page stating it from a string
+    keeps stating it afterwards.
+
+    Failure resolves to the empty list, which is the same direction the
+    policy loader fails in: every unreadable state there allowlists nothing,
+    and the restrictive sentence is the safe one to print when the answer is
+    unavailable.
+    """
+    try:
+        from nhl_betting_lab.staging_provider_policy import (
+            POLICY_FILENAME,
+            load_policy,
+        )
+    except Exception:
+        return []
+    try:
+        # `load_policy` takes the POLICY FILE, not the directory holding it.
+        # Passing the directory returns an invalid policy rather than raising,
+        # so the board silently said nothing was allowlisted while twelve
+        # markets were — the exact failure this function exists to prevent,
+        # arrived at from the other side.
+        policy = load_policy(Path(lab) / "data" / "manual" / POLICY_FILENAME)
+    except Exception as exc:
+        print(f"policy unreadable, board will say nothing is allowlisted: {exc}")
+        return []
+    return sorted(
+        market
+        for entry in policy.entries.values()
+        for market in entry.required_markets
+    ) if policy.allowed_provider_names else []
 
 
 def load_record(path: Path) -> dict:
