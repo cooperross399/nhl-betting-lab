@@ -154,7 +154,13 @@ def test_accuracy_records_are_still_published(tmp_path: Path) -> None:
 #: deficits. Neither is a pre-registered forward test, and an earlier
 #: version of this test globbed every `*.dc.html` and would have forced
 #: both of them blank.
-SEALED_PAGE = "NHL Projections.dc.html"
+SEALED_PAGE = "Board.dc.html"
+
+#: What a published return looks like on the JS side. Shared by both renderer
+#: tests below on purpose: they were one test over one file until the strip
+#: moved into the shared module, and two copies of this tuple drifting apart
+#: is how the branch got back in.
+RETURN_FIELDS = ("roiPct", "ciLow", "ciHigh", "clvPct")
 
 
 def test_no_page_renders_a_forward_return() -> None:
@@ -170,11 +176,72 @@ def test_no_page_renders_a_forward_return() -> None:
         "globbed."
     )
     text = page.read_text(encoding="utf-8")
-    for field in ("roiPct", "ciLow", "ciHigh", "clvPct"):
+    for field in RETURN_FIELDS:
         assert field not in text, (
             f"{SEALED_PAGE} renders {field}, which load_record does not "
             "supply and must not start supplying."
         )
+
+
+#: The shared adapter module. The three boards render from one file now, so
+#: the NHL section of it is the other half of the renderer the page used to
+#: be — and the half a page-only grep stopped seeing the moment the strip
+#: moved here.
+SEALED_ADAPTER = "lib/sports.js"
+
+#: The NHL adapter's bounds inside that shared file. Sliced rather than
+#: scanned whole ON PURPOSE: EPL publishes its card's settled record and CBB
+#: publishes its per-tier measurement, both legitimately, and both use these
+#: same field names. A whole-file assertion would force the sibling boards
+#: blank — the exact mistake the note on SEALED_PAGE records.
+ADAPTER_SECTION = ("// ---------- NHL ----------", "// ---------- EPL ----------")
+
+
+def _nhl_adapter_source() -> str:
+    text = (PROJECT_ROOT / "web" / SEALED_ADAPTER).read_text(encoding="utf-8")
+    start_marker, end_marker = ADAPTER_SECTION
+    start = text.find(start_marker)
+    end = text.find(end_marker)
+    assert start != -1 and end != -1 and start < end, (
+        f"{SEALED_ADAPTER} no longer carries the section markers "
+        f"{ADAPTER_SECTION!r} that bound the NHL adapter. Without them this "
+        "test cannot tell NHL's strip from its siblings', and a guard that "
+        "cannot find its subject must fail rather than pass."
+    )
+    return text[start:end]
+
+
+def test_the_shared_adapter_renders_no_forward_return() -> None:
+    """The page is no longer the only renderer.
+
+    This arrived a fifth time when the board strip moved out of the page and
+    into the shared module: `Board.dc.html` was clean, the page-scoped test
+    above passed, and the unsealed branch shipped inside `nhlBoard`. The
+    seal on the data never stopped the renderer, and neither did a guard
+    pointed at the wrong file.
+    """
+    source = _nhl_adapter_source()
+    for field in RETURN_FIELDS:
+        assert field not in source, (
+            f"the NHL section of {SEALED_ADAPTER} renders {field}, which "
+            "load_record does not supply and must not start supplying."
+        )
+
+
+def test_the_sealed_guard_can_still_see_an_unsealed_branch() -> None:
+    """A guard proved only by passing is a guard proved by nothing.
+
+    The previous version of this file asserted over the page alone and would
+    have passed against the very drop that reintroduced the branch. So this
+    plants one and checks the slice actually catches it.
+    """
+    source = _nhl_adapter_source()
+    planted = source + '\n  { label: "Forward ledger \u00b7 ROI", value: fw.roiPct },\n'
+    caught = [field for field in RETURN_FIELDS if field in planted]
+    assert caught, (
+        "a planted unsealed branch was not caught by the field list, so "
+        "RETURN_FIELDS no longer describes what a published return looks like"
+    )
 
 
 def test_the_schedule_fetch_sends_a_user_agent() -> None:
@@ -231,8 +298,12 @@ def test_the_empty_state_names_the_gate_that_actually_stopped_the_pick() -> None
     Naming the bar tells a visitor the model looked and found nothing. The
     truth is that nothing was allowed to be looked at.
     """
-    page = PROJECT_ROOT / "web" / SEALED_PAGE
-    text = page.read_text(encoding="utf-8")
+    # Reads the adapter, not the page. The empty state moved into the shared
+    # module with the rest of the board strip, and this test went on asserting
+    # over `Board.dc.html` -- where all three strings are absent, so it failed
+    # loudly rather than passing blind. That is the only reason the revert was
+    # caught: the sealed-return test next door had no such luck.
+    text = _nhl_adapter_source()
 
     # This asserted the allowlist wording and BANNED the edge-bar wording.
     # That was right while the allowlist was empty and wrong the moment it

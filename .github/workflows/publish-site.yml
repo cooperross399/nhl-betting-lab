@@ -104,6 +104,8 @@ jobs:
           PYTHONPATH: src
         run: |
           python web/build_site_json.py --lab . --out dist/data
+          python web/site_history.py --data dist/data
+          printf '{"sport":"nhl"}' > dist/site.json
 
       - name: Keep the history for tomorrow's settlement
         uses: actions/upload-artifact@v4
