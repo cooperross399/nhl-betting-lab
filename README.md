@@ -297,9 +297,12 @@ card to the pinned issue **NHL Betting Lab — Claude Operating Home**. When the
 selections differ from the previous card, the comment's first paragraph
 contains the phrase `Selections changed`.
 
-**Closing Lines** (`.github/workflows/closing-lines.yml`) runs hourly through
-the puck-drop window and records the best price on every selection into its
-own **`closing-lines` branch**. Gameday Refresh reads that store and writes
+**Closing Lines** (`.github/workflows/closing-lines.yml`) keeps the best price
+on every selection in its own **`closing-lines` branch**. It buys nothing on
+its own schedule: Line Movement Capture's fetch already carries those prices,
+so Closing Lines runs each time Line Movement completes and publishes what
+that run handed over. It can still be dispatched by hand to force a paid
+capture. Gameday Refresh reads that store and writes
 `data/outputs/closing_line_value.md`: beat-the-close rate, CLV%, and the
 de-vigged expected value at the closing line, for opinions and for bets
 separately. It is the earliest honest signal that the model is finding
@@ -319,7 +322,7 @@ finish.
 | Tests | every PR and push to main | no |
 | Provider Policy PR Gate | PRs touching policy or receipts | no |
 | Gameday Refresh | daily in season, and on demand | yes, capped |
-| Closing Lines | hourly through the evening in season | yes, capped |
+| Closing Lines | after every Line Movement run; by hand | only when dispatched by hand, capped |
 | Provider Market Discovery | on demand | yes, capped |
 | Historical Props Purchase | on demand only, never scheduled | yes, capped, required cap |
 | Venue Probe | on demand only, never scheduled | yes, capped, required cap |
