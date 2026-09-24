@@ -11,7 +11,8 @@ pre-committed to.
 
 Everything measurable on bought history has been measured. Props: no
 demonstrated edge over 25,949 wagers. Team markets: no demonstrated edge over
-1,366 / 1,762 / 2,201 wagers after buying every snapshot of both seasons.
+954 / 1,117 / 1,216 wagers after buying every snapshot of both seasons,
+measured in one window strictly before face-off.
 Model-free structure: 1,175 pre-registered cells across two sports and
 twenty-six years of NFL closing lines, zero survivors. The model's
 disagreement with the market carries a coefficient of 0.032 where the market

@@ -279,7 +279,7 @@ jobs:
         env:
           PYTHONPATH: src
         run: |
-          python scripts/run_team_markets_measurement.py
+          python scripts/run_team_markets_measurement.py --phase late
 
       - name: Rebuild the backtest with whatever was bought
         # NAME THE WINDOW. The store holds two: 4.0 hours before face-off,

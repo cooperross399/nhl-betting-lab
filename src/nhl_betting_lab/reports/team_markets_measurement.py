@@ -47,7 +47,7 @@ from nhl_betting_lab.models.value import (
     american_to_implied,
     profit_on_win,
 )
-from nhl_betting_lab.stores import best_price_per_wager
+from nhl_betting_lab.stores import best_price_per_wager, label_phases
 from nhl_betting_lab.season import row_game_date
 from nhl_betting_lab.stats import (
     NO_DEMONSTRATED_EDGE,
@@ -122,6 +122,16 @@ class TeamMeasurementReport:
     markets: list[MarketMeasurement] = field(default_factory=list)
     priced_outcomes: int = 0
     notes: list[str] = field(default_factory=list)
+    #: The window every price in this report was captured in, and its median
+    #: distance from face-off. Empty only when the prices carried no window
+    #: information at all, which is not the same as a window asked for and
+    #: missed. See `select_price_window`.
+    phase: str = ""
+    phase_hours: float = 0.0
+    #: Rows held by the store before any window was chosen, by window, and the
+    #: rows set aside because they were not captured strictly before face-off.
+    windows_in_store: dict[str, int] = field(default_factory=dict)
+    excluded_after_face_off: int = 0
 
     def summary_line(self) -> str:
         if not self.total_samples:
@@ -334,6 +344,110 @@ def lines_outside_the_grid(prices: pd.DataFrame) -> dict[str, list[float]]:
     return outside
 
 
+class MixedWindowError(ValueError):
+    """The store holds more than one window and none was named."""
+
+
+def select_price_window(
+    prices: pd.DataFrame, phase: str = "auto"
+) -> tuple[pd.DataFrame, dict[str, Any]]:
+    """Restrict team prices to one window, captured strictly before face-off.
+
+    ## Why this exists
+
+    This measurement took the best price per wager across **every** snapshot
+    the store held, and the team store holds two windows — `late` (inside six
+    hours) and `early` (fifteen hours or more). On 7,410 of 24,726 team wagers
+    both windows quote the same selection, and the collapse took whichever
+    paid more: a price nobody could have taken, because choosing it requires
+    knowing at the early moment what the late one would offer.
+    `stores.label_phases` says exactly this in its docstring, and the props
+    backtest refuses a mixed store for exactly this reason. This path never
+    called it.
+
+    **It also took prices captured after the puck dropped.** 34,196 rows of the
+    team store were snapshotted at or after face-off — 21,434 at exactly the
+    start, 12,692 inside the first three hours, 70 later still. `label_phases`
+    files them under `late`, because `late` means "six hours or fewer" and a
+    negative number is fewer. A quote on a team that is losing mid-game has a
+    low implied probability, clears the edge threshold easily against a
+    pre-game model probability, and is then usually lost. That is neither a
+    price a card can take nor a question this model answers. The closing rule
+    this lab already uses for CLV is "the last price captured strictly before
+    the face-off"; the same rule applies here, in every window including
+    `all`.
+
+    ## What it does
+
+    * Rows at or after face-off, and rows whose timestamps cannot be read, are
+      always excluded and counted.
+    * `phase="auto"` raises `MixedWindowError` if more than one window remains,
+      rather than choosing silently — the props backtest's first version of
+      this guard hardcoded a window, matched nothing, and measured the mixture
+      it was written to prevent.
+    * A named window filters whether or not it matched anything, so asking for
+      a window the store does not hold measures nothing rather than
+      everything.
+    * `phase="all"` measures the pre-face-off mixture on purpose. It exists for
+      parity with the props backtest and for reproducing the old figure; it is
+      not what any committed report should describe.
+    """
+    info: dict[str, Any] = {
+        "phase": "",
+        "phase_hours": 0.0,
+        "windows_in_store": {},
+        "excluded_after_face_off": 0,
+        "excluded_unknown": 0,
+        "excluded_other_windows": 0,
+        "no_window_information": False,
+    }
+    if prices.empty or "market" not in prices.columns:
+        return prices, info
+    # A frame with no timestamps carries no window information AT ALL, which
+    # is not the same as a window asked for and missed. There is nothing to
+    # choose between and no face-off to be after, so it is measured as it is
+    # and the report says it could not name its window — the props backtest's
+    # rule for the same case, kept identical so the two cannot drift. The
+    # bought team store always carries both columns.
+    if "commence_time" not in prices.columns or "snapshot" not in prices.columns:
+        info["no_window_information"] = True
+        return prices, info
+    labelled = label_phases(prices)
+    info["windows_in_store"] = {
+        str(k): int(v) for k, v in labelled["phase"].value_counts().items()
+    }
+    unknown = labelled["phase"] == "unknown"
+    started = labelled["hours_before"] <= 0
+    info["excluded_unknown"] = int(unknown.sum())
+    info["excluded_after_face_off"] = int((started & ~unknown).sum())
+    usable = labelled[~unknown & ~started]
+    present = sorted(str(p) for p in usable["phase"].unique())
+
+    chosen = str(phase or "").strip().lower()
+    if chosen == "auto":
+        if len(present) > 1:
+            counts = usable["phase"].value_counts().to_dict()
+            raise MixedWindowError(
+                "The team price store holds prices from more than one window "
+                f"({', '.join(f'{k}: {v:,}' for k, v in sorted(counts.items()))}). "
+                "A wager priced at two distances from face-off is two different "
+                "questions, and the better of the two is a price nobody could "
+                "have taken. Name the window: --phase late (or card/early), or "
+                "--phase all to measure the mixture on purpose."
+            )
+        chosen = present[0] if present else ""
+    if chosen in ("", "all"):
+        kept = usable
+        info["phase"] = "all" if chosen == "all" else ""
+    else:
+        kept = usable[usable["phase"] == chosen]
+        info["phase"] = chosen
+        info["excluded_other_windows"] = int(len(usable) - len(kept))
+    if not kept.empty:
+        info["phase_hours"] = float(kept["hours_before"].median())
+    return kept.drop(columns=["hours_before", "phase"]), info
+
+
 def build_team_measurement(
     samples: pd.DataFrame,
     prices: pd.DataFrame | None = None,
@@ -342,16 +456,25 @@ def build_team_measurement(
     now: datetime | None = None,
     minimum_fit_samples: int = PlattCalibration.MINIMUM_SAMPLES,
     team_names: Mapping[str, str] | None = None,
+    phase: str = "auto",
 ) -> TeamMeasurementReport:
     moment = now or datetime.now(timezone.utc)
     price_frame = (
         prices if prices is not None else pd.DataFrame(columns=["market"])
     )
+    stored = len(price_frame)
+    # One window, strictly before face-off, BEFORE the best-price collapse in
+    # `measure_prices`. See `select_price_window` for what this used to do.
+    price_frame, window = select_price_window(price_frame, phase)
     report = TeamMeasurementReport(
         generated_at=moment.isoformat(timespec="seconds"),
         total_samples=len(samples),
         games=int(samples["game_id"].nunique()) if not samples.empty else 0,
         priced_outcomes=len(price_frame),
+        phase=window["phase"],
+        phase_hours=window["phase_hours"],
+        windows_in_store=window["windows_in_store"],
+        excluded_after_face_off=window["excluded_after_face_off"],
     )
     markets = (
         sorted(set(samples["market"].astype(str))) if not samples.empty else []
@@ -375,7 +498,44 @@ def build_team_measurement(
         report.markets.append(measurement)
 
     drift = lines_outside_the_grid(price_frame)
+    window_notes: list[str] = []
+    if stored:
+        window_notes.append(
+            f"Prices measured: {len(price_frame):,} of {stored:,} stored rows, "
+            + (
+                f"from the `{report.phase}` window, median "
+                f"{report.phase_hours:.1f} hours before face-off."
+                if report.phase not in ("", "all")
+                else "from every window before face-off, on purpose."
+            )
+        )
+    if window["excluded_after_face_off"]:
+        window_notes.append(
+            f"{window['excluded_after_face_off']:,} price row(s) captured at or "
+            "after face-off were excluded. A quote on a team already losing "
+            "mid-game clears the edge threshold against a pre-game probability "
+            "and is then usually lost; it is not a price a card can take."
+        )
+    if window["excluded_other_windows"]:
+        window_notes.append(
+            f"{window['excluded_other_windows']:,} price row(s) from other "
+            "windows were excluded. The best-price collapse would otherwise "
+            "take the better of two moments for one wager — a price nobody "
+            "could have taken."
+        )
+    if window["no_window_information"]:
+        window_notes.append(
+            "These prices carry no snapshot or face-off time, so this report "
+            "cannot say which window they describe or exclude any captured "
+            "after the puck dropped. The bought team store always carries both."
+        )
+    if window["excluded_unknown"]:
+        window_notes.append(
+            f"{window['excluded_unknown']:,} price row(s) had no readable "
+            "snapshot or face-off time and were excluded rather than guessed."
+        )
     report.notes = [
+        *window_notes,
         *[
             f"{len(lines)} bought `{market}` line(s) sit outside the sample "
             f"grid and were scored by nothing: {', '.join(f'{line:g}' for line in lines)}. "
@@ -484,6 +644,22 @@ def render_team_measurement(report: TeamMeasurementReport) -> str:
         lines.append("")
 
     lines.extend(["## Measured against real prices", ""])
+    if report.phase and report.phase != "all":
+        lines.extend([
+            f"Every price below was captured in the `{report.phase}` window, "
+            f"median **{report.phase_hours:.1f} hours** before face-off, and "
+            "strictly before the puck dropped. A wager priced in two windows is "
+            "two questions; this report answers one.",
+            "",
+        ])
+    elif report.phase == "all":
+        lines.extend([
+            "**This run measures every pre-face-off window at once, on "
+            "purpose.** The best-price collapse takes the better of the windows "
+            "for each wager, which is a price nobody could have taken. It is "
+            "here to reproduce and compare, not to be quoted.",
+            "",
+        ])
     measured = [item for item in report.markets if item.has_price_evidence]
     if measured:
         lines.append(ROI_TABLE_HEADER)
@@ -554,6 +730,10 @@ def save_team_measurement(
         "total_samples": report.total_samples,
         "games": report.games,
         "priced_outcomes": report.priced_outcomes,
+        "phase": report.phase,
+        "phase_hours": report.phase_hours,
+        "windows_in_store": report.windows_in_store,
+        "excluded_after_face_off": report.excluded_after_face_off,
         "notes": report.notes,
         "markets": [
             {

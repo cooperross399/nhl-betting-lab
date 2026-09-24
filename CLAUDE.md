@@ -462,20 +462,47 @@ Re-derive rather than trust if the data has moved.
 - **Team markets are now bought in full, and show no demonstrated edge.**
   16,920 credits bought every snapshot of both seasons: **308,944 price rows
   over 398 game dates from 21 books**, up from 24,292 rows over 77 dates. At
-  one bet per wager: moneyline **+0.0% over 1,366** (−8.2% to +8.2%), puck
-  line **−1.3% over 1,762** (−5.7% to +3.2%), totals **−2.5% over 2,201**
-  (−6.5% to +1.6%). Every interval includes zero. Match rate is 96% on all
+  one bet per wager, in the `late` window strictly before face-off: moneyline
+  **−6.6% over 954** (−13.6% to +0.4%), puck line **−4.2% over 1,117** (−9.4%
+  to +0.9%), totals **−4.0% over 1,216** (−9.4% to +1.4%). Every interval
+  includes zero. `data/outputs/team_markets_measurement.md` is the source.
+- **Those figures read +0.0% / −1.3% / −2.5% until 2026-09-24, and all three
+  were flattered.** The measurement took the best price per wager across
+  *every* snapshot the store held, and never called `label_phases` — whose own
+  docstring names exactly this defect. Two things leaked in. The store holds
+  two windows, `late` (inside six hours) and `early` (fifteen or more), and
+  7,410 of 24,726 wagers are quoted in both, so the collapse took whichever
+  paid more. And **34,196 rows were captured at or after face-off** — 21,434
+  at exactly the start, 12,692 inside the first three hours, 70 later, one
+  event 26 days after its game — which `label_phases` files under `late`
+  because a negative number of hours is fewer than six. A flat-stake loss
+  costs one unit whatever the price, so a maximum taken across time only ever
+  inflates the winners. Removing the post-start rows alone moves moneyline
+  +0.0% → −3.9%; choosing one window moves it to −6.6%. The `early` window,
+  measured separately: moneyline +4.1% over 347, puck line −0.4% over 505,
+  totals −1.3% over 923, every interval spanning zero. `late` is committed
+  because it is nearer the card's window (the card prices ≈9.5h out; `late`'s
+  median is 1.5h, `early`'s 24h) and holds four times the prices. It is also
+  the less flattering of the two, so the choice cannot be read as shopping for
+  a number. The measurement now refuses an unnamed window, as the props
+  backtest already did, and drops anything not captured strictly before
+  face-off in every window — the closing rule this lab already uses for CLV.
+  **No verdict moved**: every interval spanned zero before and spans zero now.
+  Match rate is 96% on all
   three after the line grid was widened to every line the full buy actually
   holds — totals from 2.0 to 13.5, puck lines to 6.5 — because a line the
   grid does not carry is a price the measurement silently discards, which is
   how a third of the bought totals once vanished.
 - **The thin sample's +9.1% totals was noise, and the full buy proves it.**
-  On 217 wagers totals read +9.1%; on 2,201 it reads −2.5%. That is what a
+  On 217 wagers totals read +9.1%; on 2,201 it read −2.5% (−4.0% over 1,216
+  once measured in one window before face-off). That is what a
   small sample does when repriced, and it is the reason a number is never a
   finding until the sample can carry it.
 - **The same data counted per QUOTE says all three are demonstrated losses.**
   Run without the collapse, the full store gives moneyline −7.3% over 17,937,
-  puck line −5.4% over 19,418, totals −5.0% over 14,971 — every interval
+  puck line −5.4% over 19,418, totals −5.0% over 14,971 (measured on the
+  mixed-window store, post-start prices included, before the 2026-09-24
+  window fix; the point it illustrates does not depend on that) — every interval
   excluding zero and surviving the family correction. Per wager, all three
   span zero. Twenty-one books quoting one game is not twenty-one bets, and
   the distortion is large enough to manufacture three demonstrated losses out
@@ -658,7 +685,9 @@ Re-derive rather than trust if the data has moved.
   against real prices. The receipt says so in its own reviewer statement.
   Allowlisting says a market's prices may be used; it is not a claim that
   the model beats them, and every report continues to say it does not.
-  The receipt is `odds_api-20260923-cooperross399`.
+  The receipt is `odds_api-20260924-cooperross399`, which re-attests the
+  2026-09-23 receipt (now in `superseded/`) against the corrected team
+  report: the approval did not change, the evidence under it did.
 - **The 2026-08-27 approval of the same markets was withdrawn on
   2026-08-29**, because the evidence it cited moved underneath it: the
   receipt was signed against +1.4% over 4,830 bets, and the full population

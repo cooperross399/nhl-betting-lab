@@ -12,6 +12,7 @@ already on disk. It fetches nothing and spends no credits.
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 
 import pandas as pd
@@ -27,6 +28,7 @@ from nhl_betting_lab.data.build_datasets import load_team_games
 from nhl_betting_lab.markets import team_market_keys
 from nhl_betting_lab.verdicts import ships
 from nhl_betting_lab.reports.team_markets_measurement import (
+    MixedWindowError,
     build_team_measurement,
     save_team_measurement,
 )
@@ -41,6 +43,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--refit-days", type=int, default=14)
     parser.add_argument("--minimum-history-games", type=int, default=200)
     parser.add_argument("--edge-threshold", type=float, default=MIN_EDGE)
+    parser.add_argument(
+        "--phase",
+        default="auto",
+        help=(
+            "The price window to measure: late, card, early, or all. The "
+            "default refuses a store holding more than one window rather than "
+            "measuring the mixture; the team store holds two."
+        ),
+    )
     parser.add_argument("--processed-dir", default=str(PROCESSED_DIR))
     parser.add_argument("--output-dir", default=str(OUTPUTS_DIR))
     parser.add_argument(
@@ -103,9 +114,13 @@ def main(argv: list[str] | None = None) -> int:
             "against a real price. The report will say that."
         )
 
-    report = build_team_measurement(
-        samples, prices, edge_threshold=args.edge_threshold
-    )
+    try:
+        report = build_team_measurement(
+            samples, prices, edge_threshold=args.edge_threshold, phase=args.phase
+        )
+    except MixedWindowError as error:
+        print(f"::error::{error}", file=sys.stderr)
+        return 2
     paths = save_team_measurement(report, output_dir=outputs)
     print(report.summary_line())
     for item in report.markets:
