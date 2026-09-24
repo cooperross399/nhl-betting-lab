@@ -1,0 +1,48 @@
+{
+  "receipt_id": "odds_api-20260924T095805-0400-cooperross399",
+  "provider_name": "the_odds_api",
+  "reviewer_name": "Cooper Ross",
+  "reviewed_at": "2026-09-24T09:58:05-04:00",
+  "approved_markets": [
+    "assists",
+    "blocked_shots",
+    "goalie_saves",
+    "goals",
+    "hits",
+    "moneyline",
+    "points",
+    "puck_line",
+    "regulation_3_way",
+    "shots_on_goal",
+    "team_total",
+    "total_goals"
+  ],
+  "evidence": [
+    {
+      "path": "data/outputs/player_props_backtest.md",
+      "checksum_sha256": "fb7be199fcf608d579ebe24ddd54c08f93565dc7cab33cd15e75b4b9e6c93833"
+    },
+    {
+      "path": "data/outputs/props_calibration.md",
+      "checksum_sha256": "fb8eb3e3d50dd05c762d8b1b8278886cb59d47e58128e92c3c28ae434f827aef"
+    },
+    {
+      "path": "data/outputs/what_we_can_claim.md",
+      "checksum_sha256": "2835ac50fe977caa447fad2db25d5f516c0b562ff6a59f60acf24aa7a6a629f4"
+    },
+    {
+      "path": "data/outputs/team_markets_measurement.md",
+      "checksum_sha256": "6505c077d4a62bf8433015f5a288a7956c6e7570cb77dbe7d1f197c044c5993e"
+    },
+    {
+      "path": "data/outputs/replication.md",
+      "checksum_sha256": "50f5811460c665d1ed1956fc889ce53380d946ac3404ec32422c7251d7524eb1"
+    },
+    {
+      "path": "data/outputs/allowlist_evidence_bundle.md",
+      "checksum_sha256": "caf630b6d72ae5fe27fa212b26de4713dd9e04d0129b1a7b63e4f564ee740db7"
+    }
+  ],
+  "reviewer_statement": "Re-attested on 2026-09-24, the second time that day, with the same twelve markets and the same decision. Three of the six records the previous receipt cited have been regenerated, and its statement repeated three claims those records made before they were rebuilt. All three were wrong. First, `points` did not replicate. The replication record had not been rebuilt since per-quote counting was retired. Rebuilt at one bet per wager in the `late` window, nothing survives the correction in 2024-25 (12,923 bets; `points` -3.2% over 2,618), so there is nothing for 2025-26 to confirm. Run the other way, `points` survives in 2025-26 (-5.5% over 3,366) and is not confirmed on 2024-25. No market survives correction and then replicates, in either direction. Second, `hits` has been measured: 5,021 wagers in the `card` window at -1.2%, interval -3.9% to +1.5%, no demonstrated edge. It has no `late`-window measurement because the two books that quote it are in a region that purchase did not ask. Third, the figures were out of date: `points` is -4.5% over 5,984 bets in the `late` window, not -4.4% over 6,202, and `blocked_shots` is +5.2% over 4,126 on the pooled window, surviving correction there but within neither season, not +4.5% over 2,950 on a held-out window. What the six records now say: the evidence bundle supports enabling nothing. `points` and `blocked_shots` survive correction on the pooled window and not within either season. Eight markets, `hits` among them, show no demonstrated edge. `regulation_3_way` and `team_total` have never been measured against real prices. The team figures are as corrected earlier today: moneyline -6.6% over 954, puck line -4.2% over 1,117 and totals -4.0% over 1,216, every interval including zero. This correction removes the one finding the evidence had, a replicated loss, and adds support for no market. The decision stands as first recorded on 2026-09-23: approved against the measurement's own recommendation, and recorded that way on purpose. I am enabling them anyway, to run the card forward and accumulate a live record; this is a decision about what to do next, not a claim that the model has an edge, and the card's own reports continue to say it has none.",
+  "prepared_by": "Claude, at Cooper Ross's explicit direction on 2026-09-24, to re-attest the approval against the regenerated replication record, claims document and evidence bundle (nhl-betting-lab PR #106), and to correct three claims in the previous receipt's statement that Claude had drafted from those records before they were rebuilt. Cooper chose re-attestation over signing it himself or holding the change."
+}

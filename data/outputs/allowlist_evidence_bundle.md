@@ -2,7 +2,7 @@
 
 Everything needed to decide whether to trust `the_odds_api` for a market, in one place.
 
-- Generated: 2026-08-27T05:59:11+00:00
+- Generated: 2026-09-24T13:51:46+00:00
 
 ## Recommendation
 
@@ -10,29 +10,31 @@ Everything needed to decide whether to trust `the_odds_api` for a market, in one
 
 ## What the evidence supports, market by market
 
-- `shots_on_goal`: **not supported** — +3.0% over 2,508 bets. Corrected for the 7 markets measured on the same data it runs -2.4% to +8.5%, which includes zero. No demonstrated edge.
-- `points`: **not supported** — -5.5% over 940 bets. Corrected for the 7 markets measured on the same data it runs -14.3% to +3.3%, which includes zero. No demonstrated edge.
-- `goals`: **not supported** — only 34 measured bet(s), below the 200 needed before a result is worth reading. Separating a +10% edge from zero takes about 385 bets.
-- `assists`: **not supported** — -4.5% over 403 bets. Corrected for the 7 markets measured on the same data it runs -16.2% to +7.3%, which includes zero. No demonstrated edge.
-- `goalie_saves`: **not supported** — -1.7% over 397 bets. Corrected for the 7 markets measured on the same data it runs -14.3% to +10.9%, which includes zero. No demonstrated edge.
-- `blocked_shots`: **not supported** — +11.9% over 548 bets. Corrected for the 7 markets measured on the same data it runs -0.1% to +23.9%, which includes zero. No demonstrated edge.
-- `hits`: **not supported** — no price-based measurement exists; it has been calibration-checked on 616,730 walk-forward samples, which can rule the model out and can never rule it in.
-- `moneyline`: **not supported** — -2.4% over 1,504 bets. No demonstrated edge.
-- `puck_line`: **not supported** — -4.3% over 1,541 bets. No demonstrated edge.
-- `total_goals`: **not supported** — -0.5% over 1,150 bets. No demonstrated edge.
+- `shots_on_goal`: **not supported** — +1.4% over 9,043 bets. Corrected for the 7 markets measured on the same data it runs -1.6% to +4.3%, which includes zero. No demonstrated edge.
+- `points`: **not supported** — **-4.5% over 5,984 bets, and the corrected interval excludes zero on the LOSING side.** The held-out window did not confirm it (untestable), so it is not a demonstrated deficit. A loss that survives the correction still argues against enabling this market, not for it.
+- `goals`: **not supported** — -6.6% over 546 bets. Corrected for the 7 markets measured on the same data it runs -21.2% to +8.0%, which includes zero. No demonstrated edge.
+- `assists`: **not supported** — -1.3% over 3,630 bets. Corrected for the 7 markets measured on the same data it runs -5.1% to +2.6%, which includes zero. No demonstrated edge.
+- `goalie_saves`: **not supported** — -2.3% over 1,680 bets. Corrected for the 7 markets measured on the same data it runs -8.5% to +3.9%, which includes zero. No demonstrated edge.
+- `blocked_shots`: **not supported** — +5.2% over 4,126 bets, and the interval excludes zero even after correcting for the 7 markets measured on the same data. That is the strongest thing this repository can currently say, and it rests on one snapshot window. **The held-out window did not confirm it (untestable).** One window is a candidate; two agreeing is a finding. This is the first.
+- `hits`: **not supported** — -1.2% over 5,021 bets. Corrected for the 8 markets measured on the same data it runs -5.0% to +2.6%, which includes zero. No demonstrated edge. Measured only in the `card` window, 9.6 hours before face-off.
+- `moneyline`: **not supported** — -6.6% over 954 bets. No demonstrated edge.
+- `puck_line`: **not supported** — -4.2% over 1,117 bets. No demonstrated edge.
+- `total_goals`: **not supported** — -4.0% over 1,216 bets. No demonstrated edge.
 - `regulation_3_way`: **not supported** — no price-based measurement exists.
+- `team_total`: **not supported** — no price-based measurement exists.
 
 ## The evidence, and exactly which version of it
 
 | File | Size | SHA-256 |
 |:-----|-----:|:--------|
-| `data/outputs/player_props_backtest.md` | 7,393 bytes | `641fa0de7988c6351f9b69f4ca7d9719179e4e76bd48fbcb1fd165998fa9fdf8` |
-| `data/outputs/props_calibration.md` | 17,658 bytes | `8457e54905d9a02c4819c8b22db6df739a82b8dbd3e35121697b4d5b305cf869` |
-| `data/outputs/team_markets_measurement.md` | 6,857 bytes | `0714ca1705a753a7205639258a4763243fc3d6546bf3cee0a06dfb23bd3a8afa` |
-| `data/outputs/what_we_can_claim.md` | 4,028 bytes | `9d9da7dca919e041ff845bd0ba7f65a698a5b0171f5605f5e08757c226784fbe` |
+| `data/outputs/player_props_backtest.md` | 7,923 bytes | `fb7be199fcf608d579ebe24ddd54c08f93565dc7cab33cd15e75b4b9e6c93833` |
+| `data/outputs/props_calibration.md` | 17,658 bytes | `fb8eb3e3d50dd05c762d8b1b8278886cb59d47e58128e92c3c28ae434f827aef` |
+| `data/outputs/team_markets_measurement.md` | 7,725 bytes | `6505c077d4a62bf8433015f5a288a7956c6e7570cb77dbe7d1f197c044c5993e` |
+| `data/outputs/what_we_can_claim.md` | 4,532 bytes | `2835ac50fe977caa447fad2db25d5f516c0b562ff6a59f60acf24aa7a6a629f4` |
 | `provider_shadow_verification.md` | **missing** | — |
 | `provider_market_discovery.md` | **missing** | — |
-| `data/outputs/historical_props_retention.json` | 851 bytes | `7b129822ae5c3624299dd78e0812a8d85ed06c06e6f15e33cda15dfb937a377f` |
+| `data/outputs/historical_props_retention.json` | 1,328 bytes | `e8eb86f049c75a2a9048a3a1e13fc6469f64830119060779f2252cd50f739691` |
+| `data/outputs/replication.md` | 2,656 bytes | `50f5811460c665d1ed1956fc889ce53380d946ac3404ec32422c7251d7524eb1` |
 
 A missing file is listed rather than omitted. It means that part of the picture has not been produced yet, not that it was reviewed and found unremarkable.
 
@@ -49,23 +51,27 @@ Write the receipt yourself, into `data/manual/human_acceptance_receipts/<receipt
   "evidence": [
     {
       "path": "data/outputs/player_props_backtest.md",
-      "checksum_sha256": "641fa0de7988c6351f9b69f4ca7d9719179e4e76bd48fbcb1fd165998fa9fdf8"
+      "checksum_sha256": "fb7be199fcf608d579ebe24ddd54c08f93565dc7cab33cd15e75b4b9e6c93833"
     },
     {
       "path": "data/outputs/props_calibration.md",
-      "checksum_sha256": "8457e54905d9a02c4819c8b22db6df739a82b8dbd3e35121697b4d5b305cf869"
+      "checksum_sha256": "fb8eb3e3d50dd05c762d8b1b8278886cb59d47e58128e92c3c28ae434f827aef"
     },
     {
       "path": "data/outputs/team_markets_measurement.md",
-      "checksum_sha256": "0714ca1705a753a7205639258a4763243fc3d6546bf3cee0a06dfb23bd3a8afa"
+      "checksum_sha256": "6505c077d4a62bf8433015f5a288a7956c6e7570cb77dbe7d1f197c044c5993e"
     },
     {
       "path": "data/outputs/what_we_can_claim.md",
-      "checksum_sha256": "9d9da7dca919e041ff845bd0ba7f65a698a5b0171f5605f5e08757c226784fbe"
+      "checksum_sha256": "2835ac50fe977caa447fad2db25d5f516c0b562ff6a59f60acf24aa7a6a629f4"
     },
     {
       "path": "data/outputs/historical_props_retention.json",
-      "checksum_sha256": "7b129822ae5c3624299dd78e0812a8d85ed06c06e6f15e33cda15dfb937a377f"
+      "checksum_sha256": "e8eb86f049c75a2a9048a3a1e13fc6469f64830119060779f2252cd50f739691"
+    },
+    {
+      "path": "data/outputs/replication.md",
+      "checksum_sha256": "50f5811460c665d1ed1956fc889ce53380d946ac3404ec32422c7251d7524eb1"
     }
   ]
 }

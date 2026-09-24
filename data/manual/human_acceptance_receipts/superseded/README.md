@@ -33,5 +33,20 @@ checksum stopped matching, which is the gate doing its job. Corrected, all
 three team markets measure lower (moneyline +0.0% over 1,366 to -6.6% over
 954) and every interval still includes zero. Cooper re-attested the same
 twelve markets against the corrected report in
-`odds_api-20260924-cooperross399`, which the policy now cites. This file
-approves nothing; the approval continues under the new receipt.
+`odds_api-20260924-cooperross399`, which was itself re-attested later the
+same day (below). This file approves nothing.
+
+## odds_api-20260924-cooperross399.json
+
+**Re-attested, not withdrawn.** The first re-attestation of the twelve
+markets, against the corrected team report. Later the same day three of the
+records it cites were regenerated: `replication.md` had never been rebuilt
+since per-quote counting was retired, and rebuilt at one bet per wager,
+`points` no longer replicates as a loss; `what_we_can_claim.md` and
+`allowlist_evidence_bundle.md` had been stale since 2026-09-02 and
+2026-08-27. Its statement also carried three claims from those records that
+were wrong: that `points` replicated, that `hits` was never measured (it has
+5,021 wagers in the `card` window), and out-of-date `points` and
+`blocked_shots` figures. Cooper re-attested the same twelve markets in
+`odds_api-20260924T095805-0400-cooperross399`, which the policy now cites and which
+corrects those claims. This file approves nothing.

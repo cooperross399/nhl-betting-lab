@@ -66,8 +66,9 @@ It rules out every fix that is a re-weighting of the same signal:
   it re-ranks by exactly the same quantity.
 - **Recalibration** fixes the bias and leaves the disagreement uninformative,
   which is the regression above.
-- **Picking a market** does not survive: `blocked_shots` was the only
-  positive result and failed replication on the unseen window.
+- **Picking a market** does not survive: `blocked_shots` is the only
+  positive result, and neither season carries it alone, so there is nothing
+  for a second window to confirm.
 
 ## What it does not rule out
 

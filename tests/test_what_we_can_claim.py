@@ -356,3 +356,160 @@ def test_the_regulation_three_way_is_named_unmeasurable_with_its_reason(
     assert three_way.measured is False
     assert "per-event only" in three_way.sentence()
     assert "accumulates forward" in three_way.sentence()
+
+
+def test_a_loss_that_survives_the_correction_is_not_called_an_edge(
+    tmp_path: Path,
+) -> None:
+    """This sentence was written for a positive result.
+
+    Nothing reached it with a negative one until `points` lost its
+    replication verdict, when the regenerated document described -4.5% over
+    5,984 bets as "not the same as an edge that will persist".
+    """
+    _write(
+        tmp_path,
+        "player_props_backtest.json",
+        {"by_market": {"points": {
+            "bets": 5984, "roi": -0.045, "low": -0.070, "high": -0.019,
+            "includes_zero": False, "survives_correction": True, "looks": 7,
+        }}},
+    )
+    points = next(
+        c for c in claims.build_claims_report(output_dir=tmp_path).claims
+        if c.market == "points"
+    )
+
+    assert "not the same as a loss that will persist" in points.sentence()
+    assert "an edge that will persist" not in points.sentence()
+
+
+def test_a_prop_market_priced_only_in_another_window_is_measured_from_it(
+    tmp_path: Path,
+) -> None:
+    """`hits` was listed as "no historical prices have been bought for it yet".
+
+    5,021 wagers of it were bought and measured, in the `card` window: the
+    two books that quote hits are in a region the `late` purchase never
+    asked. The line says which window, because every other prop line does
+    not come from that one.
+    """
+    _write(
+        tmp_path,
+        "player_props_backtest.json",
+        {"phase": "late", "phase_hours": 4.1, "by_market": {}},
+    )
+    _write(
+        tmp_path,
+        "player_props_backtest_card.json",
+        {"phase": "card", "phase_hours": 9.6, "by_market": {"hits": {
+            "bets": 5021, "roi": -0.012, "low": -0.039, "high": 0.015,
+            "includes_zero": True, "survives_correction": False, "looks": 7,
+        }}},
+    )
+    hits = next(
+        c for c in claims.build_claims_report(output_dir=tmp_path).claims
+        if c.market == "hits"
+    )
+
+    assert hits.measured is True
+    assert "5,021 bets" in hits.sentence()
+    assert (
+        "measured only in the `card` window, 9.6 hours before face-off."
+        in hits.sentence()
+    )
+    assert "no historical prices" not in hits.sentence()
+
+
+def test_a_market_the_contract_window_measured_is_never_replaced(
+    tmp_path: Path,
+) -> None:
+    """Taking whichever window looks better per market is a look-back max."""
+    _write(
+        tmp_path,
+        "player_props_backtest.json",
+        {"phase": "late", "by_market": {"shots_on_goal": {
+            "bets": 9043, "roi": 0.014, "low": -0.008, "high": 0.035,
+            "includes_zero": True, "survives_correction": False, "looks": 6,
+        }}},
+    )
+    _write(
+        tmp_path,
+        "player_props_backtest_card.json",
+        {"phase": "card", "by_market": {"shots_on_goal": {
+            "bets": 9500, "roi": 0.080, "low": 0.050, "high": 0.110,
+            "includes_zero": False, "survives_correction": True, "looks": 7,
+        }}},
+    )
+    shots = next(
+        c for c in claims.build_claims_report(output_dir=tmp_path).claims
+        if c.market == "shots_on_goal"
+    )
+
+    assert "9,043 bets" in shots.sentence()
+    assert "+1.4%" in shots.sentence()
+    assert "window" not in shots.sentence()
+
+
+def test_the_document_names_the_windows_its_figures_come_from(
+    tmp_path: Path,
+) -> None:
+    _write(
+        tmp_path,
+        "player_props_backtest.json",
+        {
+            "phase": "late",
+            "phase_hours": 4.07,
+            "overall": {"bets": 25009, "roi": -0.002, "includes_zero": True},
+            "by_market": {"points": {
+                "bets": 5984, "roi": -0.045, "low": -0.070, "high": -0.019,
+                "includes_zero": False, "survives_correction": True, "looks": 7,
+            }},
+        },
+    )
+    _write(
+        tmp_path,
+        "team_markets_measurement.json",
+        {"phase": "late", "phase_hours": 1.5, "markets": [{
+            "market": "moneyline", "bets": 954, "roi": -0.066, "low": -0.136,
+            "high": 0.004, "includes_zero": True,
+        }]},
+    )
+    rendered = claims.render_claims(claims.build_claims_report(output_dir=tmp_path))
+
+    assert (
+        "Unless a line names another window, prop figures come from the "
+        "`late` window, 4.1 hours before face-off, and team figures come from "
+        "the `late` window, 1.5 hours before face-off." in rendered
+    )
+    assert "25,009 bets in the `late` window, 4.1 hours before face-off." in rendered
+
+
+def test_a_zero_bet_entry_in_the_contract_window_does_not_block_the_other(
+    tmp_path: Path,
+) -> None:
+    """Listed with nothing measured is the same as not measured.
+
+    Otherwise a market that happens to appear with zero bets would be
+    reported as never bought, which is the sentence this replaced.
+    """
+    _write(
+        tmp_path,
+        "player_props_backtest.json",
+        {"phase": "late", "by_market": {"hits": {"bets": 0}}},
+    )
+    _write(
+        tmp_path,
+        "player_props_backtest_card.json",
+        {"phase": "card", "by_market": {"hits": {
+            "bets": 5021, "roi": -0.012, "low": -0.039, "high": 0.015,
+            "includes_zero": True, "survives_correction": False, "looks": 7,
+        }}},
+    )
+    hits = next(
+        c for c in claims.build_claims_report(output_dir=tmp_path).claims
+        if c.market == "hits"
+    )
+
+    assert hits.measured is True
+    assert hits.bets == 5021
