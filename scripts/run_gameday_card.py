@@ -32,6 +32,7 @@ from nhl_betting_lab.models.team_model import TeamModel
 from nhl_betting_lab.providers import odds_api
 from nhl_betting_lab.providers.team_names import (
     build_team_name_map,
+    cache_derived_spellings,
     resolve_team,
     save_team_name_map,
 )
@@ -209,12 +210,17 @@ def main(argv: list[str] | None = None) -> int:
     # "TOR". Without this map every lookup misses and every game is priced
     # league-average against league-average — with no error anywhere.
     team_names = build_team_name_map()
-    if not team_names:
+    # Not `if not team_names`: the builder always adds the Utah and Arizona
+    # aliases, so with no boxscores it returns six entries and that check
+    # never fired — and the six-entry map was then saved as team_names.csv,
+    # where every later reader preferred it to a rebuild.
+    if not cache_derived_spellings(team_names):
         blockers.append(
             "No team-name map could be built, because no boxscores are "
-            "cached. Without it the provider's team names cannot be matched "
-            "to the model, and every game would be priced league-average "
-            "against league-average with nothing to show it."
+            f"cached: the map holds only its {len(team_names)} built-in "
+            "alias spelling(s). Without it the provider's team names cannot "
+            "be matched to the model, and every game would be priced "
+            "league-average against league-average with nothing to show it."
         )
     else:
         save_team_name_map(team_names, processed_dir=processed)

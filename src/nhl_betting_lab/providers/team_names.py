@@ -145,6 +145,23 @@ def build_team_name_map(
     return mapping
 
 
+def cache_derived_spellings(mapping: Mapping[str, str]) -> int:
+    """Spellings the boxscore cache supplied: neither an alias nor an
+    abbreviation naming itself.
+
+    `build_team_name_map` always adds `PROVIDER_ALIASES` and every
+    abbreviation's own name, so with no boxscores it still returns six
+    entries. "Is the map empty?" can therefore never say a map is missing;
+    this can — it is zero exactly when nothing came from the cache.
+    """
+    fixed = {normalize_team_name(alias) for alias in PROVIDER_ALIASES}
+    return sum(
+        1
+        for name, abbrev in mapping.items()
+        if name not in fixed and name != normalize_team_name(abbrev)
+    )
+
+
 def resolve_team(name: object, mapping: Mapping[str, str]) -> str | None:
     """The abbreviation for a provider team name, or None. Never a guess."""
     return mapping.get(normalize_team_name(name))
@@ -180,7 +197,12 @@ def save_team_name_map(
 def load_team_name_map(
     *, processed_dir: Path | None = None, raw_dir: Path | None = None
 ) -> dict[str, str]:
-    """The persisted map, rebuilt from the cache when it is absent or stale."""
+    """The persisted map, rebuilt from the cache when it is absent or stale.
+
+    A persisted map holding nothing the cache supplied — only the aliases,
+    which is what the card saved when it ran with no boxscores — is treated
+    as absent, so a file written that way cannot outrank a rebuild forever.
+    """
     directory = Path(processed_dir) if processed_dir else Path(PROCESSED_DIR)
     path = directory / TEAM_NAMES_FILENAME
     if path.is_file():
@@ -189,6 +211,6 @@ def load_team_name_map(
             name, _, abbrev = line.rpartition(",")
             if name and abbrev:
                 mapping[name] = abbrev
-        if mapping:
+        if cache_derived_spellings(mapping):
             return mapping
     return build_team_name_map(raw_dir)
