@@ -15,6 +15,7 @@ is evidence, and settlement only ever appends.
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 
 from nhl_betting_lab.config import OUTPUTS_DIR, PROCESSED_DIR
@@ -25,7 +26,10 @@ from nhl_betting_lab.forward_evidence import (
     save_forward_report,
     settle_snapshots,
 )
-from nhl_betting_lab.providers.team_names import load_team_name_map
+from nhl_betting_lab.providers.team_names import (
+    UnresolvedTeamsError,
+    load_team_name_map,
+)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -40,19 +44,35 @@ def main(argv: list[str] | None = None) -> int:
 
     logs = load_player_logs(processed)
     games = load_team_games(processed)
-    result = settle_snapshots(
-        logs,
-        games,
-        team_names=load_team_name_map(processed_dir=processed),
-        archive_dir=archive,
-        processed_dir=processed,
-    )
-    print(result.summary_line())
+    try:
+        result = settle_snapshots(
+            logs,
+            games,
+            team_names=load_team_name_map(processed_dir=processed),
+            archive_dir=archive,
+            processed_dir=processed,
+        )
+    except UnresolvedTeamsError as error:
+        print(f"::error::{error}", file=sys.stderr)
+        refused = True
+    else:
+        print(result.summary_line())
+        refused = False
 
+    # Restated from the ledger even on a refusal, because the ledger did not
+    # change and the report is only its restatement. The card-feed commit
+    # builds its tree from the files present, so a run that wrote no report
+    # would drop `latest_forward_evidence.md` from the feed for the day.
     payload = build_forward_report(load_ledger(processed))
     paths = save_forward_report(payload, output_dir=Path(args.output_dir))
     for name, path in paths.items():
         print(f"  {name}: {path}")
+    if refused:
+        print(
+            "Settlement refused: nothing was settled, marked or appended. The "
+            "report above restates the ledger as it already stood."
+        )
+        return 2
     print(
         "Settlement appends; no frozen opinion was revised, no price was "
         "fetched, and no bet was placed."
