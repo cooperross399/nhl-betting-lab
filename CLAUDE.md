@@ -748,20 +748,16 @@ Re-derive rather than trust if the data has moved.
   neither season; `hits` is measured only in the
   9.5-hour window (−1.3% over 5,178, spanning zero); seven more show no
   demonstrated edge; and `regulation_3_way` and `team_total` have never been
-  measured against real prices. **Pending:** the receipt below was signed
-  against the alias-map reports (25,009 bets in the `late` window, `hits`
-  5,021). The rebuilt reports change four of its six cited checksums, so the
-  policy gate fails until Cooper re-attests or signs against them. Its
-  statement also says `points` and `blocked_shots` survive within neither
-  season, which was never true of `points` in 2025-26.
+  measured against real prices. The receipt says so in its own reviewer
+  statement.
   Allowlisting says a market's prices may be used; it is not a claim that
   the model beats them, and every report continues to say it does not.
-  The receipt is `odds_api-20260924T095805-0400-cooperross399`. It re-attests the
-  approval a second time on 2026-09-24, against the rebuilt replication
-  record and the regenerated claims document and bundle, and corrects three
-  claims the earlier statements had taken from those records before they were
-  rebuilt. The two earlier receipts are in `superseded/`. The approval did
-  not change; the evidence under it did.
+  The receipt is `odds_api-20260924T150657-0400-cooperross399`. It re-attests the
+  approval a third time on 2026-09-24, against the props reports rebuilt on
+  the full team-name map, and corrects the figures and the "within neither
+  season" clause the previous statement carried. The three earlier receipts
+  are in `superseded/`. The approval did not change; the evidence under it
+  did.
 - **The 2026-08-27 approval of the same markets was withdrawn on
   2026-08-29**, because the evidence it cited moved underneath it: the
   receipt was signed against +1.4% over 4,830 bets, and the full population
