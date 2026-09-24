@@ -24,7 +24,8 @@ VERDICT_FILES: dict[str, str] = {
     # The by-TOI calibration correction. Verdict: does not ship — indexed on
     # actual ice time it was hindsight, on expected ice time it loses.
     "by_toi": "correction_experiment.json",
-    # The team back-to-back adjustment. Verdict: ships (+19.4u, must-not-lose).
+    # The team back-to-back adjustment. Verdict: ships (+5.8u in the `late`
+    # window, must-not-lose; the +19.4u it once recorded mixed windows).
     "team_b2b": "rest_experiment.json",
     # The props back-to-back adjustment. Verdict: ships (+11.4u, must-not-lose).
     "props_b2b": "props_rest_experiment.json",
