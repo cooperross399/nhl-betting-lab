@@ -176,6 +176,16 @@ def settle(actual: float, line: float, selection: str) -> tuple[bool, bool]:
 
 
 
+def _expected_toi(row: Any) -> float:
+    """A sample's expected ice time, and never its actual one."""
+    value = getattr(row, "expected_toi_seconds", None)
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+    return 0.0 if number != number else number
+
+
 def run_backtest(
     prices: pd.DataFrame,
     samples: pd.DataFrame,
@@ -205,6 +215,19 @@ def run_backtest(
     )
     report.notes = _standing_notes()
 
+    # A correction indexed on ice time needs the expected figure. Without the
+    # column every sample would index at zero, which is a different
+    # correction from the one that was fitted and nothing would say so.
+    if (
+        correct is not None
+        and not samples.empty
+        and "expected_toi_seconds" not in samples.columns
+    ):
+        raise ValueError(
+            "A correction was supplied but the samples carry no "
+            "`expected_toi_seconds`. Refusing rather than applying it on a "
+            "missing index; regenerate the samples."
+        )
     if prices.empty or samples.empty:
         return report
 
@@ -304,13 +327,11 @@ def run_backtest(
             str(getattr(row, "team", "")).strip().upper(),
             distribution_from(row.mean, getattr(row, "dispersion_r", None)),
             float(row.actual),
-            # Expected TOI where the samples carry it: the correction must be
-            # applied on information a live card can actually have.
-            float(
-                getattr(row, "expected_toi_seconds", None)
-                or getattr(row, "toi_seconds", 0)
-                or 0
-            ),
+            # Expected TOI only: the correction must be applied on what a live
+            # card can have. `expected or actual` substituted ACTUAL ice time,
+            # which is hindsight, wherever the expected value was 0 or absent,
+            # and a correction fitted on one index was applied on another.
+            _expected_toi(row),
         )
         player_id = int(getattr(row, "player_id", 0) or 0)
         for alias in player_name_aliases(row.player):

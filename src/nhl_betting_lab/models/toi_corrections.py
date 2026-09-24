@@ -1,11 +1,13 @@
-"""The ice-time-conditional correction, as the card applies it live.
+"""The ice-time-conditional correction, as the card WOULD apply it live.
 
-The experiment that put this on the card is `scripts/run_correction_experiment.py`
-and its recorded verdict in `data/outputs/correction_experiment.json`. The
-pooled Platt correction improved calibration and lost the price backtest —
-the EPL lesson, replicated to the letter — while the by-TOI correction beat
-the raw model on both measured windows. Under the house rule, the backtest
-decides; this module is the deciding side of that decision.
+It is not in force. `scripts/run_correction_experiment.py` records the
+verdict in `data/outputs/correction_experiment.json`, which says
+`ships: []`, and the card loads these curves only if that changes. The pooled
+Platt correction improved calibration and lost the price backtest — the EPL
+lesson, replicated to the letter. The by-TOI correction beat the raw model
+only while it was indexed on actual ice time, which is hindsight; indexed on
+expected ice time it loses too (docs/why_the_toi_correction_does_not_ship.md).
+This docstring used to say it beat raw and was on the card.
 
 Two properties matter for live use:
 
@@ -79,11 +81,11 @@ def fit_current_corrections(
     current = CurrentCorrections(fitted_at=fitted_at)
     if grid_samples.empty:
         return current
-    toi_column = (
-        "expected_toi_seconds"
-        if "expected_toi_seconds" in grid_samples.columns
-        else "toi_seconds"
-    )
+    # Bucketed curves are indexed on EXPECTED ice time or not fitted at all.
+    # This fell back to actual ice time, which is hindsight, and fitted
+    # bucketed curves the card would apply live the moment by_toi shipped. The
+    # pooled curves need no ice time and are fitted either way.
+    bucketed = "expected_toi_seconds" in grid_samples.columns
     for market, rows in grid_samples.groupby("market"):
         market_key = str(market)
         samples = list(
@@ -95,10 +97,12 @@ def fit_current_corrections(
         current.pooled[market_key] = PlattCalibration.fit(
             samples, minimum=minimum_fit_samples
         )
+        if not bucketed:
+            continue
         is_goalie = market_key == "goalie_saves"
         buckets: dict[str, list[tuple[float, bool]]] = {}
         for (probability, outcome), toi in zip(
-            samples, rows[toi_column].astype(float)
+            samples, rows["expected_toi_seconds"].astype(float)
         ):
             buckets.setdefault(_bucket_for(toi, is_goalie), []).append(
                 (probability, outcome)

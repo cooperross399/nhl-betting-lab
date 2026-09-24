@@ -204,6 +204,10 @@ def expand_to_lines(
             ]
         )
     rows: list[dict[str, object]] = []
+    # Expected ice time is carried through or left out, never invented: this
+    # filled a missing column with ACTUAL ice time, which is hindsight, and
+    # that silently satisfied every downstream check for the column.
+    carries_expected = "expected_toi_seconds" in samples.columns
     for row in samples.itertuples():
         shape = distribution_from(row.mean, getattr(row, "dispersion_r", None))
         for line in grid.get(str(row.market), ()):  # type: ignore[arg-type]
@@ -217,8 +221,10 @@ def expand_to_lines(
                     "model_probability": shape.over_probability(float(line)),
                     "outcome": bool(float(row.actual) > float(line)),
                     "toi_seconds": int(row.toi_seconds),
-                    "expected_toi_seconds": float(
-                        getattr(row, "expected_toi_seconds", row.toi_seconds)
+                    **(
+                        {"expected_toi_seconds": float(row.expected_toi_seconds)}
+                        if carries_expected
+                        else {}
                     ),
                 }
             )

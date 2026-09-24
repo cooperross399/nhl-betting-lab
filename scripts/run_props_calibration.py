@@ -27,6 +27,12 @@ from nhl_betting_lab.reports.props_calibration import (
 from nhl_betting_lab.verdicts import ships
 
 
+#: What a cached samples file must carry to be reused. expected_toi_seconds is
+#: here because a cache without it gives the ice-time correction nothing it can
+#: index on honestly; regenerating is the only right answer.
+REUSABLE_SAMPLE_COLUMNS = ("mean", "dispersion_r", "actual", "expected_toi_seconds")
+
+
 SAMPLES_FILENAME = "prop_calibration_samples.csv"
 
 
@@ -57,7 +63,7 @@ def main(argv: list[str] | None = None) -> int:
         current, reason = samples_are_current(
             cached,
             known_markets=prop_market_keys(),
-            required_columns=("mean", "dispersion_r", "actual"),
+            required_columns=REUSABLE_SAMPLE_COLUMNS,
         )
         if current:
             samples = cached

@@ -91,6 +91,20 @@ def build_timeline(
     timeline = CorrectionTimeline()
     if grid_samples.empty:
         return timeline
+    # The bucket index is EXPECTED ice time or nothing. Actual ice time is
+    # partly an outcome (overtime, blowouts, injuries, a pulled goalie), and
+    # indexed on it this correction "won" +162.8u that it lost once indexed on
+    # what a card can know (docs/why_the_toi_correction_does_not_ship.md).
+    # This used to fall back to `toi_seconds` when the column was absent, so a
+    # samples file from before the column existed would have re-run the
+    # hindsight version in silence and could have shipped it.
+    if "expected_toi_seconds" not in grid_samples.columns:
+        raise ValueError(
+            "These samples carry no `expected_toi_seconds`, so the by-TOI "
+            "correction cannot be indexed on information a card has. Refusing "
+            "to fall back to actual ice time, which is hindsight. Regenerate "
+            "the samples with scripts/run_props_calibration.py."
+        )
     frame = grid_samples.copy()
     frame["date"] = frame["date"].astype(str).str.slice(0, 10)
     frame = frame.sort_values("date")
@@ -105,14 +119,9 @@ def build_timeline(
         dates = rows["date"].tolist()
         probabilities = rows["model_probability"].astype(float).tolist()
         outcomes = rows["outcome"].astype(bool).tolist()
-        toi_column = (
-            "expected_toi_seconds"
-            if "expected_toi_seconds" in rows.columns
-            else "toi_seconds"
-        )
         buckets = [
             _bucket_for(float(toi), is_goalie)
-            for toi in rows[toi_column].tolist()
+            for toi in rows["expected_toi_seconds"].tolist()
         ]
 
         cursor = first + timedelta(days=refit_days)
