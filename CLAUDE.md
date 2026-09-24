@@ -685,7 +685,9 @@ Re-derive rather than trust if the data has moved.
   against real prices. The receipt says so in its own reviewer statement.
   Allowlisting says a market's prices may be used; it is not a claim that
   the model beats them, and every report continues to say it does not.
-  The receipt is `odds_api-20260923-cooperross399`.
+  The receipt is `odds_api-20260924-cooperross399`, which re-attests the
+  2026-09-23 receipt (now in `superseded/`) against the corrected team
+  report: the approval did not change, the evidence under it did.
 - **The 2026-08-27 approval of the same markets was withdrawn on
   2026-08-29**, because the evidence it cited moved underneath it: the
   receipt was signed against +1.4% over 4,830 bets, and the full population
