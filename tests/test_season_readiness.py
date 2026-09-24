@@ -666,6 +666,10 @@ def test_a_measured_market_is_not_also_reported_unmeasurable() -> None:
         edge_threshold=0.0,
         phase="card",
         unmeasurable_markets={"hits": "Not offered in any of 256 probed events."},
+        # A real map: without one this ran on the six-entry alias map, which
+        # skipped the check that Matthews' team is in the game, and the
+        # backtest now refuses such a store instead.
+        team_names={"toronto maple leafs": "TOR", "ottawa senators": "OTT"},
     )
 
     assert report.by_market.get("hits"), "the fixture must actually measure hits"
