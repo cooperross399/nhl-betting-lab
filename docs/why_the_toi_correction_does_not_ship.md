@@ -40,7 +40,7 @@ only a deployment-fidelity check finds that kind.**
 ## Where this leaves things
 
 - **No correction is in force on the card.** The pooled Platt lost the
-  backtest outright (−97.0u on the original sample, 164.9u behind raw on the
+  backtest outright (−97.0u on the original sample, 168.5u behind raw on the
   full population; the EPL lesson to the letter); the by-TOI
   correction loses once honestly indexed. The card's gate reads the recorded
   verdict from `data/outputs/correction_experiment.json`, which says
@@ -66,8 +66,9 @@ clean the fitting cadence is.
 
 The figures above come from the original 4,777-bet sample the decision was
 first made on. The record was rebuilt on the full two-season store in the
-`card` window, at one bet per wager: over 27,286 raw bets, the pooled Platt
-finishes **164.9u behind raw** and the by-TOI correction **79.8u behind raw**.
+`card` window, at one bet per wager, with the full team-name map: over 28,287
+raw bets, the pooled Platt finishes **168.5u behind raw** and the by-TOI
+correction **95.9u behind raw**.
 Both still do not ship, and `correction_experiment.json` still says
 `ships: []`. The by-TOI run was indexed on expected ice time: every one of
 the 749,115 samples carries a non-zero `expected_toi_seconds`, checked when

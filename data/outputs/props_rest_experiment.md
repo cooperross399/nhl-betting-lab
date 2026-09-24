@@ -4,17 +4,17 @@ Two variants of the identical policy on identical prices. The diagnostic (own-si
 
 | Market | Rest ignored | Rest known | Delta |
 |:-------|-------------:|-----------:|------:|
-| `assists` | -35.9u (3486) | -35.2u (3609) | +0.7u |
-| `blocked_shots` | +243.8u (2907) | +243.8u (2894) | +0.1u |
-| `goalie_saves` | -2.1u (108) | -2.3u (110) | -0.1u |
-| `goals` | -13.8u (807) | -21.1u (820) | -7.3u |
-| `hits` | -55.2u (4957) | -60.0u (5021) | -4.8u |
-| `points` | -246.3u (5732) | -256.2u (5933) | -9.9u |
-| `shots_on_goal` | +90.3u (8658) | +130.5u (8899) | +40.2u |
-| **Total** | -19.2u | -0.4u | **+18.7u** |
+| `assists` | -40.3u (3611) | -36.2u (3742) | +4.1u |
+| `blocked_shots` | +242.4u (3044) | +240.5u (3026) | -1.9u |
+| `goalie_saves` | -6.1u (112) | -6.3u (114) | -0.1u |
+| `goals` | -16.5u (826) | -23.3u (842) | -6.8u |
+| `hits` | -61.8u (5112) | -67.0u (5178) | -5.3u |
+| `points` | -243.6u (5927) | -256.8u (6140) | -13.2u |
+| `shots_on_goal` | +98.1u (8986) | +140.0u (9245) | +41.9u |
+| **Total** | -27.8u | -9.1u | **+18.7u** |
 
 ## Verdict
 
-Rest-known finishes **+18.7u** ahead across the measured markets, improving 3 of 7. The adjustment ships because the bar is *must not lose the backtest* and it does not, while making the stated probabilities honest on the quarter of the schedule that is a back-to-back. It is not evidence of an edge, and a delta this size would not survive any correction for chance.
+Rest-known finishes **+18.7u** ahead across the measured markets, improving 2 of 7. The adjustment ships because the bar is *must not lose the backtest* and it does not, while making the stated probabilities honest on the quarter of the schedule that is a back-to-back. It is not evidence of an edge, and a delta this size would not survive any correction for chance.
 
 Recorded to `props_rest_experiment.json`. The card and the default sample generation read the verdict rather than assert their own — the configuration stays auditable against the measurement that made it.

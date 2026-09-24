@@ -143,6 +143,15 @@ Re-derive rather than trust if the data has moved.
   files and the rest were in the CI artifacts; both have been restored to
   disk. This is the second time the raw cache has turned a destroyed price
   file into a five-minute recovery.
+- **These two reports were built on the six-entry alias team map (found
+  2026-09-24), and their corrected figures wait on a receipt decision.** With
+  no `team_names.csv` or boxscore cache beside the run, the backtest voided
+  the non-Utah side of every Utah game: 902 bets in the `late` window, every
+  one in a Utah game. With the full map the `late` window is **25,911 bets,
+  −0.3%** (−1.5% to +1.0%) and the `card` window **28,287, −0.0%**. No
+  market's verdict moves in either window. `player_props_backtest.md` and the
+  records built from it are receipt-cited, so rebuilding them needs Cooper
+  to re-attest or sign; until then the figures below are the alias-map ones.
 - **Both windows are now measured, and neither shows a demonstrated edge.**
   `late` (T−4.07h, 1,259,312 rows, 2,704 events, 8 books, 6 markets):
   **25,009 bets, −0.2%, 95% interval −1.5% to +1.0%**. `card` (T−9.57h,
@@ -522,17 +531,19 @@ Re-derive rather than trust if the data has moved.
   line used to quote counted every book's quote as a bet, mixed two windows
   and took 1,070 bets priced after face-off) and the **props
   back-to-back adjustment** (+18.7u in the `card` window, **all of it from
-  `shots_on_goal`**, +40.2u, while the other six markets net −21.4u; same
+  `shots_on_goal`**, +41.9u, while the other six markets net −23.2u; same
   must-not-lose bar. The diagnostic behind it: own-side scoring −6%,
   opponent-side +5%, both-tired cancelling, the tired team's goalie busier,
   across seven independent settlement columns). Not in force: **every
   calibration correction**. The pooled Platt, which improved calibration,
-  finishes 164.9u behind raw. The by-TOI correction won +162.8u bucketed on
+  finishes 168.5u behind raw. The by-TOI correction won +162.8u bucketed on
   *actual* ice time and lost 37.6u against raw on *expected* ice time, the
   only TOI a card can know, both on the original 4,777-bet sample; on the
-  full `card`-window population it finishes 79.8u behind raw. (The records
-  were rebuilt on 2026-09-24 on the full population at one bet per wager.
-  They had said +11.4u and −97.0u on the original sample. No verdict moved.)
+  full `card`-window population it finishes 95.9u behind raw. (The records
+  were rebuilt on 2026-09-24 on the full population at one bet per wager,
+  with the full team-name map; the first rebuild that day ran on the
+  six-entry alias map. They had said +11.4u and −97.0u on the original
+  sample. No verdict moved.)
   The
   standard for any conditioned quantity: **conditioned on what, known when?**
   `docs/why_the_toi_correction_does_not_ship.md`.
