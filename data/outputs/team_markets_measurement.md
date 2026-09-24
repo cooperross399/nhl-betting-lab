@@ -2,7 +2,7 @@
 
 Moneyline, puck line and totals — calibrated walk-forward, and measured against real prices wherever any have been bought.
 
-- Generated: 2026-08-31T21:05:11+00:00
+- Generated: 2026-09-24T12:25:31+00:00
 - 347,510 walk-forward samples across 4 market(s) and 3,658 games; 3 market(s) have any price-based evidence.
 
 ## Calibration
@@ -80,23 +80,25 @@ Moneyline, puck line and totals — calibrated walk-forward, and measured agains
 
 ## Measured against real prices
 
+Every price below was captured in the `late` window, median **1.5 hours** before face-off, and strictly before the puck dropped. A wager priced in two windows is two questions; this report answers one.
+
 | Market | Bets | Profit | ROI | 95% interval | Corrected for the search | Survives |
 |:-------|-----:|-------:|----:|:-------------|:-------------------------|:---------|
-| `moneyline` | 1366 | +0.0u | +0.0% | -8.2% .. +8.2% | -10.4% .. +10.4% | no |
-| `puck_line` | 1762 | -22.1u | -1.3% | -5.7% .. +3.2% | -7.0% .. +4.4% | no |
-| `total_goals` | 2201 | -54.7u | -2.5% | -6.5% .. +1.6% | -7.7% .. +2.7% | no |
+| `moneyline` | 954 | -62.9u | -6.6% | -13.6% .. +0.4% | -15.5% .. +2.4% | no |
+| `puck_line` | 1117 | -47.1u | -4.2% | -9.4% .. +0.9% | -10.8% .. +2.4% | no |
+| `total_goals` | 1216 | -48.6u | -4.0% | -9.4% .. +1.4% | -10.9% .. +2.9% | no |
 
-- `moneyline`: +0.0% over 1366 bets, 95% interval -8.2% to +8.2%. The interval includes zero, which means **no demonstrated edge**.
-- `puck_line`: -1.3% over 1762 bets, 95% interval -5.7% to +3.2%. The interval includes zero, which means **no demonstrated edge**.
-- `total_goals`: -2.5% over 2201 bets, 95% interval -6.5% to +1.6%. The interval includes zero, which means **no demonstrated edge**.
+- `moneyline`: -6.6% over 954 bets, 95% interval -13.6% to +0.4%. The interval includes zero, which means **no demonstrated edge**.
+- `puck_line`: -4.2% over 1117 bets, 95% interval -9.4% to +0.9%. The interval includes zero, which means **no demonstrated edge**.
+- `total_goals`: -4.0% over 1216 bets, 95% interval -9.4% to +1.4%. The interval includes zero, which means **no demonstrated edge**.
 
 ### Where every price landed
 
 An unmatched price is one the sample grid could not score — a line the books hang that the grid does not carry, or a warm-up-window game no sample covers. It is counted, because a third of the bought totals once vanished this way with nothing saying so.
 
-- `moneyline`: 5,456 prices seen, 210 unmatched (96% matched), 3,880 below threshold, 1,366 bets.
-- `puck_line`: 6,716 prices seen, 278 unmatched (96% matched), 4,676 below threshold, 1,762 bets.
-- `total_goals`: 12,554 prices seen, 556 unmatched (96% matched), 9,797 below threshold, 2,201 bets.
+- `moneyline`: 4,200 prices seen, 156 unmatched (96% matched), 3,090 below threshold, 954 bets.
+- `puck_line`: 4,582 prices seen, 188 unmatched (96% matched), 3,277 below threshold, 1,117 bets.
+- `total_goals`: 7,926 prices seen, 366 unmatched (95% matched), 6,344 below threshold, 1,216 bets.
 
 ### How much data would settle it
 
@@ -109,6 +111,9 @@ An unmatched price is one the sample grid could not score — a line the books h
 
 ## Standing notes
 
+- Prices measured: 212,964 of 308,944 stored rows, from the `late` window, median 1.5 hours before face-off.
+- 34,196 price row(s) captured at or after face-off were excluded. A quote on a team already losing mid-game clears the edge threshold against a pre-game probability and is then usually lost; it is not a price a card can take.
+- 61,784 price row(s) from other windows were excluded. The best-price collapse would otherwise take the better of two moments for one wager — a price nobody could have taken.
 - Team markets are not the point of this lab. They are measured to the same standard anyway, because a market nobody prices is a market where nobody can find an edge.
 - The puck line is the market most likely to expose a modelling error: covering -1.5 depends on the overtime rule rather than on the scoring rate, so a model that has overtime wrong looks fine on moneylines and totals and wrong only here.
 - A push is excluded rather than scored as a loss. Scoring pushes as losses would make every whole-number total look worse than it is.

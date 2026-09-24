@@ -17,8 +17,11 @@ moments is two questions:
 | `late` | T−4.07h | 25,009 | −0.2% | −1.5% .. +1.0% | no demonstrated edge |
 | `card` | T−9.57h | 27,286 | −0.0% | −1.2% .. +1.2% | no demonstrated edge |
 
-The team markets say the same: moneyline +0.0% over 1,366, puck line −1.3%
-over 1,762, totals −2.5% over 2,201, every interval spanning zero. The honest
+The team markets say the same: moneyline −6.6% over 954, puck line −4.2%
+over 1,117, totals −4.0% over 1,216, in the `late` window strictly before
+face-off, every interval spanning zero. (They read +0.0% / −1.3% / −2.5% until
+2026-09-24, when the measurement was found taking the best price across two
+windows and across face-off; see CLAUDE.md.) The honest
 answer to "does this work" is: *the evidence says no edge has been
 demonstrated, on samples large enough to mean it.*
 
