@@ -588,7 +588,14 @@ Re-derive rather than trust if the data has moved.
   fire and fix. `closing_lines.load_captures` now falls back to the movement
   store, the dedicated store still wins when it holds anything, and the
   closing rule is unchanged — the last price captured strictly before the
-  face-off.
+  face-off. **"CLV works anyway" was true on a laptop and false in CI until
+  2026-09-24:** the movement store lives on Line Movement's runner, Gameday
+  Refresh never downloaded it, and the `closing-lines` branch it reads had no
+  writer and did not exist, so every in-season CLV report would have read
+  nothing. Now each Line Movement run hands its closing prices over as the
+  `closing-line-captures` artifact, and Closing Lines, triggered when Line
+  Movement completes, merges them into that branch. That path fetches nothing
+  and spends no credit.
 - **This lab has an end date, decided before the data existed: 2027-04-25.**
   Everything measurable on bought history has been measured and comes back
   null. The single open question is whether the model beats prices on data

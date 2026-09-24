@@ -226,6 +226,24 @@ jobs:
           retention-days: 90
           overwrite: true
 
+      - name: Hand the closing prices to Closing Lines
+        # The capture above also wrote this run's best price per selection to
+        # data/processed/closing_line_captures.csv, and until 2026-09-24
+        # nothing kept it: this job cannot write to a branch, and the
+        # closing-lines branch Gameday Refresh reads CLV from had no writer
+        # once Closing Lines lost its schedule on 2026-08-29. Closing Lines
+        # now runs when this workflow completes, takes this artifact, and
+        # merges it into that branch. This run's rows only; the branch is the
+        # store. A night with no games writes no file and hands over nothing.
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: closing-line-captures
+          path: data/processed/closing_line_captures.csv
+          if-no-files-found: ignore
+          retention-days: 7
+          overwrite: true
+
       - name: Say what this run did not do
         if: always()
         run: |
