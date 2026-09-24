@@ -43,6 +43,7 @@ from nhl_betting_lab.models.calibration import (
 )
 from nhl_betting_lab.providers.team_names import (
     TEAM_NAMES_FILENAME,
+    UnresolvedTeamsError,
     load_team_name_map,
     resolve_team,
 )
@@ -221,10 +222,6 @@ def _puck_line_selection(selection: str, line: float | None) -> tuple[str, float
         return side, line
     suffix = "minus" if float(line) < 0 else "plus"
     return f"{side}_{suffix}", line
-
-
-class UnresolvedTeamsError(ValueError):
-    """Prices are on disk and not one row's teams could be identified."""
 
 
 def _team_code(

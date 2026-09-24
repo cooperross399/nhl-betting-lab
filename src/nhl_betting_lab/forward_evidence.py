@@ -57,7 +57,11 @@ from nhl_betting_lab.config import DATA_DIR, MIN_EDGE, MIN_PROP_EDGE, OUTPUTS_DI
 from nhl_betting_lab.markets import MARKETS_BY_KEY
 from nhl_betting_lab.models.player_props import player_name_aliases
 from nhl_betting_lab.models.value import OddsError, american_to_implied, profit_on_win
-from nhl_betting_lab.providers.team_names import resolve_team
+from nhl_betting_lab.providers.team_names import (
+    TEAM_NAMES_FILENAME,
+    UnresolvedTeamsError,
+    resolve_team,
+)
 from nhl_betting_lab.reports.player_props_backtest import settle as settle_prop
 from nhl_betting_lab.season import clean_text, row_game_date
 
@@ -181,6 +185,11 @@ class SettlementResult:
     rows_settled: int = 0
     rows_void: int = 0
     rows_unsettleable: int = 0
+    #: Rows of the pending snapshots read this pass that name a team the
+    #: team-name map could not resolve, and the names. Counted when zero too,
+    #: so "every team resolved" is distinguishable from "nobody checked".
+    rows_unresolved_teams: int = 0
+    unresolved_team_names: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
 
     def summary_line(self) -> str:
@@ -188,8 +197,31 @@ class SettlementResult:
             f"{self.snapshots_settled} of {self.snapshots_seen} pending "
             f"snapshot(s) settled ({self.snapshots_waiting} still waiting "
             f"for results); {self.rows_settled} row(s) settled, "
-            f"{self.rows_void} void, {self.rows_unsettleable} unsettleable."
+            f"{self.rows_void} void, {self.rows_unsettleable} unsettleable; "
+            f"{self.rows_unresolved_teams} row(s) named a team the team-name "
+            "map could not resolve."
         )
+
+
+def _unresolved_team_rows(
+    snapshot: pd.DataFrame, team_names: Mapping[str, str]
+) -> tuple[int, set[str]]:
+    """Rows naming a team the map cannot resolve, and the names themselves."""
+    rows = 0
+    names: set[str] = set()
+    for row in snapshot.itertuples():
+        missing = [
+            label
+            for label in (
+                clean_text(getattr(row, "home_team", "")),
+                clean_text(getattr(row, "away_team", "")),
+            )
+            if resolve_team(label, team_names) is None
+        ]
+        if missing:
+            rows += 1
+            names.update(label for label in missing if label)
+    return rows, names
 
 
 def _player_index(
@@ -351,6 +383,24 @@ def settle_snapshots(
     A snapshot settles as a unit only when every game on it is final — a
     half-settled day would make the ledger's totals move twice for one day,
     and whichever half settled first would look like the whole day.
+
+    ## A map that resolves nothing refuses; it does not write the day off
+
+    Every row finds its game through `team_names`. The runner loads that map
+    from `team_names.csv` and rebuilds it from the boxscore cache when the
+    file is absent; with neither, it holds only the six Utah and Arizona
+    alias entries. Such a map resolves both teams of no row, so every game
+    lookup missed, the day waited out `PATIENCE_DAYS`, and then every row
+    was appended as `unsettleable` and the day marked settled — permanently,
+    in a ledger that cannot be rebuilt. Nothing raised.
+
+    The card freezes only rows whose teams it resolved, so a pending snapshot
+    in which no row resolves both teams says the map is broken, not the day.
+    Such a snapshot raises `UnresolvedTeamsError`, and it is checked across
+    every pending snapshot BEFORE any marker is touched or any row appended:
+    markers are written inside the loop and the ledger after it, so a refusal
+    raised mid-loop would leave earlier days marked settled with their rows
+    never written.
     """
     moment = now or datetime.now(timezone.utc)
     directory = snapshots_dir(archive_dir)
@@ -387,13 +437,42 @@ def settle_snapshots(
             ].astype(str)
         )
 
+    pending = [
+        (path.stem, pd.read_csv(path))
+        for path in sorted(directory.glob("*.csv"))
+        if path.stem not in settled_days
+    ]
+    names: set[str] = set()
+    refused: list[tuple[str, int]] = []
+    for day, snapshot in pending:
+        unresolved, missing = _unresolved_team_rows(snapshot, team_names)
+        result.rows_unresolved_teams += unresolved
+        names |= missing
+        if len(snapshot) and unresolved == len(snapshot):
+            refused.append((day, len(snapshot)))
+    result.unresolved_team_names = sorted(names)
+    if refused:
+        preview = ", ".join(result.unresolved_team_names[:6]) + (
+            f" and {len(names) - 6} more" if len(names) > 6 else ""
+        )
+        raise UnresolvedTeamsError(
+            f"Refusing to settle: {len(refused)} pending snapshot day(s) "
+            f"({', '.join(f'{day}: {rows:,} row(s)' for day, rows in refused)}) "
+            "name two teams the team-name map can resolve on no row "
+            f"({len(team_names)} spelling(s) in the map). Unresolved: "
+            f"{preview or '(the rows name no team)'}. Settled anyway, every "
+            f"row would find no game, wait out the {PATIENCE_DAYS}-day "
+            "patience window, and then be appended to the forward ledger as "
+            "unsettleable with the day marked settled for good. No day was "
+            "marked and no row was appended. Point --processed-dir at a "
+            f"directory holding {TEAM_NAMES_FILENAME} "
+            "(scripts/run_gameday_card.py writes it), or run where "
+            "data/raw/nhl/boxscore can rebuild it."
+        )
+
     new_rows: list[dict[str, object]] = []
-    for path in sorted(directory.glob("*.csv")):
-        day = path.stem
-        if day in settled_days:
-            continue
+    for day, snapshot in pending:
         result.snapshots_seen += 1
-        snapshot = pd.read_csv(path)
         if snapshot.empty:
             (directory / f"{day}.settled").touch()
             result.snapshots_settled += 1

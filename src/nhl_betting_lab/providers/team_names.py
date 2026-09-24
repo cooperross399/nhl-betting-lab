@@ -58,6 +58,17 @@ PROVIDER_ALIASES: dict[str, str] = {
 }
 
 
+class UnresolvedTeamsError(ValueError):
+    """Rows exist and the map resolves both teams of none of them.
+
+    Raised rather than measuring or settling nothing. The map is never empty
+    — `PROVIDER_ALIASES` are always added — so an emptiness check cannot see
+    a missing map, and because the aliases always resolve one side of a Utah
+    game, neither can a check that counts resolved sides. Only rows with
+    BOTH teams resolved say the map works.
+    """
+
+
 def _strip_accents(text: str) -> str:
     """`Montréal` -> `Montreal`. The provider does not send the accent."""
     decomposed = unicodedata.normalize("NFKD", text)
