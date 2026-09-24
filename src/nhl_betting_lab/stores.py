@@ -64,19 +64,35 @@ def read_store(
 
 
 def existing_row_count(path: Path | str) -> int:
-    """Data rows in an existing CSV, cheaply: line count minus the header.
+    """Data rows in an existing CSV, cheaply: non-blank lines minus the header.
 
     Lives here because every shrink guard in the repository needs it and
     there must be one of it. "The file exists" is not "the file holds data" —
     a header-only file left by a permitted first empty build once made a
     guard raise falsely on the second.
+
+    It is a count of physical lines, independent of the parse, which is the
+    point: a stray quote makes pandas swallow rows into one field without an
+    error, and only a count taken off the file sees them. Two things it used
+    to get wrong, both measured against `pd.read_csv`:
+
+    * **Blank lines.** pandas skips empty and whitespace-only lines, and this
+      counted them, so a ledger ending in three blank lines "held" four rows
+      while holding one and every shrink guard refused an honest append to
+      it. A line is counted when `strip()` leaves something — which matches
+      pandas on empty, CRLF, space-only and tab-only lines, still counts a
+      commas-only line as the row pandas makes of it, and still counts every
+      line a stray quote swallows.
+    * **Undecodable bytes.** It decoded as UTF-8 to count newlines and caught
+      only `OSError`, so one bad byte raised `UnicodeDecodeError` out of a
+      guard. Counting needs no decoding; the file is read as bytes.
     """
     target = Path(path)
     if not target.is_file():
         return 0
     try:
-        with target.open("r", encoding="utf-8") as handle:
-            return max(0, sum(1 for _ in handle) - 1)
+        with target.open("rb") as handle:
+            return max(0, sum(1 for line in handle if line.strip()) - 1)
     except OSError:
         return 0
 
