@@ -415,10 +415,16 @@ Re-derive rather than trust if the data has moved.
   per-quote counting had it as a demonstrated loss; `shots_on_goal` +1.4%
   (9,043, spans zero); `assists` −1.3% (3,630, spans zero); `goals` −6.6%
   (546, spans zero). `blocked_shots` is the only positive at +5.2% over
-  4,126 — and it **failed replication**: same direction on the unseen window
-  but its own interval includes zero, and a window that merely fails to
-  contradict is not confirmation. The only result that survives correction
-  *and* replicates is `points`, a demonstrated deficit rather than an edge.
+  4,126. **No result survives correction and then replicates.** Until
+  2026-09-24 this line said `points` did, as a demonstrated deficit, and that
+  `blocked_shots` failed replication; but `replication.md` had not been
+  rebuilt since per-quote counting was retired, and its two seasons summed
+  to 73,918 bets. At one bet per wager they are 12,923 and 12,086, which sum
+  to the 25,009, and neither season carries either market alone: 2024-25
+  has `points` −3.2% (2,618) and `blocked_shots` +4.8% (2,599), both inside
+  the correction, so there is nothing for 2025-26 to confirm. Run the other
+  way, `points` survives in 2025-26 (−5.5%, 3,366) and is not confirmed on
+  2024-25. Both are pooled results that survive correction, and no more.
   (These counts read 6,202 / 1,733 / 9,395 / 3,762 / 564 / 4,293 until
   2026-09-02, against the same population the headline lost; the ROIs move by
   a tenth of a point and no verdict moves at all.)
@@ -678,16 +684,21 @@ Re-derive rather than trust if the data has moved.
   The alternate ladders and all per-event markets ride the per-event fetch;
   asking the bulk endpoint for them 422s the whole request.
 - **Twelve markets are allowlisted as of 2026-09-23, against the evidence
-  bundle's own recommendation**, which supports enabling nothing: `points`
-  is a demonstrated deficit and replicated as one, `blocked_shots` was not
-  confirmed on its held-out window, seven show no demonstrated edge, and
-  `hits`, `regulation_3_way` and `team_total` have never been measured
-  against real prices. The receipt says so in its own reviewer statement.
+  bundle's own recommendation**, which supports enabling nothing: no market
+  survives correction and then replicates; `points` (−4.5%) and
+  `blocked_shots` (+5.2%) survive correction on the pooled window and
+  neither survives it within either season; `hits` is measured only in the
+  9.5-hour window (−1.2% over 5,021, spanning zero); seven more show no
+  demonstrated edge; and `regulation_3_way` and `team_total` have never been
+  measured against real prices. The receipt says so in its own reviewer statement.
   Allowlisting says a market's prices may be used; it is not a claim that
   the model beats them, and every report continues to say it does not.
-  The receipt is `odds_api-20260924-cooperross399`, which re-attests the
-  2026-09-23 receipt (now in `superseded/`) against the corrected team
-  report: the approval did not change, the evidence under it did.
+  The receipt is `odds_api-20260924T095805-0400-cooperross399`. It re-attests the
+  approval a second time on 2026-09-24, against the rebuilt replication
+  record and the regenerated claims document and bundle, and corrects three
+  claims the earlier statements had taken from those records before they were
+  rebuilt. The two earlier receipts are in `superseded/`. The approval did
+  not change; the evidence under it did.
 - **The 2026-08-27 approval of the same markets was withdrawn on
   2026-08-29**, because the evidence it cited moved underneath it: the
   receipt was signed against +1.4% over 4,830 bets, and the full population

@@ -80,6 +80,16 @@ BACKTEST_MARKDOWN_FILENAME = "player_props_backtest.md"
 BACKTEST_JSON_FILENAME = "player_props_backtest.json"
 BACKTEST_CSV_FILENAME = "player_props_backtest_bets.csv"
 
+#: Window-labelled copies a summary may read for a market the contract report
+#: has no bets in. The contract file holds whichever window ran last -- `late`
+#: in both workflows -- and `hits` is quoted only by the two books in the
+#: second region, which the `late` purchase never asked. Without this the
+#: summaries reported hits as "no historical prices have been bought" while
+#: this report printed its ROI over 5,021 wagers.
+OTHER_WINDOW_JSON_FILENAMES: dict[str, str] = {
+    "card": "player_props_backtest_card.json",
+}
+
 
 @dataclass
 class PlacedBet:
@@ -838,6 +848,10 @@ def save_backtest(
         "notes": report.notes,
         "overall": _interval_payload(report.overall),
         "looks": report.looks,
+        # Which window these numbers describe, so a summary reading only the
+        # JSON can say so rather than assume.
+        "phase": report.phase,
+        "phase_hours": report.phase_hours,
         "by_market": {
             market: _interval_payload(interval)
             for market, interval in report.by_market.items()
@@ -893,3 +907,50 @@ def _interval_payload(interval: RoiInterval | None) -> dict[str, Any] | None:
         "survives_correction": interval.survives_correction,
         "verdict": interval.verdict(),
     }
+
+
+def window_phrase(payload: Mapping[str, Any], default_phase: str = "") -> str:
+    """"`late` window, 4.1 hours before face-off", from a saved payload."""
+    phase = str(payload.get("phase") or default_phase or "").strip()
+    if not phase:
+        return ""
+    hours = payload.get("phase_hours")
+    if isinstance(hours, (int, float)) and hours > 0:
+        return f"`{phase}` window, {float(hours):.1f} hours before face-off"
+    return f"`{phase}` window"
+
+
+def by_market_with_other_windows(
+    directory: Path, contract: Mapping[str, Any]
+) -> dict[str, dict[str, Any]]:
+    """The contract report's markets, plus any it has no bets for.
+
+    A market the contract window measured keeps that measurement, always.
+    Only a market with no bets there is read from another window, and it
+    carries `_window` naming that window. Choosing per market whichever window
+    looked better would be the look-back max this lab keeps removing.
+    """
+    merged: dict[str, dict[str, Any]] = {
+        str(market): dict(entry)
+        for market, entry in (contract.get("by_market") or {}).items()
+        if isinstance(entry, dict)
+    }
+    for phase, filename in OTHER_WINDOW_JSON_FILENAMES.items():
+        path = Path(directory) / filename
+        if not path.is_file():
+            continue
+        try:
+            other = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError):
+            continue
+        if not isinstance(other, dict):
+            continue
+        phrase = window_phrase(other, default_phase=phase)
+        for market, entry in (other.get("by_market") or {}).items():
+            if not isinstance(entry, dict) or int(entry.get("bets", 0) or 0) <= 0:
+                continue
+            current = merged.get(str(market))
+            if current and int(current.get("bets", 0) or 0) > 0:
+                continue
+            merged[str(market)] = {**entry, "_window": phrase}
+    return merged

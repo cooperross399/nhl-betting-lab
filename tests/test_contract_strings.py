@@ -219,10 +219,14 @@ def test_the_operating_state_records_what_the_full_sample_showed() -> None:
     text = _claude_md()
 
     assert "73,918 bets" in text
-    assert "failed replication" in text
-    # The one result that survives both tests is a loss, and the operating
-    # state has to name it rather than leave a reader to infer an edge.
-    assert "demonstrated deficit" in text
+    # This used to pin "failed replication" and "demonstrated deficit": the
+    # one result surviving both tests was a loss, `points`. Both came from a
+    # replication record built by per-quote counting and never rebuilt; at
+    # one bet per wager nothing survives both. The operating state has to say
+    # that, and name the counts that show it, rather than leave the old
+    # finding standing.
+    assert "No result survives correction and then replicates" in text
+    assert "12,923 and 12,086" in text
 
 
 

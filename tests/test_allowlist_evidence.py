@@ -375,7 +375,7 @@ def test_a_supported_market_says_a_held_out_window_confirmed_it(
 
     assert shots.supported is True
     assert "held-out window confirmed" in shots.reason
-    assert "one sampled window of one season" in shots.reason
+    assert "rests on one snapshot window" in shots.reason
 
 
 def test_a_conclusive_LOSS_is_never_reported_as_supported(tmp_path: Path) -> None:
@@ -424,7 +424,11 @@ def test_a_conclusive_LOSS_is_never_reported_as_supported(tmp_path: Path) -> Non
         "reported as supported"
     )
     assert "points" not in bundle.supported_markets
-    assert "demonstrated deficit" in verdict.reason
+    # Named as a loss, and as an argument against. Not "demonstrated": this
+    # fixture has no replication record, and that word takes two windows.
+    assert "on the LOSING side" in verdict.reason
+    assert "argues against enabling" in verdict.reason
+    assert "This is a demonstrated deficit" not in verdict.reason
     assert "consistent with enabling" not in bundle.recommendation()
 
 
@@ -600,3 +604,124 @@ def test_a_market_with_no_replication_record_is_not_supported(tmp_path: Path) ->
 def test_the_replication_record_is_required_evidence(tmp_path: Path) -> None:
     """Its absence blocks a recommendation rather than being ignored."""
     assert "replication.md" in ev.EVIDENCE_FILENAMES
+
+
+def _points_loss(directory: Path) -> None:
+    _write(
+        directory,
+        "player_props_backtest.json",
+        {
+            "by_market": {
+                "points": {
+                    "bets": 5984, "roi": -0.045, "includes_zero": False,
+                    "survives_correction": True, "looks": 7,
+                    "adjusted_low": -0.079, "adjusted_high": -0.010,
+                }
+            }
+        },
+    )
+
+
+def test_a_loss_is_demonstrated_only_once_a_second_window_confirms_it(
+    tmp_path: Path,
+) -> None:
+    """The bar a positive has to clear, applied to a negative.
+
+    `points` was reported here as "a demonstrated deficit" from 2026-08-29
+    on the strength of `replication.md`, which was built from per-season
+    files that counted every book's quote as its own bet (73,918 of them).
+    Rebuilt at one bet per wager, neither season carries it alone. A loss
+    that survives the correction on the pooled window is still the argument
+    against enabling; it is not yet a finding.
+    """
+    _all_evidence_present(tmp_path)
+    _points_loss(tmp_path)
+    _replication(tmp_path, "points", "replicated")
+    replicated = next(
+        v for v in ev.build_bundle(
+            provider_name="the_odds_api", output_dir=tmp_path, repository_root=tmp_path
+        ).verdicts if v.market == "points"
+    )
+    assert "This is a demonstrated deficit" in replicated.reason
+    assert replicated.supported is False
+
+    _replication(tmp_path, "points", "untestable")
+    unconfirmed = next(
+        v for v in ev.build_bundle(
+            provider_name="the_odds_api", output_dir=tmp_path, repository_root=tmp_path
+        ).verdicts if v.market == "points"
+    )
+    assert "This is a demonstrated deficit" not in unconfirmed.reason
+    assert "did not confirm it (untestable)" in unconfirmed.reason
+    assert "argues against enabling" in unconfirmed.reason
+    assert unconfirmed.supported is False
+
+
+def test_a_prop_market_priced_only_in_another_window_is_read_from_it(
+    tmp_path: Path,
+) -> None:
+    """`hits` is quoted only by two books in the second region.
+
+    The `late` purchase never asked that region, so the contract report has
+    no hits bets, and this bundle said "no price-based measurement exists"
+    while `player_props_backtest_card.md` printed -1.2% over 5,021 wagers.
+    """
+    _all_evidence_present(tmp_path)
+    _write(tmp_path, "player_props_backtest.json", {"by_market": {}})
+    _write(
+        tmp_path,
+        "player_props_backtest_card.json",
+        {
+            "phase": "card",
+            "phase_hours": 9.6,
+            "by_market": {
+                "hits": {
+                    "bets": 5021, "roi": -0.012, "includes_zero": True,
+                    "survives_correction": False, "looks": 7,
+                    "adjusted_low": -0.050, "adjusted_high": 0.026,
+                }
+            },
+        },
+    )
+    hits = next(
+        v for v in ev.build_bundle(
+            provider_name="the_odds_api", output_dir=tmp_path, repository_root=tmp_path
+        ).verdicts if v.market == "hits"
+    )
+
+    assert hits.bets == 5021
+    assert "no price-based measurement" not in hits.reason
+    assert "Measured only in the `card` window, 9.6 hours before face-off." in hits.reason
+    assert hits.supported is False
+
+
+def test_a_market_the_contract_window_measured_keeps_that_measurement(
+    tmp_path: Path,
+) -> None:
+    """Never the better of two windows: that is a look-back max."""
+    _all_evidence_present(tmp_path)
+    _write(
+        tmp_path,
+        "player_props_backtest.json",
+        {"by_market": {"shots_on_goal": {
+            "bets": 9043, "roi": -0.010, "includes_zero": True,
+            "survives_correction": False, "looks": 6,
+        }}},
+    )
+    _write(
+        tmp_path,
+        "player_props_backtest_card.json",
+        {"phase": "card", "by_market": {"shots_on_goal": {
+            "bets": 9500, "roi": 0.050, "includes_zero": False,
+            "survives_correction": True, "looks": 7,
+        }}},
+    )
+    shots = next(
+        v for v in ev.build_bundle(
+            provider_name="the_odds_api", output_dir=tmp_path, repository_root=tmp_path
+        ).verdicts if v.market == "shots_on_goal"
+    )
+
+    assert shots.bets == 9043
+    assert shots.roi == -0.010
+    assert "Measured only in the" not in shots.reason

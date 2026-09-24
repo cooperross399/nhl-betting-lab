@@ -19,9 +19,10 @@ before believing any number this repository produces.
 ## The current answer to "does this work"
 
 **No demonstrated edge, at full population, in either direction.** Buying
-every retained event rather than a sample took the measurement to 1,261,440
-prices over **25,949 distinct wagers**: **−0.3%, 95% interval −1.5% to
-+0.9%**, which includes zero. The earlier +1.4% was a small sample and a
+every retained event rather than a sample took the measurement to
+**25,009 distinct wagers** in the four-hour window: **−0.2%, 95% interval
+−1.5% to +1.0%**, which includes zero. (The 25,949 this line used to quote
+came from a local store that no longer exists; see `CLAUDE.md`.) The earlier +1.4% was a small sample and a
 duplicated store; a later **−1.6% over 73,918** counted each of the ~2.8 book
 quotes on one selection as its own bet, which measured a strategy the card
 would never run and narrowed every interval by about √2.8. One wager is now
@@ -29,9 +30,12 @@ one bet at the best price the card could have taken. Best-of-N is
 optimistically biased the other way, so those two numbers bracket the truth;
 both ends are at or below zero.
 
-The one result that survives correction *and* replicates is a **loss**:
-`points` at −4.4% over 6,202 wagers. `blocked_shots` is the only positive
-and it failed replication.
+Nothing survives correction *and* replicates. `points` (−4.5% over 5,984
+wagers) and `blocked_shots` (+5.2% over 4,126) both survive correction on
+the pooled window, but neither survives it within either season alone, so
+there is nothing for a second season to confirm. This line used to call
+`points` a replicated loss; that came from a replication record built by
+counting every book's quote as a bet.
 
 The mechanism is understood rather than merely observed. The model is
 **overconfident by 9 to 12 points on exactly the bets it selects** — it says
