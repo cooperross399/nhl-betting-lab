@@ -3,6 +3,11 @@
 Read this second, after `CLAUDE.md`. It is the shortest honest answer to
 "where is this and what should I do next".
 
+> **Last fully revised 2026-08-27.** A great deal has moved since: the full
+> two-season purchase, one-bet-per-wager counting, the named snapshot
+> windows, and the allowlist's history. Where this file and the "Current
+> operating state" in `CLAUDE.md` disagree, `CLAUDE.md` is right.
+
 ## Where the lab is
 
 **Built and working:**
@@ -33,13 +38,14 @@ Read this second, after `CLAUDE.md`. It is the shortest honest answer to
 
 **Not built, deliberately:**
 
-- Historical prices are bought and measured: 192 event-days of props (4,830
-  bets under the shipped bars) and two seasons of team markets. The verdict —
-  **no demonstrated edge anywhere** — is in
-  `data/outputs/player_props_backtest.md` and
+- Historical prices are bought and measured: the full two seasons of props
+  (25,009 wagers in the `late` window, 27,286 in the `card` window) and of
+  team markets. The verdict — **no demonstrated edge anywhere** — is in
+  `data/outputs/player_props_backtest.md`,
+  `data/outputs/player_props_backtest_card.md` and
   `data/outputs/team_markets_measurement.md` with every sample size printed.
-  Hits and the regulation three-way are retained by no book historically and
-  accumulate forward evidence only.
+  Hits is priced only in the `card` window (5,021 wagers). The regulation
+  three-way has no bulk history and accumulates forward evidence only.
 - No confirmed-starter source, so goalie saves cannot reach the card. See
   `docs/goalie_props_need_a_confirmed_starter.md`.
 - No xG source. MoneyPuck's CSVs need a data licence; see

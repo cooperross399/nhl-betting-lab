@@ -521,12 +521,19 @@ Re-derive rather than trust if the data has moved.
   (+5.8u in the `late` window, must-not-lose, not an edge; the +19.4u this
   line used to quote counted every book's quote as a bet, mixed two windows
   and took 1,070 bets priced after face-off) and the **props
-  back-to-back adjustment** (+11.4u, same bar — own-side scoring −6%,
+  back-to-back adjustment** (+18.7u in the `card` window, **all of it from
+  `shots_on_goal`**, +40.2u, while the other six markets net −21.4u; same
+  must-not-lose bar. The diagnostic behind it: own-side scoring −6%,
   opponent-side +5%, both-tired cancelling, the tired team's goalie busier,
   across seven independent settlement columns). Not in force: **every
-  calibration correction** — the pooled Platt improved calibration and lost
-  −97.0u; the by-TOI correction won +162.8u bucketed on *actual* ice time and
-  loses −37.6u on *expected* ice time, the only TOI a card can know. The
+  calibration correction**. The pooled Platt, which improved calibration,
+  finishes 164.9u behind raw. The by-TOI correction won +162.8u bucketed on
+  *actual* ice time and lost 37.6u against raw on *expected* ice time, the
+  only TOI a card can know, both on the original 4,777-bet sample; on the
+  full `card`-window population it finishes 79.8u behind raw. (The records
+  were rebuilt on 2026-09-24 on the full population at one bet per wager.
+  They had said +11.4u and −97.0u on the original sample. No verdict moved.)
+  The
   standard for any conditioned quantity: **conditioned on what, known when?**
   `docs/why_the_toi_correction_does_not_ship.md`.
 - **The third game in four nights was checked and not built.** One suggestive

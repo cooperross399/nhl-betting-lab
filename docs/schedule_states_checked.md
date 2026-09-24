@@ -21,7 +21,10 @@ asked to; and the tired team's goalie makes more saves (1.052) while the
 goalie facing tired shooters makes fewer (0.970). Seven independent
 settlement columns, every direction fatigue predicts. The adjustment
 (per-market own and opponent factors, shrunk, fitted from the training logs
-only) ships on the price backtest — +11.4u, same bar, same caveat.
+only) ships on the price backtest — +18.7u in the `card` window over the
+full two-season population, all of it from `shots_on_goal` while the other
+six markets net −21.4u (+11.4u on the original sample that first decided
+it), same bar, same caveat.
 
 Both verdicts are recorded (`rest_experiment.json`,
 `props_rest_experiment.json`) and read through `verdicts.ships` by the card

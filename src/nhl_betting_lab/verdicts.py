@@ -27,7 +27,8 @@ VERDICT_FILES: dict[str, str] = {
     # The team back-to-back adjustment. Verdict: ships (+5.8u in the `late`
     # window, must-not-lose; the +19.4u it once recorded mixed windows).
     "team_b2b": "rest_experiment.json",
-    # The props back-to-back adjustment. Verdict: ships (+11.4u, must-not-lose).
+    # The props back-to-back adjustment. Verdict: ships (+18.7u in the `card`
+    # window, all of it shots_on_goal; must-not-lose).
     "props_b2b": "props_rest_experiment.json",
 }
 

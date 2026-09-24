@@ -1,76 +1,86 @@
 {
-  "delta_units": 11.362322281911062,
+  "delta_units": 18.743431545361723,
   "edge_threshold": 0.06,
   "markets_improved": 3,
-  "markets_measured": 6,
+  "markets_measured": 7,
   "results": {
     "rest_ignored": {
       "assists": {
-        "bets": 384,
-        "profit": -24.348238747731934,
-        "roi": -0.06340687173888525
+        "bets": 3486,
+        "profit": -35.86465215526043,
+        "roi": -0.010288196257963405
       },
       "blocked_shots": {
-        "bets": 555,
-        "profit": 65.65345817970432,
-        "roi": 0.11829451924271048
+        "bets": 2907,
+        "profit": 243.77433983240513,
+        "roi": 0.08385770204073104
       },
       "goalie_saves": {
-        "bets": 410,
-        "profit": -10.262301158225592,
-        "roi": -0.025030002824940466
+        "bets": 108,
+        "profit": -2.1292805324936888,
+        "roi": -0.019715560486052674
       },
       "goals": {
-        "bets": 37,
-        "profit": 4.2054968506581405,
-        "roi": 0.11366207704481461
+        "bets": 807,
+        "profit": -13.787433845623179,
+        "roi": -0.017084800304365773
+      },
+      "hits": {
+        "bets": 4957,
+        "profit": -55.16441388411271,
+        "roi": -0.011128588639118966
       },
       "points": {
-        "bets": 910,
-        "profit": -43.87409717877544,
-        "roi": -0.04821329360304994
+        "bets": 5732,
+        "profit": -246.29287793455234,
+        "roi": -0.042968052675253374
       },
       "shots_on_goal": {
-        "bets": 2471,
-        "profit": 64.93273142469808,
-        "roi": 0.02627791640012063
+        "bets": 8658,
+        "profit": 90.30045385578207,
+        "roi": 0.01042971285005568
       }
     },
     "rest_known": {
       "assists": {
-        "bets": 403,
-        "profit": -17.988926690526803,
-        "roi": -0.04463753521222532
+        "bets": 3609,
+        "profit": -35.19364257744584,
+        "roi": -0.009751632745205276
       },
       "blocked_shots": {
-        "bets": 548,
-        "profit": 65.24198109990805,
-        "roi": 0.11905471003632855
+        "bets": 2894,
+        "profit": 243.832328172809,
+        "roi": 0.08425443267892502
       },
       "goalie_saves": {
-        "bets": 397,
-        "profit": -6.843652566713516,
-        "roi": -0.017238419563510115
+        "bets": 110,
+        "profit": -2.2597153151023845,
+        "roi": -0.02054286650093077
       },
       "goals": {
-        "bets": 35,
-        "profit": 2.6054968506581404,
-        "roi": 0.07444276716166115
+        "bets": 820,
+        "profit": -21.09095253850619,
+        "roi": -0.025720673827446573
+      },
+      "hits": {
+        "bets": 5021,
+        "profit": -59.95787697458924,
+        "roi": -0.01194142142493313
       },
       "points": {
-        "bets": 940,
-        "profit": -51.79729089189453,
-        "roi": -0.055103500948823964
+        "bets": 5933,
+        "profit": -256.2153103093825,
+        "roi": -0.04318478178145668
       },
       "shots_on_goal": {
-        "bets": 2508,
-        "profit": 76.45176385080728,
-        "roi": 0.030483159430146445
+        "bets": 8899,
+        "profit": 130.46473642372374,
+        "roi": 0.014660606407879957
       }
     }
   },
   "ships": [
     "props_b2b"
   ],
-  "verdict": "Rest-known finishes **+11.4u** ahead across the measured markets, improving 3 of 6. The adjustment ships because the bar is *must not lose the backtest* and it does not, while making the stated probabilities honest on the quarter of the schedule that is a back-to-back. It is not evidence of an edge, and a delta this size would not survive any correction for chance."
+  "verdict": "Rest-known finishes **+18.7u** ahead across the measured markets, improving 3 of 7. The adjustment ships because the bar is *must not lose the backtest* and it does not, while making the stated probabilities honest on the quarter of the schedule that is a back-to-back. It is not evidence of an edge, and a delta this size would not survive any correction for chance."
 }
