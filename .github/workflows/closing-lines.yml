@@ -27,6 +27,16 @@ on:
   # twice. This workflow stays dispatchable so a capture can still be
   # forced by hand, and the history of why the old grid looked the way
   # it did is in git rather than in a comment above a dead trigger.
+  #
+  # AND THE HAND-OFF, SINCE 2026-09-24. Retiring the schedule retired this
+  # branch's only writer: Line Movement wrote the closing prices on its
+  # runner and nothing published them, so every in-season CLV report would
+  # have read an empty store. Now each Line Movement run hands its closing
+  # prices over as an artifact, and this workflow publishes them. That path
+  # fetches nothing, reads no secret and spends no credit.
+  workflow_run:
+    workflows: ["Line Movement Capture"]
+    types: [completed]
   workflow_dispatch:
     inputs:
       credit_cap:
@@ -39,6 +49,8 @@ permissions:
   # Write, for exactly one ref: the closing-lines branch, which is this
   # workflow's own store. It never touches card-feed or main.
   contents: write
+  # To download the closing prices a Line Movement run handed over.
+  actions: read
 
 concurrency:
   group: closing-lines
@@ -49,6 +61,12 @@ jobs:
     name: Capture closing lines
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # A hand-off is published only from Line Movement's own runs on the
+    # default branch. A dispatch of it on a feature branch captures with code
+    # nobody has reviewed, and the store is append-only.
+    if: >-
+      github.event_name != 'workflow_run'
+      || github.event.workflow_run.head_branch == github.event.repository.default_branch
 
     steps:
       - uses: actions/checkout@v4
@@ -68,6 +86,10 @@ jobs:
           python -m pip install -e .
 
       - name: Restore the capture store
+        # Not on a hand-off: there the publish step below merges the handed
+        # rows into the branch tip itself, which is what it already does on
+        # every retry.
+        if: github.event_name != 'workflow_run'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -97,8 +119,37 @@ jobs:
             echo "No capture store yet. This run establishes it."
           fi
 
+      - name: Take the closing prices Line Movement handed over
+        id: handoff
+        if: github.event_name == 'workflow_run'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          set -euo pipefail
+          mkdir -p data/processed
+          # "Handed nothing over" and "could not fetch what was handed over"
+          # are different, and only the first is an ordinary night. So the
+          # artifact is looked up first; a download that then fails is a
+          # hard stop, because that run's closing prices are otherwise gone.
+          found=$(gh api "repos/${{ github.repository }}/actions/runs/$RUN_ID/artifacts" \
+            --jq '[.artifacts[] | select(.name == "closing-line-captures") | select(.expired | not)] | length')
+          if [ "$found" = "0" ]; then
+            echo "::notice::Line Movement run $RUN_ID handed over no closing prices (no games, or its capture wrote nothing). Nothing to publish."
+            echo "empty=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          gh run download "$RUN_ID" --name closing-line-captures --dir data/processed --repo "${{ github.repository }}"
+          rows=$(( $(wc -l < data/processed/closing_line_captures.csv) - 1 ))
+          echo "Line Movement run $RUN_ID handed over $rows closing-price row(s)."
+          if [ "$rows" -le 0 ]; then
+            echo "empty=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Capture
         id: capture
+        # Never on a hand-off: Line Movement already paid for these prices.
+        if: github.event_name != 'workflow_run'
         env:
           NHL_ODDS_API_KEY: ${{ secrets.NHL_ODDS_API_KEY }}
           PYTHONPATH: src
@@ -118,7 +169,7 @@ jobs:
           exit "$code"
 
       - name: Publish the store
-        if: steps.capture.outputs.empty_slate != 'true'
+        if: steps.capture.outputs.empty_slate != 'true' && steps.handoff.outputs.empty != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -139,6 +190,12 @@ jobs:
                 PYTHONPATH=src python scripts/merge_capture_store.py \
                   --mine mine.csv --theirs theirs.csv \
                   --out data/processed/closing_line_captures.csv || exit 1
+              else
+                # The restore step refuses this on a dispatch; a hand-off
+                # skips the restore, so the refusal lives here too. Skipping
+                # the merge would publish one run's rows over the branch.
+                echo "::error::The closing-lines branch exists but carries no capture file. Refusing to overwrite it blindly."
+                exit 1
               fi
             fi
             BLOB=$(git hash-object -w data/processed/closing_line_captures.csv)
