@@ -39,13 +39,23 @@ def _uploads() -> dict[str, list[tuple[str, list[str]]]]:
                 if not str(step.get("uses", "")).startswith("actions/upload-artifact"):
                     continue
                 given = step.get("with", {}) or {}
-                paths = [
-                    line.strip()
-                    for line in str(given.get("path", "")).splitlines()
-                    if line.strip() and not line.strip().startswith("!")
-                ]
+                paths = upload_paths(str(given.get("path", "")))
                 found.setdefault(str(given.get("name")), []).append((path.name, paths))
     return found
+
+
+def upload_paths(block: str) -> list[str]:
+    """The search paths of a `path:` block, as upload-artifact reads them.
+
+    Its glob skips blank lines, `#` comments and `!` exclusions. The EPL lab's
+    uploads carry comments inside the block, and counting one as a path
+    computes a root of "" and fails a restore that is correct.
+    """
+    return [
+        line.strip()
+        for line in block.splitlines()
+        if line.strip() and not line.strip().startswith(("!", "#"))
+    ]
 
 
 def artifact_root(paths: list[str]) -> str:
@@ -115,3 +125,17 @@ def test_the_line_movement_restore_checks_the_stores_it_uploads():
 def test_the_root_rule(paths, root):
     """The second case is the 2026-09-22 upload."""
     assert artifact_root(paths) == root
+
+
+def test_a_comment_inside_a_path_block_is_not_a_path():
+    block = """
+        data/outputs/archive/automated_cards
+        # Restored at the top of each run like the archive beside it.
+        data/processed/epl_historical_matches.csv
+        !data/processed/*.tmp
+    """
+    assert upload_paths(block) == [
+        "data/outputs/archive/automated_cards",
+        "data/processed/epl_historical_matches.csv",
+    ]
+    assert artifact_root(upload_paths(block)) == "data"
