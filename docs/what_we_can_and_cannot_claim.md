@@ -14,8 +14,8 @@ moments is two questions:
 
 | Window | When | Wagers | ROI | 95% interval | Verdict |
 |:-------|:-----|-------:|----:|:-------------|:--------|
-| `late` | T−4.07h | 25,009 | −0.2% | −1.5% .. +1.0% | no demonstrated edge |
-| `card` | T−9.57h | 27,286 | −0.0% | −1.2% .. +1.2% | no demonstrated edge |
+| `late` | T−4.07h | 25,911 | −0.3% | −1.5% .. +1.0% | no demonstrated edge |
+| `card` | T−9.57h | 28,287 | −0.0% | −1.2% .. +1.1% | no demonstrated edge |
 
 The team markets say the same: moneyline −6.6% over 954, puck line −4.2%
 over 1,117, totals −4.0% over 1,216, in the `late` window strictly before
@@ -58,18 +58,25 @@ held 2.7 million rows; and `data/outputs/player_props_backtest.md` went on
 reporting −0.3% over 25,947 bets at the four-hour window against a store that
 could produce 8,007 of them.
 
-It was recovered from the raw cache, which is why the raw cache exists. But
-one thing did not survive: **the canonical 25,947 reproduces from nothing that
-still exists.** 24,996 of those bets rebuild exactly — same book, same odds,
-model probability identical to the last bit — and 951 do not. The reproducible
-four-hour population is 25,009 bets at −0.2%.
+It was recovered from the raw cache, which is why the raw cache exists. The
+rebuild first appeared not to reproduce the canonical 25,947: 24,996 of those
+bets rebuilt exactly and 951 did not, at 25,009 bets and −0.2%. That rebuild
+ran without the team-name map, on a six-entry fallback of Utah and Arizona
+spellings that voided the
+non-Utah side of every Utah game. **With the full map, 25,895 of the 25,947
+rebuild exactly** — same book, same odds, model probability identical to the
+last bit — 52 do not, and the reproducible four-hour population is 25,911
+bets at −0.3%.
 
 So this document adds a rule to the ones below:
 
 **A recorded number must name a population that can be rebuilt.** Not one that
 was on someone's disk when the report ran. The price CSVs are derived data;
 the raw responses are the evidence; and a headline that cannot be reproduced
-from the evidence is a claim about a file, not about the market.
+from the evidence is a claim about a file, not about the market. And a rebuild
+is only as complete as every input it reads: the one that set this rule
+understated the population it was rebuilding by 902 bets, because a lookup
+table sat beside the store it did not copy.
 
 Calibration was measured too, and heavily — 2.5 million walk-forward prop
 samples. That establishes exactly one thing: the models' probabilities are
@@ -156,7 +163,7 @@ says so in those words.
 category for weeks on the strength of 256 events in which no book quoted it.
 The probe asked one region; both books that quote hits are in the second, and
 the purchase that asked for two came back with 16,048 rows over 1,218 events —
-5,021 settled wagers at −1.2%, interval −3.9% to +1.5%, no demonstrated edge.
+5,178 settled wagers at −1.3%, interval −4.0% to +1.4%, no demonstrated edge.
 "Not offered in any of 256 events" was true and "cannot be measured" was not.
 The backtest now retires an unmeasurable verdict for any market the same run
 measures, because a report that prints a market's ROI and calls it

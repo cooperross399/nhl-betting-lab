@@ -45,8 +45,23 @@ since per-quote counting was retired, and rebuilt at one bet per wager,
 `points` no longer replicates as a loss; `what_we_can_claim.md` and
 `allowlist_evidence_bundle.md` had been stale since 2026-09-02 and
 2026-08-27. Its statement also carried three claims from those records that
-were wrong: that `points` replicated, that `hits` was never measured (it has
-5,021 wagers in the `card` window), and out-of-date `points` and
+were wrong: that `points` replicated, that `hits` was never measured (it then
+had 5,021 wagers in the `card` window, 5,178 once rebuilt on the full
+team-name map), and out-of-date `points` and
 `blocked_shots` figures. Cooper re-attested the same twelve markets in
-`odds_api-20260924T095805-0400-cooperross399`, which the policy now cites and which
-corrects those claims. This file approves nothing.
+`odds_api-20260924T095805-0400-cooperross399`, which corrects those claims and was itself
+re-attested later the same day (below). This file approves nothing.
+
+## odds_api-20260924T095805-0400-cooperross399.json
+
+**Re-attested, not withdrawn.** The second re-attestation of the twelve
+markets on 2026-09-24. Later that day four of the records it cites were
+rebuilt: the props backtests had been generated on a six-entry fallback
+team-name map, which skipped the player-team check and voided the non-Utah
+side of every Utah game. Rebuilt with the full map, the `late` window is
+25,911 bets at -0.3%, not 25,009 at -0.2%, and no market's verdict moved.
+Its statement also said `points` and `blocked_shots` survive correction within
+neither season, which was never true of `points` in 2025-26. Cooper
+re-attested the same twelve markets in `odds_api-20260924T150657-0400-cooperross399`, which the
+policy now cites. This file approves nothing.
+

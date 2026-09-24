@@ -20,9 +20,11 @@ before believing any number this repository produces.
 
 **No demonstrated edge, at full population, in either direction.** Buying
 every retained event rather than a sample took the measurement to
-**25,009 distinct wagers** in the four-hour window: **−0.2%, 95% interval
-−1.5% to +1.0%**, which includes zero. (The 25,949 this line used to quote
-came from a local store that no longer exists; see `CLAUDE.md`.) The earlier +1.4% was a small sample and a
+**25,911 distinct wagers** in the four-hour window: **−0.3%, 95% interval
+−1.5% to +1.0%**, which includes zero. (This line has quoted 25,949, from a
+local store that no longer exists, and 25,009, from a rebuild on an
+incomplete team-name map that dropped one side of every Utah game; see
+`CLAUDE.md`.) The earlier +1.4% was a small sample and a
 duplicated store; a later **−1.6% over 73,918** counted each of the ~2.8 book
 quotes on one selection as its own bet, which measured a strategy the card
 would never run and narrowed every interval by about √2.8. One wager is now
@@ -30,10 +32,11 @@ one bet at the best price the card could have taken. Best-of-N is
 optimistically biased the other way, so those two numbers bracket the truth;
 both ends are at or below zero.
 
-Nothing survives correction *and* replicates. `points` (−4.5% over 5,984
-wagers) and `blocked_shots` (+5.2% over 4,126) both survive correction on
-the pooled window, but neither survives it within either season alone, so
-there is nothing for a second season to confirm. This line used to call
+Nothing survives correction *and* replicates. `points` (−4.4% over 6,194
+wagers) and `blocked_shots` (+4.9% over 4,286) both survive correction on
+the pooled window. `points` also survives within 2025-26 alone and is not
+confirmed on 2024-25; `blocked_shots` survives within neither season. So
+neither survives correction and then replicates. This line used to call
 `points` a replicated loss; that came from a replication record built by
 counting every book's quote as a bet.
 
@@ -46,9 +49,10 @@ outcome on both views gives the market a coefficient of 0.97 and the model
 right and the model's disagreement carries no information.** Line shopping
 across eight books was tested too and there is nothing to harvest.
 
-`data/manual/staging_provider_policy.json` therefore allowlists nothing, the
-card produces no selection, and re-enabling anything needs a fresh human
-receipt signed against the evidence as it now reads. The full account is in
+`data/manual/staging_provider_policy.json` nevertheless allowlists twelve
+markets, at Cooper's decision and against the evidence bundle's own
+recommendation, so the card does post selections: recommendations from a
+model with no demonstrated edge, and every report says so. The full account is in
 [`docs/why_the_model_has_no_edge.md`](docs/why_the_model_has_no_edge.md);
 `data/outputs/what_we_can_claim.md` is regenerated every run and always says
 what the measurements actually support.

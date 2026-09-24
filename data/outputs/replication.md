@@ -2,7 +2,7 @@
 
 Did a result found on one window hold on another? No amount of extra precision on the first window can answer that — a result measured more carefully on the data that produced it is still that data.
 
-- Generated: 2026-09-24T13:47:55+00:00
+- Generated: 2026-09-24T18:10:03+00:00
 - Discovery window: **player_props_backtest_2024-25**
 - Test window: **player_props_backtest_2025-26**
 
@@ -10,12 +10,12 @@ Nothing survived correction on **player_props_backtest_2024-25**, so there is no
 
 | Market | Discovery | Test | Verdict |
 |:-------|:----------|:-----|:--------|
-| `assists` | +2.1% / 1442 bets | -3.5% / 2188 bets | **untestable** |
-| `blocked_shots` | +4.8% / 2599 bets | +5.8% / 1527 bets | **untestable** |
-| `goalie_saves` | -0.7% / 819 bets | -3.9% / 861 bets | **untestable** |
-| `goals` | -9.4% / 277 bets | -3.6% / 269 bets | **untestable** |
-| `points` | -3.2% / 2618 bets | -5.5% / 3366 bets ✓ | **untestable** |
-| `shots_on_goal` | +2.1% / 5168 bets | +0.3% / 3875 bets | **untestable** |
+| `assists` | +1.8% / 1502 bets | -3.3% / 2259 bets | **untestable** |
+| `blocked_shots` | +4.6% / 2697 bets | +5.5% / 1589 bets | **untestable** |
+| `goalie_saves` | -0.8% / 848 bets | -4.1% / 879 bets | **untestable** |
+| `goals` | -10.4% / 286 bets | -3.0% / 278 bets | **untestable** |
+| `points` | -3.3% / 2726 bets | -5.4% / 3468 bets ✓ | **untestable** |
+| `shots_on_goal` | +2.0% / 5377 bets | +0.4% / 4002 bets | **untestable** |
 
 ✓ marks an interval that excludes zero after correcting for the markets tested in that window.
 

@@ -30,21 +30,22 @@ Read this second, after `CLAUDE.md`. It is the shortest honest answer to
   they won it. `verdicts.ships()` is the one door those decisions go through.
 - The provider adapter, shadow-only. The card cannot read what it writes.
 - A fail-closed provider policy and a PR gate that checks approval paperwork
-  is real and current. Since 2026-08-27 the policy allowlists `the_odds_api`
-  for all 11 measured markets, under receipt
-  `odds_api-20260827T165300-0400-cooperross399` (PR #47, merged by Cooper).
+  is real and current. The policy allowlists `the_odds_api` for twelve
+  markets, approved against the evidence's own recommendation, under the
+  receipt `CLAUDE.md`'s operating state names. The 2026-08-27 receipt for
+  eleven was withdrawn on 2026-08-29.
 - The gated card, with the puck-drop guard.
 - The `Gameday Refresh` workflow and the pinned operating-home issue.
 
 **Not built, deliberately:**
 
 - Historical prices are bought and measured: the full two seasons of props
-  (25,009 wagers in the `late` window, 27,286 in the `card` window) and of
+  (25,911 wagers in the `late` window, 28,287 in the `card` window) and of
   team markets. The verdict — **no demonstrated edge anywhere** — is in
   `data/outputs/player_props_backtest.md`,
   `data/outputs/player_props_backtest_card.md` and
   `data/outputs/team_markets_measurement.md` with every sample size printed.
-  Hits is priced only in the `card` window (5,021 wagers). The regulation
+  Hits is priced only in the `card` window (5,178 wagers). The regulation
   three-way has no bulk history and accumulates forward evidence only.
 - No confirmed-starter source, so goalie saves cannot reach the card. See
   `docs/goalie_props_need_a_confirmed_starter.md`.

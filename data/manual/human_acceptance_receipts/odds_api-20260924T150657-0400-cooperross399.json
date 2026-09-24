@@ -1,0 +1,48 @@
+{
+  "receipt_id": "odds_api-20260924T150657-0400-cooperross399",
+  "provider_name": "the_odds_api",
+  "reviewer_name": "Cooper Ross",
+  "reviewed_at": "2026-09-24T15:06:57-04:00",
+  "approved_markets": [
+    "assists",
+    "blocked_shots",
+    "goalie_saves",
+    "goals",
+    "hits",
+    "moneyline",
+    "points",
+    "puck_line",
+    "regulation_3_way",
+    "shots_on_goal",
+    "team_total",
+    "total_goals"
+  ],
+  "evidence": [
+    {
+      "path": "data/outputs/player_props_backtest.md",
+      "checksum_sha256": "642684c1a0a5510d13b07a94ea4244c6d876bbb248c27766050e3a9010014aed"
+    },
+    {
+      "path": "data/outputs/props_calibration.md",
+      "checksum_sha256": "fb8eb3e3d50dd05c762d8b1b8278886cb59d47e58128e92c3c28ae434f827aef"
+    },
+    {
+      "path": "data/outputs/what_we_can_claim.md",
+      "checksum_sha256": "a0b4192e845a063c29bce0ac713b660b8e4a3155ec28ba4e1291348428be5a38"
+    },
+    {
+      "path": "data/outputs/team_markets_measurement.md",
+      "checksum_sha256": "6505c077d4a62bf8433015f5a288a7956c6e7570cb77dbe7d1f197c044c5993e"
+    },
+    {
+      "path": "data/outputs/replication.md",
+      "checksum_sha256": "6ff525edc3d4ea17768d5f3cdd9a2d7b5155fb5810f59c1c9ef9a8e6f521cd85"
+    },
+    {
+      "path": "data/outputs/allowlist_evidence_bundle.md",
+      "checksum_sha256": "158a57965e8a0082c96dbfcc7f1f6c5ff3ca483908733e5a7d77136586ed8a0f"
+    }
+  ],
+  "reviewer_statement": "Re-attested on 2026-09-24, the third time that day, with the same twelve markets and the same decision. Four of the six records the previous receipt cited have been rebuilt, because the props backtests had been generated on a six-entry fallback team-name map: the player-team check was skipped and the non-Utah side of every Utah game was voided. With the full map the `late` window is 25,911 bets at -0.3%, interval -1.5% to +1.0%, not 25,009 at -0.2%. All 902 added bets are in Utah games, and no market's verdict changed in either window. The previous statement's figures are superseded: `points` is -4.4% over 6,194 bets, `blocked_shots` +4.9% over 4,286, and `hits` -1.3% over 5,178 in the `card` window, interval -4.0% to +1.4%. It also said `points` and `blocked_shots` survive correction within neither season. That was never true of `points`, which survives within 2025-26 alone (-5.4% over 3,468) and is not confirmed on 2024-25; `blocked_shots` survives within neither season. What the six records now say: the evidence bundle supports enabling nothing. No market survives correction and then replicates, in either direction. The seasons hold 13,436 and 12,475 bets, and in 2024-25 `points` is -3.3% over 2,726 and `blocked_shots` +4.6% over 2,697, both inside the correction. `points` and `blocked_shots` survive correction on the pooled `late` window. Eight markets, `hits` among them, show no demonstrated edge. `regulation_3_way` and `team_total` have never been measured against real prices. The team figures are unchanged: moneyline -6.6% over 954, puck line -4.2% over 1,117 and totals -4.0% over 1,216, every interval including zero. This correction adds support for no market. The decision stands as first recorded on 2026-09-23: approved against the measurement's own recommendation, and recorded that way on purpose. I am enabling them anyway, to run the card forward and accumulate a live record; this is a decision about what to do next, not a claim that the model has an edge, and the card's own reports continue to say it has none.",
+  "prepared_by": "Claude, at Cooper Ross's explicit direction on 2026-09-24, to re-attest the approval against the props reports rebuilt on the full team-name map (nhl-betting-lab PR #122), and to correct the figures and the 'within neither season' clause in the previous receipt's statement, which Claude drafted. Cooper chose re-attestation over signing it himself or holding the change."
+}

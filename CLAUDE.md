@@ -143,41 +143,39 @@ Re-derive rather than trust if the data has moved.
   files and the rest were in the CI artifacts; both have been restored to
   disk. This is the second time the raw cache has turned a destroyed price
   file into a five-minute recovery.
-- **These two reports were built on the six-entry alias team map (found
-  2026-09-24), and their corrected figures wait on a receipt decision.** With
-  no `team_names.csv` or boxscore cache beside the run, the backtest voided
-  the non-Utah side of every Utah game: 902 bets in the `late` window, every
-  one in a Utah game. With the full map the `late` window is **25,911 bets,
-  −0.3%** (−1.5% to +1.0%) and the `card` window **28,287, −0.0%**. No
-  market's verdict moves in either window. `player_props_backtest.md` and the
-  records built from it are receipt-cited, so rebuilding them needs Cooper
-  to re-attest or sign; until then the figures below are the alias-map ones.
+- **`player_props_backtest.md` and `player_props_backtest_card.md` were built
+  on the six-entry alias team map until 2026-09-24.** With no `team_names.csv` or boxscore cache beside the run, the
+  backtest voided the non-Utah side of every Utah game: 902 bets in the
+  `late` window, every one in a Utah game, and the committed report read
+  25,009 bets at −0.2% where the full map gives 25,911 at −0.3%. Rebuilt with
+  the full map, they are the figures below. No market's verdict moved in
+  either window.
 - **Both windows are now measured, and neither shows a demonstrated edge.**
   `late` (T−4.07h, 1,259,312 rows, 2,704 events, 8 books, 6 markets):
-  **25,009 bets, −0.2%, 95% interval −1.5% to +1.0%**. `card` (T−9.57h,
-  2,544,921 rows, 2,722 events, 14 books, 7 markets): **27,286 bets, −0.0%,
-  95% interval −1.2% to +1.2%**. Both include zero. Per market in the card
-  window: `points` −4.3% (5,933) and `blocked_shots` +8.4% (2,894) both still
+  **25,911 bets, −0.3%, 95% interval −1.5% to +1.0%**. `card` (T−9.57h,
+  2,544,921 rows, 2,722 events, 14 books, 7 markets): **28,287 bets, −0.0%,
+  95% interval −1.2% to +1.1%**. Both include zero. Per market in the card
+  window: `points` −4.2% (6,140) and `blocked_shots` +7.9% (3,026) both still
   exclude zero and survive the family correction; `shots_on_goal` +1.5%
-  (8,899), `assists` −1.0% (3,609), `hits` −1.2% (5,021), `goals` −2.6%
-  (820), `goalie_saves` −2.1% (110) all span zero. In the late window
-  `points` −4.5% (5,984) and `blocked_shots` +5.2% (4,126) survive; the rest
+  (9,245), `assists` −1.0% (3,742), `hits` −1.3% (5,178), `goals` −2.8%
+  (842), `goalie_saves` −5.5% (114) all span zero. In the late window
+  `points` −4.4% (6,194) and `blocked_shots` +4.9% (4,286) survive; the rest
   span zero. **These two rows are not a window comparison.** The 9.5-hour buy
   asked a second region and got six more books, so its best-of-N is taken
   across fourteen rather than eight; it carries `hits`, which the four-hour
-  buy has none of; and it holds almost no `goalie_saves` (110 bets against
-  1,680), because at nine and a half hours the books have not yet posted them.
+  buy has none of; and it holds almost no `goalie_saves` (114 bets against
+  1,727), because at nine and a half hours the books have not yet posted them.
   The window question was already answered on the matched overlap — +4.41%
   against +4.18%, −0.23 points — and that comparison stands.
-- **The canonical 25,947 does not reproduce from anything that still
-  exists.** The rebuilt four-hour window gives 25,009 bets, and so does the
-  purchase artifact that preceded the clobber; the 2026-08-29 artifact gives
-  25,050. **24,996 of the canonical report's 25,947 bets reproduce exactly** —
-  same book, same odds, model probability identical to the last bit — 951 do
-  not, and 13 are new. So the recorded headline described a local store that
-  no artifact, cache or branch now holds. The verdict is unchanged in every
-  version, which is why this is a bookkeeping failure rather than a result
-  changing: no demonstrated edge, at every population that can be assembled.
+- **The canonical 25,947 very nearly reproduces, once the team map is
+  right.** This bullet said it "does not reproduce from anything that still
+  exists": the rebuilt four-hour window gave 25,009 bets, and 24,996 of the
+  canonical 25,947 rebuilt exactly while 951 did not. Every one of those runs
+  used the six-entry alias team map, which voided the non-Utah side of every
+  Utah game. With the full map the raw cache rebuilds **25,911 bets, and
+  25,895 of the canonical 25,947 reproduce exactly** — same book, same odds,
+  model probability identical to the last bit — while 52 do not and 16 are
+  new. The verdict is unchanged in every version: no demonstrated edge.
 - **`dedupe_prices` deduplicated on whatever identity columns it was handed.**
   `PRICE_IDENTITY` includes `provider_event_id`; a frame read without it has
   nothing telling one date from another, so every night's quote on the same
@@ -396,14 +394,14 @@ Re-derive rather than trust if the data has moved.
   later. `docs/where_the_remaining_error_lives.md`.
 - **The full two-season population is bought, and the model shows no
   demonstrated edge on it — in either direction.** 2,704 events and 1,259,312
-  four-hour price rows collapsing to **25,009 distinct wagers** at the shipped
-  bar: **−0.2%, 95% interval −1.5% to +1.0%**, which includes zero. The earlier
+  four-hour price rows collapsing to **25,911 distinct wagers** at the shipped
+  bar: **−0.3%, 95% interval −1.5% to +1.0%**, which includes zero. The earlier
   +1.4% came from a 192-event sample thirty times smaller and was noise.
-  This bullet used to read "1,261,440 price rows collapsing to 25,949 distinct
-  wagers: −0.3%, −1.5% to +0.9%", and every other count of this population in
-  this file — 26,091, 25,949, 25,947 — is the same local store, which no
-  longer exists and cannot be rebuilt. The figure above is what the raw cache
-  reproduces. Nothing about the verdict moves.
+  This bullet has read 25,949 and 25,009. The 25,949-era counts (26,091,
+  25,949, 25,947) came from a local store that no longer exists; the 25,009
+  was the raw cache rebuilt on the six-entry alias team map. With the full
+  map the raw cache gives 25,911, and 25,895 of the 25,947 canonical bets
+  reproduce exactly. Nothing about the verdict moves.
 - **An earlier version of this bullet said −1.6% over 73,918 bets, interval
   excluding zero, and called it a demonstrated loss. That was wrong, and how
   it was wrong is worth keeping.** The price store holds every book's quote
@@ -419,24 +417,28 @@ Re-derive rather than trust if the data has moved.
   price is the likeliest to be stale — so −0.3% and −1.6% bracket the truth
   rather than one replacing the other. Both ends are ≤ 0.
   Per market at one bet per wager, on the four-hour window the raw cache
-  reproduces: `points` **−4.5% (5,984)** still excludes zero and still
-  survives correction; `goalie_saves` −2.3% (1,680) now **spans zero**, where
-  per-quote counting had it as a demonstrated loss; `shots_on_goal` +1.4%
-  (9,043, spans zero); `assists` −1.3% (3,630, spans zero); `goals` −6.6%
-  (546, spans zero). `blocked_shots` is the only positive at +5.2% over
-  4,126. **No result survives correction and then replicates.** Until
+  reproduces: `points` **−4.4% (6,194)** still excludes zero and still
+  survives correction; `goalie_saves` −2.5% (1,727) now **spans zero**, where
+  per-quote counting had it as a demonstrated loss; `shots_on_goal` +1.3%
+  (9,379, spans zero); `assists` −1.3% (3,761, spans zero); `goals` −6.8%
+  (564, spans zero). `blocked_shots` is the only positive at +4.9% over
+  4,286. **No result survives correction and then replicates.** Until
   2026-09-24 this line said `points` did, as a demonstrated deficit, and that
   `blocked_shots` failed replication; but `replication.md` had not been
   rebuilt since per-quote counting was retired, and its two seasons summed
-  to 73,918 bets. At one bet per wager they are 12,923 and 12,086, which sum
-  to the 25,009, and neither season carries either market alone: 2024-25
-  has `points` −3.2% (2,618) and `blocked_shots` +4.8% (2,599), both inside
-  the correction, so there is nothing for 2025-26 to confirm. Run the other
-  way, `points` survives in 2025-26 (−5.5%, 3,366) and is not confirmed on
-  2024-25. Both are pooled results that survive correction, and no more.
+  to 73,918 bets. At one bet per wager they are 13,436 and 12,475, which sum
+  to the 25,911. `blocked_shots` survives the correction in neither season,
+  and `points` survives it only in 2025-26. 2024-25 has `points` −3.3%
+  (2,726) and `blocked_shots` +4.6% (2,697), both inside the correction, so
+  there is nothing for 2025-26 to confirm. Run the other way, `points`
+  survives in 2025-26 (−5.4%, 3,468) and is not confirmed on 2024-25. So
+  neither survives correction and then replicates. (Until 2026-09-24 this
+  line also said neither season carried either market alone, which was never
+  true of `points` in 2025-26.)
   (These counts read 6,202 / 1,733 / 9,395 / 3,762 / 564 / 4,293 until
-  2026-09-02, against the same population the headline lost; the ROIs move by
-  a tenth of a point and no verdict moves at all.)
+  2026-09-02, and 5,984 / 1,680 / 9,043 / 3,630 / 546 / 4,126 on the alias
+  team map until 2026-09-24; no ROI moves by more than three tenths of a
+  point and no verdict moves at all.)
 - **The reason it loses is that the model's disagreement with the market
   carries no information.** Fitting its bias on 2024-25 and testing on the
   145,751 opinions of 2025-26 it had not seen: raw error −6.34%, corrected
@@ -668,8 +670,10 @@ Re-derive rather than trust if the data has moved.
   measured (2,600 credits) asked **one region**, and both books that quote it
   — ESPN BET and theScore Bet — are in the second. The 9.5-hour purchase,
   which asked `us,us2`, came back with **16,048 hits rows over 1,218 events**
-  from those two books, 2025-10-14 to 2026-04-19, settling **5,021 wagers at
-  −1.2%, 95% interval −3.9% to +1.5%** — no demonstrated edge, and the first
+  from those two books, 2025-10-14 to 2026-04-19, settling **5,178 wagers at
+  −1.3%, 95% interval −4.0% to +1.4%** (5,021 at −1.2%, −3.9% to +1.5%, on
+  the six-entry alias team map until 2026-09-24) — no demonstrated edge, and
+  the first
   price evidence hits has ever had. The backtest now retires an unmeasurable
   verdict for any market the same run measures, because printing both in one
   document is the report contradicting itself — and **retention is no longer
@@ -738,20 +742,22 @@ Re-derive rather than trust if the data has moved.
   asking the bulk endpoint for them 422s the whole request.
 - **Twelve markets are allowlisted as of 2026-09-23, against the evidence
   bundle's own recommendation**, which supports enabling nothing: no market
-  survives correction and then replicates; `points` (−4.5%) and
-  `blocked_shots` (+5.2%) survive correction on the pooled window and
-  neither survives it within either season; `hits` is measured only in the
-  9.5-hour window (−1.2% over 5,021, spanning zero); seven more show no
+  survives correction and then replicates; `points` (−4.4%) and
+  `blocked_shots` (+4.9%) survive correction on the pooled window, `points`
+  also within 2025-26 alone and not on 2024-25, `blocked_shots` within
+  neither season; `hits` is measured only in the
+  9.5-hour window (−1.3% over 5,178, spanning zero); seven more show no
   demonstrated edge; and `regulation_3_way` and `team_total` have never been
-  measured against real prices. The receipt says so in its own reviewer statement.
+  measured against real prices. The receipt says so in its own reviewer
+  statement.
   Allowlisting says a market's prices may be used; it is not a claim that
   the model beats them, and every report continues to say it does not.
-  The receipt is `odds_api-20260924T095805-0400-cooperross399`. It re-attests the
-  approval a second time on 2026-09-24, against the rebuilt replication
-  record and the regenerated claims document and bundle, and corrects three
-  claims the earlier statements had taken from those records before they were
-  rebuilt. The two earlier receipts are in `superseded/`. The approval did
-  not change; the evidence under it did.
+  The receipt is `odds_api-20260924T150657-0400-cooperross399`. It re-attests the
+  approval a third time on 2026-09-24, against the props reports rebuilt on
+  the full team-name map, and corrects the figures and the "within neither
+  season" clause the previous statement carried. The three earlier receipts
+  are in `superseded/`. The approval did not change; the evidence under it
+  did.
 - **The 2026-08-27 approval of the same markets was withdrawn on
   2026-08-29**, because the evidence it cited moved underneath it: the
   receipt was signed against +1.4% over 4,830 bets, and the full population
@@ -768,12 +774,13 @@ Re-derive rather than trust if the data has moved.
   source (`docs/goalie_props_need_a_confirmed_starter.md`).
   **The withdrawal cited a number this file now records as wrong, and it
   still stands.** "−1.6% over 73,918" was per-quote counting, and the
-  reproducible figure is −0.2% over 25,009 — which spans zero, so it
+  reproducible figure is −0.3% over 25,911 — which spans zero, so it
   demonstrates no edge either. The correction therefore reinstates nothing on
   its own: withdrawal only ever reduces what the card may do, and only Cooper
   reading the current evidence and signing a new receipt can move it back.
-  `data/manual/staging_provider_policy.json` is the state that governs, and
-  it allowlists nothing. **An earlier version of this file also carried a
+  `data/manual/staging_provider_policy.json` is the state that governs. It
+  allowlisted nothing from the withdrawal until Cooper approved twelve
+  markets on 2026-09-23, which is what it holds now. **An earlier version of this file also carried a
   bullet saying all eleven markets were allowlisted**, contradicting this one
   forty lines further down, alongside a verbatim duplicate of the quota
   paragraph. Both are gone. Two bullets disagreeing about whether the card
@@ -946,8 +953,10 @@ PYTHONPATH=src .venv/bin/python -m compileall -q src scripts
 Provider automation is **not trusted** unless the provider policy
 (`data/manual/staging_provider_policy.json`), the acceptance checklist, and the
 human acceptance receipt say it is. The shipped policy allowlists
-`the_odds_api` for the 11 measured markets under receipt
-`odds_api-20260827T165300-0400-cooperross399`; the PR gate re-verifies that
+`the_odds_api` for twelve markets under the receipt the operating state
+names (the 2026-08-27 receipt for eleven,
+`odds_api-20260827T165300-0400-cooperross399`, was withdrawn on 2026-08-29); the PR
+gate re-verifies that
 paperwork — receipt, coverage, evidence checksums — on every policy change.
 Shadow runs still write to `data/staging/`, and eligibility still gates what
 the card may read from there.

@@ -2,25 +2,25 @@
 
 Generated from the measurement outputs, so it cannot drift from them. The hand-written rules live in `docs/what_we_can_and_cannot_claim.md`.
 
-- Generated: 2026-09-24T13:51:45+00:00
+- Generated: 2026-09-24T18:23:29+00:00
 
 **No demonstrated edge in any market.** 10 market(s) have been measured against real prices. Nothing survives correcting for the number of markets tested and then holds on a window it was not found on.
 
 ## Across every measured prop market
 
--0.2% over 25,009 bets in the `late` window, 4.1 hours before face-off. The interval includes zero: **no demonstrated edge**.
+-0.3% over 25,911 bets in the `late` window, 4.1 hours before face-off. The interval includes zero: **no demonstrated edge**.
 
 ## Measured against real prices
 
 Unless a line names another window, prop figures come from the `late` window, 4.1 hours before face-off, and team figures come from the `late` window, 1.5 hours before face-off.
 
-- `shots_on_goal`: +1.4% over 9,043 bets, 95% interval -0.8% to +3.5%. **No demonstrated edge**.
-- `points`: -4.5% over 5,984 bets, 95% interval -7.0% to -1.9%. The interval excludes zero even after correcting for the 7 markets measured on the same data — which is not the same as a loss that will persist, and means nothing until it replicates on a window it was not found on.
-- `goals`: -6.6% over 546 bets, 95% interval -17.2% to +4.1%. **No demonstrated edge**.
-- `assists`: -1.3% over 3,630 bets, 95% interval -4.1% to +1.5%. **No demonstrated edge**.
-- `goalie_saves`: -2.3% over 1,680 bets, 95% interval -6.9% to +2.2%. **No demonstrated edge**.
-- `blocked_shots`: +5.2% over 4,126 bets, 95% interval +1.9% to +8.4%. The interval excludes zero even after correcting for the 7 markets measured on the same data — which is not the same as an edge that will persist, and means nothing until it replicates on a window it was not found on.
-- `hits`: -1.2% over 5,021 bets, 95% interval -3.9% to +1.5%, measured only in the `card` window, 9.6 hours before face-off. **No demonstrated edge**.
+- `shots_on_goal`: +1.3% over 9,379 bets, 95% interval -0.8% to +3.4%. **No demonstrated edge**.
+- `points`: -4.4% over 6,194 bets, 95% interval -6.9% to -2.0%. The interval excludes zero even after correcting for the 7 markets measured on the same data — which is not the same as a loss that will persist, and means nothing until it replicates on a window it was not found on.
+- `goals`: -6.8% over 564 bets, 95% interval -17.2% to +3.7%. **No demonstrated edge**.
+- `assists`: -1.3% over 3,761 bets, 95% interval -4.0% to +1.5%. **No demonstrated edge**.
+- `goalie_saves`: -2.5% over 1,727 bets, 95% interval -6.9% to +2.0%. **No demonstrated edge**.
+- `blocked_shots`: +4.9% over 4,286 bets, 95% interval +1.8% to +8.1%. The interval excludes zero even after correcting for the 7 markets measured on the same data — which is not the same as an edge that will persist, and means nothing until it replicates on a window it was not found on.
+- `hits`: -1.3% over 5,178 bets, 95% interval -4.0% to +1.4%, measured only in the `card` window, 9.6 hours before face-off. **No demonstrated edge**.
 - `moneyline`: -6.6% over 954 bets, 95% interval -13.6% to +0.4%. **No demonstrated edge**.
 - `puck_line`: -4.2% over 1,117 bets, 95% interval -9.4% to +0.9%. **No demonstrated edge**.
 - `total_goals`: -4.0% over 1,216 bets, 95% interval -9.4% to +1.4%. **No demonstrated edge**.
