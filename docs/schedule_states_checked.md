@@ -23,7 +23,7 @@ settlement columns, every direction fatigue predicts. The adjustment
 (per-market own and opponent factors, shrunk, fitted from the training logs
 only) ships on the price backtest — +18.7u in the `card` window over the
 full two-season population, all of it from `shots_on_goal` while the other
-six markets net −21.4u (+11.4u on the original sample that first decided
+six markets net −23.2u (+11.4u on the original sample that first decided
 it), same bar, same caveat.
 
 Both verdicts are recorded (`rest_experiment.json`,

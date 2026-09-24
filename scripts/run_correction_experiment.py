@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 
 import pandas as pd
@@ -39,6 +40,10 @@ import pandas as pd
 from nhl_betting_lab.backtest.correction_timeline import build_timeline
 from nhl_betting_lab.config import MIN_PROP_EDGE, OUTPUTS_DIR, PROCESSED_DIR
 from nhl_betting_lab.reports.player_props_backtest import run_backtest
+from nhl_betting_lab.providers.team_names import (
+    UnresolvedTeamsError,
+    load_team_name_map,
+)
 from nhl_betting_lab.reports.props_calibration import expand_to_lines
 from nhl_betting_lab.season import game_date
 
@@ -103,6 +108,14 @@ def main(argv: list[str] | None = None) -> int:
         ),
     }
 
+    # From the same directory as the prices. These runs used to build the map
+    # from the boxscore cache, which is absent in a worktree or a scratch
+    # directory; the six-entry alias map then voided the non-Utah side of every
+    # Utah game (902 bets in the `late` window) and skipped the team check
+    # everywhere else. run_player_props_backtest.py was fixed in #117; this is
+    # the same call.
+    team_names = load_team_name_map(processed_dir=Path(args.processed_dir))
+
     dates = prices["commence_time"].map(game_date)
     results: dict[str, dict[str, dict]] = {}
     for label, start, end in WINDOWS:
@@ -116,13 +129,18 @@ def main(argv: list[str] | None = None) -> int:
             # `card` is the right basis because these verdicts govern the
             # card, and the two windows were measured as equivalent
             # (-0.23 points, inside noise) before this was changed.
-            report = run_backtest(
-                window_prices,
-                samples,
-                edge_threshold=args.edge_threshold,
-                correct=correct,
-                phase=args.phase,
-            )
+            try:
+                report = run_backtest(
+                    window_prices,
+                    samples,
+                    edge_threshold=args.edge_threshold,
+                    correct=correct,
+                    phase=args.phase,
+                    team_names=team_names,
+                )
+            except UnresolvedTeamsError as error:
+                print(f"::error::{error}", file=sys.stderr)
+                return 2
             overall = report.overall
             results[label][name] = {
                 "bets": overall.bets if overall else 0,

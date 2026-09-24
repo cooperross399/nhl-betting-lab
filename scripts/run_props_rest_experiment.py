@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 
 import pandas as pd
@@ -35,6 +36,10 @@ from nhl_betting_lab.backtest.walk_forward import generate_prop_samples
 from nhl_betting_lab.config import MIN_PROP_EDGE, OUTPUTS_DIR, PROCESSED_DIR
 from nhl_betting_lab.data.build_datasets import load_player_logs
 from nhl_betting_lab.reports.player_props_backtest import run_backtest
+from nhl_betting_lab.providers.team_names import (
+    UnresolvedTeamsError,
+    load_team_name_map,
+)
 
 
 EXPERIMENT_MARKDOWN = "props_rest_experiment.md"
@@ -67,6 +72,9 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     prices = pd.read_csv(prices_path)
 
+    # From the same directory as the prices; see run_correction_experiment.py.
+    team_names = load_team_name_map(processed_dir=processed)
+
     results: dict[str, dict] = {}
     reports: dict[str, object] = {}
     for name, use_rest in (("rest_ignored", False), ("rest_known", True)):
@@ -80,10 +88,14 @@ def main(argv: list[str] | None = None) -> int:
         # `card` is the right basis because these verdicts govern the
         # card, and the two windows were measured as equivalent
         # (-0.23 points, inside noise) before this was changed.
-        report = run_backtest(
-            prices, samples, edge_threshold=args.edge_threshold,
-            phase=args.phase,
-        )
+        try:
+            report = run_backtest(
+                prices, samples, edge_threshold=args.edge_threshold,
+                phase=args.phase, team_names=team_names,
+            )
+        except UnresolvedTeamsError as error:
+            print(f"::error::{error}", file=sys.stderr)
+            return 2
         reports[name] = report
         results[name] = {
             market: {
