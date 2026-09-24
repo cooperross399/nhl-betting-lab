@@ -36,7 +36,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from nhl_betting_lab.stores import read_store
+from nhl_betting_lab.stores import existing_row_count, read_store
 
 from nhl_betting_lab.config import PROCESSED_DIR
 from nhl_betting_lab.models.value import (
@@ -161,7 +161,13 @@ def append_captures(
     existing_rows = 0
     if path.is_file():
         existing = read_store(path, columns=CAPTURE_COLUMNS, for_append=True)
-        existing_rows = len(existing)
+        # THE FLOOR COMES FROM THE FILE, NOT FROM THE READ IT GUARDS. It was
+        # `len(existing)`, and `existing` plus new rows can never be shorter
+        # than `existing`, so this guard could not fire for any input. A file
+        # with two stray quotes parses 6 of its 10 rows without an error, and
+        # the append then rewrote it at 7. The line count is the floor every
+        # other shrink guard here uses.
+        existing_rows = max(len(existing), existing_row_count(path))
         combined = pd.concat([existing, frame], ignore_index=True)
     if len(combined) < existing_rows:
         raise ValueError(

@@ -8,6 +8,7 @@ instead of counted, a de-vig applied to a market that cannot take one.
 from __future__ import annotations
 
 import pandas as pd
+import pytest
 
 from nhl_betting_lab import closing_lines as cl
 
@@ -477,3 +478,32 @@ def test_the_file_floor_agrees_with_the_parse_on_a_clean_store(tmp_path):
     frame.to_csv(theirs, index=False, lineterminator="\n")
 
     assert existing_row_count(theirs) == len(script._read(theirs)) == 40
+
+
+def test_the_shrink_guard_takes_its_floor_from_the_file(tmp_path, monkeypatch) -> None:
+    """It took it from the read it guards, and could never fire.
+
+    `len(existing)` plus the new rows is never less than `len(existing)`. A
+    file with two stray quotes parses 6 of its 10 rows without an error, and
+    the append rewrote it at 7. A short read is simulated here, because which
+    damage pandas parses short is pandas' business; the floor is ours.
+    """
+    frame = cl.best_prices(
+        pd.DataFrame([{**GAME, "market": "moneyline", "player": "",
+                       "selection": "away", "line": None,
+                       "american_odds": 120.0, "book": "BetMGM"}]),
+        captured_at="2026-10-08T22:30:00Z",
+    )
+    for _ in range(10):
+        cl.append_captures(frame, processed_dir=tmp_path)
+    path = cl.captures_path(tmp_path)
+    assert len(cl.load_captures(tmp_path)) == 10
+    before = path.read_bytes()
+
+    real = cl.read_store
+    monkeypatch.setattr(
+        cl, "read_store", lambda *a, **k: real(*a, **k).head(1)
+    )
+    with pytest.raises(ValueError, match="Refusing to write"):
+        cl.append_captures(frame, processed_dir=tmp_path)
+    assert path.read_bytes() == before
