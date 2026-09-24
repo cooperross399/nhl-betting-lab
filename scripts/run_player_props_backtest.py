@@ -20,11 +20,16 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 
 import pandas as pd
 
 from nhl_betting_lab.config import MIN_PROP_EDGE, OUTPUTS_DIR, PROCESSED_DIR
+from nhl_betting_lab.providers.team_names import (
+    UnresolvedTeamsError,
+    load_team_name_map,
+)
 from nhl_betting_lab.reports.player_props_backtest import run_backtest, save_backtest
 from nhl_betting_lab.season import game_date
 
@@ -136,20 +141,28 @@ def main(argv: list[str] | None = None) -> int:
             "scripts/run_props_calibration.py first."
         )
 
-    report = run_backtest(
-        prices,
-        samples,
-        edge_threshold=args.edge_threshold,
-        phase="" if args.phase == "all" else args.phase,
-        retention_note=retention_note,
-        unmeasurable_markets=unmeasurable,
-        window_label=args.label
-        or (
-            f"{args.start or 'start'} to {args.end or 'end'}"
-            if args.start or args.end
-            else ""
-        ),
-    )
+    try:
+        report = run_backtest(
+            prices,
+            samples,
+            edge_threshold=args.edge_threshold,
+            phase="" if args.phase == "all" else args.phase,
+            retention_note=retention_note,
+            unmeasurable_markets=unmeasurable,
+            window_label=args.label
+            or (
+                f"{args.start or 'start'} to {args.end or 'end'}"
+                if args.start or args.end
+                else ""
+            ),
+            # From the same directory as the prices, as the team measurement
+            # and forward settlement read it; rebuilt from the boxscore cache
+            # when the file is absent.
+            team_names=load_team_name_map(processed_dir=processed),
+        )
+    except UnresolvedTeamsError as error:
+        print(f"::error::{error}", file=sys.stderr)
+        return 2
     paths = save_backtest(report, output_dir=outputs, label=args.label)
     print(report.summary_line())
     for market, interval in report.by_market.items():

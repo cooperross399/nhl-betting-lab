@@ -741,7 +741,12 @@ def test_a_disambiguated_price_never_binds_to_the_bare_name() -> None:
     prices = _aho_price("Carolina Hurricanes", "Boston Bruins")
     prices.loc[:, "player"] = "Elias Pettersson (2004)"
 
-    report = bt.run_backtest(prices, samples, edge_threshold=0.01)
+    # A real map, as its siblings pass: without one this ran on the six-entry
+    # alias map, which resolves neither team, and the backtest now refuses
+    # such a store rather than skip the team check.
+    report = bt.run_backtest(
+        prices, samples, edge_threshold=0.01, team_names=TEAM_NAMES
+    )
 
     assert len(report.bets) == 0
     assert report.outcomes_without_a_model_opinion == 1

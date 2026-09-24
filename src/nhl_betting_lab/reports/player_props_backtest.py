@@ -57,6 +57,7 @@ from nhl_betting_lab.config import MIN_PROP_EDGE, OUTPUTS_DIR
 from nhl_betting_lab.markets import MARKETS_BY_KEY, PROP_MARKETS
 from nhl_betting_lab.models.player_props import player_name_aliases
 from nhl_betting_lab.providers.team_names import (
+    UnresolvedTeamsError,
     build_team_name_map,
     resolve_team,
 )
@@ -317,14 +318,58 @@ def run_backtest(
             model_by_key.setdefault(
                 (str(row.date)[:10], str(row.market), alias), {}
             )[player_id] = entry
-    # Supplied by the caller, or built lazily on the first genuine collision
-    # — scanning four thousand boxscores costs seconds and most runs never
-    # hit one. A checkout with no boxscore cache (CI) yields an empty map, so
-    # resolution finds no teams and shared names resolve to neither: the
-    # conservative direction, and the reason the caller may pass one in.
+    # Supplied by the caller (the runner passes `team_names.csv` from its
+    # --processed-dir), else built from the boxscore cache.
+    #
+    # This used to say a checkout with no boxscore cache "yields an empty
+    # map, so resolution finds no teams and shared names resolve to neither:
+    # the conservative direction". The map is never empty — the builder
+    # always adds the Utah and Arizona aliases — and neither half held. With
+    # no team resolved the filter below is skipped, so a lone same-named
+    # candidate is accepted whatever team they play for; and in a Utah game
+    # the aliases resolve Utah alone, so the filter keeps only Utah players
+    # and voids every priced player on the other side. On the bought store
+    # (3,804,233 rows) the full map resolves both teams of every row and the
+    # alias-only map resolves both of none and one side of 229,388. So a
+    # store with team labels that no game's two teams resolve in is refused.
     team_map: dict[str, str] | None = (
         dict(team_names) if team_names is not None else None
     )
+    games = [
+        (clean_text(home), clean_text(away))
+        for home, away in prices.reindex(columns=["home_team", "away_team"])
+        .drop_duplicates()
+        .itertuples(index=False)
+    ]
+    games = [game for game in games if game[0] or game[1]]
+    if games:
+        if team_map is None:
+            team_map = build_team_name_map()
+        if not any(
+            resolve_team(home, team_map) and resolve_team(away, team_map)
+            for home, away in games
+        ):
+            missing = sorted(
+                {
+                    label
+                    for game in games
+                    for label in game
+                    if label and resolve_team(label, team_map) is None
+                }
+            )
+            preview = ", ".join(missing[:6]) + (
+                f" and {len(missing) - 6} more" if len(missing) > 6 else ""
+            )
+            raise UnresolvedTeamsError(
+                f"Not one of the {len(games):,} priced game(s) names two teams "
+                f"the team-name map can resolve ({len(team_map)} spelling(s)). "
+                f"Unresolved: {preview or '(none named)'}. Measured anyway, "
+                "the check that a player's team is in the priced game would "
+                "be skipped everywhere except Utah games, where it would void "
+                "the other side. Point --processed-dir at a directory holding "
+                "team_names.csv (scripts/run_gameday_card.py writes it), or "
+                "run where data/raw/nhl/boxscore can rebuild it."
+            )
 
     unmatched: set[str] = set()
     for row in prices.itertuples():
