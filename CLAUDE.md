@@ -549,6 +549,32 @@ Re-derive rather than trust if the data has moved.
   for the two Elias Petterssons — never aliases to the bare name. The two
   Sebastian Ahos settle against their own games on all 123 nights both
   dressed.
+- **The team-name map is never empty, so "is it missing?" is asked another
+  way.** `build_team_name_map` always adds the Utah and Arizona aliases, so
+  with no boxscores cached it returns six entries: `if not map` can never
+  fire, and neither can a guard counting resolved *sides*, because the
+  aliases resolve one side of every Utah game. Measured on the bought
+  stores, the alias-only map resolves both teams of 0 rows and one side of
+  14,514 (team, `late` window, 212,964 rows) and 229,388 (props, 3,804,233).
+  Four readers ran on it silently wherever `team_names.csv` and the
+  boxscore cache were absent: the team measurement (0 bets in every market,
+  rendered downstream as "no historical prices have been bought"), forward
+  settlement (every row written off as unsettleable after 14 days, and the
+  day marked settled for good), the props backtest (the team check skipped,
+  and in Utah games the other side voided), and the card (a dead blocker,
+  and the six-entry map saved as `team_names.csv`, which every later
+  reader preferred to a rebuild). All four now read the map from
+  `--processed-dir`, refuse with `UnresolvedTeamsError` when no row
+  resolves BOTH teams, and the card blocks on — and never saves — a map
+  `cache_derived_spellings` says the cache supplied nothing to (#107, #108,
+  #116, #117).
+- **A settled day is marked only after its rows reach the ledger** (#113).
+  The marker used to be touched before the write, so a write refused for a
+  damaged or short ledger left the day marked with its rows never written,
+  and it was never retried. And every shrink guard's floor now counts rows
+  as pandas reads them (#115): blank lines, which pandas skips, had made a
+  ledger with one row and three blank lines "hold" four, so every honest
+  append to it was refused.
 - **The earlier headline numbers were data defects, and stay on the record as
   such**: +18.1% shots_on_goal came from the UTC join discarding seven prices
   in ten (survivors were matinees); the goalie-saves "miscalibration" was
