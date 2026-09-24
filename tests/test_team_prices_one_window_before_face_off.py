@@ -194,18 +194,25 @@ def _samples() -> pd.DataFrame:
     )
 
 
+#: Keyed the way `load_team_name_map` keys it: `resolve_team` looks up the
+#: NORMALIZED name. This used to read {"Toronto Maple Leafs": "TOR", ...}, which
+#: resolves nothing, so the report below measured zero bets without saying so.
+#: The unresolved-teams guard is what found it.
+TEAM_NAMES = {"toronto maple leafs": "TOR", "boston bruins": "BOS"}
+
+
 def test_the_report_refuses_a_mixed_store_by_default():
     with pytest.raises(MixedWindowError):
         build_team_measurement(
             _samples(), _store(_quote(2.0), _quote(20.0)),
-            team_names={"Toronto Maple Leafs": "TOR", "Boston Bruins": "BOS"},
+            team_names=TEAM_NAMES,
         )
 
 
 def test_the_report_records_the_window_and_what_it_set_aside():
     report = build_team_measurement(
         _samples(), _store(_quote(2.0), _quote(20.0), _quote(-1.0)),
-        team_names={"Toronto Maple Leafs": "TOR", "Boston Bruins": "BOS"},
+        team_names=TEAM_NAMES,
         phase="late",
     )
     assert report.phase == "late"

@@ -29,6 +29,7 @@ from nhl_betting_lab.markets import team_market_keys
 from nhl_betting_lab.verdicts import ships
 from nhl_betting_lab.reports.team_markets_measurement import (
     MixedWindowError,
+    UnresolvedTeamsError,
     build_team_measurement,
     save_team_measurement,
 )
@@ -115,14 +116,26 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     try:
+        # The team-name map comes from the same directory as the prices. It
+        # used to come from the default one whatever was passed here, and in
+        # a worktree that measured zero bets and said nothing.
         report = build_team_measurement(
-            samples, prices, edge_threshold=args.edge_threshold, phase=args.phase
+            samples,
+            prices,
+            edge_threshold=args.edge_threshold,
+            phase=args.phase,
+            processed_dir=processed,
         )
-    except MixedWindowError as error:
+    except (MixedWindowError, UnresolvedTeamsError) as error:
         print(f"::error::{error}", file=sys.stderr)
         return 2
     paths = save_team_measurement(report, output_dir=outputs)
     print(report.summary_line())
+    if not prices.empty:
+        print(
+            f"Unresolved team names: {report.unresolved_team_rows:,} priced "
+            "row(s)."
+        )
     for item in report.markets:
         print(f"  {item.market}: {item.verdict}")
     for name, path in paths.items():

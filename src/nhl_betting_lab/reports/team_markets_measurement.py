@@ -32,7 +32,7 @@ from typing import Any
 import pandas as pd
 
 from nhl_betting_lab.backtest.team_walk_forward import DEFAULT_TOTAL_LINES, PUCK_LINES
-from nhl_betting_lab.config import MIN_EDGE, OUTPUTS_DIR
+from nhl_betting_lab.config import MIN_EDGE, OUTPUTS_DIR, PROCESSED_DIR
 from nhl_betting_lab.markets import MARKETS_BY_KEY
 from nhl_betting_lab.models.calibration import (
     PlattCalibration,
@@ -41,7 +41,11 @@ from nhl_betting_lab.models.calibration import (
     reliability_table,
     walk_forward_calibrate,
 )
-from nhl_betting_lab.providers.team_names import load_team_name_map, resolve_team
+from nhl_betting_lab.providers.team_names import (
+    TEAM_NAMES_FILENAME,
+    load_team_name_map,
+    resolve_team,
+)
 from nhl_betting_lab.models.value import (
     OddsError,
     american_to_implied,
@@ -79,9 +83,12 @@ class MarketMeasurement:
     reliability: list[Any] = field(default_factory=list)
     verdict: str = ""
     priced: RoiInterval | None = None
-    #: Where every priced row of this market landed: seen, unmatched,
-    #: unparseable, below_threshold. Bets and pushes are on `priced`.
+    #: Where every priced row of this market landed: seen, unresolved,
+    #: unmatched, unparseable, below_threshold. Bets and pushes are on
+    #: `priced`.
     accounting: dict[str, int] = field(default_factory=dict)
+    #: The provider team names the team-name map could not resolve.
+    unresolved_names: set[str] = field(default_factory=set)
 
     @property
     def has_price_evidence(self) -> bool:
@@ -93,14 +100,21 @@ class MarketMeasurement:
             return ""
         bets = (self.priced.bets if self.priced else 0)
         accounted = (
-            self.accounting.get("unmatched", 0)
+            self.accounting.get("unresolved", 0)
+            + self.accounting.get("unmatched", 0)
             + self.accounting.get("unparseable", 0)
             + self.accounting.get("below_threshold", 0)
             + bets
         )
-        matched = seen - self.accounting.get("unmatched", 0)
+        matched = (
+            seen
+            - self.accounting.get("unresolved", 0)
+            - self.accounting.get("unmatched", 0)
+        )
         base = (
             f"`{self.market}`: {seen:,} prices seen, "
+            f"{self.accounting.get('unresolved', 0):,} naming a team the map "
+            "could not resolve, "
             f"{self.accounting.get('unmatched', 0):,} unmatched "
             f"({matched / seen:.0%} matched), "
             f"{self.accounting.get('below_threshold', 0):,} below threshold, "
@@ -132,6 +146,11 @@ class TeamMeasurementReport:
     #: rows set aside because they were not captured strictly before face-off.
     windows_in_store: dict[str, int] = field(default_factory=dict)
     excluded_after_face_off: int = 0
+    #: Priced rows naming a team the team-name map could not resolve, summed
+    #: over every market, and the names. Recorded when it is zero too, so a
+    #: reader can tell "every team resolved" from "nobody checked".
+    unresolved_team_rows: int = 0
+    unresolved_team_names: list[str] = field(default_factory=list)
 
     def summary_line(self) -> str:
         if not self.total_samples:
@@ -204,6 +223,28 @@ def _puck_line_selection(selection: str, line: float | None) -> tuple[str, float
     return f"{side}_{suffix}", line
 
 
+class UnresolvedTeamsError(ValueError):
+    """Prices are on disk and not one row's teams could be identified."""
+
+
+def _team_code(
+    name: object, names: Mapping[str, str], codes: set[str]
+) -> str | None:
+    """The samples' abbreviation for one side of a price row, or None.
+
+    The map turns "Toronto Maple Leafs" into "TOR". A row that already says
+    "TOR" needs no map, and is accepted only because the samples use exactly
+    that string. Anything else is unresolved: never guessed, and no longer
+    passed through as the raw provider name, which could only miss the join
+    and be counted as though the grid were at fault.
+    """
+    resolved = resolve_team(name, names)
+    if resolved is not None:
+        return resolved
+    text = str(name or "").strip()
+    return text if text in codes else None
+
+
 def measure_prices(
     prices: pd.DataFrame,
     samples: pd.DataFrame,
@@ -211,16 +252,39 @@ def measure_prices(
     market: str,
     edge_threshold: float = MIN_EDGE,
     team_names: Mapping[str, str] | None = None,
+    processed_dir: Path | None = None,
     looks: int = 1,
     accounting: dict[str, int] | None = None,
+    unresolved_names: set[str] | None = None,
 ) -> RoiInterval | None:
     """Flat-stake ROI against historical team prices, or None if there are none.
 
     `accounting`, when given, receives per-bucket counts for every priced row
-    of this market — seen, unmatched, unparseable, below threshold, bets. An
-    unmatched price that lands in no counter is invisible exactly when the
-    sample grid drifts away from the lines the books hang, which is how a
-    third of the bought totals silently left this measurement.
+    of this market — seen, unresolved, unmatched, unparseable, below
+    threshold, bets. An unmatched price that lands in no counter is invisible
+    exactly when the sample grid drifts away from the lines the books hang,
+    which is how a third of the bought totals silently left this measurement.
+    `unresolved_names`, when given, receives every provider team name the map
+    could not resolve.
+
+    ## The team-name map is read from `processed_dir`
+
+    With no `team_names`, the map is `team_names.csv` in `processed_dir`
+    (rebuilt from the boxscore cache when absent). This used to call
+    `load_team_name_map()` with no directory at all, so it read the default
+    `data/processed` whatever `--processed-dir` the runner was given. In a
+    worktree, where that gitignored file does not exist and no boxscores are
+    cached, the fallback map holds only the Utah and Arizona aliases: on the
+    bought `late` window it resolved one side of 14,514 of 212,964 rows and
+    both sides of none, every price joined nothing, and the report printed
+    "0 market(s) have any price-based evidence" — the words it prints when no
+    price was ever bought. Copying the file in reproduced the committed
+    report exactly (moneyline 954, puck line 1,117, totals 1,216 bets).
+
+    So a market whose prices resolve both teams on **no** row raises
+    `UnresolvedTeamsError` rather than measuring nothing. One resolvable side
+    is not a resolved row: the aliases alone always supply one side of every
+    Utah game.
     """
     if prices.empty or samples.empty:
         return None
@@ -237,8 +301,65 @@ def measure_prices(
     )
     if priced.empty:
         return None
-    # The provider says "Toronto Maple Leafs"; the samples say "TOR".
-    names = dict(team_names or load_team_name_map())
+    # The provider says "Toronto Maple Leafs"; the samples say "TOR". An
+    # explicit map is used as given, empty included: `team_names or ...`
+    # treated a caller's `{}` as "none passed" and read the default directory.
+    names = (
+        dict(team_names)
+        if team_names is not None
+        else load_team_name_map(processed_dir=processed_dir)
+    )
+    codes = {
+        str(team).strip()
+        for column in ("home_team", "away_team")
+        if column in samples.columns
+        for team in samples[column].dropna().unique()
+    }
+    sides: dict[object, str | None] = {}
+    rows: list[tuple[Any, str | None, str | None]] = []
+    for row in priced.itertuples():
+        home_name = getattr(row, "home_team", "")
+        away_name = getattr(row, "away_team", "")
+        for name in (home_name, away_name):
+            if name not in sides:
+                sides[name] = _team_code(name, names, codes)
+        rows.append((row, sides[home_name], sides[away_name]))
+    missing = sorted(
+        {
+            name.strip()
+            for name, code in sides.items()
+            if code is None and isinstance(name, str) and name.strip()
+        }
+    )
+    if unresolved_names is not None:
+        unresolved_names.update(missing)
+    if not any(home is not None and away is not None for _, home, away in rows):
+        source = (
+            "the map passed in"
+            if team_names is not None
+            else (
+                f"{TEAM_NAMES_FILENAME} in "
+                f"{Path(processed_dir) if processed_dir else PROCESSED_DIR}, "
+                "rebuilt from the boxscore cache when that file is absent"
+            )
+        )
+        preview = ", ".join(missing[:6]) + (
+            f" and {len(missing) - 6} more" if len(missing) > 6 else ""
+        )
+        raise UnresolvedTeamsError(
+            f"Not one of the {len(rows):,} `{market}` price row(s) names two "
+            "teams this measurement can identify: the team-name map "
+            f"({len(names)} spelling(s), from {source}) resolved both sides "
+            f"of no row. Unresolved: {preview or '(the rows name no team)'}. "
+            "Measured anyway, every price would join no sample and the report "
+            "would read '0 market(s) have any price-based evidence', the words "
+            "it prints when no price was ever bought. Point --processed-dir at "
+            f"a directory holding {TEAM_NAMES_FILENAME} "
+            "(scripts/run_gameday_card.py writes it), or run where "
+            "data/raw/nhl/boxscore can rebuild it."
+        )
+    if accounting is not None:
+        accounting.setdefault("unresolved", 0)
 
     lookup: dict[tuple, tuple[float, bool, bool]] = {}
     for row in samples[samples["market"].astype(str) == market].itertuples():
@@ -255,7 +376,7 @@ def measure_prices(
 
     returns: list[float] = []
     wins = pushes = 0
-    for row in priced.itertuples():
+    for row, home, away in rows:
         try:
             line_value = getattr(row, "line", None)
             line = (
@@ -270,17 +391,16 @@ def measure_prices(
         selection = str(getattr(row, "selection", ""))
         if market == "puck_line":
             selection, line = _puck_line_selection(selection, line)
-        key = (
-            row_game_date(row),
-            resolve_team(getattr(row, "home_team", ""), names)
-            or str(getattr(row, "home_team", "")),
-            resolve_team(getattr(row, "away_team", ""), names)
-            or str(getattr(row, "away_team", "")),
-            selection,
-            line,
-        )
         if accounting is not None:
             accounting["seen"] = accounting.get("seen", 0) + 1
+        # Counted apart from `unmatched`, which means the grid or the warm-up
+        # window could not score a price. An unresolved name says nothing
+        # about the grid; it is the map that is missing.
+        if home is None or away is None:
+            if accounting is not None:
+                accounting["unresolved"] = accounting.get("unresolved", 0) + 1
+            continue
+        key = (row_game_date(row), home, away, selection, line)
         found = lookup.get(key)
         if found is None:
             if accounting is not None:
@@ -457,7 +577,15 @@ def build_team_measurement(
     minimum_fit_samples: int = PlattCalibration.MINIMUM_SAMPLES,
     team_names: Mapping[str, str] | None = None,
     phase: str = "auto",
+    processed_dir: Path | None = None,
 ) -> TeamMeasurementReport:
+    """Calibrate and price every team market in `samples`.
+
+    `processed_dir` is where the team-name map is read from when
+    `team_names` is not given; pass the directory the prices came from. Raises
+    `MixedWindowError` for an unnamed window over a mixed store, and
+    `UnresolvedTeamsError` when prices exist and no row's teams resolve.
+    """
     moment = now or datetime.now(timezone.utc)
     price_frame = (
         prices if prices is not None else pd.DataFrame(columns=["market"])
@@ -492,10 +620,20 @@ def build_team_measurement(
             market=market,
             edge_threshold=edge_threshold,
             team_names=team_names,
+            processed_dir=processed_dir,
             looks=looks,
             accounting=measurement.accounting,
+            unresolved_names=measurement.unresolved_names,
         )
         report.markets.append(measurement)
+
+    scored = sum(item.accounting.get("seen", 0) for item in report.markets)
+    report.unresolved_team_rows = sum(
+        item.accounting.get("unresolved", 0) for item in report.markets
+    )
+    report.unresolved_team_names = sorted(
+        set().union(*(item.unresolved_names for item in report.markets))
+    )
 
     drift = lines_outside_the_grid(price_frame)
     window_notes: list[str] = []
@@ -533,6 +671,21 @@ def build_team_measurement(
         window_notes.append(
             f"{window['excluded_unknown']:,} price row(s) had no readable "
             "snapshot or face-off time and were excluded rather than guessed."
+        )
+    if scored:
+        names = report.unresolved_team_names
+        window_notes.append(
+            f"Team names: {report.unresolved_team_rows:,} of the {scored:,} "
+            "prices scored named a team the team-name map could not resolve"
+            + (
+                f" ({', '.join(names[:8])}"
+                f"{f' and {len(names) - 8} more' if len(names) > 8 else ''}). "
+                "They are counted as unresolved, never guessed and never "
+                f"scored; the map is `{TEAM_NAMES_FILENAME}` in the processed "
+                "directory, rebuilt from the boxscore cache when absent."
+                if report.unresolved_team_rows
+                else "."
+            )
         )
     report.notes = [
         *window_notes,
@@ -678,7 +831,9 @@ def render_team_measurement(report: TeamMeasurementReport) -> str:
                     "score — a line the books hang that the grid does not "
                     "carry, or a warm-up-window game no sample covers. It is "
                     "counted, because a third of the bought totals once "
-                    "vanished this way with nothing saying so."
+                    "vanished this way with nothing saying so. A price naming "
+                    "a team the team-name map cannot resolve is counted "
+                    "apart from those: it says nothing about the grid."
                 ),
                 "",
                 *[
@@ -734,6 +889,8 @@ def save_team_measurement(
         "phase_hours": report.phase_hours,
         "windows_in_store": report.windows_in_store,
         "excluded_after_face_off": report.excluded_after_face_off,
+        "unresolved_team_rows": report.unresolved_team_rows,
+        "unresolved_team_names": report.unresolved_team_names,
         "notes": report.notes,
         "markets": [
             {
