@@ -518,7 +518,9 @@ Re-derive rather than trust if the data has moved.
   `verdicts.ships()` reads each experiment's `ships` list;
   the card and the default sample generators consult it rather than asserting
   policy in code. In force now: the **team back-to-back adjustment**
-  (+19.4u on the corrected joins, must-not-lose, not an edge) and the **props
+  (+5.8u in the `late` window, must-not-lose, not an edge; the +19.4u this
+  line used to quote counted every book's quote as a bet, mixed two windows
+  and took 1,070 bets priced after face-off) and the **props
   back-to-back adjustment** (+11.4u, same bar — own-side scoring −6%,
   opponent-side +5%, both-tired cancelling, the tired team's goalie busier,
   across seven independent settlement columns). Not in force: **every

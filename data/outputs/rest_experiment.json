@@ -1,57 +1,61 @@
 {
-  "delta_units": 19.387625451719444,
+  "delta_units": 5.805966487718422,
+  "excluded_after_face_off": 34196,
+  "excluded_other_windows": 61784,
+  "phase": "late",
+  "phase_hours": 1.5,
   "results": {
     "rest_ignored": {
       "moneyline": {
-        "bets": 1536,
-        "high": 0.02194247970968237,
-        "low": -0.08770300490949007,
-        "profit": -50.504083353452316,
-        "roi": -0.03288026259990385
+        "bets": 998,
+        "high": -0.002612094950619176,
+        "low": -0.1415982392036769,
+        "profit": -71.96095674299374,
+        "roi": -0.07210516707714804
       },
       "puck_line": {
-        "bets": 1574,
-        "high": -0.00440353346304425,
-        "low": -0.09103645377186359,
-        "profit": -75.11126995387247,
-        "roi": -0.04771999361745392
+        "bets": 1163,
+        "high": 0.01190688220636666,
+        "low": -0.0893003052632427,
+        "profit": -45.00427550757341,
+        "roi": -0.03869671152843802
       },
       "regulation_3_way": null,
       "total_goals": {
-        "bets": 1154,
-        "high": 0.05234947635650823,
-        "low": -0.05661277759379317,
-        "profit": -2.459924813913409,
-        "roi": -0.002131650618642469
+        "bets": 1219,
+        "high": 0.015469394969559978,
+        "low": -0.09322830053082157,
+        "profit": -47.39405293958894,
+        "roi": -0.0388794527806308
       }
     },
     "rest_known": {
       "moneyline": {
-        "bets": 1504,
-        "high": 0.03114770116105463,
-        "low": -0.0796376304347473,
-        "profit": -36.46442681381688,
-        "roi": -0.02424496463684633
+        "bets": 954,
+        "high": 0.00435321347706602,
+        "low": -0.1361731147120209,
+        "profit": -62.87809288907348,
+        "roi": -0.06590995061747744
       },
       "puck_line": {
-        "bets": 1541,
-        "high": 0.001193883118710215,
-        "low": -0.08732997125266595,
-        "profit": -66.3678559072129,
-        "roi": -0.04306804406697787
+        "bets": 1117,
+        "high": 0.009419110803904916,
+        "low": -0.09371773339461667,
+        "profit": -47.08078071691251,
+        "roi": -0.042149311295355874
       },
       "regulation_3_way": null,
       "total_goals": {
-        "bets": 1150,
-        "high": 0.04950196827518548,
-        "low": -0.05968522035951414,
-        "profit": -5.855369948488978,
-        "roi": -0.005091626042164329
+        "bets": 1216,
+        "high": 0.014435703321413945,
+        "low": -0.09436077749320948,
+        "profit": -48.594445096451686,
+        "roi": -0.03996253708589777
       }
     }
   },
   "ships": [
     "team_b2b"
   ],
-  "verdict": "The priced sample is close to indifferent: rest-known finishes **+19.4u** ahead across the measured markets, improving 2 of 3. That is the interesting finding \u2014 the books already price fatigue, so correcting the model's 8.5-point residual bias mostly moves its probabilities toward numbers the market had all along. The adjustment ships because the rule's bar is *must not lose the backtest* and it does not, while making the stated probabilities honest on a quarter of the schedule. It is not evidence of an edge, and a delta this small would not survive any correction for chance."
+  "verdict": "The priced sample is close to indifferent: rest-known finishes **+5.8u** ahead across the measured markets, improving 1 of 3. That is the interesting finding \u2014 the books already price fatigue, so correcting the model's 8.5-point residual bias mostly moves its probabilities toward numbers the market had all along. The adjustment ships because the rule's bar is *must not lose the backtest* and it does not, while making the stated probabilities honest on a quarter of the schedule. It is not evidence of an edge, and a delta this small would not survive any correction for chance."
 }

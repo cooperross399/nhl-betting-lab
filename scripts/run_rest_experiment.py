@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 
 import pandas as pd
@@ -28,7 +29,11 @@ import pandas as pd
 from nhl_betting_lab.backtest.team_walk_forward import generate_team_samples
 from nhl_betting_lab.config import MIN_EDGE, OUTPUTS_DIR, PROCESSED_DIR
 from nhl_betting_lab.data.build_datasets import load_team_games
-from nhl_betting_lab.reports.team_markets_measurement import measure_prices
+from nhl_betting_lab.reports.team_markets_measurement import (
+    MixedWindowError,
+    measure_prices,
+    select_price_window,
+)
 
 
 EXPERIMENT_MARKDOWN = "rest_experiment.md"
@@ -38,6 +43,16 @@ EXPERIMENT_JSON = "rest_experiment.json"
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--edge-threshold", type=float, default=MIN_EDGE)
+    parser.add_argument(
+        "--phase",
+        default="late",
+        help=(
+            "Which snapshot window to measure. The team store holds two, and "
+            "the best price across both is a price nobody could have taken. "
+            "Defaults to `late`, the window the team measurement uses, because "
+            "this verdict decides that measurement's `use_rest`."
+        ),
+    )
     parser.add_argument("--processed-dir", default=str(PROCESSED_DIR))
     parser.add_argument("--output-dir", default=str(OUTPUTS_DIR))
     args = parser.parse_args(argv)
@@ -50,6 +65,25 @@ def main(argv: list[str] | None = None) -> int:
         print("Need team games and bought team prices on disk first.")
         return 1
     prices = pd.read_csv(prices_path)
+    # This read every window and every price captured after face-off until
+    # 2026-09-24, the defect the team measurement had: the recorded +19.4u
+    # included 1,070 bets priced once the game had started and 1,223 that
+    # took an early quote over the late one.
+    try:
+        prices, window = select_price_window(prices, args.phase)
+    except MixedWindowError as error:
+        print(f"::error::{error}", file=sys.stderr)
+        return 2
+    window_line = (
+        f"Priced in the `{window['phase']}` window, median "
+        f"{window['phase_hours']:.1f} hours before face-off. "
+        f"{window['excluded_after_face_off']:,} price row(s) captured at or "
+        f"after face-off and {window['excluded_other_windows']:,} from other "
+        "windows were excluded."
+        if window["phase"]
+        else "The prices carry no window information."
+    )
+    print(window_line)
 
     results: dict[str, dict] = {}
     variants = {"rest_ignored": False, "rest_known": True}
@@ -135,6 +169,8 @@ def main(argv: list[str] | None = None) -> int:
             "knowing the schedule, one ignoring it."
         ),
         "",
+        window_line,
+        "",
         "| Market | Variant | Bets | Profit | ROI | 95% interval |",
         "|:-------|:--------|-----:|-------:|----:|:-------------|",
     ]
@@ -159,6 +195,10 @@ def main(argv: list[str] | None = None) -> int:
                 # boolean it once was made the shared reader see "off".
                 "results": results,
                 "delta_units": delta,
+                "phase": window["phase"],
+                "phase_hours": window["phase_hours"],
+                "excluded_after_face_off": window["excluded_after_face_off"],
+                "excluded_other_windows": window["excluded_other_windows"],
                 "ships": ["team_b2b"] if ships else [],
                 "verdict": verdict,
             },

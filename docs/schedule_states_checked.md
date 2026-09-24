@@ -9,7 +9,7 @@ record was appended to one and lasted exactly one re-run.
 
 The team diagnostic: the model missed away back-to-backs by 8.5 points over
 574 games. The adjustment (venue-split, totals-preserving, shrunk) ships on
-the price backtest — +19.4u on the corrected joins, under the must-not-lose
+the price backtest — +5.8u in the `late` window, under the must-not-lose
 bar, explicitly not evidence of an edge.
 
 The props diagnostic, on 749,115 walk-forward samples: on a back-to-back,
