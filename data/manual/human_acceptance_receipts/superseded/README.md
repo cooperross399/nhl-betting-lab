@@ -45,8 +45,9 @@ since per-quote counting was retired, and rebuilt at one bet per wager,
 `points` no longer replicates as a loss; `what_we_can_claim.md` and
 `allowlist_evidence_bundle.md` had been stale since 2026-09-02 and
 2026-08-27. Its statement also carried three claims from those records that
-were wrong: that `points` replicated, that `hits` was never measured (it has
-5,021 wagers in the `card` window), and out-of-date `points` and
+were wrong: that `points` replicated, that `hits` was never measured (it then
+had 5,021 wagers in the `card` window, 5,178 once rebuilt on the full
+team-name map), and out-of-date `points` and
 `blocked_shots` figures. Cooper re-attested the same twelve markets in
 `odds_api-20260924T095805-0400-cooperross399`, which the policy now cites and which
 corrects those claims. This file approves nothing.

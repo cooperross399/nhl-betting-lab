@@ -226,7 +226,7 @@ def test_the_operating_state_records_what_the_full_sample_showed() -> None:
     # that, and name the counts that show it, rather than leave the old
     # finding standing.
     assert "No result survives correction and then replicates" in text
-    assert "12,923 and 12,086" in text
+    assert "13,436 and 12,475" in text
 
 
 

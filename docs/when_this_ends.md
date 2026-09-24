@@ -10,7 +10,7 @@ pre-committed to.
 ## Why there has to be a date
 
 Everything measurable on bought history has been measured. Props: no
-demonstrated edge over 25,949 wagers. Team markets: no demonstrated edge over
+demonstrated edge over 25,911 wagers. Team markets: no demonstrated edge over
 954 / 1,117 / 1,216 wagers after buying every snapshot of both seasons,
 measured in one window strictly before face-off.
 Model-free structure: 1,175 pre-registered cells across two sports and

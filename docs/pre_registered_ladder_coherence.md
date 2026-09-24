@@ -280,7 +280,10 @@ reported as the same finding.
 Nothing automatic. A pass produces **evidence for a receipt, not a receipt**.
 `data/manual/staging_provider_policy.json` allowlists nothing, the card
 therefore produces no picks, and only Cooper can change that by reading the
-evidence and signing. Claude may prepare all six steps of
+evidence and signing. (Dated note, 2026-09-24, not a change to what was
+registered: since 2026-09-23 the policy allowlists twelve markets at Cooper's
+decision and the card does post picks. A pass here still buys evidence for a
+receipt, not a receipt.) Claude may prepare all six steps of
 `docs/provider_allowlist_approval.md` and may never take the sixth.
 
 The detector writes to `data/outputs/` and is read by no part of the card.

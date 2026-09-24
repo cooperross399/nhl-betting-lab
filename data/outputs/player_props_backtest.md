@@ -2,31 +2,31 @@
 
 Does the model beat a price that was actually for sale? Calibration cannot answer that; this can, to the extent the sample allows.
 
-- Generated: 2026-09-02T22:27:36+00:00
+- Generated: 2026-09-24T16:46:26+00:00
 - Edge threshold: **6.0%**
 - Priced **4.1 hours before face-off** (`late` window). A return measured at one distance from the puck is not comparable to one measured at another: the lineup is known at four hours and guessed at nine.
-- -0.2% over 25009 bets, 95% interval -1.5% to +1.0%. The interval includes zero, which means **no demonstrated edge**.
+- -0.3% over 25911 bets, 95% interval -1.5% to +1.0%. The interval includes zero, which means **no demonstrated edge**.
 
 ## Result
 
 | Market | Bets | Profit | ROI | 95% interval | Corrected for the search | Survives |
 |:-------|-----:|-------:|----:|:-------------|:-------------------------|:---------|
-| **All props** | 25009 | -53.1u | -0.2% | -1.5% .. +1.0% | -1.9% .. +1.5% | no |
-| `assists` (Assists) | 3630 | -46.8u | -1.3% | -4.1% .. +1.5% | -5.1% .. +2.6% | no |
-| `blocked_shots` (Blocked shots) | 4126 | +213.6u | +5.2% | +1.9% .. +8.4% | +0.7% .. +9.6% | yes |
-| `goalie_saves` (Goalie saves) | 1680 | -39.1u | -2.3% | -6.9% .. +2.2% | -8.5% .. +3.9% | no |
-| `goals` (Goals (incl. anytime scorer)) | 546 | -35.8u | -6.6% | -17.2% .. +4.1% | -21.2% .. +8.0% | no |
-| `points` (Points) | 5984 | -267.5u | -4.5% | -7.0% .. -1.9% | -7.9% .. -1.0% | yes |
-| `shots_on_goal` (Shots on goal) | 9043 | +122.5u | +1.4% | -0.8% .. +3.5% | -1.6% .. +4.3% | no |
+| **All props** | 25911 | -69.0u | -0.3% | -1.5% .. +1.0% | -1.9% .. +1.4% | no |
+| `assists` (Assists) | 3761 | -48.3u | -1.3% | -4.0% .. +1.5% | -5.1% .. +2.5% | no |
+| `blocked_shots` (Blocked shots) | 4286 | +211.7u | +4.9% | +1.8% .. +8.1% | +0.6% .. +9.3% | yes |
+| `goalie_saves` (Goalie saves) | 1727 | -42.7u | -2.5% | -6.9% .. +2.0% | -8.6% .. +3.7% | no |
+| `goals` (Goals (incl. anytime scorer)) | 564 | -38.1u | -6.8% | -17.2% .. +3.7% | -21.1% .. +7.6% | no |
+| `points` (Points) | 6194 | -274.8u | -4.4% | -6.9% .. -2.0% | -7.8% .. -1.0% | yes |
+| `shots_on_goal` (Shots on goal) | 9379 | +123.2u | +1.3% | -0.8% .. +3.4% | -1.5% .. +4.2% | no |
 
 ### What each row means
 
-- `assists`: -1.3% over 3630 bets, 95% interval -4.1% to +1.5%. The interval includes zero, which means **no demonstrated edge**.
-- `blocked_shots`: +5.2% over 4126 bets, 95% interval +1.9% to +8.4%. The interval excludes zero, so this sample is profitable beyond chance — at this sample size and on this data, which is not the same as an edge that will persist. It also survives correcting for the 7 markets tested (+0.7% to +9.6%), which is worth more than the uncorrected number.
-- `goalie_saves`: -2.3% over 1680 bets, 95% interval -6.9% to +2.2%. The interval includes zero, which means **no demonstrated edge**.
-- `goals`: -6.6% over 546 bets, 95% interval -17.2% to +4.1%. The interval includes zero, which means **no demonstrated edge**.
-- `points`: -4.5% over 5984 bets, 95% interval -7.0% to -1.9%. The interval excludes zero, so this sample is losing beyond chance — at this sample size and on this data, which is not the same as an edge that will persist. It also survives correcting for the 7 markets tested (-7.9% to -1.0%), which is worth more than the uncorrected number.
-- `shots_on_goal`: +1.4% over 9043 bets, 95% interval -0.8% to +3.5%. The interval includes zero, which means **no demonstrated edge**.
+- `assists`: -1.3% over 3761 bets, 95% interval -4.0% to +1.5%. The interval includes zero, which means **no demonstrated edge**.
+- `blocked_shots`: +4.9% over 4286 bets, 95% interval +1.8% to +8.1%. The interval excludes zero, so this sample is profitable beyond chance — at this sample size and on this data, which is not the same as an edge that will persist. It also survives correcting for the 7 markets tested (+0.6% to +9.3%), which is worth more than the uncorrected number.
+- `goalie_saves`: -2.5% over 1727 bets, 95% interval -6.9% to +2.0%. The interval includes zero, which means **no demonstrated edge**.
+- `goals`: -6.8% over 564 bets, 95% interval -17.2% to +3.7%. The interval includes zero, which means **no demonstrated edge**.
+- `points`: -4.4% over 6194 bets, 95% interval -6.9% to -2.0%. The interval excludes zero, so this sample is losing beyond chance — at this sample size and on this data, which is not the same as an edge that will persist. It also survives correcting for the 7 markets tested (-7.8% to -1.0%), which is worth more than the uncorrected number.
+- `shots_on_goal`: +1.3% over 9379 bets, 95% interval -0.8% to +3.4%. The interval includes zero, which means **no demonstrated edge**.
 
 ### Why there are two intervals
 
@@ -36,7 +36,7 @@ The corrected column is Bonferroni, which is crude and conservative. That is the
 
 ### The claimed edge against the realised one
 
-The average selected bet claimed a **+9.4%** edge and the flat-stake return was **-0.2%**. That gap is not a mystery and not a fault in the measurement: bets are selected wherever the model most disagrees with the price, which is exactly where the model's own estimation error concentrates. A threshold on estimated edge harvests real edge and estimation error together, and the realised number is what is left after the error washes out.
+The average selected bet claimed a **+9.4%** edge and the flat-stake return was **-0.3%**. That gap is not a mystery and not a fault in the measurement: bets are selected wherever the model most disagrees with the price, which is exactly where the model's own estimation error concentrates. A threshold on estimated edge harvests real edge and estimation error together, and the realised number is what is left after the error washes out.
 
 The mean predictions themselves are close to unbiased — the walk-forward means run within a few percent of the actuals on every market — so the gap lives in the tails and in selection, not in the rates.
 
@@ -46,8 +46,8 @@ This is the most important structural fact in the report, and it is not visible 
 
 | Side | Bets | Profit | ROI | 95% interval |
 |:-----|-----:|-------:|----:|:-------------|
-| over | 2521 | -100.3u | -4.0% | -8.4% .. +0.5% |
-| under | 22488 | +47.2u | +0.2% | -1.1% .. +1.5% |
+| over | 2568 | -115.1u | -4.5% | -8.9% .. -0.1% |
+| under | 23343 | +46.1u | +0.2% | -1.1% .. +1.5% |
 
 **90% of every bet is on the under.** That is one directional disagreement with the market, not many independent ones: the model thinks these counts land below where the line sits, across the board. Per-market results that point in opposite directions are therefore harder to read as separate findings than the table suggests, because they rest on the same underlying bias.
 
@@ -68,11 +68,11 @@ Order-of-magnitude guidance rather than a precise power calculation. Its job is 
 ## Where the bets came from
 
 - Priced outcomes seen: 550,225
-- Without a model opinion: 89,154
-- Below the edge threshold: 435,480
+- Without a model opinion: 74,226
+- Below the edge threshold: 449,484
 - Unparseable line or odds: 0
-- Ambiguous player name, dropped: 582
-- Bets placed: 25,009
+- Ambiguous player name, dropped: 604
+- Bets placed: 25,911
 - Accounted for: all of them.
 
 Players whose prices could not be matched to a model opinion (first 50). A name here is a bet that was not measured, not a bet that lost:
@@ -84,13 +84,10 @@ Players whose prices could not be matched to a model opinion (first 50). A name 
 - Adam Edstrom
 - Adam Engstrom
 - Adam Erne
-- Adam Fantilli
-- Adam Fox
 - Adam Gaudette
 - Adam Ginning
 - Adam Henrique
 - Adam Klapka
-- Adam Larsson
 - Adam Lowry
 - Adam Pelech
 - Adam Sýkora
@@ -106,10 +103,8 @@ Players whose prices could not be matched to a model opinion (first 50). A name 
 - Aleksei Kolosov
 - Alex Barré-Boulet
 - Alex Bump
-- Alex DeBrincat
 - Alex Iafallo
 - Alex Kerfoot
-- Alex Killorn
 - Alex Laferriere
 - Alex Lyon
 - Alex Nedeljkovic
@@ -127,6 +122,11 @@ Players whose prices could not be matched to a model opinion (first 50). A name 
 - Alexander Holtz
 - Alexander Nikishin
 - Alexander Petrovic
+- Alexander Romanov
+- Alexander Wennberg
+- Alexandre Carrier
+- Alexandre Texier
+- Alexey Toropchenko
 
 ## Which markets can be measured at all
 
