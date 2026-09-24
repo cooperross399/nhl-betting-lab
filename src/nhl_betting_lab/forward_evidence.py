@@ -471,10 +471,13 @@ def settle_snapshots(
         )
 
     new_rows: list[dict[str, object]] = []
+    # Days this pass finished, marked only once their rows are on disk. See
+    # the end of this function.
+    finished: list[str] = []
     for day, snapshot in pending:
         result.snapshots_seen += 1
         if snapshot.empty:
-            (directory / f"{day}.settled").touch()
+            finished.append(day)
             result.snapshots_settled += 1
             continue
 
@@ -536,7 +539,7 @@ def settle_snapshots(
             base["actual"] = actual
             base["profit_units"] = profit
             new_rows.append(base)
-        (directory / f"{day}.settled").touch()
+        finished.append(day)
         result.snapshots_settled += 1
 
     if new_rows:
@@ -581,6 +584,17 @@ def settle_snapshots(
                 "rows."
             )
         frame.to_csv(ledger_path, index=False, lineterminator="\n")
+    # MARKED ONLY NOW. These were touched inside the loop, before the write,
+    # so when `read_store` refused a damaged ledger or the shrink guard
+    # refused a short one, every day of the pass was already marked, its
+    # rows never written, and the marker kept it from ever being retried:
+    # the guards that exist to prevent loss caused it. Touched after the
+    # write, a refusal leaves every day pending and the next pass retries it.
+    # A crash between the write and these touches is harmless: a day with
+    # rows is also recognised as settled by its `snapshot_date` in the
+    # ledger, and an empty day has nothing to append twice.
+    for day in finished:
+        (directory / f"{day}.settled").touch()
     return result
 
 
