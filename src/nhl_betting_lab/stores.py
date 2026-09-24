@@ -169,10 +169,43 @@ def dedupe_prices(frame: "pd.DataFrame") -> "pd.DataFrame":
         )
     work = frame.reset_index(drop=True)
     windowed = label_phases(work)
-    keep = windowed.drop_duplicates(
-        subset=[*PRICE_IDENTITY, "phase"], keep="last"
-    ).index
-    return work.loc[keep].reset_index(drop=True)
+    # COMPARE NORMALISED VALUES, NEVER WHAT PANDAS RECONSTRUCTED. A team row
+    # is built with `player` "" and read back from CSV as NaN, so the copy on
+    # disk and the identical copy just bought were two quotes, and re-running
+    # a window doubled it: 12 rows, then 24. Only the comparison is
+    # normalised; the rows kept are the rows as given.
+    identity = windowed[[*PRICE_IDENTITY, "phase"]].map(_identity_value)
+    keep = ~identity.duplicated(keep="last")
+    return work.loc[keep.to_numpy()].reset_index(drop=True)
+
+
+def _identity_value(value: object) -> str:
+    """One spelling of a key value, for comparison only.
+
+    NaN, None and "" are the same absent value, and 5.5 and "5.5" the same
+    line, because a store is compared with itself across a CSV round-trip,
+    which preserves neither. Ported from the CBB lab's `_dedupe_value`,
+    which met the same defect first.
+    """
+    import pandas as pd
+
+    if value is None:
+        return ""
+    try:
+        if pd.isna(value):
+            return ""
+    except (TypeError, ValueError):
+        pass
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    text = str(value).strip()
+    if text.lower() in {"nan", "none", "<na>"}:
+        return ""
+    try:
+        number = float(text)
+    except ValueError:
+        return text
+    return str(int(number)) if number.is_integer() else repr(number)
 
 
 def best_price_per_wager(frame, key):
@@ -195,9 +228,19 @@ def best_price_per_wager(frame, key):
     """
     import pandas as pd
 
-    columns = [column for column in key if column in frame.columns]
-    if len(columns) != len(key) or "american_odds" not in frame.columns:
+    if frame.empty:
         return frame
+    # REFUSE, NEVER RETURN THE INPUT. This used to hand back the frame
+    # uncollapsed when a key column or the odds were missing, which is the
+    # per-quote counting above, restored without a word by a renamed column.
+    missing = [c for c in [*key, "american_odds"] if c not in frame.columns]
+    if missing:
+        raise ValueError(
+            f"best_price_per_wager is missing {missing}. Returning the frame "
+            "uncollapsed would count every book's quote as its own bet: the "
+            "defect that published -1.6% over 73,918 as a demonstrated loss."
+        )
+    columns = list(key)
     odds = pd.to_numeric(frame["american_odds"], errors="coerce")
     payout = odds.where(odds < 0, odds / 100.0)
     payout = payout.where(odds > 0, -100.0 / odds)
