@@ -40,7 +40,8 @@ only a deployment-fidelity check finds that kind.**
 ## Where this leaves things
 
 - **No correction is in force on the card.** The pooled Platt lost the
-  backtest outright (−97.0u, the EPL lesson to the letter); the by-TOI
+  backtest outright (−97.0u on the original sample, 164.9u behind raw on the
+  full population; the EPL lesson to the letter); the by-TOI
   correction loses once honestly indexed. The card's gate reads the recorded
   verdict from `data/outputs/correction_experiment.json`, which says
   `ships: []`, so this is enforced by data rather than by memory.
@@ -60,3 +61,17 @@ lookup could see. So the standard for any conditioned quantity — a correction,
 a factor, a bucket, a feature — is now stated as: **conditioned on what,
 known when?** If the answer is not "before puck drop", it does not matter how
 clean the fitting cadence is.
+
+## Re-measured on the full population, 2026-09-24
+
+The figures above come from the original 4,777-bet sample the decision was
+first made on. The record was rebuilt on the full two-season store in the
+`card` window, at one bet per wager: over 27,286 raw bets, the pooled Platt
+finishes **164.9u behind raw** and the by-TOI correction **79.8u behind raw**.
+Both still do not ship, and `correction_experiment.json` still says
+`ships: []`. The by-TOI run was indexed on expected ice time: every one of
+the 749,115 samples carries a non-zero `expected_toi_seconds`, checked when
+the record was rebuilt. The +162.8u hindsight figure was not re-measured,
+because the experiment no longer indexes on actual ice time. That is the
+point of this document.
+
