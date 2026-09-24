@@ -191,6 +191,16 @@ jobs:
           fi
 
       - name: Keep the captures
+        # ONE ROOT. upload-artifact roots an artifact at the common ancestor
+        # of its paths, and "Restore today's captures" unpacks it into
+        # data/processed, so every path here must sit under data/processed.
+        # Two data/outputs files were added to this list on 2026-09-22, which
+        # moved the root to data/: every restored capture would have landed
+        # one directory too deep, each run would have started the day's file
+        # afresh, and continue-on-error would have kept the job green. The
+        # history then lives only in per-run artifacts that expire in 90 days.
+        # tests/test_the_capture_chain_restores_where_it_uploads.py derives
+        # this from the file rather than trusting this comment.
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -199,6 +209,17 @@ jobs:
             data/processed/line_movement
             data/processed/deployment
             data/processed/line_combinations
+          if-no-files-found: warn
+          retention-days: 90
+          overwrite: true
+
+      - name: Keep the ladder scan
+        # Its own artifact, for the reason above: it lives under data/outputs.
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ladder-coherence
+          path: |
             data/outputs/ladder_coherence.json
             data/outputs/ladder_coherence.md
           if-no-files-found: warn

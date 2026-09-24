@@ -285,6 +285,20 @@ def measure_prices(
     """
     if prices.empty or samples.empty:
         return None
+    # A price captured at or after face-off is never a price a card could
+    # take, in any window, so this refuses one rather than trusting every
+    # caller to have filtered. Two callers did not: this report until
+    # 2026-09-24, and the rest experiment after it, whose recorded "+19.4u"
+    # included 1,070 bets priced once the game had started.
+    if "commence_time" in prices.columns and "snapshot" in prices.columns:
+        started = label_phases(prices)["hours_before"] <= 0
+        if started.any():
+            raise ValueError(
+                f"{int(started.sum()):,} price row(s) were captured at or after "
+                "face-off. Pass the prices through select_price_window first: "
+                "a quote on a game already under way is not a price a card "
+                "can take."
+            )
     priced = prices[prices["market"].astype(str) == market]
     # One bet per wager, at the best price a card could have taken. The store
     # holds every book's quote on the same selection, and counting each as a
