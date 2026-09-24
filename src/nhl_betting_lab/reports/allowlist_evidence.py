@@ -34,6 +34,7 @@ from typing import Any
 
 from nhl_betting_lab.config import OUTPUTS_DIR, PROJECT_ROOT
 from nhl_betting_lab.markets import ALL_MARKETS
+from nhl_betting_lab.reports.player_props_backtest import by_market_with_other_windows
 from nhl_betting_lab.staging_provider_policy import file_sha256
 from nhl_betting_lab.stats import NO_DEMONSTRATED_EDGE, bets_needed_to_detect
 
@@ -211,7 +212,9 @@ def assess_markets(*, output_dir: Path) -> list[MarketVerdict]:
         if isinstance(item, dict)
     }
 
-    prop_results = props.get("by_market") or {}
+    # A prop market the contract window has no bets for is read from another
+    # window, labelled; one it measured keeps that measurement.
+    prop_results = by_market_with_other_windows(output_dir, props)
     team_results = {
         str(item.get("market")): item
         for item in (team.get("markets") or [])
@@ -303,9 +306,21 @@ def assess_markets(*, output_dir: Path) -> list[MarketVerdict]:
                         "the sign is unknown.**"
                     )
                 )
-                + " This is a demonstrated deficit, not an unproven edge: the"
-                " measurement does not fail to support enabling this market,"
-                " it argues against it."
+                + (
+                    " This is a demonstrated deficit, not an unproven edge: the"
+                    " measurement does not fail to support enabling this market,"
+                    " it argues against it."
+                    # "Demonstrated" takes the same two windows a positive
+                    # needs. `points` was called one here on a replication
+                    # record built by counting every book's quote as a bet; at
+                    # one bet per wager neither season carries it alone.
+                    if replicated
+                    else " The held-out window did not confirm it "
+                    f"({replication_state or 'no replication record'}), so it"
+                    " is not a demonstrated deficit. A loss that survives the"
+                    " correction still argues against enabling this market,"
+                    " not for it."
+                )
             )
             supported = False
         elif not survives:
@@ -329,8 +344,8 @@ def assess_markets(*, output_dir: Path) -> list[MarketVerdict]:
                 f"{roi_value:+.1%} over {bets:,} bets, and the interval "
                 f"excludes zero even after correcting for the {looks} markets "
                 "measured on the same data. That is the strongest thing this "
-                "repository can currently say, and it rests on one sampled "
-                "window of one season."
+                "repository can currently say, and it rests on one snapshot "
+                "window."
                 if roi_value is not None
                 else f"{bets:,} bets, and the corrected interval excludes zero."
             )
@@ -348,6 +363,10 @@ def assess_markets(*, output_dir: Path) -> list[MarketVerdict]:
                     "One window is a candidate; two agreeing is a finding. "
                     "This is the first."
                 )
+
+        window = str((entry or {}).get("_window", "") or "")
+        if window:
+            reason += f" Measured only in the {window}."
 
         verdicts.append(
             MarketVerdict(

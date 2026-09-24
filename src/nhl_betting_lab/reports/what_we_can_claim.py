@@ -28,6 +28,10 @@ from typing import Any
 
 from nhl_betting_lab.config import OUTPUTS_DIR
 from nhl_betting_lab.markets import ALL_MARKETS
+from nhl_betting_lab.reports.player_props_backtest import (
+    by_market_with_other_windows,
+    window_phrase,
+)
 from nhl_betting_lab.stats import NO_DEMONSTRATED_EDGE, detection_table
 
 
@@ -61,6 +65,9 @@ class MarketClaim:
     calibration_samples: int = 0
     allowlisted: bool = False
     reason_unmeasured: str = ""
+    #: Set only when the figure comes from a window other than the one the
+    #: rest of its report describes.
+    window: str = ""
 
     def sentence(self) -> str:
         if not self.measured:
@@ -78,9 +85,10 @@ class MarketClaim:
                 )
             return base
         assert self.roi is not None
+        where = f", measured only in the {self.window}" if self.window else ""
         base = (
             f"`{self.market}`: {self.roi:+.1%} over {self.bets:,} bets, 95% "
-            f"interval {self.low:+.1%} to {self.high:+.1%}."
+            f"interval {self.low:+.1%} to {self.high:+.1%}{where}."
         )
         if self.replication:
             return f"{base} {self.replication}"
@@ -94,10 +102,13 @@ class MarketClaim:
             return (
                 f"{base}{correction} **{NO_DEMONSTRATED_EDGE.capitalize()}**."
             )
+        # The sign again. This branch was written for a positive result and
+        # was first reached by `points` at -4.5%, which it called an edge.
+        outcome = "an edge" if self.roi > 0 else "a loss"
         return (
             f"{base} The interval excludes zero even after correcting for the "
             f"{self.looks} markets measured on the same data — which is not "
-            "the same as an edge that will persist, and means nothing until "
+            f"the same as {outcome} that will persist, and means nothing until "
             "it replicates on a window it was not found on."
         )
 
@@ -112,6 +123,10 @@ class ClaimsReport:
     policy_status: str = ""
     allowlisted_markets: tuple[str, ...] = ()
     notes: list[str] = field(default_factory=list)
+    #: Which snapshot window the figures describe, derived from the reports.
+    window_note: str = ""
+    #: The window the across-market prop figure describes.
+    overall_window: str = ""
 
     def _replicated(self, *, positive: bool) -> list["MarketClaim"]:
         """Claims that survived the search, replicated, and point the way asked.
@@ -233,7 +248,9 @@ def build_claims_report(
         for item in calibration.get("markets", [])
         if isinstance(item, dict)
     }
-    by_market = dict(backtest.get("by_market", {}) or {})
+    # A prop market the contract window has no bets for is read from another
+    # window and says which; one it measured keeps that measurement.
+    by_market = by_market_with_other_windows(directory, backtest)
     # Team markets are measured in their own report; the claims document
     # covers everything or it is not the claims document.
     for entry in team.get("markets", []) or []:
@@ -253,6 +270,18 @@ def build_claims_report(
         policy_status=policy_status,
         allowlisted_markets=tuple(allowlisted_markets),
     )
+    windows = [
+        f"{kind} figures come from the {phrase}"
+        for kind, phrase in (
+            ("prop", window_phrase(backtest)),
+            ("team", window_phrase(team)),
+        )
+        if phrase
+    ]
+    if windows:
+        report.window_note = (
+            "Unless a line names another window, " + ", and ".join(windows) + "."
+        )
 
     for market in ALL_MARKETS:
         entry = by_market.get(market.key) if isinstance(by_market, dict) else None
@@ -273,6 +302,7 @@ def build_claims_report(
                     replication=replication_states.get(market.key, ""),
                     calibration_samples=calibration_samples.get(market.key, 0),
                     allowlisted=market.key in allowlisted_markets,
+                    window=str(entry.get("_window", "") or ""),
                 )
             )
             continue
@@ -294,6 +324,7 @@ def build_claims_report(
         report.overall_bets = int(overall["bets"])
         report.overall_roi = float(overall.get("roi", 0.0))
         report.overall_includes_zero = bool(overall.get("includes_zero", True))
+        report.overall_window = window_phrase(backtest)
 
     report.notes = [
         "An interval that includes zero means "
@@ -337,11 +368,15 @@ def render_claims(report: ClaimsReport) -> str:
     if report.overall_bets:
         lines.extend(
             [
-                "## Across every measured market",
+                "## Across every measured prop market",
                 "",
                 (
                     f"{report.overall_roi:+.1%} over {report.overall_bets:,} "
-                    "bets. "
+                    + (
+                        f"bets in the {report.overall_window}. "
+                        if report.overall_window
+                        else "bets. "
+                    )
                     + (
                         f"The interval includes zero: **{NO_DEMONSTRATED_EDGE}**."
                         if report.overall_includes_zero
@@ -357,6 +392,8 @@ def render_claims(report: ClaimsReport) -> str:
 
     if measured:
         lines.extend(["## Measured against real prices", ""])
+        if report.window_note:
+            lines.extend([report.window_note, ""])
         lines.extend([f"- {claim.sentence()}" for claim in measured])
         lines.append("")
 

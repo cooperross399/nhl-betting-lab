@@ -971,3 +971,26 @@ def test_the_window_guard_names_a_flag_the_runner_actually_accepts() -> None:
     assert "--phase" in buffer.getvalue(), (
         "the guard names --phase, so the runner has to have one"
     )
+
+
+def test_the_saved_json_names_the_window_it_measured(tmp_path: Path) -> None:
+    """The summaries read the JSON, never the markdown.
+
+    Without these two fields they could not say which window a number came
+    from, and `hits` -- priced only in the `card` window -- was reported by
+    both as never bought.
+    """
+    samples = _samples()
+    one = _prices().iloc[0].to_dict()
+    late = pd.DataFrame([
+        {**one, "commence_time": "2025-01-06T00:10:00Z",
+         "snapshot": "2025-01-05T20:10:00Z", "american_odds": -130},
+    ])
+    report = bt.run_backtest(late, samples, edge_threshold=0.0, phase="late")
+
+    paths = bt.save_backtest(report, output_dir=tmp_path, label="late")
+    for key in ("json", "labelled_json"):
+        payload = json.loads(Path(paths[key]).read_text(encoding="utf-8"))
+        assert payload["phase"] == "late"
+        assert payload["phase_hours"] == pytest.approx(4.0)
+        assert bt.window_phrase(payload) == "`late` window, 4.0 hours before face-off"
