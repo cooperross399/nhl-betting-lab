@@ -22,7 +22,7 @@
       "provider_type": "odds_api",
       "approved_at": "2026-09-24",
       "reviewer_name": "Cooper Ross",
-      "evidence_receipt_id": "odds_api-20260924-cooperross399",
+      "evidence_receipt_id": "odds_api-20260924T095805-0400-cooperross399",
       "required_markets": [
         "assists",
         "blocked_shots",
@@ -38,8 +38,8 @@
         "total_goals"
       ],
       "known_limitations": [
-        "No market is supported by the evidence. `points` is a demonstrated deficit and replicated as one; `blocked_shots` was not confirmed on its held-out window; `hits`, `regulation_3_way` and `team_total` have never been measured against real prices.",
-        "Approved against the bundle's own recommendation on 2026-09-23 and re-attested on 2026-09-24. The prior approval of the same markets was withdrawn on 2026-08-29. The only evidence that has moved since is the team-markets correction of 2026-09-24, which took the best price across two windows and after face-off; corrected, moneyline, puck line and totals all measure lower, and every interval still includes zero."
+        "No market is supported by the evidence, and none survives correction and then replicates. `points` (-4.5%) and `blocked_shots` (+5.2%) survive correction on the pooled `late` window and within neither season; `hits` is measured only in the `card` window (-1.2% over 5,021, interval including zero); `regulation_3_way` and `team_total` have never been measured against real prices.",
+        "Approved against the bundle's own recommendation on 2026-09-23 and re-attested twice on 2026-09-24. The prior approval of the same markets was withdrawn on 2026-08-29. Two corrections have moved the evidence since: the team measurement took the best price across two windows and after face-off, and corrected, all three team markets measure lower with every interval still including zero; and the replication record still counted every book's quote as a bet, and rebuilt, `points` no longer replicates as a loss. Neither adds support for any market."
       ],
       "max_provider_run_age_hours": 12
     }
