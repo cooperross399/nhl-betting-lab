@@ -64,6 +64,7 @@ def main(argv: list[str] | None = None) -> int:
                 samples,
                 market=market,
                 edge_threshold=args.edge_threshold,
+                processed_dir=processed,
                 looks=samples["market"].nunique(),
             )
             if interval is None:
