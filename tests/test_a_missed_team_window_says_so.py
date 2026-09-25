@@ -204,7 +204,7 @@ def test_where_every_price_landed_renders_when_every_price_is_unmatched(
 
     assert not any(item.has_price_evidence for item in report.markets)
     assert "Where every price landed" in rendered
-    assert "3 prices seen" in rendered
+    assert "3 wager(s) seen" in rendered
     assert "3 unmatched (0% matched)" in rendered
 
 
