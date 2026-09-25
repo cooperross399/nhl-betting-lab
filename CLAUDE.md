@@ -690,6 +690,22 @@ Re-derive rather than trust if the data has moved.
   ledger rows beside the wagers they collapse to. The model, the edge bar,
   the market list and the staking rule are unchanged, and the published
   ledger held no rows when this landed (card-feed, last card 2026-08-28).
+- **2026-09-25: the props backtest counted one wager per UTC day, and one
+  per spelling.** Its best-price collapse keyed on the raw `date` column —
+  the UTC commence date — so a 7pm ET face-off and the next afternoon's game
+  shared a key, and each player's wager on a back-to-back collapsed to
+  whichever game paid more: 4,196 late-window and 5,337 card-window keys
+  spanned two games, while the reconciliation printed "Accounted for: all of
+  them". It also keyed the raw player string, so one player spelled two ways
+  by two books was two wagers. It now keys on the game and
+  `player_props.player_key`. Measured on the bought store with the fixed
+  code: late **26,050 bets, −0.33% [−1.55%, +0.89%]** (was 25,911, −0.27%),
+  card **28,452, −0.10% [−1.26%, +1.06%]** (was 28,287, −0.03%). No verdict
+  moves: `points` and `blocked_shots` still exclude zero and survive the
+  family correction in both windows, and every other market still spans
+  zero. **The committed reports under `data/outputs` still carry the
+  pre-fix figures, and the receipts pin them by checksum** — regenerating
+  them and re-attesting is Cooper's call, not a side effect of the fix.
 - **Hits is retained historically after all, and "no book keeps it" was a
   region artifact.** The 256-event probe that concluded hits could not be
   measured (2,600 credits) asked **one region**, and both books that quote it
