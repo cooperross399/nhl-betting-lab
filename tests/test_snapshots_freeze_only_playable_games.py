@@ -115,15 +115,28 @@ def test_a_slate_already_under_way_writes_nothing(tmp_path: Path) -> None:
     assert tally["state"] == "nothing_to_freeze" and tally["started"] == 1
 
 
-def test_an_empty_slate_still_marks_its_day(tmp_path: Path) -> None:
-    """No prices at all is a day with no games, and it is frozen as empty so
-    settlement marks it done once."""
+def test_no_prices_at_all_writes_nothing(tmp_path: Path) -> None:
+    """Not even for an empty slate. A degraded run's state is restorable
+    now, and a run whose price fetch failed has no prices exactly as a day
+    with no games does; an empty file from it would stand as the day's first
+    opinion and block the next run's real one. A day with no games has
+    nothing to settle."""
     tally: dict = {}
 
-    path = _freeze(tmp_path, [], tally=tally)
+    assert _freeze(tmp_path, [], tally=tally) is None
+    assert tally["state"] == "nothing_to_freeze"
+    assert not (fe.snapshots_dir(tmp_path) / "2026-12-20.csv").exists()
 
-    assert path is not None and pd.read_csv(path).empty
-    assert tally["state"] == "frozen"
+
+def test_a_run_with_no_prices_cannot_block_the_next_runs_snapshot(
+    tmp_path: Path,
+) -> None:
+    """The degraded 13:30 run (no prices) then the 15:00 run on its state."""
+    assert _freeze(tmp_path, []) is None
+
+    later = _freeze(tmp_path, [_row("2026-12-21T00:30:00Z")])
+
+    assert later is not None and len(pd.read_csv(later)) == 1
 
 
 def test_now_is_required_and_must_be_aware(tmp_path: Path) -> None:

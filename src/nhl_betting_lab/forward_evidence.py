@@ -138,15 +138,18 @@ def write_snapshot(
     before puck drop". The snapshot has no freeze time, so nothing afterwards
     could tell them apart.
 
-    ## A slate with prices and nothing to freeze writes nothing
+    ## Nothing to freeze writes nothing — never an empty snapshot
 
     The first snapshot of a day stands and is never replaced. A run that
     could not price anything — its team-name map or its models missing, so
     `probabilities` came back empty — used to write an EMPTY snapshot for a
     day with games, which then stood: every later, working run that day
-    found it and froze nothing. Now such a run writes nothing and a later run
-    can freeze the day. An empty slate (no prices at all) still writes its
-    empty snapshot, which is what marks a day with no games as done.
+    found it and froze nothing. Now no run writes an empty snapshot. That
+    includes a run with no prices at all: once a degraded run's state became
+    restorable (scripts/restore_state.py), a run whose price fetch failed —
+    no prices, so it looked like an empty slate — would have frozen an empty
+    day that the next run restored and could not replace. A day with no
+    games has nothing to settle, so it loses nothing by leaving no file.
 
     `tally`, when given, receives "state" ("frozen", "exists" or
     "nothing_to_freeze") and the counts "frozen", "started" and
@@ -213,7 +216,7 @@ def write_snapshot(
     counts["frozen"] = len(rows)
     if tally is not None:
         tally.update(counts)
-    if not rows and not prices.empty:
+    if not rows:
         if tally is not None:
             tally["state"] = "nothing_to_freeze"
         return None
