@@ -96,8 +96,12 @@ def main(argv: list[str] | None = None) -> int:
             refit_days=args.refit_days,
             minimum_history_games=args.minimum_history_games,
             # What the default measurement describes is the shipped policy,
-            # and what ships is the recorded verdict's call.
-            use_rest=ships("team_b2b"),
+            # and what ships is the recorded verdict's call — the verdict in
+            # THIS run's --output-dir, as the card and the props calibration
+            # read it. It used to be read from the default directory, so a
+            # scratch measurement could describe a policy its own output
+            # directory had withdrawn.
+            use_rest=ships("team_b2b", output_dir=outputs),
         )
         print(walk.summary_line())
         outputs.mkdir(parents=True, exist_ok=True)
