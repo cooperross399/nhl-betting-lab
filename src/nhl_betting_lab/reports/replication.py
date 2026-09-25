@@ -93,12 +93,38 @@ class ReplicationReport:
         )
 
     def headline(self) -> str:
+        # A WINDOW WITH NO BETS MEASURED NOTHING; NOTHING FAILED ON IT. This
+        # used to go straight to "Nothing survived correction on
+        # **<discovery>**" when no market survived, whether or not the window
+        # had measured a single bet. A backtest window that matched no price
+        # row was reported that way. On the real store, 2025-26 with the end
+        # year mistyped read 0 of 3,804,233 rows. Against the same test
+        # window, the home checkout's measured 2025-26 file (2026-08-28)
+        # returns three markets that are not untestable. A test window with no
+        # bets beside a first-window survivor was headlined "did **not**
+        # replicate". Both headlines now say which window measured nothing.
+        # `scripts/run_replication.py` refuses both before reaching this; the
+        # check here covers any other caller.
+        if not any(item.discovery_bets for item in self.markets):
+            return (
+                f"**{self.discovery_label}** measured no bets, so there is "
+                "nothing to replicate and nothing was compared. An empty "
+                "window is not a result that failed correction."
+            )
         discovered = [item for item in self.markets if item.discovery_survived]
         if not discovered:
             return (
                 f"Nothing survived correction on **{self.discovery_label}**, "
                 "so there is no result to replicate. That is not a failure of "
                 "the test window."
+            )
+        if not any(item.test_bets for item in self.markets):
+            names = ", ".join(f"`{item.market}`" for item in discovered)
+            return (
+                f"{names} survived on **{self.discovery_label}**, and "
+                f"**{self.test_label}** measured no bets, so nothing was "
+                "tested. That is not a failure to replicate. The first result "
+                f"is not yet evidence of anything durable: {NO_DEMONSTRATED_EDGE}."
             )
         if self.replicated_markets:
             names = ", ".join(f"`{m}`" for m in self.replicated_markets)
@@ -118,6 +144,21 @@ class ReplicationReport:
 
 def _interval(entry: Any) -> dict[str, Any]:
     return entry if isinstance(entry, Mapping) else {}
+
+
+def bets_measured(payload: Mapping[str, Any]) -> int:
+    """How many bets a window measured, counted the way `compare` reads them.
+
+    The sum of `by_market[*].bets`. The top-level `bets` is not read, because
+    `compare` never reads it. A payload that claims a count and carries no
+    per-market measurement gives `compare` nothing to compare.
+    """
+    markets = payload.get("by_market")
+    if not isinstance(markets, Mapping):
+        return 0
+    return sum(
+        int(_interval(entry).get("bets", 0) or 0) for entry in markets.values()
+    )
 
 
 def compare(
@@ -165,7 +206,19 @@ def compare(
             reason="",
         )
 
-        if not discovery_survived:
+        if discovery_bets == 0:
+            # A market the first window never measured was described as one
+            # that failed the correction: "Nothing survived correction on the
+            # first window". No correction was applied to it. The state is
+            # untestable either way, so no verdict moves; only the reason was
+            # false.
+            entry = _with(
+                entry,
+                UNTESTABLE,
+                "Not measured on the first window (0 bets), so there is no "
+                "result here to replicate.",
+            )
+        elif not discovery_survived:
             entry = _with(
                 entry,
                 UNTESTABLE,
