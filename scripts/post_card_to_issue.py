@@ -24,6 +24,7 @@ from nhl_betting_lab.reports.card_notification import (
     decide,
     previous_fingerprint_from,
     render_comment,
+    render_no_card_comment,
 )
 from nhl_betting_lab.reports.gameday_card import CARD_JSON_FILENAME, GamedayCard
 
@@ -53,10 +54,33 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--force", action="store_true")
     args = parser.parse_args(argv)
 
+    degraded: list[str] = []
+    if args.degraded_file:
+        path = Path(args.degraded_file)
+        if path.is_file():
+            degraded = [
+                line.strip()
+                for line in path.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+
     card = _load_card(Path(args.card_json))
     if card is None:
-        print("No card JSON on disk; nothing to post.")
-        print("skip")
+        # A degraded run with no card still posts, saying so. This used to
+        # print "skip", which only stayed quiet because the restore left
+        # yesterday's card on disk — and then posted that card as today's.
+        if not degraded:
+            print("No card JSON on disk; nothing to post.")
+            print("skip")
+            return 0
+        Path(args.out).write_text(
+            render_no_card_comment(degraded_notes=degraded, run_url=args.run_url),
+            encoding="utf-8",
+        )
+        Path(args.title_out).write_text(OPERATING_HOME_TITLE, encoding="utf-8")
+        Path(args.body_out).write_text(OPERATING_HOME_BODY, encoding="utf-8")
+        print("No card could be built, and the run was degraded: posting that.")
+        print("post")
         return 0
 
     previous = None
@@ -69,16 +93,6 @@ def main(argv: list[str] | None = None) -> int:
                 )
             except (OSError, UnicodeError, json.JSONDecodeError):
                 previous = None
-
-    degraded: list[str] = []
-    if args.degraded_file:
-        path = Path(args.degraded_file)
-        if path.is_file():
-            degraded = [
-                line.strip()
-                for line in path.read_text(encoding="utf-8").splitlines()
-                if line.strip()
-            ]
 
     decision = decide(
         card,

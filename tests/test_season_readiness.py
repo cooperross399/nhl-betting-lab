@@ -291,7 +291,9 @@ def test_a_dark_night_cannot_hide_a_degraded_run() -> None:
     report = text.index("- name: Report the outcome")
     tail = text[report:]
 
-    assert tail.index("steps.health.outputs.degraded") < tail.index(
+    # The run's final health, which also knows the card's and the
+    # delivery's outcome, not the check that ran before the card.
+    assert tail.index("steps.final.outputs.degraded") < tail.index(
         "steps.prices.outputs.empty_slate"
     ), "the degraded check must come before the empty-slate exit"
 
