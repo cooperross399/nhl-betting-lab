@@ -47,6 +47,7 @@ from nhl_betting_lab.providers.team_names import (
     save_team_name_map,
 )
 from nhl_betting_lab.reports import team_markets_measurement as tmm
+from test_no_test_reads_the_checkouts_data import point_default_data_dirs_at
 
 
 def load_script(name: str) -> ModuleType:
@@ -127,8 +128,11 @@ def defaults(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace
 
     Without this the tests would read the real `data/processed/team_names.csv`
     and boxscore cache wherever they exist, and pass or fail by checkout —
-    which is the defect under test.
+    which is the defect under test. Every other default goes too: the two
+    runner tests read the tracked verdicts through their scratch
+    `--output-dir` (#151) until it did.
     """
+    point_default_data_dirs_at(monkeypatch, tmp_path / "checkout_defaults")
     processed = tmp_path / "default_processed"
     raw = tmp_path / "default_raw"
     processed.mkdir()
@@ -299,7 +303,7 @@ def test_the_runner_reads_the_map_from_its_processed_dir(
     assert code == 0
     assert payload["markets"][0]["bets"] == 3
     assert payload["unresolved_team_rows"] == 0
-    assert "Unresolved team names: 0 priced row(s)." in out
+    assert "Unresolved team names: 0 of 3 wager(s) scored." in out
 
 
 def test_the_runner_refuses_when_its_processed_dir_has_no_map(
@@ -364,7 +368,7 @@ def test_a_fully_resolved_store_records_zero_unresolved(
     assert payload["unresolved_team_names"] == []
     assert payload["markets"][0]["accounting"]["unresolved"] == 0
     assert any(
-        note.startswith("Team names: 0 of the 3 prices scored")
+        note.startswith("Team names: 0 of the 3 wager(s) scored")
         for note in report.notes
     )
 
@@ -400,7 +404,7 @@ def test_a_partly_resolved_store_counts_and_names_what_did_not_resolve(
     assert report.unresolved_team_names == ["Vancouver Canucks"]
     assert payload["unresolved_team_rows"] == 1
     assert payload["unresolved_team_names"] == ["Vancouver Canucks"]
-    assert "Team names: 1 of the 4 prices scored" in rendered
+    assert "Team names: 1 of the 4 wager(s) scored" in rendered
     assert "Vancouver Canucks" in rendered
     assert "1 naming a team the map could not resolve" in rendered
     assert "DOES NOT RECONCILE" not in rendered

@@ -50,6 +50,7 @@ from nhl_betting_lab.providers import odds_api
 from nhl_betting_lab.providers import team_names as tn
 from nhl_betting_lab.reports.card_pricing import selection_key
 from nhl_betting_lab.staging_provider_policy import load_policy
+from test_no_test_reads_the_checkouts_data import point_default_data_dirs_at
 
 
 #: Wednesday noon in New York; the game is that evening.
@@ -161,7 +162,12 @@ def _price_what_it_is_given(prices, _model, **_kwargs):
 @pytest.fixture
 def card(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     """The real card `main()` over scratch directories, with the models
-    stubbed and every default directory pointed away from the real tree."""
+    stubbed and every default directory pointed away from the real tree.
+
+    `point_default_data_dirs_at` comes first and the lines after it override
+    what this card needs; without it the tracked verdicts were read through
+    the scratch `--output-dir` (#151)."""
+    point_default_data_dirs_at(monkeypatch, tmp_path / "checkout_defaults")
     raw = tmp_path / "default_raw"
     (raw / "nhl" / "boxscore").mkdir(parents=True)
     payload = boxscore_payload(game_id=1, game_state="OFF")

@@ -69,7 +69,13 @@ def test_the_live_verdicts_read_as_recorded() -> None:
     assert verdicts.ships("props_b2b") is True
 
 
-def test_describe_names_every_policy() -> None:
+def test_describe_names_every_policy(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Every policy is named whatever is recorded, so nothing is recorded
+    here; this used to read the tracked verdicts."""
+    monkeypatch.setattr(verdicts, "OUTPUTS_DIR", tmp_path / "recorded")
+
     line = verdicts.describe()
 
     for policy in ("by_toi", "team_b2b", "props_b2b"):

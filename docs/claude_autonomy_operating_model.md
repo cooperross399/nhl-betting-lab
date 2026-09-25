@@ -25,9 +25,9 @@ Two, and only two:
    approved something.
 2. **Spending API credits beyond a small measurement budget.** The historical
    endpoints bill somewhere between one and ten credits per market per
-   event — the documentation is ambiguous and the true rate is measured from
-   the response headers. A probe is cheap; a season may not be. State the
-   range, then wait.
+   event, per region, and the lab asks two regions — the documentation is
+   ambiguous and the true rate is measured from the response headers. A
+   probe is cheap; a season may not be. State the range, then wait.
 
 Everything else — including changing a model, restructuring a report, or
 deciding a measurement was wrong — is Claude's to do, with the reasoning
