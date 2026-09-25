@@ -667,13 +667,33 @@ def build_forward_report(
     the calibration-grade stream. **Bets** is the subset clearing the shipped
     edge bars at the price as sold — the stream an allowlist decision will
     eventually rest on. Mixing them would flatter whichever is worse.
+
+    ## One bet per wager, at the best price the card could have taken
+
+    The snapshot freezes one row per book, and the ledger keeps them all —
+    they are evidence, and the CLV report reads them. This report used to
+    count every one: a selection quoted by eight books was eight opinions
+    and eight bets. docs/when_this_ends.md registers the 2027-04-25 decision
+    on "one bet per wager at the best price the card could have taken", and
+    counting quotes is the defect that once published "-1.6% over 73,918
+    bets, interval excluding zero" for a policy that measured -0.3% spanning
+    zero. Replayed on the bought card window, the per-quote rule read -1.34%
+    over 114,292 with the interval excluding zero — "Stop" under the
+    registration — where one bet per wager reads -0.03% over 28,287,
+    spanning zero; and the 3,000-opinion floor would have been met about
+    3.7x early. So every count here is taken after
+    `closing_lines.collapse_to_best`, the one collapse the CLV report
+    already applies to the same snapshots. `rows` stays the ledger's row
+    count and `wagers` is what it collapses to, so the factor is visible.
     """
+    from nhl_betting_lab.closing_lines import collapse_to_best
     from nhl_betting_lab.stats import roi_interval
 
     moment = now or datetime.now(timezone.utc)
     payload: dict = {
         "generated_at": moment.isoformat(timespec="seconds"),
         "rows": int(len(ledger)),
+        "wagers": 0,
         "markets": {},
         "unsettleable": 0,
         "void": 0,
@@ -681,9 +701,11 @@ def build_forward_report(
     if ledger.empty:
         return payload
 
-    settled = ledger[ledger["outcome"].isin(["won", "lost", "push"])]
-    payload["unsettleable"] = int((ledger["outcome"] == "unsettleable").sum())
-    payload["void"] = int((ledger["outcome"] == "void").sum())
+    wagers = collapse_to_best(ledger)
+    payload["wagers"] = int(len(wagers))
+    settled = wagers[wagers["outcome"].isin(["won", "lost", "push"])]
+    payload["unsettleable"] = int((wagers["outcome"] == "unsettleable").sum())
+    payload["void"] = int((wagers["outcome"] == "void").sum())
 
     markets = sorted(set(settled["market"].astype(str)))
     for market_key in markets:
@@ -740,8 +762,10 @@ def render_forward_report(payload: dict) -> str:
         f"- Generated: {payload['generated_at']}",
         f"- Ledger rows: {payload['rows']:,}"
         + (
-            f" ({payload['void']:,} void, "
-            f"{payload['unsettleable']:,} unsettleable)"
+            f" — one per book — on {payload.get('wagers', 0):,} wager(s), "
+            "each counted once at the best price the card could have taken "
+            f"({payload['void']:,} void, {payload['unsettleable']:,} "
+            "unsettleable)"
             if payload["rows"]
             else ""
         ),
