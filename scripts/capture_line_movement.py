@@ -121,8 +121,14 @@ def main(argv: list[str] | None = None) -> int:
 
     # The same fetch also feeds the closing-line store, which keeps one row
     # per selection at the best price any book showed. It is a strict subset
-    # of what was just written, so deriving it here retires a second
-    # scheduled fetch that was asking the provider the same question.
+    # of what was just written, so deriving it here retired a second
+    # scheduled fetch — but only its per-event half. That fetch also bought
+    # the bulk moneyline, puck line and total (`fetch_team_markets`), which
+    # this one never asks for, so since 2026-08-29 no moneyline opinion can
+    # meet a closing price, and a featured puck line or total only when an
+    # alternate ladder repeats its line. Asking for them costs credits, so it
+    # is Cooper's call; the CLV report names those opinions as uncaptured
+    # rather than as selections the books pulled.
     narrow = best_prices(frame, captured_at=captured_at)
     added = append_captures(narrow, processed_dir=processed)
     print(f"{added} best-price row(s) appended to the closing-line store.")
