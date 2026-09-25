@@ -676,6 +676,20 @@ Re-derive rather than trust if the data has moved.
   supports, in the house vocabulary. This is the only possible price
   evidence for hits and the regulation three-way, and the accumulating
   out-of-sample test for every market and every shipped policy at once.
+- **2026-09-25, a defect fix recorded as `docs/when_this_ends.md` requires:
+  the forward report counts one bet per wager.** The snapshot and the ledger
+  keep one row per book — they are evidence, and the CLV report reads them —
+  but `build_forward_report` counted every row, so a selection quoted by
+  eight books was eight opinions and eight bets: the per-quote counting
+  retired from the backtests on 2026-08-31, still live in the report the
+  2027-04-25 decision reads. Replayed on the bought card window, the
+  per-quote rule reads −1.34% over 114,292, interval excluding zero ("Stop"),
+  where one bet per wager reads −0.03% over 28,287, spanning zero; and the
+  3,000-opinion floor would have been met about 3.7× early. Every count is
+  now taken after `closing_lines.collapse_to_best`, and the report prints
+  ledger rows beside the wagers they collapse to. The model, the edge bar,
+  the market list and the staking rule are unchanged, and the published
+  ledger held no rows when this landed (card-feed, last card 2026-08-28).
 - **Hits is retained historically after all, and "no book keeps it" was a
   region artifact.** The 256-event probe that concluded hits could not be
   measured (2,600 credits) asked **one region**, and both books that quote it
