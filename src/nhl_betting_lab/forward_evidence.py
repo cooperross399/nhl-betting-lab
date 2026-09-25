@@ -892,7 +892,7 @@ def render_forward_report(payload: dict) -> str:
         ),
         "",
     ]
-    if not payload["markets"]:
+    if not payload["markets"] and not payload["rows"]:
         lines += [
             "## Nothing settled yet",
             "",
@@ -901,6 +901,55 @@ def render_forward_report(payload: dict) -> str:
                 "the season starts this is the correct state, not a fault: "
                 "forward evidence can only begin accumulating when books "
                 "post prices and games produce results."
+            ),
+            "",
+        ]
+        return "\n".join(lines)
+    if not payload["markets"]:
+        # ROWS, AND NONE OF THEM A RESULT. This used to share the branch
+        # above, so a ledger whose every row went void or unsettleable was
+        # published to card-feed as "Nothing settled yet ... Before the
+        # season starts this is the correct state, not a fault". The
+        # failure-shape audit (finding 44) settled the real 2026-27 opener,
+        # Boston v the Rangers, with its finals never fetched: sixteen days
+        # on, "Ledger rows: 2 (0 void, 2 unsettleable)" and then that
+        # reassurance. It is the quiet version of a broken results fetch —
+        # the runs stay green, settlement waits two weeks and writes the day
+        # off — and the page called the write-off normal. Two props for
+        # scratched players beside a total with no final read the same way.
+        #
+        # A ledger with rows on it is not the preseason state. A day
+        # reaches the ledger only when all its games were found or its
+        # patience ran out, so every row here is a game that was played or
+        # waited out. The empty ledger keeps the preseason text above, word
+        # for word; this says what the counts are and where to look, and
+        # never that nothing is wrong.
+        lines += [
+            "## No row has settled to a result",
+            "",
+            (
+                f"The ledger holds {payload['rows']:,} row(s) on "
+                f"{payload.get('wagers', 0):,} wager(s), and not one wager "
+                f"settled won, lost or push: {payload['void']:,} void, "
+                f"{payload['unsettleable']:,} unsettleable. This is not the "
+                "empty state before a season. A day reaches the ledger only "
+                "when every game on it was found or its "
+                f"{PATIENCE_DAYS}-day patience window ran out, so these are "
+                "games that were played or waited out, and none of them "
+                "produced a result here."
+            ),
+            "",
+            (
+                "A void is a player who never entered a game that was found. "
+                "An unsettleable row is a game that produced no final result "
+                "inside the patience window, or a row that could not be "
+                "settled against its game. Unsettleable rows with nothing "
+                "settled beside them usually mean results never reached "
+                "settlement: read the settlement summary Gameday Refresh "
+                "prints when it settles the forward ledger, then check the "
+                "results fetch, the team-name map that finds each row's "
+                "game, and whether a preseason game slipped past the card's "
+                "filter."
             ),
             "",
         ]
