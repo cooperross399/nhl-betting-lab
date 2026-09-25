@@ -351,7 +351,7 @@ must not become the base the season is lost from.
 | Provider Policy PR Gate | PRs touching policy or receipts | no |
 | Gameday Refresh | daily in season, and on demand | yes, capped |
 | Closing Lines | after every Line Movement run; by hand | only when dispatched by hand, capped |
-| Provider Market Discovery | on demand | yes, capped |
+| Provider Market Discovery | on demand; once on 15 October, which asks the three bulk markets only (props, ladders and candidates need a dispatch) | yes, capped |
 | Historical Props Purchase | on demand only, never scheduled | yes, capped, required cap |
 | Venue Probe | on demand only, never scheduled | yes, capped, required cap |
 | Line Movement Capture | several times daily in season | yes, capped |

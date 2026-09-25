@@ -24,7 +24,7 @@ approval takes.
 from __future__ import annotations
 
 import json
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -98,17 +98,28 @@ def build_shadow_summary(
     errors: Sequence[str] = (),
     staging_files: Sequence[Path | str] = (),
     now: datetime | None = None,
+    requested_markets: Iterable[str] | None = None,
 ) -> tuple[ShadowSummary, EligibilityReport, DiscoveryReport]:
-    """Assess a staged price frame without changing anything."""
+    """Assess a staged price frame without changing anything.
+
+    `requested_markets` is the set of project markets this run asked the
+    provider for, or None when the caller cannot say (an offline assessment
+    of files some earlier run staged). Both reports need it: without it a
+    market nobody asked for reads "the provider returned no rows" and "no
+    book returned this market", which is how the scheduled bulk-only
+    discovery run published nine unasked markets as unquoted.
+    """
     moment = now or datetime.now(timezone.utc)
     slate = slate_games_from(prices)
+    requested = None if requested_markets is None else tuple(requested_markets)
     eligibility = assess_markets(
         prices,
         slate_games=slate,
         policy=policy,
         provider_name=provider_name,
+        requested=requested,
     )
-    discovery = discover_coverage(prices)
+    discovery = discover_coverage(prices, requested=requested)
     summary = ShadowSummary(
         generated_at=moment.isoformat(timespec="seconds"),
         provider_name=provider_name,
