@@ -135,7 +135,18 @@ class TeamMeasurementReport:
     total_samples: int = 0
     games: int = 0
     markets: list[MarketMeasurement] = field(default_factory=list)
+    #: Rows left after the window was chosen: in the window, strictly before
+    #: face-off. NOT the rows on disk — see `stored_rows`.
     priced_outcomes: int = 0
+    #: Every price row handed to the measurement before any window was
+    #: chosen, in total and by market. The report used to print
+    #: `priced_outcomes` as the number "on disk", so `--phase card` against a
+    #: store of 308,944 `late` and `early` rows read "0 historical team
+    #: price(s) are on disk", and the zero reached `what_we_can_claim.md` as
+    #: "no historical prices have been bought". Saved to the JSON so the
+    #: claims document can say "stored, none in this window" instead.
+    stored_rows: int = 0
+    stored_by_market: dict[str, int] = field(default_factory=dict)
     notes: list[str] = field(default_factory=list)
     #: The window every price in this report was captured in, and its median
     #: distance from face-off. Empty only when the prices carried no window
@@ -567,13 +578,18 @@ def select_price_window(
     if chosen == "auto":
         if len(present) > 1:
             counts = usable["phase"].value_counts().to_dict()
+            # Only the windows this store holds. The message used to say
+            # "--phase late (or card/early)" to a store with no `card` row, and
+            # following that advice wrote a report of 308,944 stored rows that
+            # read "0 historical team price(s) are on disk".
             raise MixedWindowError(
                 "The team price store holds prices from more than one window "
                 f"({', '.join(f'{k}: {v:,}' for k, v in sorted(counts.items()))}). "
                 "A wager priced at two distances from face-off is two different "
                 "questions, and the better of the two is a price nobody could "
-                "have taken. Name the window: --phase late (or card/early), or "
-                "--phase all to measure the mixture on purpose."
+                "have taken. Name one of the windows it holds: "
+                + " or ".join(f"--phase {name}" for name in present)
+                + ", or --phase all to measure the mixture on purpose."
             )
         chosen = present[0] if present else ""
     if chosen in ("", "all"):
@@ -586,6 +602,35 @@ def select_price_window(
     if not kept.empty:
         info["phase_hours"] = float(kept["hours_before"].median())
     return kept.drop(columns=["hours_before", "phase"]), info
+
+
+def held_windows(windows_in_store: Mapping[str, int]) -> str:
+    """"`early` (61,784 rows), `late` (247,160 rows)", or "none"."""
+    held = [
+        f"`{name}` ({int(count):,} rows)"
+        for name, count in sorted(windows_in_store.items())
+        if str(name) != "unknown" and int(count or 0) > 0
+    ]
+    return ", ".join(held) or "none"
+
+
+def missed_window_sentence(report: "TeamMeasurementReport") -> str:
+    """What a named window that matched no stored row says about itself.
+
+    The props backtest's wording for the same case, so the two reports read
+    alike, plus the face-off filter the props backtest does not apply: a
+    window whose every row was captured after the puck dropped measured
+    nothing too. Until 2026-09-25 this report said nothing of the kind: asked
+    for `card` over a store of 308,944 `late` and `early` rows, it printed
+    "median **0.0 hours** before face-off" and "0 historical team price(s)
+    are on disk", and exited 0.
+    """
+    return (
+        f"No price row in the `{report.phase}` window was captured before "
+        "face-off, so nothing was measured against a real price. The store's "
+        "rows by window, before the face-off filter: "
+        f"{held_windows(report.windows_in_store)}."
+    )
 
 
 def build_team_measurement(
@@ -611,6 +656,18 @@ def build_team_measurement(
         prices if prices is not None else pd.DataFrame(columns=["market"])
     )
     stored = len(price_frame)
+    stored_by_market = (
+        {
+            str(market): int(count)
+            for market, count in price_frame["market"]
+            .astype(str)
+            .value_counts()
+            .sort_index()
+            .items()
+        }
+        if stored and "market" in price_frame.columns
+        else {}
+    )
     # One window, strictly before face-off, BEFORE the best-price collapse in
     # `measure_prices`. See `select_price_window` for what this used to do.
     price_frame, window = select_price_window(price_frame, phase)
@@ -619,6 +676,8 @@ def build_team_measurement(
         total_samples=len(samples),
         games=int(samples["game_id"].nunique()) if not samples.empty else 0,
         priced_outcomes=len(price_frame),
+        stored_rows=stored,
+        stored_by_market=stored_by_market,
         phase=window["phase"],
         phase_hours=window["phase_hours"],
         windows_in_store=window["windows_in_store"],
@@ -658,14 +717,21 @@ def build_team_measurement(
     drift = lines_outside_the_grid(price_frame)
     window_notes: list[str] = []
     if stored:
-        window_notes.append(
-            f"Prices measured: {len(price_frame):,} of {stored:,} stored rows, "
-            + (
-                f"from the `{report.phase}` window, median "
+        if report.phase in ("", "all"):
+            where = ", from every window before face-off, on purpose."
+        elif len(price_frame):
+            where = (
+                f", from the `{report.phase}` window, median "
                 f"{report.phase_hours:.1f} hours before face-off."
-                if report.phase not in ("", "all")
-                else "from every window before face-off, on purpose."
             )
+        else:
+            # A named window that matches nothing measures nothing AND SAYS
+            # SO, as the props backtest does. This note used to read "median
+            # 0.0 hours" — the field's default, a median of no rows.
+            where = ". " + missed_window_sentence(report)
+        window_notes.append(
+            f"Prices measured: {len(price_frame):,} of {stored:,} stored rows"
+            + where
         )
     if window["excluded_after_face_off"]:
         window_notes.append(
@@ -829,7 +895,11 @@ def render_team_measurement(report: TeamMeasurementReport) -> str:
         lines.append("")
 
     lines.extend(["## Measured against real prices", ""])
-    if report.phase and report.phase != "all":
+    if report.phase and report.phase != "all" and not report.priced_outcomes:
+        # Named, and matched nothing. This used to fall into the sentence
+        # below and print "median **0.0 hours**" — a median of no rows.
+        lines.extend([f"**{missed_window_sentence(report)}**", ""])
+    elif report.phase and report.phase != "all":
         lines.extend([
             f"Every price below was captured in the `{report.phase}` window, "
             f"median **{report.phase_hours:.1f} hours** before face-off, and "
@@ -853,9 +923,57 @@ def render_team_measurement(report: TeamMeasurementReport) -> str:
         lines.append("")
         for item in measured:
             lines.append(f"- `{item.market}`: {item.priced.verdict()}")
+        lines.append("")
+    else:
+        # The rows on disk, and how many of them the window left. This used to
+        # print `priced_outcomes` — the rows AFTER the window filter — as the
+        # number on disk, so 308,944 stored rows read as "0 ... on disk".
+        if report.stored_rows:
+            held = (
+                f"{report.stored_rows:,} historical team price row(s) are on "
+                f"disk and {report.priced_outcomes:,} of them "
+                + (
+                    f"are in the `{report.phase}` window before face-off"
+                    if report.phase and report.phase != "all"
+                    else "were measured"
+                )
+            )
+        else:
+            held = "No historical team price is on disk"
         lines.extend(
             [
+                (
+                    f"**No price-based measurement.** {held}, and no market "
+                    "has enough matched, above-threshold outcomes to measure. "
+                    f"This means **{NO_DEMONSTRATED_EDGE}** — and equally, no "
+                    "demonstrated absence of one."
+                ),
                 "",
+                (
+                    "The calibration numbers above are **not** a substitute. "
+                    "They say the model's probabilities are internally "
+                    "sensible; they say nothing about whether the market "
+                    "disagrees with them profitably."
+                ),
+                "",
+            ]
+        )
+
+    # Whenever any price was scored, measured or not. This section sat inside
+    # `if measured:`, so a store whose prices ALL went unmatched — the case it
+    # was written to expose, after a third of the bought totals vanished that
+    # way — rendered no reconciliation at all. On the real store, `late`
+    # prices for games after the samples end went 100% unmatched (moneyline
+    # 14/14, puck line 16/16, totals 32/32) and the report said only that no
+    # market had enough matched outcomes.
+    reconciled = [
+        f"- {item.reconciliation_line()}"
+        for item in report.markets
+        if item.reconciliation_line()
+    ]
+    if reconciled:
+        lines.extend(
+            [
                 "### Where every price landed",
                 "",
                 (
@@ -868,35 +986,16 @@ def render_team_measurement(report: TeamMeasurementReport) -> str:
                     "apart from those: it says nothing about the grid."
                 ),
                 "",
-                *[
-                    f"- {item.reconciliation_line()}"
-                    for item in report.markets
-                    if item.reconciliation_line()
-                ],
-                "",
-                "### How much data would settle it",
-                "",
-                detection_table(),
+                *reconciled,
                 "",
             ]
         )
-    else:
+    if measured:
         lines.extend(
             [
-                (
-                    f"**No price-based measurement.** {report.priced_outcomes:,} "
-                    "historical team price(s) are on disk, and no market has "
-                    "enough matched, above-threshold outcomes to measure. This "
-                    f"means **{NO_DEMONSTRATED_EDGE}** — and equally, no "
-                    "demonstrated absence of one."
-                ),
+                "### How much data would settle it",
                 "",
-                (
-                    "The calibration numbers above are **not** a substitute. "
-                    "They say the model's probabilities are internally "
-                    "sensible; they say nothing about whether the market "
-                    "disagrees with them profitably."
-                ),
+                detection_table(),
                 "",
             ]
         )
@@ -917,6 +1016,11 @@ def save_team_measurement(
         "total_samples": report.total_samples,
         "games": report.games,
         "priced_outcomes": report.priced_outcomes,
+        # What was on disk, before any window was chosen. `priced_outcomes`
+        # is only what the window kept, and a reader that took it for the
+        # store called 308,944 bought rows "never bought".
+        "stored_rows": report.stored_rows,
+        "stored_by_market": report.stored_by_market,
         "phase": report.phase,
         "phase_hours": report.phase_hours,
         "windows_in_store": report.windows_in_store,

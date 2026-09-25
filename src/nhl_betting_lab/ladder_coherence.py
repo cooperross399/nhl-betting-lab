@@ -269,9 +269,34 @@ def violations_in_ladder(rungs: Sequence[Rung]) -> list[dict[str, float]]:
 
 @dataclass
 class LadderScan:
-    """What a scan looked at, so a count of violations has a denominator."""
+    """What a scan looked at, so a count of violations has a denominator.
+
+    Two depths, three orders of magnitude apart, and only one is registered:
+
+    * ``ladders_with_two_rungs`` — ladders carrying two or more rungs quoted
+      on **both** sides, so that each has a `Rung.fair_over`. This is the
+      depth `docs/pre_registered_ladder_coherence.md` names, by this field
+      name, as "ladders carrying two or more de-viggable rungs": the
+      2026-10-15 checkpoint needs 2,000 of them and two seasons of bought
+      history produced 57.
+    * ``ladders_with_two_lines`` — ladders with two or more distinct lines
+      of **either** side. A one-sided rung counts. 284,544 on the same store.
+      It is the denominator the comparable pairs were looked for in, and it
+      is not the depth.
+
+    Until 2026-09-25 ``ladders_with_two_rungs`` counted the second quantity,
+    and the report and the Line Movement step summary printed it as "Ladders
+    with two or more de-viggable rungs" beside the 57 and the 2,000. On the
+    bought store it read 284,544 where the registered count is 57, so history
+    alone cleared the route-closing floor 142 times over; over the first
+    seventeen game days of 2025-26, core markets only, it read 13,010 where
+    the registered count is 0, so the depth-zero alarm for the 422 fallback
+    — which leaves exactly the core markets — could never fire. Found by the
+    failure-shape audit; `tests/test_ladder_depth_counts_deviggable_rungs.py`.
+    """
 
     ladders: int = 0
+    ladders_with_two_lines: int = 0
     ladders_with_two_rungs: int = 0
     comparable_pairs: int = 0
     duplicate_rows_collapsed: int = 0
@@ -288,11 +313,15 @@ class LadderScan:
             if self.comparable_pairs
             else 0.0
         )
+        # Pairs are looked for in every ladder of two or more lines, so that
+        # is the denominator named here — never the registered depth, which
+        # the report prints on its own line.
         return (
             f"{self.violations} violation(s) at or above "
             f"{DETECTION_FLOOR * 100:.0f} points, across {self.comparable_pairs} "
-            f"comparable rung pair(s) in {self.ladders_with_two_rungs} of "
-            f"{self.ladders} ladder(s) — {rate:.3f}%. "
+            f"comparable rung pair(s) in the {self.ladders_with_two_lines} of "
+            f"{self.ladders} ladder(s) that carry two or more lines — "
+            f"{rate:.3f}%. "
             f"{self.duplicate_rows_collapsed} duplicate row(s) collapsed."
         )
 
@@ -349,9 +378,15 @@ def find_violations(
         rungs, _ = _rungs_from(frame)
         if len(rungs) < 2:
             continue
-        scan.ladders_with_two_rungs += 1
+        scan.ladders_with_two_lines += 1
         priced = [rung for rung in rungs if rung.implied_over is not None]
         deviggable = [rung for rung in rungs if rung.fair_over is not None]
+        # The registered depth, counted off the same `fair_over` the edge
+        # arithmetic uses, so a rung that cannot bound an edge cannot pass
+        # for depth either. It used to be incremented on the line above,
+        # for any two lines — see `LadderScan`.
+        if len(deviggable) >= 2:
+            scan.ladders_with_two_rungs += 1
         scan.comparable_pairs += sum(
             1
             for low in priced

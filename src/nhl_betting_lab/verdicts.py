@@ -7,8 +7,12 @@ sample generators read that list rather than hard-coding the decision — so
 the shipped configuration is auditable against the measurement that made it,
 and reverting a policy is re-running its experiment rather than editing code.
 
-A missing or unreadable verdict file ships nothing. The conservative reading
-of "no recorded decision" is "no policy in force".
+A run given its own output directory reads a verdict from there when that
+directory records one — a what-if experiment re-run into a scratch directory
+governs the card and the measurements pointed at the same directory — and
+otherwise the recorded verdict in `data/outputs/`. A verdict file that is
+missing from both, or that is present and unreadable, ships nothing. The
+conservative reading of "no recorded decision" is "no policy in force".
 """
 
 from __future__ import annotations
@@ -33,15 +37,38 @@ VERDICT_FILES: dict[str, str] = {
 }
 
 
-def ships(policy: str, *, output_dir: Path | None = None) -> bool:
-    """Whether the recorded verdict for `policy` says it is in force."""
+def source(policy: str, *, output_dir: Path | None = None) -> Path:
+    """The file the verdict for `policy` is read from.
+
+    `output_dir`'s own file when it holds one, else the recorded one under
+    `data/outputs/`. This used to be `output_dir`'s file whether or not it
+    existed, and a missing file ships nothing — but the verdicts are tracked
+    files that live only in `data/outputs/`, so every run given a scratch
+    --output-dir priced with every shipped policy off. Reproducing the
+    2025-03-02 card that way moved all six home moneylines (Pittsburgh,
+    at home the night after playing, 0.4141 -> 0.4370) and cut the card from
+    3 best bets and 1.25 units to 2 and 0.5, while its log and its frozen
+    snapshot said "props_b2b=off, team_b2b=off" against a repository that
+    ships both. A file that exists is the directory's own decision, and
+    stands even when unreadable, so a broken what-if verdict ships nothing
+    rather than being papered over by the recorded one.
+    """
     filename = VERDICT_FILES.get(str(policy))
     if filename is None:
         raise KeyError(
             f"No experiment records a verdict for {policy!r}. Known: "
             f"{sorted(VERDICT_FILES)}"
         )
-    path = (Path(output_dir) if output_dir else Path(OUTPUTS_DIR)) / filename
+    recorded = Path(OUTPUTS_DIR) / filename
+    if not output_dir:
+        return recorded
+    own = Path(output_dir) / filename
+    return own if own.exists() else recorded
+
+
+def ships(policy: str, *, output_dir: Path | None = None) -> bool:
+    """Whether the recorded verdict for `policy` says it is in force."""
+    path = source(policy, output_dir=output_dir)
     if not path.is_file():
         return False
     try:

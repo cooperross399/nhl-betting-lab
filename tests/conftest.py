@@ -349,16 +349,55 @@ def boxscore_payload(
     away: str = "NJD",
     home_score: int = 4,
     away_score: int = 2,
+    home_shots: int = 33,
+    away_shots: int = 28,
     period: int = 3,
-    skaters: list[dict[str, Any]] | None = None,
-    goalies: list[dict[str, Any]] | None = None,
+    home_skaters: list[dict[str, Any]] | None = None,
+    away_skaters: list[dict[str, Any]] | None = None,
+    home_goalies: list[dict[str, Any]] | None = None,
+    away_goalies: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """A boxscore in the shape `api-web.nhle.com` actually returns."""
-    default_skaters = [
+    """A boxscore in the shape `api-web.nhle.com` actually returns: each club
+    with its own block of players.
+
+    This used to hand ONE stats dict to both `homeTeam` and `awayTeam`, so the
+    same two players played for Toronto and for New Jersey at once, which no
+    real boxscore does (0 of the 3,936 cached final games list a player on both
+    sides). With the blocks identical, reading the wrong side's block built
+    exactly the right rows: `build_datasets` reading the away block for the
+    home side left the whole suite green (1,842 passed; failure-shape audit,
+    finding 64). Now the home block is the home club's players and the away
+    block the away club's, each with its own stat line, and
+    `tests/test_each_player_row_keeps_its_own_side.py` holds this default to
+    that.
+
+    The away skater carries the line the old default gave both sides, because
+    tests that read the first skater row pin it and the away club sorts first;
+    the away goalie keeps the old goalie line for the same reason. The default
+    lines are not reconciled with the team totals (that goalie line never was);
+    a test that needs them to add up passes its own players. Skaters at
+    position "D" are filed under `defense`, as the feed files them.
+    """
+    default_home_skaters = [
         {
             "playerId": 8478483,
             "name": {"default": "M. Marner"},
             "position": "R",
+            "goals": 2,
+            "assists": 2,
+            "points": 4,
+            "sog": 5,
+            "blockedShots": 0,
+            "hits": 1,
+            "powerPlayGoals": 0,
+            "toi": "19:48",
+        }
+    ]
+    default_away_skaters = [
+        {
+            "playerId": 8480002,
+            "name": {"default": "N. Hischier"},
+            "position": "C",
             "goals": 1,
             "assists": 2,
             "points": 3,
@@ -369,7 +408,17 @@ def boxscore_payload(
             "toi": "21:30",
         }
     ]
-    default_goalies = [
+    default_home_goalies = [
+        {
+            "playerId": 8476932,
+            "name": {"default": "A. Stolarz"},
+            "position": "G",
+            "saveShotsAgainst": "26/28",
+            "goalsAgainst": 2,
+            "toi": "60:00",
+        }
+    ]
+    default_away_goalies = [
         {
             "playerId": 8474593,
             "name": {"default": "J. Markstrom"},
@@ -379,11 +428,24 @@ def boxscore_payload(
             "toi": "59:38",
         }
     ]
-    block = {
-        "forwards": skaters if skaters is not None else default_skaters,
-        "defense": [],
-        "goalies": goalies if goalies is not None else default_goalies,
-    }
+
+    def side_block(
+        skaters: list[dict[str, Any]], goalies: list[dict[str, Any]]
+    ) -> dict[str, Any]:
+        return {
+            "forwards": [p for p in skaters if p.get("position") != "D"],
+            "defense": [p for p in skaters if p.get("position") == "D"],
+            "goalies": list(goalies),
+        }
+
+    home_block = side_block(
+        home_skaters if home_skaters is not None else default_home_skaters,
+        home_goalies if home_goalies is not None else default_home_goalies,
+    )
+    away_block = side_block(
+        away_skaters if away_skaters is not None else default_away_skaters,
+        away_goalies if away_goalies is not None else default_away_goalies,
+    )
     return {
         "id": game_id,
         "season": season,
@@ -392,9 +454,9 @@ def boxscore_payload(
         "startTimeUTC": start_time,
         "gameState": game_state,
         "periodDescriptor": {"number": period},
-        "homeTeam": {"abbrev": home, "score": home_score, "sog": 33},
-        "awayTeam": {"abbrev": away, "score": away_score, "sog": 28},
-        "playerByGameStats": {"homeTeam": block, "awayTeam": block},
+        "homeTeam": {"abbrev": home, "score": home_score, "sog": home_shots},
+        "awayTeam": {"abbrev": away, "score": away_score, "sog": away_shots},
+        "playerByGameStats": {"homeTeam": home_block, "awayTeam": away_block},
     }
 
 

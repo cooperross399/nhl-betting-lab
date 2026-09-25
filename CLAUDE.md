@@ -270,6 +270,23 @@ Re-derive rather than trust if the data has moved.
   the eligibility gate, so anything reaching the probability map would
   contaminate the 2027-04-25 measurement.
   `tests/test_ladder_route_cannot_reach_the_ledger.py` holds that apart.
+- **2026-09-25: the ladder depth checkpoint reads its registered unit, and
+  can run.** Two detector defects, fixed and recorded here as the
+  registration permits. `ladders_with_two_rungs` — the field the
+  registration names for its 2,000 floor, and defines as ladders carrying two
+  or more *de-viggable* rungs — counted two or more lines of either side, so
+  the report and the Line Movement summary printed **284,544** for the
+  bought store where the registered count is **57**, and **13,010** for the
+  first seventeen game days of 2025-26 (core markets only, the shape a 422
+  fallback leaves) where it is **0**: history cleared the floor 142 times
+  over and the depth-zero alarm could never fire. It now counts rungs with a
+  de-vigged price; the line count is kept as `ladders_with_two_lines`. And
+  the scan grouped on `snapshot`, which forward captures do not carry — they
+  stamp `captured_at` — so it raised on every capture and every run summary
+  read "Ladder scan wrote no report"; the runner now takes `captured_at` as
+  the moment. No threshold, band, floor or date moved, and no report from
+  this scan had ever been published.
+  `tests/test_ladder_depth_counts_deviggable_rungs.py`.
 - **The oracle ceiling was an outcome filter, not a line-label result.**
   Abstaining above a 2-minute realised rise gives +3.11% [+1.39%, +4.80%] and
   a random-removal placebo reaches only −0.30% (z=8.3), so the cell is
@@ -736,6 +753,19 @@ Re-derive rather than trust if the data has moved.
   in rows: `PlattCalibration.MINIMUM_SAMPLES` and the 200-sample verdict
   floor, which gate the correction fit rather than an interval, and the team
   report's 200-row market floor.
+- **2026-09-25: two corrections were labelled with the wrong count.** The
+  props correction (its markets plus the overall figure) was printed as "the
+  7 markets tested" for six markets (8 for the card window's seven) and now
+  reads "7 figures measured on the same data (6 markets and the overall
+  figure)"; and `what_we_can_claim.md` headed the `late` pool "Across every
+  measured prop market" above a list carrying `hits` from the `card` window,
+  and now reads "Across 6 of the 7 measured prop markets" and names `hits` as
+  outside it. No number changed. The team measurement's family still counts
+  every sample market, four with `regulation_3_way`, while the bought store
+  prices three; narrowing it to three would loosen the correction slightly
+  (moneyline −15.2% .. +2.0% against today's −15.5% .. +2.4%, no verdict
+  moving), and loosening a gate is Cooper's call, so it is left at four. The
+  committed reports still carry the old wording.
 - **Hits is retained historically after all, and "no book keeps it" was a
   region artifact.** The 256-event probe that concluded hits could not be
   measured (2,600 credits) asked **one region**, and both books that quote it
@@ -758,6 +788,25 @@ Re-derive rather than trust if the data has moved.
   still accumulates forward**: it is per-event only, and it was wired end to
   end without ever being *requested* until the dead-code test caught it, so
   every declared market must appear in a fetch list.
+- **2026-09-25: the retention table counted responses under "Events
+  probed".** `retention_from_cache` makes one probe per cached response, and
+  the four-hour and 9.5-hour buys each priced nearly every event, so the
+  table printed 5,432 "events" over 2,723, and three events priced at two
+  moments could clear the absence floor of five. It now counts distinct
+  events — an event is seen for a market when any of its responses carried
+  it — and prints the response count beneath. Measured on the real cache
+  with the fixed code: events probed 5,432 → 2,723 for every market; seen in
+  5,431 → 2,723 for shots on goal, points, goals and assists,
+  `player_total_saves` 2,570 → 2,298, `player_blocked_shots` 4,715 → 2,631,
+  `player_hits` 1,218 of 5,432 → **1,218 of 2,723** (22% → 45%; the 2,706
+  four-hour responses asked one region and carry no hits). No verdict moves:
+  all seven stay measurable and none is unmeasurable. The cache key carries
+  the market list and not the regions, so an event whose only response asked
+  one region still counts as probed and unseen for hits (one event today).
+  **The committed props reports still print the pre-fix table
+  (`1218/5432`) and the receipts pin them by checksum**; regenerating them,
+  and `historical_props_retention.json` (whose checksum the evidence bundle
+  records), is Cooper's call.
 - **The price CSVs are derived data**; every bought response is cached raw
   and the CSVs rebuild from the cache. `build_datasets` refuses to shrink an
   accumulated table by more than half (each file guarded on its own, rows not
