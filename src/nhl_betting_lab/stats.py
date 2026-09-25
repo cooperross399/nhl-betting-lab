@@ -13,7 +13,7 @@ reaches for one of those has stopped reporting and started selling.
 from __future__ import annotations
 
 import math
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 
 
@@ -241,18 +241,89 @@ def detection_table(edges: Sequence[float] = (0.05, 0.08, 0.10, 0.15)) -> str:
 
 
 def wilson_interval(successes: int, trials: int) -> tuple[float, float]:
-    """95% Wilson interval on a hit rate. Correct at small n, unlike normal."""
+    """95% Wilson interval on a hit rate. Correct at small n, unlike normal.
+
+    It assumes every trial is independent. Where trials arrive in clusters
+    that share an outcome — the lines of one player-game, the selections of
+    one game — use `clustered_wilson_interval`.
+    """
     if trials <= 0:
         return 0.0, 1.0
     hits = max(0, min(int(successes), int(trials)))
     n = float(trials)
-    p = hits / n
+    return wilson_interval_on_rate(hits / n, n)
+
+
+def wilson_interval_on_rate(rate: float, trials: float) -> tuple[float, float]:
+    """The Wilson arithmetic at a rate and a possibly fractional trial count.
+
+    `wilson_interval` is this at a whole number, bit for bit. The fractional
+    form exists for an effective sample size, which is rarely a whole number.
+    """
+    n = float(trials)
+    if n <= 0:
+        return 0.0, 1.0
+    p = min(max(float(rate), 0.0), 1.0)
     denominator = 1.0 + Z95 * Z95 / n
     centre = (p + Z95 * Z95 / (2 * n)) / denominator
     margin = (
         Z95 * math.sqrt(p * (1.0 - p) / n + Z95 * Z95 / (4 * n * n))
     ) / denominator
     return max(0.0, centre - margin), min(1.0, centre + margin)
+
+
+def clustered_wilson_interval(
+    clusters: Iterable[tuple[int, int]],
+) -> tuple[float, float]:
+    """95% Wilson interval on a hit rate whose trials arrive in clusters.
+
+    `clusters` is `(hits, trials)` per cluster: per game, when every
+    selection at every line of one game shares its scoreline, or when every
+    line of a player-game and every player in one game share its events.
+    Rows inside a cluster are not independent trials, and a Wilson interval
+    on the rows pretends they are.
+
+    The rate is the pooled one. Its variance is measured across clusters —
+    the ratio estimator's cluster-robust variance — and turned into a design
+    effect, `deff = sum((hits_g - rate * trials_g) ** 2) / (N * rate * (1 -
+    rate))`, and an effective sample size `N / deff` that the Wilson
+    arithmetic is then run at. Three conventions, each so that the interval
+    is never narrower than one on the rows:
+
+    * clusters of one are independent trials, and the result is exactly
+      `wilson_interval(hits, trials)`;
+    * a design effect below one — rows inside a cluster that move in
+      opposite directions, like an over and an under of one game in one
+      bucket — is held at one, as survey practice does (Korn and Graubard),
+      so the interval is the Wilson interval on the rows, never narrower;
+    * where no design effect can be measured — a single cluster, or a rate
+      of exactly 0 or 1 — each cluster counts as one trial rather than
+      assuming the rows inside it are independent.
+
+    Identical rows inside equal clusters therefore give exactly the Wilson
+    interval on the clusters: repeating every row k times moves nothing.
+    """
+    pairs: list[tuple[int, int]] = []
+    for hits, trials in clusters:
+        size = int(trials)
+        won = int(hits)
+        if size <= 0:
+            continue
+        if not 0 <= won <= size:
+            raise ValueError(f"A cluster cannot hold {won} hits in {size} trials.")
+        pairs.append((won, size))
+    trials_total = sum(size for _, size in pairs)
+    hits_total = sum(won for won, _ in pairs)
+    if trials_total <= 0:
+        return 0.0, 1.0
+    if len(pairs) == trials_total:
+        return wilson_interval(hits_total, trials_total)
+    rate = hits_total / trials_total
+    if len(pairs) < 2 or hits_total in (0, trials_total):
+        return wilson_interval_on_rate(rate, float(len(pairs)))
+    spread = sum((won - rate * size) ** 2 for won, size in pairs)
+    design_effect = max(1.0, spread / (trials_total * rate * (1.0 - rate)))
+    return wilson_interval_on_rate(rate, trials_total / design_effect)
 
 
 def looks_significant_but_is_a_multiple_comparison(

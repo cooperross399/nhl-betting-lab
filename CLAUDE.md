@@ -706,6 +706,36 @@ Re-derive rather than trust if the data has moved.
   zero. **The committed reports under `data/outputs` still carry the
   pre-fix figures, and the receipts pin them by checksum** — regenerating
   them and re-attesting is Cooper's call, not a side effect of the fix.
+- **2026-09-25: both calibration reports printed a "95%" interval that
+  counted rows as trials.** `props_calibration.md` prices every player-game
+  at each line of a fixed grid (two lines for goals and assists, five for
+  hits and goalie saves), and `team_markets_measurement.md` prices every
+  selection at every line of a game, so one game is many rows sharing one
+  outcome. The "95% on observed" was a Wilson interval on those rows, and
+  the props ⚠ floor and market floor counted rows. The interval is now
+  clustered on the game (`stats.clustered_wilson_interval`): a Wilson
+  interval at the effective sample size the game-clustered variance implies,
+  never narrower than the one on the rows. The props floors count
+  player-games, and both tables print player-games or games beside the
+  samples. Measured on the real samples (the unfixed code reproduces the
+  committed props report byte for byte), the props intervals widen 1.03x
+  (goals) to 1.62x (hits), so the printed ones covered about 77-94%. The
+  goalie "pulled or partial" row, 830 line samples from 166 goalie-games,
+  moves from 8.5% .. 12.6% to 7.7% .. 13.9%. In the team report 10 of 36
+  rows move: the puck_line and total_goals 0-10% and 90-100% buckets widen
+  1.82-1.87x (they covered about 71%). total_goals 90-100% goes from 97.3% ..
+  97.6% to 97.2% .. 97.7%, and puck_line 10-20% from 17.0% .. 18.3% to 16.9%
+  .. 18.4%, which still excludes the predicted 14.5%. No point estimate,
+  Brier score, count or verdict moves, and no code reads these intervals.
+  Every bucket still clears the floor (the smallest has 166 player-games).
+  One reading moves: in blocked_shots "20 min and up" the pooled-corrected
+  32.0% sat just outside 32.1% .. 32.6% and now sits inside 32.0% .. 32.7%,
+  and that correction is not in force on the card. **Both committed reports
+  still carry the pre-fix intervals, and the receipts pin them by
+  checksum** — regenerating and re-attesting is Cooper's call. Still counted
+  in rows: `PlattCalibration.MINIMUM_SAMPLES` and the 200-sample verdict
+  floor, which gate the correction fit rather than an interval, and the team
+  report's 200-row market floor.
 - **Hits is retained historically after all, and "no book keeps it" was a
   region artifact.** The 256-event probe that concluded hits could not be
   measured (2,600 credits) asked **one region**, and both books that quote it
