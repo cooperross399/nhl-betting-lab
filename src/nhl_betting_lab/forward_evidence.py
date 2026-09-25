@@ -57,6 +57,7 @@ from nhl_betting_lab.config import DATA_DIR, MIN_EDGE, MIN_PROP_EDGE, OUTPUTS_DI
 from nhl_betting_lab.markets import MARKETS_BY_KEY
 from nhl_betting_lab.models.player_props import player_name_aliases
 from nhl_betting_lab.models.value import OddsError, american_to_implied, profit_on_win
+from nhl_betting_lab.puck_drop import check_commence_time
 from nhl_betting_lab.providers.team_names import (
     TEAM_NAMES_FILENAME,
     UnresolvedTeamsError,
@@ -113,14 +114,47 @@ def write_snapshot(
     key_for,
     verdicts_line: str,
     snapshot_date: str,
+    now: datetime,
     archive_dir: Path | None = None,
+    tally: dict[str, object] | None = None,
 ) -> Path | None:
-    """Freeze today's priced opinions. Returns None when one already stands.
+    """Freeze today's priced opinions. Returns the file, or None when nothing
+    was written — because one already stands, or because the slate has
+    prices and not one row could be frozen.
 
     `key_for(row, market, selection, line)` is the card's own key function,
     passed in rather than imported by both sides — the probability map and
     the snapshot must agree on the key by construction.
+
+    ## Only a game not yet under way is frozen
+
+    `now` is required, and every row goes through the card's own puck-drop
+    rule (`puck_drop.check_commence_time`): a game that has started, or whose
+    start cannot be confirmed, is not frozen. This used to freeze whatever it
+    was handed, and the card handed it the unguarded prices before
+    `build_card`'s guard ran — so a run after a face-off (a Global Series
+    morning, a late manual dispatch) froze in-play prices beside pre-game
+    probabilities, and settlement booked them as opinions "written down
+    before puck drop". The snapshot has no freeze time, so nothing afterwards
+    could tell them apart.
+
+    ## A slate with prices and nothing to freeze writes nothing
+
+    The first snapshot of a day stands and is never replaced. A run that
+    could not price anything — its team-name map or its models missing, so
+    `probabilities` came back empty — used to write an EMPTY snapshot for a
+    day with games, which then stood: every later, working run that day
+    found it and froze nothing. Now such a run writes nothing and a later run
+    can freeze the day. An empty slate (no prices at all) still writes its
+    empty snapshot, which is what marks a day with no games as done.
+
+    `tally`, when given, receives "state" ("frozen", "exists" or
+    "nothing_to_freeze") and the counts "frozen", "started" and
+    "unconfirmed".
     """
+    counts: dict[str, object] = {"frozen": 0, "started": 0, "unconfirmed": 0}
+    if tally is not None:
+        tally.update(counts)
     directory = snapshots_dir(archive_dir)
     directory.mkdir(parents=True, exist_ok=True)
     target = directory / f"{snapshot_date}.csv"
@@ -128,6 +162,8 @@ def write_snapshot(
         # The first opinion of the day stands. A repriced snapshot is not the
         # card's opinion any more, and two snapshots for one day would let
         # the flattering one be the one that settles.
+        if tally is not None:
+            tally["state"] = "exists"
         return None
 
     rows: list[dict[str, object]] = []
@@ -147,6 +183,10 @@ def write_snapshot(
             key_for(row, market=market, selection=selection, line=line)
         )
         if probability is None:
+            continue
+        verdict = check_commence_time(getattr(row, "commence_time", ""), now=now)
+        if not verdict.playable:
+            counts[verdict.state] = int(counts.get(verdict.state, 0)) + 1
             continue
         try:
             implied = american_to_implied(getattr(row, "american_odds"))
@@ -170,8 +210,17 @@ def write_snapshot(
                 "verdicts_in_force": verdicts_line,
             }
         )
+    counts["frozen"] = len(rows)
+    if tally is not None:
+        tally.update(counts)
+    if not rows and not prices.empty:
+        if tally is not None:
+            tally["state"] = "nothing_to_freeze"
+        return None
     frame = pd.DataFrame(rows, columns=list(SNAPSHOT_COLUMNS))
     frame.to_csv(target, index=False, lineterminator="\n")
+    if tally is not None:
+        tally["state"] = "frozen"
     return target
 
 

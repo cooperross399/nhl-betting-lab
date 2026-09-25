@@ -82,6 +82,8 @@ def _snapshot(archive: Path, rows: list[dict], day: str) -> None:
         key_for=selection_key,
         verdicts_line="team_b2b=in force",
         snapshot_date=day,
+        # That morning, before any of the day's face-offs.
+        now=datetime.fromisoformat(f"{day}T12:00:00+00:00"),
         archive_dir=archive,
     ) is not None
 

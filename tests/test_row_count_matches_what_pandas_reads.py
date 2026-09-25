@@ -111,6 +111,7 @@ def _settle_one_day(tmp_path: Path, day: str, commence: str) -> None:
         key_for=selection_key,
         verdicts_line="x",
         snapshot_date=day,
+        now=datetime.fromisoformat(f"{day}T12:00:00+00:00"),
         archive_dir=tmp_path / "archive",
     )
     fe.settle_snapshots(
