@@ -21,6 +21,8 @@ from nhl_betting_lab.reports.card_pricing import selection_key
 
 
 NOW = datetime(2026, 10, 9, 15, 0, tzinfo=timezone.utc)
+#: When the card froze the 2026-10-08 slate: that morning, before any face-off.
+FROZEN_AT = datetime(2026, 10, 8, 15, 0, tzinfo=timezone.utc)
 TEAM_NAMES = {
     "toronto maple leafs": "TOR",
     "boston bruins": "BOS",
@@ -66,6 +68,7 @@ def _snapshot(tmp_path: Path, rows: list[dict], probabilities=None) -> Path:
         key_for=selection_key,
         verdicts_line="props_b2b=in force",
         snapshot_date="2026-10-08",
+        now=FROZEN_AT,
         archive_dir=tmp_path,
     )
     assert path is not None
@@ -138,6 +141,7 @@ def test_the_first_opinion_of_the_day_stands(tmp_path: Path) -> None:
         key_for=selection_key,
         verdicts_line="x",
         snapshot_date="2026-10-08",
+        now=FROZEN_AT,
         archive_dir=tmp_path,
     )
 
@@ -357,6 +361,7 @@ def test_an_empty_snapshot_settles_exactly_once(tmp_path: Path) -> None:
         key_for=selection_key,
         verdicts_line="x",
         snapshot_date="2026-10-08",
+        now=FROZEN_AT,
         archive_dir=tmp_path,
     )
 

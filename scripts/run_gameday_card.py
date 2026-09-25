@@ -341,16 +341,29 @@ def main(argv: list[str] | None = None) -> int:
     # snapshot that already exists for today stands untouched, because the
     # card's first opinion of the day is the one that counts.
     snapshot_day = moment.astimezone(LEAGUE_TIMEZONE).date().isoformat()
+    frozen: dict[str, object] = {}
     written = write_snapshot(
         prices,
         probabilities,
         key_for=selection_key,
         verdicts_line=describe_verdicts(output_dir=outputs),
         snapshot_date=snapshot_day,
+        now=moment,
         archive_dir=archive_dir,
+        tally=frozen,
     )
-    if written is not None:
-        print(f"Priced snapshot frozen: {written}")
+    withheld = (
+        f"{frozen['started']} priced row(s) for games already under way and "
+        f"{frozen['unconfirmed']} with an unconfirmable start were not frozen"
+    )
+    if frozen.get("state") == "frozen":
+        print(f"Priced snapshot frozen: {written} ({frozen['frozen']} row(s)); {withheld}.")
+    elif frozen.get("state") == "nothing_to_freeze":
+        print(
+            f"No snapshot was frozen for {snapshot_day}: the slate has prices "
+            f"and no priced row could be frozen ({withheld}). A later run "
+            "today can still freeze the day's first opinion."
+        )
     else:
         print(
             f"A priced snapshot for {snapshot_day} already stands; the first "

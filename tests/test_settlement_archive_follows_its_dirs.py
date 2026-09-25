@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import importlib.util
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
 
@@ -71,6 +72,7 @@ def _freeze(archive_dir: Path | None) -> None:
         key_for=selection_key,
         verdicts_line="team_b2b=in force",
         snapshot_date="2026-04-01",
+        now=datetime(2026, 4, 1, 12, 0, tzinfo=timezone.utc),
         archive_dir=archive_dir,
     ) is not None
 
