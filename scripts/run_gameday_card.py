@@ -180,6 +180,8 @@ def main(argv: list[str] | None = None) -> int:
     # alias map, blocked, and left all 12 team names on a real six-game slate
     # unresolved. And a cache knowing fewer teams than the file overwrote it
     # with the smaller map.
+    # Built here, before the preseason screen and the eligibility slate,
+    # because both match priced games to the schedule through it.
     from_cache = build_team_name_map(raw) if raw else build_team_name_map()
     team_names = {**saved_team_name_map(processed_dir=processed), **from_cache}
 
@@ -254,13 +256,6 @@ def main(argv: list[str] | None = None) -> int:
             "scripts/fetch_nhl_data.py first."
         )
 
-    # The provider says "Toronto Maple Leafs" and every model here is keyed by
-    # "TOR". Without this map every lookup misses and every game is priced
-    # league-average against league-average — with no error anywhere. Built
-    # before the slate, because the slate matches priced games to the
-    # schedule through it.
-    team_names = build_team_name_map()
-
     # The slate is every game the prices cover PLUS every scheduled
     # regular-season game on the same league dates that no row prices. It
     # used to be `slate_games_from(prices)` — the distinct games of the very
@@ -277,7 +272,7 @@ def main(argv: list[str] | None = None) -> int:
     # a partial cache; this closes the other door, the provider's.
     slate, unpriced = slate_games_with_schedule(
         prices,
-        scheduled_regular_season_starts(),
+        scheduled_regular_season_starts(raw),
         resolve=lambda name: resolve_team(name, team_names),
         now=moment,
     )

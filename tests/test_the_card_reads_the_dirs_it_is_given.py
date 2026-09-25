@@ -154,15 +154,15 @@ def _saved_map(tmp_path: Path, processed: Path, clubs: tuple[str, ...]) -> Path:
     return tn.save_team_name_map(tn.build_team_name_map(source), processed_dir=processed)
 
 
-def _schedules(raw: Path) -> None:
+def _schedules(raw: Path, *extra: tuple[str, str, str, str]) -> None:
     """A complete club-schedule cache for the season: every club's own file,
-    each holding the season's two known games."""
+    each holding the season's two known games (and any `extra`)."""
     directory = raw / "nhl" / "club_schedule"
     directory.mkdir(parents=True, exist_ok=True)
     games = [
-        {"gameType": 2, "gameDate": day,
+        {"gameType": 2, "gameDate": day, "startTimeUTC": commence,
          "homeTeam": {"abbrev": home}, "awayTeam": {"abbrev": away}}
-        for day, _, home, away in (TONIGHT, LATER)
+        for day, commence, home, away in (TONIGHT, LATER, *extra)
     ]
     for club in CLUBS:
         (directory / f"{club}_{SEASON}.json").write_text(
@@ -317,6 +317,33 @@ def test_every_raw_read_goes_to_the_raw_dir(
         "the screen kept the exhibition game or dropped the real one"
     )
     assert "Rosters: 2 players across 1 clubs" in out
+
+
+def test_the_eligibility_slate_reads_the_raw_dir_too(
+    tmp_path: Path, default_raw: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The eligibility slate is judged against the schedule in `--raw-dir`,
+    as the screen is. Tonight the cache there holds a second game that no row
+    prices; it counts against the market (finding 50), while the default
+    cache holds no schedule at all. Built at integration: the slate's
+    schedule reader (#148) arrived after `--raw-dir`, and a card reading it
+    from the default cache left the whole suite green."""
+    raw = tmp_path / "raw"
+    _boxscore(raw, 1, "TOR", "BOS")
+    _boxscore(raw, 2, "MTL", "OTT")
+    unpriced = ("2026-10-15", "2026-10-15T23:30:00Z", "MTL", "OTT")
+    _schedules(raw, unpriced)
+    processed = tmp_path / "processed"
+    _tables(processed)
+    _slate(tmp_path / "staging", TONIGHT)
+
+    out, card, _ = _run(tmp_path, capsys, "--raw-dir", str(raw))
+
+    assert card["slate_games"] == 2, "the slate did not read --raw-dir's schedule"
+    assert (
+        "1 scheduled regular-season game(s) not yet under way match no priced game"
+        in out
+    )
 
 
 def test_the_screen_resolves_teams_with_the_map_the_pricers_use(

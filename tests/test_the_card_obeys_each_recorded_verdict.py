@@ -71,6 +71,7 @@ from nhl_betting_lab.reports.card_pricing import (
     price_team_markets,
     selection_key,
 )
+from nhl_betting_lab import verdicts
 from nhl_betting_lab.verdicts import VERDICT_FILES, describe
 
 
@@ -238,6 +239,10 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Path]:
     monkeypatch.setattr(tn, "RAW_DIR", raw)
     monkeypatch.setattr(tn, "PROCESSED_DIR", processed)
     monkeypatch.setattr(nhl_api, "RAW_DIR", raw)
+    # A directory that records no verdict now reads the repository's recorded
+    # one (finding 59), so the recorded directory is pointed at an empty one
+    # too: "no verdict on file" must mean none anywhere, not data/outputs'.
+    monkeypatch.setattr(verdicts, "OUTPUTS_DIR", tmp_path / "recorded")
 
     _boxscore(raw)
     logs, games = _history()

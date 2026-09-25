@@ -284,7 +284,7 @@ def _run(world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch,
                         lambda _dir: pd.DataFrame({"game_id": [1]}))
     monkeypatch.setattr(module, "PlayerPropsModel", _Fitted)
     monkeypatch.setattr(module, "TeamModel", _Fitted)
-    monkeypatch.setattr(module, "current_rosters", lambda: {})
+    monkeypatch.setattr(module, "current_rosters", lambda **_: {})
     monkeypatch.setattr(module, "price_props", lambda prices, model, **k: ({}, []))
     monkeypatch.setattr(
         module, "price_team_markets",
