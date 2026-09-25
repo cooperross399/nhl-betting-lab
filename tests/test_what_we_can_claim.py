@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -14,9 +15,16 @@ def _write(directory: Path, name: str, payload: dict) -> None:
 
 
 def test_with_no_measurements_it_says_so_plainly(tmp_path: Path) -> None:
+    """Plainly, and about the directory: which outputs it did not find.
+
+    This asserted "nothing has been measured against real prices yet" for an
+    empty directory, which is the headline a fresh checkout wrote over a
+    tracked contract file recording ten measured markets.
+    """
     report = claims.build_claims_report(output_dir=tmp_path)
 
-    assert "nothing has been measured against real prices yet" in report.headline()
+    assert "`player_props_backtest.json` was not found" in report.headline()
+    assert "cannot say whether anything would" in report.headline()
     assert report.anything_demonstrated is False
 
 
@@ -136,7 +144,13 @@ def test_every_sentence_carries_its_sample_size(tmp_path: Path) -> None:
 
 
 def test_the_reason_sentence_is_punctuated(tmp_path: Path) -> None:
-    """It once read "...bought for it yet It has been calibration-checked"."""
+    """It once read "...bought for it yet It has been calibration-checked".
+
+    This asserted "yet. It has been", which pinned the words of the reason
+    as well as its full stop — "no historical prices have been bought for it
+    yet", given here to a market whose backtest output was never read. What
+    it guards is the full stop, so that is what it now asserts.
+    """
     _write(
         tmp_path,
         "props_calibration.json",
@@ -149,7 +163,8 @@ def test_the_reason_sentence_is_punctuated(tmp_path: Path) -> None:
         if c.market == "assists"
     ).sentence()
 
-    assert "yet. It has been" in sentence
+    assert re.search(r"\w\. It has been calibration-checked", sentence), sentence
+    assert ".. It has been" not in sentence
 
 
 def test_a_forbidden_phrase_refuses_to_be_written(tmp_path: Path) -> None:

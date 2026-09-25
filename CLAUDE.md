@@ -706,6 +706,19 @@ Re-derive rather than trust if the data has moved.
   zero. **The committed reports under `data/outputs` still carry the
   pre-fix figures, and the receipts pin them by checksum** — regenerating
   them and re-attesting is Cooper's call, not a side effect of the fix.
+- **2026-09-25: two corrections were labelled with the wrong count.** The
+  props correction (its markets plus the overall figure) was printed as "the
+  7 markets tested" for six markets (8 for the card window's seven) and now
+  reads "7 figures measured on the same data (6 markets and the overall
+  figure)"; and `what_we_can_claim.md` headed the `late` pool "Across every
+  measured prop market" above a list carrying `hits` from the `card` window,
+  and now reads "Across 6 of the 7 measured prop markets" and names `hits` as
+  outside it. No number changed. The team measurement's family still counts
+  every sample market, four with `regulation_3_way`, while the bought store
+  prices three; narrowing it to three would loosen the correction slightly
+  (moneyline −15.2% .. +2.0% against today's −15.5% .. +2.4%, no verdict
+  moving), and loosening a gate is Cooper's call, so it is left at four. The
+  committed reports still carry the old wording.
 - **Hits is retained historically after all, and "no book keeps it" was a
   region artifact.** The 256-event probe that concluded hits could not be
   measured (2,600 credits) asked **one region**, and both books that quote it
