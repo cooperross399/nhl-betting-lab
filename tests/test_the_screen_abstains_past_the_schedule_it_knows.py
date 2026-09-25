@@ -321,4 +321,10 @@ def test_inside_the_schedule_an_unknown_game_is_still_excluded_and_counted(
         in out
     )
     assert _frozen_games(root, tonight) == {(_full_name(home), _full_name(away))}
-    assert _card(root)["slate_games"] == 1
+    # The eligibility slate is every game the schedule holds for the night,
+    # priced or not (finding 50): the one priced fixture and the night's other
+    # scheduled games, and neither exhibition. This read 1, the priced game
+    # alone, while the slate was built from the prices it judged.
+    scheduled_tonight = [game for game in fixtures if game[0] == tonight]
+    assert len(scheduled_tonight) > 1
+    assert _card(root)["slate_games"] == len(scheduled_tonight)
