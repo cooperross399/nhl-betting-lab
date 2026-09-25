@@ -84,21 +84,31 @@ jobs:
         # Each capture appends to the day's file, so the day's earlier
         # captures have to come back or every run writes the first line of a
         # new file and the movement is lost.
+        #
+        # FROM THE NEWEST RUN THAT CARRIES THEM, WHATEVER ITS CONCLUSION. This
+        # used to restore `gh run list --status success --limit 1`. A run goes
+        # red when the price capture's events list fails or when the line
+        # units were not captured (the gate at the end), and either way the
+        # steps marked `if: always()` still captured and uploaded: the
+        # deployment and line units on a price failure, the prices and the
+        # deployment on a line failure. The next restore skipped that run, so
+        # its rows fell out of the chain; in the failure-shape audit's replay
+        # (14:00 green, 18:00 red, 21:00 green) the 18:00 scratch list and PP1
+        # promotion were first seen at 21:00, three hours late, and neither
+        # source keeps an archive. `--union 3` then folds in, row by row, what
+        # the two carriers before the newest hold that it lacks, so a run
+        # whose own restore found nothing cannot become the base the season
+        # is lost from. See scripts/restore_state.py.
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -u
           DAY=$(TZ=America/New_York date +%F)
-          previous=$(gh run list --workflow line-movement.yml --status success \
-            --limit 1 --json databaseId --jq '.[0].databaseId // empty')
-          if [ -z "$previous" ]; then
-            echo "No previous capture; this run starts the file."
-            exit 0
-          fi
           mkdir -p data/processed
-          gh run download "$previous" --name line-movement --dir data/processed \
-            || echo "Nothing to restore; continuing."
+          python scripts/restore_state.py --artifact line-movement --dest data/processed \
+            --workflow line-movement.yml --union 3 \
+            || echo "::warning::The previous captures could not be restored; this run starts the day's files afresh."
           for store in line_movement deployment line_combinations; do
             ls -la "data/processed/$store/$DAY.csv" 2>/dev/null \
               || echo "No $store file for $DAY yet; this run starts it."
