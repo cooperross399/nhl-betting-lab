@@ -269,17 +269,24 @@ def detection_table(edges: Sequence[float] = (0.05, 0.08, 0.10, 0.15)) -> str:
     return "\n".join(lines)
 
 
-def wilson_interval(successes: int, trials: int) -> tuple[float, float]:
-    """95% Wilson interval on a hit rate. Correct at small n, unlike normal."""
+def wilson_interval(
+    successes: int, trials: int, *, z: float = Z95
+) -> tuple[float, float]:
+    """Wilson interval on a hit rate. Correct at small n, unlike normal.
+
+    95% unless `z` says otherwise. A rate that is one row of a family (one
+    market among several in the same table) passes `bonferroni_z(looks)`,
+    the same correction `RoiInterval.adjusted_low` applies to a mean.
+    """
     if trials <= 0:
         return 0.0, 1.0
     hits = max(0, min(int(successes), int(trials)))
     n = float(trials)
     p = hits / n
-    denominator = 1.0 + Z95 * Z95 / n
-    centre = (p + Z95 * Z95 / (2 * n)) / denominator
+    denominator = 1.0 + z * z / n
+    centre = (p + z * z / (2 * n)) / denominator
     margin = (
-        Z95 * math.sqrt(p * (1.0 - p) / n + Z95 * Z95 / (4 * n * n))
+        z * math.sqrt(p * (1.0 - p) / n + z * z / (4 * n * n))
     ) / denominator
     return max(0.0, centre - margin), min(1.0, centre + margin)
 
