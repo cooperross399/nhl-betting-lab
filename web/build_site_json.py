@@ -13,9 +13,14 @@ Sources, in order of trust:
   * data/outputs/gameday_card.json: the card's selections and passes, which
     carry the model probability, edge and best price for every team market.
   * data/staging/*.csv: current prices; data/processed/line_movement/: the
-    earliest capture of the day, used as the open.
+    earliest capture of the day, used as the open. Publish Site restores
+    NEITHER — its two artifacts carry no data/staging and no line_movement —
+    so there every regular-season game is published unpriced (`priced:
+    false`, no line, no pick) and every open is missing, and the board says
+    so rather than reading as a pass.
   * data/processed/team_games.csv + TeamModel: expected goals per side.
-  * data/outputs/forward_evidence.json: the season record and the ledger's ROI.
+  * data/outputs/forward_evidence.json: the forward ledger's SIZE, in wagers.
+    Never its return, and never a season record: nothing here tallies one.
 
 Preseason (gameType 1) is published as schedule only. The models are fitted
 on regular-season games and the card excludes exhibitions, so no projection
@@ -220,6 +225,15 @@ def build_board(day: date, lab: Path, history_dir: Path) -> dict:
             "city": g.get("venueLocation", {}).get("default", ""), "tv": tv,
             "away": {"abbr": a, "record": away.get("record", "")}, "home": {"abbr": h, "record": home.get("record", "")},
             "pick": None,
+            # Whether this build attached market prices to the game. A null
+            # pick used to be the whole story, and the page read every null
+            # as "No market clears the edge bar" — including games this build
+            # held no price for. Publish Site restores no staged prices, so
+            # from opening night that was every regular-season game: 5 of 5
+            # published as edge-bar passes while the card held a best bet
+            # (MTL @ TOR moneyline home +112, edge 0.110), and the history
+            # froze 0 bets for the day. A game nobody priced is not a pass.
+            "priced": False,
         }
         if not preseason and lab_model:
             home_key = lab_model["resolve"](f"{home.get('placeName', {}).get('default', '')} {home.get('commonName', {}).get('default', '')}".strip()) or h
@@ -235,8 +249,14 @@ def build_board(day: date, lab: Path, history_dir: Path) -> dict:
             provider_home = next((r["home_team"] for r in prices if lab_model["resolve"](r.get("home_team", "")) == home_key), None)
             provider_away = next((r["away_team"] for r in prices if lab_model["resolve"](r.get("away_team", "")) == away_key), None)
             if provider_home and provider_away:
+                row["priced"] = True
                 cur, opn = ml_pair(prices, provider_home, provider_away), ml_pair(opens, provider_home, provider_away)
-                row["moneyline"] = {"open": opn or cur, "current": cur, "fair": {"home": to_american(ml["home"]), "away": to_american(ml["away"])}}
+                # The open is the day's first line-movement capture, or it is
+                # missing. It used to fall back to the current price, and
+                # Publish Site restores no capture, so every "Open" it could
+                # publish was the current price under another name: a line
+                # that never moved because it was only ever read once.
+                row["moneyline"] = {"open": opn, "current": cur, "fair": {"home": to_american(ml["home"]), "away": to_american(ml["away"])}}
                 fav_home = ml["home"] >= ml["away"]
                 pl = m.puck_line_probabilities(home_key, away_key, line=1.5, home_b2b=hb, away_b2b=ab)
                 row["puckLine"] = {
@@ -248,7 +268,7 @@ def build_board(day: date, lab: Path, history_dir: Path) -> dict:
                 if line is not None:
                     tot = m.total_probabilities(home_key, away_key, line=line, home_b2b=hb, away_b2b=ab)
                     row["total"] = {
-                        "open": headline_line(opens, provider_home, provider_away, "total_goals") or line, "current": line,
+                        "open": headline_line(opens, provider_home, provider_away, "total_goals"), "current": line,
                         "overPrice": best_price(prices, provider_home, provider_away, "total_goals", "over", line),
                         "underPrice": best_price(prices, provider_home, provider_away, "total_goals", "under", line),
                         "proj": round(eh + ea + m.overtime_rate, 2), "overProb": round(tot["over"], 4),
@@ -290,7 +310,19 @@ def build_board(day: date, lab: Path, history_dir: Path) -> dict:
                   "September 29. Tonight shows the schedule; projections and market lines arrive with the first regular-season "
                   f"card. {gate}, and the model has no demonstrated edge.")
     elif not lab_model:
-        notice = "The model's game history was not available to this run, so the board shows the schedule and market lines only."
+        # This said "the schedule and market lines only". The lines are
+        # attached inside the model's branch above, so a board without the
+        # model carries none, and the sentence promised what was not there.
+        notice = ("The model's game history was not available to this run, so the board shows the schedule only: "
+                  "no projection, no market line and no pick.")
+    elif out_games and not any(g["priced"] for g in out_games):
+        # Said nothing before, while the page printed "No market clears the
+        # edge bar" under every game. Cause-neutral on purpose: the prices
+        # may be absent (Publish Site restores none) or present and
+        # unmatched (a team-name map that resolves nothing). Either way this
+        # build priced no game, and that is all it can truthfully say.
+        notice = ("No market price reached this build, so no game on the board shows a line or a pick. "
+                  "A game here without a pick was not priced, which is not the same as the model passing on it.")
     board = {
         "generatedAt": now, "season": "2026–27", "phase": "preseason" if preseason else "regular",
         "boardDate": day.isoformat(), "notice": notice, "record": record, "teams": teams, "games": out_games,
@@ -380,22 +412,49 @@ def load_record(path: Path) -> dict:
     mid-season result looks strong, the correct action is nothing."
 
     So the site reports how far the experiment has got and not how it is
-    going: rows accumulated, markets covered, the span of dates. Those are
-    facts about the ledger's size, and none of them is the answer.
+    going: opinions accumulated, markets covered, the span of dates. Those
+    are facts about the ledger's size, and none of them is the answer.
+
+    ## The count is wagers, not ledger rows
+
+    The page printed `rows` as "{rows} opinions frozen". A ledger row is one
+    BOOK'S QUOTE — the snapshot freezes one row per book — so one selection
+    at three books was "3 opinions": about 3.7 rows per opinion on the
+    bought card window (2,544,921 quotes over 685,746 wagers), and 180 rows
+    from 18 opinions on one real slate. `wagers` is the report's own count
+    of one per selection at the best price, the unit docs/when_this_ends.md
+    registers. The ledger holds only slates whose games have all finished,
+    so it counts opinions on SETTLED slates, never everything frozen, and
+    the page says so. `rows` stays in the payload as the per-quote size it
+    is; the page does not show it.
+
+    A report written before the wager count existed carries `rows` only.
+    Zero rows is zero wagers; any other row count cannot be turned into
+    wagers, so `wagers` is None and the page shows no number.
+
+    ## No season record
+
+    `straightUp`, `puckLine` and `totals` were the constants 0–0, 0–0–0 and
+    0–0–0 on every path: nothing tallies a season, and nothing grades a puck
+    line at all. After 55 settled games (28–27 straight up) the strip still
+    read "Straight up 0–0". They are None until something keeps a tally,
+    and the page renders None as an absence. Publishing a real tally would
+    be a new figure on a public page, which is the owner's decision.
     """
     sealed = {
         "sealed": True,
         "decisionDate": FORWARD_DECISION_DATE,
         "rows": 0,
+        "wagers": 0,
         "markets": 0,
         "firstDate": None,
         "lastDate": None,
         "unsettleable": 0,
     }
     empty = {
-        "straightUp": {"w": 0, "l": 0},
-        "puckLine": {"w": 0, "l": 0, "p": 0},
-        "totals": {"w": 0, "l": 0, "p": 0},
+        "straightUp": None,
+        "puckLine": None,
+        "totals": None,
         "forward": sealed,
     }
     if not path.is_file():
@@ -419,8 +478,14 @@ def load_record(path: Path) -> dict:
         for entry in markets.values()
         if isinstance(entry, dict) and entry.get("last_date")
     )
+    rows = int(fe.get("rows", 0) or 0)
+    try:
+        wagers = int(fe["wagers"])
+    except (KeyError, TypeError, ValueError):
+        wagers = 0 if rows == 0 else None
     sealed.update(
-        rows=int(fe.get("rows", 0) or 0),
+        rows=rows,
+        wagers=wagers,
         markets=len(markets),
         firstDate=firsts[0] if firsts else None,
         lastDate=lasts[-1] if lasts else None,

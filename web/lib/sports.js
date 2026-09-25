@@ -115,17 +115,33 @@ function nhlBoard(data) {
       // error pointing the other way. Reverted by four drops now, the last
       // one by hard-coding the bar arm here. Pinned by
       // tests/test_site_publishes_no_forward_return.py.
+      //
+      // Neither gate applies to a game the board holds no price for
+      // (`priced: false`): nothing was assessed, so naming the bar or the
+      // allowlist reports a judgement nobody made. Publish Site restores no
+      // staged prices, so without this arm every regular-season game read
+      // "No market clears the edge bar" while the card held a best bet.
+      // Pinned by tests/test_site_never_calls_an_unpriced_game_a_pass.py.
       cells, pick: pickView(p, unit, { noneLabel: pre ? "Exhibition · model abstains"
+        : g.priced === false ? "Not priced · no market price reached this board"
         : (data.allowlistedMarkets || []).length ? "No market clears the edge bar"
         : "No market is allowlisted for selection" }),
       score: modelled ? `${num(g.away.projGoals)} – ${num(g.home.projGoals)}` : dash,
     });
   }
   const r = data.record || {}, fw = r.forward;
+  // A season record is shown only when the board carries one. These used to
+  // fall back to 0–0, and build_site_json published exactly that constant on
+  // every path -- nothing tallies a season and nothing grades a puck line --
+  // so the strip read "Straight up 0–0" after 55 settled games (28–27). An
+  // absent record is a dash that says why, never 0–0. Pinned by
+  // tests/test_site_invents_no_season_record.py.
+  const kept = (rec) => rec && typeof rec === "object";
+  const untallied = "Season not tallied · each night is on Results";
   const strip = [
-    { label: "Straight up", value: F.recStr(r.straightUp || { w: 0, l: 0 }), sub: `${F.winRate((r.straightUp || {}).w || 0, (r.straightUp || {}).l || 0)} of games`, fine: "" },
-    { label: "Puck line", value: F.recStr(r.puckLine || { w: 0, l: 0, p: 0 }), sub: "against the spread", fine: "" },
-    { label: "Totals", value: F.recStr(r.totals || { w: 0, l: 0, p: 0 }), sub: "over / under", fine: "" },
+    { label: "Straight up", value: kept(r.straightUp) ? F.recStr(r.straightUp) : dash, sub: kept(r.straightUp) ? `${F.winRate(r.straightUp.w || 0, r.straightUp.l || 0)} of games` : untallied, fine: "" },
+    { label: "Puck line", value: kept(r.puckLine) ? F.recStr(r.puckLine) : dash, sub: kept(r.puckLine) ? "against the spread" : "Not graded", fine: "" },
+    { label: "Totals", value: kept(r.totals) ? F.recStr(r.totals) : dash, sub: kept(r.totals) ? "over / under" : untallied, fine: "" },
     // No unsealed branch, on purpose, for the fifth time -- it arrived again
     // when this rendering moved out of the page and into this module, where
     // the guard that greps the page could not see it. `load_record` always
@@ -134,17 +150,25 @@ function nhlBoard(data) {
     // return tomorrow. NHL's pooled forward return IS the test decided
     // 2027-04-25 (docs/when_this_ends.md).
     //
-    // `rows` is build_forward_report's len(ledger): every frozen opinion,
-    // settled or not. It is not called "settled".
+    // `wagers` is the forward report's own count: one per selection at the
+    // best price, on slates whose games have all finished (void and
+    // unsettleable included, which is why the sub says "settled slates" and
+    // not "settled"). This printed `rows` as "opinions frozen", and both
+    // words were wrong: a ledger row is one BOOK'S QUOTE (180 rows from 18
+    // opinions on one real slate), and the ledger holds only settled slates,
+    // so opening night -- 118 opinions frozen, none settled -- read "Nothing
+    // frozen yet". A board with no `wagers` shows no number, never `rows`.
     //
     // The sibling adapters below DO publish their records, and must: EPL's
     // card is allowlisted and CBB's measurement is historical. Neither is a
     // pre-registered forward test. Pinned by
-    // tests/test_site_publishes_no_forward_return.py.
-    { label: "Forward ledger · sealed", value: fw && fw.rows ? String(fw.rows) : dash,
+    // tests/test_site_publishes_no_forward_return.py and
+    // tests/test_site_counts_one_opinion_per_wager.py.
+    { label: "Forward ledger · sealed", value: fw && typeof fw.wagers === "number" && fw.wagers ? String(fw.wagers) : dash,
       sub: !fw ? "No forward ledger yet"
-        : fw.rows ? `opinions frozen across ${fw.markets} market${fw.markets === 1 ? "" : "s"} · return decided ${F.fmtDateOnly(fw.decisionDate)}, not before`
-        : `Nothing frozen yet · return decided ${F.fmtDateOnly(fw.decisionDate)}, not before`,
+        : typeof fw.wagers !== "number" ? `Ledger size not reported · return decided ${F.fmtDateOnly(fw.decisionDate)}, not before`
+        : fw.wagers ? `opinions on settled slates, across ${fw.markets} market${fw.markets === 1 ? "" : "s"} · return decided ${F.fmtDateOnly(fw.decisionDate)}, not before`
+        : `No slate settled yet · return decided ${F.fmtDateOnly(fw.decisionDate)}, not before`,
       fine: "" },
   ];
   return { ...common(data, sport), kicker: `${data.season} NHL · ${data.boardDate ? F.fmtDateOnly(data.boardDate) : ""}`, title: ["Tonight's", "Board."],
@@ -157,8 +181,14 @@ function nhlResults(data) {
   const games = (data.games || []).map((g) => {
     const winner = g.away.final > g.home.final ? g.away.abbr : g.home.abbr, suHit = winner === g.projWinner, tot = g.away.final + g.home.final;
     const side = (x) => ({ ...sideBase(T, x), proj: num(x.projGoals), final: x.final, scoreColor: x.abbr === winner ? "#14151a" : "#9a9ca6" });
+    // A game whose board carried no total line settles with no `total`.
+    // This read g.total.line unguarded, so the morning after an unpriced
+    // board -- every game, under Publish Site -- the adapter threw and the
+    // Results page rendered nothing. Pinned by
+    // tests/test_site_never_calls_an_unpriced_game_a_pass.py.
+    const t = g.total;
     return { sides: [side(g.away), side(g.home)], finishLabel: g.finish && g.finish !== "REG" ? ` · ${g.finish}` : "",
-      cells: [cell("Straight up", [["Projected", g.projWinner], ["Result", suHit ? "Hit" : "Miss", true]]), cell("Total", [["Line / proj", `${num(g.total.line)} / ${num(g.total.proj)}`], ["Landed", `${tot} · ${g.total.result === "over" ? "Over" : g.total.result === "under" ? "Under" : "Push"}`, true]])],
+      cells: [cell("Straight up", [["Projected", g.projWinner], ["Result", suHit ? "Hit" : "Miss", true]]), cell("Total", t ? [["Line / proj", `${num(t.line)} / ${num(t.proj)}`], ["Landed", `${tot} · ${t.result === "over" ? "Over" : t.result === "under" ? "Under" : "Push"}`, true]] : [["Line / proj", dash], ["Landed", `${tot} · no line`, true]])],
       ...resultPick(g.pick) };
   });
   return { ...common(data, sport), kicker: `${data.season} NHL · ${data.resultsDate ? F.fmtDateOnly(data.resultsDate) : ""}`, dateShort: data.resultsDate ? F.fmtDateOnly(data.resultsDate) : "",
