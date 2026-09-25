@@ -24,6 +24,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -118,6 +119,21 @@ class StagingProviderPolicy:
             return False
         entry = self.entries.get(str(provider_name).strip())
         return bool(entry) and str(market_key).strip() in entry.required_markets
+
+    def max_run_age_hours(self, provider_name: str) -> float | None:
+        """How old a provider run may be before the card refuses its prices.
+
+        The stricter of the policy-wide `max_provider_run_age_hours` and the
+        provider entry's own. Each is a limit the policy states, so neither
+        may loosen the other. None only when the policy states no limit at
+        all.
+        """
+        limits = [self.max_provider_run_age_hours]
+        entry = self.entries.get(str(provider_name or "").strip())
+        if entry is not None:
+            limits.append(entry.max_provider_run_age_hours)
+        stated = [float(limit) for limit in limits if limit is not None]
+        return min(stated) if stated else None
 
     def allowed_markets(self, provider_name: str) -> tuple[str, ...]:
         if not self.provider_allowed(provider_name):
@@ -372,3 +388,40 @@ def run_is_fresh(
             f"{max_age_hours:g}-hour limit."
         )
     return True, f"The provider run is {age_hours:.1f} hours old."
+
+
+def staged_prices_are_fresh(
+    stamps: Iterable[object], *, max_age_hours: float | None, now: datetime
+) -> tuple[bool, str]:
+    """Whether staged price rows are recent enough to build a card from.
+
+    Until 2026-09-25 nothing outside the tests called `run_is_fresh`, so the
+    policy's 12-hour `max_provider_run_age_hours` was parsed and never
+    applied, while docs/provider_allowlist_approval.md promised freshness on
+    every run. The failure-shape audit ran the real card over prices staged
+    on a Monday and rendered on the Wednesday, 50 hours later: it staked 0.5u
+    on a Wednesday game at Monday's price, froze it as the day's first
+    opinion, and nothing said how old the price was.
+
+    The OLDEST row decides, because the card prices every row it is given: a
+    fresh team fetch beside yesterday's per-event file is not a fresh run. A
+    row whose `fetched_at` is blank, unreadable or carries no timezone
+    decides too, and it decides stale, for the reason `run_is_fresh` gives.
+    `now` is required, so a reproduced card is judged at the instant it
+    reproduces rather than at the wall clock.
+    """
+    oldest_text = ""
+    oldest: datetime | None = None
+    for value in stamps:
+        # A CSV round-trip turns a blank field into NaN, which is not equal
+        # to itself.
+        text = "" if value is None or value != value else str(value).strip()
+        try:
+            stamp = datetime.fromisoformat(text) if text else None
+        except ValueError:
+            stamp = None
+        if stamp is None or stamp.tzinfo is None:
+            return run_is_fresh(text, max_age_hours=max_age_hours, now=now)
+        if oldest is None or stamp < oldest:
+            oldest_text, oldest = text, stamp
+    return run_is_fresh(oldest_text, max_age_hours=max_age_hours, now=now)

@@ -111,6 +111,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--output-dir", default=str(OUTPUTS_DIR))
     args = parser.parse_args(argv)
 
+    # The cap governs the per-event fetch, the only one `--props` runs. A
+    # dispatched "0" used to reach the provider as "no cap" (the library
+    # read `if credit_cap and ...`), buying every event on the board. It is
+    # refused here, before a credential is loaded or a provider is built, as
+    # capture_line_movement.py and every buy_* script already did.
+    if args.live and args.props and args.credit_cap <= 0:
+        parser.error("--live --props requires a positive --credit-cap.")
+
     staging_dir = Path(args.staging_dir)
     loaded = load_provider_env()
     print(loaded.summary_line())

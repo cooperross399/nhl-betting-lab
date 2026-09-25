@@ -230,8 +230,9 @@ for its bulk historical endpoint and is ambiguous about the per-event one, so
 the real rate is read from `x-requests-last` as it is spent and the cap is
 enforced against the pessimistic reading. Team markets come from the bulk
 historical endpoint at `10 x markets x regions` **per snapshot**, so a whole
-slate costs thirty credits whether it holds four games or fourteen. Either way
-this is a spending decision rather than a default.
+slate costs sixty credits at the lab's two regions (`us,us2`) whether it holds
+four games or fourteen. Either way this is a spending decision rather than a
+default.
 
 ### Gates and tests
 
