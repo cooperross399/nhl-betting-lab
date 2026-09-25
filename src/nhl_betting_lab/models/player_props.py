@@ -143,6 +143,19 @@ def _collapse_initials(normalized: str) -> str:
     return " ".join(collapsed)
 
 
+def player_key(name: object) -> str:
+    """One key per player as a bet is written: normalized, initials collapsed.
+
+    `"Alexis Lafreniere"` (one book) and `"Alexis Lafrenière"` (another), or
+    `"JT Miller"` and `"J.T. Miller"`, are one player and so one wager.
+    `"Elias Pettersson (2004)"` keeps its disambiguating number and stays
+    apart from `"Elias Pettersson"`. `card_pricing.selection_key` keys on
+    this, so every consumer of that key — the card, the snapshot, the CLV
+    collapse — agrees with the resolver that prices both spellings as one.
+    """
+    return _collapse_initials(normalize_player_name(name))
+
+
 def player_name_aliases(name: object) -> tuple[str, ...]:
     """Every normalized form one registry spelling can legitimately take.
 
