@@ -299,8 +299,15 @@ def _publish_whole(frame: pd.DataFrame, target: Path) -> bool:
         temporary.unlink(missing_ok=True)
 
 
-def _read_snapshot(path: Path) -> tuple[pd.DataFrame | None, str]:
+def read_snapshot(path: Path) -> tuple[pd.DataFrame | None, str]:
     """The snapshot in `path`, or None and the reason it is not one.
+
+    Settlement and the closing-line report both read snapshots through this,
+    so the two cannot disagree about which files are a day's opinion. They
+    used to: #146 gave settlement this reader and left the CLV runner on a
+    bare `pd.read_csv`, which still crashed on half a character and dropped
+    the other shapes below without a word
+    (tests/test_an_unreadable_snapshot_stopped_the_clv_report.py).
 
     ## An unreadable file waits, named; it no longer stops the whole pass
 
@@ -351,7 +358,7 @@ class SettlementResult:
     unresolved_team_names: list[str] = field(default_factory=list)
     #: Pending snapshot files that could not be read as a snapshot, by file
     #: name, with the reason. Each is left unsettled and unmarked, and is
-    #: retried on every pass (see `_read_snapshot`).
+    #: retried on every pass (see `read_snapshot`).
     unreadable_snapshots: dict[str, str] = field(default_factory=dict)
     notes: list[str] = field(default_factory=list)
 
@@ -606,7 +613,7 @@ def settle_snapshots(
     for path in sorted(directory.glob("*.csv")):
         if path.stem in settled_days:
             continue
-        snapshot, problem = _read_snapshot(path)
+        snapshot, problem = read_snapshot(path)
         if snapshot is None:
             # Named and left pending. It used to raise out of the whole pass.
             result.unreadable_snapshots[path.name] = problem
