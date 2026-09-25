@@ -40,7 +40,39 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     processed = Path(args.processed_dir)
+    outputs = Path(args.output_dir)
     archive = Path(args.archive_dir) if args.archive_dir else None
+
+    # The archive and the ledger are one pair: a day counts as settled if its
+    # marker is in the archive OR its rows are in the ledger. This used to
+    # take the real archive whatever directories it was given, so a scratch
+    # run (--processed-dir/--output-dir elsewhere) settled the real archive's
+    # days into a scratch ledger and marked them settled in the real archive,
+    # and the next real run found nothing pending: the real ledger never got
+    # those rows. It also never looked where a scratch card freezes.
+    #
+    # So, as in run_gameday_card.py, the archive follows a non-default output
+    # directory unless one is named, and a scratch ledger with the real
+    # archive is refused rather than guessed at.
+    if archive is None and outputs.resolve() != OUTPUTS_DIR.resolve():
+        archive = outputs / "archive"
+    if archive is None and processed.resolve() != PROCESSED_DIR.resolve():
+        print(
+            f"::error::Refusing to settle the real evidence archive into the "
+            f"ledger in {processed}. Its days would be marked settled in the "
+            "real archive while their rows went to a ledger the real run "
+            "never reads, and nothing would ever settle them again. Pass "
+            "--archive-dir for the archive that belongs with this "
+            "--processed-dir, or --output-dir (whose archive/ a scratch card "
+            "freezes into).",
+            file=sys.stderr,
+        )
+        return 2
+    if archive is not None:
+        print(
+            f"Settling the snapshots under {archive}, not the real evidence "
+            "archive, because this run was given its own directories."
+        )
 
     logs = load_player_logs(processed)
     games = load_team_games(processed)
@@ -64,7 +96,7 @@ def main(argv: list[str] | None = None) -> int:
     # builds its tree from the files present, so a run that wrote no report
     # would drop `latest_forward_evidence.md` from the feed for the day.
     payload = build_forward_report(load_ledger(processed))
-    paths = save_forward_report(payload, output_dir=Path(args.output_dir))
+    paths = save_forward_report(payload, output_dir=outputs)
     for name, path in paths.items():
         print(f"  {name}: {path}")
     if refused:
