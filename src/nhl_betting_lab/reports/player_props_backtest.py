@@ -44,6 +44,7 @@ price-based number exists, it is the one that decides.
 from __future__ import annotations
 
 import json
+import math
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -121,6 +122,15 @@ class BacktestReport:
     overall: RoiInterval | None = None
     by_side: dict[str, RoiInterval] = field(default_factory=dict)
     looks: int = 1
+    #: Every price row handed in, and the two ways one leaves before it is a
+    #: quote on a wager: priced in another window, or carrying no parseable
+    #: snapshot or face-off time, so its window is unknown. The
+    #: reconciliation starts here, not at `priced_outcomes`, because every
+    #: row this measurement is known to have lost silently was lost before
+    #: the loop that counts priced outcomes.
+    rows_read: int = 0
+    rows_other_window: int = 0
+    rows_window_unknown: int = 0
     #: Book quotes seen, and the distinct wagers they collapse to. One
     #: selection quoted by eight books is one bet, not eight.
     quotes_seen: int = 0
@@ -132,10 +142,10 @@ class BacktestReport:
     priced_outcomes: int = 0
     outcomes_without_a_model_opinion: int = 0
     outcomes_below_threshold: int = 0
-    #: Rows whose line or odds could not be parsed. Zero on the shipped data,
-    #: and counted anyway: an uncounted drop is invisible exactly when a
-    #: provider format change makes it large, which is the shape of the
-    #: UTC-join defect that once discarded seven prices in ten.
+    #: Rows whose line, odds or selection could not be parsed. Zero on the
+    #: shipped data, and counted anyway: an uncounted drop is invisible
+    #: exactly when a provider format change makes it large, which is the
+    #: shape of the UTC-join defect that once discarded seven prices in ten.
     outcomes_unparseable: int = 0
     #: Rows whose player name matched two different players that both dressed
     #: that night and could not be separated by team — the same-game Aho
@@ -155,6 +165,15 @@ class BacktestReport:
                 "statement about the evidence, not about the model."
             )
         return self.overall.verdict()
+
+
+#: The sides a price row may name. Pricing reads the first two as the Over;
+#: settlement reads them the same way. Anything else is unparseable: pricing
+#: used to read every other string as an Under while `settle` read anything
+#: beginning with "o" as an Over, so an "o" row was priced one way and
+#: settled the other, and "maybe" raised in `settle` and ended the report.
+OVER_SELECTIONS = frozenset({"over", "yes"})
+UNDER_SELECTIONS = frozenset({"under", "no"})
 
 
 def settle(actual: float, line: float, selection: str) -> tuple[bool, bool]:
@@ -230,6 +249,7 @@ def run_backtest(
         window_label=window_label,
     )
     report.notes = _standing_notes()
+    report.rows_read = len(prices)
 
     # A correction indexed on ice time needs the expected figure. Without the
     # column every sample would index at zero, which is a different
@@ -244,8 +264,24 @@ def run_backtest(
             "`expected_toi_seconds`. Refusing rather than applying it on a "
             "missing index; regenerate the samples."
         )
-    if prices.empty or samples.empty:
+    if prices.empty:
         return report
+    # NO SAMPLES IS NOT NO PRICES. This returned here for either, before the
+    # phase filter below, so prices with no model samples — a worktree, or a
+    # purchase probe that never builds them — reported "No snapshot window
+    # was filtered" with `--phase late` named and "Priced outcomes seen: 0"
+    # over 20,000 price rows, skipped the team-map refusal below, and the
+    # claims summary then said no prices had been bought for any market. The
+    # prices still go through the same window, collapse and accounting; with
+    # no opinion to compare, every priced outcome lands in "without a model
+    # opinion", which is what happened. The runner refuses before this.
+    if samples.empty:
+        report.notes.append(
+            "No walk-forward samples were supplied, so no priced outcome had "
+            "a model opinion to compare with its price and nothing about the "
+            "model is measured. Every priced outcome is counted as one "
+            "without a model opinion."
+        )
 
     # ONE WAGER IS ONE BET, AT THE BEST PRICE A CARD COULD HAVE TAKEN.
     #
@@ -303,8 +339,21 @@ def run_backtest(
         # behaviour: it means the store carries no window information at all,
         # not that a window was asked for and missed.
         if phase:
-            kept = labelled[labelled["phase"] == phase]
+            in_window = labelled["phase"] == phase
+            # A ROW WITH NO READABLE MOMENT IS NOT A ROW FROM ANOTHER MOMENT.
+            # Both used to be one count, "outside the window", explained as
+            # "a wager priced at two different moments" — which says nothing
+            # true about a row whose snapshot or face-off could not be
+            # parsed. On one real week (`card`), sending 30% of the quotes
+            # with an unparseable time cut priced outcomes by 1,326 and grew
+            # that count from 23,056 rows to 35,907, while the reconciliation
+            # said "all of them" — and a provider format change is exactly
+            # what produces such rows. Counted apart, and named.
+            unknown = (labelled["phase"] == "unknown") & ~in_window
+            kept = labelled[in_window]
             report.phase = str(phase)
+            report.rows_window_unknown = int(unknown.sum())
+            report.rows_other_window = int((~in_window & ~unknown).sum())
             prices = kept.drop(columns=["hours_before", "phase"])
             if kept.empty:
                 report.notes.append(
@@ -314,14 +363,21 @@ def run_backtest(
                 )
             else:
                 report.phase_hours = float(kept["hours_before"].median())
-                dropped = len(labelled) - len(kept)
-                if dropped:
+                if report.rows_other_window:
                     report.notes.append(
-                        f"{dropped:,} price row(s) outside the `{phase}` "
-                        "window were excluded. A wager priced at two different "
-                        "moments is two different questions, and the better of "
-                        "the two is a price nobody could have taken."
+                        f"{report.rows_other_window:,} price row(s) outside "
+                        f"the `{phase}` window were excluded. A wager priced "
+                        "at two different moments is two different questions, "
+                        "and the better of the two is a price nobody could "
+                        "have taken."
                     )
+            if report.rows_window_unknown:
+                report.notes.append(
+                    f"{report.rows_window_unknown:,} price row(s) have no "
+                    "parseable snapshot or face-off time, so the window they "
+                    "were priced in is unknown. They were excluded rather "
+                    f"than guessed into the `{phase}` window or another one."
+                )
 
     report.quotes_seen = len(prices)
     # THE WAGER IS A GAME AND A PLAYER, NOT A UTC DAY AND A SPELLING. This
@@ -432,6 +488,17 @@ def run_backtest(
         except (TypeError, ValueError):
             report.outcomes_unparseable += 1
             continue
+        # A blank line reads as NaN and `float(nan)` succeeds, so it used to
+        # pass the parse above: with a model opinion `math.floor` raised in
+        # `over_probability` and ended the whole report, and without one it
+        # was filed as "without a model opinion". A side neither pricing nor
+        # settlement names ended the report in `settle` once its edge
+        # cleared. Both are unparseable rows, counted here with the rest.
+        if not math.isfinite(line) or selection not in (
+            OVER_SELECTIONS | UNDER_SELECTIONS
+        ):
+            report.outcomes_unparseable += 1
+            continue
         # The game date, not the UTC date of puck drop. An evening North
         # American game commences on the *next* UTC day, so joining on the raw
         # commence date silently discarded roughly seven prices in ten — and
@@ -498,7 +565,7 @@ def run_backtest(
         # both look like edges on a vigged market and neither is.
         side_probability = (
             over_probability
-            if selection in {"over", "yes"}
+            if selection in OVER_SELECTIONS
             else 1.0 - over_probability
         )
         edge = side_probability - implied
@@ -584,32 +651,101 @@ def run_backtest(
 def _side_of(bet: PlacedBet) -> str:
     """Which way a bet points, normalising `yes`/`no` onto over/under."""
     side = str(bet.selection).strip().lower()
-    return "over" if side in {"over", "yes"} else "under"
+    return "over" if side in OVER_SELECTIONS else "under"
 
 
 def _reconciliation_line(report: "BacktestReport") -> str:
-    """Every priced outcome must land in exactly one bucket.
+    """Every price row read must land in exactly one bucket.
 
-    A drop that lands in no bucket is invisible exactly when a provider
-    format change makes it large, so the identity is printed — and printed
-    loudly when it fails, because a report that does not reconcile is
-    describing a subset it cannot name.
+    Checked in two stages, because rows leave in two places: before the
+    priced outcomes are counted (another window, an unknown window, another
+    book's quote on a wager already counted) and inside the loop that prices
+    them (no opinion, below threshold, unparseable, ambiguous, bet).
+
+    This used to check only the second stage, against `priced_outcomes` —
+    which is bumped at the top of the same loop that bumps every bucket, so
+    "Accounted for: all of them." was printed by construction, including
+    while the UTC-day collapse lost 4,196 late-window wager keys before the
+    loop ever saw them. What the identity catches, said plainly: a code path
+    that drops a row, or counts one twice, without a counter, anywhere from
+    reading the store to placing a bet. What it cannot catch: a collapse
+    keyed on the wrong columns, which merges wagers into a bucket that is
+    counted correctly — the printed bucket sizes are what show that. A
+    provider format change is not caught by the identity either; it lands in
+    a named bucket (window unknown, unparseable), and the bucket is printed.
     """
-    accounted = (
+    before_the_loop = (
+        report.rows_other_window
+        + report.rows_window_unknown
+        + (report.quotes_seen - report.wagers)
+    )
+    in_the_loop = (
         report.outcomes_without_a_model_opinion
         + report.outcomes_below_threshold
         + report.outcomes_unparseable
         + report.outcomes_ambiguous
         + len(report.bets)
     )
-    if accounted == report.priced_outcomes:
+    gaps = []
+    if before_the_loop + report.priced_outcomes != report.rows_read:
+        gaps.append(
+            f"{report.rows_read:,} price rows read, "
+            f"{before_the_loop + report.priced_outcomes:,} accounted for"
+        )
+    if in_the_loop != report.priced_outcomes:
+        gaps.append(
+            f"{report.priced_outcomes:,} outcomes seen, "
+            f"{in_the_loop:,} accounted for"
+        )
+    if not gaps:
         return "- Accounted for: all of them."
     return (
-        f"- **DOES NOT RECONCILE**: {report.priced_outcomes:,} outcomes seen, "
-        f"{accounted:,} accounted for. {report.priced_outcomes - accounted:,} "
-        "row(s) were dropped by a path with no counter, and whatever they "
-        "have in common is missing from this measurement."
+        f"- **DOES NOT RECONCILE**: {'; '.join(gaps)}. The difference was "
+        "dropped by a path with no counter, or counted twice, and whatever "
+        "those rows have in common is missing from this measurement."
     )
+
+
+def _accounting_lines(report: "BacktestReport") -> list[str]:
+    """Where every price row went, from the store to the bets.
+
+    Printed whether or not a bet was placed: a report that measured nothing
+    is exactly the one whose reader needs to see where the rows went.
+    """
+    return [
+        f"- Price rows read: {report.rows_read:,}",
+        (
+            "- Outside the measured window, excluded: "
+            f"{report.rows_other_window:,}"
+        ),
+        (
+            "- Window unknown (no parseable snapshot or face-off time), "
+            f"excluded: {report.rows_window_unknown:,}"
+        ),
+        (
+            "- Another book's quote on a wager already counted at its best "
+            f"price: {report.quotes_seen - report.wagers:,}"
+        ),
+        f"- Priced outcomes seen: {report.priced_outcomes:,}",
+        (
+            "- Without a model opinion: "
+            f"{report.outcomes_without_a_model_opinion:,}"
+        ),
+        (
+            "- Below the edge threshold: "
+            f"{report.outcomes_below_threshold:,}"
+        ),
+        (
+            "- Unparseable line, odds or selection: "
+            f"{report.outcomes_unparseable:,}"
+        ),
+        (
+            "- Ambiguous player name, dropped: "
+            f"{report.outcomes_ambiguous:,}"
+        ),
+        f"- Bets placed: {len(report.bets):,}",
+        _reconciliation_line(report),
+    ]
 
 
 def _standing_notes() -> list[str]:
@@ -663,27 +799,27 @@ def render_backtest(report: BacktestReport) -> str:
     ]
 
     if report.overall is None or not report.overall.bets:
+        # When not one priced outcome had an opinion, the threshold never had
+        # anything to clear, and saying it was not cleared blames it for what
+        # a missing or mismatched model did.
+        no_opinion_at_all = bool(report.priced_outcomes) and (
+            report.outcomes_without_a_model_opinion == report.priced_outcomes
+        )
         lines.extend(
             [
                 "## Not measured",
                 "",
                 (
+                    "Not one historically-priced outcome had a model opinion "
+                    "behind it, so no bet was placed and **nothing is "
+                    "measured**."
+                    if no_opinion_at_all else
                     "No historically-priced outcome cleared the edge "
                     "threshold with a model opinion behind it, so no bet was "
                     "placed and **nothing is measured**."
                 ),
                 "",
-                (
-                    f"- Priced outcomes seen: {report.priced_outcomes:,}"
-                ),
-                (
-                    "- Without a model opinion: "
-                    f"{report.outcomes_without_a_model_opinion:,}"
-                ),
-                (
-                    "- Below the edge threshold: "
-                    f"{report.outcomes_below_threshold:,}"
-                ),
+                *_accounting_lines(report),
                 "",
                 (
                     "This is a statement about the evidence, not about the "
@@ -830,22 +966,7 @@ def render_backtest(report: BacktestReport) -> str:
                 "",
                 "## Where the bets came from",
                 "",
-                f"- Priced outcomes seen: {report.priced_outcomes:,}",
-                (
-                    "- Without a model opinion: "
-                    f"{report.outcomes_without_a_model_opinion:,}"
-                ),
-                (
-                    "- Below the edge threshold: "
-                    f"{report.outcomes_below_threshold:,}"
-                ),
-                f"- Unparseable line or odds: {report.outcomes_unparseable:,}",
-                (
-                    "- Ambiguous player name, dropped: "
-                    f"{report.outcomes_ambiguous:,}"
-                ),
-                f"- Bets placed: {len(report.bets):,}",
-                _reconciliation_line(report),
+                *_accounting_lines(report),
                 "",
             ]
         )
