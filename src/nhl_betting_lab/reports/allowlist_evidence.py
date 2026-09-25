@@ -35,6 +35,7 @@ from typing import Any
 from nhl_betting_lab.config import OUTPUTS_DIR, PROJECT_ROOT
 from nhl_betting_lab.markets import ALL_MARKETS
 from nhl_betting_lab.reports.player_props_backtest import by_market_with_other_windows
+from nhl_betting_lab.reports.what_we_can_claim import unread_reason
 from nhl_betting_lab.staging_provider_policy import file_sha256
 from nhl_betting_lab.stats import NO_DEMONSTRATED_EDGE, bets_needed_to_detect
 
@@ -60,6 +61,22 @@ EVIDENCE_FILENAMES: tuple[str, ...] = (
     # replication.json recorded it "not confirmed".
     "replication.md",
 )
+
+#: The files every verdict below is READ from, each beside the report above
+#: that a reviewer checksums. They are gitignored, so a fresh checkout has the
+#: reports and none of these, and CI never builds `replication.json` at all.
+#: This bundle used to read an absent one as an empty one: with only the
+#: tracked reports present, all 12 markets read "no price-based measurement
+#: exists" beside a checksummed `player_props_backtest.md` recording 9,379
+#: `shots_on_goal` bets, and the Gameday Refresh bundle said `points` and
+#: `blocked_shots` had "no replication record" beside a checksummed
+#: `replication.md`. An input that could not be read is now named as missing
+#: evidence, per market and in the recommendation.
+VERDICT_INPUTS: dict[str, str] = {
+    "player_props_backtest.json": "player_props_backtest.md",
+    "team_markets_measurement.json": "team_markets_measurement.md",
+    "replication.json": "replication.md",
+}
 
 #: Replication verdicts that permit a market to be called supported. Only
 #: one does. "not confirmed" is not a neutral absence -- the second window
@@ -117,6 +134,8 @@ class EvidenceBundle:
     files: list[EvidenceFile] = field(default_factory=list)
     verdicts: list[MarketVerdict] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
+    #: Each entry of `VERDICT_INPUTS` that could not be read, with why.
+    unread: dict[str, str] = field(default_factory=dict)
 
     @property
     def supported_markets(self) -> tuple[str, ...]:
@@ -126,13 +145,34 @@ class EvidenceBundle:
     def missing_files(self) -> tuple[str, ...]:
         return tuple(item.name for item in self.files if not item.present)
 
+    @property
+    def unread_inputs(self) -> tuple[str, ...]:
+        return tuple(name for name in VERDICT_INPUTS if name in self.unread)
+
     def recommendation(self) -> str:
+        unread = ", ".join(self.unread_inputs)
         if self.missing_files:
             return (
                 "**Enable nothing yet.** "
                 f"{len(self.missing_files)} evidence file(s) are missing, so "
                 "the picture is incomplete: "
                 f"{', '.join(self.missing_files)}."
+                + (
+                    " The verdicts are read from files that could not be "
+                    f"read either: {unread}."
+                    if unread
+                    else ""
+                )
+            )
+        if unread and not self.supported_markets:
+            # Absence fails closed here — nothing unread can be supported —
+            # but "the evidence supports enabling nothing" is a statement
+            # about evidence this bundle never read.
+            return (
+                "**Enable nothing yet.** The verdicts below are read from "
+                f"measurement outputs this bundle could not read: {unread}. "
+                "A verdict that could not be read is missing evidence, not a "
+                "finding, so the picture is incomplete."
             )
         if not self.supported_markets:
             return (
@@ -153,6 +193,12 @@ class EvidenceBundle:
             "considerably more than one measured precisely, and it is still "
             "two windows, scored by a model that has never been tested on a "
             "season it did not help fit. The decision is yours either way."
+            + (
+                f"\n\nSome verdicts could not be read ({unread}), so the "
+                "markets read from them are not assessed here at all."
+                if unread
+                else ""
+            )
         )
 
 
@@ -191,11 +237,23 @@ def collect_files(
     return files
 
 
+def unread_verdict_inputs(output_dir: Path) -> dict[str, str]:
+    """Each of `VERDICT_INPUTS` that is absent or unreadable, with why."""
+    problems = {
+        name: unread_reason(Path(output_dir) / name) for name in VERDICT_INPUTS
+    }
+    return {name: problem for name, problem in problems.items() if problem}
+
+
 def assess_markets(*, output_dir: Path) -> list[MarketVerdict]:
     """What the measurements support, market by market."""
     props = _read_json(output_dir / "player_props_backtest.json")
     team = _read_json(output_dir / "team_markets_measurement.json")
     calibration = _read_json(output_dir / "props_calibration.json")
+    # `_read_json` gives `{}` for an absent file and an empty one alike; these
+    # say which, so an absent input is never reported as a finding.
+    unread = unread_verdict_inputs(output_dir)
+    replication_unread = unread.get("replication.json", "")
 
     calibration_samples = {
         str(item.get("market")): int(item.get("samples", 0) or 0)
@@ -232,13 +290,36 @@ def assess_markets(*, output_dir: Path) -> list[MarketVerdict]:
         bets = int((entry or {}).get("bets", 0) or 0)
 
         if not entry or bets == 0:
+            source = (
+                "player_props_backtest.json"
+                if market.is_prop
+                else "team_markets_measurement.json"
+            )
+            problem = unread.get(source, "")
+            if problem:
+                # Missing evidence, not a finding. This read "no price-based
+                # measurement exists" whenever the JSON was absent, beside the
+                # checksummed report recording the measurement.
+                report_name = VERDICT_INPUTS[source]
+                beside = (
+                    f", while the checksummed `{report_name}` is present"
+                    if (output_dir / report_name).is_file()
+                    else ""
+                )
+                opening = (
+                    f"its verdict could not be read: {problem}{beside}. A "
+                    "verdict that could not be read is missing evidence, not "
+                    "an absence of measurement"
+                )
+            else:
+                opening = "no price-based measurement exists"
             verdicts.append(
                 MarketVerdict(
                     market=market.key,
                     calibration_samples=samples,
                     supported=False,
                     reason=(
-                        "no price-based measurement exists"
+                        opening
                         + (
                             f"; it has been calibration-checked on {samples:,} "
                             "walk-forward samples, which can rule the model "
@@ -284,6 +365,17 @@ def assess_markets(*, output_dir: Path) -> list[MarketVerdict]:
         # well it did the first time.
         replication_state = replication.get(market.key)
         replicated = replication_state == REPLICATED
+        # "No replication record" is true only of a record that was read and
+        # does not list this market. Gameday Refresh never builds
+        # `replication.json`, so the bundle it uploads said that of `points`
+        # and `blocked_shots` while checksumming the `replication.md` that
+        # records them as untestable. An unread record is said to be unread.
+        held_out = (
+            f"The held-out verdict could not be read ({replication_unread})"
+            if replication_unread
+            else "The held-out window did not confirm it "
+            f"({replication_state or 'no replication record'})"
+        )
 
         if bets < MINIMUM_BETS_TO_READ:
             reason = (
@@ -315,8 +407,7 @@ def assess_markets(*, output_dir: Path) -> list[MarketVerdict]:
                     # record built by counting every book's quote as a bet; at
                     # one bet per wager neither season carries it alone.
                     if replicated
-                    else " The held-out window did not confirm it "
-                    f"({replication_state or 'no replication record'}), so it"
+                    else f" {held_out}, so it"
                     " is not a demonstrated deficit. A loss that survives the"
                     " correction still argues against enabling this market,"
                     " not for it."
@@ -358,8 +449,7 @@ def assess_markets(*, output_dir: Path) -> list[MarketVerdict]:
                 )
             else:
                 reason += (
-                    f" **The held-out window did not confirm it "
-                    f"({replication_state or 'no replication record'}).** "
+                    f" **{held_out}.** "
                     "One window is a candidate; two agreeing is a finding. "
                     "This is the first."
                 )
@@ -398,6 +488,7 @@ def build_bundle(
         provider_name=provider_name,
         files=collect_files(output_dir=directory, repository_root=root),
         verdicts=assess_markets(output_dir=directory),
+        unread=unread_verdict_inputs(directory),
     )
     bundle.notes = [
         "Claude assembled this bundle and stops here. Claude never writes a "
@@ -451,6 +542,29 @@ def render_bundle(bundle: EvidenceBundle) -> str:
     )
     lines.extend(item.as_row() for item in bundle.files)
     lines.append("")
+    lines.extend(
+        [
+            "### Where the verdicts were read from",
+            "",
+            (
+                "Not the reports above: each verdict is read from the "
+                "measurement output beside its report. One that could not be "
+                "read is missing evidence, and the verdicts that need it say "
+                "so rather than reporting an absence."
+            ),
+            "",
+            *[
+                f"- `{name}`: "
+                + (
+                    f"**not read** — {bundle.unread[name]}."
+                    if name in bundle.unread
+                    else "read."
+                )
+                for name in VERDICT_INPUTS
+            ],
+            "",
+        ]
+    )
 
     if bundle.missing_files:
         lines.extend(
@@ -528,6 +642,8 @@ def save_bundle(
                 "recommendation": bundle.recommendation(),
                 "supported_markets": list(bundle.supported_markets),
                 "missing_files": list(bundle.missing_files),
+                "unread_inputs": list(bundle.unread_inputs),
+                "unread": dict(bundle.unread),
                 "files": [item.__dict__ for item in bundle.files],
                 "verdicts": [item.__dict__ for item in bundle.verdicts],
                 "notes": bundle.notes,

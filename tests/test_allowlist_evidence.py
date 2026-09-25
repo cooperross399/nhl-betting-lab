@@ -40,7 +40,17 @@ def test_a_missing_file_is_listed_rather_than_omitted(tmp_path: Path) -> None:
 
 
 def test_with_no_price_evidence_nothing_is_supported(tmp_path: Path) -> None:
+    """Measurements that were read and hold nothing, not measurements absent.
+
+    This used to plant the reports alone and assert "supports enabling
+    nothing" — the bundle's verdict on JSON inputs it never found, which is
+    the defect in `test_the_bundle_names_the_verdicts_it_could_not_read.py`.
+    The inputs are planted empty now, so "no price evidence" is what was read.
+    """
     _all_evidence_present(tmp_path)
+    _write(tmp_path, "player_props_backtest.json", {"by_market": {}})
+    _write(tmp_path, "team_markets_measurement.json", {"markets": []})
+    _write(tmp_path, "replication.json", {"markets": []})
 
     bundle = ev.build_bundle(
         provider_name="the_odds_api", output_dir=tmp_path, repository_root=tmp_path

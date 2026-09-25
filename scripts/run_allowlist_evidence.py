@@ -36,6 +36,13 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  {verdict.sentence()}")
     if bundle.missing_files:
         print(f"Missing evidence: {', '.join(bundle.missing_files)}")
+    # The files the verdicts are read from. An absent one used to surface only
+    # as "no price-based measurement exists" or "no replication record".
+    if bundle.unread_inputs:
+        print(
+            "Verdict inputs not found or unreadable: "
+            f"{', '.join(bundle.unread_inputs)}"
+        )
     for name, path in paths.items():
         print(f"  {name}: {path}")
     print(
