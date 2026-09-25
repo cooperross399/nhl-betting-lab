@@ -28,7 +28,10 @@ teams[ABBR]      {name, short, color, fg}
 games[]
   id, startUtc, venue, city, tv
   priced         true when this build attached market prices to the game; false renders "Not priced", never a pass
-  away | home    {abbr, record, projGoals, winProb, b2b, goalie:{name, status:"confirmed"|"projected"}}  — everything after abbr optional
+  away | home    {abbr, record, projGoals, winProb, b2b, goalie:{name, status:"confirmed"|"projected"}}  — everything after abbr optional;
+                 b2b is the schedule fact (played the previous league day) and is published under either
+                 verdict; projGoals, winProb and the market figures below include the back-to-back
+                 adjustment only while the recorded team_b2b verdict ships it
   moneyline      {open:{away,home} | null, current:{away,home}, fair:{away,home}}  — open is the day's first line-movement capture, null when none was captured
   puckLine       {favorite, line, price, coverProb}
   total          {open | null, current, overPrice, underPrice, proj, overProb}
@@ -52,4 +55,4 @@ games[]
   pick           {market, label, price, result:"win"|"loss"|"push"}
 ```
 
-`web/build_site_json.py` is the reference writer. Source mapping in nhl-betting-lab: `moneyline`/`puckLine`/`total`/`regulation` come from `reports/card_pricing.price_team_markets` (TeamModel), `pick` from `reports/gameday_card.build_card` selections, `record.forward` from `forward_evidence.py` + `closing_lines.py`, finals from the boxscore cache via `build_datasets.load_team_games`.
+`web/build_site_json.py` is the reference writer. Source mapping in nhl-betting-lab: `projGoals`/`winProb`/`moneyline`/`puckLine`/`total`/`regulation` come from `models/team_model.TeamModel`, called directly rather than through `reports/card_pricing.price_team_markets`; the back-to-back adjustment reaches them only while `verdicts.ships("team_b2b")`, read from the lab's `data/outputs` as the card reads it, says it ships, so the board and the card price under one policy. `pick` comes from `reports/gameday_card.build_card` selections, `record.forward` from `forward_evidence.py` + `closing_lines.py`, finals from the boxscore cache via `build_datasets.load_team_games`.
