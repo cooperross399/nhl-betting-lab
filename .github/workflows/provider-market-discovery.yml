@@ -22,6 +22,18 @@ on:
   # A revisit that depends on somebody remembering is a revisit that does
   # not happen, so it is a cron: mid-October, once, capped, and it writes
   # nothing but a report.
+  #
+  # WHAT THE SCHEDULED RUN ACTUALLY ASKS (checked 2026-09-25): a scheduled
+  # event has no inputs, so `inputs.include_props == true` and
+  # `inputs.probe_every_market == true` are both false. The cron asks the
+  # three bulk markets (h2h, spreads, totals — about 6 credits) and nothing
+  # else: no prop, no ladder, no team total, no deferred candidate. Its
+  # reports used to publish the nine per-event markets as "No book returned
+  # this market"; they now say "Not asked in this run", and the run summary
+  # says the individual-market probe was not asked for. Making the cron ask
+  # them spends up to the per-event cap unattended, which is a spending
+  # decision for Cooper, not a fix — until it is made, the October revisit
+  # is a manual dispatch with both boxes ticked.
   schedule:
     - cron: "0 16 15 10 *"
   workflow_dispatch:
@@ -83,6 +95,7 @@ jobs:
         # bulk endpoint, and asking for it there makes the provider refuse the
         # whole request with a 422 that names nothing. Asking one at a time
         # means a single bad name cannot hide the others.
+        id: probe
         if: ${{ inputs.probe_every_market == true }}
         continue-on-error: true
         env:
@@ -116,6 +129,11 @@ jobs:
           # twenty". A starved probe and an unquoted market must never look
           # alike here: telling them apart is the entire job of this
           # workflow.
+          #
+          # Without `--props` (every scheduled run: see the note on the
+          # cron) only the bulk markets are asked, and both reports label
+          # every per-event market "not asked in this run" rather than
+          # reading it as a market no book quotes.
           python scripts/run_provider_shadow.py --live --overwrite-staging \
             --horizon-days 0 --max-events 20 \
             ${{ inputs.include_props == true && '--props' || '' }} \
@@ -123,18 +141,31 @@ jobs:
 
       - name: Write the coverage report to the run summary
         if: always()
+        env:
+          # skipped | failure | success. With continue-on-error a failed
+          # probe's outcome is still `failure`, which is what tells "never
+          # asked" from "asked and wrote nothing".
+          PROBE_OUTCOME: ${{ steps.probe.outcome }}
         run: |
+          # This section used to be omitted silently when the probe did not
+          # run — which is every scheduled run — so the one unattended
+          # revisit of the deferred markets said nothing about not having
+          # asked about any of them.
           {
             echo "## Provider market discovery"
             echo
+            echo "### Markets the provider serves"
+            echo
             if [ -f data/outputs/nhl_market_discovery.json ]; then
-              echo "### Markets the provider serves"
-              echo
               echo '```json'
               cat data/outputs/nhl_market_discovery.json
               echo '```'
-              echo
+            elif [ "${PROBE_OUTCOME:-}" = "skipped" ]; then
+              echo 'Not asked in this run. The individual-market probe step was skipped: it runs only when a manual dispatch ticks `probe_every_market` (a scheduled run has no inputs) and no earlier step failed. No candidate market (the deferred period markets and extra props) was asked about, so their absence here says nothing about whether any book quotes them.'
+            else
+              echo "The individual-market probe ran (outcome: ${PROBE_OUTCOME:-unknown}) and wrote no result, so no candidate market can be read from this run."
             fi
+            echo
             cat data/outputs/provider_market_discovery.md 2>/dev/null \
               || echo "No coverage report was produced."
           } >> "$GITHUB_STEP_SUMMARY"
