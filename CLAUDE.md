@@ -642,6 +642,17 @@ Re-derive rather than trust if the data has moved.
   `closing-line-captures` artifact, and Closing Lines, triggered when Line
   Movement completes, merges them into that branch. That path fetches nothing
   and spends no credit.
+- **Closing Lines is DISABLED as of 2026-09-25, pending Cooper's decision —
+  do not re-enable it as a fix.** This repository is public, so the
+  `closing-lines` branch would be a permanent, downloadable file of captured
+  odds (book, price, line, capture time), and The Odds API's terms forbid
+  redistributing their data as downloadable files that serve as raw data.
+  Nothing is lost while it is held: the closing prices are a strict subset of
+  Line Movement's own captures (`line_movement/<day>.csv`), which keep flowing
+  through the `line-movement` artifact chain, so the store can be rebuilt from
+  them. The cost is that the CLV report in Gameday Refresh reads nothing and
+  says "No capture store yet". Re-enabling is one click (Actions → Closing
+  Lines → Enable workflow) once Cooper decides where that file may live.
 - **This lab has an end date, decided before the data existed: 2027-04-25.**
   Everything measurable on bought history has been measured and comes back
   null. The single open question is whether the model beats prices on data
