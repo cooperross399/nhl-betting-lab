@@ -451,6 +451,23 @@ def test_the_union_keeps_a_repeated_row_as_often_as_it_was_captured(tmp_path: Pa
     assert newer.read_text() == "a,b\n1,x\n1,x\n2,y\n3,z\n"
 
 
+def test_a_row_the_newer_copy_repeats_is_kept_as_often_as_it_repeats(
+    tmp_path: Path,
+) -> None:
+    """The multiset union from the other side: the newer copy holds a row
+    twice that the older holds once, and the older holds a row the newer
+    lacks. Each row is kept as often as the copy holding it most often has
+    it, so nothing is lost and nothing is doubled. (A union that never
+    counted down the older copy's matches read both newer rows as already
+    known, recovered nothing and dropped the older row; the independent
+    reviewer found that no test told the two apart.)"""
+    older = _write(tmp_path / "old.csv", "a,b\n0,x\n1,a\n")
+    newer = _write(tmp_path / "new.csv", "a,b\n1,a\n1,a\n")
+
+    assert _union()(older, newer) == 1
+    assert newer.read_text() == "a,b\n0,x\n1,a\n1,a\n"
+
+
 def test_two_headers_are_not_merged_and_the_newer_file_is_untouched(tmp_path: Path) -> None:
     older = _write(tmp_path / "old.csv", "a,b\n1,x\n")
     newer = _write(tmp_path / "new.csv", "a,b,c\n3,z,q\n")
