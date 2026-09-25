@@ -45,6 +45,7 @@ from nhl_betting_lab.models.value import (
     devig_two_way,
 )
 from nhl_betting_lab.reports.card_pricing import selection_key
+from nhl_betting_lab.season import row_game_date
 
 
 CAPTURES_FILENAME = "closing_line_captures.csv"
@@ -179,16 +180,24 @@ def append_captures(
 
 
 #: Where the line-movement capture writes. It runs five times a day in
-#: season and records every field a closing price needs, so a separate
-#: closing-line capture would re-buy data this lab already pays for.
+#: season and records every field a closing price needs — for the markets it
+#: asks for, which are the per-event markets and their alternate ladders only.
+#: It never asks for the bulk moneyline, puck line or total, so those have no
+#: closing price here (see `uncaptured_markets`).
 MOVEMENT_DIRNAME = "line_movement"
 
 
 def load_movement_captures(processed_dir: Path | None = None) -> pd.DataFrame:
     """Closing-line captures, taken from the line-movement store.
 
-    The dedicated closing-line capture and this one ask the provider the same
-    question. The movement capture already runs five times a day through the
+    For the per-event markets and their alternate ladders, the dedicated
+    closing-line capture and this one ask the provider the same question. NOT
+    for the bulk team markets: the dedicated capture also bought `h2h`,
+    `spreads` and `totals`, and the movement capture never asks for them, so
+    no moneyline — and no featured puck line or total unless an alternate
+    ladder happens to repeat it — ever reaches this store. The report names
+    those opinions rather than blaming the books for them. The movement
+    capture already runs five times a day through the
     evening — including a snapshot at face-off for a 19:00 ET start — and
     writes `captured_at` beside every price, which is the only column the
     closing rule needs. Scheduling a second job to fetch the same board again
@@ -375,6 +384,7 @@ def closing_prices(captures: pd.DataFrame) -> dict[tuple, dict[str, object]]:
             "american_odds": float(getattr(row, "american_odds")),
             "book": str(getattr(row, "book", "")),
             "decimal": decimal,
+            "market_in_game": _market_in_game(row),
         }
     return closing
 
@@ -384,6 +394,45 @@ def _pays_more(decimal: float | None, than: object) -> bool:
     if decimal is None:
         return False
     return than is None or decimal > float(than)  # type: ignore[arg-type]
+
+
+def _market_in_game(row) -> tuple:
+    """(market, home, away, league game date): one market of one game."""
+    return (
+        str(getattr(row, "market", "")).strip(),
+        str(getattr(row, "home_team", "")),
+        str(getattr(row, "away_team", "")),
+        row_game_date(row),
+    )
+
+
+def uncaptured_markets(
+    opinions: pd.DataFrame, captures: pd.DataFrame
+) -> dict[str, int]:
+    """Opinions in a market the store holds NO pre-start price for, in their
+    game — by market.
+
+    Every one of them is also counted under "no closing price found", and
+    the page used to explain all of those the same way: "a selection the
+    books pulled before puck drop". For these it is false. Line Movement,
+    which feeds the store, fetches only the per-event markets and their
+    alternate ladders, so a moneyline opinion — frozen every game day from
+    the bulk fetch — could never meet a close; the failure-shape audit
+    replayed a card and two captures and found both moneyline opinions under
+    "no closing price found", moneyline absent from the by-market table, and
+    a moneyline-only day reading "Nothing to measure yet ... not a fault".
+    No book pulled anything there. The capture never priced that market.
+    """
+    collapsed = collapse_to_best(opinions)
+    if collapsed.empty:
+        return {}
+    captured = {entry["market_in_game"] for entry in closing_prices(captures).values()}
+    found: dict[str, int] = {}
+    for row in collapsed.itertuples():
+        where = _market_in_game(row)
+        if where not in captured:
+            found[where[0]] = found.get(where[0], 0) + 1
+    return found
 
 
 #: Markets whose two sides pair for a proportional de-vig. The regulation
@@ -649,7 +698,10 @@ def build_clv_report(
 
     rows, counts = clv_rows(opinions, captures)
     counts["bets"] = staked_total
-    report: dict = {"counts": counts, "markets": {}}
+    uncaptured = uncaptured_markets(opinions, captures)
+    counts["no_close_uncaptured"] = sum(uncaptured.values())
+    counts["store_has_closes"] = bool(closing_prices(captures))
+    report: dict = {"counts": counts, "markets": {}, "uncaptured": uncaptured}
     if rows.empty:
         counts["bets_matched"] = 0
         counts["bets_no_close"] = staked_total
@@ -805,6 +857,38 @@ def render_clv(report: dict, *, generated: str = "") -> str:
         f"- Opinions considered: **{counts.get('opinions', 0)}**; "
         f"matched to a closing price: **{counts.get('matched', 0)}**; "
         f"no closing price found: **{counts.get('no_close', 0)}**.",
+    ]
+    # Split, not added to: every opinion below is already in the count above.
+    # All of them used to be explained by the paragraph after this, as
+    # selections the books pulled — including every moneyline opinion, in a
+    # market the capture has never once asked for. An empty store is left to
+    # the "Nothing to measure yet" section: with no capture at all, every
+    # opinion is trivially uncaptured and the split would say nothing new.
+    uncaptured = 0
+    if counts.get("store_has_closes"):
+        uncaptured = int(counts.get("no_close_uncaptured", 0) or 0)
+    if uncaptured:
+        named = ", ".join(
+            f"`{market}` ({count})"
+            for market, count in sorted((report.get("uncaptured") or {}).items())
+        )
+        lines += [
+            f"- Of those, **{uncaptured}** are in a market the store holds no "
+            f"price for, in their game, from before face-off: {named}. No "
+            "book pulled these. The capture never priced that market for that "
+            "game — it does not ask for it, or no capture ran before face-off "
+            "— so they are a gap in what is captured and say nothing about "
+            "the model.",
+        ]
+        others = int(counts.get("no_close", 0)) - uncaptured
+        if others:
+            lines += [
+                f"- The other **{others}** are in a market that was captured "
+                "for their game, but their own line or side never was before "
+                "face-off: the books pulled or moved it, or the capture's "
+                "ladders did not carry that line.",
+            ]
+    lines += [
         "",
         "A closing price is the last price captured **strictly before** the",
         "listed start. An opinion with none is counted here, never dropped:",
@@ -814,14 +898,25 @@ def render_clv(report: dict, *, generated: str = "") -> str:
         "",
     ]
     if not report.get("overall"):
-        lines += [
-            "## Nothing to measure yet",
-            "",
-            "No opinion has been matched to a closing price. Before the",
-            "season, and on any day the capture job has not run, this is the",
-            "correct state and not a fault.",
-            "",
-        ]
+        lines += ["## Nothing to measure yet", ""]
+        if uncaptured:
+            # "Not a fault" was printed here on a day whose only opinions
+            # were moneylines, while the store held that day's prop closes.
+            lines += [
+                "No opinion has been matched to a closing price. This is NOT",
+                "the empty state before a season: the store holds closing",
+                f"prices, and {uncaptured} of these opinions are in a market it",
+                "never priced for their game. That is a gap in what is",
+                "captured.",
+                "",
+            ]
+        else:
+            lines += [
+                "No opinion has been matched to a closing price. Before the",
+                "season, and on any day the capture job has not run, this is the",
+                "correct state and not a fault.",
+                "",
+            ]
         return "\n".join(lines)
 
     for view in ("opinions", "bets"):

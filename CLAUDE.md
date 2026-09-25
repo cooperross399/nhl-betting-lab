@@ -658,14 +658,21 @@ Re-derive rather than trust if the data has moved.
   nothing. Now each Line Movement run hands its closing prices over as the
   `closing-line-captures` artifact, and Closing Lines, triggered when Line
   Movement completes, merges them into that branch. That path fetches nothing
-  and spends no credit.
+  and spends no credit. **Except the bulk team markets (found 2026-09-25):**
+  the retired capture also bought `h2h`, `spreads` and `totals`, and Line
+  Movement asks only for the per-event markets and their ladders, so no
+  moneyline opinion can ever meet a close, and a featured puck line or total
+  only when an alternate ladder repeats its line. The CLV report now names
+  those opinions as uncaptured rather than as selections the books pulled;
+  capturing them (3 markets x 2 regions = 6 credits a run) is Cooper's call.
 - **Closing Lines is DISABLED as of 2026-09-25, pending Cooper's decision —
   do not re-enable it as a fix.** This repository is public, so the
   `closing-lines` branch would be a permanent, downloadable file of captured
   odds (book, price, line, capture time), and The Odds API's terms forbid
   redistributing their data as downloadable files that serve as raw data.
-  Nothing is lost while it is held: the closing prices are a strict subset of
-  Line Movement's own captures (`line_movement/<day>.csv`), which keep flowing
+  Nothing more is lost while it is held: the per-event closing prices are a
+  strict subset of Line Movement's own captures (`line_movement/<day>.csv`;
+  the bulk team markets are captured nowhere — see above), which keep flowing
   through the `line-movement` artifact chain, so the store can be rebuilt from
   them. The cost is that the CLV report in Gameday Refresh reads nothing and
   says "No capture store yet". Re-enabling is one click (Actions → Closing
