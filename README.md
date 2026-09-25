@@ -312,6 +312,11 @@ de-vigged expected value at the closing line, for opinions and for bets
 separately. It is the earliest honest signal that the model is finding
 something — and it is not profit, which the report says out loud.
 
+**Closing Lines is disabled as of 2026-09-25**, pending a decision about
+publishing captured odds on this public repository's `closing-lines` branch.
+Line Movement still captures every price, so nothing is lost while it is held;
+until it is re-enabled, the closing-line report says it has no capture store.
+
 Every run — including a "skip" run — also publishes the rendered comment, a
 one-object status file, and the forward-evidence report to the **`card-feed`
 branch** (`latest_card_comment.md`, `latest_status.json`,
