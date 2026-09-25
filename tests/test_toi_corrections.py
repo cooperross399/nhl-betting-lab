@@ -96,14 +96,22 @@ def test_an_unreadable_file_degrades_to_no_correction(tmp_path: Path) -> None:
 
 
 def test_the_card_applies_corrections_only_on_the_recorded_verdict(
-    tmp_path,
+    tmp_path, monkeypatch
 ) -> None:
     """The decision is read from disk through `verdicts.ships`, not asserted
     in code, so the card's configuration is auditable against the experiment
-    that made it."""
+    that made it.
+
+    Nothing is recorded anywhere here to begin with. Since #151 a directory
+    holding no verdict reads the tracked one in `data/outputs/`, so the first
+    assertion held only while the recorded by_toi verdict was off, and would
+    have failed on the day an experiment shipped it."""
     import json
 
+    from nhl_betting_lab import verdicts
     from nhl_betting_lab.verdicts import ships
+
+    monkeypatch.setattr(verdicts, "OUTPUTS_DIR", tmp_path / "recorded")
 
     assert ships("by_toi", output_dir=tmp_path) is False
     (tmp_path / "correction_experiment.json").write_text(
