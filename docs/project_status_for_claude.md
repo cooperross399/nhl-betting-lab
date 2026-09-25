@@ -28,7 +28,10 @@ Read this second, after `CLAUDE.md`. It is the shortest honest answer to
   is in force on the card (each lost the price backtest in the only form a
   card could apply it); the two back-to-back rest adjustments are, because
   they won it. `verdicts.ships()` is the one door those decisions go through.
-- The provider adapter, shadow-only. The card cannot read what it writes.
+- The provider adapter, which decides nothing. The card reads what it writes
+  to `data/staging/`, and prices a market from it only through the policy's
+  allowlist, completeness and freshness gates. (Until 2026-09-25 this line
+  denied that the card reads it.)
 - A fail-closed provider policy and a PR gate that checks approval paperwork
   is real and current. The policy allowlists `the_odds_api` for twelve
   markets, approved against the evidence's own recommendation, under the

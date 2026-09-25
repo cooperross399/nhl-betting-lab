@@ -49,6 +49,7 @@ from nhl_betting_lab.providers import team_names as team_names_module
 from nhl_betting_lab.providers.team_names import save_team_name_map
 from nhl_betting_lab.reports import team_markets_measurement as tmm
 from nhl_betting_lab.reports import what_we_can_claim as claims
+from test_no_test_reads_the_checkouts_data import point_default_data_dirs_at
 
 
 def load_script(name: str) -> ModuleType:
@@ -124,7 +125,10 @@ def _store(*hours_before: float) -> pd.DataFrame:
 
 @pytest.fixture
 def defaults(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
-    """No test here may read the real `data/processed` or boxscore cache."""
+    """No test here may read the real `data/processed` or boxscore cache,
+    nor the tracked verdicts, which the runner read through its scratch
+    `--output-dir` (#151) until every default was pointed away here."""
+    point_default_data_dirs_at(monkeypatch, tmp_path / "checkout_defaults")
     processed = tmp_path / "default_processed"
     raw = tmp_path / "default_raw"
     processed.mkdir()
