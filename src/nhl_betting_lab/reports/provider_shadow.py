@@ -1,8 +1,13 @@
 """The shadow verification report.
 
 A shadow run fetches real prices, writes them to `data/staging/`, and reports
-what it found. That is all it does. It cannot allowlist anything, it cannot
-promote staging, and the card cannot read the files it writes.
+what it found. That is all it does. It cannot allowlist anything and it
+cannot promote staging. The gameday card reads the files it writes — in
+Gameday Refresh this fetch is the card's price source — and uses a market
+from them only if the policy allowlists it, it is priced for every game in
+the slate, and the oldest staged row is inside the policy's
+`max_provider_run_age_hours`. (Until 2026-09-25 this docstring and the
+report denied that the card reads them.)
 
 The report answers three questions and refuses to answer a fourth:
 
@@ -144,9 +149,15 @@ def render_shadow(
     lines = [
         "# Provider shadow verification",
         "",
+        # Until 2026-09-25 this said "The card cannot read those files." It
+        # can, and does: run_gameday_card.py reads data/staging/ by name. A
+        # reader told otherwise would treat a bad fetch as harmless.
         (
             "A shadow run fetches real prices into `data/staging/` and reports "
-            "what it found. The card cannot read those files. **Nothing in "
+            "what it found. The gameday card reads `data/staging/`, and uses a "
+            "market from it only if the provider policy allowlists it, it is "
+            "priced for every game in the slate, and the oldest staged row is "
+            "inside the policy's `max_provider_run_age_hours`. **Nothing in "
             "this report allowlists a provider or a market.**"
         ),
         "",

@@ -38,6 +38,7 @@ from nhl_betting_lab.config import PROJECT_ROOT
 from nhl_betting_lab.providers import odds_api
 from nhl_betting_lab.providers import team_names as tn
 from nhl_betting_lab.season import schedule_cache_is_complete, season_id
+from test_no_test_reads_the_checkouts_data import point_default_data_dirs_at
 
 
 CLUBS = (
@@ -152,6 +153,9 @@ def test_the_card_keeps_a_real_game_when_the_seasons_cache_is_partial(
                            commonName={"default": "Bruins"})
     (raw / "nhl" / "boxscore").mkdir(parents=True)
     (raw / "nhl" / "boxscore" / "1.json").write_text(json.dumps(box), encoding="utf-8")
+    # Every default first (the tracked verdicts were read through the
+    # scratch --output-dir, #151); the two lines after override the cache.
+    point_default_data_dirs_at(monkeypatch, tmp_path / "checkout_defaults")
     monkeypatch.setattr(config, "RAW_DIR", raw)
     monkeypatch.setattr(tn, "RAW_DIR", raw)
 
@@ -189,6 +193,7 @@ def test_the_card_warns_when_its_season_has_no_files_at_all(
     raw = tmp_path / "raw"
     for club in CLUBS:
         _club_file(raw, club, "20252026")
+    point_default_data_dirs_at(monkeypatch, tmp_path / "checkout_defaults")
     monkeypatch.setattr(config, "RAW_DIR", raw)
     monkeypatch.setattr(tn, "RAW_DIR", raw)
     staging = tmp_path / "staging"

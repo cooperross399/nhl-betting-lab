@@ -84,9 +84,11 @@ class MarketMeasurement:
     reliability: list[Any] = field(default_factory=list)
     verdict: str = ""
     priced: RoiInterval | None = None
-    #: Where every priced row of this market landed: seen, unresolved,
-    #: unmatched, unparseable, below_threshold. Bets and pushes are on
-    #: `priced`.
+    #: Where every WAGER of this market landed — seen, unresolved, unmatched,
+    #: unparseable, below_threshold — counted after the best-price collapse,
+    #: one per wager, as the bets on `priced` are. `quotes` is the unit before
+    #: the collapse: the book quotes (price rows) those wagers were taken
+    #: from. See `reconciliation_line` for why the two are printed together.
     accounting: dict[str, int] = field(default_factory=dict)
     #: The provider team names the team-name map could not resolve.
     unresolved_names: set[str] = field(default_factory=set)
@@ -96,6 +98,21 @@ class MarketMeasurement:
         return self.priced is not None and self.priced.bets > 0
 
     def reconciliation_line(self) -> str:
+        """Where this market's wagers went, and the book quotes behind them.
+
+        Every count here is taken after `best_price_per_wager`, one per
+        wager. It used to print as "`moneyline`: 4,200 prices seen", beside
+        a standing note reading "Prices measured: 212,964 of 308,944 stored
+        rows" — which does count rows. On the bought `late` window moneyline
+        is 71,430 book quotes and 4,200 wagers, puck line 70,298 and 4,582,
+        totals 71,236 and 7,926, so the three "prices seen" summed to 16,708
+        against 212,964 "prices measured", in the same unit by their labels
+        and 9x to 17x apart in fact. The counts were right and the unit was
+        not. The line now says wagers, and prints the quotes they were
+        collapsed from. Summed over the markets measured, the quotes are the
+        "Prices measured" rows (212,964 = 71,430 + 70,298 + 71,236), so the
+        two figures reconcile instead of reading as one unit.
+        """
         seen = self.accounting.get("seen", 0)
         if not seen:
             return ""
@@ -112,8 +129,16 @@ class MarketMeasurement:
             - self.accounting.get("unresolved", 0)
             - self.accounting.get("unmatched", 0)
         )
+        # A measurement built before `quotes` was counted names no quote
+        # figure rather than guessing one.
+        quotes = self.accounting.get("quotes")
+        behind = (
+            f", each at its best price among {quotes:,} book quote(s)"
+            if quotes is not None
+            else ", each at its best price"
+        )
         base = (
-            f"`{self.market}`: {seen:,} prices seen, "
+            f"`{self.market}`: {seen:,} wager(s) seen{behind}, "
             f"{self.accounting.get('unresolved', 0):,} naming a team the map "
             "could not resolve, "
             f"{self.accounting.get('unmatched', 0):,} unmatched "
@@ -124,8 +149,8 @@ class MarketMeasurement:
         if accounted == seen:
             return base
         return base + (
-            f" **DOES NOT RECONCILE**: {seen - accounted:,} row(s) dropped by "
-            "a path with no counter."
+            f" **DOES NOT RECONCILE**: {seen - accounted:,} wager(s) dropped "
+            "by a path with no counter."
         )
 
 
@@ -158,11 +183,21 @@ class TeamMeasurementReport:
     #: rows set aside because they were not captured strictly before face-off.
     windows_in_store: dict[str, int] = field(default_factory=dict)
     excluded_after_face_off: int = 0
-    #: Priced rows naming a team the team-name map could not resolve, summed
-    #: over every market, and the names. Recorded when it is zero too, so a
-    #: reader can tell "every team resolved" from "nobody checked".
+    #: WAGERS (one per wager, at its best price) naming a team the team-name
+    #: map could not resolve, summed over every market, and the names.
+    #: Recorded when it is zero too, so a reader can tell "every team
+    #: resolved" from "nobody checked". The name says rows and the count
+    #: never was: it is taken after the best-price collapse, and the runner
+    #: printed it as "N priced row(s)" — with "St Louis Blues" dropped from
+    #: the real map that read 1,078 while 14,042 `late` rows named the team.
+    #: The key is kept for its readers; `scored_wagers` beside it is its
+    #: denominator, in the same unit.
     unresolved_team_rows: int = 0
     unresolved_team_names: list[str] = field(default_factory=list)
+    #: Every wager scored against the model across all markets (the sum of
+    #: `accounting["seen"]`): 16,708 on the bought `late` window, from
+    #: 212,964 price rows.
+    scored_wagers: int = 0
 
     def summary_line(self) -> str:
         if not self.total_samples:
@@ -276,11 +311,13 @@ def measure_prices(
 ) -> RoiInterval | None:
     """Flat-stake ROI against historical team prices, or None if there are none.
 
-    `accounting`, when given, receives per-bucket counts for every priced row
-    of this market — seen, unresolved, unmatched, unparseable, below
-    threshold, bets. An unmatched price that lands in no counter is invisible
-    exactly when the sample grid drifts away from the lines the books hang,
-    which is how a third of the bought totals silently left this measurement.
+    `accounting`, when given, receives per-bucket counts for every wager of
+    this market — seen, unresolved, unmatched, unparseable, below threshold —
+    taken after the best-price collapse, one per wager, and `quotes`: the
+    price rows the wagers were collapsed from. An unmatched price that lands
+    in no counter is invisible exactly when the sample grid drifts away from
+    the lines the books hang, which is how a third of the bought totals
+    silently left this measurement.
     `unresolved_names`, when given, receives every provider team name the map
     could not resolve.
 
@@ -320,6 +357,13 @@ def measure_prices(
                 "can take."
             )
     priced = prices[prices["market"].astype(str) == market]
+    # Counted BEFORE the collapse: every count below is per wager, and this
+    # is the only one in the unit the "Prices measured" note uses. Without
+    # it the report printed wagers as "prices seen" beside rows and nothing
+    # tied the two together (moneyline, `late`: 71,430 rows, 4,200 wagers).
+    quotes = len(priced)
+    if accounting is not None:
+        accounting["quotes"] = quotes
     # One bet per wager, at the best price a card could have taken. The store
     # holds every book's quote on the same selection, and counting each as a
     # separate bet measures a strategy no card runs while narrowing every
@@ -377,9 +421,14 @@ def measure_prices(
         preview = ", ".join(missing[:6]) + (
             f" and {len(missing) - 6} more" if len(missing) > 6 else ""
         )
+        # Rows as rows and wagers as wagers. This printed `len(rows)` — the
+        # wagers left by the collapse — as "price row(s)". Every quote on one
+        # wager names the same two teams (both are in the collapse key), so
+        # "not one row" and "not one wager" are the same statement.
         raise UnresolvedTeamsError(
-            f"Not one of the {len(rows):,} `{market}` price row(s) names two "
-            "teams this measurement can identify: the team-name map "
+            f"Not one of the {quotes:,} `{market}` price row(s) "
+            f"({len(rows):,} wager(s), one per wager at its best price) names "
+            "two teams this measurement can identify: the team-name map "
             f"({len(names)} spelling(s), from {source}) resolved both sides "
             f"of no row. Unresolved: {preview or '(the rows name no team)'}. "
             "Measured anyway, every price would join no sample and the report "
@@ -707,6 +756,7 @@ def build_team_measurement(
         report.markets.append(measurement)
 
     scored = sum(item.accounting.get("seen", 0) for item in report.markets)
+    report.scored_wagers = scored
     report.unresolved_team_rows = sum(
         item.accounting.get("unresolved", 0) for item in report.markets
     )
@@ -760,9 +810,13 @@ def build_team_measurement(
         )
     if scored:
         names = report.unresolved_team_names
+        # Wagers, one per wager at its best price: the unit of `seen`. This
+        # read "0 of the 16,708 prices scored" two lines below "Prices
+        # measured: 212,964", which counts rows.
         window_notes.append(
             f"Team names: {report.unresolved_team_rows:,} of the {scored:,} "
-            "prices scored named a team the team-name map could not resolve"
+            "wager(s) scored (each at its best price) named a team the "
+            "team-name map could not resolve"
             + (
                 f" ({', '.join(names[:8])}"
                 f"{f' and {len(names) - 8} more' if len(names) > 8 else ''}). "
@@ -983,7 +1037,11 @@ def render_team_measurement(report: TeamMeasurementReport) -> str:
                     "counted, because a third of the bought totals once "
                     "vanished this way with nothing saying so. A price naming "
                     "a team the team-name map cannot resolve is counted "
-                    "apart from those: it says nothing about the grid."
+                    "apart from those: it says nothing about the grid. "
+                    "Everything here is counted one per wager, at the best "
+                    "price any book quoted, as the bets are; the book quotes "
+                    "each market's wagers were taken from are named beside "
+                    "them."
                 ),
                 "",
                 *reconciled,
@@ -1025,8 +1083,12 @@ def save_team_measurement(
         "phase_hours": report.phase_hours,
         "windows_in_store": report.windows_in_store,
         "excluded_after_face_off": report.excluded_after_face_off,
+        # Counted in wagers despite its name (see the field); `scored_wagers`
+        # is the denominator in the same unit, so no reader has to set it
+        # against `stored_rows`.
         "unresolved_team_rows": report.unresolved_team_rows,
         "unresolved_team_names": report.unresolved_team_names,
+        "scored_wagers": report.scored_wagers,
         "notes": report.notes,
         "markets": [
             {

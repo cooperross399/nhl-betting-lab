@@ -10,7 +10,9 @@ name: Provider Market Discovery
 #
 # SCOPE: fetches prices into staging and writes a report. It allowlists
 # nothing, promotes nothing, places no bet, and the card cannot read what it
-# writes.
+# writes — not because the card ignores data/staging (it reads it; Gameday
+# Refresh fetches into it and cards from it), but because this job's staging
+# files stay on this runner: only the reports below are uploaded.
 #
 # COST: the bulk fetch is a handful of credits. Props are opt-in and capped.
 on:
@@ -117,17 +119,26 @@ jobs:
           # live market off for the wrong reason, which is the exact mistake
           # this workflow exists to prevent.
           #
-          # The cap is read against the number of markets asked (19), so a
-          # cap that was six events when ten were asked is three today. A
-          # starved probe and an unquoted market look identical in the
-          # coverage table, so the cap has to be scaled deliberately.
-          # --max-events is what makes the coverage table honest. The cap
-          # buys twenty events; without the same limit on the bulk fetch the
-          # slate would be the whole board and every per-event market would
-          # report "20 of 32 games — incomplete", which reads as "no book
-          # covers the slate" when the truth is "the budget stopped at
-          # twenty". A starved probe and an unquoted market must never look
-          # alike here: telling them apart is the entire job of this
+          # The cap is read against markets asked x regions asked, because
+          # both are billed: 19 markets x 2 regions = 38 credits an event,
+          # so 380 buys 10 events. A starved probe and an unquoted market
+          # look identical in the coverage table, so the cap has to be
+          # scaled deliberately.
+          # --max-events is meant to make the coverage table honest: without
+          # the same limit on the bulk fetch the slate would be the whole
+          # board and every per-event market would report "N of 32 games —
+          # incomplete", which reads as "no book covers the slate" when the
+          # truth is "the budget stopped". But the limit here is 20 and the
+          # default cap buys 10, so a dispatch with props at the defaults
+          # reports every per-event market "10 of 20 games — incomplete":
+          # exactly the starved-probe look this was written to prevent.
+          # (Until 2026-09-25 this put the cap at twenty events — one
+          # region's arithmetic.) Matching them means raising the cap to 760
+          # or lowering --max-events to 10; either changes what this probe
+          # spends or asks, and is Cooper's decision, still pending; until
+          # then a props dispatch at the defaults asks about half the slate
+          # it reports on. A starved probe and an unquoted market must never
+          # look alike here: telling them apart is the entire job of this
           # workflow.
           #
           # Without `--props` (every scheduled run: see the note on the

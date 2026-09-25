@@ -9,6 +9,9 @@ Offline. Reads two labelled backtest payloads and writes
 `data/outputs/replication.md`. It never pools them: pooling asks a different
 question and launders a strong first window into a merged average that reads
 like confirmation.
+
+It refuses (exit 1, nothing written, the previous record untouched) when
+either window is missing, unreadable, or measured no bets.
 """
 
 from __future__ import annotations
@@ -18,6 +21,7 @@ from pathlib import Path
 
 from nhl_betting_lab.config import OUTPUTS_DIR
 from nhl_betting_lab.reports.replication import (
+    bets_measured,
     compare,
     load_backtest,
     save_replication,
@@ -47,6 +51,38 @@ def main(argv: list[str] | None = None) -> int:
         print(
             "Cannot compare: these measured windows are missing or unreadable: "
             + ", ".join(missing)
+        )
+        return 1
+
+    # A WINDOW THAT MEASURED NOTHING IS NOT A WINDOW WHERE NOTHING SURVIVED.
+    # The check above catches a missing or unreadable file only. A backtest
+    # payload with `bets: 0, by_market: {}` is a well-formed 17-key dict, and
+    # `run_player_props_backtest.py` exits 0 and writes one whenever its
+    # window matches nothing. On the real store, `--from 2025-10-07 --to
+    # 2025-04-30 --label 2025-26` (end year mistyped) read 0 of 3,804,233
+    # price rows. Passed here as --discovery, that file produced a run that
+    # exited 0 and wrote "Nothing survived correction on
+    # **player_props_backtest_2025-26** ... That is not a failure of the test
+    # window", with all six markets "untestable". Against the same test
+    # window, the home checkout's measured 2025-26 file (2026-08-28) returns
+    # `points` replicated, `goalie_saves` not confirmed and `shots_on_goal`
+    # contradicted. A comparison that never happened was recorded as a null,
+    # in the file `allowlist_evidence` reads. Either window with no bets is
+    # now refused, the way a missing one is: there is nothing to compare.
+    unmeasured = [
+        str(path)
+        for path, payload in ((discovery_path, discovery), (test_path, test))
+        if bets_measured(payload) == 0
+    ]
+    if unmeasured:
+        print(
+            "Cannot compare: these windows measured no bets, so there is "
+            "nothing to compare: "
+            + ", ".join(unmeasured)
+            + ". A window that measured nothing is not a result that failed "
+            "correction. Check that the backtest's --from/--to/--phase "
+            "matched price rows. Nothing was written, so the previous "
+            "replication record is untouched."
         )
         return 1
 

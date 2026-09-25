@@ -2,9 +2,18 @@
 
 What this module does: fetch prices, normalise them into a long-form table,
 and write that table into `data/staging/`. What it does not do, ever: decide
-anything. The card cannot read `data/staging/` — it reads the card input,
-which is built only from markets a reviewed policy allowlists. So a shadow run
-can be wrong, incomplete, or surprising without a single pick changing.
+anything.
+
+The gameday card reads `data/staging/` directly — it is the card's price
+source, and Gameday Refresh fetches into it and cards from it in one job. The
+card uses a market from it only when the provider policy allowlists that
+market, the market is priced for every game in the slate, and the oldest
+staged row is inside the policy's `max_provider_run_age_hours`. So a fetch
+cannot widen what the card may bet on, but what it stages is what the card
+prices. (Until 2026-09-25 this denied that the card reads `data/staging/`,
+naming a separate "card input" built only from allowlisted markets; no such
+input exists, and `scripts/run_gameday_card.py` reads the two staging files
+by name.)
 
 ## The credential
 
@@ -17,12 +26,15 @@ a key shape ever reaches a tracked file.
 ## What a fetch costs
 
 The bulk endpoint serves `h2h`, `spreads` and `totals` for the whole slate for
-a handful of credits. Everything else is per-event: **one credit per market
-per event when a book actually quotes it, nothing when none does** — the
-alternate ladders ride along for free until the day a book hangs one. The cap
-is enforced against the pessimistic bound (every asked market billed), so the
-per-event fetch is also filtered to the day's slate; spending the budget on
-games four days out was how a 32-event August board starved the nearest nine.
+a handful of credits (3 markets x the region count a call). Everything else
+is per-event: **one credit per market per region per event when a book
+actually quotes it, nothing when none does** — the alternate ladders ride
+along for free until the day a book hangs one. The cap is enforced against
+the pessimistic bound (every asked market billed in every asked region), so
+at the default two regions the 19 markets Gameday Refresh asks count 38
+credits an event against the cap, and the per-event fetch is also filtered to
+the day's slate; spending the budget on games four days out was how a
+32-event August board starved the nearest nine.
 
 Every entry point states the cost before spending it and takes a hard cap, so
 a probe cannot become a bill by accident.
@@ -93,7 +105,7 @@ def count_regions(regions: str) -> int:
 #: Markets the bulk endpoint serves for the whole slate at once.
 BULK_PROVIDER_MARKETS: tuple[str, ...] = ("h2h", "spreads", "totals")
 
-#: Markets that cost one credit per market per event.
+#: Markets that cost one credit per market per region per event.
 PROP_PROVIDER_MARKETS: tuple[str, ...] = tuple(
     market.provider_key for market in PROP_MARKETS
 )
@@ -866,9 +878,17 @@ def write_provenance(
         "errors": list(result.errors),
         "staging_files": [str(path.name) for path in staging_files],
         "shadow_only": True,
+        # This note read "Staging is invisible to the card" until 2026-09-25,
+        # in every provenance file ever written. run_gameday_card.py reads
+        # these files by name and stakes their prices; the policy's gates
+        # are what stand between them and a bet, so the note names those.
         "note": (
-            "Staging is invisible to the card. Nothing here allowlists a "
-            "provider or a market; that requires a reviewed human approval."
+            "The gameday card reads these staged prices, and uses a market "
+            "from them only if the provider policy allowlists it, it is "
+            "priced for every game in the slate, and the oldest staged row "
+            "is inside the policy's max_provider_run_age_hours. Nothing here "
+            "allowlists a provider or a market; that requires a reviewed "
+            "human approval."
         ),
     }
     # Belt and braces: nothing is supposed to put a credential in here, and

@@ -4,10 +4,13 @@ name: Historical Props Purchase
 # were actually for sale.
 #
 # THIS SPENDS CREDITS, and it is the most expensive thing in the repository:
-# somewhere between one and ten credits per market per event. The provider
-# documents ten for its bulk historical endpoint and is ambiguous about the
-# per-event one, so the true rate is read from `x-requests-last` as it is
-# spent and the cap is enforced against the pessimistic reading.
+# somewhere between one and ten credits per market per event, per region —
+# and the lab asks two regions (us,us2). The provider documents ten for its
+# bulk historical endpoint and is ambiguous about the per-event one, so the
+# true rate is read from `x-requests-last` as it is spent and the cap is
+# enforced against the pessimistic reading. (Measured: ten per market
+# returned at one region on 2026-08-25, and 107 an event — 10 x ~5.35
+# returned x 2 — on the two-region purchase that spent 289,984.)
 #
 # It is manual-dispatch only and will never be put on a schedule. The credit
 # cap is a required input and is enforced before each request rather than
@@ -250,9 +253,10 @@ jobs:
 
       - name: Buy team markets
         # The bulk historical endpoint returns every game on the board at one
-        # instant for 10 x markets x regions, so a whole slate costs thirty
-        # credits whether it holds four games or fourteen. That is why these
-        # went unmeasured while the props were bought twice.
+        # instant for 10 x markets x regions, so at the lab's two regions
+        # (us,us2) a whole slate costs 60 credits whether it holds four games
+        # or fourteen. That is why these went unmeasured while the props were
+        # bought twice. (This said thirty until 2026-09-25: one region.)
         if: ${{ inputs.mode == 'buy_team' }}
         env:
           NHL_ODDS_API_KEY: ${{ secrets.NHL_ODDS_API_KEY }}
