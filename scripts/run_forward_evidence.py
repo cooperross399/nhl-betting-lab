@@ -76,6 +76,7 @@ def main(argv: list[str] | None = None) -> int:
 
     logs = load_player_logs(processed)
     games = load_team_games(processed)
+    unreadable: dict[str, str] = {}
     try:
         result = settle_snapshots(
             logs,
@@ -90,6 +91,7 @@ def main(argv: list[str] | None = None) -> int:
     else:
         print(result.summary_line())
         refused = False
+        unreadable = result.unreadable_snapshots
 
     # Restated from the ledger even on a refusal, because the ledger did not
     # change and the report is only its restatement. The card-feed commit
@@ -103,6 +105,24 @@ def main(argv: list[str] | None = None) -> int:
         print(
             "Settlement refused: nothing was settled, marked or appended. The "
             "report above restates the ledger as it already stood."
+        )
+        return 2
+    if unreadable:
+        # One unreadable snapshot used to raise a bare ParserError out of
+        # settlement. This script then died before writing the report, on
+        # that run and on every later one, and no later day could settle.
+        # The file is now named, the other days settle, the report is
+        # written above, and the exit is non-zero so it is not missed.
+        listed = "; ".join(f"{name} ({reason})" for name, reason in unreadable.items())
+        print(
+            f"::error::{len(unreadable)} pending snapshot file(s) could not "
+            f"be read and were neither settled nor marked: {listed}. Every "
+            "other pending day settled as usual. A snapshot is written whole "
+            "or not at all, so this file was damaged after it was written, "
+            "or was written before that rule existed. It is retried on every "
+            "pass until it is restored from the gameday-state artifact that "
+            "froze it, or moved out of the archive.",
+            file=sys.stderr,
         )
         return 2
     print(
