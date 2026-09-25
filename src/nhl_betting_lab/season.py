@@ -131,13 +131,65 @@ def known_regular_season_games(raw_dir=None) -> set[tuple[str, str, str]]:
 EXPECTED_CLUBS = 32
 
 
-def schedule_cache_is_complete(raw_dir=None) -> tuple[bool, int]:
-    """(is complete, clubs found) for the cached club schedules.
+def season_id(day: object) -> str:
+    """The NHL season a league date belongs to, as the cache names it.
+
+    A season runs from the autumn into the next summer, so a date from July
+    onwards belongs to the season starting that year: 2026-10-08 and
+    2027-04-10 are both "20262027".
+    """
+    text = str(day)[:10]
+    year, month = int(text[:4]), int(text[5:7])
+    start = year if month >= 7 else year - 1
+    return f"{start}{start + 1}"
+
+
+def schedule_cache_is_complete(
+    raw_dir=None, *, season: str | None = None
+) -> tuple[bool, int]:
+    """(is complete, clubs whose own schedule for `season` is cached).
 
     A partial cache is not a smaller truth. It is the same truth with holes,
     and the holes are indistinguishable from exhibition games to anything
     that only asks "is this fixture in the set?".
+
+    Completeness is counted by OWN files: a club counts only when
+    `{ABBR}_{season}.json` is cached, parses, and holds a regular-season game.
+    This used to count every club named in any cached game — opponents
+    included — and one club's 82-game schedule meets all 31 others, so a
+    cache holding a single file read as complete (True, 32), the card's
+    partial-cache warning could never fire, and the screen dropped every
+    game whose club file had not landed as "preseason". It is also counted
+    per season: across seasons the real cache names 33 clubs (ARI and UTA),
+    and last season's 32 files say nothing about this one. `season` is the
+    slate's (see `season_id`); by default, the newest season cached.
     """
-    known = known_regular_season_games(raw_dir)
-    clubs = {team for _, home, away in known for team in (home, away)}
-    return len(clubs) >= EXPECTED_CLUBS, len(clubs)
+    import json
+    import re
+    from pathlib import Path
+
+    from nhl_betting_lab.config import RAW_DIR, REGULAR_SEASON_GAME_TYPE
+
+    directory = (Path(raw_dir) if raw_dir else Path(RAW_DIR)) / "nhl" / (
+        "club_schedule"
+    )
+    owners: dict[str, set[str]] = {}
+    if directory.is_dir():
+        for path in directory.glob("*.json"):
+            match = re.fullmatch(r"([A-Z]{2,3})_(\d{8})", path.stem)
+            if not match:
+                continue
+            try:
+                payload = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, UnicodeError, json.JSONDecodeError):
+                continue
+            games = payload.get("games", []) if isinstance(payload, dict) else []
+            if any(
+                isinstance(game, dict)
+                and int(game.get("gameType", 0) or 0) == REGULAR_SEASON_GAME_TYPE
+                for game in games or []
+            ):
+                owners.setdefault(match.group(2), set()).add(match.group(1))
+    target = season or (max(owners) if owners else "")
+    found = len(owners.get(target, set()))
+    return found >= EXPECTED_CLUBS, found

@@ -169,19 +169,32 @@ def test_a_refused_market_list_falls_back_to_the_core_markets() -> None:
 def test_a_holed_schedule_cache_reports_itself_incomplete(tmp_path: Path) -> None:
     """A partial cache is the same truth with holes, and the holes look
     exactly like exhibition games to anything that only asks whether a
-    fixture is in the set."""
+    fixture is in the set.
+
+    This fixture used to be one TOR-BOS game in a file called TOR.json, and
+    asserted `clubs == 2` — the opponent-counting defect itself, green only
+    because no real club file holds one game. A real one meets every other
+    club, which is what made a single file read as complete (True, 32).
+    """
     directory = tmp_path / "nhl" / "club_schedule"
     directory.mkdir(parents=True)
-    (directory / "TOR.json").write_text(
+    others = [
+        "ANA", "BOS", "BUF", "CAR", "CBJ", "CGY", "CHI", "COL", "DAL", "DET",
+        "EDM", "FLA", "LAK", "MIN", "MTL", "NJD", "NSH", "NYI", "NYR", "OTT",
+        "PHI", "PIT", "SEA", "SJS", "STL", "TBL", "UTA", "VAN", "VGK", "WPG",
+        "WSH",
+    ]
+    (directory / "TOR_20262027.json").write_text(
         json.dumps(
             {
                 "games": [
                     {
                         "gameType": 2,
-                        "gameDate": "2026-10-08",
+                        "gameDate": f"2026-{10 + i // 28:02d}-{1 + i % 28:02d}",
                         "homeTeam": {"abbrev": "TOR"},
-                        "awayTeam": {"abbrev": "BOS"},
+                        "awayTeam": {"abbrev": opponent},
                     }
+                    for i, opponent in enumerate(others)
                 ]
             }
         ),
@@ -191,7 +204,7 @@ def test_a_holed_schedule_cache_reports_itself_incomplete(tmp_path: Path) -> Non
     complete, clubs = schedule_cache_is_complete(tmp_path)
 
     assert complete is False
-    assert clubs == 2
+    assert clubs == 1, "one club's own file, however many clubs it names"
 
 
 def test_the_card_abstains_from_screening_on_a_holed_cache() -> None:
