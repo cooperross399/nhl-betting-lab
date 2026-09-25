@@ -29,7 +29,7 @@ from collections.abc import Mapping
 import pandas as pd
 
 from nhl_betting_lab.markets import MARKETS_BY_KEY
-from nhl_betting_lab.models.player_props import PlayerPropsModel
+from nhl_betting_lab.models.player_props import PlayerPropsModel, player_key
 from nhl_betting_lab.models.toi_corrections import CurrentCorrections
 from nhl_betting_lab.models.team_model import TeamModel
 from nhl_betting_lab.providers.team_names import resolve_team
@@ -56,9 +56,15 @@ def selection_key(row: object, *, market: str, selection: str, line: float | Non
     player = (
         "" if raw_player is None or pd.isna(raw_player) else str(raw_player)
     ).strip()
+    # The player as a bet is written (`player_props.player_key`), not the
+    # raw string casefolded. `price_props` resolves "Alexis Lafreniere" (one
+    # book) and "Alexis Lafrenière" (the rest) to one player, so both got a
+    # probability; keyed on the raw string they were two selections, and the
+    # card listed one outcome twice — 234 wager keys across 61 events of the
+    # bought card window, as two leans at once on the real 2025-10-16 slate.
     return (
         str(market),
-        player.casefold(),
+        player_key(player),
         str(getattr(row, "home_team", "")),
         str(getattr(row, "away_team", "")),
         str(selection),
