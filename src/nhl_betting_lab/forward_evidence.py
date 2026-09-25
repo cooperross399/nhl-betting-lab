@@ -466,7 +466,8 @@ def settle_snapshots(
             "unsettleable with the day marked settled for good. No day was "
             "marked and no row was appended. Point --processed-dir at a "
             f"directory holding {TEAM_NAMES_FILENAME} "
-            "(scripts/run_gameday_card.py writes it), or run where "
+            "(scripts/run_gameday_card.py writes it) together with the "
+            "--archive-dir or --output-dir that belongs with it, or run where "
             "data/raw/nhl/boxscore can rebuild it."
         )
 
