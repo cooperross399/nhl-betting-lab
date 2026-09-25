@@ -31,10 +31,13 @@ from nhl_betting_lab.models.toi_corrections import load_current_corrections
 from nhl_betting_lab.models.team_model import TeamModel
 from nhl_betting_lab.providers import odds_api
 from nhl_betting_lab.providers.team_names import (
+    TEAM_NAMES_FILENAME,
+    boxscore_dir,
     build_team_name_map,
     cache_derived_spellings,
     resolve_team,
     save_team_name_map,
+    saved_team_name_map,
 )
 from nhl_betting_lab.reports.card_pricing import (
     price_props,
@@ -52,7 +55,12 @@ from nhl_betting_lab.season import (
     season_id,
 )
 from nhl_betting_lab.staging_provider_policy import load_policy
-from nhl_betting_lab.verdicts import describe as describe_verdicts, ships
+from nhl_betting_lab.verdicts import (
+    VERDICT_FILES,
+    describe as describe_verdicts,
+    ships,
+    source as verdict_source,
+)
 
 
 def _staged_prices(staging_dir: Path) -> pd.DataFrame:
@@ -77,6 +85,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--staging-dir", default=str(STAGING_DIR))
     parser.add_argument("--processed-dir", default=str(PROCESSED_DIR))
     parser.add_argument("--output-dir", default=str(OUTPUTS_DIR))
+    parser.add_argument(
+        "--raw-dir",
+        default="",
+        help=(
+            "The NHL cache every raw read comes from: the boxscores the "
+            "team-name map is built from, the club schedules the preseason "
+            "screen uses, and the rosters. Defaults to data/raw."
+        ),
+    )
     parser.add_argument(
         "--now",
         default="",
@@ -104,6 +121,10 @@ def main(argv: list[str] | None = None) -> int:
     staging = Path(args.staging_dir)
     processed = Path(args.processed_dir)
     outputs = Path(args.output_dir)
+    # Every read of the raw cache goes here; None is each reader's own
+    # default, data/raw. The card used to have no such flag and read the
+    # default for all of it, whatever --processed-dir it was given.
+    raw = Path(args.raw_dir) if args.raw_dir else None
 
     # A run pointed at a scratch output directory must not write into the
     # real evidence archive. It did once, in testing: a synthetic card
@@ -128,8 +149,35 @@ def main(argv: list[str] | None = None) -> int:
     policy = load_policy()
     print(f"Provider policy: {policy.status}")
     print(f"Recorded policy verdicts: {describe_verdicts(output_dir=outputs)}.")
+    if outputs.resolve() != OUTPUTS_DIR.resolve():
+        # A verdict the scratch directory records governs this run; one it
+        # does not record is the repository's (see verdicts.source). Say
+        # which, since the two can now differ within one run.
+        read_from = ", ".join(
+            f"{policy} {verdict_source(policy, output_dir=outputs)}"
+            for policy in sorted(VERDICT_FILES)
+        )
+        print(f"Verdicts read from: {read_from}.")
 
     prices = _staged_prices(staging)
+
+    # The provider says "Toronto Maple Leafs" and every model here is keyed by
+    # "TOR". Without this map every lookup misses and every game is priced
+    # league-average against league-average — with no error anywhere.
+    #
+    # ONE map serves the preseason screen and both pricers: the one the raw
+    # cache builds, laid over the `team_names.csv` already in
+    # --processed-dir. The cache wins where the two disagree, so a rename
+    # still flows in; the file supplies what the cache does not hold. The
+    # card used to build from the default raw cache only, twice, and never
+    # read that file — the one every other reader of the map reads. Run from
+    # a clone, whose data/raw is empty, with --processed-dir holding the real
+    # map (101 spellings, 64 of them from the cache), it built the 6-spelling
+    # alias map, blocked, and left all 12 team names on a real six-game slate
+    # unresolved. And a cache knowing fewer teams than the file overwrote it
+    # with the smaller map.
+    from_cache = build_team_name_map(raw) if raw else build_team_name_map()
+    team_names = {**saved_team_name_map(processed_dir=processed), **from_cache}
 
     # Regular season only. The provider does not flag preseason, the models
     # are fitted on regular season only, and exhibition results are never
@@ -137,10 +185,10 @@ def main(argv: list[str] | None = None) -> int:
     # ledger that can never settle. A game the schedule cache does not know
     # is excluded and counted, never guessed at; with no schedule knowledge
     # at all, nothing is excluded and the run says so loudly.
-    schedule = known_regular_season_games()
+    schedule = known_regular_season_games(raw)
     # Completeness of THIS slate's season, counted by each club's own file.
     schedule_complete, clubs_cached = schedule_cache_is_complete(
-        season=season_id(moment.astimezone(LEAGUE_TIMEZONE).date())
+        raw, season=season_id(moment.astimezone(LEAGUE_TIMEZONE).date())
     )
     if not prices.empty and schedule and not schedule_complete:
         # A partial cache screens like a complete one and is wrong in the
@@ -170,7 +218,6 @@ def main(argv: list[str] | None = None) -> int:
         # schedules every run, so in production the range always covers the
         # slate.
         known_until = max(day for day, _, _ in schedule)
-        team_lookup = build_team_name_map()
 
         def _is_regular(row) -> bool:
             day = row_game_date(row)
@@ -178,8 +225,8 @@ def main(argv: list[str] | None = None) -> int:
                 return True  # abstain: the cache cannot judge this date
             return (
                 day,
-                resolve_team(getattr(row, "home_team", ""), team_lookup) or "",
-                resolve_team(getattr(row, "away_team", ""), team_lookup) or "",
+                resolve_team(getattr(row, "home_team", ""), team_names) or "",
+                resolve_team(getattr(row, "away_team", ""), team_names) or "",
             ) in schedule
 
         keep = [_is_regular(row) for row in prices.itertuples()]
@@ -211,10 +258,6 @@ def main(argv: list[str] | None = None) -> int:
     probabilities: dict[tuple, float] = {}
     unresolved_names: set[str] = set()
 
-    # The provider says "Toronto Maple Leafs" and every model here is keyed by
-    # "TOR". Without this map every lookup misses and every game is priced
-    # league-average against league-average — with no error anywhere.
-    team_names = build_team_name_map()
     # Not `if not team_names`: the builder always adds the Utah and Arizona
     # aliases, so with no boxscores it returns six entries and that check
     # never fired — and the six-entry map was then saved as team_names.csv,
@@ -225,10 +268,23 @@ def main(argv: list[str] | None = None) -> int:
             f"cached: the map holds only its {len(team_names)} built-in "
             "alias spelling(s). Without it the provider's team names cannot "
             "be matched to the model, and every game would be priced "
-            "league-average against league-average with nothing to show it."
+            "league-average against league-average with nothing to show it. "
+            f"Looked for boxscores under {boxscore_dir(raw)} and for a "
+            f"{TEAM_NAMES_FILENAME} built from them under {processed}, and "
+            "found neither: point --raw-dir at a boxscore cache or "
+            f"--processed-dir at a directory holding {TEAM_NAMES_FILENAME}."
         )
     else:
-        save_team_name_map(team_names, processed_dir=processed)
+        if cache_derived_spellings(from_cache):
+            # Saved only when the cache supplied something, and saved as the
+            # merged map, so a smaller cache never shrinks the file.
+            save_team_name_map(team_names, processed_dir=processed)
+        else:
+            print(
+                f"No boxscore under {boxscore_dir(raw)}: the team-name map is "
+                f"the {TEAM_NAMES_FILENAME} in {processed}, read and left as "
+                "it is."
+            )
         print(
             f"Team-name map: {len(set(team_names.values()))} franchises, "
             f"{len(team_names)} spellings."
@@ -268,7 +324,7 @@ def main(argv: list[str] | None = None) -> int:
             props_history = (
                 games if ships("props_b2b", output_dir=outputs) else None
             )
-            rosters = current_rosters()
+            rosters = current_rosters(raw_dir=raw)
             if rosters:
                 print(
                     f"Rosters: {len(rosters)} players across "
