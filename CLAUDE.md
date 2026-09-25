@@ -522,11 +522,16 @@ Re-derive rather than trust if the data has moved.
   backtest already did, and drops anything not captured strictly before
   face-off in every window — the closing rule this lab already uses for CLV.
   **No verdict moved**: every interval spanned zero before and spans zero now.
-  Match rate is 96% on all
-  three after the line grid was widened to every line the full buy actually
+  Match rate is 96%, 96% and 95% of WAGERS (moneyline, puck line, totals)
+  after the line grid was widened to every line the full buy actually
   holds — totals from 2.0 to 13.5, puck lines to 6.5 — because a line the
   grid does not carry is a price the measurement silently discards, which is
-  how a third of the bought totals once vanished.
+  how a third of the bought totals once vanished. (2026-09-25: the report's
+  reconciliation counts one per wager at its best price and printed it as
+  "prices seen" — moneyline's "4,200 prices seen" are 4,200 wagers from
+  71,430 quote rows, beside "Prices measured: 212,964" rows. It now says
+  wagers and prints the quotes; no number moved, and the committed report
+  keeps the old labels until it is regenerated.)
 - **The thin sample's +9.1% totals was noise, and the full buy proves it.**
   On 217 wagers totals read +9.1%; on 2,201 it read −2.5% (−4.0% over 1,216
   once measured in one window before face-off). That is what a

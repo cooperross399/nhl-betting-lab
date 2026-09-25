@@ -299,7 +299,7 @@ def test_the_runner_reads_the_map_from_its_processed_dir(
     assert code == 0
     assert payload["markets"][0]["bets"] == 3
     assert payload["unresolved_team_rows"] == 0
-    assert "Unresolved team names: 0 priced row(s)." in out
+    assert "Unresolved team names: 0 of 3 wager(s) scored." in out
 
 
 def test_the_runner_refuses_when_its_processed_dir_has_no_map(
@@ -364,7 +364,7 @@ def test_a_fully_resolved_store_records_zero_unresolved(
     assert payload["unresolved_team_names"] == []
     assert payload["markets"][0]["accounting"]["unresolved"] == 0
     assert any(
-        note.startswith("Team names: 0 of the 3 prices scored")
+        note.startswith("Team names: 0 of the 3 wager(s) scored")
         for note in report.notes
     )
 
@@ -400,7 +400,7 @@ def test_a_partly_resolved_store_counts_and_names_what_did_not_resolve(
     assert report.unresolved_team_names == ["Vancouver Canucks"]
     assert payload["unresolved_team_rows"] == 1
     assert payload["unresolved_team_names"] == ["Vancouver Canucks"]
-    assert "Team names: 1 of the 4 prices scored" in rendered
+    assert "Team names: 1 of the 4 wager(s) scored" in rendered
     assert "Vancouver Canucks" in rendered
     assert "1 naming a team the map could not resolve" in rendered
     assert "DOES NOT RECONCILE" not in rendered

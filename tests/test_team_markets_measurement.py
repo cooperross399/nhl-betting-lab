@@ -375,7 +375,7 @@ def test_the_report_prints_the_match_rate_per_market() -> None:
     rendered = tmm.render_team_measurement(report)
 
     assert "Where every price landed" in rendered
-    assert "prices seen" in rendered
+    assert "wager(s) seen" in rendered
     assert "DOES NOT RECONCILE" not in rendered
 
 

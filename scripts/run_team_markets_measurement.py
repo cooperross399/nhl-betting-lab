@@ -144,9 +144,13 @@ def main(argv: list[str] | None = None) -> int:
     paths = save_team_measurement(report, output_dir=outputs)
     print(report.summary_line())
     if not prices.empty:
+        # Wagers, with their denominator. This printed "N priced row(s)" with
+        # N counted after the best-price collapse: one real spelling dropped
+        # from the map ("St Louis Blues") read 1,078 while 14,042 `late`
+        # rows named the team.
         print(
-            f"Unresolved team names: {report.unresolved_team_rows:,} priced "
-            "row(s)."
+            f"Unresolved team names: {report.unresolved_team_rows:,} of "
+            f"{report.scored_wagers:,} wager(s) scored."
         )
     for item in report.markets:
         print(f"  {item.market}: {item.verdict}")
