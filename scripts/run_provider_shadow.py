@@ -32,12 +32,14 @@ from __future__ import annotations
 
 import argparse
 import sys
+from collections.abc import Iterable
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pandas as pd
 
 from nhl_betting_lab.config import OUTPUTS_DIR, STAGING_DIR
+from nhl_betting_lab.markets import market_for_provider_key
 from nhl_betting_lab.providers import odds_api
 from nhl_betting_lab.providers.odds_api import EmptySlateError
 from nhl_betting_lab.providers.env_file import load_provider_env
@@ -64,6 +66,16 @@ def _staged_prices(staging_dir: Path) -> pd.DataFrame:
     if not frames:
         return pd.DataFrame(columns=list(odds_api.PRICE_COLUMNS))
     return pd.concat(frames, ignore_index=True)
+
+
+def _project_markets(provider_keys: Iterable[str]) -> set[str]:
+    """The project markets a list of provider market keys asks about."""
+    found = set()
+    for key in provider_keys:
+        market = market_for_provider_key(key)
+        if market is not None:
+            found.add(market.key)
+    return found
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -153,6 +165,14 @@ def main(argv: list[str] | None = None) -> int:
     quota = ""
     warnings: list[str] = []
     errors: list[str] = []
+    # The project markets this run asked the provider for. Without it both
+    # reports read an unasked market as an unquoted one: the scheduled
+    # discovery run (no `--props`, so the three bulk markets only) published
+    # "No book returned this market" and "The provider returned no rows" for
+    # nine of twelve markets it had never asked about. None offline: an
+    # assessment of staged files cannot know what the run that staged them
+    # asked, and says nothing either way.
+    requested: set[str] | None = None
 
     if args.live:
         provider = odds_api.OddsApiProvider()
@@ -202,6 +222,8 @@ def main(argv: list[str] | None = None) -> int:
         warnings += team.warnings
         errors += team.errors
         print(f"Team markets: {team.summary_line()}")
+        # `fetch_team_markets` asks for exactly these.
+        requested = _project_markets(odds_api.BULK_PROVIDER_MARKETS)
 
         if args.props:
             estimate = provider.estimate_prop_credits(
@@ -240,6 +262,7 @@ def main(argv: list[str] | None = None) -> int:
                     overwrite=args.overwrite_staging,
                 )
             )
+            requested |= _project_markets(per_event)
             credits += props.credits_spent
             quota = props.quota_remaining or quota
             warnings += props.warnings
@@ -280,6 +303,7 @@ def main(argv: list[str] | None = None) -> int:
         warnings=warnings,
         errors=errors,
         staging_files=written,
+        requested_markets=requested,
     )
     paths = save_shadow_reports(
         summary, eligibility, discovery, output_dir=Path(args.output_dir)
