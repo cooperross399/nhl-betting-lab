@@ -270,6 +270,23 @@ Re-derive rather than trust if the data has moved.
   the eligibility gate, so anything reaching the probability map would
   contaminate the 2027-04-25 measurement.
   `tests/test_ladder_route_cannot_reach_the_ledger.py` holds that apart.
+- **2026-09-25: the ladder depth checkpoint reads its registered unit, and
+  can run.** Two detector defects, fixed and recorded here as the
+  registration permits. `ladders_with_two_rungs` — the field the
+  registration names for its 2,000 floor, and defines as ladders carrying two
+  or more *de-viggable* rungs — counted two or more lines of either side, so
+  the report and the Line Movement summary printed **284,544** for the
+  bought store where the registered count is **57**, and **13,010** for the
+  first seventeen game days of 2025-26 (core markets only, the shape a 422
+  fallback leaves) where it is **0**: history cleared the floor 142 times
+  over and the depth-zero alarm could never fire. It now counts rungs with a
+  de-vigged price; the line count is kept as `ladders_with_two_lines`. And
+  the scan grouped on `snapshot`, which forward captures do not carry — they
+  stamp `captured_at` — so it raised on every capture and every run summary
+  read "Ladder scan wrote no report"; the runner now takes `captured_at` as
+  the moment. No threshold, band, floor or date moved, and no report from
+  this scan had ever been published.
+  `tests/test_ladder_depth_counts_deviggable_rungs.py`.
 - **The oracle ceiling was an outcome filter, not a line-label result.**
   Abstaining above a 2-minute realised rise gives +3.11% [+1.39%, +4.80%] and
   a random-removal placebo reaches only −0.30% (z=8.3), so the cell is
