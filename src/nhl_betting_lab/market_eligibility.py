@@ -51,12 +51,15 @@ the move this repository exists to not make.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
+from datetime import datetime
 
 import pandas as pd
 
 from nhl_betting_lab.markets import MARKETS_BY_KEY, market_for
+from nhl_betting_lab.puck_drop import parse_commence_time
+from nhl_betting_lab.season import row_game_date
 from nhl_betting_lab.staging_provider_policy import StagingProviderPolicy
 
 
@@ -309,9 +312,75 @@ def filter_to_eligible(
 
 
 def slate_games_from(prices: pd.DataFrame) -> tuple[str, ...]:
-    """Every distinct game key present in a price table."""
+    """Every distinct game key present in a price table.
+
+    The provider's view only: a game it priced in no market is not here.
+    The card's slate is `slate_games_with_schedule`.
+    """
     if prices.empty:
         return ()
     return tuple(
         dict.fromkeys(prices.apply(_game_key, axis=1).tolist())
     )
+
+
+def slate_games_with_schedule(
+    prices: pd.DataFrame,
+    scheduled: Mapping[tuple[str, str, str], str],
+    *,
+    resolve: Callable[[object], str | None],
+    now: datetime,
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """The card's slate: every priced game, plus every scheduled game on the
+    same league dates that no row prices. Returns (slate, unpriced).
+
+    `scheduled` maps (league date, HOME, AWAY) to the scheduled face-off, as
+    `season.scheduled_regular_season_starts` reads it; `resolve` turns a
+    provider team name into the abbreviation the schedule uses. A priced row
+    matches a scheduled game on (league date, HOME, AWAY) — the key the
+    preseason screen already judges by — so the two cannot disagree about
+    which game a row belongs to.
+
+    `slate_games_from` alone describes only the games the provider returned,
+    and a game it returned for NO market was then absent from the slate and
+    could never make any market incomplete. That is the selection effect
+    `require_full_slate` exists to block, reached one level up.
+
+    Only the league dates the prices cover are filled in: they are the
+    window the fetch asked about. A scheduled game already under way at
+    `now` is not added — it cannot be played, and the provider need not
+    still list it — but one whose face-off cannot be read is, because an
+    unreadable start is not a started game and ambiguity falls on the
+    excluded side. An unpriced game is keyed `DATE AWAY@HOME` in the
+    league's abbreviations, not the provider's spelling a price key uses.
+    A priced game whose team names do not resolve cannot be matched: where
+    its rows survive to be judged it counts on both sides, overstating the
+    slate by one game — an error toward excluding a market the card could
+    not have fully priced anyway, never toward including one.
+    """
+    if now.tzinfo is None:
+        raise ValueError("`now` must carry a timezone to tell a started game.")
+    priced = slate_games_from(prices)
+    if prices.empty:
+        return priced, ()
+    days: set[str] = set()
+    matched: set[tuple[str, str, str]] = set()
+    for row in prices.itertuples():
+        day = row_game_date(row)
+        days.add(day)
+        matched.add(
+            (
+                day,
+                resolve(getattr(row, "home_team", "")) or "",
+                resolve(getattr(row, "away_team", "")) or "",
+            )
+        )
+    unpriced: list[str] = []
+    for (day, home, away), start in sorted(scheduled.items()):
+        if day not in days or (day, home, away) in matched:
+            continue
+        begins = parse_commence_time(start)
+        if begins is not None and begins <= now:
+            continue
+        unpriced.append(f"{day} {away}@{home}")
+    return tuple(dict.fromkeys(priced + tuple(unpriced))), tuple(unpriced)

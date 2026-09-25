@@ -173,11 +173,18 @@ def _write_retention_from_cache(
         for provider_key, reason in hist.unmeasurable_markets(probes).items()
     }
     snapshots = sorted({probe.snapshot for probe in probes if probe.snapshot})
+    # One probe is one cached response, not one event. `events_probed` used
+    # to be `len(probes)` and read 5,432 over a cache holding 2,723 events,
+    # because the four-hour and nine-and-a-half-hour buys each priced nearly
+    # every event. It is the event count now, as its name and the table say;
+    # the responses keep their own key so the doubling stays visible.
+    events = hist.events_probed(probes)
     output_dir.mkdir(parents=True, exist_ok=True)
     (output_dir / RETENTION_FILENAME).write_text(
         json.dumps(
             {
-                "events_probed": len(probes),
+                "events_probed": events,
+                "responses_read": len(probes),
                 "source": (
                     "Derived from the raw response cache, not from a paid "
                     "probe. Every response that requested exactly this market "
@@ -185,7 +192,7 @@ def _write_retention_from_cache(
                 ),
                 "note": (
                     f"{len(probes)} cached response(s) covering "
-                    f"{len({probe.event_id for probe in probes})} event(s). "
+                    f"{events} event(s). "
                     "This replaces a 256-event probe whose verdict of "
                     "'player_hits not offered in any of 256 events' was true "
                     "of what it saw and false about the provider: it asked "
@@ -207,8 +214,9 @@ def _write_retention_from_cache(
         encoding="utf-8",
     )
     print(
-        f"Retention rebuilt from {len(probes):,} cached response(s) for 0 "
-        f"credits, written to {output_dir / RETENTION_FILENAME}."
+        f"Retention rebuilt from {len(probes):,} cached response(s) over "
+        f"{events:,} event(s) for 0 credits, written to "
+        f"{output_dir / RETENTION_FILENAME}."
     )
     return 0
 

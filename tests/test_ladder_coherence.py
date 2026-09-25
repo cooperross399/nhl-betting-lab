@@ -150,7 +150,11 @@ def test_a_duplicate_row_is_collapsed_and_counted_not_treated_as_a_step() -> Non
     )
     assert scan.duplicate_rows_collapsed == 1
     assert found.empty
-    # One distinct line is not a ladder.
+    # One distinct line is not a ladder: neither two lines nor two
+    # de-viggable rungs. (`ladders_with_two_rungs` now counts de-viggable
+    # depth only, which one line can never have, so the line count is what
+    # holds this comment.)
+    assert scan.ladders_with_two_lines == 0
     assert scan.ladders_with_two_rungs == 0
 
 
@@ -168,6 +172,7 @@ def test_a_duplicate_is_counted_even_when_its_ladder_is_never_visited() -> None:
         )
     )
     assert found.empty
+    assert scan.ladders_with_two_lines == 0, "neither group is a ladder"
     assert scan.ladders_with_two_rungs == 0, "neither group is a ladder"
     assert scan.duplicate_rows_collapsed == 1
 
