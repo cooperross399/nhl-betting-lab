@@ -10,9 +10,20 @@ import pytest
 from nhl_betting_lab import verdicts
 
 
-def test_a_missing_verdict_file_ships_nothing(tmp_path: Path) -> None:
-    """"No recorded decision" reads as "no policy in force"."""
+def test_a_missing_verdict_file_ships_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """"No recorded decision" reads as "no policy in force".
+
+    Nothing is recorded anywhere here: neither in the directory passed nor in
+    the recorded one. (This used to pass a bare tmp dir while the real
+    data/outputs ships `props_b2b`, which asserted the defect in
+    tests/test_a_scratch_output_dir_keeps_the_recorded_verdicts.py: a
+    directory holding no verdict read as a withdrawn one.)"""
+    monkeypatch.setattr(verdicts, "OUTPUTS_DIR", tmp_path / "recorded")
+
     assert verdicts.ships("props_b2b", output_dir=tmp_path) is False
+    assert verdicts.ships("props_b2b") is False
 
 
 def test_an_unreadable_verdict_file_ships_nothing(tmp_path: Path) -> None:
