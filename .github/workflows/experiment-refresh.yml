@@ -63,12 +63,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -u
+          # Each artifact from the newest run of each workflow that carries
+          # it, whatever its conclusion; a skipped run is a success with no
+          # artifact and used to be chosen. Later workflows are laid over
+          # earlier ones, as before. See scripts/restore_state.py.
           for wf in gameday-refresh.yml historical-props-purchase.yml; do
-            run=$(gh run list --workflow "$wf" --status success --limit 1 \
-              --json databaseId --jq '.[0].databaseId // empty')
-            [ -z "$run" ] && continue
             for name in gameday-state historical-props; do
-              gh run download "$run" --name "$name" --dir data 2>/dev/null || true
+              python scripts/restore_state.py --artifact "$name" --dest data \
+                --workflow "$wf" --no-merge || true
             done
           done
           games=$(find data/raw/nhl/boxscore -name '*.json' 2>/dev/null | wc -l)

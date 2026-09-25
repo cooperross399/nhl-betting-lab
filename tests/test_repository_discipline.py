@@ -328,12 +328,31 @@ def test_state_restore_names_the_artifact_it_wants(workflow: str) -> None:
     )
     # Both named workflows restore state; that is why they are the two named.
     # A restore step that disappeared used to be a skip here, which is a rule
-    # that stops checking exactly when the thing it checks is removed.
-    assert "gh run download" in text, f"{workflow} no longer restores state"
-
+    # that stops checking exactly when the thing it checks is removed. The
+    # state is restored through scripts/restore_state.py, which picks the run
+    # by its artifact rather than its conclusion; it must name the artifact
+    # too, and every direct `gh run download` left in the file still must.
+    assert "restore_state.py --artifact gameday-state" in text, (
+        f"{workflow} no longer restores state"
+    )
     for line in text.splitlines():
         if "gh run download" in line:
             assert "--name" in line, line
+
+    import ast
+
+    downloads = [
+        node
+        for node in ast.walk(ast.parse(_read("scripts/restore_state.py")))
+        if isinstance(node, ast.Call)
+        and getattr(node.func, "id", "") == "_gh"
+        and [a.value for a in node.args[:2] if isinstance(a, ast.Constant)]
+        == ["run", "download"]
+    ]
+    assert downloads, "restore_state.py no longer downloads anything"
+    for call in downloads:
+        constants = [a.value for a in call.args if isinstance(a, ast.Constant)]
+        assert "--name" in constants, f"line {call.lineno}: {constants}"
 
 
 def test_a_failed_restore_is_warned_about_rather_than_passed_over() -> None:

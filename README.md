@@ -326,6 +326,13 @@ credential: a cloud session cloning this repository sees it over plain git.
 A day with no new `card-feed` commit means the workflow itself did not
 finish.
 
+Each run starts from the previous run's state, restored by
+`scripts/restore_state.py` from the newest run that actually carries the
+`gameday-state` artifact — whatever its conclusion, with the newest successful
+state laid underneath a red one. Choosing "the newest successful run" picked a
+skipped backup run (a success with no artifact) and threw away every degraded
+run's cache and frozen snapshot.
+
 | Workflow | Trigger | Spends credits |
 |:---------|:--------|:---------------|
 | Tests | every PR and push to main | no |
