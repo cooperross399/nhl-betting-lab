@@ -32,6 +32,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     path = save_claims(report, output_dir=Path(args.output_dir))
     print(report.headline())
+    # Said on the terminal too: a measurement output this run could not read
+    # used to surface only as "no historical prices have been bought" inside
+    # the document.
+    if report.unread_sources:
+        print(f"Incomplete: {'; '.join(report.unread_sources)}.")
     print(f"  written: {path}")
     return 0
 
