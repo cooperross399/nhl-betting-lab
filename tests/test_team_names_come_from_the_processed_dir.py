@@ -47,6 +47,7 @@ from nhl_betting_lab.providers.team_names import (
     save_team_name_map,
 )
 from nhl_betting_lab.reports import team_markets_measurement as tmm
+from test_no_test_reads_the_checkouts_data import point_default_data_dirs_at
 
 
 def load_script(name: str) -> ModuleType:
@@ -127,8 +128,11 @@ def defaults(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace
 
     Without this the tests would read the real `data/processed/team_names.csv`
     and boxscore cache wherever they exist, and pass or fail by checkout —
-    which is the defect under test.
+    which is the defect under test. Every other default goes too: the two
+    runner tests read the tracked verdicts through their scratch
+    `--output-dir` (#151) until it did.
     """
+    point_default_data_dirs_at(monkeypatch, tmp_path / "checkout_defaults")
     processed = tmp_path / "default_processed"
     raw = tmp_path / "default_raw"
     processed.mkdir()

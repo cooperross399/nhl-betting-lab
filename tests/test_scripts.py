@@ -6,7 +6,9 @@ test. The modules they call are tested thoroughly; the wiring between argument
 parsing, missing data, and exit codes was not tested at all.
 
 Each test runs the script offline, against a temporary directory, and asserts
-on the exit code and the words the operator actually sees.
+on the exit code and the words the operator actually sees. Every default data
+directory a script falls back to is pointed at an empty one first
+(`no_checkout_data`), so a test runs the same code in every checkout.
 """
 
 from __future__ import annotations
@@ -21,9 +23,30 @@ from types import ModuleType
 import pytest
 
 from nhl_betting_lab.config import PROJECT_ROOT
+from test_no_test_reads_the_checkouts_data import point_default_data_dirs_at
 
 
 SCRIPTS_DIR = PROJECT_ROOT / "scripts"
+
+
+@pytest.fixture(autouse=True)
+def no_checkout_data(
+    tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """No script here reads the checkout's own data/ tree.
+
+    The defaults are absolute paths under the checkout, and these tests
+    named only some directories: in the operator's checkout the dataset
+    builder's "empty cache" was 5,280 boxscores, the card built its team map
+    from them (3 blockers where CI has 4), and the backtest rebuilt the map
+    from them, while CI ran the empty case each test is named for
+    (failure-shape audit, finding 89). The card, calibration and team
+    measurement runners also read the tracked verdicts through a scratch
+    `--output-dir` (#151).
+    """
+    point_default_data_dirs_at(
+        monkeypatch, tmp_path_factory.mktemp("checkout_defaults")
+    )
 
 
 def load_script(name: str) -> ModuleType:
@@ -91,6 +114,14 @@ def test_the_card_script_blocks_and_exits_zero_with_no_data(
     assert "No card" in out
     assert "no policy was edited" in out
     assert (tmp_path / "outputs" / "gameday_card.md").is_file()
+    # With no data there is no boxscore to build a team map from. In the
+    # operator's checkout this test built one from the real cache instead.
+    card = json.loads(
+        (tmp_path / "outputs" / "gameday_card.json").read_text(encoding="utf-8")
+    )
+    assert any(
+        "No team-name map could be built" in item for item in card["blockers"]
+    ), card["blockers"]
 
 
 def test_the_card_script_refuses_a_naive_now(tmp_path: Path) -> None:
@@ -330,15 +361,21 @@ def test_a_dry_run_makes_no_paid_listing_call(
 
 
 def test_the_dataset_builder_runs_on_an_empty_cache(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
+    """The cache is empty because `no_checkout_data` points it at an empty
+    directory. This used to `monkeypatch.chdir(tmp_path)`, which moves no
+    absolute path: in the operator's checkout the "empty cache" was the real
+    one ("3936 of 5280 cached games used; 157419 player-game rows"), and the
+    case this test is named for ran only on CI."""
     module = load_script("build_datasets.py")
-    monkeypatch.chdir(tmp_path)
 
     code = module.main(["--dry-run"])
+    out = capsys.readouterr().out
 
     assert code == 0
-    assert "Dry run" in capsys.readouterr().out
+    assert "0 of 0 cached games used" in out
+    assert "Dry run" in out
 
 
 def test_the_shadow_script_exits_three_on_an_empty_slate(
