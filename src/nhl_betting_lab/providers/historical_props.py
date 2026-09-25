@@ -437,6 +437,25 @@ def retention_from_cache(
     claim about the provider. That is what the fingerprint in the cache
     filename is for.
 
+    **It returns one probe per cached response, and a response is not an
+    event.** The four-hour and nine-and-a-half-hour purchases each priced
+    nearly every event, so the real cache holds 5,432 responses over 2,723
+    events, and `retention_table` used to print the first number under
+    "Events probed": `player_hits` read 1,218/5,432 (22%) where it was seen in
+    1,218 of 2,723 events (45%), and three events priced at two moments
+    cleared an absence floor of five events. `retention_table` and
+    `unmeasurable_markets` now count events (`_responses_by_event`).
+
+    **The fingerprint carries the market list and not the regions**, so this
+    cannot tell the four-hour buy's one-region responses (2,706 of them, none
+    carrying hits, because neither book that quotes hits is in that region)
+    from the two-region ones. Counting by event bounds the damage: a
+    narrower response can add a sighting to its event and never remove one.
+    It cannot help an event whose only responses asked the narrower region;
+    that event still counts as probed and not seen, and the table says so.
+    Putting the regions in the key would rename every file already bought,
+    so a re-run over a bought window would miss the cache and pay again.
+
     Nothing here touches the network: no provider is constructed and no
     request is made. It reads files.
     """
@@ -595,6 +614,67 @@ def buy_historical_props(
     return buy
 
 
+def _responses_by_event(
+    probes: Sequence[RetentionProbe],
+) -> dict[str, list[RetentionProbe]]:
+    """The probes grouped by the event each one describes.
+
+    A paid probe asks each event once, but `retention_from_cache` makes one
+    probe per cached response, and the lab bought most events at two moments.
+    Everything below counts these groups, never the probes: "Events probed"
+    over the real cache used to read 5,432, which is the responses, over 2,723
+    events.
+    """
+    grouped: dict[str, list[RetentionProbe]] = {}
+    for probe in probes:
+        grouped.setdefault(probe.event_id, []).append(probe)
+    return grouped
+
+
+def events_probed(probes: Sequence[RetentionProbe]) -> int:
+    """How many distinct events these probes describe."""
+    return len(_responses_by_event(probes))
+
+
+def _retention_by_market(
+    probes: Sequence[RetentionProbe],
+) -> list[tuple[str, int, int]]:
+    """`(market, events that asked for it, events it was seen in)`, per market.
+
+    An event asked for a market when any of its responses requested it, and
+    the market was seen in that event when any response that requested it
+    came back carrying it. So a response from a narrower request -- the
+    four-hour buy asked one region, and neither book that quotes hits is in
+    it -- can add a sighting to its event and never subtract one.
+
+    `retention_table` and `unmeasurable_markets` both read this, so the list
+    of unmeasurable markets is exactly the set the table calls not offered.
+    The list used to take its floor and its sentence from every probe,
+    whatever each had asked, while the table counted per market.
+    """
+    requested: list[str] = []
+    for probe in probes:
+        for market in probe.markets_requested:
+            if market not in requested:
+                requested.append(market)
+    by_event = _responses_by_event(probes)
+    counts: list[tuple[str, int, int]] = []
+    for market in requested:
+        asked = 0
+        seen = 0
+        for responses in by_event.values():
+            asking = [
+                probe for probe in responses if market in probe.markets_requested
+            ]
+            if not asking:
+                continue
+            asked += 1
+            if any(market in probe.markets_returned for probe in asking):
+                seen += 1
+        counts.append((market, asked, seen))
+    return counts
+
+
 def retention_table(probes: Sequence[RetentionProbe]) -> str:
     """The per-market retention table the backtest report embeds.
 
@@ -602,6 +682,13 @@ def retention_table(probes: Sequence[RetentionProbe]) -> str:
     looked at. Below `MINIMUM_PROBES_FOR_ABSENCE` a market that did not appear
     is "not seen in N events", which is a claim about the probe; "cannot be
     measured" is a claim about the provider, and one event cannot support it.
+
+    Every count is of events, whatever the probes are. This table used to
+    count probes under the heading "Events probed", and a cache-derived probe
+    is one response: the real cache printed 5,432 for 2,723 events and
+    `player_hits` as 1,218/5,432 (22%) where it was seen in 1,218 of 2,723
+    events (45%), and the floor of five events could be cleared by three
+    events priced at two moments.
     """
     if not probes:
         return (
@@ -609,34 +696,36 @@ def retention_table(probes: Sequence[RetentionProbe]) -> str:
             "measured historically is **unknown**. It is not assumed to be "
             "all of them, and it is not assumed to be none."
         )
-    requested: list[str] = []
-    for probe in probes:
-        for market in probe.markets_requested:
-            if market not in requested:
-                requested.append(market)
+    events = events_probed(probes)
     lines = [
         "| Provider market | Events probed | Seen in | Verdict |",
         "|:----------------|--------------:|--------:|:--------|",
     ]
-    for market in requested:
-        probed = [probe for probe in probes if market in probe.markets_requested]
-        retained = [probe for probe in probed if market in probe.markets_returned]
+    for market, probed, retained in _retention_by_market(probes):
         if retained:
-            verdict = f"measurable ({len(retained)}/{len(probed)})"
-        elif len(probed) >= MINIMUM_PROBES_FOR_ABSENCE:
-            verdict = f"**not offered in any of {len(probed)} events**"
+            verdict = f"measurable ({retained}/{probed})"
+        elif probed >= MINIMUM_PROBES_FOR_ABSENCE:
+            verdict = f"**not offered in any of {probed} events**"
         else:
             verdict = (
-                f"not seen in {len(probed)} event(s) — too few to call it "
+                f"not seen in {probed} event(s) — too few to call it "
                 "absent"
             )
-        lines.append(
-            f"| `{market}` | {len(probed)} | {len(retained)} | {verdict} |"
-        )
-    if len(probes) < MINIMUM_PROBES_FOR_ABSENCE:
+        lines.append(f"| `{market}` | {probed} | {retained} | {verdict} |")
+    if len(probes) > events:
         lines.append("")
         lines.append(
-            f"Only {len(probes)} event(s) probed. A market missing from this "
+            f"{len(probes)} responses were read over {events} events. An "
+            "event is counted once, and is seen for a market when any of its "
+            "responses carried it, so an event priced at two moments is one "
+            "event rather than two. No response records which regions it "
+            "asked, so an event whose only responses asked a region without "
+            "the market's books still counts as probed and not seen."
+        )
+    if events < MINIMUM_PROBES_FOR_ABSENCE:
+        lines.append("")
+        lines.append(
+            f"Only {events} event(s) probed. A market missing from this "
             "many is a book's night, not the provider's retention policy: a "
             "single probe once recorded `player_total_saves` as unmeasurable "
             "and the next purchase found it priced on 54 of 58 events."
@@ -651,19 +740,16 @@ def unmeasurable_markets(
 
     Deliberately returns nothing when too few events were probed, so a thin
     probe cannot write "cannot be measured" into a report through this door
-    either.
+    either. The floor and the sentence count the events that asked for each
+    market, as the table does: they used to count probes, so three events
+    priced at two moments cleared a floor of five, and the sentence would
+    have named twice the events it saw.
     """
-    if len(probes) < MINIMUM_PROBES_FOR_ABSENCE:
-        return {}
-    requested: set[str] = set()
-    seen: set[str] = set()
-    for probe in probes:
-        requested.update(probe.markets_requested)
-        seen.update(probe.markets_returned)
     return {
         market: (
-            f"Not offered on any of {len(probes)} probed events, so it cannot "
+            f"Not offered on any of {probed} probed events, so it cannot "
             "be measured against real prices."
         )
-        for market in sorted(requested - seen)
+        for market, probed, seen in sorted(_retention_by_market(probes))
+        if not seen and probed >= MINIMUM_PROBES_FOR_ABSENCE
     }

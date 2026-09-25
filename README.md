@@ -304,10 +304,13 @@ contains the phrase `Selections changed`.
 
 **Closing Lines** (`.github/workflows/closing-lines.yml`) keeps the best price
 on every selection in its own **`closing-lines` branch**. It buys nothing on
-its own schedule: Line Movement Capture's fetch already carries those prices,
-so Closing Lines runs each time Line Movement completes and publishes what
-that run handed over. It can still be dispatched by hand to force a paid
-capture. Gameday Refresh reads that store and writes
+its own schedule: Line Movement Capture's fetch already carries the per-event
+prices, so Closing Lines runs each time Line Movement completes and publishes
+what that run handed over. It does not carry the bulk moneyline, puck line and
+total, so no moneyline opinion meets a closing price; the report names those
+opinions as uncaptured rather than as prices the books pulled. It can still
+be dispatched by hand to force a paid capture. Gameday Refresh reads that
+store and writes
 `data/outputs/closing_line_value.md`: beat-the-close rate, CLV%, and the
 de-vigged expected value at the closing line, for opinions and for bets
 separately. It is the earliest honest signal that the model is finding
@@ -315,8 +318,9 @@ something — and it is not profit, which the report says out loud.
 
 **Closing Lines is disabled as of 2026-09-25**, pending a decision about
 publishing captured odds on this public repository's `closing-lines` branch.
-Line Movement still captures every price, so nothing is lost while it is held;
-until it is re-enabled, the closing-line report says it has no capture store.
+Line Movement still captures every per-event price, so nothing more is lost
+while it is held; until it is re-enabled, the closing-line report says it has
+no capture store.
 
 Every run — including a "skip" run — also publishes the rendered comment, a
 one-object status file, and the forward-evidence report to the **`card-feed`
@@ -332,7 +336,11 @@ Each run starts from the previous run's state, restored by
 `gameday-state` artifact — whatever its conclusion, with the newest successful
 state laid underneath a red one. Choosing "the newest successful run" picked a
 skipped backup run (a success with no artifact) and threw away every degraded
-run's cache and frozen snapshot.
+run's cache and frozen snapshot. Line Movement Capture restores its captures
+the same way, and then unions every day file, row by row, with the two
+carriers before the newest (`--union 3`): a red run's scratch list and line
+units used to fall out of the chain, and a run whose own restore found nothing
+must not become the base the season is lost from.
 
 | Workflow | Trigger | Spends credits |
 |:---------|:--------|:---------------|
@@ -347,7 +355,7 @@ run's cache and frozen snapshot.
 | Experiment Refresh | weekly | no |
 | Publish Site | daily, and after each Gameday Refresh | no |
 
-The public site is deployed from `web/` by **Publish Site**, which reads the lab's own outputs and the NHL's free schedule API, and deploys through the Pages API without pushing to any branch. It publishes what the card publishes — which, while nothing is allowlisted, is a slate and no selections.
+The public site is deployed from `web/` by **Publish Site**, which reads the lab's own outputs and the NHL's free schedule API, and deploys through the Pages API without pushing to any branch. It joins market lines and the card's picks through the staged prices, which Publish Site does not restore, so today every regular-season game is published unpriced: projections, no line, no pick, and the page says "Not priced" rather than calling the game a pass. Whether provider prices may appear on the public page at all is an open decision. The forward ledger shows its size in wagers and never its return; no season accuracy record is tallied, so none is shown.
 
 ## Safety boundaries
 

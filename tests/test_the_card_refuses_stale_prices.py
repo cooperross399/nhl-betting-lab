@@ -190,7 +190,7 @@ def card(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
                         lambda _dir: pd.DataFrame({"game_id": [1]}))
     monkeypatch.setattr(module, "PlayerPropsModel", _StubModel)
     monkeypatch.setattr(module, "TeamModel", _StubModel)
-    monkeypatch.setattr(module, "current_rosters", lambda: {})
+    monkeypatch.setattr(module, "current_rosters", lambda **_: {})
     monkeypatch.setattr(module, "price_props", lambda *a, **k: ({}, []))
     monkeypatch.setattr(module, "price_team_markets", _price_what_it_is_given)
 

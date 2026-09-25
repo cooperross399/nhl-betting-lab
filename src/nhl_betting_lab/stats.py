@@ -43,6 +43,25 @@ def bonferroni_z(looks: int) -> float:
     return NormalDist().inv_cdf(1.0 - 0.05 / (2 * count))
 
 
+def correction_family(looks: int, family: str = "") -> str:
+    """The family a correction counted, in words that are true of it.
+
+    `family` says what the looks are when they are not simply markets. The
+    props backtest corrects over its markets AND the overall figure, and
+    every sentence that stated the count used to call all of it markets: the
+    `late` window measures 6 markets and printed "correcting for the 7
+    markets tested", the card window measures 7 and printed 8, and the claims
+    document and the allowlist bundle repeated it beside a table of six
+    market rows. The count was right and the unit was not. A family of
+    markets alone — team markets, the forward ledger, whose correction
+    `docs/when_this_ends.md` registers as "across the markets measured" —
+    keeps that unit. One phrase for every document, so they cannot drift.
+    """
+    if family:
+        return f"{looks} figures measured on the same data ({family})"
+    return f"{looks} markets measured on the same data"
+
+
 @dataclass(frozen=True)
 class RoiInterval:
     """Flat-stake ROI with its interval and the sample behind it."""
@@ -55,10 +74,14 @@ class RoiInterval:
     high: float
     wins: int = 0
     pushes: int = 0
-    #: How many markets were tested in the same family. One means the naive
+    #: How many figures were tested in the same family. One means the naive
     #: interval is the honest one; more means it is not.
     looks: int = 1
     standard_error: float = 0.0
+    #: What those looks are, when they are not simply markets — the props
+    #: backtest's "6 markets and the overall figure". Empty means each look
+    #: is one market. See `correction_family`.
+    family: str = ""
 
     @property
     def includes_zero(self) -> bool:
@@ -66,7 +89,7 @@ class RoiInterval:
 
     @property
     def adjusted_low(self) -> float:
-        """The interval after correcting for how many markets were tested."""
+        """The interval after correcting for how many figures were tested."""
         if self.looks <= 1 or not self.standard_error:
             return self.low
         return self.roi - bonferroni_z(self.looks) * self.standard_error
@@ -115,15 +138,17 @@ class RoiInterval:
         )
         if self.looks <= 1:
             return naive
+        # What the correction counted, never "markets" for a family that is
+        # more than markets. See `correction_family`.
+        family = correction_family(self.looks, self.family)
         if self.survives_correction:
             return naive + (
-                f" It also survives correcting for the {self.looks} markets "
-                f"tested ({self.adjusted_low:+.1%} to "
-                f"{self.adjusted_high:+.1%}), which is worth more than the "
-                "uncorrected number."
+                f" It also survives correcting for the {family}, at "
+                f"{self.adjusted_low:+.1%} to {self.adjusted_high:+.1%}, "
+                "which is worth more than the uncorrected number."
             )
         return naive + (
-            f" But correcting for the {self.looks} markets tested widens it to "
+            f" But correcting for the {family} widens it to "
             f"{self.adjusted_low:+.1%} to {self.adjusted_high:+.1%}, which "
             f"includes zero — so on the family of tests actually run, "
             f"**{NO_DEMONSTRATED_EDGE}**."
@@ -157,6 +182,7 @@ def roi_interval(
     wins: int = 0,
     pushes: int = 0,
     looks: int = 1,
+    family: str = "",
 ) -> RoiInterval:
     """ROI and its 95% interval from per-bet profit in units.
 
@@ -183,6 +209,7 @@ def roi_interval(
             low=0.0,
             high=0.0,
             looks=looks,
+            family=family,
         )
     profit = sum(rows)
     staked = float(bets)
@@ -198,6 +225,7 @@ def roi_interval(
             wins=wins,
             pushes=pushes,
             looks=looks,
+            family=family,
         )
     mean = roi
     variance = sum((value - mean) ** 2 for value in rows) / (bets - 1)
@@ -213,6 +241,7 @@ def roi_interval(
         pushes=pushes,
         looks=looks,
         standard_error=standard_error,
+        family=family,
     )
 
 
@@ -240,17 +269,24 @@ def detection_table(edges: Sequence[float] = (0.05, 0.08, 0.10, 0.15)) -> str:
     return "\n".join(lines)
 
 
-def wilson_interval(successes: int, trials: int) -> tuple[float, float]:
-    """95% Wilson interval on a hit rate. Correct at small n, unlike normal."""
+def wilson_interval(
+    successes: int, trials: int, *, z: float = Z95
+) -> tuple[float, float]:
+    """Wilson interval on a hit rate. Correct at small n, unlike normal.
+
+    95% unless `z` says otherwise. A rate that is one row of a family (one
+    market among several in the same table) passes `bonferroni_z(looks)`,
+    the same correction `RoiInterval.adjusted_low` applies to a mean.
+    """
     if trials <= 0:
         return 0.0, 1.0
     hits = max(0, min(int(successes), int(trials)))
     n = float(trials)
     p = hits / n
-    denominator = 1.0 + Z95 * Z95 / n
-    centre = (p + Z95 * Z95 / (2 * n)) / denominator
+    denominator = 1.0 + z * z / n
+    centre = (p + z * z / (2 * n)) / denominator
     margin = (
-        Z95 * math.sqrt(p * (1.0 - p) / n + Z95 * Z95 / (4 * n * n))
+        z * math.sqrt(p * (1.0 - p) / n + z * z / (4 * n * n))
     ) / denominator
     return max(0.0, centre - margin), min(1.0, centre + margin)
 
