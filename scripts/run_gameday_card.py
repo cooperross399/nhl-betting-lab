@@ -25,7 +25,10 @@ import pandas as pd
 from nhl_betting_lab.config import OUTPUTS_DIR, PROCESSED_DIR, STAGING_DIR
 from nhl_betting_lab.data.build_datasets import load_player_logs, load_team_games
 from nhl_betting_lab.data.nhl_api import current_rosters
-from nhl_betting_lab.market_eligibility import assess_markets, slate_games_from
+from nhl_betting_lab.market_eligibility import (
+    assess_markets,
+    slate_games_with_schedule,
+)
 from nhl_betting_lab.models.player_props import PlayerPropsModel
 from nhl_betting_lab.models.toi_corrections import load_current_corrections
 from nhl_betting_lab.models.team_model import TeamModel
@@ -49,6 +52,7 @@ from nhl_betting_lab.season import (
     known_regular_season_games,
     row_game_date,
     schedule_cache_is_complete,
+    scheduled_regular_season_starts,
     season_id,
 )
 from nhl_betting_lab.staging_provider_policy import load_policy
@@ -158,7 +162,9 @@ def main(argv: list[str] | None = None) -> int:
             "preseason. The preseason screen is skipped rather than run on a "
             "cache with holes — a hole and an exhibition game look identical "
             "to it, and dropping real games would shrink the slate the "
-            "eligibility gate measures against. Run "
+            "eligibility gate measures against. Nor can the eligibility "
+            "slate count a game no cached file names, so for those games "
+            "coverage is judged only against what the provider returned. Run "
             "scripts/fetch_nhl_data.py to complete the cache."
         )
     elif not prices.empty and schedule:
@@ -195,10 +201,46 @@ def main(argv: list[str] | None = None) -> int:
     elif not prices.empty:
         print(
             "WARNING: no regular-season schedule is cached, so nothing could "
-            "be screened for preseason. Run scripts/fetch_nhl_data.py first."
+            "be screened for preseason, and the eligibility gate can judge "
+            "each market only against the games the provider returned — a "
+            "game it priced in no market cannot count against any. Run "
+            "scripts/fetch_nhl_data.py first."
         )
 
-    slate = slate_games_from(prices)
+    # The provider says "Toronto Maple Leafs" and every model here is keyed by
+    # "TOR". Without this map every lookup misses and every game is priced
+    # league-average against league-average — with no error anywhere. Built
+    # before the slate, because the slate matches priced games to the
+    # schedule through it.
+    team_names = build_team_name_map()
+
+    # The slate is every game the prices cover PLUS every scheduled
+    # regular-season game on the same league dates that no row prices. It
+    # used to be `slate_games_from(prices)` — the distinct games of the very
+    # frame the gate then judged — so a game the provider priced in no market
+    # was missing from the slate and could never make any market INCOMPLETE.
+    # Found by the failure-shape audit, reproduced on the real 2026-27
+    # schedule: 8 games on 2026-10-01, 5 of them staged, and the gate printed
+    # "1 of 12 markets eligible across 5 game(s): moneyline", "priced for all
+    # 5 game(s) in the slate", while the same prices judged against the 8
+    # read "Priced for 5 of 8 games". An allowlisted card then picked only
+    # where prices happened to exist — the selection effect
+    # `require_full_slate` exists to block — and never mentioned the three
+    # games it had not seen. The screen above no longer shrinks the slate on
+    # a partial cache; this closes the other door, the provider's.
+    slate, unpriced = slate_games_with_schedule(
+        prices,
+        scheduled_regular_season_starts(),
+        resolve=lambda name: resolve_team(name, team_names),
+        now=moment,
+    )
+    if unpriced:
+        print(
+            f"{len(unpriced)} scheduled regular-season game(s) not yet under "
+            "way match no priced game — the provider priced them in no "
+            "market, or its rows could not be matched to the schedule — so "
+            f"every market is judged against them too: {', '.join(unpriced)}."
+        )
     eligibility = assess_markets(
         prices,
         slate_games=slate,
@@ -211,10 +253,6 @@ def main(argv: list[str] | None = None) -> int:
     probabilities: dict[tuple, float] = {}
     unresolved_names: set[str] = set()
 
-    # The provider says "Toronto Maple Leafs" and every model here is keyed by
-    # "TOR". Without this map every lookup misses and every game is priced
-    # league-average against league-average — with no error anywhere.
-    team_names = build_team_name_map()
     # Not `if not team_names`: the builder always adds the Utah and Arizona
     # aliases, so with no boxscores it returns six entries and that check
     # never fired — and the six-entry map was then saved as team_names.csv,

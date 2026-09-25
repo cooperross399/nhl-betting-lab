@@ -1,10 +1,13 @@
 """The ladder route must not touch the registered forward test.
 
 `scripts/run_gameday_card.py` calls `write_snapshot` on the **unfiltered**
-price frame and the full probability map, at line 333, *before* `build_card`
-applies the eligibility gate at line 349. That ordering is deliberate and
-correct — it is what lets the forward ledger accumulate while the card stays
-dark, which is the whole 2026-27 experiment (`docs/when_this_ends.md`).
+price frame and the full probability map, *before* `build_card` applies the
+eligibility gate. That is deliberate and correct — it is what lets the
+forward ledger accumulate while the card stays dark, which is the whole
+2026-27 experiment (`docs/when_this_ends.md`). The unfiltered input is the
+part that matters, and it is held by running the card:
+`tests/test_the_ledger_freezes_what_the_gate_excludes.py`. (This docstring
+used to cite lines 333 and 349; the calls had moved.)
 
 It also means the forward ledger sits **in front of** the allowlist gate, not
 behind it. Anything that reaches the `probabilities` map reaches the ledger,
@@ -148,6 +151,13 @@ def test_the_snapshot_is_still_written_before_the_eligibility_gate() -> None:
     would quietly stop running. That is a worse failure than the one above,
     and it would make this whole file's reasoning obsolete — so it is pinned
     here, where someone changing it will be told why.
+
+    This reads only where two calls sit in the text, so it cannot see what
+    `write_snapshot` is handed: passing it the prices filtered to the
+    eligible markets left the whole suite green (failure-shape audit,
+    finding 77). That — the property the ledger actually depends on — is
+    held by `tests/test_the_ledger_freezes_what_the_gate_excludes.py`, which
+    runs the card and reads the frozen snapshot back.
     """
     text = CARD_SCRIPT.read_text(encoding="utf-8")
     snapshot_at = text.index("write_snapshot(")
