@@ -261,8 +261,16 @@ jobs:
           # produces no card at all. A cold cache therefore fills over
           # consecutive days rather than in one heroic run; in steady season
           # there are about a dozen new games a night and this is instant.
-          python scripts/fetch_nhl_data.py --polite-seconds 0.25 --max-games 600
+          #
+          # The fetch fails when the NHL API could not be reached, and that
+          # failure is what "Record what went wrong" reads to call the run
+          # degraded. The datasets are rebuilt either way — whatever did
+          # arrive is still worth fitting on — and the step then exits with
+          # the fetch's code so the failure is not swallowed.
+          code=0
+          python scripts/fetch_nhl_data.py --polite-seconds 0.25 --max-games 600 || code=$?
           python scripts/build_datasets.py
+          exit "$code"
 
       - name: Fetch prices into staging
         # Soft for the same reason: without fresh prices the card is refused,
