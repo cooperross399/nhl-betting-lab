@@ -117,6 +117,27 @@ def main(argv: list[str] | None = None) -> int:
                 f"{r['roi']:>+7.1%}"
             )
 
+    # A VARIANT THAT PLACED NO BET DECIDES NOTHING. A named window the store
+    # does not hold leaves every market `None`, which summed to +0.0u; 0 is
+    # not > 0, so this recorded "costs +0.0u on the priced sample" and
+    # `ships: []` — withdrawing `team_b2b`, recorded at +5.8u in the `late`
+    # window, on a run that priced nothing. The props rest experiment did
+    # exactly this on the real four-hour store. A refusal writes nothing, so
+    # the drift check reads the untouched verdict as "not re-decided" and the
+    # refresh fails instead of opening a pull request.
+    unmeasured = [
+        name
+        for name in variants
+        if not any(entry and entry["bets"] for entry in results[name].values())
+    ]
+    if unmeasured:
+        print(
+            f"::error::The {' and '.join(unmeasured)} variant(s) placed no bet, "
+            f"so this run measured nothing and records no verdict. {window_line}",
+            file=sys.stderr,
+        )
+        return 2
+
     def total(name: str) -> float:
         return sum(
             entry["profit"]

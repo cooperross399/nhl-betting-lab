@@ -21,8 +21,10 @@ is indistinguishable from tuning, and this lab's whole discipline is that
 what ships is auditable against the experiment that decided it.
 
 Exit codes: 0 nothing moved, 1 something moved, **2 the refresh was broken**
-— an experiment produced no file this run, so nothing was compared and
-"nothing moved" would be a false statement rather than a clean bill.
+— an experiment produced no readable file this run, so nothing was compared
+and "nothing moved" would be a false statement rather than a clean bill. The
+check failing outright is a broken refresh too, and exits 2: 1 is the code on
+which Experiment Refresh opens a pull request.
 """
 
 from __future__ import annotations
@@ -30,6 +32,8 @@ from __future__ import annotations
 import argparse
 import json
 import subprocess
+import sys
+import traceback
 from pathlib import Path
 
 from nhl_betting_lab.config import OUTPUTS_DIR
@@ -103,14 +107,24 @@ def main(argv: list[str] | None = None) -> int:
         if path.is_file():
             try:
                 now = json.loads(path.read_text(encoding="utf-8"))
-            except (OSError, json.JSONDecodeError):
+            except (OSError, UnicodeError, json.JSONDecodeError):
                 now = None
+        if not isinstance(now, dict):
+            now = None
         was_ships = ships_of(committed(rel))
         now_ships = ships_of(now)
         was = "in force" if policy in was_ships else "off"
         current = "in force" if policy in now_ships else "off"
+        # A MISSING OR UNREADABLE FILE WAS NOT RE-DECIDED EITHER. This branch
+        # dates from when 1 was the only non-zero exit; it labelled the file
+        # "not produced" and then compared that label with the committed
+        # verdict, so an experiment cut off mid-write ("| `team_b2b` | in
+        # force | not produced | **yes** |") exited 1, and the refresh opened
+        # a pull request committing the truncated file — which
+        # `verdicts.ships()` reads as off. It is a broken refresh: exit 2.
         if now is None:
-            current = "not produced"
+            current = "**not produced** (missing or unreadable)"
+            stale.append(policy)
         # A file that predates this run was not re-decided. Reading it as
         # "unchanged" reports a stale belief as a confirmed one, which is the
         # exact failure this script exists to catch — one level up.
@@ -129,8 +143,9 @@ def main(argv: list[str] | None = None) -> int:
         lines.append(
             f"**{len(stale)} verdict(s) were not re-decided: "
             + ", ".join(f"`{s}`" for s in stale)
-            + ".** Their experiments did not produce a file during this run, "
-            "so nothing was compared for them. This is a broken refresh, not "
+            + ".** Their experiments did not produce a readable file during "
+            "this run, so nothing was compared for them. This is a broken "
+            "refresh, not "
             "a clean one: a job that cannot re-decide must never report that "
             "nothing changed, because on more data it might have."
         )
@@ -161,5 +176,25 @@ def main(argv: list[str] | None = None) -> int:
     return 1 if moved else 0
 
 
+def cli(argv: list[str] | None = None) -> int:
+    """`main`, with a crash reported as the broken refresh it is.
+
+    An uncaught exception ends Python with status 1, and 1 is "a verdict
+    moved": the refresh would open a pull request from a check that never
+    finished. So a failure here exits 2, which fails the run instead.
+    """
+    try:
+        return main(argv)
+    except Exception as error:  # noqa: BLE001 - every failure is a broken refresh
+        traceback.print_exc()
+        print(
+            f"::error::The verdict drift check failed ({type(error).__name__}: "
+            f"{error}), so nothing was compared. This is a broken refresh, not "
+            "a moved verdict.",
+            file=sys.stderr,
+        )
+        return 2
+
+
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(cli())

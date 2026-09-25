@@ -103,6 +103,11 @@ SAMPLE_COLUMNS = (
     # than the actual, because a correction tested on information the card
     # cannot have would ship something other than what was tested.
     "expected_toi_seconds",
+    # The back-to-back policy the row was priced under. Samples from either
+    # policy were otherwise identical in shape, so a cache could not say
+    # which verdict made it and `--reuse-samples` kept the old policy's cache
+    # after a verdict flipped (see `backtest.samples_are_current`).
+    "use_rest",
 )
 
 
@@ -297,6 +302,7 @@ def generate_prop_samples(
                         "expected_toi_seconds": float(
                             rates.expected_toi_seconds if rates else 0.0
                         ),
+                        "use_rest": bool(use_rest),
                     }
                 )
             if not priced_any:

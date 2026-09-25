@@ -55,7 +55,11 @@ def _correction(tmp_path, monkeypatch, *, raises=None):
     processed, outputs = tmp_path / "processed", tmp_path / "outputs"
     _prices(processed)
     outputs.mkdir()
-    pd.DataFrame([{"market": "shots_on_goal"}]).to_csv(
+    # Recording the policy it was generated under, as every sample file now
+    # does: no verdict here ships props_b2b, so rest-ignored. Without it the
+    # experiment refuses the file before any backtest runs, and the refusal
+    # test below would pass on that instead of on the map.
+    pd.DataFrame([{"market": "shots_on_goal", "use_rest": False}]).to_csv(
         outputs / "prop_calibration_samples.csv", index=False
     )
     seen = []

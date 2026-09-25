@@ -45,6 +45,12 @@ from nhl_betting_lab.providers.team_names import (
 EXPERIMENT_MARKDOWN = "props_rest_experiment.md"
 EXPERIMENT_JSON = "props_rest_experiment.json"
 
+#: The windows a verdict may be measured in. Named, never inferred and never
+#: `all`: this accepted any string, and `run_backtest` reads an unknown name
+#: as a window that matches nothing — `--phase all`, which the backtest's own
+#: error message suggests, measured nothing and recorded a verdict on it.
+WINDOWS = ("card", "late", "early")
+
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -52,6 +58,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--phase",
         default="card",
+        choices=WINDOWS,
         help=(
             "Which snapshot window to measure. The store holds more than "
             "one and mixing them takes the better of two moments, which "
@@ -111,6 +118,37 @@ def main(argv: list[str] | None = None) -> int:
                 f"{entry['profit']:>+8.1f}u  {entry['roi']:>+7.1%}"
             )
 
+    # A VARIANT THAT PLACED NO BET DECIDES NOTHING. With no row in the named
+    # window `run_backtest` measures nothing and says so in its notes, and
+    # this never read them: 0 - 0 is not > 0, so it recorded "Knowing about
+    # back-to-backs costs +0.0u on the priced sample. It does not ship" and
+    # exited 0. On the four-hour store (1,259,312 `late` rows, none in
+    # `card`) that withdrew `props_b2b`, recorded at +18.7u over 7 markets,
+    # and the drift check exited 1 — the code on which Experiment Refresh
+    # opens a pull request to take it off the card. A refusal writes
+    # nothing, so the verdict on disk keeps its old mtime, the drift check
+    # reads it as "not re-decided", and the refresh fails instead.
+    unmeasured = [
+        name
+        for name, entries in results.items()
+        if not sum(entry["bets"] for entry in entries.values())
+    ]
+    if unmeasured:
+        notes = [
+            note
+            for name in unmeasured
+            for note in getattr(reports[name], "notes", [])
+            if f"`{args.phase}` window" in note
+        ]
+        print(
+            f"::error::The {' and '.join(unmeasured)} variant(s) placed no bet "
+            f"in the `{args.phase}` window, so this run measured nothing and "
+            "records no verdict. "
+            + " ".join(dict.fromkeys(notes)),
+            file=sys.stderr,
+        )
+        return 2
+
     def total(name: str) -> float:
         return sum(entry["profit"] for entry in results[name].values())
 
@@ -142,12 +180,22 @@ def main(argv: list[str] | None = None) -> int:
             "whether correcting it beats the prices."
         )
 
+    # The window, as the team experiment records it: the drift report tells
+    # its reader to judge a moved verdict against the window it was measured
+    # in, and this record did not say.
+    measured = reports["rest_known"]
+    window_line = (
+        f"Priced in the `{measured.phase}` window, median "
+        f"{measured.phase_hours:.1f} hours before face-off."
+    )
     payload = {
         "ships": ["props_b2b"] if ships else [],
         "delta_units": delta,
         "markets_improved": wins,
         "markets_measured": len(both),
         "edge_threshold": args.edge_threshold,
+        "phase": measured.phase,
+        "phase_hours": measured.phase_hours,
         "verdict": verdict,
         "results": results,
     }
@@ -166,6 +214,8 @@ def main(argv: list[str] | None = None) -> int:
             "misses fatigue; this decides whether correcting it beats the "
             "prices that were actually for sale."
         ),
+        "",
+        window_line,
         "",
         "| Market | Rest ignored | Rest known | Delta |",
         "|:-------|-------------:|-----------:|------:|",

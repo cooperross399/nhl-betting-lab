@@ -55,15 +55,30 @@ def main(argv: list[str] | None = None) -> int:
     outputs = Path(args.output_dir)
     samples_path = outputs / SAMPLES_FILENAME
 
+    # The default measurement describes the shipped policy, and what ships is
+    # the recorded verdict's call, not this script's.
+    use_rest = ships("props_b2b", output_dir=outputs)
+    # Read before the cache is judged, because the cache is judged against
+    # them: which games exist is half of whether it is current.
+    logs = load_player_logs(processed)
+
     samples = None
     if args.reuse_samples and samples_path.is_file():
         import pandas as pd
 
         cached = pd.read_csv(samples_path)
+        # The policy and the games are checked as well as the schema. This
+        # checked the schema alone, so after a verdict flipped the old
+        # policy's cache was reused (194,707 of 749,115 fitted means differ
+        # between the two), and a cache the logs had outgrown was reused
+        # forever — Gameday Refresh restores it every run. Either one
+        # regenerates here.
         current, reason = samples_are_current(
             cached,
             known_markets=prop_market_keys(),
             required_columns=REUSABLE_SAMPLE_COLUMNS,
+            required_policy={"use_rest": use_rest},
+            source_games=logs,
         )
         if current:
             samples = cached
@@ -71,7 +86,6 @@ def main(argv: list[str] | None = None) -> int:
         else:
             print(f"Not reusing the cached samples: {reason}")
     if samples is None:
-        logs = load_player_logs(processed)
         if logs.empty:
             print(
                 "No player logs. Run scripts/fetch_nhl_data.py and "
@@ -86,9 +100,7 @@ def main(argv: list[str] | None = None) -> int:
             minimum_history_games=args.minimum_history_games,
             start_date=args.start_date,
             end_date=args.end_date,
-            # The default measurement describes the shipped policy, and what
-            # ships is the recorded verdict's call, not this script's.
-            use_rest=ships("props_b2b", output_dir=outputs),
+            use_rest=use_rest,
         )
         print(walk.summary_line())
         outputs.mkdir(parents=True, exist_ok=True)

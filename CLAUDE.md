@@ -732,10 +732,16 @@ Re-derive rather than trust if the data has moved.
   and the CSVs rebuild from the cache. `build_datasets` refuses to shrink an
   accumulated table by more than half (each file guarded on its own, rows not
   existence, `--allow-shrink` as the deliberate override).
-- **Caches are checked before reuse, four ways**: renamed market, added
+- **Caches are checked before reuse, six ways**: renamed market, added
   market, schema change, and a widened line grid — the last because the CI
   state artifact restores the previous run's samples forever, which would
-  have reproduced the biased totals measurement indefinitely.
+  have reproduced the biased totals measurement indefinitely — and, since
+  2026-09-25, the back-to-back policy each row records (`use_rest`) against
+  the verdict in force, and every game the logs hold from the cache's first
+  sampled date. Before that a cache from the withdrawn policy passed (194,707
+  of 749,115 fitted means differ) and a cache the logs had outgrown was
+  reused forever. The correction experiment refuses samples from the other
+  policy, and Experiment Refresh sends restored samples through the check.
 - **The measured historical rate is ten credits per market returned per
   event, per region.** One provider account funds every lab, and its quota
   is **3,635,739 remaining of 5,000,000** as of 2026-09-02 (1,364,261 used
