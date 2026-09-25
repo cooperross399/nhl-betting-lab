@@ -355,15 +355,11 @@ def test_an_empty_snapshot_settles_exactly_once(tmp_path: Path) -> None:
     """An empty day leaves no ledger trace, so without its own marker it
     would re-settle on every run forever — noise that trains the reader to
     ignore the settlement log."""
-    fe.write_snapshot(
-        pd.DataFrame(columns=["market"]),
-        {},
-        key_for=selection_key,
-        verdicts_line="x",
-        snapshot_date="2026-10-08",
-        now=FROZEN_AT,
-        archive_dir=tmp_path,
-    )
+    # write_snapshot no longer writes an empty snapshot, but archives frozen
+    # before that change hold them, and settlement must still mark each once.
+    empty = fe.snapshots_dir(tmp_path) / "2026-10-08.csv"
+    empty.parent.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame(columns=list(fe.SNAPSHOT_COLUMNS)).to_csv(empty, index=False)
 
     first = _settle(tmp_path, _logs(), _games())
     second = _settle(tmp_path, _logs(), _games())

@@ -358,6 +358,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     if frozen.get("state") == "frozen":
         print(f"Priced snapshot frozen: {written} ({frozen['frozen']} row(s)); {withheld}.")
+    elif frozen.get("state") == "nothing_to_freeze" and prices.empty:
+        print(
+            f"No snapshot was frozen for {snapshot_day}: there were no prices. "
+            "A later run today can still freeze the day's first opinion."
+        )
     elif frozen.get("state") == "nothing_to_freeze":
         print(
             f"No snapshot was frozen for {snapshot_day}: the slate has prices "

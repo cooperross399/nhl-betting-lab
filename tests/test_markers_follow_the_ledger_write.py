@@ -64,7 +64,14 @@ def _moneyline(
 
 
 def _snapshot(archive: Path, rows: list[dict], day: str) -> None:
-    """Freeze rows the way the card does, each with a model opinion."""
+    """Freeze rows the way the card does, each with a model opinion. An
+    empty day is written as an older archive holds it: write_snapshot no
+    longer writes one, but settlement must still handle those it finds."""
+    if not rows:
+        path = fe.snapshots_dir(archive) / f"{day}.csv"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        pd.DataFrame(columns=list(fe.SNAPSHOT_COLUMNS)).to_csv(path, index=False)
+        return
     probabilities = {}
     for raw in rows:
         line = raw.get("line")
