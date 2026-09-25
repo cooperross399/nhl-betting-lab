@@ -49,6 +49,7 @@ import pandas as pd
 import pytest
 
 from nhl_betting_lab.config import PROJECT_ROOT
+from nhl_betting_lab import verdicts
 from nhl_betting_lab.providers import team_names as tn
 
 
@@ -79,6 +80,16 @@ def _isolated_team_map(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     rebuilt from the real boxscore cache."""
     monkeypatch.setattr(tn, "PROCESSED_DIR", tmp_path / "default_processed")
     monkeypatch.setattr(tn, "RAW_DIR", tmp_path / "default_raw")
+
+
+@pytest.fixture(autouse=True)
+def _no_recorded_verdicts(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """No verdict is recorded anywhere these experiments look. Since #151 a
+    directory that records no verdict reads the repository's recorded one
+    (data/outputs ships props_b2b), so "no verdict in this output directory"
+    would otherwise mean "the real repository's", and the rest-ignored
+    samples below would be refused as the wrong policy."""
+    monkeypatch.setattr(verdicts, "OUTPUTS_DIR", tmp_path / "recorded_verdicts")
 
 
 def _prop_quote(season: str, hours_before: float, *, odds: int = 120) -> dict:

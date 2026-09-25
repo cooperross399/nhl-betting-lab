@@ -21,10 +21,21 @@ import pandas as pd
 import pytest
 
 from nhl_betting_lab.config import PROJECT_ROOT
+from nhl_betting_lab import verdicts
 from nhl_betting_lab.providers import team_names as tn
 from nhl_betting_lab.providers.team_names import UnresolvedTeamsError
 
 TEAM_MAP = {"Toronto Maple Leafs": "TOR", "Utah Mammoth": "UTA"}
+
+
+@pytest.fixture(autouse=True)
+def _no_recorded_verdicts(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """No verdict is recorded anywhere these experiments look. Since #151 a
+    directory that records no verdict reads the repository's recorded one
+    (data/outputs ships props_b2b), so "no verdict in this output directory"
+    would otherwise mean "the real repository's", and the rest-ignored
+    samples below would be refused as the wrong policy."""
+    monkeypatch.setattr(verdicts, "OUTPUTS_DIR", tmp_path / "recorded_verdicts")
 
 
 def _script(name: str) -> ModuleType:
