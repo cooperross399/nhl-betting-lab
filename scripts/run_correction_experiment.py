@@ -37,6 +37,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from nhl_betting_lab.backtest import policy_mismatch
 from nhl_betting_lab.backtest.correction_timeline import build_timeline
 from nhl_betting_lab.config import MIN_PROP_EDGE, OUTPUTS_DIR, PROCESSED_DIR
 from nhl_betting_lab.reports.player_props_backtest import run_backtest
@@ -46,6 +47,7 @@ from nhl_betting_lab.providers.team_names import (
 )
 from nhl_betting_lab.reports.props_calibration import expand_to_lines
 from nhl_betting_lab.season import game_date
+from nhl_betting_lab.verdicts import ships
 
 
 EXPERIMENT_MARKDOWN = "correction_experiment.md"
@@ -56,6 +58,24 @@ WINDOWS = (
     ("2025-26", "2025-10-01", "2026-05-01"),
 )
 
+#: The price windows a verdict may be measured in: named, never `all`. See
+#: scripts/run_props_rest_experiment.py.
+PHASES = ("card", "late", "early")
+
+
+def _not_the_shipped_policy(samples: pd.DataFrame, outputs: Path) -> str:
+    """Why `samples` are not the shipped props policy's, or "".
+
+    This read whatever file was on disk, and nothing in the file said which
+    back-to-back policy made it, so after `props_b2b` flipped it would decide
+    `by_toi` for a card that no longer prices that way. The verdict is read
+    from this run's --output-dir, as the calibration that writes the samples
+    reads it.
+    """
+    return policy_mismatch(
+        samples, {"use_rest": ships("props_b2b", output_dir=outputs)}
+    )
+
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -63,6 +83,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--phase",
         default="card",
+        choices=PHASES,
         help=(
             "Which snapshot window to measure. The store holds more than "
             "one and mixing them takes the better of two moments, which "
@@ -85,6 +106,14 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     samples = pd.read_csv(samples_path)
+    mismatch = _not_the_shipped_policy(samples, outputs)
+    if mismatch:
+        print(
+            f"::error::Not deciding on these samples: {mismatch} Regenerate "
+            "them with scripts/run_props_calibration.py.",
+            file=sys.stderr,
+        )
+        return 2
     prices = pd.read_csv(prices_path)
     print(f"{len(samples):,} distribution samples, {len(prices):,} price rows.")
 
@@ -163,6 +192,27 @@ def main(argv: list[str] | None = None) -> int:
                 f"{r['profit']:>+8.1f}u  {r['roi']:>+7.1%}  "
                 f"[{r['low']:+.1%} .. {r['high']:+.1%}]"
             )
+
+    # A WINDOW THAT PLACED NO BET DECIDES NOTHING. An empty window scored
+    # 0 against 0, which `>=` counts as a win, so "beats raw on both windows"
+    # could be written from one; and an entirely empty run wrote `ships: []`,
+    # equal to the committed record, so the drift check reported "Nothing
+    # moved" for a run that measured nothing. A refusal writes nothing, and
+    # the drift check reads the untouched file as "not re-decided".
+    unmeasured = [
+        f"{label} {name}"
+        for label, _, _ in WINDOWS
+        for name in variants
+        if not results[label][name]["bets"]
+    ]
+    if unmeasured:
+        print(
+            f"::error::{', '.join(unmeasured)} placed no bet in the "
+            f"`{args.phase}` window, so this run cannot compare the variants "
+            "and records no verdict.",
+            file=sys.stderr,
+        )
+        return 2
 
     # The decision, in the repository's own words.
     def total_profit(name: str) -> float:

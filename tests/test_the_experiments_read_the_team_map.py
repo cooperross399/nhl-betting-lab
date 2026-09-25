@@ -21,10 +21,21 @@ import pandas as pd
 import pytest
 
 from nhl_betting_lab.config import PROJECT_ROOT
+from nhl_betting_lab import verdicts
 from nhl_betting_lab.providers import team_names as tn
 from nhl_betting_lab.providers.team_names import UnresolvedTeamsError
 
 TEAM_MAP = {"Toronto Maple Leafs": "TOR", "Utah Mammoth": "UTA"}
+
+
+@pytest.fixture(autouse=True)
+def _no_recorded_verdicts(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """No verdict is recorded anywhere these experiments look. Since #151 a
+    directory that records no verdict reads the repository's recorded one
+    (data/outputs ships props_b2b), so "no verdict in this output directory"
+    would otherwise mean "the real repository's", and the rest-ignored
+    samples below would be refused as the wrong policy."""
+    monkeypatch.setattr(verdicts, "OUTPUTS_DIR", tmp_path / "recorded_verdicts")
 
 
 def _script(name: str) -> ModuleType:
@@ -55,7 +66,11 @@ def _correction(tmp_path, monkeypatch, *, raises=None):
     processed, outputs = tmp_path / "processed", tmp_path / "outputs"
     _prices(processed)
     outputs.mkdir()
-    pd.DataFrame([{"market": "shots_on_goal"}]).to_csv(
+    # Recording the policy it was generated under, as every sample file now
+    # does: no verdict here ships props_b2b, so rest-ignored. Without it the
+    # experiment refuses the file before any backtest runs, and the refusal
+    # test below would pass on that instead of on the map.
+    pd.DataFrame([{"market": "shots_on_goal", "use_rest": False}]).to_csv(
         outputs / "prop_calibration_samples.csv", index=False
     )
     seen = []

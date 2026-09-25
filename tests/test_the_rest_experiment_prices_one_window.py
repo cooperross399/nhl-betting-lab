@@ -23,6 +23,7 @@ import pytest
 
 from nhl_betting_lab.config import PROJECT_ROOT
 from nhl_betting_lab.reports import team_markets_measurement as TM
+from nhl_betting_lab.stats import roi_interval
 
 FACE_OFF = "2025-01-10T00:00:00Z"
 
@@ -68,7 +69,10 @@ def _run(tmp_path, monkeypatch, store: pd.DataFrame, *argv: str):
 
     def fake_measure(prices, samples, **_):
         seen.append(prices.copy())
-        return None
+        # A measured market: a run in which every market measured nothing is
+        # now refused rather than recorded (test_experiments_refuse_empty_
+        # verdicts.py), and this test is about which prices were measured.
+        return roi_interval([0.8], wins=1)
 
     monkeypatch.setattr(module, "load_team_games", lambda _: pd.DataFrame([{"game": 1}]))
     monkeypatch.setattr(module, "generate_team_samples", fake_samples)
