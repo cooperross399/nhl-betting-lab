@@ -36,7 +36,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from nhl_betting_lab.stores import existing_row_count, read_store
+from nhl_betting_lab.stores import CorruptStoreError, existing_row_count, read_store
 
 from nhl_betting_lab.config import PROCESSED_DIR
 from nhl_betting_lab.models.value import (
@@ -199,12 +199,32 @@ def load_movement_captures(processed_dir: Path | None = None) -> pd.DataFrame:
     So CLV reads the movement store when the dedicated one is empty. The
     closing rule is unchanged: the last price captured strictly before the
     face-off, chosen by `closing_prices`.
+
+    ## One best-price row per selection per round, as the dedicated store
+
+    The movement file keeps EVERY book's row for every round, and this used
+    to hand them over as they were. `closing_prices` then kept the first row
+    at the latest moment, which is one book chosen by file order, and it
+    scored it against an opinion taken at the best of N. The finder's round
+    listed BetMGM +105 first, then DraftKings +140 and FanDuel +135. Against
+    an opinion taken at +130 the fallback reported a close of BetMGM +105,
+    beat_close True, CLV +12.2%. The dedicated store's basis gives
+    DraftKings +140, beat_close False, CLV -4.2%. The error could only
+    flatter: a refuter replayed 291 real games on a market that did not
+    move, and this path printed mean CLV +0.74% [+0.72%, +0.76%], "excludes
+    zero on the positive side".
+
+    Each round now goes through `best_prices` under its own `captured_at`,
+    which is exactly what `scripts/capture_line_movement.py` writes to the
+    dedicated store from the same fetch. The two stores therefore hold the
+    same rows, and a report does not depend on which one it read.
     """
+    empty = pd.DataFrame(columns=list(CAPTURE_COLUMNS))
     root = (
         Path(processed_dir) if processed_dir else PROCESSED_DIR
     ) / MOVEMENT_DIRNAME
     if not root.is_dir():
-        return pd.DataFrame(columns=list(CAPTURE_COLUMNS))
+        return empty
     frames = []
     for path in sorted(root.glob("*.csv")):
         try:
@@ -217,10 +237,41 @@ def load_movement_captures(processed_dir: Path | None = None) -> pd.DataFrame:
             # than half-read: a capture missing `captured_at` cannot be
             # ordered against face-off and would silently become "closing".
             continue
-        frames.append(frame[list(CAPTURE_COLUMNS)])
+        frames.append(frame)
     if not frames:
-        return pd.DataFrame(columns=list(CAPTURE_COLUMNS))
-    return pd.concat(frames, ignore_index=True)
+        return empty
+    rows = pd.concat(frames, ignore_index=True)
+    rounds = [
+        best_prices(round_rows, captured_at=str(stamp))
+        for stamp, round_rows in rows.groupby("captured_at", sort=False)
+    ]
+    rounds = [frame for frame in rounds if not frame.empty]
+    if not rounds:
+        return empty
+    return pd.concat(rounds, ignore_index=True)
+
+
+class UnreadableCaptureStore(CorruptStoreError):
+    """The dedicated capture store holds rows that cannot all be read."""
+
+    def __init__(
+        self, path: Path, *, rows_on_disk: int, rows_read: int | None
+    ) -> None:
+        self.path = Path(path)
+        self.rows_on_disk = int(rows_on_disk)
+        #: None when the file does not parse at all.
+        self.rows_read = rows_read
+        how = (
+            "does not parse"
+            if rows_read is None
+            else f"parses to only {rows_read} of them"
+        )
+        super().__init__(
+            f"{self.path} holds {self.rows_on_disk} row(s) and {how}. "
+            "Closing-line value was not measured from it, and not from the "
+            "movement store in its place. Restore it from the branch that "
+            "carries it, then re-run."
+        )
 
 
 def load_captures(processed_dir: Path | None = None) -> pd.DataFrame:
@@ -228,10 +279,43 @@ def load_captures(processed_dir: Path | None = None) -> pd.DataFrame:
 
     Both hold the same kind of row. The dedicated one wins when it has
     anything, so an explicit closing-line run is never ignored.
+
+    ## A damaged store raises; only an empty one falls through
+
+    This read the store with the forgiving reader, which returns an empty
+    frame for a file that will not parse. A damaged store therefore fell
+    through to the movement store. Gameday Refresh never has a movement
+    store, so the result was 0 captures, and the report said "Nothing to
+    measure yet ... the correct state and not a fault" while the closing
+    prices sat on disk. One refuter's store held a capture matching its one
+    opinion, plus an unterminated quote at the end. It reported "matched
+    0; no closing price found: 1", where the undamaged store matched 1 of 1.
+    Stray quotes were just as silent: they parse short without an error, so
+    a 10-row store read as 6.
+
+    `stores.py` lets a reader "treat that as absent and say so". This one
+    now says so by raising `UnreadableCaptureStore`, whether the store does
+    not parse at all or parses to fewer rows than its lines. A missing,
+    zero-byte or header-only store still reads as empty: there is nothing
+    in it to lose. The movement store is never used in place of a damaged
+    dedicated one, because that would swap the data source without saying.
     """
     path = captures_path(processed_dir)
     if path.is_file():
-        dedicated = read_store(path, columns=CAPTURE_COLUMNS)
+        rows_on_disk = existing_row_count(path)
+        try:
+            # for_append=True is the strict reader: it refuses a file that
+            # holds something unparseable instead of returning "nothing".
+            dedicated = read_store(path, columns=CAPTURE_COLUMNS, for_append=True)
+        except CorruptStoreError as exc:
+            raise UnreadableCaptureStore(
+                path, rows_on_disk=rows_on_disk, rows_read=None
+            ) from exc
+        if len(dedicated) < rows_on_disk:
+            # The floor comes from the file, not from the read it guards.
+            raise UnreadableCaptureStore(
+                path, rows_on_disk=rows_on_disk, rows_read=len(dedicated)
+            )
         if not dedicated.empty:
             return dedicated
     return load_movement_captures(processed_dir)
@@ -256,6 +340,13 @@ def closing_prices(captures: pd.DataFrame) -> dict[tuple, dict[str, object]]:
 
     A capture at or after the listed start is discarded rather than used: it
     is a live price, and the card's opinion was frozen hours earlier.
+
+    At that latest moment the close is the BEST price, the same basis as
+    `best_prices` and `collapse_to_best`. It used to be the first row seen
+    at that moment, so when a store held several books at one instant the
+    close was decided by row order. A movement file listing BetMGM +105
+    before DraftKings +140 closed at +105, and the same rows reversed closed
+    at +135. A longer price from an EARLIER round is still never the close.
     """
     closing: dict[tuple, dict[str, object]] = {}
     if captures.empty:
@@ -269,16 +360,30 @@ def closing_prices(captures: pd.DataFrame) -> dict[tuple, dict[str, object]]:
         if captured is None or commence is None or captured >= commence:
             continue
         key = _key_of(row)
+        decimal = _decimal(getattr(row, "american_odds", None))
         current = closing.get(key)
-        if current is not None and current["moment"] >= captured:  # type: ignore[operator]
-            continue
+        if current is not None:
+            if current["moment"] > captured:  # type: ignore[operator]
+                continue
+            if current["moment"] == captured and not _pays_more(
+                decimal, current["decimal"]
+            ):
+                continue
         closing[key] = {
             "captured_at": str(getattr(row, "captured_at", "")),
             "moment": captured,
             "american_odds": float(getattr(row, "american_odds")),
             "book": str(getattr(row, "book", "")),
+            "decimal": decimal,
         }
     return closing
+
+
+def _pays_more(decimal: float | None, than: object) -> bool:
+    """Whether one price pays more than another; an unreadable one never does."""
+    if decimal is None:
+        return False
+    return than is None or decimal > float(than)  # type: ignore[arg-type]
 
 
 #: Markets whose two sides pair for a proportional de-vig. The regulation
@@ -426,8 +531,15 @@ def clv_rows(
 def _summarise(frame: pd.DataFrame, *, looks: int = 1) -> dict:
     """One view's numbers. `looks` is how many markets share the table, so a
     per-market row is corrected for the search that produced it — the same
-    rule every other report in this lab applies."""
-    from nhl_betting_lab.stats import roi_interval, wilson_interval
+    rule every other report in this lab applies.
+
+    Every interval is kept twice: the plain 95% one (`*_low/high`) and the
+    one corrected for `looks` (`*_adjusted_low/high`). The two are equal
+    when looks is 1. Only the CLV interval used to be corrected, and it was
+    never rendered. The EV correction was computed and then dropped, and the
+    beat-rate interval was never corrected at all.
+    """
+    from nhl_betting_lab.stats import bonferroni_z, roi_interval, wilson_interval
 
     if frame.empty:
         return {"bets": 0, "no_close": 0}
@@ -438,6 +550,9 @@ def _summarise(frame: pd.DataFrame, *, looks: int = 1) -> dict:
     # value on exactly the markets that move least.
     decided = int(len(frame)) - tied
     low, high = wilson_interval(beat, decided)
+    adjusted_low, adjusted_high = wilson_interval(
+        beat, decided, z=bonferroni_z(looks)
+    )
     clv = roi_interval(
         [float(value) for value in frame["clv_pct"]], looks=looks
     )
@@ -450,6 +565,8 @@ def _summarise(frame: pd.DataFrame, *, looks: int = 1) -> dict:
         "beat_rate": (beat / decided) if decided else 0.0,
         "beat_low": low,
         "beat_high": high,
+        "beat_adjusted_low": adjusted_low,
+        "beat_adjusted_high": adjusted_high,
         "mean_clv_pct": float(frame["clv_pct"].mean()),
         "clv_low": clv.low,
         "clv_high": clv.high,
@@ -464,6 +581,8 @@ def _summarise(frame: pd.DataFrame, *, looks: int = 1) -> dict:
         summary["mean_ev"] = float(priced["ev_at_close"].mean())
         summary["ev_low"] = ev.low
         summary["ev_high"] = ev.high
+        summary["ev_adjusted_low"] = ev.adjusted_low
+        summary["ev_adjusted_high"] = ev.adjusted_high
     return summary
 
 
@@ -546,6 +665,7 @@ def build_clv_report(
 
     markets = sorted({str(value) for value in rows["market"]})
     looks = max(1, len(markets))
+    report["looks"] = looks
     report["overall"] = {
         "opinions": {
             **_summarise(rows),
@@ -562,6 +682,25 @@ def build_clv_report(
             "bets": _summarise(subset[subset["is_bet"]], looks=looks),
         }
     return report
+
+
+def unreadable_store_report(
+    opinions: pd.DataFrame, error: UnreadableCaptureStore
+) -> dict:
+    """The report for a run whose capture store could not be read.
+
+    It counts the opinions and scores none of them. It never reports them as
+    having no close, and `render_clv` never calls this the pre-season state.
+    """
+    return {
+        "counts": {"opinions": int(len(collapse_to_best(opinions)))},
+        "markets": {},
+        "unreadable_store": {
+            "name": error.path.name,
+            "rows_on_disk": error.rows_on_disk,
+            "rows_read": error.rows_read,
+        },
+    }
 
 
 #: The columns every CLV table carries, in order. One definition, so a row
@@ -585,14 +724,19 @@ def _interval(low: float, high: float, fmt: str = "+.2%") -> str:
     return f"[{low:{fmt}}, {high:{fmt}}]"
 
 
-def _summary_cells(summary: dict) -> list[str]:
+def _summary_cells(summary: dict, *, corrected: bool = False) -> list[str]:
+    """One table row. `corrected` prints the intervals corrected for the
+    markets sharing the table, which is what the By-market heading promises.
+    It used to print the plain 95% ones there, so every by-market interval
+    was about 18% too narrow at three markets (z 1.960 against 2.394)."""
     if not summary.get("bets"):
         return ["0", "0", "0", "—", "—", "—"]
+    bound = "adjusted_" if corrected else ""
     ev = "—"
     if "mean_ev" in summary:
         ev = (
             f"{summary['mean_ev']:+.1%} "
-            f"{_interval(summary['ev_low'], summary['ev_high'], '+.1%')} "
+            f"{_interval(summary[f'ev_{bound}low'], summary[f'ev_{bound}high'], '+.1%')} "
             f"({summary['ev_rows']})"
         )
     return [
@@ -600,9 +744,11 @@ def _summary_cells(summary: dict) -> list[str]:
         str(summary["beat_close"]),
         str(summary.get("tied", 0)),
         f"{summary['beat_rate']:.1%} "
-        + _interval(summary["beat_low"], summary["beat_high"], ".1%"),
+        + _interval(
+            summary[f"beat_{bound}low"], summary[f"beat_{bound}high"], ".1%"
+        ),
         f"{summary['mean_clv_pct']:+.2%} "
-        + _interval(summary["clv_low"], summary["clv_high"]),
+        + _interval(summary[f"clv_{bound}low"], summary[f"clv_{bound}high"]),
         ev,
     ]
 
@@ -625,6 +771,36 @@ def render_clv(report: dict, *, generated: str = "") -> str:
     ]
     if generated:
         lines += [f"- Generated: {generated}"]
+    unreadable = report.get("unreadable_store")
+    if unreadable:
+        # Never "Nothing to measure yet" and never "no closing price found":
+        # the closing prices may be in the part of the file that did not
+        # parse, so neither the heading nor the counts would be true.
+        read = unreadable.get("rows_read")
+        how = (
+            "it does not parse"
+            if read is None
+            else f"only {read} of them parse"
+        )
+        lines += [
+            f"- Opinions considered: **{counts.get('opinions', 0)}**; none "
+            "was scored.",
+            "",
+            "## The capture store could not be read",
+            "",
+            f"`{unreadable.get('name', CAPTURES_FILENAME)}` holds "
+            f"{unreadable.get('rows_on_disk', 0)} row(s) on disk, and {how}.",
+            "No opinion was scored against a closing price, and none is",
+            "counted as having no close, because the closing prices may be",
+            "in the part of the file that could not be read. The line-movement",
+            "store was not used in its place: that would change where the",
+            "closes came from without saying so.",
+            "",
+            "This is a fault, not the pre-season state. Restore the store",
+            "from the branch that carries it, then re-run.",
+            "",
+        ]
+        return "\n".join(lines)
     lines += [
         f"- Opinions considered: **{counts.get('opinions', 0)}**; "
         f"matched to a closing price: **{counts.get('matched', 0)}**; "
@@ -684,13 +860,35 @@ def render_clv(report: dict, *, generated: str = "") -> str:
                     "",
                 ]
 
-    header = ("Market", "View") + TABLE_COLUMNS
+    # The heading said every interval here was corrected, and the cells
+    # printed the plain 95% ones. The corrected ones are printed now, the
+    # column labels name the family, and the factor is on the page.
+    from nhl_betting_lab.stats import Z95, bonferroni_z
+
+    looks = int(report.get("looks") or max(1, len(report["markets"])))
+    corrected = looks > 1
+    if corrected:
+        family = f"[95% family-wise, {looks} markets]"
+        columns = tuple(
+            column.replace("[95%]", family) for column in TABLE_COLUMNS
+        )
+        preamble = [
+            f"Every interval here is corrected for the {looks} markets that",
+            "share the table (Bonferroni: z = "
+            f"{bonferroni_z(looks):.3f} in place of {Z95:.3f}), because a",
+            "row that only looks remarkable among a dozen is not remarkable.",
+        ]
+    else:
+        columns = TABLE_COLUMNS
+        preamble = [
+            "Only one market has a matched close, so there is no family to",
+            "correct for: these are the plain 95% intervals.",
+        ]
+    header = ("Market", "View") + columns
     lines += [
         "## By market",
         "",
-        "Every interval here is corrected for how many markets share the",
-        "table, because a row that only looks remarkable among a dozen is",
-        "not remarkable.",
+        *preamble,
         "",
         _row(*header),
         _row(*(["---"] * len(header))),
@@ -699,7 +897,11 @@ def render_clv(report: dict, *, generated: str = "") -> str:
         for view in ("opinions", "bets"):
             summary = report["markets"][market][view]
             lines.append(
-                _row(f"`{market}`", view, *_summary_cells(summary))
+                _row(
+                    f"`{market}`",
+                    view,
+                    *_summary_cells(summary, corrected=corrected),
+                )
             )
     lines += [
         "",
