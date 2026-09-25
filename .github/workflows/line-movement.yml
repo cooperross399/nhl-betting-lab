@@ -129,6 +129,7 @@ jobs:
           python scripts/capture_deployment.py
 
       - name: Capture line combinations
+        id: lines
         # The other half of the deployment signal. `capture_deployment.py`
         # records who is OUT; this records who moved UP -- promoted to the
         # first line or onto the top power-play unit, which is exactly the
@@ -250,3 +251,16 @@ jobs:
           echo "This job captured prices for later analysis."
           echo "It wrote no staging file, froze no opinion, edited no policy,"
           echo "allowlisted no provider, and placed no bet."
+
+      - name: Fail the run when the line units were not captured
+        # The capture above stays continue-on-error so a line-source failure
+        # can never cost the prices, but that also made a lost night look like
+        # a green run. The source keeps no archive, so a game day whose line
+        # units were not captured is gone for good. This runs after every
+        # upload above, so the captures are already kept: the red X is the
+        # report, not the damage. The capture script exits 0 on a night with
+        # no games and 2 only when nothing was captured.
+        if: always() && steps.lines.outcome == 'failure'
+        run: |
+          echo "::error::The Daily Faceoff line units were NOT captured this run (the price capture reports on itself). That source keeps no archive, so this night's line units cannot be collected later."
+          exit 1
