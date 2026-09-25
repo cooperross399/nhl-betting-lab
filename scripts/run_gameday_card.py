@@ -17,7 +17,7 @@ shipped in.
 from __future__ import annotations
 
 import argparse
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 import pandas as pd
@@ -87,6 +87,25 @@ def _staged_prices(staging_dir: Path) -> pd.DataFrame:
     return pd.concat(frames, ignore_index=True)
 
 
+def _dated_before(frame: pd.DataFrame, day: date) -> pd.DataFrame:
+    """The rows of a processed table whose league game date is before `day`.
+
+    Both tables carry the NHL's own game date (`gameDate`), the league day,
+    which is what `day` is. A row whose date cannot be read cannot be shown
+    to precede `day`, so it is left out rather than guessed in. The
+    walk-forward samplers drop such rows too.
+    """
+
+    def _precedes(value: object) -> bool:
+        try:
+            return date.fromisoformat(str(value)[:10]) < day
+        except ValueError:
+            return False
+
+    keep = frame["date"].map(_precedes).astype(bool)
+    return frame[keep].reset_index(drop=True)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--staging-dir", default=str(STAGING_DIR))
@@ -104,7 +123,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--now",
         default="",
-        help="ISO instant to treat as now, for reproducing a past card.",
+        help=(
+            "ISO instant to treat as now, for reproducing a past card. The "
+            "processed tables are cut to games dated before its league day, "
+            "so the models and the back-to-back flags see only what a run "
+            "that morning could have seen."
+        ),
     )
     parser.add_argument(
         "--archive-dir",
@@ -365,6 +389,67 @@ def main(argv: list[str] | None = None) -> int:
 
     logs = load_player_logs(processed)
     games = load_team_games(processed)
+    if args.now:
+        # A reproduction reads the tables as they stood on the day it
+        # reproduces. Until 2026-09-25 `--now` moved the clock and nothing
+        # else, and both tables were read whole. Both models were fitted on
+        # the reproduced night's own results and everything after it. The
+        # whole table was also the back-to-back history, where each team's
+        # last game is on or after any past night, so no side was ever on a
+        # back-to-back, while the run printed both rest adjustments "in
+        # force". Measured on the real tables: cut at each day, 1,187 of
+        # 7,872 team-sides are tired; read whole, 0. On 2026-01-10, cut at
+        # the day, the tables flag CHI, LAK and STL. The rest history alone
+        # moved each of those moneylines by about 4 points and flipped 3 of
+        # the card's 4 best bets. The fit read 3,936 games where the day
+        # held 3,320, and the card read 4 best bets and 1 unit where the
+        # tables cut at the day give 1 and 0.25 (finding f3).
+        #
+        # The cut is by league date, the day the walk-forward samplers cut
+        # their fits on and the day `rest` counts in, so every game dated
+        # before the reproduced day is kept and nothing from that day or
+        # later is. The one thing it cannot do is keep a game of the same
+        # league day that had finished by the instant, such as a matinee
+        # before a late run: the tables carry no completion time.
+        #
+        # The live card is not cut. Its tables hold only games completed
+        # before its own clock, so there is nothing to take out, and a cut
+        # by league day would take out a same-day matinee that a delayed run
+        # fetched. That game is the one that makes the next day's matinee a
+        # back-to-back.
+        #
+        # A table with no date column at all is not one build_datasets
+        # writes, and the cut cannot read it. It is read whole and the line
+        # below says so, rather than emptied into a "no games on disk"
+        # blocker that would be false.
+        reproduced_day = moment.astimezone(LEAGUE_TIMEZONE).date()
+        read: list[str] = []
+        cut: list[pd.DataFrame] = []
+        for label, table in (
+            ("team game(s)", games),
+            ("player-log row(s)", logs),
+        ):
+            if "date" in table.columns:
+                kept = _dated_before(table, reproduced_day)
+                read.append(
+                    f"{len(kept)} of {len(table)} {label} kept, and "
+                    f"{len(table) - len(kept)} dated on or after it or "
+                    "undated set aside"
+                )
+                cut.append(kept)
+            else:
+                read.append(
+                    f"all {len(table)} {label} read uncut, because that "
+                    "table has no date column, so this reproduction may see "
+                    "games after the day"
+                )
+                cut.append(table)
+        games, logs = cut
+        print(
+            f"Reproducing {reproduced_day.isoformat()}: the models and the "
+            "back-to-back history read only games dated before it, which is "
+            f"what a run that morning could have seen: {'; '.join(read)}."
+        )
     if logs.empty:
         blockers.append(
             "No player logs on disk, so no prop can be priced. Run "
