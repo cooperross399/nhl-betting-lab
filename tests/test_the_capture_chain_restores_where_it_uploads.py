@@ -27,6 +27,11 @@ from nhl_betting_lab.config import PROJECT_ROOT
 
 WORKFLOWS = PROJECT_ROOT / ".github" / "workflows"
 DOWNLOAD = re.compile(r'gh run download \S+ --name ("?\$?\w[\w-]*"?) --dir (\S+)')
+#: `scripts/restore_state.py` restores `--artifact X` into `--dest D` with
+#: `gh run download --name X --dir D`, and `--also NAME=DIR` from the same run
+#: the same way, so the same root rule applies to both.
+HELPER = re.compile(r'restore_state\.py --artifact ("?\$?\w[\w-]*"?) --dest (\S+)')
+ALSO = re.compile(r'restore_state\.py [^\n]*?--also ([\w-]+)=(\S+)')
 LOOP = re.compile(r"for name in ([\w\- ]+); do")
 
 
@@ -71,9 +76,11 @@ def _restores() -> list[tuple[str, str, str]]:
     """(workflow, artifact name, directory) for every restore into the repo."""
     out = []
     for path in sorted(WORKFLOWS.glob("*.yml")):
-        text = path.read_text(encoding="utf-8")
+        # Continuations joined first: a long invocation spans lines.
+        text = re.sub(r"\\\s*\n\s*", " ", path.read_text(encoding="utf-8"))
         loop = LOOP.search(text)
-        for match in DOWNLOAD.finditer(text):
+        matches = [*DOWNLOAD.finditer(text), *HELPER.finditer(text), *ALSO.finditer(text)]
+        for match in matches:
             name, directory = match.group(1).strip('"'), match.group(2)
             if directory.startswith("/"):
                 continue  # a scratch download to inspect, not a restore in place

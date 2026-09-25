@@ -108,26 +108,16 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -u
-          previous=$(gh run list --workflow historical-props-purchase.yml \
-            --status success --limit 1 --json databaseId \
-            --jq '.[0].databaseId // empty')
-          if [ -z "$previous" ]; then
-            previous=$(gh run list --workflow gameday-refresh.yml \
-              --status success --limit 1 --json databaseId \
-              --jq '.[0].databaseId // empty')
-          fi
-          if [ -z "$previous" ]; then
-            echo "No previous state. This run rebuilds it from scratch."
-            exit 0
-          fi
           mkdir -p data
-          # `--name` matters. Without it `gh` puts each artifact in a
-          # subdirectory named after itself, so the cache lands in
-          # `data/gameday-state/raw/...` where nothing looks for it — and the
-          # step still reports success, so the run silently refetches four
-          # thousand boxscores it already had.
-          gh run download "$previous" --name gameday-state --dir data || \
-            echo "No usable state on run $previous; rebuilding."
+          # From the newest run that carries the state, whatever its
+          # conclusion — a purchase that died writing its CSV still uploaded
+          # it — with the newest successful state laid underneath. `--name`
+          # matters, and restore_state.py always passes it: without it `gh`
+          # puts each artifact in a subdirectory named after itself, so the
+          # cache lands in `data/gameday-state/raw/...` where nothing looks.
+          python scripts/restore_state.py --artifact gameday-state --dest data \
+            --workflow historical-props-purchase.yml --workflow gameday-refresh.yml \
+            || echo "No usable previous state; rebuilding."
           restored=$(find data/raw/nhl/boxscore -name '*.json' 2>/dev/null | wc -l)
           echo "Cached boxscores restored: $restored"
 

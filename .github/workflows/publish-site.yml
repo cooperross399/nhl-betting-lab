@@ -75,15 +75,17 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -u
-          previous=$(gh run list --workflow gameday-refresh.yml --status success \
-            --limit 1 --json databaseId --jq '.[0].databaseId // empty')
-          if [ -n "$previous" ]; then
-            mkdir -p data
-            gh run download "$previous" --name gameday-state --dir data || echo "No gameday-state artifact on run $previous."
-            gh run download "$previous" --name gameday-reports --dir data/outputs || echo "No gameday-reports artifact on run $previous."
-          else
-            echo "No successful Gameday Refresh yet; building schedule-only."
-          fi
+          # The state and the reports from one run: the newest Gameday
+          # Refresh that carries them, whatever its conclusion. Picking "the
+          # newest successful run" chose the skipped 15:00 backup — a success
+          # with no artifact — and published a board with no model history.
+          # Nothing is laid underneath: an older run's card must never fill
+          # in for today's. See scripts/restore_state.py.
+          mkdir -p data/outputs
+          python scripts/restore_state.py --artifact gameday-state --dest data \
+            --workflow gameday-refresh.yml --no-merge \
+            --also gameday-reports=data/outputs \
+            || echo "No Gameday Refresh state could be restored; building schedule-only."
           last=$(gh run list --workflow publish-site.yml --status success \
             --limit 1 --json databaseId --jq '.[0].databaseId // empty')
           mkdir -p dist/data/history

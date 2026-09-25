@@ -172,36 +172,31 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -u
-          previous=$(gh run list --workflow gameday-refresh.yml --status success \
-            --limit 1 --json databaseId --jq '.[0].databaseId // empty')
-          if [ -z "$previous" ]; then
-            # The purchase workflow uploads the same `gameday-state` artifact,
-            # and on a repository where it has run and this one has not, its
-            # cache is exactly as good. Without this fallback the very first
-            # refresh refetches four thousand boxscores that are already
-            # sitting in an artifact.
-            previous=$(gh run list --workflow historical-props-purchase.yml \
-              --status success --limit 1 --json databaseId \
-              --jq '.[0].databaseId // empty')
-            if [ -n "$previous" ]; then
-              echo "No previous refresh; restoring from purchase run $previous."
-            fi
-          fi
-          if [ -z "$previous" ]; then
-            echo "No previous successful run. This run establishes the baseline."
-            exit 0
-          fi
           mkdir -p data
-          gh run download "$previous" --name gameday-state --dir data || {
-            echo "No state on run $previous; continuing without it."
-            exit 0
-          }
+          # From the newest run that CARRIES the state, whatever its
+          # conclusion, with the newest successful state laid underneath a
+          # red one. "The newest successful run" was wrong twice: a skipped
+          # backup is a success with no artifact, so the next run started
+          # cold for good; and a degraded run's cache and frozen snapshot
+          # were never restored, so a cold cache could never fill. See
+          # scripts/restore_state.py. The purchase workflow uploads the same
+          # artifact and is the fallback when no refresh run carries one —
+          # without it the very first refresh refetches four thousand
+          # boxscores already sitting in an artifact.
+          python scripts/restore_state.py --artifact gameday-state --dest data \
+            --workflow gameday-refresh.yml --workflow historical-props-purchase.yml \
+            || echo "::warning::The previous state could not be restored; this run starts without it."
+          # Nothing above exits early: the ledger fallback below must run
+          # whenever the ledger did not come back, however the restore ended.
           if [ -f data/outputs/gameday_card.json ]; then
             cp data/outputs/gameday_card.json previous_card.json
             echo "Restored the previous card for the selections diff."
           fi
+          # `|| true`: the shell is `bash -eo pipefail`, and with nothing
+          # restored `find` fails on the missing directory — which used to
+          # end the step here, before the ledger fallback below.
           find data/raw/nhl/boxscore -name '*.json' 2>/dev/null | wc -l \
-            | xargs echo "Cached boxscores restored:"
+            | xargs echo "Cached boxscores restored:" || true
           # If the chain broke, take the ledger from the card-feed branch
           # rather than starting the season's record over. Restoring a
           # slightly stale ledger is harmless — settlement is idempotent and
