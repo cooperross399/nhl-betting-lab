@@ -42,14 +42,26 @@ TEAMS = (
 )
 
 
-def _game_ids_for_season(season_id: int, *, polite_seconds: float) -> set[int]:
+#: Live requests per source this run: ok, served from cache, failed.
+Tally = dict[str, dict[str, int]]
+
+
+def _count(tally: Tally, source: str, outcome: str) -> None:
+    tally.setdefault(source, {"ok": 0, "cached": 0, "failed": 0})[outcome] += 1
+
+
+def _game_ids_for_season(
+    season_id: int, *, polite_seconds: float, tally: Tally
+) -> set[int]:
     ids: set[int] = set()
     for team in TEAMS:
         try:
             entry = fetch_club_season_schedule(team, season_id)
         except NhlApiError as exc:
+            _count(tally, "club schedules", "failed")
             print(f"  {team}: {exc}", file=sys.stderr)
             continue
+        _count(tally, "club schedules", "cached" if entry.from_cache else "ok")
         if not entry.from_cache:
             time.sleep(polite_seconds)
         payload = entry.payload
@@ -65,16 +77,20 @@ def _game_ids_for_season(season_id: int, *, polite_seconds: float) -> set[int]:
     return ids
 
 
-def _game_ids_for_dates(start: date, end: date, *, polite_seconds: float) -> set[int]:
+def _game_ids_for_dates(
+    start: date, end: date, *, polite_seconds: float, tally: Tally
+) -> set[int]:
     ids: set[int] = set()
     cursor = start
     while cursor <= end:
         try:
             entry = fetch_schedule_day(cursor, refresh=True)
         except NhlApiError as exc:
+            _count(tally, "schedule days", "failed")
             print(f"  {cursor}: {exc}", file=sys.stderr)
             cursor += timedelta(days=7)
             continue
+        _count(tally, "schedule days", "ok")
         time.sleep(polite_seconds)
         payload = entry.payload
         week = payload.get("gameWeek", []) if isinstance(payload, dict) else []
@@ -136,6 +152,7 @@ def main(argv: list[str] | None = None) -> int:
 
     seasons = args.seasons if args.seasons else list(DEFAULT_SEASONS)
 
+    tally: Tally = {}
     ids: set[int] = set()
     if args.start or args.end:
         if not (args.start and args.end):
@@ -146,11 +163,15 @@ def main(argv: list[str] | None = None) -> int:
         except ValueError:
             parser.error("--from and --to must be ISO dates (YYYY-MM-DD).")
         print(f"Schedule window {start} .. {end}")
-        ids |= _game_ids_for_dates(start, end, polite_seconds=args.polite_seconds)
+        ids |= _game_ids_for_dates(
+            start, end, polite_seconds=args.polite_seconds, tally=tally
+        )
     else:
         for season in seasons:
             print(f"Season {season}: reading club schedules")
-            ids |= _game_ids_for_season(season, polite_seconds=args.polite_seconds)
+            ids |= _game_ids_for_season(
+                season, polite_seconds=args.polite_seconds, tally=tally
+            )
 
     print(f"{len(ids)} regular-season game ids in scope.")
 
@@ -167,9 +188,11 @@ def main(argv: list[str] | None = None) -> int:
                 fetch_club_roster(team, season, refresh=True)
             except NhlApiError as exc:
                 failed += 1
+                _count(tally, "rosters", "failed")
                 print(f"  roster {team}: {exc}", file=sys.stderr)
                 continue
             fetched += 1
+            _count(tally, "rosters", "ok")
             time.sleep(args.polite_seconds)
         print(f"Rosters {season}: {fetched} clubs refreshed, {failed} failed.")
 
@@ -178,8 +201,10 @@ def main(argv: list[str] | None = None) -> int:
             try:
                 entry = fetch_player_registry(season)
             except NhlApiError as exc:
+                _count(tally, "registry", "failed")
                 print(f"Registry {season}: {exc}", file=sys.stderr)
                 continue
+            _count(tally, "registry", "cached" if entry.from_cache else "ok")
             payload = entry.payload
             count = len(payload.get("skaters", [])) + len(payload.get("goalies", []))
             source = "cache" if entry.from_cache else "fetched"
@@ -197,12 +222,15 @@ def main(argv: list[str] | None = None) -> int:
             entry = fetch_boxscore(game_id)
         except NhlApiError as exc:
             failures += 1
+            _count(tally, "boxscores", "failed")
             print(f"  {game_id}: {exc}", file=sys.stderr)
             continue
         if entry.from_cache:
             cached += 1
+            _count(tally, "boxscores", "cached")
             continue
         fetched += 1
+        _count(tally, "boxscores", "ok")
         if not entry.complete:
             unfinished += 1
         time.sleep(args.polite_seconds)
@@ -216,7 +244,48 @@ def main(argv: list[str] | None = None) -> int:
         "and no bet was placed."
     )
     print(f"Finished at {datetime.now(timezone.utc).isoformat(timespec='seconds')}.")
-    return 1 if failures and not (cached or fetched) else 0
+    return _verdict(tally)
+
+
+def _verdict(tally: Tally) -> int:
+    """1 when a source this run asked for was unreachable, else 0.
+
+    This used to return 1 only when boxscores failed and nothing was cached
+    or fetched. With the API down, every schedule request fails, no game id
+    is in scope, the boxscore loop never runs, and "failures" stays 0; on a
+    restored runner "cached" is in the thousands anyway. So a complete outage
+    exited 0, the Fetch results step was green, and Gameday Refresh's
+    "Results could not be refreshed" could never be written. A cache hit
+    proves nothing about whether the API answered.
+
+    A source is DOWN when it made live requests and none succeeded; that is
+    a failed refresh. A source that lost some requests and not all is named
+    and warned about, and does not fail the run — one roster blip should
+    not turn a run red and summon the backup.
+    """
+    down = sorted(s for s, c in tally.items() if c["failed"] and not c["ok"])
+    partial = sorted(s for s, c in tally.items() if c["failed"] and c["ok"])
+    for source, c in sorted(tally.items()):
+        print(
+            f"Live requests, {source}: {c['ok']} ok, {c['cached']} from cache, "
+            f"{c['failed']} failed."
+        )
+    if partial:
+        print(
+            "::warning::Some NHL API requests failed ("
+            + ", ".join(f"{s}: {tally[s]['failed']}" for s in partial)
+            + "); the rest were refreshed."
+        )
+    if down:
+        print(
+            "::error::The NHL API could not be reached for "
+            f"{', '.join(down)}: every live request failed, so results were "
+            "not refreshed. The cached results stand, and this run is "
+            "degraded.",
+            file=sys.stderr,
+        )
+        return 1
+    return 0
 
 
 if __name__ == "__main__":
