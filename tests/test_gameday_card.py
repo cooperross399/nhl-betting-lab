@@ -621,12 +621,18 @@ def test_an_unparseable_line_is_treated_as_no_line() -> None:
 
     card = card_module.build_card(
         prices,
-        {("shots_on_goal", "auston matthews", "TOR", "BOS", "over", None): 0.60},
+        # Keyed by `_key` at no line. This was a hand-built 6-tuple that
+        # stopped matching anything when `selection_key` gained the game date
+        # (#39). The test then passed with no opinion at all, and it passed a
+        # card that read this line as 2.5 (failure-shape audit, finding 81).
+        {_key(rows[0]): 0.60},
         eligibility=_eligibility(["shots_on_goal"]),
         now=NOW,
     )
 
     assert card.card_generated is True
+    listed = card.best_bets + card.leans + card.passes
+    assert [(row["line"], row["american_odds"]) for row in listed] == [(None, 150)]
 
 
 def test_a_market_key_the_lab_does_not_know_produces_no_candidate() -> None:

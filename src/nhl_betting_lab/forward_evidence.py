@@ -15,7 +15,8 @@ Three stages, each idempotent:
 probability, the edge against the price as sold, and the policy verdicts in
 force. A snapshot is evidence and is never overwritten: the first opinion of
 the day stands, because "the card's opinion" repriced at a better moment is
-not the card's opinion any more.
+not the card's opinion any more. It is published whole or not at all, because
+whatever stands under the day's name is the day's opinion for good.
 
 **Settle.** Once a snapshot day's results are final, each row is settled from
 the boxscore — via the same identity join and the same settlement rules the
@@ -37,6 +38,8 @@ from __future__ import annotations
 
 import json
 import math
+import os
+import secrets
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -221,10 +224,114 @@ def write_snapshot(
             tally["state"] = "nothing_to_freeze"
         return None
     frame = pd.DataFrame(rows, columns=list(SNAPSHOT_COLUMNS))
-    frame.to_csv(target, index=False, lineterminator="\n")
+    if not _publish_whole(frame, target):
+        # Another run froze the day while this one was writing. Its opinion
+        # came first, so it stands.
+        if tally is not None:
+            tally["state"] = "exists"
+        return None
     if tally is not None:
         tally["state"] = "frozen"
     return target
+
+
+#: Ends the name of a snapshot still being written. Such a file is never a
+#: day's opinion, and no reader's `*.csv` glob matches it.
+PARTIAL_SUFFIX = ".partial"
+
+
+def _publish_whole(frame: pd.DataFrame, target: Path) -> bool:
+    """Write `frame` to `target` whole or not at all, and never over a file
+    that is already there. Returns False when `target` already stood.
+
+    ## A cut-short snapshot used to stand for good
+
+    This used to be `frame.to_csv(target)`, written straight onto the day's
+    name. If the write was cut short (the process killed, the disk full),
+    part of a file stayed there. `write_snapshot` treats any file under that
+    name as the day's first opinion, so every later run printed "already
+    stands" and froze nothing. The failure-shape audit reproduced this
+    through the real scripts on the 2026-04-14 slate. A 48,218-byte snapshot
+    cut at 28,672 bytes, inside the quoted verdicts field, made
+    `run_forward_evidence.py` exit 1 with a ParserError on that pass and on
+    every later one. It wrote no report, no ledger rows and no marker, and
+    it blocked a later complete day as well. Only 1 of that file's 11 block
+    boundaries falls inside a quote. A cut at any of the others parses
+    cleanly as a day missing its later rows, with the last row garbled (a
+    model probability of 0.0 where the card said 0.698), and that short day
+    would have settled quietly as the card's opinion. CI was exposed too.
+    The state upload runs `if: always()`, and scripts/restore_state.py
+    restores the newest completed run whatever its conclusion, so a torn
+    file from a failed card step would have been carried into every later
+    run.
+
+    So the bytes go first to a temporary file in the same directory, and are
+    flushed and fsynced there. Only then is the day's name linked to them,
+    so the name never points at data that is not yet on disk. `os.link` is
+    atomic and, unlike `os.replace`, refuses a name that already exists. The
+    first opinion therefore still stands if a second run froze the same day
+    while this write was in flight; `replace` would silently put the later
+    opinion over it.
+
+    The temporary's name starts with a dot and ends in `PARTIAL_SUFFIX`, not
+    ".csv". Settlement and the CLV report both read `*.csv`, so neither can
+    take an unfinished write for a day. If the process is killed before the
+    link, that file stays and no snapshot does, and the next run freezes the
+    day whole. The name is unique to this call, so two writers never share
+    one. On any other failure the temporary is removed and the error raised,
+    as the in-place write raised it. The encoding and line ending are the
+    ones `to_csv(target)` used, so a complete snapshot's bytes are unchanged.
+    """
+    temporary = target.with_name(
+        f".{target.name}.{os.getpid()}.{secrets.token_hex(4)}{PARTIAL_SUFFIX}"
+    )
+    try:
+        with temporary.open("x", encoding="utf-8", newline="") as stream:
+            frame.to_csv(stream, index=False, lineterminator="\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        try:
+            os.link(temporary, target)
+        except FileExistsError:
+            return False
+        return True
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def _read_snapshot(path: Path) -> tuple[pd.DataFrame | None, str]:
+    """The snapshot in `path`, or None and the reason it is not one.
+
+    ## An unreadable file waits, named; it no longer stops the whole pass
+
+    `settle_snapshots` read every pending file with a bare `pd.read_csv`.
+    One damaged file raised out of the whole pass, so no day settled, and
+    `run_forward_evidence.py` died before it restated the ledger as its
+    report, on that run and on every later one. The damage could be a torn
+    write, which `_publish_whole` now prevents, or anything that damages a
+    file after it is written. A zero-byte file (a write killed before its
+    first flush), an unclosed quote and half of a multi-byte character each
+    raise. Half a header parses as an empty frame with the wrong columns,
+    which used to be marked settled as an empty day. None of these is the
+    card's opinion, and none can be guessed back into one. So such a day is
+    neither settled nor marked. It is named in the result and retried on
+    every pass, and the other days settle as they would have. A file cut
+    cleanly between two rows cannot be told from a short day at all; only
+    writing it whole prevents that.
+    """
+    try:
+        frame = pd.read_csv(path)
+    except (
+        pd.errors.EmptyDataError,
+        pd.errors.ParserError,
+        UnicodeDecodeError,
+    ) as error:
+        detail = str(error).strip().splitlines()
+        return None, f"{type(error).__name__}: {detail[0] if detail else ''}"
+    missing = [column for column in SNAPSHOT_COLUMNS if column not in frame.columns]
+    if missing:
+        return None, f"missing column(s) {', '.join(missing)}"
+    return frame, ""
 
 
 @dataclass
@@ -242,6 +349,10 @@ class SettlementResult:
     #: so "every team resolved" is distinguishable from "nobody checked".
     rows_unresolved_teams: int = 0
     unresolved_team_names: list[str] = field(default_factory=list)
+    #: Pending snapshot files that could not be read as a snapshot, by file
+    #: name, with the reason. Each is left unsettled and unmarked, and is
+    #: retried on every pass (see `_read_snapshot`).
+    unreadable_snapshots: dict[str, str] = field(default_factory=dict)
     notes: list[str] = field(default_factory=list)
 
     def summary_line(self) -> str:
@@ -251,7 +362,9 @@ class SettlementResult:
             f"for results); {self.rows_settled} row(s) settled, "
             f"{self.rows_void} void, {self.rows_unsettleable} unsettleable; "
             f"{self.rows_unresolved_teams} row(s) named a team the team-name "
-            "map could not resolve."
+            "map could not resolve. "
+            f"{len(self.unreadable_snapshots)} pending snapshot file(s) could "
+            "not be read and were left unsettled."
         )
 
 
@@ -489,11 +602,16 @@ def settle_snapshots(
             ].astype(str)
         )
 
-    pending = [
-        (path.stem, pd.read_csv(path))
-        for path in sorted(directory.glob("*.csv"))
-        if path.stem not in settled_days
-    ]
+    pending: list[tuple[str, pd.DataFrame]] = []
+    for path in sorted(directory.glob("*.csv")):
+        if path.stem in settled_days:
+            continue
+        snapshot, problem = _read_snapshot(path)
+        if snapshot is None:
+            # Named and left pending. It used to raise out of the whole pass.
+            result.unreadable_snapshots[path.name] = problem
+            continue
+        pending.append((path.stem, snapshot))
     names: set[str] = set()
     refused: list[tuple[str, int]] = []
     for day, snapshot in pending:

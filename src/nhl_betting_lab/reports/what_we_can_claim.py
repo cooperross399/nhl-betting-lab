@@ -16,6 +16,10 @@ Three rules it enforces mechanically:
   "no demonstrated edge", never a softer one.
 * A market with no price-based measurement is listed under "not measured",
   never under "no value" and never with a calibration number standing in.
+
+And one it enforces about itself: it says only what the measurement outputs
+it read support. A measurement output it could not find is named as missing,
+never read as "nothing was bought" — see `_unmeasured_reason`.
 """
 
 from __future__ import annotations
@@ -26,13 +30,21 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from nhl_betting_lab.config import OUTPUTS_DIR
-from nhl_betting_lab.markets import ALL_MARKETS
+from nhl_betting_lab.config import OUTPUTS_DIR, PROJECT_ROOT
+from nhl_betting_lab.markets import ALL_MARKETS, Market
 from nhl_betting_lab.reports.player_props_backtest import (
+    BACKTEST_JSON_FILENAME,
     by_market_with_other_windows,
     window_phrase,
 )
-from nhl_betting_lab.stats import NO_DEMONSTRATED_EDGE, detection_table
+from nhl_betting_lab.reports.team_markets_measurement import (
+    MEASUREMENT_JSON_FILENAME,
+)
+from nhl_betting_lab.stats import (
+    NO_DEMONSTRATED_EDGE,
+    correction_family,
+    detection_table,
+)
 
 
 CLAIMS_MARKDOWN_FILENAME = "what_we_can_claim.md"
@@ -57,10 +69,13 @@ class MarketClaim:
     low: float | None = None
     high: float | None = None
     includes_zero: bool = True
-    #: Whether it still excludes zero once the number of markets measured on
+    #: Whether it still excludes zero once the family of figures measured on
     #: the same data is counted. This is the one that governs.
     survives_correction: bool = False
     looks: int = 1
+    #: What the looks are when they are not simply markets, as the report
+    #: that measured it wrote it ("6 markets and the overall figure").
+    family: str = ""
     replication: str = ""
     calibration_samples: int = 0
     allowlisted: bool = False
@@ -92,10 +107,14 @@ class MarketClaim:
         )
         if self.replication:
             return f"{base} {self.replication}"
+        # The family as the measuring report counted it. This printed
+        # "the 7 markets measured on the same data" for the props backtest's
+        # six markets and its overall figure (8 for `hits`, from the card
+        # window's seven): see `stats.correction_family`.
+        family = correction_family(self.looks, self.family)
         if not self.survives_correction:
             correction = (
-                f" Correcting for the {self.looks} markets measured on the "
-                "same data, it does not exclude zero."
+                f" Correcting for the {family}, it does not exclude zero."
                 if self.looks > 1 and not self.includes_zero
                 else ""
             )
@@ -107,7 +126,7 @@ class MarketClaim:
         outcome = "an edge" if self.roi > 0 else "a loss"
         return (
             f"{base} The interval excludes zero even after correcting for the "
-            f"{self.looks} markets measured on the same data — which is not "
+            f"{family} — which is not "
             f"the same as {outcome} that will persist, and means nothing until "
             "it replicates on a window it was not found on."
         )
@@ -127,6 +146,14 @@ class ClaimsReport:
     window_note: str = ""
     #: The window the across-market prop figure describes.
     overall_window: str = ""
+    #: The measured prop markets inside that figure, and those outside it
+    #: with the window each was measured in instead. See `render_claims`.
+    overall_markets: tuple[str, ...] = ()
+    outside_the_pool: tuple[tuple[str, str], ...] = ()
+    #: Measurement outputs this document looked for and could not read, each
+    #: as a sentence fragment naming the file and the directory. Empty when
+    #: both the props and the team measurement were read.
+    unread_sources: list[str] = field(default_factory=list)
 
     def _replicated(self, *, positive: bool) -> list["MarketClaim"]:
         """Claims that survived the search, replicated, and point the way asked.
@@ -164,6 +191,18 @@ class ClaimsReport:
 
     def headline(self) -> str:
         measured = [claim for claim in self.claims if claim.measured]
+        if not measured and self.unread_sources:
+            # A fresh checkout holds none of the gitignored measurement JSONs,
+            # and this headline used to read "nothing has been measured
+            # against real prices yet" there — over a tracked contract file
+            # recording ten measured markets.
+            return (
+                "**Nothing here shows a demonstrated edge, and this document "
+                "cannot say whether anything would:** "
+                + "; ".join(self.unread_sources)
+                + ". That is a statement about which measurement outputs it "
+                "found, not about the evidence or the models."
+            )
         if not measured:
             return (
                 "**Nothing in this repository has a demonstrated edge, "
@@ -206,6 +245,139 @@ def _read_json(path: Path) -> dict[str, Any]:
     return payload if isinstance(payload, dict) else {}
 
 
+def _shown(directory: Path) -> str:
+    """A directory as a reader should see it: repository-relative when inside."""
+    try:
+        return directory.resolve().relative_to(PROJECT_ROOT.resolve()).as_posix()
+    except (OSError, ValueError):
+        return str(directory)
+
+
+def unread_reason(path: Path) -> str:
+    """Why a measurement output could not be read, or "" when it was.
+
+    `_read_json` returns `{}` for a file that is absent, truncated, or not an
+    object, which is right for reading and wrong for reporting: `{}` is also
+    what a measurement with nothing in it looks like.
+    """
+    where = _shown(path.parent)
+    if not path.is_file():
+        return f"`{path.name}` was not found in `{where}`"
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        payload = None
+    if not isinstance(payload, dict):
+        return f"`{path.name}` in `{where}` could not be read"
+    return ""
+
+
+def _unmeasured_reason(
+    market: Market,
+    *,
+    unmeasurable: dict[str, Any],
+    backtest: dict[str, Any],
+    props_unread: str,
+    team: dict[str, Any],
+    team_unread: str,
+) -> str:
+    """Why `market` has no price-based measurement, in words its inputs support.
+
+    ## What this replaced
+
+    Every market this document found no bets for used to get "no historical
+    prices have been bought for it yet" — a statement about purchases that
+    nothing here ever checked, since this module reads measurement outputs
+    and never the price store. Measured, it was false three ways:
+
+    * A Historical Props Purchase run in mode `buy` or `probe` does not
+      rebuild the team measurement, and `team_markets_measurement.json` is
+      gitignored and in no artifact it restores; its claims step still runs.
+      With 308,944 bought team price rows on disk, the document it uploaded
+      said moneyline, puck line and totals had never been bought.
+    * A team measurement that scored prices and placed no bet (seen 48,000,
+      unmatched 48,000, bets 0) printed the same sentence.
+    * In a fresh checkout, where every measurement JSON is gitignored, the
+      regenerated contract file listed eleven price-measured markets as never
+      bought.
+
+    Now: a measurement output that could not be read is named; a team
+    measurement that saw prices says where they went; and "holds no price
+    for it" is said only from the team measurement's own count of the store
+    it read (`stored_by_market`, recorded since 2026-09-25).
+    """
+    explicit = str(unmeasurable.get(market.key, "") or "").strip()
+    if explicit:
+        return explicit
+    if market.is_prop:
+        if props_unread:
+            return (
+                f"{props_unread}, so this document has no props measurement "
+                "to read, which says nothing about whether its prices were "
+                "bought"
+            )
+        window = window_phrase(backtest)
+        return "the props backtest placed no bet on it" + (
+            f" in the {window}" if window else ""
+        )
+    if team_unread:
+        return (
+            f"{team_unread}, so this document has no team measurement to "
+            "read, which says nothing about whether its prices were bought"
+        )
+    window = window_phrase(team)
+    where = f" in the {window}" if window else ""
+    entry = next(
+        (
+            item
+            for item in team.get("markets", []) or []
+            if isinstance(item, dict) and str(item.get("market")) == market.key
+        ),
+        None,
+    )
+    accounting = (entry or {}).get("accounting")
+    counts = accounting if isinstance(accounting, dict) else {}
+    seen = int(counts.get("seen", 0) or 0)
+    if seen:
+        return (
+            f"{seen:,} price(s){where} were scored against the model, one "
+            "per wager, and none became a bet: "
+            f"{int(counts.get('unresolved', 0) or 0):,} named a team the "
+            "team-name map could not resolve, "
+            f"{int(counts.get('unmatched', 0) or 0):,} were unmatched, "
+            f"{int(counts.get('unparseable', 0) or 0):,} could not be parsed "
+            f"and {int(counts.get('below_threshold', 0) or 0):,} fell below "
+            "the edge threshold"
+        )
+    stored_by_market = team.get("stored_by_market")
+    if isinstance(stored_by_market, dict):
+        stored = int(stored_by_market.get(market.key, 0) or 0)
+        if not stored:
+            return (
+                "the historical team price store the team measurement read "
+                "holds no price for it"
+            )
+        if entry is None:
+            return (
+                f"{stored:,} historical price row(s) for it are stored, and "
+                "the team measurement has no model samples for it, so none "
+                "was scored"
+            )
+        if window:
+            return (
+                f"{stored:,} historical price row(s) for it are stored, and "
+                f"none was captured in the {window} before face-off, which is "
+                "the window the team measurement read"
+            )
+        return (
+            f"{stored:,} historical price row(s) for it are stored, and none "
+            "was scored"
+        )
+    # A team measurement written before it recorded the store says only
+    # what it scored.
+    return f"the team measurement scored no price for it{where}"
+
+
 def build_claims_report(
     *,
     output_dir: Path | None = None,
@@ -216,10 +388,14 @@ def build_claims_report(
     """Read whatever measurements exist and state what they support."""
     directory = Path(output_dir) if output_dir else Path(OUTPUTS_DIR)
     moment = now or datetime.now(timezone.utc)
-    backtest = _read_json(directory / "player_props_backtest.json")
+    backtest = _read_json(directory / BACKTEST_JSON_FILENAME)
     calibration = _read_json(directory / "props_calibration.json")
     replication = _read_json(directory / "replication.json")
-    team = _read_json(directory / "team_markets_measurement.json")
+    team = _read_json(directory / MEASUREMENT_JSON_FILENAME)
+    # Read apart from the payloads, because `{}` means "absent" and "empty"
+    # alike, and this document must never say the second about the first.
+    props_unread = unread_reason(directory / BACKTEST_JSON_FILENAME)
+    team_unread = unread_reason(directory / MEASUREMENT_JSON_FILENAME)
 
     # A replication verdict outranks any single-window number, so it is
     # attached to the market and printed instead of the interval prose.
@@ -269,6 +445,9 @@ def build_claims_report(
         generated_at=moment.isoformat(timespec="seconds"),
         policy_status=policy_status,
         allowlisted_markets=tuple(allowlisted_markets),
+        unread_sources=[
+            problem for problem in (props_unread, team_unread) if problem
+        ],
     )
     windows = [
         f"{kind} figures come from the {phrase}"
@@ -299,6 +478,7 @@ def build_claims_report(
                         entry.get("survives_correction", False)
                     ),
                     looks=int(entry.get("looks", 1) or 1),
+                    family=str(entry.get("family", "") or ""),
                     replication=replication_states.get(market.key, ""),
                     calibration_samples=calibration_samples.get(market.key, 0),
                     allowlisted=market.key in allowlisted_markets,
@@ -312,9 +492,13 @@ def build_claims_report(
                 measured=False,
                 calibration_samples=calibration_samples.get(market.key, 0),
                 allowlisted=market.key in allowlisted_markets,
-                reason_unmeasured=str(
-                    unmeasurable.get(market.key, "")
-                    or "no historical prices have been bought for it yet"
+                reason_unmeasured=_unmeasured_reason(
+                    market,
+                    unmeasurable=unmeasurable,
+                    backtest=backtest,
+                    props_unread=props_unread,
+                    team=team,
+                    team_unread=team_unread,
                 ),
             )
         )
@@ -325,6 +509,20 @@ def build_claims_report(
         report.overall_roi = float(overall.get("roi", 0.0))
         report.overall_includes_zero = bool(overall.get("includes_zero", True))
         report.overall_window = window_phrase(backtest)
+        # The pooled figure is the contract window's alone; a prop market
+        # measured only in another window is listed below and is not in it.
+        prop_keys = {market.key for market in ALL_MARKETS if market.is_prop}
+        measured_props = [
+            claim
+            for claim in report.claims
+            if claim.measured and claim.market in prop_keys
+        ]
+        report.overall_markets = tuple(
+            claim.market for claim in measured_props if not claim.window
+        )
+        report.outside_the_pool = tuple(
+            (claim.market, claim.window) for claim in measured_props if claim.window
+        )
 
     report.notes = [
         "An interval that includes zero means "
@@ -364,11 +562,52 @@ def render_claims(report: ClaimsReport) -> str:
         report.headline(),
         "",
     ]
-
-    if report.overall_bets:
+    if report.unread_sources and any(claim.measured for claim in report.claims):
+        # Where a reader starts, not only in the per-market lines. The
+        # purchase workflow's document read "no historical prices have been
+        # bought" for three team markets whose measurement it never had.
         lines.extend(
             [
-                "## Across every measured prop market",
+                (
+                    "**This document is incomplete.** "
+                    + "; ".join(report.unread_sources)
+                    + ". The markets measured there are listed under \"Not "
+                    "measured against real prices\" with that reason, which "
+                    "is not the same as having no price."
+                ),
+                "",
+            ]
+        )
+
+    if report.overall_bets:
+        # THE HEADING NAMES THE POPULATION THE FIGURE COVERS. It read "Across
+        # every measured prop market" above the `late` window's six markets
+        # (-0.3% over 25,911) while the list below it carried `hits` from the
+        # `card` window, 5,178 bets that are not in the pool. The pool is
+        # right — folding `hits` in would take the better of two moments —
+        # so the heading counts what is in it and the section names what is
+        # not, both generated from the claims this document lists.
+        pooled = len(report.overall_markets)
+        heading = (
+            f"## Across {pooled} of the "
+            f"{pooled + len(report.outside_the_pool)} measured prop markets"
+            if report.outside_the_pool
+            else "## Across every measured prop market"
+        )
+        left_out = (
+            " It does not include "
+            + "; or ".join(
+                f"`{market}`, measured only in the {window}"
+                for market, window in report.outside_the_pool
+            )
+            + ". Windows are never pooled: a wager priced at two moments is "
+            "two questions."
+            if report.outside_the_pool
+            else ""
+        )
+        lines.extend(
+            [
+                heading,
                 "",
                 (
                     f"{report.overall_roi:+.1%} over {report.overall_bets:,} "
@@ -382,6 +621,7 @@ def render_claims(report: ClaimsReport) -> str:
                         if report.overall_includes_zero
                         else "The interval excludes zero on this sample."
                     )
+                    + left_out
                 ),
                 "",
             ]
