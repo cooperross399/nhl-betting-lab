@@ -125,6 +125,63 @@ def known_regular_season_games(raw_dir=None) -> set[tuple[str, str, str]]:
     return known
 
 
+#: `gameScheduleState` for a game that will be played when the schedule says.
+#: Any other stated value (the real cache holds `CNCL`) is a game called off.
+SCHEDULED_STATE = "OK"
+
+
+def scheduled_regular_season_starts(
+    raw_dir=None,
+) -> dict[tuple[str, str, str], str]:
+    """(game date, HOME, AWAY) -> scheduled face-off, for every regular-season
+    game the cache says will be played.
+
+    The face-off is the cache's `startTimeUTC`, verbatim ("" when absent);
+    the caller decides what an unreadable one means. This is the slate the
+    card's eligibility gate is judged against, so it keeps a game unless the
+    schedule POSITIVELY calls it off. A called-off game stays in the cache
+    under its original date — the real cache holds the 2024-10-07
+    exhibition NSH at TBL as `CNCL`, its `gameState` still `FUT` — and a
+    regular-season one kept here would read as a game every market failed
+    to price, excluding every market for a game nobody will play. A missing
+    state is not a called-off game. A game both clubs' files carry is kept
+    if either copy says it is on.
+    """
+    import json
+    from pathlib import Path
+
+    from nhl_betting_lab.config import RAW_DIR, REGULAR_SEASON_GAME_TYPE
+
+    directory = (Path(raw_dir) if raw_dir else Path(RAW_DIR)) / "nhl" / (
+        "club_schedule"
+    )
+    starts: dict[tuple[str, str, str], str] = {}
+    if not directory.is_dir():
+        return starts
+    for path in sorted(directory.glob("*.json")):
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError):
+            continue
+        games = payload.get("games", []) if isinstance(payload, dict) else []
+        for game in games or []:
+            if not isinstance(game, dict):
+                continue
+            if int(game.get("gameType", 0) or 0) != REGULAR_SEASON_GAME_TYPE:
+                continue
+            state = str(game.get("gameScheduleState") or "").strip().upper()
+            if state and state != SCHEDULED_STATE:
+                continue
+            day = str(game.get("gameDate", ""))[:10]
+            home = str((game.get("homeTeam") or {}).get("abbrev", "")).upper()
+            away = str((game.get("awayTeam") or {}).get("abbrev", "")).upper()
+            if len(day) == 10 and home and away:
+                starts[(day, home, away)] = str(
+                    game.get("startTimeUTC") or ""
+                ).strip()
+    return starts
+
+
 #: The number of clubs a complete `club_schedule` cache holds. A cache with
 #: fewer has games it simply does not know about, and cannot be used to judge
 #: whether a game is preseason.

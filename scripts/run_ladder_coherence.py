@@ -35,6 +35,35 @@ from nhl_betting_lab.ladder_coherence import (
 
 MOVEMENT_DIRNAME = "line_movement"
 
+#: The column `scripts/capture_line_movement.py` stamps on every row it
+#: appends: the instant that capture was taken, shared by every book and rung
+#: it fetched. It is the "one moment" the detector compares inside.
+CAPTURE_MOMENT = "captured_at"
+
+
+def with_ladder_moment(prices: pd.DataFrame) -> pd.DataFrame:
+    """The capture, with its moment under the name the detector groups on.
+
+    `find_violations` compares rungs only inside one (event, market, player,
+    book, snapshot). The bought historical store names its moment
+    `snapshot`; the forward capture names it `captured_at` and has no
+    `snapshot` column at all. Until 2026-09-25 this script passed the capture
+    through as read, so every forward capture raised "missing ['snapshot']",
+    the Line Movement step's `|| true` swallowed it, and every run summary
+    read "Ladder scan wrote no report": the 2026-10-15 depth checkpoint in
+    `docs/pre_registered_ladder_coherence.md` could not have produced a
+    number. The registration already takes the capture's instant as the
+    moment ("the book, the rung, the price and the instant"), so this maps a
+    name and changes nothing about what is compared.
+
+    A frame that already carries `snapshot` is left alone, and one carrying
+    neither is left for `find_violations` to refuse: guessing a moment would
+    merge two captures and call a book changing its mind a contradiction.
+    """
+    if "snapshot" in prices.columns or CAPTURE_MOMENT not in prices.columns:
+        return prices
+    return prices.assign(snapshot=prices[CAPTURE_MOMENT])
+
 
 def load_captures(directory: Path) -> tuple[pd.DataFrame, list[str]]:
     """Every captured day, and the names of the files that were read.
@@ -90,6 +119,7 @@ def main(argv: list[str] | None = None) -> int:
         print("Nothing captured yet; wrote the empty-state report.")
         return 0
 
+    prices = with_ladder_moment(prices)
     found, scan = find_violations(prices[prices["line"].notna()].copy())
     print(scan.summary_line())
 
@@ -99,7 +129,11 @@ def main(argv: list[str] | None = None) -> int:
     record = {
         "captures": len(files),
         "ladders": scan.ladders,
+        # The registered depth: two or more DE-VIGGABLE rungs. The name is
+        # the one the pre-registration and the Line Movement summary read.
         "ladders_with_two_rungs": scan.ladders_with_two_rungs,
+        # Two or more lines of either side. A denominator, not the depth.
+        "ladders_with_two_lines": scan.ladders_with_two_lines,
         "comparable_pairs": scan.comparable_pairs,
         "duplicate_rows_collapsed": scan.duplicate_rows_collapsed,
         "violations": scan.violations,
@@ -112,6 +146,13 @@ def main(argv: list[str] | None = None) -> int:
 
     # The registered checkpoint reads DEPTH, not violations: no violation
     # rate can rescue a population that does not exist, so depth leads.
+    #
+    # Depth is ladders with two or more de-viggable rungs, the unit the
+    # 2,000 floor and the historical 57 are both in. Until 2026-09-25 the
+    # field behind this line counted two or more lines of either side, and
+    # this printed 284,544 for the bought store under a label that says 57,
+    # and 13,010 for a core-markets-only window whose true depth is 0 —
+    # so the warning below could not fire in the case it was written for.
     depth = scan.ladders_with_two_rungs
     lines = [
         "# Ladder coherence",

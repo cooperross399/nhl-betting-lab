@@ -270,6 +270,23 @@ Re-derive rather than trust if the data has moved.
   the eligibility gate, so anything reaching the probability map would
   contaminate the 2027-04-25 measurement.
   `tests/test_ladder_route_cannot_reach_the_ledger.py` holds that apart.
+- **2026-09-25: the ladder depth checkpoint reads its registered unit, and
+  can run.** Two detector defects, fixed and recorded here as the
+  registration permits. `ladders_with_two_rungs` — the field the
+  registration names for its 2,000 floor, and defines as ladders carrying two
+  or more *de-viggable* rungs — counted two or more lines of either side, so
+  the report and the Line Movement summary printed **284,544** for the
+  bought store where the registered count is **57**, and **13,010** for the
+  first seventeen game days of 2025-26 (core markets only, the shape a 422
+  fallback leaves) where it is **0**: history cleared the floor 142 times
+  over and the depth-zero alarm could never fire. It now counts rungs with a
+  de-vigged price; the line count is kept as `ladders_with_two_lines`. And
+  the scan grouped on `snapshot`, which forward captures do not carry — they
+  stamp `captured_at` — so it raised on every capture and every run summary
+  read "Ladder scan wrote no report"; the runner now takes `captured_at` as
+  the moment. No threshold, band, floor or date moved, and no report from
+  this scan had ever been published.
+  `tests/test_ladder_depth_counts_deviggable_rungs.py`.
 - **The oracle ceiling was an outcome filter, not a line-label result.**
   Abstaining above a 2-minute realised rise gives +3.11% [+1.39%, +4.80%] and
   a random-removal placebo reaches only −0.30% (z=8.3), so the cell is
@@ -713,6 +730,19 @@ Re-derive rather than trust if the data has moved.
   zero. **The committed reports under `data/outputs` still carry the
   pre-fix figures, and the receipts pin them by checksum** — regenerating
   them and re-attesting is Cooper's call, not a side effect of the fix.
+- **2026-09-25: two corrections were labelled with the wrong count.** The
+  props correction (its markets plus the overall figure) was printed as "the
+  7 markets tested" for six markets (8 for the card window's seven) and now
+  reads "7 figures measured on the same data (6 markets and the overall
+  figure)"; and `what_we_can_claim.md` headed the `late` pool "Across every
+  measured prop market" above a list carrying `hits` from the `card` window,
+  and now reads "Across 6 of the 7 measured prop markets" and names `hits` as
+  outside it. No number changed. The team measurement's family still counts
+  every sample market, four with `regulation_3_way`, while the bought store
+  prices three; narrowing it to three would loosen the correction slightly
+  (moneyline −15.2% .. +2.0% against today's −15.5% .. +2.4%, no verdict
+  moving), and loosening a gate is Cooper's call, so it is left at four. The
+  committed reports still carry the old wording.
 - **Hits is retained historically after all, and "no book keeps it" was a
   region artifact.** The 256-event probe that concluded hits could not be
   measured (2,600 credits) asked **one region**, and both books that quote it
