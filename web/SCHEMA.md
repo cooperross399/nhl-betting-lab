@@ -49,7 +49,9 @@ games[]
   finish         "REG" | "OT" | "SO"
   projWinner     ABBR
   total          {line, proj, result:"over"|"under"|"push"}
-  pick           {market, label, price, result:"win"|"loss"|"push"}
+  priced         the frozen board's `priced` for this game (a board frozen before that flag: whether it carried a moneyline)
+  pick           {market, label, price, edgePct, result:"win"|"loss"|"push"} | null  ← null when the board carried no pick for the game;
+                 the page renders it "Not priced" unless priced is true, "No play" when it is, and grades neither and shows no price
 ```
 
 `web/build_site_json.py` is the reference writer. Source mapping in nhl-betting-lab: `moneyline`/`puckLine`/`total`/`regulation` come from `reports/card_pricing.price_team_markets` (TeamModel), `pick` from `reports/gameday_card.build_card` selections, `record.forward` from `forward_evidence.py` + `closing_lines.py`, finals from the boxscore cache via `build_datasets.load_team_games`.
