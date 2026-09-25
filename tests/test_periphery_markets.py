@@ -370,10 +370,14 @@ def test_the_per_event_fetch_spends_only_on_the_days_it_is_for() -> None:
         environment={"NHL_ODDS_API_KEY": "k" * 24}, requester=requester
     )
 
+    # An explicit cap: this call used to rely on the default of 0, which
+    # meant no cap at all and is now refused. 100 affords both events many
+    # times over, so the window, not the cap, is what leaves the far one out.
     result = provider.fetch_player_props(
         markets=["player_shots_on_goal"],
         league_days=["2026-10-09"],
         fetched_at="x",
+        credit_cap=100,
     )
 
     assert len(asked) == 1

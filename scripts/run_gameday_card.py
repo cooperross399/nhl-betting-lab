@@ -58,7 +58,10 @@ from nhl_betting_lab.season import (
     scheduled_regular_season_starts,
     season_id,
 )
-from nhl_betting_lab.staging_provider_policy import load_policy
+from nhl_betting_lab.staging_provider_policy import (
+    load_policy,
+    staged_prices_are_fresh,
+)
 from nhl_betting_lab.verdicts import (
     VERDICT_FILES,
     describe as describe_verdicts,
@@ -164,6 +167,34 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Verdicts read from: {read_from}.")
 
     prices = _staged_prices(staging)
+
+    # Freshness, as the policy states it: `max_provider_run_age_hours`, the
+    # stricter of the policy-wide limit and the provider entry's (12 and 12
+    # as shipped), judged on the oldest staged row at `moment`, so a
+    # reproduced card is judged at the instant it reproduces. Until
+    # 2026-09-25 the limit was parsed and never applied: a card rendered on
+    # Wednesday over prices staged on Monday, 50 hours earlier, staked 0.5u
+    # at Monday's price, froze it as the day's first opinion, and said
+    # nothing about its age, while docs/provider_allowlist_approval.md
+    # promised freshness on every run. Stale prices now block the card and
+    # are never frozen, so a later run with fresh prices can still freeze
+    # the day. Gameday Refresh fetches in the same job, so in CI this only
+    # prints the age.
+    stale = ""
+    if not prices.empty:
+        fresh, age = staged_prices_are_fresh(
+            prices["fetched_at"] if "fetched_at" in prices.columns
+            else [""] * len(prices),
+            max_age_hours=policy.max_run_age_hours(odds_api.PROVIDER_NAME),
+            now=moment,
+        )
+        print(f"Staged prices: {age}")
+        if not fresh:
+            stale = (
+                f"The staged prices are too old to build a card from. {age} "
+                "Nothing was priced from them, staked, or frozen; fetch fresh "
+                "prices and run the card again."
+            )
 
     # The provider says "Toronto Maple Leafs" and every model here is keyed by
     # "TOR". Without this map every lookup misses and every game is priced
@@ -291,7 +322,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     print(eligibility.summary_line())
 
-    blockers: list[str] = []
+    blockers: list[str] = [stale] if stale else []
+    # The eligibility report above describes what is staged, stale or not.
+    # Opinions are another matter: stale rows reach no pricer, and the
+    # snapshot below freezes only rows that carry an opinion, so nothing is
+    # frozen from them and the day stays open for a run with fresh prices.
+    priceable = prices.iloc[0:0] if stale else prices
     probabilities: dict[tuple, float] = {}
     unresolved_names: set[str] = set()
 
@@ -376,7 +412,7 @@ def main(argv: list[str] | None = None) -> int:
                     "opinion. Run scripts/fetch_nhl_data.py."
                 )
             prop_probabilities, unresolved = price_props(
-                prices,
+                priceable,
                 props_model,
                 corrections=corrections,
                 team_names=team_names,
@@ -410,7 +446,8 @@ def main(argv: list[str] | None = None) -> int:
                 games if ships("team_b2b", output_dir=outputs) else None
             )
             team_probabilities, unresolved = price_team_markets(
-                prices, team_model, team_names=team_names, history=team_history
+                priceable, team_model, team_names=team_names,
+                history=team_history,
             )
             probabilities.update(team_probabilities)
             unresolved_names.update(unresolved)
@@ -451,6 +488,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     if frozen.get("state") == "frozen":
         print(f"Priced snapshot frozen: {written} ({frozen['frozen']} row(s)); {withheld}.")
+    elif frozen.get("state") == "nothing_to_freeze" and stale:
+        print(
+            f"No snapshot was frozen for {snapshot_day}: the staged prices "
+            "are too old to use, so none was priced. A later run today with "
+            "fresh prices can still freeze the day's first opinion."
+        )
     elif frozen.get("state") == "nothing_to_freeze" and prices.empty:
         print(
             f"No snapshot was frozen for {snapshot_day}: there were no prices. "

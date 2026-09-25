@@ -203,8 +203,11 @@ def estimate_credits(*, events: int, markets: int, regions: int = 1) -> int:
     for `us,us2` -- two regions. So the measured 107 an event was not the
     documented rule being wrong; it was the documented rule with the region
     factor applied (10 x ~5.35 returned x 2) and this estimate leaving it
-    out. The sibling `historical_team_prices.estimate_credits` has carried
-    the factor since it was written. Callers pass `provider.region_count`.
+    out. Callers pass `provider.region_count`. (This docstring said the
+    sibling `historical_team_prices.estimate_credits` had carried the factor
+    since it was written. Its signature had; its only caller left it out,
+    so the team buy was gated at one region and billed for two until
+    2026-09-25.)
     """
     return (
         int(events)

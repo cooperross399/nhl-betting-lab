@@ -730,6 +730,34 @@ Re-derive rather than trust if the data has moved.
   zero. **The committed reports under `data/outputs` still carry the
   pre-fix figures, and the receipts pin them by checksum** — regenerating
   them and re-attesting is Cooper's call, not a side effect of the fix.
+- **2026-09-25, a defect fix recorded as `docs/when_this_ends.md` requires:
+  the card refuses stale prices.** The policy's `max_provider_run_age_hours`
+  (12, policy-wide and on `the_odds_api`) was parsed and never applied —
+  `run_is_fresh` had no caller outside the tests — while
+  `docs/provider_allowlist_approval.md` and the evidence bundle said
+  freshness runs on every card. Prices staged on a Monday and carded on the
+  Wednesday, 50 hours later, staked 0.5u at Monday's price and froze it as
+  the day's first opinion. The card now judges the oldest staged row at
+  `--now` against the stricter of the two limits; stale, blank or
+  unreadable stamps block the card with the age and the limit named, reach
+  no pricer and freeze nothing, and every priced run prints the age. Gameday
+  Refresh fetches in the same job and never restores `data/staging/`, so no
+  CI card, snapshot or ledger row changes.
+- **2026-09-25: two credit caps did not hold.** `fetch_player_props` read
+  `if credit_cap and ...`, so a cap of 0 (also its default) was no cap:
+  on a 30-event board at 38 credits an event, cap 190 made 5 requests and
+  cap 0 made 30 (1,140 credits), and `run_provider_shadow.py --props` and
+  `capture_closing_lines.py` passed a dispatched "0" through. A missing,
+  zero or negative cap is now refused, by the library before it asks
+  anything and by both scripts at parse time. And the team-price buy gated
+  each snapshot at one region (30 credits) while asking `us,us2` and being
+  billed 60, never comparing its measured spend with the cap: cap 2,000
+  over 90 snapshots spent 3,960, the workflow's default cap of 60 spent
+  120, and the dry-run quote was half the bill. It now gates on
+  `provider.region_count` and on measured spend, and quotes at the live
+  region count. 395 of the 475 snapshots in the bought team store carry
+  `us2` books, so past buys did ask for both regions. No price, measurement
+  or verdict changes.
 - **2026-09-25: both calibration reports printed a "95%" interval that
   counted rows as trials.** `props_calibration.md` prices every player-game
   at each line of a fixed grid (two lines for goals and assists, five for
@@ -842,10 +870,12 @@ Re-derive rather than trust if the data has moved.
   asks for `us,us2`. So the "107 an event against a predicted 70" above was
   not the documented rule being wrong: it was the rule with the region factor
   applied (10 x ~5.35 returned x 2) and the estimate leaving it out. The
-  sibling `historical_team_prices.estimate_credits` carried the factor from
-  the day it was written. The measured-spend gate meant nothing overspent
-  because of it, but every dry-run quote was half the real figure. Callers
-  now pass `provider.region_count`.
+  measured-spend gate meant nothing overspent because of it, but every
+  dry-run quote was half the real figure. Callers now pass
+  `provider.region_count`. (This said the sibling
+  `historical_team_prices.estimate_credits` "carried the factor from the day
+  it was written". Its signature did; its only caller did not, and the team
+  buy had no measured-spend gate either — fixed 2026-09-25, above.)
 - **A player's side comes from the roster, not from his last game.** The
   models learn rates from game logs and that is right — shooting travels with
   the player — but the logs also carry the club he last played for, which in

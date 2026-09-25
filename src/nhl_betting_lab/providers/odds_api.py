@@ -82,6 +82,14 @@ PROVIDER_TYPE = "odds_api"
 #: edges that cannot be taken, which is worse than a narrower one.
 DEFAULT_REGIONS = os.environ.get("NHL_ODDS_REGIONS", "us,us2").strip() or "us,us2"
 
+
+def count_regions(regions: str) -> int:
+    """How many regions a `regions` string asks for: the provider's billing
+    multiplier. One function, so a quote made before any provider exists
+    (a dry run) and the provider's own `region_count` cannot disagree."""
+    return max(1, len([part for part in str(regions).split(",") if part.strip()]))
+
+
 #: Markets the bulk endpoint serves for the whole slate at once.
 BULK_PROVIDER_MARKETS: tuple[str, ...] = ("h2h", "spreads", "totals")
 
@@ -380,9 +388,7 @@ class OddsApiProvider:
         # enforced against stopped being pessimistic the moment a second
         # region was added, and the run would overspend a cap it believed
         # it was respecting.
-        self.region_count = max(
-            1, len([part for part in self.regions.split(",") if part.strip()])
-        )
+        self.region_count = count_regions(self.regions)
         self.bookmakers = str(bookmakers or "").strip()
         self.timeout_seconds = float(timeout_seconds)
         self._validate_configuration()
@@ -651,7 +657,7 @@ class OddsApiProvider:
         *,
         markets: Sequence[str] | None = None,
         max_events: int = 0,
-        credit_cap: int = 0,
+        credit_cap: int | None = None,
         fetched_at: str = "",
         league_days: Sequence[str] | None = None,
     ) -> FetchResult:
@@ -661,6 +667,15 @@ class OddsApiProvider:
         full-slate fetch is exactly the accident this parameter exists to make
         impossible, so the loop stops the moment the next event would exceed
         it — and says how many events it skipped.
+
+        It is also required and must be positive. Until 2026-09-25 the cap
+        defaulted to 0 and the loop guarded with `if credit_cap and ...`, so
+        0 — the natural spelling of "spend nothing" — switched the cap off,
+        and `run_provider_shadow.py` and `capture_closing_lines.py` passed a
+        dispatched "0" straight through. On a 30-event board at 38 credits
+        an event, cap 190 made 5 requests and cap 0 made 30 (1,140 credits)
+        with no warning. A cap that is missing, zero or negative is now
+        refused before the provider is asked anything.
 
         `league_days` restricts the fetch to events on those NHL game dates
         (America/New_York). The board holds every posted upcoming game — 32
@@ -674,6 +689,12 @@ class OddsApiProvider:
         wanted = list(markets) if markets is not None else list(PROP_PROVIDER_MARKETS)
         if not wanted:
             raise ProviderError("A props fetch needs at least one market.")
+        if credit_cap is None or credit_cap <= 0:
+            raise ProviderError(
+                f"A per-event fetch needs a positive credit cap; got "
+                f"{credit_cap!r}. A cap of 0 once meant no cap at all. "
+                "Nothing was asked of the provider."
+            )
         per_event = len(wanted) * self.region_count
 
         events = self.list_events()
@@ -714,7 +735,7 @@ class OddsApiProvider:
             event_id = str(event.get("id", "")).strip()
             if not event_id:
                 continue
-            if credit_cap and result.credits_spent + per_event > credit_cap:
+            if result.credits_spent + per_event > credit_cap:
                 skipped_for_budget += 1
                 continue
             try:

@@ -188,13 +188,12 @@ def _event(home: str, away: str, start: str) -> dict:
     }
 
 
-def _stage(staging: Path, events: list[dict]) -> None:
+def _stage(staging: Path, events: list[dict], *,
+           fetched_at: str = "2026-10-01T13:25:00Z") -> None:
     rows = [
         row
         for event in events
-        for row in odds_api.normalize_event(
-            event, fetched_at="2026-10-01T13:25:00Z"
-        )
+        for row in odds_api.normalize_event(event, fetched_at=fetched_at)
     ]
     odds_api.write_staging(
         rows, filename=odds_api.STAGING_PRICES_FILENAME, staging_dir=staging
@@ -361,9 +360,12 @@ def test_a_game_already_under_way_is_not_part_of_the_slate(
     """An evening run: Utah's game faced off at 01:30Z and the provider no
     longer lists it. It cannot be played, so it cannot be missing."""
     _schedule(world.raw)
+    # The evening run fetches its own prices minutes before it cards them,
+    # as Gameday Refresh does; the morning's, 12h20m old by now, are stale
+    # under the policy's 12-hour limit (finding 55) and would block the card.
     _stage(world.staging, [
         _event(h, a, s) for h, a, s in SLATE if h != "UTA"
-    ])
+    ], fetched_at="2026-10-02T01:40:00Z")
 
     card, out = _run(world, monkeypatch, capsys, now="2026-10-02T01:45:00+00:00")
 

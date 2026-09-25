@@ -50,6 +50,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--processed-dir", default=str(PROCESSED_DIR))
     args = parser.parse_args(argv)
 
+    # A dispatched "0" used to reach the provider as "no cap" (the library
+    # read `if credit_cap and ...`), buying every event on today's slate. It
+    # is refused here, before a credential is loaded or a provider is built,
+    # as capture_line_movement.py and every buy_* script already did.
+    if args.live and args.credit_cap <= 0:
+        parser.error("--live requires a positive --credit-cap.")
+
     if not args.live:
         print("Dry run: nothing was fetched and no credit was spent.")
         return 0

@@ -3,8 +3,9 @@
 
 Far cheaper than props. Props are per event — ten credits per market per event
 — while team markets come from the bulk historical endpoint, which returns
-every game on the board at one instant for `10 x markets x regions`. Thirty
-credits buys a whole slate, whether that slate is four games or fourteen.
+every game on the board at one instant for `10 x markets x regions`. Sixty
+credits buys a whole slate at the lab's two regions (`us,us2`), whether that
+slate is four games or fourteen.
 
 That difference is why the team markets went unmeasured while the props were
 bought twice: the props were expensive enough to think about and the team
@@ -31,6 +32,7 @@ from nhl_betting_lab.stores import dedupe_prices, read_store
 
 from nhl_betting_lab.config import PROCESSED_DIR, RAW_DIR
 from nhl_betting_lab.providers import historical_team_prices as team
+from nhl_betting_lab.providers import odds_api
 from nhl_betting_lab.providers.env_file import load_provider_env
 from nhl_betting_lab.providers.odds_api import OddsApiProvider, ProviderError
 
@@ -75,7 +77,15 @@ def main(argv: list[str] | None = None) -> int:
         cursor += timedelta(days=step)
 
     markets = list(team.BULK_MARKETS)
-    print(team.cost_note(snapshots=len(snapshots), markets=len(markets)))
+    # Quoted at the regions the live run will ask for. This quote left the
+    # region factor out, so the number approved before `--live` was half the
+    # bill: 1,200 credits for the docstring's example, billed 2,400.
+    regions = odds_api.count_regions(odds_api.DEFAULT_REGIONS)
+    print(
+        team.cost_note(
+            snapshots=len(snapshots), markets=len(markets), regions=regions
+        )
+    )
     if not args.live:
         print("Dry run: nothing was bought and no credit was spent.")
         return 0

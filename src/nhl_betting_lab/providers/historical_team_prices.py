@@ -3,16 +3,16 @@
 Props are per-event: ten credits per market per event, so one game-day of
 twelve games across six markets is 720. Team markets come from the **bulk**
 historical endpoint, which returns every game on the board at one instant for
-`10 x markets x regions` — thirty credits for the whole slate, whether that
-slate is four games or fourteen.
+`10 x markets x regions` — sixty credits for the whole slate at the lab's two
+regions (`us,us2`), whether that slate is four games or fourteen.
 
 That difference is why the team markets went unmeasured for so long while the
 props were bought twice: the props were expensive enough to think about and
 the team markets were cheap enough to forget.
 
 Same rules as everywhere else. Real spend is read from `x-requests-last`, the
-cap is enforced against a pessimistic estimate before each request, and a
-snapshot already on disk costs nothing.
+cap is enforced before each request against both the estimate and the
+measured spend, and a snapshot already on disk costs nothing.
 """
 
 from __future__ import annotations
@@ -73,8 +73,12 @@ class TeamPriceBuy:
         )
 
 
-def estimate_credits(*, snapshots: int, markets: int, regions: int = 1) -> int:
-    """The documented bulk rate. Per snapshot, not per event."""
+def estimate_credits(*, snapshots: int, markets: int, regions: int) -> int:
+    """The documented bulk rate. Per snapshot, not per event.
+
+    `regions` has no default. It defaulted to 1, and the only caller left it
+    out, so the buy was gated at one region while it asked for two.
+    """
     return (
         int(snapshots)
         * int(markets)
@@ -83,11 +87,17 @@ def estimate_credits(*, snapshots: int, markets: int, regions: int = 1) -> int:
     )
 
 
-def cost_note(*, snapshots: int, markets: int) -> str:
-    total = estimate_credits(snapshots=snapshots, markets=markets)
+def cost_note(*, snapshots: int, markets: int, regions: int) -> str:
+    """The quote a dry run prints before anything is bought.
+
+    `regions` is required: this quote was one region's price for its whole
+    life while the buy asked for two, so the number approved before `--live`
+    was half the bill (1,200 against 2,400 for the script's own example).
+    """
+    total = estimate_credits(snapshots=snapshots, markets=markets, regions=regions)
     return (
-        f"{snapshots} snapshot(s) x {markets} market(s) x "
-        f"{BULK_CREDITS_PER_MARKET_PER_REGION} = **{total:,} credits**. The "
+        f"{snapshots} snapshot(s) x {markets} market(s) x {regions} region(s) "
+        f"x {BULK_CREDITS_PER_MARKET_PER_REGION} = **{total:,} credits**. The "
         "bulk endpoint bills per snapshot rather than per event, so a "
         "fourteen-game night costs the same as a four-game one."
     )
@@ -130,13 +140,30 @@ def buy_team_prices(
     credit_cap: int,
     raw_dir: Path | None = None,
 ) -> TeamPriceBuy:
-    """Buy one bulk snapshot per instant, under a hard cap."""
+    """Buy one bulk snapshot per instant, under a hard cap.
+
+    Until 2026-09-25 each snapshot was estimated at
+    `estimate_credits(snapshots=1, markets=3)` — one region, 30 credits —
+    while the request asked for `provider.regions`, `us,us2` since
+    2026-08-28, and was billed 60; and the measured spend was added up and
+    never compared with the cap. With a biller charging the documented
+    `10 x markets x regions`, a cap of 2,000 over 90 snapshots bought 66 and
+    spent 3,960, and the workflow's default cap of 60 spent 120. The
+    estimate now carries the provider's region count, and a second gate
+    reads what has actually been charged, as `buy_historical_props` does.
+    """
     wanted = list(markets)
     if not wanted:
         raise ProviderError("A team-price buy needs at least one market.")
-    per_snapshot = estimate_credits(snapshots=1, markets=len(wanted))
+    per_snapshot = estimate_credits(
+        snapshots=1, markets=len(wanted), regions=provider.region_count
+    )
     buy = TeamPriceBuy(snapshots_requested=len(snapshots))
     worst_case = 0
+    # The dearest snapshot the provider has actually charged so far, never
+    # below the estimate: the best available forecast of the next charge.
+    largest_charge = per_snapshot
+    stopped_on_measured = False
 
     for snapshot in snapshots:
         path = _cache_path(snapshot, wanted, raw_dir=raw_dir)
@@ -144,6 +171,21 @@ def buy_team_prices(
         if payload is None:
             if worst_case + per_snapshot > credit_cap:
                 buy.snapshots_skipped_for_budget += 1
+                continue
+            # The gate that cannot be mis-specified: what the provider says
+            # it has charged, projected one more snapshot ahead at the
+            # dearest charge seen. An estimate can be wrong about the bill;
+            # the running total of `x-requests-last` cannot. Skipped, not
+            # stopped, so a snapshot already cached further on is still read.
+            if buy.credits_spent + largest_charge > credit_cap:
+                buy.snapshots_skipped_for_budget += 1
+                if not stopped_on_measured:
+                    stopped_on_measured = True
+                    buy.errors.append(
+                        f"Stopped buying at the {credit_cap:,}-credit cap on "
+                        f"MEASURED spend ({buy.credits_spent:,} charged; the "
+                        f"next snapshot could cost {largest_charge:,})."
+                    )
                 continue
             try:
                 payload, headers = provider._get(  # noqa: SLF001 — one door
@@ -164,7 +206,9 @@ def buy_team_prices(
                 measured = int(str(headers.get("x-requests-last", "")).strip())
             except (TypeError, ValueError):
                 measured = 0
-            buy.credits_spent += measured or per_snapshot
+            charged = measured or per_snapshot
+            buy.credits_spent += charged
+            largest_charge = max(largest_charge, charged)
             buy.credits_remaining = (
                 str(headers.get("x-requests-remaining", ""))
                 or buy.credits_remaining
