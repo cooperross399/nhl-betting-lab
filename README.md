@@ -354,7 +354,7 @@ must not become the base the season is lost from.
 | Experiment Refresh | weekly | no |
 | Publish Site | daily, and after each Gameday Refresh | no |
 
-The public site is deployed from `web/` by **Publish Site**, which reads the lab's own outputs and the NHL's free schedule API, and deploys through the Pages API without pushing to any branch. It publishes what the card publishes — which, while nothing is allowlisted, is a slate and no selections.
+The public site is deployed from `web/` by **Publish Site**, which reads the lab's own outputs and the NHL's free schedule API, and deploys through the Pages API without pushing to any branch. It joins market lines and the card's picks through the staged prices, which Publish Site does not restore, so today every regular-season game is published unpriced: projections, no line, no pick, and the page says "Not priced" rather than calling the game a pass. Whether provider prices may appear on the public page at all is an open decision. The forward ledger shows its size in wagers and never its return; no season accuracy record is tallied, so none is shown.
 
 ## Safety boundaries
 

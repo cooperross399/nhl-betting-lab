@@ -765,6 +765,25 @@ Re-derive rather than trust if the data has moved.
   still accumulates forward**: it is per-event only, and it was wired end to
   end without ever being *requested* until the dead-code test caught it, so
   every declared market must appear in a fetch list.
+- **2026-09-25: the retention table counted responses under "Events
+  probed".** `retention_from_cache` makes one probe per cached response, and
+  the four-hour and 9.5-hour buys each priced nearly every event, so the
+  table printed 5,432 "events" over 2,723, and three events priced at two
+  moments could clear the absence floor of five. It now counts distinct
+  events — an event is seen for a market when any of its responses carried
+  it — and prints the response count beneath. Measured on the real cache
+  with the fixed code: events probed 5,432 → 2,723 for every market; seen in
+  5,431 → 2,723 for shots on goal, points, goals and assists,
+  `player_total_saves` 2,570 → 2,298, `player_blocked_shots` 4,715 → 2,631,
+  `player_hits` 1,218 of 5,432 → **1,218 of 2,723** (22% → 45%; the 2,706
+  four-hour responses asked one region and carry no hits). No verdict moves:
+  all seven stay measurable and none is unmeasurable. The cache key carries
+  the market list and not the regions, so an event whose only response asked
+  one region still counts as probed and unseen for hits (one event today).
+  **The committed props reports still print the pre-fix table
+  (`1218/5432`) and the receipts pin them by checksum**; regenerating them,
+  and `historical_props_retention.json` (whose checksum the evidence bundle
+  records), is Cooper's call.
 - **The price CSVs are derived data**; every bought response is cached raw
   and the CSVs rebuild from the cache. `build_datasets` refuses to shrink an
   accumulated table by more than half (each file guarded on its own, rows not
