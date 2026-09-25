@@ -25,8 +25,9 @@ breach the cap — and it stays pessimistic, because a cap that can only be
 over-respected is the safe direction to be wrong in.
 
 A day's listing costs 1 credit and returns the whole slate, so the marginal
-cost of a sampled slate is `10 x [markets retained] x [games that night]`,
-plus one.
+cost of a sampled slate is `10 x [markets retained] x [regions] x [games that
+night]`, plus one — two regions (`us,us2`) since 2026-08-28, a factor this
+line left out until 2026-09-25.
 
 Nothing spends a credit without an explicit `--live` and a `credit_cap`, and
 the cap is checked before each request rather than after.

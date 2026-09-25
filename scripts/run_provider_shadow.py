@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 """Run a shadow provider fetch and write the verification reports.
 
-A shadow run fetches real prices into `data/staging/` — which the card cannot
-read — and reports what it found. It allowlists nothing, promotes nothing, and
-places nothing.
+A shadow run fetches real prices into `data/staging/` and reports what it
+found. It allowlists nothing, promotes nothing, and places nothing. The
+gameday card reads `data/staging/` — Gameday Refresh runs this script to
+fetch the card's prices — and uses a market from it only if the provider
+policy allowlists it, it is priced for every game in the slate, and the
+oldest staged row is inside the policy's freshness limit.
 
     # Offline: assess whatever is already staged. Spends no credits.
     PYTHONPATH=src .venv/bin/python scripts/run_provider_shadow.py
@@ -11,10 +14,15 @@ places nothing.
     # Live team markets only. A handful of credits.
     PYTHONPATH=src .venv/bin/python scripts/run_provider_shadow.py --live
 
-    # Live including props. One credit per market per event; the cap is hard.
-    # 19 markets are asked, so a cap of 190 buys ten events.
+    # Live including props. One credit per market per region per event; the
+    # cap is hard. 19 markets at the default two regions (us,us2) count 38
+    # credits an event, so a cap of 190 buys five events.
     PYTHONPATH=src .venv/bin/python scripts/run_provider_shadow.py --live \
         --props --credit-cap 190
+
+(Until 2026-09-25 this denied that the card reads `data/staging/`, and put a
+cap of 190 at ten events: one region's arithmetic, wrong since `us2` was
+added on 2026-08-28.)
 
 The credential comes from `NHL_ODDS_API_KEY` in the environment, a gitignored
 `.env`, or a GitHub Secret. It is never accepted as a command argument.
@@ -68,20 +76,30 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--props",
         action="store_true",
-        help="Include player props. One credit per market per event.",
+        help="Include player props. One credit per market per region per event.",
     )
+    # What the default buys is computed, not written. This help said "19
+    # now, which is ten events at this default" until 2026-09-25: it counted
+    # markets and not regions, and since `us2` was added on 2026-08-28 the
+    # fetch has counted 19 x 2 = 38 credits an event, so 190 bought five.
+    default_cap = 190
+    asked = len(odds_api.PER_EVENT_PROVIDER_MARKETS) + len(
+        odds_api.ALTERNATE_PROVIDER_MARKETS
+    )
+    regions = odds_api.count_regions(odds_api.DEFAULT_REGIONS)
+    per_event = asked * regions
     parser.add_argument(
         "--credit-cap",
         type=int,
-        default=190,
+        default=default_cap,
         help=(
             "Hard cap on per-event credits. The fetch stops rather than "
-            "exceeding it, billing every asked market whether a book quotes "
-            "it or not — so the cap must be read against the number of "
-            "markets asked (19 now, which is ten events at this default). "
-            "The old 60 bought six events when ten markets were asked and "
-            "would buy three today: a starved fetch reads exactly like a "
-            "market nobody quotes."
+            "exceeding it, billing every asked market in every asked region "
+            "whether a book quotes it or not — so the cap must be read "
+            f"against markets x regions: {asked} x {regions} = {per_event} "
+            f"credits an event, so the default {default_cap} buys "
+            f"{default_cap // per_event} events. A starved fetch reads "
+            "exactly like a market nobody quotes."
         ),
     )
     parser.add_argument(
