@@ -66,9 +66,22 @@ def main(argv: list[str] | None = None) -> int:
     outputs = Path(args.output_dir)
     samples_path = outputs / SAMPLES_FILENAME
 
+    # What the default measurement describes is the shipped policy, and what
+    # ships is the recorded verdict's call — the verdict in THIS run's
+    # --output-dir, as the card and the props calibration read it. It used to
+    # be read from the default directory, so a scratch measurement could
+    # describe a policy its own output directory had withdrawn.
+    use_rest = ships("team_b2b", output_dir=outputs)
+    games = load_team_games(processed)
+
     samples = None
     if args.reuse_samples and samples_path.is_file():
         cached = pd.read_csv(samples_path)
+        # The policy and the games, as well as the schema: see
+        # scripts/run_props_calibration.py. (Today `team_market_keys()`
+        # names `team_total`, which the team generator never emits, so every
+        # team cache is refused before these checks are reached; they are
+        # here so that closing that gap cannot reopen this one.)
         current, reason = samples_are_current(
             cached,
             known_markets=team_market_keys(),
@@ -77,6 +90,8 @@ def main(argv: list[str] | None = None) -> int:
                 "total_goals": DEFAULT_TOTAL_LINES,
                 "puck_line": PUCK_LINES,
             },
+            required_policy={"use_rest": use_rest},
+            source_games=games,
         )
         if current:
             samples = cached
@@ -84,7 +99,6 @@ def main(argv: list[str] | None = None) -> int:
         else:
             print(f"Not reusing the cached samples: {reason}")
     if samples is None:
-        games = load_team_games(processed)
         if games.empty:
             print(
                 "No team games. Run scripts/fetch_nhl_data.py and "
@@ -95,13 +109,7 @@ def main(argv: list[str] | None = None) -> int:
             games,
             refit_days=args.refit_days,
             minimum_history_games=args.minimum_history_games,
-            # What the default measurement describes is the shipped policy,
-            # and what ships is the recorded verdict's call — the verdict in
-            # THIS run's --output-dir, as the card and the props calibration
-            # read it. It used to be read from the default directory, so a
-            # scratch measurement could describe a policy its own output
-            # directory had withdrawn.
-            use_rest=ships("team_b2b", output_dir=outputs),
+            use_rest=use_rest,
         )
         print(walk.summary_line())
         outputs.mkdir(parents=True, exist_ok=True)

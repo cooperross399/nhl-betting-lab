@@ -27,6 +27,13 @@ curve while leaving the low-minutes bucket bent has not fixed anything.
 any sample is fitted only on samples from strictly earlier game-days. The
 report states how many samples were dropped as warm-up rather than quietly
 scoring them uncorrected.
+
+**It counts games, not lines, where it states an uncertainty.** Every
+player-game is priced at each line of a fixed grid, so one player-game is two
+to five samples sharing one outcome, and every player in one game shares that
+game's events. The player-games stand beside the line samples, the floors
+count player-games, and the interval on an observed rate is clustered on the
+game. See `_volume_rows` for what the row count used to cost.
 """
 
 from __future__ import annotations
@@ -50,9 +57,10 @@ from nhl_betting_lab.models.calibration import (
     calibration_verdict,
     log_loss,
     reliability_table,
+    scored_keys,
     walk_forward_calibrate,
 )
-from nhl_betting_lab.stats import wilson_interval
+from nhl_betting_lab.stats import clustered_wilson_interval
 
 
 CALIBRATION_MARKDOWN_FILENAME = "props_calibration.md"
@@ -81,7 +89,9 @@ TOI_BUCKETS: tuple[tuple[str, float, float], ...] = (
     SKATER_TOI_BUCKETS + GOALIE_TOI_BUCKETS
 )
 
-#: Below this many samples a bucket is reported with its count and no verdict.
+#: Below this many player-games a bucket is reported with its count and no
+#: verdict. It counted line samples until 2026-09-25, so a bucket of twenty
+#: goalie-games on the five-line saves grid cleared it as a hundred.
 BUCKET_FLOOR = 100
 
 
@@ -105,6 +115,9 @@ class MarketCalibration:
     #: `docs/why_ice_time_gets_its_own_correction.md` for the mechanism.
     grouped_brier: float | None = None
     grouped_volume_rows: list[dict[str, Any]] = field(default_factory=list)
+    #: Distinct (game, player) among the scored samples. `samples` counts
+    #: line samples, two to five per player-game; this counts predictions.
+    player_games: int = 0
 
     @property
     def improved(self) -> bool:
@@ -125,6 +138,9 @@ class CalibrationReport:
     total_samples: int = 0
     markets: list[MarketCalibration] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
+    #: Distinct (market, game, player) behind `total_samples`, warm-up
+    #: included as it is there.
+    total_player_games: int = 0
 
     def summary_line(self) -> str:
         if not self.total_samples:
@@ -132,11 +148,14 @@ class CalibrationReport:
                 "No samples. Nothing about this model's calibration is known, "
                 "and the honest statement is that it has not been measured."
             )
-        measured = [item for item in self.markets if item.samples >= BUCKET_FLOOR]
+        measured = [
+            item for item in self.markets if item.player_games >= BUCKET_FLOOR
+        ]
         return (
-            f"{self.total_samples:,} walk-forward samples across "
+            f"{self.total_samples:,} walk-forward line samples from "
+            f"{self.total_player_games:,} player-game predictions across "
             f"{len(self.markets)} market(s); {len(measured)} have enough "
-            "samples to say anything about."
+            "player-games to say anything about."
         )
 
 
@@ -154,12 +173,47 @@ def _volume_rows(
     toi: Sequence[float],
     *,
     is_goalie: bool,
+    player_games: Sequence[tuple[Any, Any]],
 ) -> list[dict[str, Any]]:
-    """Predicted vs observed per ice-time bucket, raw and corrected."""
-    buckets: dict[str, list[tuple[float, float, bool]]] = {}
-    for (_, raw, corrected, won), seconds in zip(scored, toi):
+    """Predicted vs observed per ice-time bucket, raw and corrected.
+
+    `toi` and `player_games` — the (game, player) of each sample — are
+    aligned with `scored`.
+
+    ## Lines are not trials, and neither are the players of one game
+
+    Every line of a player-game's grid lands in the same bucket and settles
+    on the same stat line, and every player in one game shares its goals and
+    its pace. This used to take `wilson_interval(hits, rows)` as the "95% on
+    observed" and `rows >= BUCKET_FLOOR` as the floor, so the goalie "pulled
+    or partial" row printed 830 samples, 8.5% .. 12.6%, from 166 goalie-games
+    on the five-line saves grid, and a bucket of twenty goalie-games would
+    have cleared the floor as a hundred. Measured on the real samples,
+    clustering on the game widens the printed intervals 1.03x (goals) to
+    1.62x (hits): goalie saves 1.46-1.50x, shots on goal 1.32-1.50x, points
+    1.21-1.46x. The printed intervals therefore covered about 77-94%, not
+    95%, and the pulled-goalie row is 7.7% .. 13.9% (`CLAUDE.md`,
+    2026-09-25). Clustering on the player-game alone was measured to leave
+    points about 1.3x too narrow: one goal credits up to three players in one
+    game.
+
+    The interval is now `clustered_wilson_interval` over per-game (hits,
+    rows). It is exactly the Wilson interval on the rows where the rows are
+    independent, and never narrower than it. The floor counts player-games,
+    and the row says how many player-games and games stand behind its
+    samples.
+    """
+    toi = list(toi)
+    keys = list(player_games)
+    if not len(scored) == len(toi) == len(keys):
+        raise ValueError(
+            f"{len(scored)} scored samples, {len(toi)} ice times and "
+            f"{len(keys)} player-games: they must align one to one."
+        )
+    buckets: dict[str, list[tuple[float, float, bool, Any, Any]]] = {}
+    for (_, raw, corrected, won), seconds, (game, player) in zip(scored, toi, keys):
         buckets.setdefault(_bucket_for(seconds, is_goalie), []).append(
-            (raw, corrected, won)
+            (raw, corrected, won, game, player)
         )
     rows: list[dict[str, Any]] = []
     for label, _, _ in TOI_BUCKETS:
@@ -167,18 +221,28 @@ def _volume_rows(
         if not entries:
             continue
         count = len(entries)
-        hits = sum(1 for _, _, won in entries if won)
-        low, high = wilson_interval(hits, count)
+        hits = sum(1 for entry in entries if entry[2])
+        per_game: dict[Any, list[int]] = {}
+        for _, _, won, game, _ in entries:
+            tally = per_game.setdefault(game, [0, 0])
+            tally[0] += 1 if won else 0
+            tally[1] += 1
+        predictions = len({(game, player) for *_, game, player in entries})
+        low, high = clustered_wilson_interval(
+            (won, size) for won, size in per_game.values()
+        )
         rows.append(
             {
                 "bucket": label,
                 "samples": count,
-                "raw_predicted": sum(raw for raw, _, _ in entries) / count,
-                "corrected_predicted": sum(c for _, c, _ in entries) / count,
+                "player_games": predictions,
+                "games": len(per_game),
+                "raw_predicted": sum(entry[0] for entry in entries) / count,
+                "corrected_predicted": sum(entry[1] for entry in entries) / count,
                 "observed": hits / count,
                 "observed_low": low,
                 "observed_high": high,
-                "enough": count >= BUCKET_FLOOR,
+                "enough": predictions >= BUCKET_FLOOR,
             }
         )
     return rows
@@ -254,6 +318,13 @@ def measure_market(
         )
     ordered = subset.sort_values(["date", "game_id", "player_id", "line"])
     is_goalie = market == "goalie_saves"
+    keys = list(
+        zip(
+            ordered["game_id"].tolist(),
+            ordered["player_id"].tolist(),
+            ordered["toi_seconds"].tolist(),
+        )
+    )
     rows = [
         (
             str(row.date),
@@ -283,9 +354,11 @@ def measure_market(
         if result.corrections
         else PlattCalibration.identity()
     )
-    # Align ice time with the scored samples: the warm-up was dropped from the
-    # front of the date-sorted series, so the tail matches.
-    toi = ordered["toi_seconds"].tolist()[result.warmup_skipped :]
+    # Align ice time and the player-game with the scored samples: the warm-up
+    # was dropped from the front of the date-sorted series, so the tail
+    # matches — recomputed and checked by `scored_keys`, not assumed.
+    pooled_keys = scored_keys(rows, result, keys)
+    grouped_keys = scored_keys(rows, grouped, keys)
     return MarketCalibration(
         market=market,
         samples=len(result.scored),
@@ -297,14 +370,21 @@ def measure_market(
         correction=correction,
         raw_table=reliability_table(result.raw),
         corrected_table=reliability_table(result.corrected),
-        volume_rows=_volume_rows(result.scored, toi, is_goalie=is_goalie),
+        volume_rows=_volume_rows(
+            result.scored,
+            [seconds for _, _, seconds in pooled_keys],
+            is_goalie=is_goalie,
+            player_games=[(game, player) for game, player, _ in pooled_keys],
+        ),
         verdict=calibration_verdict(result),
         grouped_brier=brier_score(grouped.corrected),
         grouped_volume_rows=_volume_rows(
             grouped.scored,
-            ordered["toi_seconds"].tolist()[grouped.warmup_skipped :],
+            [seconds for _, _, seconds in grouped_keys],
             is_goalie=is_goalie,
+            player_games=[(game, player) for game, player, _ in grouped_keys],
         ),
+        player_games=len({(game, player) for game, player, _ in pooled_keys}),
     )
 
 
@@ -320,6 +400,11 @@ def build_calibration_report(
     report = CalibrationReport(
         generated_at=moment.isoformat(timespec="seconds"),
         total_samples=len(samples),
+        total_player_games=(
+            len(samples[["market", "game_id", "player_id"]].drop_duplicates())
+            if not samples.empty
+            else 0
+        ),
     )
     markets = (
         sorted(set(samples["market"].astype(str)))
@@ -356,6 +441,13 @@ def build_calibration_report(
         "Both a pooled correction and an ice-time-conditional one are shown "
         "for every market, whether or not the conditional one wins. A variant "
         "reported only when it wins is a selection, not a measurement.",
+        "A sample is one line of one player-game: every player-game is priced "
+        "at each line of a fixed grid, two to five of them, and they settle "
+        "on one stat line. Player-games are printed beside the samples, the "
+        "floors count player-games, and the interval on an observed rate "
+        "counts each game once, because every line of a player-game and every "
+        "player in one game share that game's events. It is never narrower "
+        "than a Wilson interval on the samples.",
         "**Neither correction is in force on the card.** The card prices "
         "props with the raw model. Calibration cannot rule a model in, so a "
         "correction ships only when the price-based backtest in "
@@ -408,12 +500,12 @@ def render_calibration(report: CalibrationReport) -> str:
             "## Headline, per market",
             "",
             (
-                "| Market | Samples | Warm-up dropped | Brier raw | Brier "
-                "pooled | Brier by ice time | Correction |"
+                "| Market | Samples | Player-games | Warm-up dropped | Brier raw "
+                "| Brier pooled | Brier by ice time | Correction |"
             ),
             (
-                "|:-------|--------:|----------------:|----------:|"
-                "-------------:|------------------:|:-----------|"
+                "|:-------|--------:|-------------:|----------------:|"
+                "----------:|-------------:|------------------:|:-----------|"
             ),
         ]
     )
@@ -421,6 +513,7 @@ def render_calibration(report: CalibrationReport) -> str:
         label = MARKETS_BY_KEY[item.market].label if item.market in MARKETS_BY_KEY else item.market
         lines.append(
             f"| `{item.market}` ({label}) | {item.samples:,} "
+            f"| {item.player_games:,} "
             f"| {item.warmup_skipped:,} | {_fmt(item.raw_brier)} "
             f"| {_fmt(item.corrected_brier)} | {_fmt(item.grouped_brier)} "
             f"| {item.correction.describe()} |"
@@ -429,12 +522,16 @@ def render_calibration(report: CalibrationReport) -> str:
 
     for item in report.markets:
         lines.extend([f"## `{item.market}`", "", f"- {item.verdict}", ""])
-        if item.samples < BUCKET_FLOOR:
+        # Player-games, not line samples: 25 goalie-games are 125 samples,
+        # which cleared this floor while it counted samples.
+        if item.player_games < BUCKET_FLOOR:
             lines.extend(
                 [
                     (
-                        f"Only {item.samples} samples. That is too few for a "
-                        "reliability table to mean anything, so none is shown."
+                        f"Only {item.player_games:,} player-games "
+                        f"({item.samples:,} line samples). That is too few for "
+                        "a reliability table to mean anything, so none is "
+                        "shown."
                     ),
                     "",
                 ]
@@ -468,16 +565,17 @@ def render_calibration(report: CalibrationReport) -> str:
                     "### By ice time — where a count model's defects actually live",
                     "",
                     (
-                        "| Ice time | Samples | Predicted (raw) | Predicted "
-                        "(corrected) | Observed | 95% on observed |"
+                        "| Ice time | Samples | Player-games | Predicted (raw) "
+                        "| Predicted (corrected) | Observed | 95% on observed |"
                     ),
-                    "|:---------|--------:|----------------:|----------------------:|---------:|:----------------|",
+                    "|:---------|--------:|-------------:|----------------:|----------------------:|---------:|:----------------|",
                 ]
             )
             for row in item.volume_rows:
                 note = "" if row["enough"] else " ⚠"
                 lines.append(
                     f"| {row['bucket']}{note} | {row['samples']:,} "
+                    f"| {row['player_games']:,} "
                     f"| {row['raw_predicted']:.1%} "
                     f"| {row['corrected_predicted']:.1%} "
                     f"| {row['observed']:.1%} "
@@ -488,9 +586,10 @@ def render_calibration(report: CalibrationReport) -> str:
                     "",
                     (
                         "⚠ marks a bucket below "
-                        f"{BUCKET_FLOOR} samples. Its numbers are printed with "
-                        "their count and should be read as noise, not as a "
-                        "finding."
+                        f"{BUCKET_FLOOR} player-games. Its numbers are printed "
+                        "with their count and should be read as noise, not as "
+                        "a finding. The 95% interval counts each game once, "
+                        "not each line sample."
                     ),
                     "",
                 ]
@@ -516,14 +615,15 @@ def render_calibration(report: CalibrationReport) -> str:
                         "backtest, not to this table."
                     ),
                     "",
-                    "| Ice time | Samples | Predicted | Observed |",
-                    "|:---------|--------:|----------:|---------:|",
+                    "| Ice time | Samples | Player-games | Predicted | Observed |",
+                    "|:---------|--------:|-------------:|----------:|---------:|",
                 ]
             )
             for row in item.grouped_volume_rows:
                 note = "" if row["enough"] else " ⚠"
                 lines.append(
                     f"| {row['bucket']}{note} | {row['samples']:,} "
+                    f"| {row['player_games']:,} "
                     f"| {row['corrected_predicted']:.1%} "
                     f"| {row['observed']:.1%} |"
                 )
@@ -543,11 +643,13 @@ def save_calibration_report(
     payload = {
         "generated_at": report.generated_at,
         "total_samples": report.total_samples,
+        "total_player_games": report.total_player_games,
         "notes": report.notes,
         "markets": [
             {
                 "market": item.market,
                 "samples": item.samples,
+                "player_games": item.player_games,
                 "warmup_skipped": item.warmup_skipped,
                 "raw_brier": item.raw_brier,
                 "corrected_brier": item.corrected_brier,

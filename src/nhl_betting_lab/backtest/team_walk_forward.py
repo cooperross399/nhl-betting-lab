@@ -80,6 +80,9 @@ SAMPLE_COLUMNS = (
     "home_goals",
     "away_goals",
     "regulation",
+    # The back-to-back policy the row was priced under, so a cached file can
+    # say which verdict made it (see `backtest.samples_are_current`).
+    "use_rest",
 )
 
 
@@ -311,6 +314,7 @@ def generate_team_samples(
                 "home_goals": home_goals,
                 "away_goals": away_goals,
                 "regulation": regulation,
+                "use_rest": bool(use_rest),
             }
             try:
                 winner = settle_moneyline(home_goals, away_goals)
