@@ -53,6 +53,7 @@ from nhl_betting_lab.providers import odds_api
 from nhl_betting_lab.providers import team_names as tn
 from nhl_betting_lab.reports.card_pricing import selection_key
 from nhl_betting_lab.staging_provider_policy import load_policy
+from test_no_test_reads_the_checkouts_data import point_default_data_dirs_at
 
 
 SEASON = "20262027"
@@ -262,6 +263,9 @@ def _home_opinions(prices: pd.DataFrame) -> dict:
 
 @pytest.fixture
 def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
+    # Every default first, so the tracked verdicts are not read through the
+    # scratch --output-dir (#151); the lines below override what this needs.
+    point_default_data_dirs_at(monkeypatch, tmp_path / "checkout_defaults")
     raw = tmp_path / "raw"
     _boxscores(raw)
     monkeypatch.setattr(config, "RAW_DIR", raw)

@@ -18,7 +18,7 @@ Read-only. It produces a table, not a decision.
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -57,16 +57,43 @@ class MarketCoverage:
     lines: tuple[float | None, ...] = ()
     complete_book_lines: list[LineCoverage] = field(default_factory=list)
     partial_book_lines: list[LineCoverage] = field(default_factory=list)
+    #: Whether the fetch behind this report asked the provider for the
+    #: market. True when the caller cannot say (an offline assessment of
+    #: staged files), which keeps the old wording rather than inventing a
+    #: claim in either direction.
+    requested: bool = True
 
     @property
     def offered(self) -> bool:
         return self.rows > 0
 
     @property
+    def not_asked(self) -> bool:
+        """No rows because nobody asked — never because nobody quotes it.
+
+        A market with rows is judged on its rows whatever `requested` says.
+        """
+        return not self.requested and not self.offered
+
+    @property
     def has_a_complete_line(self) -> bool:
         return bool(self.complete_book_lines)
 
     def verdict(self) -> str:
+        if self.not_asked:
+            # Until 2026-09-25 this read "No book returned this market". The
+            # scheduled discovery run asks for the three bulk markets only,
+            # so nine of twelve markets — every prop, the regulation
+            # three-way and the team total — were published as unquoted on
+            # the one unattended run built to tell a starved probe from an
+            # unquoted market.
+            return (
+                "Not asked in this run. The fetch behind this report never "
+                "requested this market (the per-event markets are asked "
+                "only when `run_provider_shadow.py` runs with `--props`), so "
+                "the absence of rows says nothing about whether any book "
+                "quotes it. Ask for it before reading it either way."
+            )
         if not self.offered:
             return (
                 "No book returned this market. Before recording it as not "
@@ -104,10 +131,23 @@ class DiscoveryReport:
     def summary_line(self) -> str:
         offered = [item.market for item in self.markets if item.offered]
         complete = [item.market for item in self.markets if item.has_a_complete_line]
+        not_asked = [item.market for item in self.markets if item.not_asked]
+        if not not_asked:
+            return (
+                f"{len(offered)} of {len(self.markets)} markets returned prices "
+                f"across {self.slate_games} game(s); {len(complete)} have at "
+                "least one book covering the whole slate on a single line."
+            )
+        # "3 of 12 markets returned prices" read as nine markets no book
+        # quotes, when nine were never asked. The count is of markets asked.
+        asked = len(self.markets) - len(not_asked)
         return (
-            f"{len(offered)} of {len(self.markets)} markets returned prices "
-            f"across {self.slate_games} game(s); {len(complete)} have at least "
-            "one book covering the whole slate on a single line."
+            f"{len(offered)} of {asked} markets asked returned prices "
+            f"across {self.slate_games} game(s); {len(complete)} have at "
+            "least one book covering the whole slate on a single line. "
+            f"{len(not_asked)} of {len(self.markets)} were not asked in this "
+            f"run ({', '.join(not_asked)}), so their absence says nothing "
+            "about whether any book quotes them."
         )
 
 
@@ -124,13 +164,30 @@ def discover_coverage(
     *,
     markets: Sequence[str] | None = None,
     unmapped_provider_markets: Sequence[str] = (),
+    requested: Iterable[str] | None = None,
 ) -> DiscoveryReport:
-    """Build the coverage table from a staged price frame."""
+    """Build the coverage table from a staged price frame.
+
+    `requested` is the set of project markets the fetch actually asked the
+    provider for. A market outside it with no rows reads "not asked in this
+    run" rather than "no book returned this market". None means the caller
+    cannot say, and every market is treated as asked, as before.
+    """
     keys = list(markets) if markets else [market.key for market in ALL_MARKETS]
+    asked = (
+        None if requested is None else {str(item).strip() for item in requested}
+    )
+
+    def _asked(key: str) -> bool:
+        return asked is None or key in asked
+
     if prices.empty:
         return DiscoveryReport(
             slate_games=0,
-            markets=[MarketCoverage(market=key, games_in_slate=0) for key in keys],
+            markets=[
+                MarketCoverage(market=key, games_in_slate=0, requested=_asked(key))
+                for key in keys
+            ],
             unmapped_provider_markets=tuple(unmapped_provider_markets),
         )
 
@@ -144,7 +201,9 @@ def discover_coverage(
 
     for key in keys:
         subset = frame[frame["market"].astype(str).str.strip() == key]
-        coverage = MarketCoverage(market=key, games_in_slate=len(slate))
+        coverage = MarketCoverage(
+            market=key, games_in_slate=len(slate), requested=_asked(key)
+        )
         if subset.empty:
             report.markets.append(coverage)
             continue
@@ -207,8 +266,10 @@ def render_discovery(report: DiscoveryReport) -> str:
         ) or "-"
         if len(coverage.lines) > 8:
             seen += f", +{len(coverage.lines) - 8} more"
+        # A 0 in the Rows column reads as "asked, and nothing came back".
+        rows = "not asked" if coverage.not_asked else str(coverage.rows)
         lines.append(
-            f"| `{coverage.market}` ({label}) | {coverage.rows} "
+            f"| `{coverage.market}` ({label}) | {rows} "
             f"| {len(coverage.books)} | {seen} "
             f"| {len(coverage.complete_book_lines)} |"
         )

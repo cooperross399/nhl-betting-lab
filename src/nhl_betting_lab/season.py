@@ -112,7 +112,18 @@ def known_regular_season_games(raw_dir=None) -> set[tuple[str, str, str]]:
             payload = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, UnicodeError, json.JSONDecodeError):
             continue
-        for game in payload.get("games", []) or []:
+        # A file that parses but is not an object (`null`, `[]`, a string)
+        # used to reach `payload.get` and raise AttributeError out of this
+        # reader, which the card calls on every run with nothing around it.
+        # On copies of the real 2026-27 cache, one such TOR file stopped the
+        # opening-night card (2026-09-29, 5 games) before it froze or wrote
+        # anything, while the two readers below, which already guarded this
+        # shape, read the same cache as 31 of 32 clubs. It is skipped like an
+        # unreadable file, so the card sees a partial cache, says so, and
+        # still builds. 0 of the 128 cached club schedules had this shape on
+        # 2026-09-25, so no reading of the real cache changes.
+        games = payload.get("games", []) if isinstance(payload, dict) else []
+        for game in games or []:
             if not isinstance(game, dict):
                 continue
             if int(game.get("gameType", 0) or 0) != REGULAR_SEASON_GAME_TYPE:

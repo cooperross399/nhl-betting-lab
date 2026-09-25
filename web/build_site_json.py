@@ -16,8 +16,9 @@ Sources, in order of trust:
     earliest capture of the day, used as the open. Publish Site restores
     NEITHER — its two artifacts carry no data/staging and no line_movement —
     so there every regular-season game is published unpriced (`priced:
-    false`, no line, no pick) and every open is missing, and the board says
-    so rather than reading as a pass.
+    false`, no line, no pick) and every open is missing. The board says so
+    rather than reading as a pass, and so does the next morning's Results
+    page, which grades no game that carried no pick.
   * data/processed/team_games.csv + TeamModel: expected goals per side,
     with the back-to-back adjustment only while the recorded `team_b2b`
     verdict ships it — the same verdict, read the same way, as the card.
@@ -583,13 +584,32 @@ def settle(day: date, history_dir: Path) -> dict:
             proj_side = "over" if tot["proj"] > tot["current"] else "under"
             s["totals"]["p" if res == "push" else "w" if res == proj_side else "l"] += 1
             row["total"] = {"line": tot["current"], "proj": tot["proj"], "result": res}
+        # What the frozen board said about this game's prices, carried onto
+        # the results row so the page can say it. A board frozen before the
+        # flag existed carries none. Every version of build_board attached
+        # `moneyline` under exactly the condition that now sets `priced`
+        # (both provider team strings matched), so its line answers the
+        # question for those boards.
+        row["priced"] = bool(g["priced"] if "priced" in g else "moneyline" in g)
         pick = g.get("pick")
         if pick:
             outcome = grade_pick(pick, ha, aa, hs, as_, finish)
             s["picks"]["w" if outcome == "win" else "l" if outcome == "loss" else "p"] += 1
             row["pick"] = {**pick, "result": outcome}
         else:
-            row["pick"] = {"market": "—", "label": "No play", "price": 0, "result": "push"}
+            # A game with no pick settles with no pick. This used to write
+            # {"market": "—", "label": "No play", "price": 0, "result":
+            # "push"} for every such game, without reading `priced`. Publish
+            # Site restores no staged prices, so from opening night that
+            # was every regular-season game: 2 of 2 in
+            # tests/test_results_never_grade_an_unpriced_game.py, and 5 of 5
+            # on the real 2026-09-29 slate. The Results page showed each one
+            # under "Model pick" as "No play · — · −0 · Push". That called a
+            # game no price reached a model pass, graded a pass that was
+            # never a bet, and printed a price nobody quoted. The page reads
+            # `priced` and says "Not priced" or "No play". It grades
+            # neither.
+            row["pick"] = None
         base["games"].append(row)
     return base
 
