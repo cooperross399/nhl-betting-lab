@@ -763,6 +763,20 @@ Re-derive rather than trust if the data has moved.
   region count. 395 of the 475 snapshots in the bought team store carry
   `us2` books, so past buys did ask for both regions. No price, measurement
   or verdict changes.
+- **2026-09-25: the docs misstated the per-event cap and what the card
+  reads.** The gameday and probe caps were documented at one region's
+  arithmetic; the quota bullet below has what 320 buys, measured on the real
+  schedule. Seven places said the card cannot read `data/staging/` — the
+  `odds_api` docstring, the note in every provenance file, the shadow report
+  and its docstring, the shadow script, the approval doc, the project status
+  — while `run_gameday_card.py` reads it by name and stakes its prices. And
+  `docs/provider_allowlist_approval.md` listed "staging validation" and
+  "checksum" among every card's checks: the card opens no receipt (the PR
+  gate recomputes evidence checksums) and validates no staged file (one it
+  cannot parse is skipped). All corrected; no cap, input, verdict or policy
+  changed. The committed evidence bundle, pinned by the receipt's checksum,
+  still names "Staging validation" in its notes; regenerating it is
+  Cooper's call. `tests/test_the_docs_state_the_cap_and_staging_truthfully.py`.
 - **2026-09-25: both calibration reports printed a "95%" interval that
   counted rows as trials.** `props_calibration.md` prices every player-game
   at each line of a fixed grid (two lines for goals and assists, five for
@@ -891,18 +905,36 @@ Re-derive rather than trust if the data has moved.
   exactly like books not posting props. `current_rosters()` decides the side
   now; the logs are the fallback, and a roster naming a club not in the game
   fails the same safe way a stale log does.
-- **The season fits the quota, measured against the real schedule.** 185
-  game days, 1,344 games, 2026-09-29 to 2027-04-10; a mean of 7.3 games a
-  night and a maximum of 16. At 19 asked per-event markets that is **26,091
-  credits for one fetch a day** and 52,182 for two, against the 3,635,739
-  remaining read on 2026-09-02. (This line said "88,527 remaining" until
-  2026-09-02, a figure from before the plan changed and forty times too
-  small. The conclusion held anyway; the margin is far wider than it said.)
-  The 320-credit daily cap clips **zero** of the 185 nights (16 games x 19 =
-  304). The second scheduled trigger now stands down when the first already
-  published a clean card to `card-feed`, so the ordinary season costs the
-  one-run figure and the backup still fires whenever the primary did not
-  finish or finished degraded.
+- **The season fits the quota, measured against the real schedule; the
+  per-event cap does not fit the slate.** 185 game days, 1,344 games,
+  2026-09-29 to 2027-04-10; a mean of 7.3 games a night and a maximum of 16.
+  The provider bills every asked per-event market once per region and the
+  lab asks two (`us,us2`), so the 19 asked markets are 19 markets x 2
+  regions = 38 credits an event. Uncapped, one fetch a day is **52,182
+  credits** (51,072 per-event, 1,110 bulk) and two are 104,364, against the
+  3,635,739 remaining read on 2026-09-02; at today's cap one fetch a day is
+  at most 42,530. (This line said 26,091 for one fetch and 52,182 for two
+  until 2026-09-25, one region's arithmetic, and "88,527 remaining" until
+  2026-09-02, a figure from before the plan changed. The conclusion held
+  both times.) **The Gameday Refresh per-event cap of 320 buys 8 events,
+  not a full slate.** Until 2026-09-25 this line said it clipped none of the
+  185 nights, as 16 games x 19 = 304 — the region factor left out, since the
+  cap was set on 2026-08-28 and `us2` was added the same day. Measured
+  (read-only) on the real 2026-27 club schedules, it clips **72 of the 185
+  nights** and leaves **254 games** unpriced; the fetch takes the first eight
+  by face-off, and on those nights every market only the per-event fetch
+  prices — the seven props, the regulation three-way, team totals, 9 of the
+  12 allowlisted markets — is INCOMPLETE and excluded from the card. 608 is
+  the smallest cap that clips no night (16 x 38); 640 clips 0. **Raising the
+  cap spends more credits and is Cooper's decision, still pending**; nothing
+  here changed it. Provider Market Discovery has the same gap: its 380 buys
+  10 events against a `--max-events 20`. `tests/test_periphery_markets.py`
+  divides both caps by the markets asked, not by markets x regions, which is
+  how it stayed green; the region-aware check fails at today's caps, so it
+  waits on the same decision. The second scheduled trigger now stands down
+  when the first already published a clean card to `card-feed`, so the
+  ordinary season costs the one-run figure and the backup still fires
+  whenever the primary did not finish or finished degraded.
 - **Gameday Refresh runs green end to end** (verified 2026-08-26: live team
   prices staged, models fitted, card correctly blocked, comment posted).
   Props return no rows this far from the season — an absence, not a fault.
@@ -962,8 +994,10 @@ Re-derive rather than trust if the data has moved.
   first/last scorer are deferred — no period model, no goal-order data —
   not silently dropped. The per-event fetch is windowed to the day's slate
   (`--horizon-days 1`; an unwindowed 32-event August board starved the
-  nearest nine games) and the cap is 320 against the pessimistic bound;
-  an asked-for market nobody quotes costs nothing.
+  nearest nine games) and the cap is 320 against the pessimistic bound —
+  eight events at two regions, short of the largest nights (the quota bullet
+  above has the measurement); an asked-for market nobody quotes costs
+  nothing.
 - **Data**: three seasons cached — 3,936 games, 157,419 player-game rows,
   121 unresolved names (0.08%). A completed boxscore is never refetched.
 - **Calibration** (can rule out, never in): 2.5M walk-forward prop samples,
@@ -1126,8 +1160,11 @@ names (the 2026-08-27 receipt for eleven,
 `odds_api-20260827T165300-0400-cooperross399`, was withdrawn on 2026-08-29); the PR
 gate re-verifies that
 paperwork — receipt, coverage, evidence checksums — on every policy change.
-Shadow runs still write to `data/staging/`, and eligibility still gates what
-the card may read from there.
+Shadow runs still write to `data/staging/`, which the card reads directly
+(Gameday Refresh fetches into it and cards from it in one job); eligibility
+(allowlist and completeness) and freshness gate what the card may price from
+there. Evidence checksums are the PR gate's check, not the card's
+(`docs/provider_allowlist_approval.md`).
 
 ## What Claude decides, and what Cooper decides
 
