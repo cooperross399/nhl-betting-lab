@@ -148,3 +148,29 @@ def test_a_report_without_a_wager_count_never_publishes_the_quote_count(tmp_path
         "180 ledger rows are not 'no slate settled'; an unknown count must "
         f"say it is unknown: {cell['sub']!r}"
     )
+
+
+@pytest.mark.parametrize("content", [None, "{not json", "[]", b"\xff\xfe"],
+                         ids=["missing", "malformed", "not-an-object", "not-utf-8"])
+def test_a_report_that_cannot_be_read_is_an_unknown_count_not_zero(
+    tmp_path: Path, content: str | bytes | None
+) -> None:
+    """Publish Site restores forward_evidence.json with the run's reports, so
+    a board built without a readable one knows nothing about the ledger. It
+    used to publish 0 wagers, and the page read "No slate settled yet" —
+    false from the first settled night on. No count is published instead,
+    and the seal holds either way."""
+    module = site_module()
+    target = tmp_path / "forward_evidence.json"
+    if isinstance(content, bytes):
+        target.write_bytes(content)
+    elif content is not None:
+        target.write_text(content)
+
+    record = module.load_record(target)
+
+    assert record["forward"]["sealed"] is True
+    assert record["forward"]["wagers"] is None
+    cell = _forward_cell(record, tmp_path)
+    assert cell["value"] == "—", cell
+    assert "not reported" in cell["sub"] and "No slate settled" not in cell["sub"], cell

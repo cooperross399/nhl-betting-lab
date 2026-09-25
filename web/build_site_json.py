@@ -457,14 +457,22 @@ def load_record(path: Path) -> dict:
         "totals": None,
         "forward": sealed,
     }
+    # No readable report is not an empty ledger. Publish Site restores
+    # forward_evidence.json with the run's reports, so a board built without
+    # it knows nothing about the ledger, and "No slate settled yet" would be
+    # false from the first settled night on. The count is unknown, so none
+    # is published: the page reads "Ledger size not reported". (`rows`
+    # stays 0: the page never shows it, and the seal pins every failure
+    # path to it — tests/test_site_publishes_no_forward_return.py.)
+    unknown = {**empty, "forward": {**sealed, "wagers": None}}
     if not path.is_file():
-        return empty
+        return unknown
     try:
         fe = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        return empty
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return unknown
     if not isinstance(fe, dict):
-        return empty
+        return unknown
 
     markets = fe.get("markets")
     markets = markets if isinstance(markets, dict) else {}
