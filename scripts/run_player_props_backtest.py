@@ -14,6 +14,11 @@ credits per market per event and is a separate, deliberate command.
 When no historical prices exist, the report says so plainly and measures
 nothing, rather than presenting a calibration number as though it were a
 backtest.
+
+When prices exist and the walk-forward samples do not, or either file exists
+and cannot be read, it refuses: `::error::`, exit 1, and nothing written, so
+the previous report stays where it is rather than being replaced by one that
+says nothing was bought.
 """
 
 from __future__ import annotations
@@ -39,13 +44,40 @@ RETENTION_FILENAME = "historical_props_retention.json"
 SAMPLES_FILENAME = "prop_calibration_samples.csv"
 
 
+class UnreadableInputError(Exception):
+    """A file that exists and cannot be parsed, which is not no file."""
+
+
 def _load(path: Path, columns: list[str]) -> pd.DataFrame:
+    """The frame at `path`; an empty one when there is no file.
+
+    A file that exists and cannot be parsed used to come back empty too,
+    exactly as though it were absent. A damaged samples file then printed "No
+    walk-forward samples are on disk" and overwrote the contract report with
+    one measuring nothing — a copy of the real one went from the `late`
+    window and 550,225 priced outcomes to no window and 0 — and a damaged
+    price store read as "no prices", so every summary said none had been
+    bought. Absent is a fact a report can state; unreadable is a fault it
+    cannot, so it refuses.
+    """
     if not path.is_file():
         return pd.DataFrame(columns=columns)
     try:
         return pd.read_csv(path)
-    except (OSError, pd.errors.EmptyDataError, pd.errors.ParserError):
-        return pd.DataFrame(columns=columns)
+    except (
+        OSError,
+        UnicodeError,
+        pd.errors.EmptyDataError,
+        pd.errors.ParserError,
+    ) as error:
+        # One line: a GitHub annotation ends at the first newline, and the
+        # parser's own message carries one.
+        reason = " ".join(str(error).split())
+        raise UnreadableInputError(
+            f"{path} exists but could not be read ({type(error).__name__}: "
+            f"{reason}). An unreadable file is not an empty one, so nothing "
+            "was measured and no report was written."
+        ) from error
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -85,14 +117,41 @@ def main(argv: list[str] | None = None) -> int:
     processed = Path(args.processed_dir)
     outputs = Path(args.output_dir)
 
-    prices = _load(
-        processed / HISTORICAL_PRICES_FILENAME,
-        ["date", "market", "player", "selection", "line", "american_odds", "book"],
-    )
-    samples = _load(
-        outputs / SAMPLES_FILENAME,
-        ["date", "market", "player", "line", "model_probability", "actual"],
-    )
+    try:
+        prices = _load(
+            processed / HISTORICAL_PRICES_FILENAME,
+            ["date", "market", "player", "selection", "line", "american_odds", "book"],
+        )
+        samples = _load(
+            outputs / SAMPLES_FILENAME,
+            ["date", "market", "player", "line", "model_probability", "actual"],
+        )
+    except UnreadableInputError as error:
+        print(f"::error::{error}", file=sys.stderr)
+        return 1
+
+    # PRICES WITH NO MODEL TO MEASURE THEM AGAINST ARE A REFUSAL, NOT A
+    # REPORT. This used to print one stdout line and write the report anyway:
+    # with 20,000 price rows and `--phase late` it read "No snapshot window
+    # was filtered" and "Priced outcomes seen: 0", exited 0, and the claims
+    # summary built on it said no prices had been bought for any market. It
+    # happens in a worktree (the samples file is gitignored and read from
+    # --output-dir) and in a purchase probe, which skips the step that builds
+    # them. The calibration and team measurements already refuse in the same
+    # position; a report with no model that looks like a report is worse
+    # than none. No prices at all is still reported, because "nothing has
+    # been bought" is then true.
+    if samples.empty and not prices.empty:
+        print(
+            f"::error::{len(prices):,} historical price row(s) are on disk in "
+            f"{processed / HISTORICAL_PRICES_FILENAME} and there are no "
+            f"walk-forward samples at {outputs / SAMPLES_FILENAME} to measure "
+            "them against. Run scripts/run_props_calibration.py with the same "
+            "--output-dir first. Nothing was measured and no report was "
+            "written, so the previous one is untouched.",
+            file=sys.stderr,
+        )
+        return 1
 
     retention_note = ""
     unmeasurable: dict[str, str] = {}
