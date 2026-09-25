@@ -55,7 +55,7 @@ import pandas as pd
 from nhl_betting_lab.backtest.walk_forward import distribution_from
 from nhl_betting_lab.config import MIN_PROP_EDGE, OUTPUTS_DIR
 from nhl_betting_lab.markets import MARKETS_BY_KEY, PROP_MARKETS
-from nhl_betting_lab.models.player_props import player_name_aliases
+from nhl_betting_lab.models.player_props import player_key, player_name_aliases
 from nhl_betting_lab.providers.team_names import (
     UnresolvedTeamsError,
     build_team_name_map,
@@ -187,6 +187,21 @@ def _expected_toi(row: Any) -> float:
     return 0.0 if number != number else number
 
 
+def _game_of(row) -> str:
+    """One game: the provider's event id where there is one, else the
+    league game date and the two teams — never the UTC commence date."""
+    event = clean_text(getattr(row, "provider_event_id", ""))
+    if event:
+        return event
+    return "|".join(
+        (
+            row_game_date(row),
+            clean_text(getattr(row, "home_team", "")),
+            clean_text(getattr(row, "away_team", "")),
+        )
+    )
+
+
 def run_backtest(
     prices: pd.DataFrame,
     samples: pd.DataFrame,
@@ -309,9 +324,23 @@ def run_backtest(
                     )
 
     report.quotes_seen = len(prices)
-    prices = best_price_per_wager(
-        prices, ["date", "market", "player", "line", "selection"]
+    # THE WAGER IS A GAME AND A PLAYER, NOT A UTC DAY AND A SPELLING. This
+    # keyed on the raw `date` column, which is the UTC commence date: a 7pm
+    # ET face-off (00:00Z) and the next afternoon's game share one, so each
+    # player's wager on a back-to-back collapsed to whichever game paid more
+    # and the other vanished before `priced_outcomes` counted it — 4,196
+    # late-window and 5,337 card-window wager keys on the bought store, with
+    # the reconciliation still printing "Accounted for: all of them". It
+    # also keyed the raw player string, so one player spelled two ways by
+    # two books was two wagers. The card keys on the game and the player's
+    # identity (`card_pricing.selection_key`), and this replays the card.
+    prices = prices.assign(
+        _wager_game=[_game_of(row) for row in prices.itertuples()],
+        _wager_player=[player_key(p) for p in prices["player"]],
     )
+    prices = best_price_per_wager(
+        prices, ["_wager_game", "market", "_wager_player", "line", "selection"]
+    ).drop(columns=["_wager_game", "_wager_player"])
     report.wagers = len(prices)
 
     # One entry per player-game-market, indexed under every legitimate
