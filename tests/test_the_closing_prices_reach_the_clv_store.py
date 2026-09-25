@@ -269,6 +269,17 @@ def test_a_branch_without_its_store_is_never_overwritten(rig):
 
 
 def test_the_store_format_is_the_one_clv_reads():
-    """The hand-off carries what `best_prices` writes, which `load_captures` reads."""
+    """`best_prices` writes exactly `CAPTURE_COLUMNS`, and no helper column.
+
+    This docstring used to say "The hand-off carries what `best_prices`
+    writes, which `load_captures` reads". Nothing here calls `load_captures`.
+    The comparison checks `best_prices` against the constant it projects
+    onto. Twelve mutants each left CLV matching nothing, and this test passed
+    under every one (finding 87). What it does catch is `best_prices`
+    dropping its projection and leaking `_decimal` into the store.
+    The claim in its name is now held by
+    tests/test_clv_reads_the_store_the_hand_off_publishes.py, which runs the
+    published store through `run_closing_line_value.main`.
+    """
     assert re.fullmatch(r"[a-z_]+\.csv", cl.CAPTURES_FILENAME)
     assert list(_captures(1, 0).columns) == list(cl.CAPTURE_COLUMNS)
