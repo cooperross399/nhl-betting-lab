@@ -133,6 +133,30 @@ def decide(
     )
 
 
+def render_no_card_comment(
+    *, degraded_notes: Sequence[str], run_url: str = ""
+) -> str:
+    """The comment for a degraded run that produced no card at all.
+
+    A degraded run always posts, because silence is only safe to read as
+    "nothing moved" if anything going wrong breaks it — and a run whose card
+    step crashed is the most degraded run there is. It used to post
+    yesterday's card instead, left on disk by the restore, as today's. The
+    marker is never in this comment: no selections exist to have changed.
+    """
+    lines = [
+        "**No card could be built this run.** Nothing below is a card, and no "
+        "earlier card stands in for today's.",
+        "",
+        "What went wrong:",
+        "",
+        *[f"- {note}" for note in degraded_notes],
+    ]
+    if run_url:
+        lines += ["", f"Run: {run_url}"]
+    return "\n".join(lines) + "\n"
+
+
 def render_comment(
     card: GamedayCard,
     decision: NotificationDecision,

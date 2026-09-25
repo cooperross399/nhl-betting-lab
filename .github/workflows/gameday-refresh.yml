@@ -189,7 +189,10 @@ jobs:
           # Nothing above exits early: the ledger fallback below must run
           # whenever the ledger did not come back, however the restore ended.
           if [ -f data/outputs/gameday_card.json ]; then
-            cp data/outputs/gameday_card.json previous_card.json
+            # Moved, not copied: a card step that crashes must leave NO card
+            # on disk. A copy left yesterday's card at today's path, and the
+            # post and card-feed steps published it as today's.
+            mv data/outputs/gameday_card.json previous_card.json
             echo "Restored the previous card for the selections diff."
           fi
           # `|| true`: the shell is `bash -eo pipefail`, and with nothing
@@ -310,7 +313,10 @@ jobs:
           set -u
           : > run_degraded.txt
           : > run_quiet.txt
-          games=$(find data/raw/nhl/boxscore -name '*.json' 2>/dev/null | wc -l)
+          # `|| true`: under the runner's bash -eo pipefail, `find` on a
+          # missing cache fails the substitution and ended this step before
+          # it wrote `degraded` at all — so the coldest run read as clean.
+          games=$(find data/raw/nhl/boxscore -name '*.json' 2>/dev/null | wc -l || true)
           echo "Boxscores cached: $games"
           if [ ! -f data/processed/player_game_logs.csv ]; then
             echo "No player logs: no prop can be priced, so no card can be built. The NHL API could not be reached and no previous cache was restored." >> run_degraded.txt
@@ -369,6 +375,17 @@ jobs:
           PYTHONPATH: src
         run: |
           python scripts/run_gameday_card.py
+
+      - name: Record whether the card was built
+        # "Record what went wrong" runs before the card, so on its own it can
+        # never know the card crashed. It could not, and a crashed card was
+        # published as a clean run. The post step reads this file too, so a
+        # run with no card posts that instead of staying silent.
+        if: always()
+        run: |
+          if [ "${{ steps.card.outcome }}" != "success" ]; then
+            echo "The card could not be rendered, so there is no card for today; no earlier card stands in for it." >> run_degraded.txt
+          fi
 
       - name: Settle the forward ledger
         # After the card froze today's opinions and results were fetched
@@ -446,11 +463,15 @@ jobs:
             --body-out issue_body.md \
             --degraded-file run_degraded.txt --run-url "$RUN_URL" \
             ${{ inputs.force_post == true && '--force' || '' }} | tail -1)
-          echo "decision=$DECISION" >> "$GITHUB_OUTPUT"
           if [ "$DECISION" != "post" ]; then
+            echo "decision=$DECISION" >> "$GITHUB_OUTPUT"
             echo "Not posting: the run was clean and the selections did not change."
             exit 0
           fi
+          # `decision=post` is recorded only once the comment is delivered.
+          # It used to be written first, so a comment that failed still
+          # published "post" and a clean status, and nothing noticed.
+          echo "decision=post_failed" >> "$GITHUB_OUTPUT"
           # The title comes from the module so the two cannot drift apart and
           # start posting to different issues. Matched exactly against the open
           # issues rather than through the search API: the title contains an em
@@ -467,7 +488,25 @@ jobs:
             gh issue pin "$NUMBER" || echo "Could not pin; not fatal."
           fi
           gh issue comment "$NUMBER" --body-file card_comment.md
+          echo "decision=post" >> "$GITHUB_OUTPUT"
           echo "Card posted to issue #$NUMBER."
+
+      - name: Record whether the card was delivered
+        # The run's final health: everything "Record what went wrong" knew,
+        # the card's outcome, and now the delivery's. The card-feed status and
+        # the run's exit read this, not the check that ran before the card.
+        id: final
+        if: always()
+        run: |
+          if [ "${{ steps.post.outcome }}" = "failure" ]; then
+            echo "The card could not be posted to the operating home." >> run_degraded.txt
+          fi
+          if [ -s run_degraded.txt ]; then
+            echo "degraded=true" >> "$GITHUB_OUTPUT"
+            cat run_degraded.txt
+          else
+            echo "degraded=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Publish the card to the card-feed branch
         # The cloud morning-brief routine reads today's card from this branch
@@ -501,7 +540,7 @@ jobs:
           jq -n \
             --arg date "$DAY" \
             --arg decision "$DECISION" \
-            --arg degraded "${{ steps.health.outputs.degraded || 'unknown' }}" \
+            --arg degraded "${{ steps.final.outputs.degraded || 'unknown' }}" \
             --arg empty_slate "${{ steps.prices.outputs.empty_slate || 'false' }}" \
             --arg run_url "$RUN_URL" \
             '{date: $date, decision: $decision, degraded: $degraded,
@@ -610,8 +649,8 @@ jobs:
           # before this check, so a night with no games and a broken results
           # fetch finished green and silent. Half the season's nights are
           # dark; a fault that hides on them is a fault that hides.
-          if [ "${{ steps.health.outputs.degraded }}" = "true" ]; then
-            echo "::error::This run was degraded. See the job summary."
+          if [ "${{ steps.final.outputs.degraded }}" != "false" ]; then
+            echo "::error::This run was degraded (or its health was never recorded). See the job summary."
             exit 1
           fi
           if [ "${{ steps.prices.outputs.empty_slate }}" = "true" ]; then
