@@ -37,7 +37,11 @@ from nhl_betting_lab.markets import ALL_MARKETS
 from nhl_betting_lab.reports.player_props_backtest import by_market_with_other_windows
 from nhl_betting_lab.reports.what_we_can_claim import unread_reason
 from nhl_betting_lab.staging_provider_policy import file_sha256
-from nhl_betting_lab.stats import NO_DEMONSTRATED_EDGE, bets_needed_to_detect
+from nhl_betting_lab.stats import (
+    NO_DEMONSTRATED_EDGE,
+    bets_needed_to_detect,
+    correction_family,
+)
 
 
 BUNDLE_MARKDOWN_FILENAME = "allowlist_evidence_bundle.md"
@@ -350,6 +354,11 @@ def assess_markets(*, output_dir: Path) -> list[MarketVerdict]:
         # A demonstrated deficit is the strongest possible argument AGAINST
         # enabling, and it was being rendered as the argument for.
         looks = int(entry.get("looks", 1) or 1)
+        # The family as the measuring report counted it. The props backtest
+        # corrects over its markets and the overall figure, and five lines of
+        # this bundle called that "the 7 markets measured on the same data"
+        # for six markets (8 on `hits`, whose card window measured seven).
+        family = correction_family(looks, str(entry.get("family", "") or ""))
         adjusted_low = entry.get("adjusted_low")
         adjusted_high = entry.get("adjusted_high")
         roi = entry.get("roi")
@@ -416,7 +425,7 @@ def assess_markets(*, output_dir: Path) -> list[MarketVerdict]:
             supported = False
         elif not survives:
             corrected = (
-                f" Corrected for the {looks} markets measured on the same data "
+                f" Corrected for the {family} "
                 f"it runs {float(adjusted_low):+.1%} to "
                 f"{float(adjusted_high):+.1%}, which includes zero."
                 if isinstance(adjusted_low, (int, float))
@@ -433,8 +442,8 @@ def assess_markets(*, output_dir: Path) -> list[MarketVerdict]:
         else:
             reason = (
                 f"{roi_value:+.1%} over {bets:,} bets, and the interval "
-                f"excludes zero even after correcting for the {looks} markets "
-                "measured on the same data. That is the strongest thing this "
+                f"excludes zero even after correcting for the {family}. "
+                "That is the strongest thing this "
                 "repository can currently say, and it rests on one snapshot "
                 "window."
                 if roi_value is not None

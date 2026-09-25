@@ -40,7 +40,11 @@ from nhl_betting_lab.reports.player_props_backtest import (
 from nhl_betting_lab.reports.team_markets_measurement import (
     MEASUREMENT_JSON_FILENAME,
 )
-from nhl_betting_lab.stats import NO_DEMONSTRATED_EDGE, detection_table
+from nhl_betting_lab.stats import (
+    NO_DEMONSTRATED_EDGE,
+    correction_family,
+    detection_table,
+)
 
 
 CLAIMS_MARKDOWN_FILENAME = "what_we_can_claim.md"
@@ -65,10 +69,13 @@ class MarketClaim:
     low: float | None = None
     high: float | None = None
     includes_zero: bool = True
-    #: Whether it still excludes zero once the number of markets measured on
+    #: Whether it still excludes zero once the family of figures measured on
     #: the same data is counted. This is the one that governs.
     survives_correction: bool = False
     looks: int = 1
+    #: What the looks are when they are not simply markets, as the report
+    #: that measured it wrote it ("6 markets and the overall figure").
+    family: str = ""
     replication: str = ""
     calibration_samples: int = 0
     allowlisted: bool = False
@@ -100,10 +107,14 @@ class MarketClaim:
         )
         if self.replication:
             return f"{base} {self.replication}"
+        # The family as the measuring report counted it. This printed
+        # "the 7 markets measured on the same data" for the props backtest's
+        # six markets and its overall figure (8 for `hits`, from the card
+        # window's seven): see `stats.correction_family`.
+        family = correction_family(self.looks, self.family)
         if not self.survives_correction:
             correction = (
-                f" Correcting for the {self.looks} markets measured on the "
-                "same data, it does not exclude zero."
+                f" Correcting for the {family}, it does not exclude zero."
                 if self.looks > 1 and not self.includes_zero
                 else ""
             )
@@ -115,7 +126,7 @@ class MarketClaim:
         outcome = "an edge" if self.roi > 0 else "a loss"
         return (
             f"{base} The interval excludes zero even after correcting for the "
-            f"{self.looks} markets measured on the same data — which is not "
+            f"{family} — which is not "
             f"the same as {outcome} that will persist, and means nothing until "
             "it replicates on a window it was not found on."
         )
@@ -135,6 +146,10 @@ class ClaimsReport:
     window_note: str = ""
     #: The window the across-market prop figure describes.
     overall_window: str = ""
+    #: The measured prop markets inside that figure, and those outside it
+    #: with the window each was measured in instead. See `render_claims`.
+    overall_markets: tuple[str, ...] = ()
+    outside_the_pool: tuple[tuple[str, str], ...] = ()
     #: Measurement outputs this document looked for and could not read, each
     #: as a sentence fragment naming the file and the directory. Empty when
     #: both the props and the team measurement were read.
@@ -463,6 +478,7 @@ def build_claims_report(
                         entry.get("survives_correction", False)
                     ),
                     looks=int(entry.get("looks", 1) or 1),
+                    family=str(entry.get("family", "") or ""),
                     replication=replication_states.get(market.key, ""),
                     calibration_samples=calibration_samples.get(market.key, 0),
                     allowlisted=market.key in allowlisted_markets,
@@ -493,6 +509,20 @@ def build_claims_report(
         report.overall_roi = float(overall.get("roi", 0.0))
         report.overall_includes_zero = bool(overall.get("includes_zero", True))
         report.overall_window = window_phrase(backtest)
+        # The pooled figure is the contract window's alone; a prop market
+        # measured only in another window is listed below and is not in it.
+        prop_keys = {market.key for market in ALL_MARKETS if market.is_prop}
+        measured_props = [
+            claim
+            for claim in report.claims
+            if claim.measured and claim.market in prop_keys
+        ]
+        report.overall_markets = tuple(
+            claim.market for claim in measured_props if not claim.window
+        )
+        report.outside_the_pool = tuple(
+            (claim.market, claim.window) for claim in measured_props if claim.window
+        )
 
     report.notes = [
         "An interval that includes zero means "
@@ -550,9 +580,34 @@ def render_claims(report: ClaimsReport) -> str:
         )
 
     if report.overall_bets:
+        # THE HEADING NAMES THE POPULATION THE FIGURE COVERS. It read "Across
+        # every measured prop market" above the `late` window's six markets
+        # (-0.3% over 25,911) while the list below it carried `hits` from the
+        # `card` window, 5,178 bets that are not in the pool. The pool is
+        # right — folding `hits` in would take the better of two moments —
+        # so the heading counts what is in it and the section names what is
+        # not, both generated from the claims this document lists.
+        pooled = len(report.overall_markets)
+        heading = (
+            f"## Across {pooled} of the "
+            f"{pooled + len(report.outside_the_pool)} measured prop markets"
+            if report.outside_the_pool
+            else "## Across every measured prop market"
+        )
+        left_out = (
+            " It does not include "
+            + "; or ".join(
+                f"`{market}`, measured only in the {window}"
+                for market, window in report.outside_the_pool
+            )
+            + ". Windows are never pooled: a wager priced at two moments is "
+            "two questions."
+            if report.outside_the_pool
+            else ""
+        )
         lines.extend(
             [
-                "## Across every measured prop market",
+                heading,
                 "",
                 (
                     f"{report.overall_roi:+.1%} over {report.overall_bets:,} "
@@ -566,6 +621,7 @@ def render_claims(report: ClaimsReport) -> str:
                         if report.overall_includes_zero
                         else "The interval excludes zero on this sample."
                     )
+                    + left_out
                 ),
                 "",
             ]

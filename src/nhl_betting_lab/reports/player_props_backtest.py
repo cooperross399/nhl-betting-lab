@@ -121,6 +121,8 @@ class BacktestReport:
     overall: RoiInterval | None = None
     by_side: dict[str, RoiInterval] = field(default_factory=dict)
     looks: int = 1
+    #: What the looks are: "6 markets and the overall figure".
+    family: str = ""
     #: Book quotes seen, and the distinct wagers they collapse to. One
     #: selection quoted by eight books is one bet, not eight.
     quotes_seen: int = 0
@@ -534,12 +536,23 @@ def run_backtest(
         # Reporting the market that cleared 95% without counting the rest is
         # not a finding, it is a search.
         looks = len(markets) + 1  # the markets, plus the overall figure
+        # ...and every sentence that states the count says so. It used to be
+        # printed as "the 7 markets tested" for the late window's 6 markets
+        # (8 for the card window's 7), and the claims document and allowlist
+        # bundle repeated it from the JSON beside a table of six market rows.
+        # The correction is unchanged; its label now says what it counted.
+        family = (
+            f"{len(markets)} market{'s' if len(markets) != 1 else ''} "
+            "and the overall figure"
+        )
         report.looks = looks
+        report.family = family
         report.overall = roi_interval(
             [bet.profit for bet in report.bets],
             wins=sum(1 for bet in report.bets if bet.won),
             pushes=sum(1 for bet in report.bets if bet.push),
             looks=looks,
+            family=family,
         )
         for market in markets:
             subset = [bet for bet in report.bets if bet.market == market]
@@ -548,6 +561,7 @@ def run_backtest(
                 wins=sum(1 for bet in subset if bet.won),
                 pushes=sum(1 for bet in subset if bet.push),
                 looks=looks,
+                family=family,
             )
         report.by_side = {
             side: roi_interval(
@@ -719,7 +733,12 @@ def render_backtest(report: BacktestReport) -> str:
                     "",
                     (
                         f"{report.looks} figures were computed from one body "
-                        "of data. Under the null, the chance that at least one "
+                        + (
+                            f"of data: {report.family}. "
+                            if report.family
+                            else "of data. "
+                        )
+                        + "Under the null, the chance that at least one "
                         f"of {report.looks} independent 95% tests clears is "
                         f"about {1 - 0.95 ** report.looks:.0%} — so reporting "
                         "the market that cleared, at its uncorrected interval, "
@@ -943,6 +962,7 @@ def save_backtest(
         "notes": report.notes,
         "overall": _interval_payload(report.overall),
         "looks": report.looks,
+        "family": report.family,
         # Which window these numbers describe, so a summary reading only the
         # JSON can say so rather than assume.
         "phase": report.phase,
@@ -997,6 +1017,9 @@ def _interval_payload(interval: RoiInterval | None) -> dict[str, Any] | None:
         "high": interval.high,
         "includes_zero": interval.includes_zero,
         "looks": interval.looks,
+        # What the looks are, so a document reading this file states the
+        # family it was corrected for rather than calling it markets.
+        "family": interval.family,
         "adjusted_low": interval.adjusted_low,
         "adjusted_high": interval.adjusted_high,
         "survives_correction": interval.survives_correction,
