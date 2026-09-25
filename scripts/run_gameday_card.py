@@ -49,6 +49,7 @@ from nhl_betting_lab.season import (
     known_regular_season_games,
     row_game_date,
     schedule_cache_is_complete,
+    season_id,
 )
 from nhl_betting_lab.staging_provider_policy import load_policy
 from nhl_betting_lab.verdicts import describe as describe_verdicts, ships
@@ -137,7 +138,10 @@ def main(argv: list[str] | None = None) -> int:
     # is excluded and counted, never guessed at; with no schedule knowledge
     # at all, nothing is excluded and the run says so loudly.
     schedule = known_regular_season_games()
-    schedule_complete, clubs_cached = schedule_cache_is_complete()
+    # Completeness of THIS slate's season, counted by each club's own file.
+    schedule_complete, clubs_cached = schedule_cache_is_complete(
+        season=season_id(moment.astimezone(LEAGUE_TIMEZONE).date())
+    )
     if not prices.empty and schedule and not schedule_complete:
         # A partial cache screens like a complete one and is wrong in the
         # worst possible direction: every game whose club file never landed
@@ -148,8 +152,9 @@ def main(argv: list[str] | None = None) -> int:
         # exhibition game is visible in the card and settles as unsettleable;
         # a silently truncated slate is invisible.
         print(
-            f"WARNING: the club-schedule cache names only {clubs_cached} of "
-            f"{EXPECTED_CLUBS} clubs, so it cannot say which games are "
+            f"WARNING: the club-schedule cache holds this season's own "
+            f"schedule for only {clubs_cached} of {EXPECTED_CLUBS} clubs, so "
+            "it cannot say which games are "
             "preseason. The preseason screen is skipped rather than run on a "
             "cache with holes — a hole and an exhibition game look identical "
             "to it, and dropping real games would shrink the slate the "
