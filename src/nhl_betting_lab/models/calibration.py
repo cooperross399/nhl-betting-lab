@@ -27,10 +27,16 @@ from __future__ import annotations
 
 import math
 from bisect import bisect_left
-from collections.abc import Iterable, Sequence
+from collections.abc import Hashable, Iterable, Sequence
 from dataclasses import dataclass
+from typing import Any, TypeVar
 
 import numpy as np
+
+from nhl_betting_lab.stats import clustered_wilson_interval
+
+
+_Key = TypeVar("_Key")
 
 
 #: Probabilities are clamped away from 0 and 1 before a logit. Without this a
@@ -160,6 +166,13 @@ class ReliabilityBucket:
     count: int
     predicted: float
     observed: float
+    #: The distinct clusters behind `count`, and the 95% interval on
+    #: `observed` clustered on them. Set only when `reliability_table` is
+    #: told which cluster each sample belongs to; there is deliberately no
+    #: row-count interval to fall back on.
+    clusters: int | None = None
+    observed_low: float | None = None
+    observed_high: float | None = None
 
     @property
     def gap(self) -> float:
@@ -171,38 +184,67 @@ def reliability_table(
     samples: Iterable[tuple[float, bool]],
     *,
     edges: Sequence[float] = (0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0),
+    clusters: Sequence[Hashable] | None = None,
 ) -> list[ReliabilityBucket]:
     """Predicted vs observed rate per probability bucket, with counts.
 
     The count is not decoration. A bucket holding nine outcomes says nothing
     about calibration, and a table that hides that invites exactly the
     over-reading this project is built to avoid.
+
+    `clusters`, when given, names the cluster of each sample — the game, in
+    the team report — and each bucket then carries its cluster count and a
+    95% interval on `observed` from `clustered_wilson_interval`. Rows of one
+    game share its scoreline, so a bucket's rows are not its trials.
     """
     bounds = list(edges)
     if len(bounds) < 2 or any(b <= a for a, b in zip(bounds, bounds[1:])):
         raise ValueError("Bucket edges must be increasing and at least two.")
+    rows = list(samples)
+    keys = None if clusters is None else list(clusters)
+    if keys is not None and len(keys) != len(rows):
+        raise ValueError(
+            f"{len(keys)} cluster keys for {len(rows)} samples: every sample "
+            "needs exactly one."
+        )
     totals = [0] * (len(bounds) - 1)
     predicted = [0.0] * (len(bounds) - 1)
     observed = [0] * (len(bounds) - 1)
+    tallies: list[dict[Hashable, list[int]]] = [{} for _ in totals]
 
-    for probability, won in samples:
+    for position, (probability, won) in enumerate(rows):
         p = min(max(float(probability), 0.0), 1.0)
         index = bisect_left(bounds, p) - 1
         index = min(max(index, 0), len(totals) - 1)
         totals[index] += 1
         predicted[index] += p
         observed[index] += 1 if won else 0
+        if keys is not None:
+            tally = tallies[index].setdefault(keys[position], [0, 0])
+            tally[0] += 1 if won else 0
+            tally[1] += 1
 
     table: list[ReliabilityBucket] = []
     for index, count in enumerate(totals):
         if not count:
             continue
+        clustered: dict[str, Any] = {}
+        if keys is not None:
+            low, high = clustered_wilson_interval(
+                (hits, size) for hits, size in tallies[index].values()
+            )
+            clustered = {
+                "clusters": len(tallies[index]),
+                "observed_low": low,
+                "observed_high": high,
+            }
         table.append(
             ReliabilityBucket(
                 label=f"{bounds[index]:.0%}-{bounds[index + 1]:.0%}",
                 count=count,
                 predicted=predicted[index] / count,
                 observed=observed[index] / count,
+                **clustered,
             )
         )
     return table
@@ -348,6 +390,48 @@ def walk_forward_calibrate(
     return WalkForwardResult(
         scored=scored, corrections=corrections, warmup_skipped=warmup
     )
+
+
+def scored_keys(
+    samples: Sequence[Sequence[Any]],
+    result: WalkForwardResult,
+    keys: Sequence[_Key],
+) -> list[_Key]:
+    """The key of every scored sample, in the order `result.scored` holds them.
+
+    `samples` is exactly what was passed to `walk_forward_calibrate` and
+    `keys` holds one entry per sample in the same order — the game a sample
+    belongs to, say, which the scored tuples do not carry. That function
+    sorts by date, stably, and drops the warm-up from the front, so the scored
+    samples are the tail of the date-sorted input. This recomputes that tail
+    and then checks it against `result.scored`, date and probability, rather
+    than assuming it: a key misaligned by one row would put every sample in
+    the wrong game, and nothing downstream could see it.
+    """
+    rows = list(samples)
+    labels = list(keys)
+    if len(rows) != len(labels):
+        raise ValueError(
+            f"{len(labels)} keys for {len(rows)} samples: every sample needs "
+            "exactly one."
+        )
+    order = sorted(range(len(rows)), key=lambda position: str(rows[position][0]))
+    tail = order[result.warmup_skipped :]
+    if len(tail) != len(result.scored):
+        raise ValueError(
+            f"{len(tail)} samples after the warm-up but {len(result.scored)} "
+            "scored: these are not the samples that result was built from."
+        )
+    for position, scored in zip(tail, result.scored):
+        if (
+            str(rows[position][0]) != scored[0]
+            or float(rows[position][1]) != scored[1]
+        ):
+            raise ValueError(
+                "The scored samples do not line up with the samples given, so "
+                "their keys cannot be assigned."
+            )
+    return [labels[position] for position in tail]
 
 
 def calibration_verdict(

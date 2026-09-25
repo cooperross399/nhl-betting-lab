@@ -22,9 +22,13 @@ name: Closing Lines
 on:
   # SCHEDULE RETIRED 2026-08-29. Line Movement Capture now performs one
   # fetch and writes both stores: every book's every rung for movement
-  # analysis, and the best price per selection for this one. Two
-  # schedules were asking the provider the same question and paying
-  # twice. This workflow stays dispatchable so a capture can still be
+  # analysis, and the best price per selection for this one. For the
+  # per-event markets, two schedules were asking the provider the same
+  # question and paying twice. NOT for the bulk moneyline, puck line and
+  # total, which only this workflow's capture asked for: since the
+  # retirement nothing captures them, so no moneyline opinion can meet a
+  # closing price (found 2026-09-25; capturing them spends credits, so it
+  # is Cooper's call). This workflow stays dispatchable so a capture can still be
   # forced by hand, and the history of why the old grid looked the way
   # it did is in git rather than in a comment above a dead trigger.
   #

@@ -658,14 +658,21 @@ Re-derive rather than trust if the data has moved.
   nothing. Now each Line Movement run hands its closing prices over as the
   `closing-line-captures` artifact, and Closing Lines, triggered when Line
   Movement completes, merges them into that branch. That path fetches nothing
-  and spends no credit.
+  and spends no credit. **Except the bulk team markets (found 2026-09-25):**
+  the retired capture also bought `h2h`, `spreads` and `totals`, and Line
+  Movement asks only for the per-event markets and their ladders, so no
+  moneyline opinion can ever meet a close, and a featured puck line or total
+  only when an alternate ladder repeats its line. The CLV report now names
+  those opinions as uncaptured rather than as selections the books pulled;
+  capturing them (3 markets x 2 regions = 6 credits a run) is Cooper's call.
 - **Closing Lines is DISABLED as of 2026-09-25, pending Cooper's decision —
   do not re-enable it as a fix.** This repository is public, so the
   `closing-lines` branch would be a permanent, downloadable file of captured
   odds (book, price, line, capture time), and The Odds API's terms forbid
   redistributing their data as downloadable files that serve as raw data.
-  Nothing is lost while it is held: the closing prices are a strict subset of
-  Line Movement's own captures (`line_movement/<day>.csv`), which keep flowing
+  Nothing more is lost while it is held: the per-event closing prices are a
+  strict subset of Line Movement's own captures (`line_movement/<day>.csv`;
+  the bulk team markets are captured nowhere — see above), which keep flowing
   through the `line-movement` artifact chain, so the store can be rebuilt from
   them. The cost is that the CLV report in Gameday Refresh reads nothing and
   says "No capture store yet". Re-enabling is one click (Actions → Closing
@@ -723,6 +730,36 @@ Re-derive rather than trust if the data has moved.
   zero. **The committed reports under `data/outputs` still carry the
   pre-fix figures, and the receipts pin them by checksum** — regenerating
   them and re-attesting is Cooper's call, not a side effect of the fix.
+- **2026-09-25: both calibration reports printed a "95%" interval that
+  counted rows as trials.** `props_calibration.md` prices every player-game
+  at each line of a fixed grid (two lines for goals and assists, five for
+  hits and goalie saves), and `team_markets_measurement.md` prices every
+  selection at every line of a game, so one game is many rows sharing one
+  outcome. The "95% on observed" was a Wilson interval on those rows, and
+  the props ⚠ floor and market floor counted rows. The interval is now
+  clustered on the game (`stats.clustered_wilson_interval`): a Wilson
+  interval at the effective sample size the game-clustered variance implies,
+  never narrower than the one on the rows. The props floors count
+  player-games, and both tables print player-games or games beside the
+  samples. Measured on the real samples (the unfixed code reproduces the
+  committed props report byte for byte), the props intervals widen 1.03x
+  (goals) to 1.62x (hits), so the printed ones covered about 77-94%. The
+  goalie "pulled or partial" row, 830 line samples from 166 goalie-games,
+  moves from 8.5% .. 12.6% to 7.7% .. 13.9%. In the team report 10 of 36
+  rows move: the puck_line and total_goals 0-10% and 90-100% buckets widen
+  1.82-1.87x (they covered about 71%). total_goals 90-100% goes from 97.3% ..
+  97.6% to 97.2% .. 97.7%, and puck_line 10-20% from 17.0% .. 18.3% to 16.9%
+  .. 18.4%, which still excludes the predicted 14.5%. No point estimate,
+  Brier score, count or verdict moves, and no code reads these intervals.
+  Every bucket still clears the floor (the smallest has 166 player-games).
+  One reading moves: in blocked_shots "20 min and up" the pooled-corrected
+  32.0% sat just outside 32.1% .. 32.6% and now sits inside 32.0% .. 32.7%,
+  and that correction is not in force on the card. **Both committed reports
+  still carry the pre-fix intervals, and the receipts pin them by
+  checksum** — regenerating and re-attesting is Cooper's call. Still counted
+  in rows: `PlattCalibration.MINIMUM_SAMPLES` and the 200-sample verdict
+  floor, which gate the correction fit rather than an interval, and the team
+  report's 200-row market floor.
 - **2026-09-25: two corrections were labelled with the wrong count.** The
   props correction (its markets plus the overall figure) was printed as "the
   7 markets tested" for six markets (8 for the card window's seven) and now

@@ -39,6 +39,7 @@ from nhl_betting_lab.models.calibration import (
     brier_score,
     calibration_verdict,
     reliability_table,
+    scored_keys,
     walk_forward_calibrate,
 )
 from nhl_betting_lab.providers.team_names import (
@@ -60,7 +61,6 @@ from nhl_betting_lab.stats import (
     RoiInterval,
     detection_table,
     roi_interval,
-    wilson_interval,
 )
 
 
@@ -207,6 +207,15 @@ def measure_calibration(
         if result.corrections
         else PlattCalibration.identity()
     )
+    # Every selection at every grid line of one game shares its scoreline:
+    # total_goals holds 160,446 held-out rows over 3,658 games, up to 13 of
+    # one game in one bucket. The reliability interval was a Wilson interval
+    # on those rows. Measured on the real samples, the puck_line and
+    # total_goals 0-10% and 90-100% buckets were 1.82-1.87x too narrow and
+    # covered about 71%, not the 95% the header said; 10 of 36 rows move. It
+    # is now clustered on the game (`clustered_wilson_interval`), and the
+    # table prints the games beside the rows.
+    games = scored_keys(rows, result, ordered["game_id"].tolist())
     return MarketMeasurement(
         market=market,
         samples=len(result.scored),
@@ -214,7 +223,7 @@ def measure_calibration(
         raw_brier=brier_score(result.raw),
         corrected_brier=brier_score(result.corrected),
         correction=correction,
-        reliability=reliability_table(result.raw),
+        reliability=reliability_table(result.raw, clusters=games),
         verdict=calibration_verdict(result),
     )
 
@@ -782,6 +791,10 @@ def build_team_measurement(
         "moneylines and totals and wrong only here.",
         "A push is excluded rather than scored as a loss. Scoring pushes as "
         "losses would make every whole-number total look worse than it is.",
+        "The 95% interval on each reliability row counts each game once, not "
+        "each row: every selection at every line of one game shares its "
+        "scoreline, so one bucket can hold many rows of one game. It is never "
+        "narrower than a Wilson interval on the rows.",
         "Calibration can rule this model out; it cannot rule it in. Where "
         "historical prices exist the backtest decides, and where they do not "
         "this report says so rather than offering a calibration number in "
@@ -859,17 +872,25 @@ def render_team_measurement(report: TeamMeasurementReport) -> str:
             continue
         lines.extend(
             [
-                "| Bucket | Samples | Predicted | Observed | 95% on observed |",
-                "|:-------|--------:|----------:|---------:|:----------------|",
+                "| Bucket | Samples | Games | Predicted | Observed | 95% on observed |",
+                "|:-------|--------:|------:|----------:|---------:|:----------------|",
             ]
         )
         for row in item.reliability:
-            low, high = wilson_interval(
-                int(round(row.observed * row.count)), row.count
-            )
+            if (
+                row.clusters is None
+                or row.observed_low is None
+                or row.observed_high is None
+            ):
+                raise ValueError(
+                    f"`{item.market}` {row.label}: a reliability row with no "
+                    "game-clustered interval. A Wilson interval on its rows "
+                    "would count every line of one game as a trial."
+                )
             lines.append(
-                f"| {row.label} | {row.count:,} | {row.predicted:.1%} "
-                f"| {row.observed:.1%} | {low:.1%} .. {high:.1%} |"
+                f"| {row.label} | {row.count:,} | {row.clusters:,} "
+                f"| {row.predicted:.1%} | {row.observed:.1%} "
+                f"| {row.observed_low:.1%} .. {row.observed_high:.1%} |"
             )
         lines.append("")
 

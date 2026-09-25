@@ -12,8 +12,10 @@ got — rows, markets, span of dates — and never how it is going. These tests
 hold that line, because it is one comment away from quietly moving.
 
 Straight-up, puck-line and totals win/loss records are a different thing.
-They are forecast accuracy, not the registered wager return, and the site
-publishes them live.
+They are forecast accuracy, not the registered wager return, and nothing
+here seals them. Nothing tallies them yet either, so the record carries
+None rather than a 0–0 nobody counted
+(tests/test_site_invents_no_season_record.py).
 """
 
 from __future__ import annotations
@@ -133,10 +135,19 @@ def test_a_missing_report_seals_too(tmp_path: Path) -> None:
 
 
 def test_accuracy_records_are_still_published(tmp_path: Path) -> None:
-    """The seal is on the wager return, not on whether the model is any good."""
+    """The seal is on the wager return, not on whether the model is any good.
+
+    So the accuracy slots stay in the published record. What they may not
+    carry is a number nobody counted: this asserted `puckLine == {w: 0, l: 0,
+    p: 0}` on a mid-season ledger, and that zero was a constant `load_record`
+    returned on every path while nothing tallied a season or graded a puck
+    line (tests/test_site_invents_no_season_record.py). Until a tally is
+    kept, each slot is None and the page renders it as absent.
+    """
     record = _record(MID_SEASON, tmp_path)
     assert set(record) >= {"straightUp", "puckLine", "totals"}
-    assert record["puckLine"] == {"w": 0, "l": 0, "p": 0}
+    assert record["puckLine"] is None
+    assert record["straightUp"] is None and record["totals"] is None
 
 
 #: The one page whose forward return is sealed. Scoped deliberately.
