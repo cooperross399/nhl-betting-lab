@@ -31,6 +31,7 @@ from nhl_betting_lab.config import MIN_EDGE, OUTPUTS_DIR, PROCESSED_DIR
 from nhl_betting_lab.data.build_datasets import load_team_games
 from nhl_betting_lab.reports.team_markets_measurement import (
     MixedWindowError,
+    held_windows,
     measure_prices,
     select_price_window,
 )
@@ -38,6 +39,50 @@ from nhl_betting_lab.reports.team_markets_measurement import (
 
 EXPERIMENT_MARKDOWN = "rest_experiment.md"
 EXPERIMENT_JSON = "rest_experiment.json"
+
+
+def describe_window(window: dict, kept_rows: int, requested: str) -> str:
+    """Where the measured prices were captured — or that none were.
+
+    A window that kept no row says so and names the windows the store does
+    hold, in the team measurement's words (`missed_window_sentence`, #147), so
+    the two read alike. Until 2026-09-25 this line had no empty case: asked
+    for `card` over copies of the real team store (247,160 `late` rows,
+    61,784 `early`, none in `card`), it printed "Priced in the `card` window,
+    median 0.0 hours before face-off" — 0.0 being `select_price_window`'s
+    default, a median of no rows — on stdout and inside the `::error::` that
+    refuses the run. A header-only store, and `--phase auto` over a store
+    whose every row was captured after face-off, printed "The prices carry
+    no window information", which is not what happened either: they carried
+    it, and nothing was in the window.
+
+    `requested` names the window when `select_price_window` left `phase`
+    blank: it does so for an empty store, and for `auto` when no window has
+    a row before face-off. `all` and `auto` are not windows, so an empty one
+    reads "in any window".
+    """
+    if not kept_rows:
+        phase = window["phase"] or requested
+        where = (
+            f"in the `{phase}` window"
+            if phase not in ("", "all", "auto")
+            else "in any window"
+        )
+        return (
+            f"No price row {where} was captured before face-off, so nothing "
+            "was measured against a real price. The store's rows by window, "
+            "before the face-off filter: "
+            f"{held_windows(window['windows_in_store'])}."
+        )
+    if window["phase"]:
+        return (
+            f"Priced in the `{window['phase']}` window, median "
+            f"{window['phase_hours']:.1f} hours before face-off. "
+            f"{window['excluded_after_face_off']:,} price row(s) captured at "
+            f"or after face-off and {window['excluded_other_windows']:,} from "
+            "other windows were excluded."
+        )
+    return "The prices carry no window information."
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -74,14 +119,8 @@ def main(argv: list[str] | None = None) -> int:
     except MixedWindowError as error:
         print(f"::error::{error}", file=sys.stderr)
         return 2
-    window_line = (
-        f"Priced in the `{window['phase']}` window, median "
-        f"{window['phase_hours']:.1f} hours before face-off. "
-        f"{window['excluded_after_face_off']:,} price row(s) captured at or "
-        f"after face-off and {window['excluded_other_windows']:,} from other "
-        "windows were excluded."
-        if window["phase"]
-        else "The prices carry no window information."
+    window_line = describe_window(
+        window, len(prices), str(args.phase or "").strip().lower()
     )
     print(window_line)
 
