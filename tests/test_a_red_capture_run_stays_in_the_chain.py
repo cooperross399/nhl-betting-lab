@@ -232,7 +232,8 @@ class Chain:
         runs = list(self.registry)
         if in_progress is not None:
             runs.insert(0, {"databaseId": in_progress, "workflow": "line-movement.yml",
-                            "status": "in_progress", "conclusion": "", "artifacts": {}})
+                            "status": "in_progress", "conclusion": "",
+                            "headBranch": "main", "artifacts": {}})
         path = self.tmp / "registry.json"
         path.write_text(json.dumps(runs), encoding="utf-8")
         return path
@@ -243,7 +244,7 @@ class Chain:
         self.next_id += 1
         self.registry.insert(0, {"databaseId": run_id, "workflow": "line-movement.yml",
                                  "status": "completed", "conclusion": "cancelled",
-                                 "artifacts": {}})
+                                 "headBranch": "main", "artifacts": {}})
         return run_id
 
     def run(
@@ -311,6 +312,9 @@ class Chain:
 
         self.registry.insert(0, {
             "databaseId": run_id, "workflow": "line-movement.yml", "status": "completed",
+            # Scheduled, so on main. `gh run list --json` answers every field it
+            # is asked for, and the restore now asks for this one.
+            "headBranch": "main",
             # The price step has no continue-on-error, and the last step fails
             # the job when the line capture did.
             "conclusion": "success" if prices and lines else "failure",

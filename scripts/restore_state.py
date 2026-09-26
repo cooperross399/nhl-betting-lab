@@ -47,6 +47,27 @@ be merged safely (different headers, or a parse that disagrees with the
 line count) keeps the newer copy and says so. When the older copy is a byte
 prefix of the newer one — every ordinary run — nothing is parsed at all.
 
+**Only runs on the default branch are sources** (`--branch`, default
+`main`). The listing used to pass no `--branch` and never read a run's
+`headBranch`, so the newest carrier on ANY branch became the state main's
+next run started from. A feature-branch dispatch runs code nobody has
+reviewed, and every store restored here is append-only or first-opinion-
+stands: a branch's frozen snapshot would have stood as the day's opinion
+and settled into the pre-registered forward ledger, and Publish Site would
+have frozen the public board from it. It was already set to happen: Line
+Movement's only unexpired artifact (run 33691822845, 2026-09-02, branch
+`rehearse-the-line-fetch`, expiring 2026-12-01; the two main runs before it
+carry none) would have seeded the season's capture chain on 2026-09-29.
+The branch is filtered twice, and each half does work the other cannot:
+`gh run list --branch` keeps branch runs out of the `--limit` window, so a
+burst of dispatches cannot crowd main's carriers out of it; and each run's
+own `headBranch` is checked, so the restore does not rest on a flag whose
+effect it cannot see. Every older carrier the fill and the union read is
+sliced from that same list. On 2026-09-25 `gh run list --branch main`
+returned exactly the unfiltered list for Gameday Refresh and Historical
+Props Purchase, so no carrier this lab holds is lost; a branch's artifact
+is restored only when `--branch` names that branch.
+
 Standard library only, so it runs before anything is installed. By default
 it never fails the calling step: whatever it restores, it says, and a
 restore that finds nothing is a statement, not an error.
@@ -87,6 +108,13 @@ from pathlib import Path
 #: Relative to the artifact root. Append-only; the longer copy is the truth.
 LEDGER = Path("processed") / "forward_evidence.csv"
 
+#: The only branch whose runs are restored from unless `--branch` says
+#: otherwise: the protected one, where code arrives only through review.
+#: A literal, so no caller has to pass it: a workflow expression that came
+#: out empty would name no branch, restore nothing and start every store
+#: cold.
+DEFAULT_BRANCH = "main"
+
 
 class Unreachable(RuntimeError):
     """GitHub could not be asked, which is not the same as having nothing."""
@@ -103,17 +131,26 @@ def _pause(attempt: int) -> None:
 
 
 def completed_runs(
-    workflow: str, limit: int, *, success_only: bool = False,
-    attempts: int = 1, strict: bool = False,
+    workflow: str, limit: int, branch: str = DEFAULT_BRANCH, *,
+    success_only: bool = False, attempts: int = 1, strict: bool = False,
 ) -> list[dict]:
-    """The workflow's completed runs, newest first, of every conclusion —
-    or, with `success_only`, its successes as GitHub filters them.
+    """The workflow's completed runs on `branch`, newest first, of every
+    conclusion — or, with `success_only`, its successes as GitHub filters them.
+
+    This listed every branch: no `--branch`, no `headBranch`. Line Movement's
+    newest carrier is a 2026-09-02 dispatch on `rehearse-the-line-fetch`, and
+    it would have seeded the season's capture chain; a Gameday Refresh
+    dispatched on a branch would have become the day's frozen opinion. `gh`
+    filters by branch so branch runs cannot fill the `--limit` window, and
+    each run's `headBranch` is checked as well, so nothing rests on a flag
+    whose effect this script cannot otherwise see.
 
     A listing that fails is printed and read as no runs, unless `strict`,
     when it raises `Unreachable` after `attempts` tries.
     """
-    args = ["run", "list", "--workflow", workflow, "--limit", str(limit),
-            "--json", "databaseId,conclusion,status"]
+    args = ["run", "list", "--workflow", workflow, "--branch", branch,
+            "--limit", str(limit),
+            "--json", "databaseId,conclusion,status,headBranch"]
     if success_only:
         args += ["--status", "success"]
     problem = f"{workflow} runs were listed as something other than JSON."
@@ -129,7 +166,17 @@ def completed_runs(
             runs = json.loads(result.stdout or "[]")
         except json.JSONDecodeError:
             continue
-        return [r for r in runs if r.get("status") == "completed"]
+        completed = [r for r in runs if r.get("status") == "completed"]
+        elsewhere = [r for r in completed if r.get("headBranch") != branch]
+        if elsewhere:
+            print(
+                f"::warning::gh listed {len(elsewhere)} completed {workflow} run(s) "
+                f"on other branches despite --branch {branch} ("
+                + ", ".join(f"{r.get('databaseId')} on {r.get('headBranch')!r}"
+                            for r in elsewhere)
+                + "); none of them is a restore source."
+            )
+        return [r for r in completed if r.get("headBranch") == branch]
     if strict:
         raise Unreachable(f"{problem} ({attempts} attempt(s))")
     return []
@@ -190,6 +237,7 @@ def restore(
     merge: bool = True,
     also: list[tuple[str, Path]] = (),
     union: int = 0,
+    branch: str = DEFAULT_BRANCH,
     success_only: bool = False,
     require_newest: bool = False,
     attempts: int = 1,
@@ -204,7 +252,7 @@ def restore(
                     "rows_recovered": 0, "not_merged": []}
     dest.mkdir(parents=True, exist_ok=True)
     for workflow in workflows:
-        runs = completed_runs(workflow, limit, success_only=success_only,
+        runs = completed_runs(workflow, limit, branch, success_only=success_only,
                               attempts=attempts, strict=require_newest)
         for index, run in enumerate(runs):
             with tempfile.TemporaryDirectory() as scratch:
@@ -222,7 +270,7 @@ def restore(
             report.update(run=run["databaseId"], conclusion=run.get("conclusion"))
             print(
                 f"Restored {artifact} from {workflow} run {run['databaseId']} "
-                f"({run.get('conclusion')})."
+                f"({run.get('conclusion')}) on {branch}."
             )
             for name, directory in also:
                 directory.mkdir(parents=True, exist_ok=True)
@@ -245,8 +293,8 @@ def restore(
         )
         return report
     print(
-        f"No completed run of {', '.join(workflows)} carries {artifact}; "
-        "this run starts without it."
+        f"No completed run of {', '.join(workflows)} on {branch} carries "
+        f"{artifact}; this run starts without it."
     )
     return report
 
@@ -411,6 +459,13 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     parser.add_argument(
+        "--branch", default=DEFAULT_BRANCH,
+        help=(
+            "Restore only from runs on this branch (default: %(default)s). A "
+            "run dispatched on a feature branch ran unreviewed code."
+        ),
+    )
+    parser.add_argument(
         "--success-only", action="store_true",
         help="Only successful runs are sources, filtered by GitHub (--status success).",
     )
@@ -445,6 +500,7 @@ def main(argv: list[str] | None = None) -> int:
             merge=not args.no_merge,
             also=also,
             union=args.union,
+            branch=args.branch,
             success_only=args.success_only,
             require_newest=args.require_newest,
             attempts=args.attempts,

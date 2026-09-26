@@ -104,13 +104,19 @@ if args[:2] == ["run", "list"]:
     injected("list:" + workflow, "HTTP 502: Bad Gateway (https://api.github.com/"
              "repos/owner/nhl-betting-lab/actions/workflows/" + workflow + "/runs)")
     runs = [r for r in registry if r["workflow"] == workflow]
+    # As `gh run list --branch` does. Every run here ran on main unless a
+    # test says otherwise; restore_state.py asks for main and checks it.
+    branch = value("--branch")
+    if branch:
+        runs = [r for r in runs if r.get("headBranch", "main") == branch]
     status = value("--status")
     if status:
         # As `gh run list --help` documents it: a status or a conclusion.
         runs = [r for r in runs if status in (r["status"], r["conclusion"])]
     runs = runs[: int(value("--limit", "20"))]
     fields = [f for f in value("--json", "").split(",") if f]
-    rows = [{{k: r[k] for k in fields}} for r in runs]
+    rows = [{{k: r.get(k, "main") if k == "headBranch" else r[k] for k in fields}}
+            for r in runs]
     jq = value("--jq")
     if jq is None:
         print(json.dumps(rows))
