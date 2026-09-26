@@ -34,9 +34,11 @@ What these tests hold:
   and SCHEMA.md says the build fails rather than settling nothing;
 * the functions `settle()` reaches, transitively, that open a URL are
   derived from the builder's own syntax tree, not written down here;
-  SCHEMA.md's finals sentence names every one of them that `settle()` calls
-  itself, names the endpoint, and affirms neither `load_team_games` nor the
-  boxscore cache as the source (a negated mention is allowed);
+  SCHEMA.md's finals sentence names at least one of them other than
+  `fetch_json`, and `schedule_for` whenever it is reached, names the
+  endpoint, and affirms neither `load_team_games` nor the boxscore cache as
+  the source (a negated mention is allowed). Extracting a helper between
+  `settle()` and `schedule_for` is a probe that must pass;
 * the builder's syntax tree never mentions `closing_lines`; `build_board`'s
   one `load_record` call resolves, through constants and imports, to
   `forward_evidence.json`; the real `load_record` publishes the ledger's
@@ -124,17 +126,32 @@ def _fetches(tree: ast.Module, name: str) -> bool:
     )
 
 
-def settle_fetchers() -> set[str]:
+def settle_fetchers(tree: ast.Module | None = None) -> set[str]:
     """Every function `settle()` reaches, transitively, that opens a URL."""
-    tree = builder_tree()
+    tree = tree or builder_tree()
     return {name for name in _reachable(tree, "settle") if _fetches(tree, name)}
 
 
-def settle_fetch_entries() -> set[str]:
-    """Of those, the ones `settle()` names itself: the reader that says WHAT
-    is read. `fetch_json` below them is how it is read."""
-    tree = builder_tree()
-    return settle_fetchers() & _called_names(_functions(tree)["settle"])
+def named_finals_readers(tree: ast.Module | None = None) -> set[str]:
+    """The readers a finals sentence may name: every URL opener `settle()`
+    reaches except `fetch_json`, which is HOW anything is read, not WHAT.
+    Reached transitively, so extracting a helper between `settle()` and
+    `schedule_for` changes nothing the doc has to say."""
+    return settle_fetchers(tree) - {"fetch_json"}
+
+
+def finals_reader_problems(tree: ast.Module, finals: list[str]) -> list[str]:
+    """Why the finals sentences fail to name what `settle()` reads, if they do."""
+    joined = " ".join(finals)
+    readers = named_finals_readers(tree)
+    problems = []
+    if not readers:
+        problems.append("settle() reaches no function that opens a URL besides fetch_json")
+    elif not any(f"`{name}`" in joined for name in readers):
+        problems.append(f"the finals sentence names none of {sorted(readers)}")
+    if "schedule_for" in readers and "`schedule_for`" not in joined:
+        problems.append("settle() reaches schedule_for and the finals sentence does not name it")
+    return problems
 
 
 def _import_map(tree: ast.Module) -> dict[str, tuple[str, str | None]]:
@@ -298,19 +315,50 @@ def test_without_the_network_the_build_fails_and_writes_neither_file(tmp_path: P
 
 def test_the_derivation_finds_the_schedule_read() -> None:
     # Guards the derivation itself: if it found nothing, the doc check below
-    # would pass on an empty set.
-    assert "schedule_for" in settle_fetchers()
-    assert settle_fetch_entries(), "settle() calls no function that opens a URL?"
+    # would have nothing to require.
+    assert "schedule_for" in named_finals_readers()
     assert "load_team_games" not in _reachable(builder_tree(), "settle")
+
+
+def _builder_with_finals_helper() -> ast.Module:
+    """The builder with a harmless refactor: settle() calls `_finals(day)`,
+    which calls `schedule_for(day)`. Nothing about what is read changes."""
+    tree = builder_tree()
+    functions = _functions(tree)
+    calls = [
+        node for node in ast.walk(functions["settle"])
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "schedule_for"
+    ]
+    for call in calls:
+        call.func.id = "_finals"
+    if calls and "_finals" not in functions:
+        helper = ast.parse("def _finals(day):\n    return schedule_for(day)\n").body[0]
+        tree.body.insert(tree.body.index(functions["settle"]), helper)
+    # Already refactored some other way, the tree stands as it is; either way
+    # settle() must still reach the schedule read.
+    assert "schedule_for" in settle_fetchers(tree)
+    return tree
+
+
+def test_extracting_a_finals_helper_does_not_make_the_doc_wrong() -> None:
+    tree = _builder_with_finals_helper()
+    assert "schedule_for" not in _called_names(_functions(tree)["settle"])
+    assert finals_reader_problems(tree, sentences_about(r"\bfinals?\b")) == []
+
+
+def test_a_finals_sentence_naming_no_reader_is_still_caught() -> None:
+    tree = builder_tree()
+    assert finals_reader_problems(tree, ["Finals are fetched live from the NHL."])
+    # Naming only a helper while settle() still reaches schedule_for is not enough.
+    assert finals_reader_problems(
+        _builder_with_finals_helper(), ["Finals are fetched through `_finals`."]
+    )
 
 
 def test_schema_names_the_finals_source_settle_actually_calls() -> None:
     finals = sentences_about(r"\bfinals?\b")
     joined = " ".join(finals)
-    for name in sorted(settle_fetch_entries()):
-        assert f"`{name}`" in joined, (
-            f"settle() takes its finals through `{name}`, and SCHEMA.md's finals sentence does not name it: {finals}"
-        )
+    assert finals_reader_problems(builder_tree(), finals) == [], finals
     endpoint = site_module().NHL.split("://", 1)[1] + "/schedule"
     assert endpoint in joined, f"SCHEMA.md's finals sentence does not name the endpoint {endpoint}: {finals}"
     for sentence in finals:
