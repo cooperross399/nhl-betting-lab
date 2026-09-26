@@ -2,7 +2,7 @@
 """Run a shadow provider fetch and write the verification reports.
 
 A shadow run fetches real prices into `data/staging/` and reports what it
-found. It allowlists nothing, promotes nothing, and places nothing. The
+found. It adds no allowlist entry, promotes nothing, and places nothing. The
 gameday card reads `data/staging/` — Gameday Refresh runs this script to
 fetch the card's prices — and uses a market from it only if the provider
 policy allowlists it, it is priced for every game in the slate, and the
