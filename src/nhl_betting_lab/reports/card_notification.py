@@ -189,10 +189,18 @@ def render_comment(
                 "or this is the first run."
             )
         )
-    else:
+    elif decision.degraded:
         opening.append(
             "Selections are unchanged since the previous card; this comment "
             "is here because the run was degraded."
+        )
+    else:
+        # Unchanged and clean only posts when the caller forced it. Saying
+        # "degraded" here sent the reader looking for a fault that did not
+        # exist, and taught them to shrug at the next one that did.
+        opening.append(
+            "Selections are unchanged since the previous card; this comment "
+            "was posted on request, and the run was clean."
         )
 
     lines = [opening[0], ""]
