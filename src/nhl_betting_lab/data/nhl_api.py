@@ -9,10 +9,11 @@ would make the dataset silently depend on when it was built, which is exactly
 the kind of dependency that turns an unreproducible number into an argument.
 
 The rule has one exception and it is explicit: a schedule day, or a boxscore
-for a game that is not final, is *incomplete evidence*. Those are cached too,
-but `is_final` is recorded alongside so a later run knows to fetch again. A
-cache that cannot tell "finished" from "in progress" would freeze a game at
-the second period forever. The player registry of a season that has not
+for a game that is not final, is *incomplete evidence*. A schedule is cached
+but always refetched when asked to refresh; a boxscore that is not final is
+returned and never cached at all, so a later run fetches it again. A cache
+that cannot tell "finished" from "in progress" would freeze a game at the
+second period forever. The player registry of a season that has not
 closed is incomplete evidence in the same way (`registry_is_settled`).
 
 Nothing here needs a credential, so nothing here can leak one.
@@ -186,7 +187,19 @@ def fetch_boxscore(
         f"{API_BASE_URL}/v1/gamecenter/{identifier}/boxscore", requester=requester or _default_requester
     )
     complete = game_is_final(payload)
-    _write_cache(path, payload)
+    if complete:
+        _write_cache(path, payload)
+    else:
+        # Only a final boxscore is cached. A non-final one was written here
+        # too, and nothing ever read it back: the cache check above refetches
+        # it, and `build_datasets` skips it. What it did do was sit in
+        # `data/raw/nhl/boxscore` looking like a game, so the fetch filled
+        # the directory with a file per scheduled game and Gameday Refresh's
+        # thin-history count read those as history. One an older run left is
+        # removed; a final one on disk is never replaced by a non-final
+        # answer (a `refresh=True` mid-game must not unsettle a result).
+        if not game_is_final(_read_cache(path)):
+            path.unlink(missing_ok=True)
     return CacheEntry(path=path, payload=payload, from_cache=False, complete=complete)
 
 

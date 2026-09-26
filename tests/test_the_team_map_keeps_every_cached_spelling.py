@@ -25,7 +25,9 @@ refuters) found two tests in `tests/test_team_names.py` that passed whatever
 Writing the corrupt-file test here found a shape that WAS fatal: a boxscore
 that parses but is not a JSON object (`null`, `[]`) reached `payload.get` and
 raised AttributeError out of the whole build, and the card builds the map with
-nothing around it. `fetch_boxscore` stores any HTTP 200 body as-is, and
+nothing around it. `fetch_boxscore` used to store any HTTP 200 body as-is
+(it now caches only a final boxscore, but a cache restored from an older
+run may still hold a non-final body, so the guard stays), and
 `build_datasets` already counts that shape as malformed and skips it; the
 builder now skips it the same way. 0 of the 5,280 cached boxscores had that
 shape on 2026-09-25 (none was unreadable either), so no map changed.

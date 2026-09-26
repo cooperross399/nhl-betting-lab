@@ -445,7 +445,7 @@ def _runner(tmp_path: Path) -> Path:
     box = work / "data" / "raw" / "nhl" / "boxscore"
     box.mkdir(parents=True)
     for game in range(1200):
-        (box / f"{game}.json").write_text("{}", encoding="utf-8")
+        (box / f"{game}.json").write_text('{"gameState": "OFF"}', encoding="utf-8")
     return work
 
 
