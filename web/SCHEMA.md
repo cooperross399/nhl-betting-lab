@@ -32,9 +32,13 @@ games[]
                  b2b is the schedule fact (played the previous league day) and is published under either
                  verdict; projGoals, winProb and the market figures below include the back-to-back
                  adjustment only while the recorded team_b2b verdict ships it
-  moneyline      {open:{away,home} | null, current:{away,home}, fair:{away,home}}  — open is the day's first line-movement capture, null when none was captured
+  moneyline      {open:{away,home} | null, current:{away,home}, fair:{away,home}}  — open is the game's moneyline at the first capture in
+                 line_movement/<day>.csv that held it (one capture, never the day pooled); null when none was captured, which
+                 today is every game: the capture asks for no bulk h2h
   puckLine       {favorite, line, price, coverProb}
-  total          {open | null, current, overPrice, underPrice, proj, overProb}
+  total          {open | null, current, overPrice, underPrice, proj, overProb}  — current is the most common line among the
+                 staged bulk (featured) totals, never an alternate-ladder rung; open is null, because every total a capture
+                 holds is an alternate_totals rung and no row says which line is the featured one
   regulation     {away, draw, home, prices:{away,draw,home}}
   pick           {market, label, price, edgePct} | null   ← one best market per game; null on a priced game means nothing cleared the edge bar, on an unpriced game it means nothing was assessed
 ```
