@@ -293,7 +293,13 @@ def test_two_captures_are_two_moments_never_one_ladder(tmp_path: Path) -> None:
 
 
 def test_a_capture_with_no_moment_is_refused_not_guessed(tmp_path: Path) -> None:
-    """With no instant on the rows, any grouping would be a guess."""
+    """With no instant on the rows, any grouping would be a guess.
+
+    The file used to reach `find_violations`, which raised. It is now
+    refused by the loader, named with the column it lacks, and the runner
+    exits non-zero; no ladder is scanned from it (see
+    tests/test_the_ladder_scan_names_a_damaged_day.py).
+    """
     processed = tmp_path / "processed"
     _capture(processed, [CORE, TWO_SIDED_LADDER], "2026-10-01T14:00:00+00:00",
              stamp=False)
@@ -301,8 +307,17 @@ def test_a_capture_with_no_moment_is_refused_not_guessed(tmp_path: Path) -> None
     frame = frame.drop(columns=["fetched_at"])
     frame.to_csv(processed / "line_movement" / "2026-10-01.csv", index=False)
 
-    with pytest.raises(ValueError, match="snapshot"):
-        _run(processed, tmp_path / "outputs")
+    module = load_script("run_ladder_coherence.py")
+    outputs = tmp_path / "outputs"
+    assert module.main(
+        ["--processed-dir", str(processed), "--output-dir", str(outputs)]
+    ) != 0
+    record = json.loads((outputs / "ladder_coherence.json").read_text(encoding="utf-8"))
+    assert record["ladders"] == 0
+    assert record["unreadable_captures"] == [
+        {"name": "2026-10-01.csv",
+         "reason": "missing column(s): captured_at (or snapshot)"}
+    ]
 
 
 # --------------------------------------------------------------------------

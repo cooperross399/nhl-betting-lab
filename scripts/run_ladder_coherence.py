@@ -16,12 +16,17 @@ not answer for the ladders this hypothesis is actually about.
 
 It reads only captured files, spends no credit, places no bet, edits no
 policy, and produces no selection.
+
+Exits 2 when a captured day file cannot be read. It still writes the report,
+which counts every day it could read and names each one it could not, with
+the reason; the same names go to stderr as `::error::` lines.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 
 import pandas as pd
@@ -30,8 +35,10 @@ from nhl_betting_lab.config import OUTPUTS_DIR, PROCESSED_DIR
 from nhl_betting_lab.ladder_coherence import (
     DETECTION_FLOOR,
     LADDER_CLASSES,
+    LADDER_KEY,
     find_violations,
 )
+from nhl_betting_lab.stores import existing_row_count
 
 MOVEMENT_DIRNAME = "line_movement"
 
@@ -39,6 +46,16 @@ MOVEMENT_DIRNAME = "line_movement"
 #: appends: the instant that capture was taken, shared by every book and rung
 #: it fetched. It is the "one moment" the detector compares inside.
 CAPTURE_MOMENT = "captured_at"
+
+#: What every day file must carry for its rows to be scanned: the ladder
+#: identity except its moment, and the rung itself. The moment is checked on
+#: its own, because a file may carry it as `snapshot` or as `captured_at`.
+REQUIRED_COLUMNS: tuple[str, ...] = (
+    *(name for name in LADDER_KEY if name != "snapshot"),
+    "line",
+    "selection",
+    "american_odds",
+)
 
 
 def with_ladder_moment(prices: pd.DataFrame) -> pd.DataFrame:
@@ -65,13 +82,35 @@ def with_ladder_moment(prices: pd.DataFrame) -> pd.DataFrame:
     return prices.assign(snapshot=prices[CAPTURE_MOMENT])
 
 
-def load_captures(directory: Path) -> tuple[pd.DataFrame, list[str]]:
+def load_captures(
+    directory: Path, *, unreadable: dict[str, str] | None = None
+) -> tuple[pd.DataFrame, list[str]]:
     """Every captured day, and the names of the files that were read.
 
     The file list is returned rather than just the row count because "0
     violations" means something different over three nights than over eighty,
     and only the caller can see which one it is looking at.
+
+    `unreadable`, when given, receives every day file that could not be read,
+    by file name, with the reason. Until 2026-09-26 a file that did not parse
+    was skipped with a bare `continue`, so it fell out of "Captures read" and
+    out of the registered depth without a word and the run exited 0; an
+    undecodable byte was not caught at all, raised, and the Line Movement
+    step's `|| true` turned it into "Ladder scan wrote no report"; stray
+    quotes parse short WITHOUT an error, so the rows they swallowed were lost
+    with nothing to catch; and a file missing a ladder column was
+    concatenated with the good days, its rows reaching the detector with
+    that column blank. The same four shapes, and zero bytes, are what
+    `closing_lines.load_movement_captures` names for the CLV report. That
+    loader cannot be reused here: it collapses each round to the best price
+    across books, and a ladder is one book's.
+
+    A damaged day is left out and named rather than raised, so every good
+    day is still counted. A header-only file still reads as empty: it holds
+    no row to lose. The capture only ever creates a file with rows in it, so
+    zero bytes is damage here, not an empty day.
     """
+    damaged = unreadable if unreadable is not None else {}
     if not directory.is_dir():
         return pd.DataFrame(), []
     paths = sorted(directory.glob("*.csv"))
@@ -80,15 +119,61 @@ def load_captures(directory: Path) -> tuple[pd.DataFrame, list[str]]:
     for path in paths:
         try:
             frame = pd.read_csv(path, low_memory=False)
-        except (OSError, pd.errors.ParserError):
+        except (
+            OSError,
+            UnicodeDecodeError,
+            pd.errors.EmptyDataError,
+            pd.errors.ParserError,
+        ) as error:
+            damaged[path.name] = f"{type(error).__name__}: {error}".strip()
+            continue
+        # The floor comes from the file, not the parse: stray quotes make
+        # pandas swallow rows into one field without an error.
+        rows_on_disk = existing_row_count(path)
+        if len(frame) < rows_on_disk:
+            damaged[path.name] = (
+                f"holds {rows_on_disk} row(s) and parses to only {len(frame)}"
+            )
             continue
         if frame.empty:
+            continue
+        missing = [name for name in REQUIRED_COLUMNS if name not in frame.columns]
+        if "snapshot" not in frame.columns and CAPTURE_MOMENT not in frame.columns:
+            # With no instant on its rows, any grouping would be a guess, and
+            # a guessed moment merges two captures into one deeper ladder.
+            missing.append(f"{CAPTURE_MOMENT} (or snapshot)")
+        if missing:
+            damaged[path.name] = f"missing column(s): {', '.join(missing)}"
             continue
         frames.append(frame)
         read.append(path.name)
     if not frames:
         return pd.DataFrame(), read
     return pd.concat(frames, ignore_index=True), read
+
+
+def _unreadable_lines(damaged: list[dict[str, str]]) -> list[str]:
+    """One bullet per day file that could not be read, above every count."""
+    if not damaged:
+        return []
+    lines = [
+        f"- **{len(damaged)} captured day file(s) could not be read**, so "
+        "every ladder in them is missing from the counts below, the "
+        "registered depth included. This run is not clean:",
+    ]
+    for entry in damaged:
+        lines.append(f"  - `{entry['name']}` ({entry['reason']}).")
+    return lines
+
+
+def _say_unreadable(damaged: list[dict[str, str]]) -> None:
+    for entry in damaged:
+        print(
+            f"::error::Ladder scan could not read {entry['name']} "
+            f"({entry['reason']}); its ladders are not in the depth. Every "
+            "other day is still counted, and the report names this one.",
+            file=sys.stderr,
+        )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -98,26 +183,55 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     directory = Path(args.processed_dir) / MOVEMENT_DIRNAME
-    prices, files = load_captures(directory)
+    unreadable: dict[str, str] = {}
+    prices, files = load_captures(directory, unreadable=unreadable)
+    damaged = [
+        {"name": name, "reason": reason}
+        for name, reason in sorted(unreadable.items())
+    ]
+    _say_unreadable(damaged)
+    # The report is written either way and names each damaged file; the exit
+    # says the run was not clean.
+    exit_code = 2 if damaged else 0
     outputs = Path(args.output_dir)
     outputs.mkdir(parents=True, exist_ok=True)
 
     if prices.empty:
+        if damaged:
+            # Never "Nothing has been captured yet ... not a fault" over a
+            # list of captured days that could not be read.
+            state = (
+                "- **No captured day could be read.** This is not the "
+                "pre-season state: the file(s) named above hold captures. "
+                "No depth and no rate is quoted for them.\n"
+            )
+        else:
+            state = (
+                "- **Nothing has been captured yet.** Before the season "
+                "starts this is the correct state, not a fault. A scan of no "
+                "ladders is not a coherent market; it is an absence, and no "
+                "rate is quoted for it.\n"
+            )
         body = (
             "# Ladder coherence\n\n"
             f"- Captures read: {len(files)}\n"
-            "- **Nothing has been captured yet.** Before the season starts "
-            "this is the correct state, not a fault. A scan of no ladders is "
-            "not a coherent market; it is an absence, and no rate is quoted "
-            "for it.\n"
+            + "".join(line + "\n" for line in _unreadable_lines(damaged))
+            + state
         )
         (outputs / "ladder_coherence.md").write_text(body, encoding="utf-8")
         (outputs / "ladder_coherence.json").write_text(
-            json.dumps({"captures": len(files), "ladders": 0}, indent=2) + "\n",
+            json.dumps(
+                {"captures": len(files), "ladders": 0,
+                 "unreadable_captures": damaged},
+                indent=2,
+            ) + "\n",
             encoding="utf-8",
         )
-        print("Nothing captured yet; wrote the empty-state report.")
-        return 0
+        if damaged:
+            print("No captured day could be read; wrote a report naming each.")
+        else:
+            print("Nothing captured yet; wrote the empty-state report.")
+        return exit_code
 
     prices = with_ladder_moment(prices)
     found, scan = find_violations(prices[prices["line"].notna()].copy())
@@ -139,6 +253,8 @@ def main(argv: list[str] | None = None) -> int:
         "violations": scan.violations,
         "detection_floor": DETECTION_FLOOR,
         "by_class": {name: int(by_class.get(name, 0)) for name, _ in LADDER_CLASSES},
+        # Each day file left out of every count above, with the reason.
+        "unreadable_captures": damaged,
     }
     (outputs / "ladder_coherence.json").write_text(
         json.dumps(record, indent=2) + "\n", encoding="utf-8"
@@ -162,6 +278,7 @@ def main(argv: list[str] | None = None) -> int:
         "return. See `docs/pre_registered_ladder_coherence.md`.",
         "",
         f"- Captures read: {len(files)}",
+        *_unreadable_lines(damaged),
         f"- **Ladders with two or more de-viggable rungs: {depth}** — the "
         "2026-10-15 checkpoint reads this. Two seasons of bought history "
         "produced 57.",
@@ -197,7 +314,7 @@ def main(argv: list[str] | None = None) -> int:
     ]
     (outputs / "ladder_coherence.md").write_text("\n".join(lines), encoding="utf-8")
     print(f"  wrote: {outputs / 'ladder_coherence.md'}")
-    return 0
+    return exit_code
 
 
 if __name__ == "__main__":
