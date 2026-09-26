@@ -19,17 +19,29 @@ What these tests hold:
   one slate (a started game kept in the bulk rows and skipped per event would
   read as every per-event market missing one game);
 * the count dropped is stated in the result's warnings, never silent;
-* `now` must be an aware instant.
+* `now` must be an aware instant;
+* a script that runs both fetches passes them one instant, so a game that
+  starts between the two calls cannot be staged by one and dropped by the
+  other;
+* the shipped default clock is the wall clock in UTC (the suite pins it
+  everywhere else).
 """
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+import importlib.util
+import sys
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from types import ModuleType
 
+import pandas as pd
 import pytest
 
 from conftest import FakeResponse, RecordingRequester
+from nhl_betting_lab.config import PROJECT_ROOT
 from nhl_betting_lab.providers import odds_api
+from nhl_betting_lab.providers.env_file import ProviderEnvLoadResult
 
 
 ENVIRONMENT = {"NHL_ODDS_API_KEY": "k" * 24}
@@ -225,3 +237,204 @@ def test_without_a_now_the_fetch_reads_the_provider_clock(
     )
 
     assert _bought(requester) == ["evt_1900"]
+
+
+
+# -- the edge of the rule -------------------------------------------------
+
+#: A minute after the fetch: still to be played, however close.
+ABOUT_TO_START = ("evt_soon", "2026-10-10T15:01:00Z")
+
+
+def test_a_game_a_minute_away_is_bought_by_both_fetches() -> None:
+    board = [UNDER_WAY, ABOUT_TO_START, *EVENING]
+    per_event = _requester(board)
+    _provider(per_event).fetch_player_props(
+        markets=["player_points"], max_events=1, credit_cap=100, now=NOW
+    )
+    bulk = _provider(_requester(board)).fetch_team_markets(max_events=1, now=NOW)
+
+    assert _bought(per_event) == ["evt_soon"]
+    assert {row["home_team"] for row in bulk.rows} == {"Home evt_soon"}
+
+
+def test_a_window_where_every_game_has_started_says_so() -> None:
+    result = _provider(_requester([UNDER_WAY, AT_PUCK_DROP])).fetch_team_markets(
+        now=NOW
+    )
+
+    assert result.rows == []
+    assert any(
+        "Every one of the 2 event(s) in the fetch window had already started"
+        in note
+        for note in result.warnings
+    ), result.warnings
+    assert not any("no usable team-market" in note for note in result.warnings)
+
+
+# -- the production clock -------------------------------------------------
+
+
+def test_the_production_clock_is_the_wall_clock_in_utc(real_provider_clock) -> None:
+    """The suite replaces `_provider_clock` everywhere; this checks the one
+    that ships, since a clock a day out or a century back drops the wrong
+    games in production and nothing else here would notice."""
+    before = datetime.now(timezone.utc)
+    moment = real_provider_clock()
+    after = datetime.now(timezone.utc)
+
+    assert moment.tzinfo is not None
+    assert moment.utcoffset() == timedelta(0)
+    assert before - timedelta(seconds=5) <= moment <= after + timedelta(seconds=5)
+
+
+# -- one instant per run ----------------------------------------------------
+#
+# The scripts call both fetches, and a game that starts between the two calls
+# must be dropped by both or by neither. If each fetch read its own clock, the
+# bulk fetch would stage it and the per-event fetch would drop it; the slate
+# the card measures coverage against is built from the staged rows, so every
+# per-event market would read "priced for N-1 of N games" and leave the card.
+
+#: Two seconds before the first face-off on a three-game night.
+RUN_AT = datetime(2026, 10, 7, 22, 59, 58, tzinfo=timezone.utc)
+
+GAME_NIGHT = (
+    ("ev0", "Winnipeg Jets", "Colorado Avalanche", "2026-10-07T23:00:00Z"),
+    ("ev1", "Washington Capitals", "Pittsburgh Penguins", "2026-10-07T23:30:00Z"),
+    ("ev2", "Anaheim Ducks", "Edmonton Oilers", "2026-10-08T02:00:00Z"),
+)
+
+
+class _RunClock(datetime):
+    """The script's own clock, frozen at the run's instant."""
+
+    @classmethod
+    def now(cls, tz=None):  # type: ignore[override]
+        return RUN_AT.astimezone(tz) if tz else RUN_AT.replace(tzinfo=None)
+
+
+def _advancing_provider_clock(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A clock that has crossed the first face-off by its second reading."""
+    ticks = iter([RUN_AT, RUN_AT + timedelta(seconds=4)])
+    last = [RUN_AT]
+
+    def clock() -> datetime:
+        last[0] = next(ticks, last[0])
+        return last[0]
+
+    monkeypatch.setattr(odds_api, "_provider_clock", clock)
+
+
+def _game_night_event(event_id: str, markets: list[dict]) -> dict:
+    for game_id, home, away, commence in GAME_NIGHT:
+        if game_id == event_id:
+            return {
+                "id": game_id, "commence_time": commence, "home_team": home,
+                "away_team": away,
+                "bookmakers": [
+                    {"key": "draftkings", "title": "DraftKings", "markets": markets}
+                ],
+            }
+    raise AssertionError(event_id)
+
+
+def _game_night_transport(url: str, **_kwargs: object) -> FakeResponse:
+    if "/events/" in url and url.endswith("/odds"):
+        event_id = url.split("/events/")[1].split("/")[0]
+        return FakeResponse(_game_night_event(event_id, [
+            {"key": "player_shots_on_goal", "outcomes": [
+                {"name": "Over", "description": f"Skater {event_id}",
+                 "price": -115, "point": 2.5},
+                {"name": "Under", "description": f"Skater {event_id}",
+                 "price": -105, "point": 2.5}]}]))
+    if url.endswith("/events"):
+        return FakeResponse([
+            {"id": game_id, "commence_time": commence}
+            for game_id, _home, _away, commence in GAME_NIGHT
+        ])
+    if url.endswith("/odds"):
+        return FakeResponse([
+            _game_night_event(game_id, [{"key": "h2h", "outcomes": [
+                {"name": home, "price": -140}, {"name": away, "price": 120}]}])
+            for game_id, home, away, _commence in GAME_NIGHT
+        ])
+    raise AssertionError(f"unexpected request: {url}")
+
+
+def _load_script(name: str) -> ModuleType:
+    path = PROJECT_ROOT / "scripts" / name
+    spec = importlib.util.spec_from_file_location(f"_script_g6_{path.stem}", path)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def _wire(module: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    real = odds_api.OddsApiProvider
+    monkeypatch.setattr(
+        module.odds_api, "OddsApiProvider",
+        lambda: real(
+            environment=ENVIRONMENT, requester=_game_night_transport, regions="us"
+        ),
+    )
+    monkeypatch.setattr(
+        module, "load_provider_env",
+        lambda: ProviderEnvLoadResult(path=tmp_path / ".env"),
+    )
+    monkeypatch.setattr(module, "datetime", _RunClock)
+    _advancing_provider_clock(monkeypatch)
+
+
+def _games(frame: pd.DataFrame, market: str) -> set[str]:
+    return set(frame.loc[frame["market"] == market, "provider_event_id"].astype(str))
+
+
+def test_the_shadow_run_stages_one_slate_across_both_fetches(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    module = _load_script("run_provider_shadow.py")
+    _wire(module, tmp_path, monkeypatch)
+
+    code = module.main([
+        "--live", "--props", "--overwrite-staging", "--horizon-days", "1",
+        "--credit-cap", "320",
+        "--staging-dir", str(tmp_path / "staging"),
+        "--output-dir", str(tmp_path / "outputs"),
+    ])
+    capsys.readouterr()
+
+    assert code == 0
+    team = pd.read_csv(tmp_path / "staging" / odds_api.STAGING_PRICES_FILENAME)
+    props = pd.read_csv(tmp_path / "staging" / odds_api.STAGING_PROPS_FILENAME)
+    assert _games(team, "moneyline") == {"ev0", "ev1", "ev2"}
+    assert _games(props, "shots_on_goal") == _games(team, "moneyline")
+
+
+def test_the_closing_capture_takes_one_slate_across_both_fetches(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    module = _load_script("capture_closing_lines.py")
+    _wire(module, tmp_path, monkeypatch)
+    captured: list[pd.DataFrame] = []
+
+    def keep(frame: pd.DataFrame, **_kwargs: object) -> pd.DataFrame:
+        captured.append(frame.copy())
+        return frame
+
+    monkeypatch.setattr(module, "best_prices", keep)
+    monkeypatch.setattr(module, "append_captures", lambda frame, **_: len(frame))
+
+    code = module.main([
+        "--live", "--credit-cap", "400", "--processed-dir", str(tmp_path),
+    ])
+    capsys.readouterr()
+
+    assert code == 0
+    (frame,) = captured
+    assert _games(frame, "moneyline") == {"ev0", "ev1", "ev2"}
+    assert _games(frame, "shots_on_goal") == _games(frame, "moneyline")

@@ -806,7 +806,15 @@ class OddsApiProvider:
             if rows:
                 result.events_priced += 1
                 result.rows.extend(rows)
-        if not result.rows:
+        if not result.rows and started and not events:
+            # Not the books' silence: every game left to price had started.
+            result.warnings.append(
+                f"Every one of the {started} event(s) in the fetch window had "
+                "already started, or carried no start time that could be "
+                "confirmed, so no team-market price was taken. Nothing was "
+                "guessed; the markets stay absent."
+            )
+        elif not result.rows:
             result.warnings.append(
                 "The provider returned events but no usable team-market "
                 "prices. Nothing was guessed; the markets stay absent."
