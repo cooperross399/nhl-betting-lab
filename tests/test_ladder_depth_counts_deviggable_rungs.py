@@ -316,7 +316,8 @@ def test_a_capture_with_no_moment_is_refused_not_guessed(tmp_path: Path) -> None
     assert record["ladders"] == 0
     assert record["unreadable_captures"] == [
         {"name": "2026-10-01.csv",
-         "reason": "missing column(s): captured_at (or snapshot)"}
+         "reason": "missing column(s): captured_at (or snapshot)",
+         "fails_run": True}
     ]
 
 

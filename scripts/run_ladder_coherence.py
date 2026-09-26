@@ -20,6 +20,15 @@ policy, and produces no selection.
 Exits 2 when a captured day file cannot be read. It still writes the report,
 which counts every day it could read and names each one it could not, with
 the reason; the same names go to stderr as `::error::` lines.
+
+With `--fail-on-day YYYY-MM-DD` (the Line Movement job passes the league day
+it captured into), only damage in that day's file exits 2. Damage in an
+earlier day is still named in the report, the JSON and on stderr, as a
+`::warning::`, and exits 0. The job's artifact carries every day and each
+run restores the newest copy, so a day damaged in October is still damaged
+in March: were every damaged file to fail the run, one bad day would turn
+every later run of the season red, and the red X that reports uncollectable
+line units or scratch lists would be lost under one that nothing clears.
 """
 
 from __future__ import annotations
@@ -135,15 +144,18 @@ def load_captures(
                 f"holds {rows_on_disk} row(s) and parses to only {len(frame)}"
             )
             continue
-        if frame.empty:
-            continue
         missing = [name for name in REQUIRED_COLUMNS if name not in frame.columns]
         if "snapshot" not in frame.columns and CAPTURE_MOMENT not in frame.columns:
             # With no instant on its rows, any grouping would be a guess, and
             # a guessed moment merges two captures into one deeper ladder.
             missing.append(f"{CAPTURE_MOMENT} (or snapshot)")
         if missing:
+            # Checked before emptiness, so a truncated header with no rows
+            # (`captured_at,commence`) is named, as `load_movement_captures`
+            # names it: the capture never writes a header it cannot fill.
             damaged[path.name] = f"missing column(s): {', '.join(missing)}"
+            continue
+        if frame.empty:
             continue
         frames.append(frame)
         read.append(path.name)
@@ -152,24 +164,29 @@ def load_captures(
     return pd.concat(frames, ignore_index=True), read
 
 
-def _unreadable_lines(damaged: list[dict[str, str]]) -> list[str]:
+def _unreadable_lines(damaged: list[dict]) -> list[str]:
     """One bullet per day file that could not be read, above every count."""
     if not damaged:
         return []
     lines = [
         f"- **{len(damaged)} captured day file(s) could not be read**, so "
         "every ladder in them is missing from the counts below, the "
-        "registered depth included. This run is not clean:",
+        "registered depth included:",
     ]
     for entry in damaged:
-        lines.append(f"  - `{entry['name']}` ({entry['reason']}).")
+        standing = (
+            "" if entry["fails_run"]
+            else " An earlier day: a standing warning, not this run's capture."
+        )
+        lines.append(f"  - `{entry['name']}` ({entry['reason']}).{standing}")
     return lines
 
 
-def _say_unreadable(damaged: list[dict[str, str]]) -> None:
+def _say_unreadable(damaged: list[dict]) -> None:
     for entry in damaged:
+        level = "error" if entry["fails_run"] else "warning"
         print(
-            f"::error::Ladder scan could not read {entry['name']} "
+            f"::{level}::Ladder scan could not read {entry['name']} "
             f"({entry['reason']}); its ladders are not in the depth. Every "
             "other day is still counted, and the report names this one.",
             file=sys.stderr,
@@ -180,19 +197,28 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--processed-dir", default=str(PROCESSED_DIR))
     parser.add_argument("--output-dir", default=str(OUTPUTS_DIR))
+    parser.add_argument(
+        "--fail-on-day",
+        default=None,
+        help="League day (YYYY-MM-DD) this run captured into. Only damage "
+        "in that day's file exits 2; an earlier damaged day is named as a "
+        "warning. Omitted, any damaged file exits 2.",
+    )
     args = parser.parse_args(argv)
 
     directory = Path(args.processed_dir) / MOVEMENT_DIRNAME
     unreadable: dict[str, str] = {}
     prices, files = load_captures(directory, unreadable=unreadable)
+    own_file = f"{args.fail_on_day}.csv" if args.fail_on_day else None
     damaged = [
-        {"name": name, "reason": reason}
+        {"name": name, "reason": reason,
+         "fails_run": own_file is None or name == own_file}
         for name, reason in sorted(unreadable.items())
     ]
     _say_unreadable(damaged)
     # The report is written either way and names each damaged file; the exit
-    # says the run was not clean.
-    exit_code = 2 if damaged else 0
+    # says whether the day this run wrote is one of them.
+    exit_code = 2 if any(entry["fails_run"] for entry in damaged) else 0
     outputs = Path(args.output_dir)
     outputs.mkdir(parents=True, exist_ok=True)
 

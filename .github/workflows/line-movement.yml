@@ -203,7 +203,17 @@ jobs:
         # The step stays continue-on-error so a failed scan can never stop
         # the captures being kept; the last step reads its outcome and turns
         # the run red after every upload.
-        # tests/test_the_ladder_scan_names_a_damaged_day.py holds both rules.
+        #
+        # RED ONLY FOR THE DAY THIS RUN WROTE. The artifact carries every day
+        # and each run restores the newest copy, so a day damaged in October
+        # is still damaged in March. `--fail-on-day` names the league day the
+        # capture appended to (computed as `capture_line_movement.py` and the
+        # restore step compute it); damage there exits 2, and an earlier
+        # damaged day is named in the summary every run as a warning and
+        # exits 0. Otherwise one bad day would red every later run of the
+        # season and bury the line-unit and scratch-list gates, which report
+        # data that cannot be collected later.
+        # tests/test_the_ladder_scan_names_a_damaged_day.py holds these rules.
         id: ladder
         if: always()
         continue-on-error: true
@@ -211,7 +221,8 @@ jobs:
           PYTHONPATH: src
         run: |
           SCAN_EXIT=0
-          python scripts/run_ladder_coherence.py || SCAN_EXIT=$?
+          DAY=$(TZ=America/New_York date +%F)
+          python scripts/run_ladder_coherence.py --fail-on-day "$DAY" || SCAN_EXIT=$?
           if [ -f data/outputs/ladder_coherence.json ]; then
             DEPTH=$(python -c "import json;print(json.load(open('data/outputs/ladder_coherence.json')).get('ladders_with_two_rungs',0))")
             LADDERS=$(python -c "import json;print(json.load(open('data/outputs/ladder_coherence.json')).get('ladders',0))")
@@ -223,7 +234,7 @@ jobs:
               echo "" >> "$GITHUB_STEP_SUMMARY"
               echo "> **Depth is zero while $LADDERS ladders were scanned.** Read this as the alternate keys not arriving -- check this run's capture warnings for a 422 -- and NOT as books being coherent. The two are indistinguishable here." >> "$GITHUB_STEP_SUMMARY"
             fi
-            UNREADABLE=$(python -c "import json;print('\n'.join('- \`%s\` (%s)' % (e['name'], e['reason']) for e in json.load(open('data/outputs/ladder_coherence.json')).get('unreadable_captures',[])))")
+            UNREADABLE=$(python -c "import json;print('\n'.join('- \`%s\` (%s) -- %s' % (e['name'], e['reason'], 'this run\'s day: the run is red' if e.get('fails_run') else 'an earlier day: a standing warning') for e in json.load(open('data/outputs/ladder_coherence.json')).get('unreadable_captures',[])))")
             if [ -n "$UNREADABLE" ]; then
               echo "" >> "$GITHUB_STEP_SUMMARY"
               echo "> **These captured day files could not be read, and their ladders are not in the depth above:**" >> "$GITHUB_STEP_SUMMARY"
@@ -331,12 +342,16 @@ jobs:
       - name: Fail the run when the ladder scan failed
         # "Scan the captured ladders" stays continue-on-error so a failed scan
         # can never cost the captures, which made a damaged day a green run.
-        # The scanner exits 2 when a captured day file could not be read, and
-        # that day's ladders are then missing from the depth the 2026-10-15
-        # checkpoint reads. This runs after every upload, so the captures and
-        # the report naming the file are already kept: the red X is the
-        # report, not the damage.
+        # The scanner exits 2 when the day file THIS run appended to could
+        # not be read (`--fail-on-day`), and that day's ladders are then
+        # missing from the depth the 2026-10-15 checkpoint reads. An earlier
+        # damaged day is a standing warning in the scan's summary, never a
+        # red here: it would otherwise red every run for the rest of the
+        # season. So a run is red for a damaged day only while that league
+        # day is the one being captured. This runs after every upload, so the
+        # captures and the report naming the file are already kept: the red
+        # X is the report, not the damage.
         if: always() && steps.ladder.outcome == 'failure'
         run: |
-          echo "::error::The ladder scan failed or could not read every captured day (see Scan the captured ladders, which names each file). The depth in this run's summary leaves those days out. Restore the file from the line-movement artifact that carries it."
+          echo "::error::The ladder scan failed, or could not read the day file this run appended to (see Scan the captured ladders, which names it). That day's ladders are left out of the depth in this run's summary. Earlier runs' line-movement artifacts keep earlier copies of the file (gh run download <run-id> -n line-movement); no step in this workflow repairs it in the chain."
           exit 1

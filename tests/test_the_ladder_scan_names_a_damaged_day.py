@@ -287,7 +287,7 @@ def _scan_step() -> dict:
 def _run_step(root: Path) -> tuple[int, str, str]:
     """The step's own block, under the shell GitHub gives a `run:` (bash -e)."""
     bin_dir = root / "bin"
-    bin_dir.mkdir()
+    bin_dir.mkdir(exist_ok=True)
     stub = bin_dir / "python"
     stub.write_text(STUB_PYTHON, encoding="utf-8")
     stub.chmod(stub.stat().st_mode | stat.S_IEXEC)
@@ -316,17 +316,18 @@ def test_the_step_names_the_damaged_day_and_exits_non_zero(
     damage, _ = DAMAGE[shape]
     processed = tmp_path / "data" / "processed"
     _capture_day(processed, GOOD_DAY, 1)
-    damage(_capture_day(processed, BAD_DAY, ROUNDS))
+    # The day this run captured into (the step's clock is pinned to TODAY).
+    damage(_capture_day(processed, TODAY, ROUNDS))
 
-    code, summary, log = _run_step(tmp_path)
+    code, summary, log = _run_step_on_today(tmp_path)
 
     assert code != 0, log
     assert "wrote no report" not in summary, summary
     # The depth of the days that were read is still reported ...
     assert "### Ladder depth: 1\n" in summary, summary
     # ... under the name of the day that was not.
-    assert f"{BAD_DAY}.csv" in summary, summary
-    assert f"{BAD_DAY}.csv" in log, log
+    assert f"{TODAY}.csv" in summary, summary
+    assert f"{TODAY}.csv" in log, log
 
 
 def test_the_step_exits_zero_on_undamaged_days(tmp_path: Path) -> None:
@@ -375,3 +376,147 @@ def test_a_failed_scan_turns_the_run_red_after_every_upload(tmp_path: Path) -> N
     )
     assert result.returncode == 1
     assert "::error::" in result.stdout
+
+
+# --------------------------------------------------------------------------
+# Red for the day this run wrote; a standing warning for every earlier day.
+#
+# The line-movement artifact carries the whole directory, the restore copies
+# the newest carrier over, and the scan reads every day in it. So a day
+# damaged in October is still damaged in March. Were any damaged file to turn
+# the run red, one bad day would red every later run of the season, and the
+# line-unit and scratch-list gates, which report data that cannot be
+# collected later, would sit under a red X nobody could clear. The run is red
+# only when the day this run captured into (`--fail-on-day`) is damaged; an
+# earlier damaged day is still named, every run, as a warning.
+# --------------------------------------------------------------------------
+
+TODAY = "2026-10-03"
+
+
+def _main_for_day(processed: Path, outputs: Path, day: str) -> tuple[int, str, dict]:
+    module = load_script("run_ladder_coherence.py")
+    code = module.main([
+        "--processed-dir", str(processed), "--output-dir", str(outputs),
+        "--fail-on-day", day,
+    ])
+    body = (outputs / "ladder_coherence.md").read_text(encoding="utf-8")
+    record = json.loads(
+        (outputs / "ladder_coherence.json").read_text(encoding="utf-8")
+    )
+    return code, body, record
+
+
+def test_an_earlier_damaged_day_is_a_standing_warning_not_a_red_run(
+    tmp_path: Path, capsys
+) -> None:
+    processed = tmp_path / "processed"
+    _stray_quote(_capture_day(processed, BAD_DAY, ROUNDS))
+    _capture_day(processed, TODAY, 1)
+
+    code, body, record = _main_for_day(processed, tmp_path / "outputs", TODAY)
+    stderr = capsys.readouterr().err
+
+    assert code == 0, "an earlier day's damage must not red every later run"
+    # Still named, in every place, every run.
+    assert f"`{BAD_DAY}.csv`" in body, body
+    assert "standing warning" in body, body
+    [entry] = record["unreadable_captures"]
+    assert entry["name"] == f"{BAD_DAY}.csv"
+    assert entry["fails_run"] is False
+    assert f"::warning::Ladder scan could not read {BAD_DAY}.csv" in stderr, stderr
+    assert "::error::" not in stderr, stderr
+    assert record["ladders_with_two_rungs"] == 1
+
+
+@pytest.mark.parametrize("shape", ["stray-quote", "undecodable-byte", "missing-column"])
+def test_damage_in_the_day_this_run_wrote_is_a_red_run(
+    tmp_path: Path, capsys, shape: str
+) -> None:
+    damage, _ = DAMAGE[shape]
+    processed = tmp_path / "processed"
+    _capture_day(processed, GOOD_DAY, 1)
+    damage(_capture_day(processed, TODAY, ROUNDS))
+
+    code, body, record = _main_for_day(processed, tmp_path / "outputs", TODAY)
+    stderr = capsys.readouterr().err
+
+    assert code != 0
+    assert f"`{TODAY}.csv`" in body, body
+    assert [e["fails_run"] for e in record["unreadable_captures"]] == [True]
+    assert f"::error::Ladder scan could not read {TODAY}.csv" in stderr, stderr
+
+
+def test_without_a_day_every_damaged_file_fails_the_run(tmp_path: Path) -> None:
+    """Run by hand, with no day named, the scan stays strict."""
+    processed = tmp_path / "processed"
+    _stray_quote(_capture_day(processed, BAD_DAY, ROUNDS))
+    _capture_day(processed, TODAY, 1)
+
+    code, _, record = _main(processed, tmp_path / "outputs")
+
+    assert code != 0
+    assert [e["fails_run"] for e in record["unreadable_captures"]] == [True]
+
+
+def test_a_truncated_header_with_no_rows_is_named(tmp_path: Path) -> None:
+    """Not an empty day: it lacks the capture's columns, as #235 names it."""
+    processed = tmp_path / "processed"
+    _capture_day(processed, GOOD_DAY, 1)
+    path = processed / "line_movement" / f"{BAD_DAY}.csv"
+    path.write_text("captured_at,commence\n", encoding="utf-8")
+
+    code, body, record = _main(processed, tmp_path / "outputs")
+
+    assert code != 0
+    assert f"`{BAD_DAY}.csv`" in body, body
+    assert "missing column(s)" in record["unreadable_captures"][0]["reason"]
+
+
+DATE_STUB = f"""#!/bin/sh
+echo {TODAY}
+"""
+
+
+def _run_step_on_today(root: Path) -> tuple[int, str, str]:
+    """The step, with the league day its clock reads pinned to TODAY."""
+    bin_dir = root / "bin"
+    bin_dir.mkdir()
+    stub = bin_dir / "date"
+    stub.write_text(DATE_STUB, encoding="utf-8")
+    stub.chmod(stub.stat().st_mode | stat.S_IEXEC)
+    return _run_step(root)
+
+
+def test_the_step_warns_on_an_earlier_damaged_day_and_stays_green(
+    tmp_path: Path,
+) -> None:
+    processed = tmp_path / "data" / "processed"
+    _stray_quote(_capture_day(processed, BAD_DAY, ROUNDS))
+    _capture_day(processed, TODAY, 1)
+
+    code, summary, log = _run_step_on_today(tmp_path)
+
+    assert code == 0, log
+    assert f"{BAD_DAY}.csv" in summary, summary
+    assert "earlier day" in summary, summary
+    assert "### Ladder depth: 1\n" in summary, summary
+
+
+def test_the_step_is_red_when_the_day_it_wrote_is_damaged(tmp_path: Path) -> None:
+    processed = tmp_path / "data" / "processed"
+    _capture_day(processed, GOOD_DAY, 1)
+    _stray_quote(_capture_day(processed, TODAY, ROUNDS))
+
+    code, summary, log = _run_step_on_today(tmp_path)
+
+    assert code != 0, log
+    assert f"{TODAY}.csv" in summary, summary
+    assert "this run's day" in summary, summary
+
+
+def test_the_gate_names_no_repair_it_cannot_describe() -> None:
+    [gate] = [s for s in _steps()
+              if "steps.ladder.outcome == 'failure'" in str(s.get("if", ""))]
+    assert "Restore the file from the line-movement artifact" not in gate["run"]
+    assert "gh run download" in gate["run"]
