@@ -315,6 +315,38 @@ def test_both_failed_reports_are_named(tmp_path: Path) -> None:
     assert f"::error::{CLV} failed" in report.stdout, report.stdout
 
 
+def test_a_degraded_run_still_names_every_other_failure(tmp_path: Path) -> None:
+    """The degraded check used to exit on the spot, so a degraded run that
+    also failed its rebuild, its CLV report or its card-feed publish named
+    only that it was degraded. Every failure is printed before the exit."""
+    work, outcomes, _, notes = _the_run(tmp_path, {
+        "run_forward_evidence.py": 2,
+        "run_allowlist_evidence.py": 1,
+        "run_closing_line_value.py": 2,
+    })
+    degraded = _final(work, tmp_path)
+    values = {
+        "steps.final.outputs.degraded": degraded,
+        "steps.prices.outputs.empty_slate": "true",
+        "steps.cardfeed.outcome": "failure",
+    }
+    for name in (REBUILD, CLV):
+        values[f"steps.{_id(name)}.outcome"] = outcomes[name]
+
+    report = _bash(_render(_step(REPORT)["run"], values), work, dict(os.environ))
+
+    assert degraded == "true", notes
+    assert report.returncode != 0
+    errors = [line for line in report.stdout.splitlines()
+              if line.startswith("::error::")]
+    assert len(errors) == 4, report.stdout
+    assert "This run was degraded" in errors[0]
+    assert any(f"{REBUILD} failed" in line for line in errors), errors
+    assert any(f"{CLV} failed" in line for line in errors), errors
+    assert any("card-feed" in line for line in errors), errors
+    assert "No NHL games on the slate" not in report.stdout
+
+
 def test_a_skipped_rebuild_is_not_named_as_a_failed_one(tmp_path: Path) -> None:
     """The rebuild has no `if: always()`, so an earlier step that failed the
     job skips it. That failure fails the run on its own; the report must not
