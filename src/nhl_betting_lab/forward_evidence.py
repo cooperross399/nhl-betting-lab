@@ -949,6 +949,13 @@ def load_ledger(processed_dir: Path | None = None) -> pd.DataFrame:
     return pd.read_csv(path)
 
 
+#: Below this many bets `stats.RoiInterval.survives_correction` is False
+#: whatever the interval says, and its verdict calls the sample far too few
+#: to measure. The report's "Survives correction" column says so in words;
+#: a test holds this equal to the threshold `RoiInterval` applies.
+TOO_FEW_TO_SURVIVE = 30
+
+
 def registered_statistic(
     settled: pd.DataFrame, markets: list[str], *, now: datetime
 ) -> dict:
@@ -1016,13 +1023,19 @@ def registered_statistic(
         stat["high"] = interval.high
         stat["adjusted_low"] = interval.adjusted_low
         stat["adjusted_high"] = interval.adjusted_high
+        # The same `RoiInterval` rule the per-market column reads: under
+        # TOO_FEW_TO_SURVIVE bets nothing survives, whatever the bounds say.
+        # The 3,000 floor makes that unreachable for a reading, and the
+        # reading is taken from this property anyway, so it can never say
+        # "excludes zero" of a sample the verdicts call far too few.
+        stat["survives_correction"] = interval.survives_correction
     if stat["meets_floor"]:
-        if stat["adjusted_low"] > 0.0:
-            stat["reading"] = "excludes_zero_positive"
-        elif stat["adjusted_high"] < 0.0:
-            stat["reading"] = "excludes_zero_negative"
-        else:
+        if not stat["survives_correction"]:
             stat["reading"] = "spans_zero"
+        elif stat["adjusted_low"] > 0.0:
+            stat["reading"] = "excludes_zero_positive"
+        else:
+            stat["reading"] = "excludes_zero_negative"
     return stat
 
 
@@ -1335,47 +1348,65 @@ def render_forward_report(payload: dict) -> str:
         (
             "| Market | Opinions | Bets | Profit | ROI "
             "| 95% interval, uncorrected | Corrected interval "
-            "| Corrected includes zero |"
+            "| Survives correction |"
         ),
         "|:-------|---------:|-----:|-------:|----:|:--|:--|:--|",
     ]
     for market, entry in sorted(payload["markets"].items()):
         if entry["bets"]:
-            # The zero column reads the CORRECTED interval, the one the
-            # registered rule reads. It used to read the plain one, and a
-            # market could show "no" here while its corrected interval —
-            # and its own verdict line below — said no demonstrated edge.
-            spans = entry["adjusted_low"] <= 0.0 <= entry["adjusted_high"]
+            # The last column reads the stored `survives_correction`, the
+            # same `RoiInterval` property the verdict line below reads, so
+            # the two cannot disagree. It used to be "Includes zero" on the
+            # PLAIN interval, and a market could show "no" there while its
+            # corrected interval, the one the registered rule reads, spanned
+            # zero. Reading the corrected bounds alone was not enough either:
+            # 15-5 at even money over two markets is +5.5% .. +94.5%
+            # corrected, "no" on the bounds, while the verdict says 20 bets is
+            # far too few to measure anything. Nothing under
+            # `TOO_FEW_TO_SURVIVE` bets survives, and the column says why
+            # rather than printing a bare "no".
+            if entry["bets"] < TOO_FEW_TO_SURVIVE:
+                survives = f"too few (<{TOO_FEW_TO_SURVIVE})"
+            else:
+                survives = "yes" if entry["survives_correction"] else "no"
             lines.append(
                 f"| `{market}` | {entry['opinions']:,} | {entry['bets']:,} "
                 f"| {entry['profit_units']:+.1f}u | {entry['roi']:+.1%} "
                 f"| {entry['low']:+.1%} .. {entry['high']:+.1%} "
                 f"| {entry['adjusted_low']:+.1%} .. "
                 f"{entry['adjusted_high']:+.1%} "
-                f"| {'yes' if spans else 'no'} |"
+                f"| {survives} |"
             )
         else:
             lines.append(
                 f"| `{market}` | {entry['opinions']:,} | 0 | — | — | — | — "
                 "| — |"
             )
+    # The family is every market with a settled opinion, as
+    # `build_forward_report` counts it. With no bet anywhere there is no
+    # interval to describe, so the sentence is left out rather than claiming
+    # a market was measured.
     looks = len(payload["markets"])
-    lines += [
-        "",
-        (
-            "The corrected interval is the 95% interval widened (Bonferroni) "
-            f"for the {correction_family(looks)}"
-            if looks > 1
-            else "With one market measured there is nothing to correct for, "
-            "so the corrected interval is the 95% interval"
-        )
-        + (
-            " — the interval docs/when_this_ends.md registers the decision "
-            "on, and the one the zero column reads. The uncorrected "
-            "interval is shown beside it for reference only."
-        ),
-        "",
-    ]
+    lines += [""]
+    if any(entry["bets"] for entry in payload["markets"].values()):
+        lines += [
+            (
+                "The corrected interval is the 95% interval widened "
+                f"(Bonferroni) for the {correction_family(looks)}"
+                if looks > 1
+                else "With one market measured there is nothing to correct "
+                "for, so the corrected interval is the 95% interval"
+            )
+            + (
+                " — the interval docs/when_this_ends.md registers the "
+                "decision on. \"Survives correction\" reads it: yes when it "
+                "excludes zero, no when it spans zero, and too few below "
+                f"{TOO_FEW_TO_SURVIVE} bets, where nothing survives whatever "
+                "the interval says. The uncorrected interval is shown beside "
+                "it for reference only."
+            ),
+            "",
+        ]
     for market, entry in sorted(payload["markets"].items()):
         lines.append(f"- `{market}`: {entry['verdict']}")
     lines.append("")

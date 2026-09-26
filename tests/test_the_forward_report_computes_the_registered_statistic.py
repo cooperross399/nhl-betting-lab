@@ -217,6 +217,41 @@ def test_the_reading_is_taken_from_the_corrected_interval() -> None:
     assert stat["reading"] == "spans_zero"
 
 
+def test_a_small_pooled_sample_never_reads_as_surviving() -> None:
+    # 15-5 at even money over two markets: the corrected bounds exclude
+    # zero, but under TOO_FEW_TO_SURVIVE nothing survives (the per-market
+    # column's rule). The floor sits far above that threshold, so the
+    # reading is "below_floor", and the stored property agrees.
+    assert fe.SAMPLE_FLOOR > fe.TOO_FEW_TO_SURVIVE
+    payload = fe.build_forward_report(
+        _ledger(_market("shots_on_goal", 8, 2)
+                + _market("points", 7, 3, start=10_000)),
+        now=ON_THE_DATE,
+    )
+    stat = payload["registered_statistic"]
+    assert stat["settled_opinions"] == 20
+    assert stat["adjusted_low"] > 0.0
+    assert stat["survives_correction"] is False
+    assert stat["reading"] == "below_floor"
+    section = _section(fe.render_forward_report(payload))
+    assert "excludes zero" not in section
+
+
+def test_the_reading_follows_survives_correction(monkeypatch) -> None:
+    # Were a floor ever at or under 30, a small sample must still not read
+    # as excluding zero: the reading is taken from `survives_correction`.
+    monkeypatch.setattr(fe, "SAMPLE_FLOOR", 10)
+    payload = fe.build_forward_report(
+        _ledger(_market("shots_on_goal", 8, 2)
+                + _market("points", 7, 3, start=10_000)),
+        now=BEFORE,
+    )
+    stat = payload["registered_statistic"]
+    assert stat["meets_floor"] is True
+    assert stat["adjusted_low"] > 0.0
+    assert stat["reading"] != "excludes_zero_positive"
+
+
 def test_above_the_floor_negative_reads_confirmed_loser() -> None:
     payload = fe.build_forward_report(
         _ledger(_market("shots_on_goal", 1200, 1800)), now=BEFORE
