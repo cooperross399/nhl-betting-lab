@@ -117,3 +117,17 @@ def test_the_status_doc_says_the_same() -> None:
     claims = _three_way_claims(text)
     assert claims
     assert not any("no book retains" in s for s in claims), claims
+
+
+def test_the_settle_step_comment_says_the_same() -> None:
+    """The gameday workflow's settle step explains why the ledger matters;
+    its comment carried the same stale claim."""
+    raw = (REPO / ".github" / "workflows" / "gameday-refresh.yml").read_text()
+    text = "\n".join(
+        line.strip().lstrip("#").strip()
+        for line in raw.splitlines() if line.strip().startswith("#")
+    )
+    assert _hits_claims(text) == []
+    claims = _three_way_claims(text)
+    assert claims
+    assert not any("no book retains" in s for s in claims), claims
