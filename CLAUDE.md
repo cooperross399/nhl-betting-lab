@@ -906,8 +906,8 @@ Re-derive rather than trust if the data has moved.
   was actually tested.
   `points` is the one market here measured as a loss that survives
   correction: **-4.2% over 6,140 card-window wagers**, 95% interval -6.7% to
-  -1.7%, -7.6% to -0.7% corrected for the eight markets tested, -256.8 units
-  realised. In the late window it is -4.4% over 6,194, 95% interval -6.9% to
+  -1.7%, -7.6% to -0.7% after correcting for the 8 figures measured on the
+  same data (7 markets and the overall figure), -256.8 units realised. In the late window it is -4.4% over 6,194, 95% interval -6.9% to
   -2.0%, holding within that window's 2025-26 season alone at -5.4% over
   3,468 (2,726 + 3,468 = 6,194; this sentence ran the two windows together
   until 2026-09-26). On the late window the evidence bundle's verdict is that
