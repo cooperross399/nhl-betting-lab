@@ -64,6 +64,9 @@ from nhl_betting_lab.providers.team_names import (
 )
 from nhl_betting_lab.stores import best_price_per_wager, label_phases
 from nhl_betting_lab.season import clean_text, row_game_date
+# The team reports' wording for "the windows these rows are in", so all three
+# reports name held windows alike.
+from nhl_betting_lab.reports.team_markets_measurement import held_windows
 from nhl_betting_lab.models.value import (
     OddsError,
     american_to_implied,
@@ -139,8 +142,21 @@ class BacktestReport:
     wagers: int = 0
     #: Which snapshot window was measured, and its median hours before
     #: face-off. A number without this is not comparable to another number.
+    #:
+    #: `phase_hours` is None when no median was taken: no window was
+    #: filtered, or the named window kept no row. It used to default to 0.0,
+    #: and the header printed that default as a distance. `--phase early`
+    #: over the bought store (3,804,233 rows: 2,544,921 `card`, 1,259,312
+    #: `late`, none `early`) exited 0 and wrote "Priced **0.0 hours before
+    #: face-off** (`early` window)" into the contract report and 0.0 into its
+    #: JSON, above a note saying no price row was in the window. A median of
+    #: no rows is not a number, so it is not stored as one.
     phase: str = ""
-    phase_hours: float = 0.0
+    phase_hours: float | None = None
+    #: The price rows handed in, by the window `label_phases` filed each
+    #: under, before the filter. Lets a window that kept nothing name the
+    #: windows the rows are in. Empty when no window was filtered.
+    rows_by_window: dict[str, int] = field(default_factory=dict)
     priced_outcomes: int = 0
     outcomes_without_a_model_opinion: int = 0
     outcomes_below_threshold: int = 0
@@ -314,6 +330,10 @@ def run_backtest(
         present = [
             p for p in labelled["phase"].unique() if str(p) != "unknown"
         ]
+        report.rows_by_window = {
+            str(name): int(count)
+            for name, count in labelled["phase"].value_counts().items()
+        }
         # Auto-detect rather than trust a default. A hardcoded window that
         # matches nothing falls through silently and measures the mixture it
         # was added to prevent — which is exactly what happened the first
@@ -782,6 +802,43 @@ def _standing_notes() -> list[str]:
     ]
 
 
+def _window_line(report: BacktestReport) -> str:
+    """The header's statement of which window was priced, and how far out.
+
+    A named window that kept no row now says so, and names the windows the
+    rows read are in, with the same wording as the team reports
+    (`held_windows`, #147 and #162). This line used to branch on
+    `report.phase` alone, so an empty named window printed `phase_hours`'
+    old 0.0 default as a distance: "Priced **0.0 hours before face-off**
+    (`early` window)". On the bought store that came from `--phase early`
+    (2,544,921 `card` rows, 1,259,312 `late`, none `early`) and from
+    `--phase late --from 2026-04-18 --to 2026-04-20` (12,191 rows, all
+    `card`). Both exited 0 and wrote it into the contract report, and the
+    same header shape came from both workflows' `--phase card --label card`
+    step over a store holding only `late` rows. A window that kept rows
+    prints the line it always printed, byte for byte, including a median
+    that really is 0.0 hours.
+    """
+    if not report.phase:
+        return (
+            "- No snapshot window was filtered, so this number may mix prices "
+            "taken at different distances from face-off."
+        )
+    if report.phase_hours is None:
+        return (
+            f"- **No price row is in the `{report.phase}` window**, so nothing "
+            "was priced at any distance from face-off and nothing was "
+            "measured against a real price. The price rows read, by window: "
+            f"{held_windows(report.rows_by_window)}."
+        )
+    return (
+        f"- Priced **{report.phase_hours:.1f} hours before face-off** "
+        f"(`{report.phase}` window). A return measured at one distance "
+        "from the puck is not comparable to one measured at another: the "
+        "lineup is known at four hours and guessed at nine."
+    )
+
+
 def render_backtest(report: BacktestReport) -> str:
     lines = [
         "# Player props backtest",
@@ -799,15 +856,7 @@ def render_backtest(report: BacktestReport) -> str:
             else []
         ),
         f"- Edge threshold: **{report.edge_threshold:.1%}**",
-        (
-            f"- Priced **{report.phase_hours:.1f} hours before face-off** "
-            f"(`{report.phase}` window). A return measured at one distance "
-            "from the puck is not comparable to one measured at another: the "
-            "lineup is known at four hours and guessed at nine."
-            if report.phase else
-            "- No snapshot window was filtered, so this number may mix prices "
-            "taken at different distances from face-off."
-        ),
+        _window_line(report),
         f"- {report.summary_line()}",
         "",
     ]
