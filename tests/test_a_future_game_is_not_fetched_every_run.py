@@ -35,9 +35,11 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import re
 import stat
 import subprocess
 import sys
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import ModuleType
 
@@ -212,6 +214,47 @@ def test_an_unconfirmed_start_is_fetched(raw: Path, monkeypatch, start) -> None:
     assert _run(monkeypatch, requester) == 0
 
     assert _boxscore_calls(requester) == [2026020001]
+
+
+def _start_from_now(hours: float, *, offset_hours: int) -> str:
+    """A start time `hours` from the real now, written in a UTC offset of
+    `offset_hours`, as `startTimeUTC` could carry it."""
+    moment = datetime.now(timezone.utc) + timedelta(hours=hours)
+    return moment.astimezone(timezone(timedelta(hours=offset_hours))).isoformat(
+        timespec="seconds"
+    )
+
+
+@pytest.mark.parametrize(
+    ("hours", "offset_hours", "fetched"),
+    [
+        (-1, 0, True),
+        (+1, 0, False),
+        # A written offset is read, not dropped: in +05:00 a game that started
+        # an hour ago reads as four hours ahead if the offset is ignored, and
+        # in -05:00 one starting in an hour reads as four hours ago.
+        (-1, +5, True),
+        (+1, -5, False),
+    ],
+    ids=["started-an-hour-ago", "starts-in-an-hour",
+         "started-an-hour-ago-in-plus-5", "starts-in-an-hour-in-minus-5"],
+)
+def test_the_line_is_now_not_a_day_either_side(
+    raw: Path, monkeypatch, hours: int, offset_hours: int, fetched: bool
+) -> None:
+    """The fixtures above sit centuries away, so a rule that skipped until a
+    day after the start would pass them all and hold tonight's finals back
+    until tomorrow. A game that started an hour ago is fetched (its state
+    here is the cached, frozen `FUT`, which is not believed); one starting
+    in an hour is not."""
+    game_id = 2026020001
+    start = _start_from_now(hours, offset_hours=offset_hours)
+    _write_club_schedule(raw, [_game(game_id, start=start, state="FUT")])
+    requester = _requester([], {game_id})
+
+    assert _run(monkeypatch, requester) == 0
+
+    assert _boxscore_calls(requester) == ([game_id] if fetched else []), start
 
 
 def test_one_club_saying_future_does_not_outvote_one_that_does_not(
@@ -433,3 +476,47 @@ def test_experiment_refresh_does_not_count_future_games_toward_its_floor(
     else:
         assert result.returncode == 0, output
         assert "::error::" not in result.stdout, output
+
+
+# -- Gameday Refresh's restore log line counts finals only ------------------------
+
+
+def _restored_count_command() -> str:
+    """The one command in "Restore the previous state" that prints "Cached
+    boxscores restored:", continuation lines included. The rest of the step
+    lists and downloads artifacts through gh, and is exercised by
+    tests/test_a_restore_that_could_not_ask_is_a_degraded_run.py."""
+    workflow = yaml.safe_load(
+        (PROJECT_ROOT / ".github" / "workflows" / "gameday-refresh.yml").read_text(
+            encoding="utf-8"
+        )
+    )
+    for job in workflow["jobs"].values():
+        for step in job.get("steps", []):
+            if step.get("id") == "restore":
+                block = step["run"]
+                match = re.search(
+                    r"^[^#\n][^\n]*\\\n[^\n]*\"Cached boxscores restored:\"[^\n]*$",
+                    block, flags=re.M,
+                )
+                assert match, block
+                return match.group(0)
+    raise AssertionError("gameday-refresh.yml has no step with id: restore")
+
+
+@pytest.mark.parametrize("finals", [0, 3], ids=["none", "three"])
+def test_the_restore_log_counts_finals_not_files(tmp_path: Path, finals: int) -> None:
+    """Under the workflow's `bash -eo pipefail`, with a thousand scheduled
+    games beside the finals, and with no cache at all when there are none."""
+    box = tmp_path / "data" / "raw" / "nhl" / "boxscore"
+    if finals:
+        for game_id, state in enumerate(["OFF"] * finals + ["FUT"] * 1000, start=1):
+            nhl_api._write_cache(box / f"{game_id}.json", {"id": game_id, "gameState": state})
+
+    result = subprocess.run(
+        ["bash", "--noprofile", "--norc", "-eo", "pipefail", "-c", _restored_count_command()],
+        cwd=tmp_path, capture_output=True, text=True,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.stdout == f"Cached boxscores restored: {finals}\n", result.stdout

@@ -237,10 +237,12 @@ jobs:
             echo "Restored the previous card for the selections diff."
           fi
           # `|| true`: the shell is `bash -eo pipefail` (declared under
-          # `defaults:` above), and with nothing restored `find` fails on the
-          # missing directory. That would end the step here, before the
-          # ledger fallback below.
-          find data/raw/nhl/boxscore -name '*.json' 2>/dev/null | wc -l \
+          # `defaults:` above), and with nothing restored, or nothing final,
+          # `grep` fails. That would end the step here, before the ledger
+          # fallback below. FINAL boxscores only, as "Record what went wrong"
+          # counts them: a restored cache can hold a file per scheduled game
+          # from before fetch_boxscore stopped caching non-final answers.
+          grep -rliE --include='*.json' '"gameState":[[:space:]]*"(OFF|FINAL)"' data/raw/nhl/boxscore 2>/dev/null | wc -l \
             | xargs echo "Cached boxscores restored:" || true
           # If the chain broke, take the ledger from the card-feed branch
           # rather than starting the season's record over. Restoring a
