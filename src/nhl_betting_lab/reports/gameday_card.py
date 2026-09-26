@@ -160,6 +160,37 @@ HARD_GATED_MARKETS: dict[str, str] = {
 }
 
 
+#: Markets the CARD does not stake, on measured return, whatever the policy
+#: allows and whatever the model says tonight.
+#:
+#: Deliberately NOT HARD_GATED_MARKETS. That dict is about information this
+#: lab does not have, and says so: "This is not a judgement that the market
+#: has no value." This one is exactly that judgement, and it is reversible by
+#: deleting an entry.
+#:
+#: A market named here stays allowlisted, stays eligible, stays priced, and
+#: keeps every opinion it produces. `write_snapshot` runs on the unfiltered
+#: price frame before `build_card` is called at all, so the forward ledger
+#: accumulates these rows identically either way. `docs/when_this_ends.md` is
+#: explicit that the forward test measures opinions rather than bets -- "the
+#: card is dark and places none, but a frozen opinion scored against the price
+#: it was frozen at is the same test" -- so NOTHING measurable is given up by
+#: declining to stake a market. What is given up is the recommendation.
+STAKE_EXCLUDED_MARKETS: dict[str, str] = {
+    "points": (
+        "`points` is the one market this lab has measured as a loss that "
+        "survives correction: -4.2% over 6,140 card-window wagers, 95% "
+        "interval -6.7% to -1.7%, -7.6% to -0.7% after correcting for the "
+        "eight markets tested, and -256.8 units realised. It holds within "
+        "2025-26 alone (-5.4% over 3,468). The evidence bundle's verdict is "
+        "that \"a loss that survives the correction still argues against "
+        "enabling this market, not for it\". The opinion is still recorded "
+        "and still settles into the forward ledger; only the stake is "
+        "withheld."
+    )
+}
+
+
 @dataclass
 class Candidate:
     """One priced selection with a model opinion behind it."""
@@ -450,6 +481,15 @@ def build_candidates(
         candidate.section = (
             BEST_BETS_SECTION if edge >= best_bar else LEANS_SECTION
         )
+        if (
+            candidate.section == BEST_BETS_SECTION
+            and market_key in STAKE_EXCLUDED_MARKETS
+        ):
+            # Demoted to a lean, never to a pass and never deleted: the
+            # opinion cleared every bar the card sets and the record should
+            # say so. Only the stake is withheld.
+            candidate.section = LEANS_SECTION
+            candidate.demotion_reason = STAKE_EXCLUDED_MARKETS[market_key]
         if candidate.section == BEST_BETS_SECTION:
             candidate.suggested_units = TIER_UNITS.get(candidate.tier, 0.1)
             staked.append((key, candidate))
