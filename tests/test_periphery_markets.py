@@ -557,7 +557,7 @@ def test_a_missing_line_is_unsettleable_rather_than_an_under_that_won() -> None:
 
 
 def test_a_scratch_run_cannot_freeze_into_the_real_evidence_archive(
-    tmp_path, monkeypatch
+    tmp_path, monkeypatch, capsys
 ) -> None:
     """Found by running the card end to end against synthetic prices: with
     `--output-dir` pointed at a scratch directory, the snapshot still froze
@@ -572,27 +572,59 @@ def test_a_scratch_run_cannot_freeze_into_the_real_evidence_archive(
     regression of exactly this defect would have frozen test rows into the
     operator's real evidence archive before failing, and the card read the
     checkout's boxscores, club schedules and verdicts on the way (5,664 files
-    in the operator's checkout)."""
+    in the operator's checkout).
+
+    It also used to be unable to fail. Its staging directory did not exist,
+    so the card had no prices and froze nothing anywhere ("No snapshot was
+    frozen for 2026-10-08: there were no prices"), and `after == before`
+    held with the guard deleted. The whole suite under that mutant went 14
+    failed, 2412 passed, and this test passed (failure-shape audit, v5;
+    `tests/test_no_test_can_freeze_into_the_checkouts_archive.py`). Now it
+    stages Toronto hosting Boston that evening, with the tables and the team
+    map to price it. The run has something to freeze, so the test sees where
+    it goes: under `<output-dir>/archive`, and nowhere in the default
+    archive."""
     from nhl_betting_lab import forward_evidence
 
     from test_no_test_reads_the_checkouts_data import point_default_data_dirs_at
     from test_scripts import load_script
+    from test_the_card_reads_the_dirs_it_is_given import (
+        PROVIDER,
+        _saved_map,
+        _slate,
+        _tables,
+    )
 
     point_default_data_dirs_at(monkeypatch, tmp_path / "checkout_defaults")
     module = load_script("run_gameday_card.py")
     real_archive = forward_evidence.snapshots_dir()
     assert tmp_path in real_archive.parents, real_archive
     before = set(real_archive.glob("*")) if real_archive.is_dir() else set()
+    processed = tmp_path / "processed"
+    _tables(processed)
+    _saved_map(tmp_path, processed, ("TOR", "BOS", "MTL", "OTT"))
+    _slate(
+        tmp_path / "staging",
+        ("2026-10-08", "2026-10-08T23:00:00Z", "TOR", "BOS"),
+    )
+    outputs = tmp_path / "outputs"
 
     code = module.main(
         [
             "--staging-dir", str(tmp_path / "staging"),
-            "--processed-dir", str(tmp_path / "processed"),
-            "--output-dir", str(tmp_path / "outputs"),
+            "--processed-dir", str(processed),
+            "--output-dir", str(outputs),
             "--now", "2026-10-08T18:00:00+00:00",
         ]
     )
+    out = capsys.readouterr().out
 
     after = set(real_archive.glob("*")) if real_archive.is_dir() else set()
     assert code == 0
     assert after == before, "a scratch run wrote into the real archive"
+    assert not real_archive.exists(), "a scratch run created the real archive"
+    scratch_archive = outputs / "archive"
+    assert f"Snapshots are frozen under {scratch_archive}" in out, out
+    frozen = forward_evidence.snapshots_dir(scratch_archive) / "2026-10-08.csv"
+    assert f"Priced snapshot frozen: {frozen}" in out, out
+    assert sorted(pd.read_csv(frozen)["home_team"]) == [PROVIDER["TOR"]] * 2
