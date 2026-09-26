@@ -187,7 +187,9 @@ def append_captures(
 MOVEMENT_DIRNAME = "line_movement"
 
 
-def load_movement_captures(processed_dir: Path | None = None) -> pd.DataFrame:
+def load_movement_captures(
+    processed_dir: Path | None = None, *, unreadable: dict[str, str] | None = None
+) -> pd.DataFrame:
     """Closing-line captures, taken from the line-movement store.
 
     For the per-event markets and their alternate ladders, the dedicated
@@ -227,8 +229,24 @@ def load_movement_captures(processed_dir: Path | None = None) -> pd.DataFrame:
     which is exactly what `scripts/capture_line_movement.py` writes to the
     dedicated store from the same fetch. The two stores therefore hold the
     same rows, and a report does not depend on which one it read.
+
+    ## A day file that cannot be read is named, not skipped
+
+    `unreadable`, when given, receives every day file that could not be read,
+    by file name, with the reason. A file that did not parse, held zero
+    bytes, lacked a capture column, or parsed to fewer rows than its lines
+    used to be skipped with a bare `continue`. One ragged row took that
+    day's closing prices with it, and the report called the day's opinions
+    "no closing price found" and the run exited 0. The dedicated store raises
+    `UnreadableCaptureStore` for the same damage. This store is one file per
+    day, so raising would stop every good day being scored; instead the day
+    is left out and named, the same rule the runner follows for a damaged
+    priced snapshot. A header-only file still reads as empty: it holds no
+    row to lose. The capture only ever creates a file with rows in it, so
+    zero bytes is damage here, not an empty day.
     """
     empty = pd.DataFrame(columns=list(CAPTURE_COLUMNS))
+    damaged = unreadable if unreadable is not None else {}
     root = (
         Path(processed_dir) if processed_dir else PROCESSED_DIR
     ) / MOVEMENT_DIRNAME
@@ -238,13 +256,28 @@ def load_movement_captures(processed_dir: Path | None = None) -> pd.DataFrame:
     for path in sorted(root.glob("*.csv")):
         try:
             frame = pd.read_csv(path)
-        except (OSError, pd.errors.EmptyDataError, pd.errors.ParserError):
+        except (
+            OSError,
+            UnicodeDecodeError,
+            pd.errors.EmptyDataError,
+            pd.errors.ParserError,
+        ) as error:
+            damaged[path.name] = f"{type(error).__name__}: {error}".strip()
             continue
         missing = [c for c in CAPTURE_COLUMNS if c not in frame.columns]
         if missing:
-            # A day's file that predates a schema change is skipped rather
-            # than half-read: a capture missing `captured_at` cannot be
-            # ordered against face-off and would silently become "closing".
+            # Skipped rather than half-read: a capture missing `captured_at`
+            # cannot be ordered against face-off and would silently become
+            # "closing". Named, because its day then has no close at all.
+            damaged[path.name] = f"missing column(s): {', '.join(missing)}"
+            continue
+        # The floor comes from the file, as in `load_captures`: stray quotes
+        # parse short without an error.
+        rows_on_disk = existing_row_count(path)
+        if len(frame) < rows_on_disk:
+            damaged[path.name] = (
+                f"holds {rows_on_disk} row(s) and parses to only {len(frame)}"
+            )
             continue
         frames.append(frame)
     if not frames:
@@ -283,7 +316,9 @@ class UnreadableCaptureStore(CorruptStoreError):
         )
 
 
-def load_captures(processed_dir: Path | None = None) -> pd.DataFrame:
+def load_captures(
+    processed_dir: Path | None = None, *, unreadable: dict[str, str] | None = None
+) -> pd.DataFrame:
     """The dedicated capture store, falling back to the movement store.
 
     Both hold the same kind of row. The dedicated one wins when it has
@@ -327,7 +362,8 @@ def load_captures(processed_dir: Path | None = None) -> pd.DataFrame:
             )
         if not dedicated.empty:
             return dedicated
-    return load_movement_captures(processed_dir)
+    # `unreadable` receives each movement day file that could not be read.
+    return load_movement_captures(processed_dir, unreadable=unreadable)
 
 
 def _key_of(row) -> tuple:
@@ -870,6 +906,27 @@ def _row(*cells: str) -> str:
     return "| " + " | ".join(cells) + " |"
 
 
+def _unreadable_movement_lines(report: dict) -> list[str]:
+    """One bullet per line-movement day file the loader could not read.
+
+    Each used to be skipped without a word, so its day's opinions were
+    counted as having no close while the closing prices sat on disk. Printed
+    beside the damaged-snapshot lines, above every count they qualify.
+    """
+    damaged = report.get("unreadable_movement_days") or []
+    if not damaged:
+        return []
+    lines = [
+        f"- **{len(damaged)}** line-movement capture file(s) could not be "
+        "read, so no closing price in them is used, and an opinion whose "
+        "close was only in them is counted below as having none. This run "
+        "is not clean:",
+    ]
+    for entry in damaged:
+        lines.append(f"  - `{entry.get('name')}` ({entry.get('reason')}).")
+    return lines
+
+
 def _unreadable_snapshot_lines(report: dict) -> list[str]:
     """One bullet per priced snapshot the runner could not read.
 
@@ -914,6 +971,7 @@ def render_clv(report: dict, *, generated: str = "") -> str:
     if generated:
         lines += [f"- Generated: {generated}"]
     lines += _unreadable_snapshot_lines(report)
+    lines += _unreadable_movement_lines(report)
     unreadable = report.get("unreadable_store")
     if unreadable:
         # Never "Nothing to measure yet" and never "no closing price found":
@@ -1018,6 +1076,14 @@ def render_clv(report: dict, *, generated: str = "") -> str:
                 "that is the state before a season, or on a day the capture",
                 "job has not run. This run is still not clean: the snapshot",
                 "file(s) named above could not be read.",
+                "",
+            ]
+        elif report.get("unreadable_movement_days"):
+            # "Not a fault" would sit under a list of damaged capture files.
+            lines += [
+                "No opinion has been matched to a closing price, and this run",
+                "is not clean: the line-movement file(s) named above could",
+                "not be read, and a closing price may be in them.",
                 "",
             ]
         else:

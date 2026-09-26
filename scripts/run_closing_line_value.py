@@ -8,10 +8,11 @@ not settled anything yet) and the closing-price store, and writes
 `data/outputs/closing_line_value.md`. Spends nothing, fetches nothing, and
 places no bet.
 
-Exits 2 when the capture store holds rows it cannot read, or when a priced
-snapshot cannot be read. It still writes the report either way, and the
-report names what could not be read instead of calling it the pre-season
-state or leaving the day out without a word.
+Exits 2 when the capture store holds rows it cannot read, when a priced
+snapshot cannot be read, or when a line-movement day file cannot be read. It
+still writes the report either way, and the report names what could not be
+read instead of calling it the pre-season state or leaving the day out
+without a word.
 """
 
 from __future__ import annotations
@@ -143,6 +144,18 @@ def _say_unreadable_snapshots(damaged: list[dict[str, object]]) -> None:
     )
 
 
+def _say_unreadable_movement(damaged: list[dict[str, str]]) -> None:
+    if not damaged:
+        return
+    listed = "; ".join(f"{entry['name']} ({entry['reason']})" for entry in damaged)
+    print(
+        f"::error::{len(damaged)} line-movement capture file(s) could not be "
+        f"read, so no closing price in them is used: {listed}. Every other "
+        "day is still scored, and the report names each one. Restore it from "
+        "the artifact that carries it, then re-run."
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--processed-dir", default=str(PROCESSED_DIR))
@@ -157,8 +170,11 @@ def main(argv: list[str] | None = None) -> int:
     opinions = _opinions(processed, archive, unreadable=unreadable)
     damaged = _unreadable_snapshots(opinions, unreadable)
     generated = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    # A damaged movement day is named and left out; the good days are still
+    # scored. It used to be skipped without a word and exit 0.
+    movement_unreadable: dict[str, str] = {}
     try:
-        captures = load_captures(processed)
+        captures = load_captures(processed, unreadable=movement_unreadable)
     except UnreadableCaptureStore as exc:
         # A damaged store was read as an empty one, and the report said
         # "Nothing to measure yet ... the correct state and not a fault".
@@ -184,6 +200,12 @@ def main(argv: list[str] | None = None) -> int:
 
     report = build_clv_report(opinions, captures)
     report["unreadable_snapshots"] = damaged
+    movement_damaged = [
+        {"name": name, "reason": reason}
+        for name, reason in sorted(movement_unreadable.items())
+    ]
+    report["unreadable_movement_days"] = movement_damaged
+    _say_unreadable_movement(movement_damaged)
     path = save_clv_report(
         report, output_dir=Path(args.output_dir), generated=generated
     )
@@ -196,7 +218,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"  report: {path}")
     # The report above is written and names each damaged file; the exit says
     # the run was not clean, as it does for a damaged capture store.
-    return 2 if damaged else 0
+    return 2 if damaged or movement_damaged else 0
 
 
 if __name__ == "__main__":
