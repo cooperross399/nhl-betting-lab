@@ -242,13 +242,18 @@ def test_a_result_that_includes_zero_says_the_exact_words() -> None:
     assert NO_DEMONSTRATED_EDGE in rendered
 
 
-def test_the_report_states_that_one_sided_prices_understate_the_edge() -> None:
+def test_the_report_scopes_the_one_sided_vig_to_bet_selection() -> None:
+    # This used to pin "understates ... conservative in that one direction",
+    # which was false of the return the report prints: that is taken at the
+    # best of N books and leans optimistic (see
+    # tests/test_a_best_of_n_return_is_not_called_understated.py).
     report = bt.run_backtest(_prices(), _samples(), edge_threshold=0.05)
 
     rendered = bt.render_backtest(report)
 
-    assert "understates" in rendered
-    assert "conservative in that one direction" in rendered
+    assert "one-sided at most books" in rendered
+    assert "the edge used for bet selection" in rendered
+    assert "conservative in that one direction" not in rendered
 
 
 def test_the_report_says_settlement_never_comes_from_the_provider() -> None:
