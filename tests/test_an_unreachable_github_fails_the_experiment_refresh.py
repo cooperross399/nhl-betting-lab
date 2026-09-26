@@ -243,6 +243,23 @@ def test_a_failed_gameday_listing_fails_the_refresh_too(tmp_path: Path) -> None:
     assert UNREACHABLE in result.stdout + result.stderr
 
 
+def test_a_failed_gameday_state_download_alone_fails_the_refresh(tmp_path: Path) -> None:
+    """The listing above is shared with the historical-props restore from the
+    same workflow, so failing it cannot tell whether `gameday-state` itself
+    is held to the contract. Here only its download fails: every listing
+    answers, and the historical-props pairs restore normally."""
+    result, _ = _refresh(tmp_path, "github-default",
+                         fail={"download:6001:gameday-state": ALWAYS})
+    said = result.stdout + result.stderr
+
+    assert result.returncode != 0, said
+    assert UNREACHABLE in said, said
+    assert "restore gameday-state from gameday-refresh.yml" in said, said
+    assert "Only 0 boxscores restored" not in said, (
+        "an outage was reported as a thin cache"
+    )
+
+
 @pytest.mark.parametrize("fail", [f"list:{PURCHASE}", "download:8002:historical-props"])
 def test_a_transient_failure_is_retried_and_the_newest_prices_restored(
     tmp_path: Path, fail: str,
