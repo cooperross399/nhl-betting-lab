@@ -43,6 +43,7 @@ from nhl_betting_lab.providers.team_names import (
     save_team_name_map,
     saved_team_name_map,
 )
+from nhl_betting_lab.puck_drop import parse_commence_time
 from nhl_betting_lab.reports.card_pricing import (
     price_props,
     price_team_markets,
@@ -161,6 +162,13 @@ def _dated_before(frame: pd.DataFrame, day: date) -> pd.DataFrame:
 
     keep = frame["date"].map(_precedes).astype(bool)
     return frame[keep].reset_index(drop=True)
+
+
+def _under_way(start: str, moment: datetime) -> bool:
+    """A scheduled game that has faced off. An unreadable start has not, as
+    in `slate_games_with_schedule`: ambiguity counts as a game to card."""
+    begins = parse_commence_time(start)
+    return begins is not None and begins <= moment
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -383,9 +391,10 @@ def main(argv: list[str] | None = None) -> int:
     # `require_full_slate` exists to block — and never mentioned the three
     # games it had not seen. The screen above no longer shrinks the slate on
     # a partial cache; this closes the other door, the provider's.
+    starts = scheduled_regular_season_starts(raw)
     slate, unpriced = slate_games_with_schedule(
         prices,
-        scheduled_regular_season_starts(raw),
+        starts,
         resolve=lambda name: resolve_team(name, team_names),
         now=moment,
     )
@@ -655,6 +664,25 @@ def main(argv: list[str] | None = None) -> int:
             "opinion of the day is the one that settles."
         )
 
+    # What tells a blocked card that is a fault from one that is not
+    # (`why_nothing_to_card`): what the policy allowlists, and how many
+    # regular-season games are still to be played on this league day.
+    # Gameday Refresh used to read only this script's exit, 0 on every
+    # blocked card, so a card blocked because the board priced 7 of 8 games
+    # published a clean status and the 15:00 backup stood down. A policy that
+    # did not load, or a schedule cache with holes, cannot vouch for anything,
+    # so each is passed as None and the block stays a fault.
+    allowlisted = (
+        None if policy.blockers
+        else policy.allowed_markets(odds_api.PROVIDER_NAME)
+    )
+    still_to_play: int | None = None
+    if schedule_complete:
+        still_to_play = sum(
+            1
+            for (day, _home, _away), start in starts.items()
+            if day == snapshot_day and not _under_way(start, moment)
+        )
     card = build_card(
         prices,
         probabilities,
@@ -662,9 +690,19 @@ def main(argv: list[str] | None = None) -> int:
         blockers=blockers,
         now=moment,
         unresolved_names=sorted(unresolved_names),
+        allowlisted_markets=allowlisted,
+        scheduled_games=still_to_play,
     )
     paths = save_card(card, output_dir=outputs)
     print(card.summary_line())
+    if not card.card_generated:
+        print(
+            f"Not a fault: {card.nothing_to_card}"
+            if card.nothing_to_card
+            else "This block is a fault, not the policy's decision or an "
+            "empty day: Gameday Refresh records the run as degraded, and the "
+            "15:00 backup does not stand down for it."
+        )
     if card.quarantined:
         print(
             f"Puck-drop guard removed {len(card.quarantined)} selection(s) "

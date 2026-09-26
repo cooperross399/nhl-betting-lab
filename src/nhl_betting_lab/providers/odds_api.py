@@ -175,7 +175,12 @@ class ProviderError(RuntimeError):
     `status` is the HTTP status the provider refused a request with, and None
     when there was no refusal to read: a request that never came back, or one
     answered 200 with an unreadable body. A caller that has to tell one
-    refusal from another reads this, not the words of the message.
+    refusal from another reads this, not the words of the message. Until
+    2026-09-26 the error carried nothing but its message: `fetch_team_markets`
+    read any failure of its h2h check as the off-season (#201), and
+    `scripts/discover_nhl_markets.py` recorded every failed request as "not a
+    market at all" — a 503, a 429, a 500 and a read timeout alike, next to one
+    genuine 422 — because nothing on the error told them apart.
     """
 
     def __init__(self, *args: object, status: int | None = None) -> None:

@@ -632,9 +632,31 @@ def _responses_by_event(
     return grouped
 
 
+def answered_probes(probes: Sequence[RetentionProbe]) -> list[RetentionProbe]:
+    """The probes that got an answer. A failed request is not evidence.
+
+    `probe_retention` returns a probe with `error` set, its
+    `markets_requested` still filled and `markets_returned` empty, when the
+    request raised (an HTTP 503, a 401 from a key out of quota, a timeout)
+    or the answer was not a JSON object. Nothing downstream read `error`, so
+    that probe counted as an event that asked for every market and saw none.
+    Replayed through `buy_historical_props.py --probe --live` with every
+    per-event request answering 503, the table read "**not offered in any of
+    5 events**" for all seven markets, the retention file named all seven
+    unmeasurable, and the backtest printed `hits` as having "no price-based
+    evidence at all" beside a card window that had measured it at 5,207
+    bets. Two answers plus three 503s cleared the absence floor of five.
+
+    A request that got no answer says nothing about any market, so it is
+    neither an event probed nor an absence. Everything below counts only
+    these, and `retention_table` states how many requests failed.
+    """
+    return [probe for probe in probes if not probe.error]
+
+
 def events_probed(probes: Sequence[RetentionProbe]) -> int:
-    """How many distinct events these probes describe."""
-    return len(_responses_by_event(probes))
+    """How many distinct events these probes got an answer about."""
+    return len(_responses_by_event(answered_probes(probes)))
 
 
 def _retention_by_market(
@@ -648,6 +670,10 @@ def _retention_by_market(
     four-hour buy asked one region, and neither book that quotes hits is in
     it -- can add a sighting to its event and never subtract one.
 
+    Only answered probes count (`answered_probes`): a failed request asked
+    nothing and saw nothing, and counting it here is how an outage wrote
+    "not offered in any of 5 events" for every market.
+
     `retention_table` and `unmeasurable_markets` both read this, so the list
     of unmeasurable markets is exactly the set the table calls not offered.
     The list used to take its floor and its sentence from every probe,
@@ -658,7 +684,7 @@ def _retention_by_market(
         for market in probe.markets_requested:
             if market not in requested:
                 requested.append(market)
-    by_event = _responses_by_event(probes)
+    by_event = _responses_by_event(answered_probes(probes))
     counts: list[tuple[str, int, int]] = []
     for market in requested:
         asked = 0
@@ -690,12 +716,25 @@ def retention_table(probes: Sequence[RetentionProbe]) -> str:
     `player_hits` as 1,218/5,432 (22%) where it was seen in 1,218 of 2,723
     events (45%), and the floor of five events could be cleared by three
     events priced at two moments.
+
+    A probe whose request failed is counted nowhere but in its own line
+    (`answered_probes`). Five 503s used to read "not offered in any of 5
+    events" for every market.
     """
     if not probes:
         return (
             "No retention probe has been run, so which prop markets can be "
             "measured historically is **unknown**. It is not assumed to be "
             "all of them, and it is not assumed to be none."
+        )
+    answered = answered_probes(probes)
+    failed = len(probes) - len(answered)
+    if not answered:
+        return (
+            f"All {failed} retention probe request(s) failed, so no event was "
+            "probed and which prop markets can be measured historically is "
+            "**unknown**. A request that got no answer says nothing about any "
+            "market, so none is counted as absent."
         )
     events = events_probed(probes)
     lines = [
@@ -713,15 +752,22 @@ def retention_table(probes: Sequence[RetentionProbe]) -> str:
                 "absent"
             )
         lines.append(f"| `{market}` | {probed} | {retained} | {verdict} |")
-    if len(probes) > events:
+    if len(answered) > events:
         lines.append("")
         lines.append(
-            f"{len(probes)} responses were read over {events} events. An "
+            f"{len(answered)} responses were read over {events} events. An "
             "event is counted once, and is seen for a market when any of its "
             "responses carried it, so an event priced at two moments is one "
             "event rather than two. No response records which regions it "
             "asked, so an event whose only responses asked a region without "
             "the market's books still counts as probed and not seen."
+        )
+    if failed:
+        lines.append("")
+        lines.append(
+            f"{failed} probe request(s) failed and are counted neither as "
+            "probed nor as not seen: a request that got no answer says "
+            "nothing about any market."
         )
     if events < MINIMUM_PROBES_FOR_ABSENCE:
         lines.append("")
@@ -744,7 +790,9 @@ def unmeasurable_markets(
     either. The floor and the sentence count the events that asked for each
     market, as the table does: they used to count probes, so three events
     priced at two moments cleared a floor of five, and the sentence would
-    have named twice the events it saw.
+    have named twice the events it saw. And a failed request counts for
+    nothing (`answered_probes`): five 503s used to name all seven prop
+    markets here.
     """
     return {
         market: (

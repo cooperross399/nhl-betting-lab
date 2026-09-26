@@ -415,6 +415,38 @@ def main(argv: list[str] | None = None) -> int:
             probes.append(probe)
         table = hist.retention_table(probes)
         print(table)
+        spent = sum(probe.credits_spent for probe in probes) + listing_cost
+        failed = [probe for probe in probes if probe.error]
+        if failed:
+            # A probe with a failed request is a degraded probe, and it writes
+            # nothing. This branch used to append every probe, write the
+            # record over whatever it held and return 0: with every
+            # per-event request answering 503 it wrote all seven prop
+            # markets as "cannot be measured against real prices" over the
+            # cache-derived record (2,723 events, none unmeasurable), and the
+            # run was green. The table no longer counts a failure as absence
+            # (`hist.answered_probes`), but a probe with fewer answers than it
+            # asked for is still a thinner record than the one it would
+            # replace, and nothing is lost by refusing: every answered
+            # response is already in the raw cache, so the same command asks
+            # again only for the requests that failed.
+            print(
+                f"{len(failed)} of {len(probes)} probe request(s) failed, so "
+                f"{outputs / RETENTION_FILENAME} is left as it is rather than "
+                "replaced with an answer to fewer events than were asked. A "
+                "failed request says nothing about any market. The answered "
+                "responses are cached, so re-running this command asks again "
+                "only for the failed ones; `--from-cache` rebuilds retention "
+                "from every response already bought, for nothing.",
+                file=sys.stderr,
+            )
+            for probe in failed:
+                print(
+                    f"  {probe.event_id} at {probe.snapshot}: {probe.error}",
+                    file=sys.stderr,
+                )
+            print(f"Total spend this run: {spent} credit(s).")
+            return 2
         provider_to_key = {
             market.provider_key: market.key for market in PROP_MARKETS
         }
@@ -422,11 +454,12 @@ def main(argv: list[str] | None = None) -> int:
             provider_to_key.get(provider_key, provider_key): reason
             for provider_key, reason in hist.unmeasurable_markets(probes).items()
         }
-        spent = sum(probe.credits_spent for probe in probes) + listing_cost
         (outputs / RETENTION_FILENAME).write_text(
             json.dumps(
                 {
-                    "events_probed": len(probes),
+                    # Distinct events, as the table counts them and as the
+                    # `--from-cache` record does.
+                    "events_probed": hist.events_probed(probes),
                     "snapshots": [probe.snapshot for probe in probes],
                     "markets_seen": sorted(
                         {
