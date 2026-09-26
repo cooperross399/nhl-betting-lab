@@ -1,8 +1,13 @@
 """The shadow verification report.
 
 A shadow run fetches real prices, writes them to `data/staging/`, and reports
-what it found. That is all it does. It cannot allowlist anything, it cannot
-promote staging, and the card cannot read the files it writes.
+what it found. That is all it does. It cannot allowlist anything and it
+cannot promote staging. The gameday card reads the files it writes — in
+Gameday Refresh this fetch is the card's price source — and uses a market
+from them only if the policy allowlists it, it is priced for every game in
+the slate, and the oldest staged row is inside the policy's
+`max_provider_run_age_hours`. (Until 2026-09-25 this docstring and the
+report denied that the card reads them.)
 
 The report answers three questions and refuses to answer a fourth:
 
@@ -19,7 +24,7 @@ approval takes.
 from __future__ import annotations
 
 import json
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -93,17 +98,28 @@ def build_shadow_summary(
     errors: Sequence[str] = (),
     staging_files: Sequence[Path | str] = (),
     now: datetime | None = None,
+    requested_markets: Iterable[str] | None = None,
 ) -> tuple[ShadowSummary, EligibilityReport, DiscoveryReport]:
-    """Assess a staged price frame without changing anything."""
+    """Assess a staged price frame without changing anything.
+
+    `requested_markets` is the set of project markets this run asked the
+    provider for, or None when the caller cannot say (an offline assessment
+    of files some earlier run staged). Both reports need it: without it a
+    market nobody asked for reads "the provider returned no rows" and "no
+    book returned this market", which is how the scheduled bulk-only
+    discovery run published nine unasked markets as unquoted.
+    """
     moment = now or datetime.now(timezone.utc)
     slate = slate_games_from(prices)
+    requested = None if requested_markets is None else tuple(requested_markets)
     eligibility = assess_markets(
         prices,
         slate_games=slate,
         policy=policy,
         provider_name=provider_name,
+        requested=requested,
     )
-    discovery = discover_coverage(prices)
+    discovery = discover_coverage(prices, requested=requested)
     summary = ShadowSummary(
         generated_at=moment.isoformat(timespec="seconds"),
         provider_name=provider_name,
@@ -133,9 +149,15 @@ def render_shadow(
     lines = [
         "# Provider shadow verification",
         "",
+        # Until 2026-09-25 this said "The card cannot read those files." It
+        # can, and does: run_gameday_card.py reads data/staging/ by name. A
+        # reader told otherwise would treat a bad fetch as harmless.
         (
             "A shadow run fetches real prices into `data/staging/` and reports "
-            "what it found. The card cannot read those files. **Nothing in "
+            "what it found. The gameday card reads `data/staging/`, and uses a "
+            "market from it only if the provider policy allowlists it, it is "
+            "priced for every game in the slate, and the oldest staged row is "
+            "inside the policy's `max_provider_run_age_hours`. **Nothing in "
             "this report allowlists a provider or a market.**"
         ),
         "",

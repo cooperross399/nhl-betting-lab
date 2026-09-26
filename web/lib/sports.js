@@ -176,6 +176,23 @@ function nhlBoard(data) {
     summary: `Showing ${(data.games || []).length} games · ${bets} best bets · ${leans} leans · a unit is $${unit}`, unit };
 }
 
+// A settled game whose board carried no pick. The builder used to hand such
+// a game the pick {market: "—", label: "No play", price: 0, result: "push"},
+// and resultPick rendered it under "Model pick" as "No play · — · −0 ·
+// Push". Publish Site restores no staged prices, so every game on an
+// unpriced board became a model pass graded as a push, at a price of −0
+// that nobody quoted. That was 5 of 5 on the real 2026-09-29 slate. The
+// row now carries `priced`. A pass is read only off `priced: true`; any
+// other row is not a judgement the model made. Neither kind is graded,
+// and neither shows a price. Pinned by
+// tests/test_results_never_grade_an_unpriced_game.py.
+function nhlNoPick(g) {
+  const [label, market] = g.priced === true
+    ? ["No play", "priced, nothing selected · not graded"]
+    : ["Not priced", "no market price reached this board · not graded"];
+  return { hasPick: true, pick: { label, market, result: dash, color: "#6b6e7a", bg: "#f4f2ee" } };
+}
+
 function nhlResults(data) {
   const sport = SPORTS.nhl, T = data.teams || {}, s = data.summary || {};
   const games = (data.games || []).map((g) => {
@@ -189,7 +206,7 @@ function nhlResults(data) {
     const t = g.total;
     return { sides: [side(g.away), side(g.home)], finishLabel: g.finish && g.finish !== "REG" ? ` · ${g.finish}` : "",
       cells: [cell("Straight up", [["Projected", g.projWinner], ["Result", suHit ? "Hit" : "Miss", true]]), cell("Total", t ? [["Line / proj", `${num(t.line)} / ${num(t.proj)}`], ["Landed", `${tot} · ${t.result === "over" ? "Over" : t.result === "under" ? "Under" : "Push"}`, true]] : [["Line / proj", dash], ["Landed", `${tot} · no line`, true]])],
-      ...resultPick(g.pick) };
+      ...(g.pick ? resultPick(g.pick) : nhlNoPick(g)) };
   });
   return { ...common(data, sport), kicker: `${data.season} NHL · ${data.resultsDate ? F.fmtDateOnly(data.resultsDate) : ""}`, dateShort: data.resultsDate ? F.fmtDateOnly(data.resultsDate) : "",
     strip: [{ label: "Straight up", value: F.recStr(s.straightUp || { w: 0, l: 0 }) }, { label: "Model picks", value: F.recStr(s.picks || { w: 0, l: 0, p: 0 }) }, { label: "Totals", value: F.recStr(s.totals || { w: 0, l: 0, p: 0 }) }],

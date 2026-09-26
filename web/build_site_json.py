@@ -16,9 +16,12 @@ Sources, in order of trust:
     earliest capture of the day, used as the open. Publish Site restores
     NEITHER — its two artifacts carry no data/staging and no line_movement —
     so there every regular-season game is published unpriced (`priced:
-    false`, no line, no pick) and every open is missing, and the board says
-    so rather than reading as a pass.
-  * data/processed/team_games.csv + TeamModel: expected goals per side.
+    false`, no line, no pick) and every open is missing. The board says so
+    rather than reading as a pass, and so does the next morning's Results
+    page, which grades no game that carried no pick.
+  * data/processed/team_games.csv + TeamModel: expected goals per side,
+    with the back-to-back adjustment only while the recorded `team_b2b`
+    verdict ships it — the same verdict, read the same way, as the card.
   * data/outputs/forward_evidence.json: the forward ledger's SIZE, in wagers.
     Never its return, and never a season record: nothing here tallies one.
 
@@ -180,12 +183,40 @@ def ml_pair(rows, home, away):
     return {"home": h, "away": a} if h is not None and a is not None else None
 
 
-def load_model(processed: Path):
+def load_model(processed: Path, outputs: Path):
+    """The fitted team model, the team-name resolver, the schedule's rest
+    fact, and whether that fact may move a price.
+
+    ## Rest moves a price only while its verdict ships
+
+    `b2b` is the schedule fact — the side played the previous league day —
+    and the board publishes it as the chip whatever any verdict says. `rest`
+    is whether the fact reaches the model, and it is the recorded `team_b2b`
+    verdict, read through `verdicts.ships` from the lab's own `data/outputs`
+    (falling back to the recorded directory exactly as the card's does).
+
+    This used to feed the fact into every price unconditionally. The card
+    applies rest only while `ships("team_b2b", output_dir=outputs)` is true
+    (`scripts/run_gameday_card.py`), so once Experiment Refresh's drift PR
+    withdrew the policy the card would price every side rested while the
+    board kept publishing the adjusted winProb, projGoals, fair odds,
+    coverProb, overProb and regulation split, froze them as the day's first
+    opinion, and graded straight up on them. Measured on the real history
+    with the verdict withdrawn: on 2025-03-02 the card priced Pittsburgh (at
+    home, the night after playing) at 0.4370 and the board published 0.4141,
+    fair +142; over the 2025-26 regular season, refitted each day as the
+    board fits, the flag moved the published winProb by a median 3.6 points
+    (max 4.6) in the 358 of 1,312 games with a tired side and flipped the
+    projected winner in 39. A withdrawn policy is withdrawn from the public
+    page as well, or the page shows a policy nobody stands behind beside a
+    pick priced without it.
+    """
     try:
         from nhl_betting_lab.data.build_datasets import load_team_games
         from nhl_betting_lab.models.team_model import TeamModel
         from nhl_betting_lab.providers.team_names import build_team_name_map, resolve_team
         from nhl_betting_lab.rest import last_played_dates, played_previous_day
+        from nhl_betting_lab.verdicts import ships, source
     except ImportError:
         return None
     games = load_team_games(processed)
@@ -194,7 +225,17 @@ def load_model(processed: Path):
     model = TeamModel().fit(games)
     names = build_team_name_map()
     last = last_played_dates(games)
-    return {"model": model, "resolve": lambda label: resolve_team(label, names), "b2b": lambda team, day: played_previous_day(last, team, day)}
+    rest = ships("team_b2b", output_dir=outputs)
+    print(
+        f"Back-to-back adjustment on the board: team_b2b={'in force' if rest else 'off'} "
+        f"(verdict read from {source('team_b2b', output_dir=outputs)})."
+    )
+    return {
+        "model": model,
+        "resolve": lambda label: resolve_team(label, names),
+        "b2b": lambda team, day: played_previous_day(last, team, day),
+        "rest": rest,
+    }
 
 
 def build_board(day: date, lab: Path, history_dir: Path) -> dict:
@@ -211,7 +252,7 @@ def build_board(day: date, lab: Path, history_dir: Path) -> dict:
     candidates = [r for r in card.get("best_bets", []) + card.get("leans", []) + card.get("passes", []) if r.get("market") in MARKET_LABEL]
     prices = read_prices(lab / "data" / "staging") if not preseason else []
     opens = earliest_capture(lab / "data" / "processed", day) if not preseason else []
-    lab_model = load_model(lab / "data" / "processed") if not preseason else None
+    lab_model = load_model(lab / "data" / "processed", lab / "data" / "outputs") if not preseason else None
 
     for g in games:
         away, home = g["awayTeam"], g["homeTeam"]
@@ -239,10 +280,15 @@ def build_board(day: date, lab: Path, history_dir: Path) -> dict:
             home_key = lab_model["resolve"](f"{home.get('placeName', {}).get('default', '')} {home.get('commonName', {}).get('default', '')}".strip()) or h
             away_key = lab_model["resolve"](f"{away.get('placeName', {}).get('default', '')} {away.get('commonName', {}).get('default', '')}".strip()) or a
             hb, ab = lab_model["b2b"](home_key, day.isoformat()), lab_model["b2b"](away_key, day.isoformat())
+            # The chip publishes the schedule fact; the prices see it only
+            # while the team_b2b verdict ships (see load_model). This passed
+            # hb/ab straight through, so a withdrawn policy kept moving
+            # every figure below.
+            rest = {"home_b2b": hb and lab_model["rest"], "away_b2b": ab and lab_model["rest"]}
             m = lab_model["model"]
-            eh, ea = m.expected_goals(home_key, away_key, home_b2b=hb, away_b2b=ab)
-            ml = m.moneyline_probabilities(home_key, away_key, home_b2b=hb, away_b2b=ab)
-            reg = m.regulation_3_way_probabilities(home_key, away_key, home_b2b=hb, away_b2b=ab)
+            eh, ea = m.expected_goals(home_key, away_key, **rest)
+            ml = m.moneyline_probabilities(home_key, away_key, **rest)
+            reg = m.regulation_3_way_probabilities(home_key, away_key, **rest)
             row["home"].update({"projGoals": round(eh, 2), "winProb": round(ml["home"], 4), "b2b": hb})
             row["away"].update({"projGoals": round(ea, 2), "winProb": round(ml["away"], 4), "b2b": ab})
             # Provider rows are keyed by the provider's team strings; match on either.
@@ -258,7 +304,7 @@ def build_board(day: date, lab: Path, history_dir: Path) -> dict:
                 # that never moved because it was only ever read once.
                 row["moneyline"] = {"open": opn, "current": cur, "fair": {"home": to_american(ml["home"]), "away": to_american(ml["away"])}}
                 fav_home = ml["home"] >= ml["away"]
-                pl = m.puck_line_probabilities(home_key, away_key, line=1.5, home_b2b=hb, away_b2b=ab)
+                pl = m.puck_line_probabilities(home_key, away_key, line=1.5, **rest)
                 row["puckLine"] = {
                     "favorite": h if fav_home else a, "line": -1.5,
                     "price": best_price(prices, provider_home, provider_away, "puck_line", "home" if fav_home else "away", -1.5),
@@ -266,7 +312,7 @@ def build_board(day: date, lab: Path, history_dir: Path) -> dict:
                 }
                 line = headline_line(prices, provider_home, provider_away, "total_goals")
                 if line is not None:
-                    tot = m.total_probabilities(home_key, away_key, line=line, home_b2b=hb, away_b2b=ab)
+                    tot = m.total_probabilities(home_key, away_key, line=line, **rest)
                     row["total"] = {
                         "open": headline_line(opens, provider_home, provider_away, "total_goals"), "current": line,
                         "overPrice": best_price(prices, provider_home, provider_away, "total_goals", "over", line),
@@ -538,13 +584,32 @@ def settle(day: date, history_dir: Path) -> dict:
             proj_side = "over" if tot["proj"] > tot["current"] else "under"
             s["totals"]["p" if res == "push" else "w" if res == proj_side else "l"] += 1
             row["total"] = {"line": tot["current"], "proj": tot["proj"], "result": res}
+        # What the frozen board said about this game's prices, carried onto
+        # the results row so the page can say it. A board frozen before the
+        # flag existed carries none. Every version of build_board attached
+        # `moneyline` under exactly the condition that now sets `priced`
+        # (both provider team strings matched), so its line answers the
+        # question for those boards.
+        row["priced"] = bool(g["priced"] if "priced" in g else "moneyline" in g)
         pick = g.get("pick")
         if pick:
             outcome = grade_pick(pick, ha, aa, hs, as_, finish)
             s["picks"]["w" if outcome == "win" else "l" if outcome == "loss" else "p"] += 1
             row["pick"] = {**pick, "result": outcome}
         else:
-            row["pick"] = {"market": "—", "label": "No play", "price": 0, "result": "push"}
+            # A game with no pick settles with no pick. This used to write
+            # {"market": "—", "label": "No play", "price": 0, "result":
+            # "push"} for every such game, without reading `priced`. Publish
+            # Site restores no staged prices, so from opening night that
+            # was every regular-season game: 2 of 2 in
+            # tests/test_results_never_grade_an_unpriced_game.py, and 5 of 5
+            # on the real 2026-09-29 slate. The Results page showed each one
+            # under "Model pick" as "No play · — · −0 · Push". That called a
+            # game no price reached a model pass, graded a pass that was
+            # never a bet, and printed a price nobody quoted. The page reads
+            # `priced` and says "Not priced" or "No play". It grades
+            # neither.
+            row["pick"] = None
         base["games"].append(row)
     return base
 

@@ -17,6 +17,14 @@ because conflating them is how a card starts lying:
 ``unavailable``
     The provider returned no rows at all. Not a price of zero, not a "no
     value" verdict — simply absent.
+``not_requested``
+    The fetch behind the prices never asked the provider for this market, so
+    there is nothing to judge. Only a caller that knows what it asked can say
+    this (a live shadow run); the card never passes a requested set and never
+    sees the state. It exists because "never asked" and "asked, nobody
+    quotes it" read identically as `unavailable`, and the scheduled discovery
+    probe — bulk markets only — published nine markets as the provider's
+    absence that it had never asked about.
 ``not_allowlisted``
     Priced and complete, but no reviewed human approval covers it. This is the
     default state of every market in this repository.
@@ -66,6 +74,7 @@ from nhl_betting_lab.staging_provider_policy import StagingProviderPolicy
 ELIGIBLE = "eligible"
 INCOMPLETE = "incomplete"
 UNAVAILABLE = "unavailable"
+NOT_REQUESTED = "not_requested"
 NOT_ALLOWLISTED = "not_allowlisted"
 DISABLED = "disabled"
 
@@ -164,6 +173,7 @@ def assess_markets(
     markets: Iterable[str] | None = None,
     disabled: Iterable[str] = (),
     require_full_slate: bool = True,
+    requested: Iterable[str] | None = None,
 ) -> EligibilityReport:
     """Decide each market's state for one slate.
 
@@ -171,9 +181,22 @@ def assess_markets(
     `date`, `home_team` and `away_team`. `slate_games` is the set of game keys
     the card would cover, so a market can be judged against the whole slate
     rather than against whatever the provider happened to return.
+
+    `requested` is the set of project markets the fetch behind `prices`
+    actually asked the provider for, when the caller knows it. A market
+    outside it with no rows is `not_requested`, not `unavailable`: until
+    2026-09-25 the scheduled discovery run, which asks for the three bulk
+    markets only, reported the other nine as "The provider returned no rows
+    for this market" — a claim about a provider nobody had asked. None (the
+    card, and any offline assessment of staged files) means "unknown", and
+    every market is judged exactly as before. A market with rows is judged
+    on its rows whatever this says; rows are never hidden behind a label.
     """
     keys = tuple(str(market) for market in (markets or MARKETS_BY_KEY))
     turned_off = {str(item).strip() for item in disabled}
+    asked = (
+        None if requested is None else {str(item).strip() for item in requested}
+    )
     slate = tuple(dict.fromkeys(str(game) for game in slate_games))
     report = EligibilityReport(
         provider_name=str(provider_name), games_in_slate=len(slate)
@@ -222,6 +245,26 @@ def assess_markets(
                     games_in_slate=len(slate),
                     games_priced=len(covered),
                     rows=rows,
+                )
+            )
+            continue
+
+        if not covered and asked is not None and key not in asked:
+            report.markets.append(
+                MarketEligibility(
+                    market=key,
+                    state=NOT_REQUESTED,
+                    reason=(
+                        "Not requested in this run: the fetch behind these "
+                        "prices never asked the provider for this market, "
+                        "so there is nothing to judge. That says nothing "
+                        "about whether any book quotes it — it is not an "
+                        "absence at the provider, not a price of zero and "
+                        "not a no-value call."
+                    ),
+                    games_in_slate=len(slate),
+                    rows=0,
+                    missing_games=missing,
                 )
             )
             continue

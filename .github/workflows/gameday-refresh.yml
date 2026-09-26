@@ -30,10 +30,16 @@ name: Gameday Refresh
 # The concurrency group serialises them and the second run only reposts if it
 # has something new to say, so a duplicate run is invisible.
 #
-# COST: the bulk team-market fetch is a handful of credits. Player props are
-# per-event and bill one credit per market per event, which on a twelve-game
-# night across six markets is 72 credits — so the props fetch runs under a hard
-# cap set here, and the run prints what it spent.
+# COST: the bulk team-market fetch is a handful of credits (3 markets x 2
+# regions = 6 a run). Player props and every other per-event market bill one
+# credit per market per region per event: the fetch asks 19 markets at the
+# lab's two regions (us,us2), 19 markets x 2 regions = 38 credits an event
+# under the pessimistic bound — so the per-event fetch runs under a hard cap
+# set here, and the run prints what it spent. That cap covers fewer games
+# than the season's largest nights; see "Fetch prices into staging". (Until
+# 2026-09-25 this said one credit per market per event, 72 credits for a
+# twelve-game night across six markets: one region, and a third of the
+# markets asked.)
 on:
   schedule:
     # 13:30 UTC is 09:30 in New York: the card is in the inbox before the
@@ -86,8 +92,10 @@ jobs:
     # The second scheduled trigger exists only to cover a dropped first one,
     # and when the first one worked it has nothing to add: it would refetch
     # the same slate for the same credits, then republish the same card. Over
-    # a 185-day season that duplicate is 26,091 credits — half the entire
-    # season's budget — spent to learn nothing.
+    # the 185 nights of 2026-27 that duplicate could bill up to 42,530
+    # credits at the 320 cap and two regions (41,420 per-event, 1,110 bulk) —
+    # as much again as the primary — spent to learn nothing. (This said
+    # 26,091 until 2026-09-25: the uncapped figure at one region.)
     #
     # So a scheduled run first asks the card-feed branch whether today's card
     # is already published and clean. If it is, the whole job is skipped. A
@@ -282,13 +290,26 @@ jobs:
           PYTHONPATH: src
         run: |
           set +e
-          # 320 covers a sixteen-game slate at nineteen asked markets under
-          # the pessimistic bound the cap enforces; the real bill is only
-          # what books actually quote (an unquoted market costs nothing).
+          # The cap is enforced against the pessimistic bound, every asked
+          # market in every asked region: 19 markets x 2 regions = 38
+          # credits an event, so 320 buys 8 events, the first eight by
+          # face-off. The real bill is only what books actually quote (an
+          # unquoted market costs nothing), but the cap stops at the bound.
+          # Measured on the real 2026-27 club schedules, that clips 72 of the
+          # 185 nights and leaves 254 games unpriced; on those nights every
+          # market only this per-event fetch prices (the props, the
+          # regulation three-way, team totals) is INCOMPLETE and excluded
+          # from the card. 608 is the smallest cap that clips no night (16
+          # games x 38). Raising the cap spends more credits and is Cooper's
+          # decision, still pending, so 320 stands. (Until 2026-09-25 this
+          # said the cap covered a sixteen-game slate: one region's
+          # arithmetic. The cap was set that way on 2026-08-28, and us2 was
+          # added the same day.)
           # The one-day horizon keeps the spend on today's slate — a 32-event
           # August board once starved the nearest nine games under the old
-          # cap. Ceiling if every market were quoted for every game, both
-          # daily runs: ~700 credits/day; realistic in-season: 250-400.
+          # cap. Ceiling at this cap: about 326 credits a run (320
+          # per-event, 6 bulk), and the backup trigger stands down after a
+          # clean primary.
           python scripts/run_provider_shadow.py --live --props \
             --overwrite-staging --horizon-days 1 \
             --credit-cap "${{ inputs.props_credit_cap || '320' }}"
