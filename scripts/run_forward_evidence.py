@@ -30,6 +30,7 @@ from nhl_betting_lab.providers.team_names import (
     UnresolvedTeamsError,
     load_team_name_map,
 )
+from nhl_betting_lab.stores import CorruptStoreError
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -88,6 +89,20 @@ def main(argv: list[str] | None = None) -> int:
     except UnresolvedTeamsError as error:
         print(f"::error::{error}", file=sys.stderr)
         refused = True
+    except CorruptStoreError as error:
+        # The ledger itself cannot be read. This used to escape as a bare
+        # ParserError on this run and on every later one (a torn ledger
+        # measured "EOF inside string starting at row 45122"). It is named
+        # now, and nothing was settled, marked or appended. The report is
+        # withheld rather than restated: it restates the ledger, and there
+        # is no ledger to restate, so card-feed carries no forward-evidence
+        # report from this run rather than a wrong one.
+        print(f"::error::{error}", file=sys.stderr)
+        print(
+            "No report was written: it restates the forward ledger, and the "
+            "ledger cannot be read."
+        )
+        return 2
     else:
         print(result.summary_line())
         refused = False
