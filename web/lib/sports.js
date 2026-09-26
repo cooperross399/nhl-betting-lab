@@ -100,8 +100,13 @@ function nhlBoard(data) {
       cell("Total", [["Open / Current", `${num(tot.open)} / ${num(tot.current)}`], ["Over / Under", `${odds(tot.overPrice)} / ${odds(tot.underPrice)}`], ["Proj", `${num(tot.proj)} · O ${pct(tot.overProb)}`, true]], h.total),
       cell("Regulation", [[a, `${pct(reg.away)} · ${odds(reg.prices && reg.prices.away)}`], ["Draw", `${pct(reg.draw)} · ${odds(reg.prices && reg.prices.draw)}`], [hm, `${pct(reg.home)} · ${odds(reg.prices && reg.prices.home)}`]]),
     ] : [];
+    // The builder names each pick's kind; a pick frozen before it did reads
+    // as a bet. This counted every pick as a best bet, and the builder set
+    // no kind, so a lean was headed "Best bet" and counted in the strip.
+    // Pinned by tests/test_a_lean_is_never_published_as_a_best_bet.py.
     const p = g.pick ? { kind: "bet", ...g.pick } : null;
-    if (p && !g.started) bets++;
+    if (p && p.kind === "bet" && !g.started) bets++;
+    if (p && p.kind === "lean" && !g.started) leans++;
     byDay.get(key).games.push({
       id: g.id, time: F.fmtTime(g.startUtc), tv: g.tv || "", venue: g.venue || "", city: g.city || "", started: !!g.started, opacity: g.started ? "0.55" : "1",
       sides: [{ ...sideBase(T, g.away, "Away"), proj: num(g.away.projGoals) }, { ...sideBase(T, g.home, "Home"), proj: num(g.home.projGoals) }],
@@ -193,6 +198,15 @@ function nhlNoPick(g) {
   return { hasPick: true, pick: { label, market, result: dash, color: "#6b6e7a", bg: "#f4f2ee" } };
 }
 
+// A settled lean says so. The builder keeps it out of the Model picks
+// record (it was recorded, not staked), and the row it is judged on must
+// not read like a best bet's. Pinned by
+// tests/test_a_lean_is_never_published_as_a_best_bet.py.
+function nhlResultPick(p) {
+  const r = resultPick(p);
+  return p.kind === "lean" ? { ...r, pick: { ...r.pick, market: `Lean · ${r.pick.market} · not in the record` } } : r;
+}
+
 function nhlResults(data) {
   const sport = SPORTS.nhl, T = data.teams || {}, s = data.summary || {};
   const games = (data.games || []).map((g) => {
@@ -206,7 +220,7 @@ function nhlResults(data) {
     const t = g.total;
     return { sides: [side(g.away), side(g.home)], finishLabel: g.finish && g.finish !== "REG" ? ` · ${g.finish}` : "",
       cells: [cell("Straight up", [["Projected", g.projWinner], ["Result", suHit ? "Hit" : "Miss", true]]), cell("Total", t ? [["Line / proj", `${num(t.line)} / ${num(t.proj)}`], ["Landed", `${tot} · ${t.result === "over" ? "Over" : t.result === "under" ? "Under" : "Push"}`, true]] : [["Line / proj", dash], ["Landed", `${tot} · no line`, true]])],
-      ...(g.pick ? resultPick(g.pick) : nhlNoPick(g)) };
+      ...(g.pick ? nhlResultPick(g.pick) : nhlNoPick(g)) };
   });
   return { ...common(data, sport), kicker: `${data.season} NHL · ${data.resultsDate ? F.fmtDateOnly(data.resultsDate) : ""}`, dateShort: data.resultsDate ? F.fmtDateOnly(data.resultsDate) : "",
     strip: [{ label: "Straight up", value: F.recStr(s.straightUp || { w: 0, l: 0 }) }, { label: "Model picks", value: F.recStr(s.picks || { w: 0, l: 0, p: 0 }) }, { label: "Totals", value: F.recStr(s.totals || { w: 0, l: 0, p: 0 }) }],
