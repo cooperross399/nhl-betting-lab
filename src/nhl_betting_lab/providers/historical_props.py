@@ -483,7 +483,9 @@ def probe_retention_under_cap(
     seen so far (never below the estimate), which is the team buy's form of
     the gate (#159): the estimate has already been wrong in production (107
     charged against 70 predicted), and projecting, rather than stopping once
-    the total has reached the cap, means the run cannot pass it. Both skip
+    the total has reached the cap, bounds any overshoot by how much the next
+    charge exceeds the dearest one seen, and rules it out while charges do
+    not rise. It is a forecast, not a guarantee: charges vary. Both skip
     rather than stop, so an event already bought further on is still read,
     and a cached event costs nothing and passes neither gate.
 
@@ -696,6 +698,11 @@ def buy_historical_props(
     )
     buy = HistoricalBuy(events_requested=len(events))
     worst_case_spent = 0
+    # The dearest event the provider has actually charged so far, never
+    # below the estimate: the best available forecast of the next charge.
+    # Before the first event is measured the estimate is all there is.
+    largest_charge = worst_case_per_event
+    stopped_on_measured = False
 
     for entry in events:
         event_id = str(entry.get("event_id", "")).strip()
@@ -716,20 +723,37 @@ def buy_historical_props(
             #
             # The second gate is the one that cannot be wrong: what the
             # provider says it has actually charged, read from
-            # `x-requests-last` as it is spent. An estimate can be
-            # mis-specified; a running total of measured spend cannot.
+            # `x-requests-last` as it is spent, projected one event ahead at
+            # the dearest charge seen. An estimate can be mis-specified; a
+            # running total of measured spend cannot.
+            #
+            # Until 2026-09-26 this asked only whether the total had already
+            # REACHED the cap (`credits_spent >= credit_cap`), so the last
+            # event it started could carry the total past it: seven markets
+            # on one region, 70 estimated and 107 charged, a cap of 200
+            # bought two events and spent 214 with no error. Projecting, as
+            # the team buy and the retention probe do, bounds the overshoot:
+            # the run can pass the cap by at most how much the next charge
+            # exceeds the dearest one seen so far, and not at all while
+            # charges do not rise. It is still a forecast -- charges vary
+            # (107 then 200 under a cap of 300 spends 307), and the first
+            # event has only the estimate to go on -- so an overspend that
+            # gets through anyway is reported after the loop, never left
+            # silent. Skipped, not stopped, so an event already cached
+            # further on is still read.
             if worst_case_spent + worst_case_per_event > credit_cap:
                 buy.events_skipped_for_budget += 1
                 continue
-            if buy.credits_spent >= credit_cap:
+            if buy.credits_spent + largest_charge > credit_cap:
                 buy.events_skipped_for_budget += 1
-                buy.errors.append(
-                    f"Stopped at the {credit_cap:,}-credit cap on MEASURED "
-                    f"spend ({buy.credits_spent:,} charged). The per-event "
-                    "estimate was too low, which is exactly what this second "
-                    "gate exists for."
-                )
-                break
+                if not stopped_on_measured:
+                    stopped_on_measured = True
+                    buy.errors.append(
+                        f"Stopped buying at the {credit_cap:,}-credit cap on "
+                        f"MEASURED spend ({buy.credits_spent:,} charged; the "
+                        f"next event could cost {largest_charge:,})."
+                    )
+                continue
             try:
                 payload, headers = provider._get(  # noqa: SLF001
                     f"{provider.base_url}/v4/historical/sports/"
@@ -749,7 +773,9 @@ def buy_historical_props(
                 continue
             measured = _measured_cost(headers)
             worst_case_spent += worst_case_per_event
-            buy.credits_spent += measured or worst_case_per_event
+            charged = measured or worst_case_per_event
+            buy.credits_spent += charged
+            largest_charge = max(largest_charge, charged)
             buy.credits_remaining = str(
                 headers.get("x-requests-remaining", "")
             ) or buy.credits_remaining
@@ -767,6 +793,20 @@ def buy_historical_props(
         for row in rows:
             row["snapshot"] = snapshot
         buy.rows.extend(rows)
+
+    # The gates forecast the next charge; they cannot know it. A first event
+    # dearer than the whole cap, or a charge that rose past the dearest one
+    # seen, still lands past the cap, and the estimate gate then refuses the
+    # rest without a word -- so a first charge of 500 under a cap of 100 used
+    # to finish with `errors` empty. Whatever the path, a run that spent past
+    # its cap says so, with both numbers.
+    if buy.credits_spent > credit_cap:
+        buy.errors.append(
+            f"OVERSPENT: {buy.credits_spent:,} credit(s) actually charged "
+            f"against a {credit_cap:,}-credit cap. The gates forecast each "
+            "charge from the estimate and the dearest one measured, and the "
+            "provider charged more than that forecast."
+        )
 
     return buy
 

@@ -645,6 +645,18 @@ def main(argv: list[str] | None = None) -> int:
         "Bought prices only. No bet was placed, no policy was edited, and no "
         "market was allowlisted."
     )
+    if buy.credits_spent > budget:
+        # What was bought is kept and written above: it is paid for, and a
+        # re-run reads it from the cache for nothing. But the cap was passed,
+        # so the step goes red with exit 2, the fault code, and says by how
+        # much, rather than exiting 0 with the overspend in a stderr line.
+        print(
+            f"This run spent {buy.credits_spent} credit(s) on events against "
+            f"the {budget} left of the {args.credit_cap}-credit cap after the "
+            "listings. The provider charged more than the gates forecast.",
+            file=sys.stderr,
+        )
+        return 2
     return 0
 
 

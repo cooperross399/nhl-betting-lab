@@ -3,8 +3,10 @@
 `buy_historical_props` enforces its credit cap with two gates, checked before
 every request. The first is the estimate: ten credits a market a region an
 event, the provider's documented rate. The second reads the running total of
-what the provider says it actually charged (`x-requests-last`), and stops the
-run once that total reaches the cap. The second (#65) exists because the
+what the provider says it actually charged (`x-requests-last`), projected one
+event ahead at the dearest charge seen (until 2026-09-26 it stopped only once
+that total had already reached the cap, so the last event could pass it; see
+`test_the_props_buy_never_spends_past_its_cap.py`). The second (#65) exists because the
 first has already been wrong in production: a run capped at 200,000 spent
 289,984, 107 credits an event against a predicted 70.
 
@@ -38,8 +40,13 @@ function with a stubbed requester (no network, no key, no credits), and a
 provider that charges MORE than the estimate, so that only the measured gate
 can stop the buy:
 
-* the buy stops once measured spend reaches the cap and never starts a request
-  at or past it, so it overshoots by at most one request;
+* the buy refuses any event that the dearest charge seen so far would carry
+  past the cap, so it can pass the cap by at most how much the next charge
+  exceeds that dearest one, and not at all while charges do not rise; here
+  every request costs the same, so only the first event, whose charge
+  nothing has measured yet, can end the run past it (and the run then says
+  it OVERSPENT; see `test_the_props_buy_never_spends_past_its_cap.py` for
+  charges that vary);
 * the spend recorded is the sum of what each request was charged;
 * the prices it paid for are kept, and the stop is reported as MEASURED.
 
@@ -138,11 +145,11 @@ def _historical_calls(requester: RecordingRequester) -> list[str]:
 #   regions, markets, charged a request, cap -> events bought, credits spent
 OVER_ESTIMATE = [
     pytest.param(
-        "us", ALL_PROP_KEYS, 107, 700, 7, 749,
+        "us", ALL_PROP_KEYS, 107, 700, 6, 642,
         id="recorded-107-against-70-one-region",
     ),
     pytest.param(
-        "us,us2", ALL_PROP_KEYS, 214, 1400, 7, 1498,
+        "us,us2", ALL_PROP_KEYS, 214, 1400, 6, 1284,
         id="recorded-ratio-on-two-regions",
     ),
     pytest.param(
@@ -197,10 +204,16 @@ def test_measured_spend_stops_a_buy_the_estimate_would_let_through(
     assert len(calls) == bought, "one request per event bought, and no more"
     # The spend recorded is what each request was charged, summed.
     assert buy.credits_spent == spent == bought * charged
-    # No request was started once measured spend had reached the cap, so the
-    # run can pass the cap by one request and never by two.
-    assert buy.credits_spent - charged < cap
-    assert buy.credits_spent < cap + charged
+    # No request was started that the dearest charge seen said would pass
+    # the cap. Every request here costs the same, so only a first request,
+    # whose charge nothing had measured yet, can end the run past it.
+    if charged <= cap:
+        assert buy.credits_spent <= cap
+        assert not any("OVERSPENT" in error for error in buy.errors)
+    else:
+        assert bought == 1
+        assert any("OVERSPENT" in error for error in buy.errors), buy.errors
+    assert buy.credits_spent + charged > cap, "and it stopped no earlier"
     # It stopped at the first event it could not afford, in order, and kept
     # the prices it paid for.
     assert [url.split("/events/")[1].split("/")[0] for url in calls] == [
@@ -209,7 +222,7 @@ def test_measured_spend_stops_a_buy_the_estimate_would_let_through(
     assert {row["provider_event_id"] for row in buy.rows} == {
         event["event_id"] for event in events[:bought]
     }
-    assert buy.events_skipped_for_budget >= 1
+    assert buy.events_skipped_for_budget == len(events) - bought
     assert any(
         "MEASURED" in error and f"{cap:,}" in error and f"{spent:,}" in error
         for error in buy.errors
