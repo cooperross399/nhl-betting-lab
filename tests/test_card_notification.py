@@ -78,7 +78,11 @@ def test_a_degraded_run_posts_even_when_nothing_changed() -> None:
 
 
 def test_a_blocked_card_counts_as_degraded_and_posts() -> None:
-    """'No card, because nothing is allowlisted' is information."""
+    """A blocked card that does not say its block is benign is a fault.
+
+    The benign blocks (nothing allowlisted, no game left) are in
+    `test_a_benign_blocked_card_is_not_called_degraded.py`.
+    """
     card = _card(generated=False, best_bets=[])
 
     decision = note.decide(
