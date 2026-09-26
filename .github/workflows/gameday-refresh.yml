@@ -99,8 +99,11 @@ concurrency:
 # recorded decision=post on a green step. The suite never saw this: rewriting
 # its 275 pipefail replays to `bash -e` left all 2504 tests passing. Every
 # pipeline in this file was audited for a left side that may exit non-zero
-# before this was added. The two `find | wc -l` counts carry `|| true` for
-# exactly that reason. tests/test_the_post_step_fails_closed_under_the_runners_shell.py
+# before this was added. The two boxscore counts (`grep … | wc -l`, final
+# boxscores only, in "Restore the previous state" and "Record what went
+# wrong") carry `|| true` for exactly that reason: grep exits non-zero on a
+# missing cache or one with no final game. (They were `find | wc -l` until
+# 2026-09-26.) tests/test_the_post_step_fails_closed_under_the_runners_shell.py
 # resolves each step's shell from this file the way GitHub does and pins it.
 defaults:
   run:
