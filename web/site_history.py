@@ -9,7 +9,8 @@ Does three things, all inside --data:
   2. Appends the current market values to history/lines/<date>.json, one point per
      build, and injects the series into board.json as `lineHistory[gameId][key]`
      so the page can draw the movement.
-  3. Rewrites history/index.json, newest first, with game and best-bet counts.
+  3. Rewrites history/index.json, newest first, with game and best-bet counts
+     (`bets: null` for a board on which no game was priced).
 
 The workflow restores the previous run's history artifact into --data/history before
 this runs and uploads it again afterwards, so the series survive between builds.
@@ -42,6 +43,20 @@ def dig(d, path):
             return None
         d = d[k]
     return d if isinstance(d, (int, float)) and not isinstance(d, bool) else None
+
+
+def game_priced(g: dict) -> bool:
+    """Whether the board held a market price for this game.
+
+    Read from the game's `priced` flag. A board frozen before that flag, or
+    written by a lab whose builder does not set it, is read by its lines: the
+    NHL builder attached `moneyline` under exactly the condition that now sets
+    `priced` (as web/build_site_json.py::build_results reads it), and any
+    numeric market value in SERIES is a price the board carried.
+    """
+    if "priced" in g:
+        return g["priced"] is True
+    return "moneyline" in g or any(dig(g, p) is not None for paths in SERIES.values() for p in paths)
 
 
 def board_date(board: dict) -> str:
@@ -116,7 +131,19 @@ def main(argv=None) -> int:
             continue
         b = load(p, {})
         games = b.get("games", [])
-        bets = sum(1 for g in games if isinstance(g.get("pick"), dict) and g["pick"].get("kind", "bet") == "bet")
+        # Best bets are counted among the games the board priced. This used
+        # to count every game's pick without reading `priced`, so a board no
+        # price reached (every regular-season board Publish Site builds
+        # without staged prices) was indexed `bets: 0`, and the Archive page
+        # listed it as "0 best bets": a slate the model looked at and passed
+        # on. Nobody looked. A board with no priced game is `bets: null`,
+        # which the page prints as "not priced"; "0 best bets" stays for a
+        # priced board where nothing cleared the bar.
+        priced = [g for g in games if isinstance(g, dict) and game_priced(g)]
+        if games and not priced:
+            bets = None
+        else:
+            bets = sum(1 for g in priced if isinstance(g.get("pick"), dict) and g["pick"].get("kind", "bet") == "bet")
         e = {"date": m.group(1), "file": p.name, "games": len(games), "bets": bets}
         if m.group(2):
             e["slot"] = m.group(2)
