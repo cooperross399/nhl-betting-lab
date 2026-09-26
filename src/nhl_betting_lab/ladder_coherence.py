@@ -165,9 +165,22 @@ LADDER_CLASSES: tuple[tuple[str, float], ...] = (
 #: from the table rather than repeated, so the two can never disagree.
 DETECTION_FLOOR: float = LADDER_CLASSES[-1][1]
 
-#: What the card would stake, if a card were ever licensed to stake anything.
-#: It is not: nothing is allowlisted and only Cooper may change that. These
-#: exist so a band means something concrete rather than being a label.
+#: What the card would stake, if a card were ever licensed to stake on the
+#: strength of this table. It is not — but the reason is no longer that
+#: "nothing is allowlisted". `data/manual/staging_provider_policy.json` is
+#: the state that governs, and it has allowlisted twelve markets since
+#: 2026-09-23; only Cooper may change that, by reading the evidence and
+#: signing a receipt. That is no licence to stake either: allowlisting says a
+#: market's prices may be used, not that the model beats them. The reason is
+#: the structural one in this module's docstring, which does not move when the
+#: policy moves — nothing here may produce a pick, so there is no selection
+#: for a unit to attach to. These exist so a band means something concrete
+#: rather than being a label. **This comment read "nothing is allowlisted"
+#: until 2026-09-26**, three days after the approval; the quotation marks are
+#: how the guard in `tests/test_season_readiness.py` tells a superseded claim
+#: from an asserted one, though that guard does not read this file. The
+#: receipt id is deliberately not copied here: it changed three times on
+#: 2026-09-24, and the policy file is where to read the current one.
 #:
 #: **The registered test does not use them.** It is flat-staked, one bet per
 #: wager, which is the convention every other measurement in this repository
