@@ -81,6 +81,7 @@ import requests
 import yaml
 
 from conftest import FakeResponse
+from test_no_test_reads_the_checkouts_data import point_default_data_dirs_at
 from nhl_betting_lab import config
 from nhl_betting_lab.config import PROJECT_ROOT
 from nhl_betting_lab.markets import ALL_MARKETS
@@ -272,6 +273,10 @@ def _shadow(tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     transport, run as `raise SystemExit(main())` runs it: an exception that
     escapes `main` is what the interpreter prints and exits 1 on, so it is
     recorded here as exactly that rather than failing the harness."""
+    # The script screens posted events against the cached club schedules,
+    # so a checkout holding a real season's cache would screen out every
+    # game here; none of the defaults is the checkout's.
+    point_default_data_dirs_at(monkeypatch, tmp_path / "defaults")
     module = _load("run_provider_shadow.py", "_script_shadow_failed_listing")
     transport = Transport(listing)
     real = odds_api.OddsApiProvider

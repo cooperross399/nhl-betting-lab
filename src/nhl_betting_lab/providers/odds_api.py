@@ -275,6 +275,9 @@ class FetchResult:
     warnings: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
     fetched_at: str = ""
+    #: Posted events the caller's preseason screen dropped before any cap
+    #: was applied (`keep_event`).
+    events_not_regular_season: int = 0
     #: One entry per per-event request that got no usable answer, beside its
     #: line in `errors`: the event, the date and teams its rows would have
     #: carried, the project `markets` it asked for, and the `error`. The
@@ -293,6 +296,37 @@ class FetchResult:
                 else "."
             )
         )
+
+
+#: A caller's preseason screen: True keeps a posted event (see `keep_event`).
+EventScreen = Callable[[Mapping[str, Any]], bool]
+
+
+def _screen_events(
+    events: Sequence[Mapping[str, Any]],
+    keep_event: EventScreen | None,
+    result: FetchResult,
+) -> list[Any]:
+    """The events `keep_event` keeps, with the rest counted and said.
+
+    Shared by both fetches, so a caller's screen describes one slate. The
+    provider knows nothing of the schedule and decides nothing here: the
+    caller's screen does (`run_provider_shadow.py` passes the card's
+    preseason rule), and None keeps everything.
+    """
+    if keep_event is None:
+        return list(events)
+    kept = [event for event in events if keep_event(event)]
+    dropped = len(events) - len(kept)
+    if dropped:
+        result.events_not_regular_season = dropped
+        result.warnings.append(
+            f"{dropped} posted event(s) are not on the cached regular-season "
+            "schedule — preseason, or a game it cannot recognise — and were "
+            "not asked about, before any cap was applied. The card would "
+            "exclude them, and no price was taken for them."
+        )
+    return kept
 
 
 def normalize_event(
@@ -588,12 +622,19 @@ class OddsApiProvider:
         self,
         *,
         fetched_at: str = "",
+        keep_event: EventScreen | None = None,
         league_days: Sequence[str] | None = None,
         max_events: int = 0,
     ) -> FetchResult:
         """Bulk team markets for the whole slate.
 
         Cheap: the bulk endpoint bills per market requested, not per event.
+
+        `keep_event`, the caller's preseason screen, must be the **same
+        screen the per-event fetch uses**, for the reason `league_days` must:
+        `max_events` truncates this fetch to the first N by face-off, and a
+        screen on one side only makes those two different sets of games.
+        It runs after the window and before the cap.
 
         `league_days` must be the **same window the per-event fetch uses**.
         The eligibility gate measures each market's coverage against the
@@ -717,6 +758,13 @@ class OddsApiProvider:
                 )
             result.events_seen = len(in_window)
             events = in_window
+        # After the window, so an off-day stays an off-day (EmptySlateError
+        # above) whatever the screen says, and a window holding only
+        # exhibition games stages nothing rather than reading as no games.
+        # Before the cap, so the first N are the first N the card can use.
+        events = _screen_events(events, keep_event, result)
+        if result.events_not_regular_season:
+            result.events_seen = len(events)
         if max_events:
             # The eligibility gate and the coverage report both derive the
             # slate from the staged rows, so a bulk fetch of the whole board
@@ -732,7 +780,17 @@ class OddsApiProvider:
             if rows:
                 result.events_priced += 1
                 result.rows.extend(rows)
-        if not result.rows:
+        if not result.rows and result.events_not_regular_season and not events:
+            # Not the books' silence: the window held only games the card
+            # would exclude, which on a late-September morning is the whole
+            # board.
+            result.warnings.append(
+                f"Every one of the {result.events_not_regular_season} "
+                "event(s) in the fetch window is off the cached regular-"
+                "season schedule, so no team-market price was taken. Nothing "
+                "was guessed; the markets stay absent."
+            )
+        elif not result.rows:
             result.warnings.append(
                 "The provider returned events but no usable team-market "
                 "prices. Nothing was guessed; the markets stay absent."
@@ -752,12 +810,22 @@ class OddsApiProvider:
         self,
         *,
         markets: Sequence[str] | None = None,
+        keep_event: EventScreen | None = None,
         max_events: int = 0,
         credit_cap: int | None = None,
         fetched_at: str = "",
         league_days: Sequence[str] | None = None,
     ) -> FetchResult:
         """Per-event player props, under a hard credit cap.
+
+        `keep_event` is the caller's preseason screen, applied before the
+        events are sorted and the cap is spent; None screens nothing. The
+        provider does not flag preseason, and on a mixed night the cap spends
+        front-to-back in face-off order, so an unscreened early exhibition
+        game takes a place a regular-season game needed. The card then drops
+        the exhibition, as it must, and every per-event market for the game
+        it displaced reads "priced for k of N": INCOMPLETE, excluded, and
+        missing from the frozen snapshot. Pass the bulk fetch the same screen.
 
         `credit_cap` is not advisory. A probe that quietly turned into a
         full-slate fetch is exactly the accident this parameter exists to make
@@ -814,7 +882,10 @@ class OddsApiProvider:
         # Ordered by start time, so "the first N events" means the same N
         # events here and in the bulk fetch. Truncating two differently
         # ordered lists to the same length is how a coverage table ends up
-        # measuring one set of games against another.
+        # measuring one set of games against another. The screen runs first,
+        # so an exhibition game never takes a place a regular-season game
+        # needed (`keep_event`).
+        events = _screen_events(events, keep_event, result)
         events = sorted(events, key=_commence_key)
         selected = events[:max_events] if max_events else events
 
