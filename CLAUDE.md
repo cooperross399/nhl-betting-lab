@@ -786,11 +786,15 @@ Re-derive rather than trust if the data has moved.
   report prints, zero included: never scored, never dropped, and kept apart
   from markets never captured at all. The bound comes from the crons: a
   19:00 EDT start's best close is the 21:00 round, 120 minutes out, and
-  every 19:00, 19:30 and 22:00 ET start, EDT or EST, has a round within 120
-  minutes when the rounds run on time. **Some starts can never close under
-  today's crons**: 13:00, 13:30, 14:00 and 17:00 EDT; 12:00, 12:30, 13:00,
-  16:00 and 23:00 EST; and 19:00 EDT on 29-30 September, when only the 18:00
-  and 23:00 rounds are scheduled. Their opinions always land in that bucket.
+  from 1 October every 19:00, 19:30 and 22:00 ET start, EDT or EST, has a
+  round within 120 minutes when the rounds run on time. **Some starts can
+  never close under today's crons**: 13:00, 13:30, 14:00 and 17:00 EDT;
+  12:00, 12:30, 13:00, 16:00 and 23:00 EST. On 29-30 September only the
+  18:00 and 23:00 rounds are scheduled, so on both days every start from
+  17:00 to 19:00 EDT has none (and, with no 14:00 round, every start up to
+  14:00 EDT), and on the 29th so do 22:00, 22:30 and 23:00 EDT; the 30th's
+  late games close on the 01:00 round of 1 October. Their opinions always
+  land in that bucket.
   A late round that slips past face-off is excluded, and the close falls to
   the round before: 19:00 EST and 22:00 EDT starts lose their close once
   that round runs more than 60 minutes late, 19:30 EST past 90, 19:00 EDT
