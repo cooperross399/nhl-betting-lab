@@ -311,7 +311,10 @@ def main(argv: list[str] | None = None) -> int:
     # ingested — an unfiltered card would freeze opinions into the forward
     # ledger that can never settle. A game the schedule cache does not know
     # is excluded and counted, never guessed at; with no schedule knowledge
-    # at all, nothing is excluded and the run says so loudly.
+    # at all, nothing is excluded and the run says so loudly. A game the
+    # schedule calls off (PPD, CNCL) is not in `schedule` either, so a
+    # postponed game the provider still lists is screened here rather than
+    # priced, frozen, and left to hold the night's settlement for two weeks.
     schedule = known_regular_season_games(raw)
     # Completeness of THIS slate's season, counted by each club's own file.
     schedule_complete, clubs_cached = schedule_cache_is_complete(
@@ -363,7 +366,8 @@ def main(argv: list[str] | None = None) -> int:
         if excluded:
             print(
                 f"{excluded} price row(s) are for games the regular-season "
-                "schedule does not know — preseason or unrecognisable — and "
+                "schedule does not know — preseason, called off or "
+                "unrecognisable — and "
                 "were excluded before pricing. They are not passes and no "
                 "opinion was frozen for them."
             )
