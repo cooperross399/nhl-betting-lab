@@ -31,6 +31,16 @@ return season-to-date totals with no as-of date, so feeding them into a
 walk-forward fit would leak the rest of the season into a game being priced.
 Names cannot leak anything.
 
+Cached at `data/raw/nhl/registry/{season}.json`, and **cached only once the
+season has closed** (fetched on or after 1 August of its second year). The
+registry of a season still being played grows with every debut, so it is
+asked for again on every run and merged into what is cached, never shrunk;
+an answer naming nobody (the API lists no one before opening night) is
+never written. It used to be fetched once and served forever, and 2026-27's
+first answer, cached in August, named nobody. Pages are requested in
+`playerId` order: unsorted, they overlapped and the cached 2025-26 registry
+lost 22 of its 940 players between them.
+
 ## Power-play deployment: what we have and what we do not
 
 Power-play time on ice is the single input this model most wants and does not

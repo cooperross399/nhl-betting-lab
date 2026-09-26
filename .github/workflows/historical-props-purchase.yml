@@ -251,11 +251,12 @@ jobs:
         # and a final boxscore is never refetched, so this is cheap on any run
         # after the first — but the first pays for four thousand games.
         #
-        # A probe skips it entirely. A probe asks one question of one event
-        # ("which markets does the provider retain") and nothing in the answer
-        # depends on the model, so making it wait half an hour for 1.9 million
-        # walk-forward samples was pure ceremony. Probing is the thing you do
-        # repeatedly while exploring retention; it should be minutes.
+        # A probe skips it entirely. A probe asks a handful of events one
+        # question ("which markets does the provider retain") and nothing in
+        # the answer depends on the model, so making it wait half an hour for
+        # 1.9 million walk-forward samples was pure ceremony. Probing is the
+        # thing you do repeatedly while exploring retention; it should be
+        # minutes.
         if: ${{ inputs.mode != 'probe' }}
         env:
           PYTHONPATH: src
@@ -271,9 +272,18 @@ jobs:
           fi
 
       - name: Probe retention
-        # One event, so the cost is bounded and known, and the answer turns
-        # "which markets can be measured historically" from an assumption into
-        # a measured fact.
+        # Up to five events (`--probe-events`), spread across the day, and
+        # the answer turns "which markets can be measured historically" from
+        # an assumption into a measured fact. The day's listing and every
+        # event are paid out of the cap: an event not already bought is gated
+        # before it is asked at its worst case, 10 x 7 markets x 2 regions =
+        # 140 credits, and on measured spend. An event already bought costs
+        # nothing. So the default cap of 60 affords no event outside the
+        # restored cache, and the step fails saying so rather than writing a
+        # record of nothing. This comment said "one event, so the cost is
+        # bounded and known" after the probe had grown to five, and the probe
+        # never read the cap: until 2026-09-26 a default dispatch on an
+        # uncached day spent 536 credits under a cap of 60.
         if: ${{ inputs.mode == 'probe' }}
         env:
           NHL_ODDS_API_KEY: ${{ secrets.NHL_ODDS_API_KEY }}

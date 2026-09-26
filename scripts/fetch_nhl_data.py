@@ -129,7 +129,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--skip-registry",
         action="store_true",
-        help="Do not refresh the playerId to full-name registry.",
+        help=(
+            "Do not refresh the playerId to full-name registry. Without this "
+            "flag the registry of a season still being played is asked for "
+            "again on every run; a closed season's is read from cache."
+        ),
     )
     parser.add_argument(
         "--polite-seconds",
@@ -197,9 +201,19 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Rosters {season}: {fetched} clubs refreshed, {failed} failed.")
 
     if not args.skip_registry:
+        # A season still being played is asked for again on every run; only a
+        # closed season's registry is read from cache (`registry_is_settled`).
+        # This used to serve whatever was cached, so 2026-27's August answer,
+        # which named nobody, stood as the season's registry: "Registry
+        # 20262027: 0 players (cache)." on every Gameday Refresh run, and
+        # every player new this season would have gone unpriced. A failed
+        # refresh is counted, so a stats-API outage makes the run degraded
+        # rather than quietly serving stale names.
         for season in seasons:
             try:
-                entry = fetch_player_registry(season)
+                entry = fetch_player_registry(
+                    season, polite_seconds=args.polite_seconds
+                )
             except NhlApiError as exc:
                 _count(tally, "registry", "failed")
                 print(f"Registry {season}: {exc}", file=sys.stderr)
@@ -209,6 +223,12 @@ def main(argv: list[str] | None = None) -> int:
             count = len(payload.get("skaters", [])) + len(payload.get("goalies", []))
             source = "cache" if entry.from_cache else "fetched"
             print(f"Registry {season}: {count} players ({source}).")
+            if not count and not entry.from_cache:
+                print(
+                    f"  The stats API lists nobody for {season} yet, so "
+                    "nothing was cached; any names already cached stand, and "
+                    "the next run asks again."
+                )
 
     fetched = 0
     cached = 0

@@ -798,6 +798,33 @@ Re-derive rather than trust if the data has moved.
   It landed before the first live card: the forward ledger held **zero rows**
   and card-feed's last card was 2026-08-28 (`decision: none`), so nothing
   already measured is re-cut by it.
+- **2026-09-26, a defect fix recorded as `docs/when_this_ends.md` requires:
+  a player new this season gets a name.** `fetch_player_registry` served any
+  cached registry and `fetch_nhl_data.py` never refreshed one, so a season's
+  first answer stood all season. 2026-27's came on 2026-08-26, before a game
+  was played, and named nobody (the stats API answers `{"data": [], "total":
+  0}` for a season that has not started); every Gameday Refresh since logged
+  "Registry 20262027: 0 players (cache)." and carried the file forward in
+  gameday-state. A nameless player's props land under "Names that could not
+  be matched": no opinion, no card, **no forward-ledger row**. On the 2025-26
+  analog that is 160 players, 58 of them past the model's 15-game minimum,
+  3,033 of 52,478 player-game rows, 55 of the 58 quoted in the bought prices
+  (4,937 of 135,284 event-player-market triples) — the season's rookies, a
+  non-random slice, silently absent from the 2027-04-25 measurement. A
+  registry is now read from cache only once its season has closed (fetched
+  on or after 1 August of its second year); the season being played is asked
+  again every run and merged, never shrunk; an answer naming nobody is never
+  written; a malformed or short page fails the fetch rather than being cached
+  as the season; and pages are requested in `playerId` order, because
+  unsorted paging lost 22 of 2025-26's 940 players and 25 of 2024-25's 924.
+  **Closed seasons are untouched**: every cached 2023-24 to 2025-26 registry,
+  local and in CI (whose first run was 2026-08-25), was fetched after its
+  season closed and is read as before, so no published figure moves. The
+  model, the edge bar, the market list, the staking rule and the ledger's
+  schema are unchanged. It lands before opening night, and no newcomer can
+  reach the 15-game minimum before mid-November, so no frozen opinion is
+  re-cut.
+  `tests/test_a_registry_cached_before_its_season_ended_is_asked_again.py`.
 - **2026-09-25, a defect fix recorded as `docs/when_this_ends.md` requires:
   the card refuses stale prices.** The policy's `max_provider_run_age_hours`
   (12, policy-wide and on `the_odds_api`) was parsed and never applied —

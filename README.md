@@ -204,9 +204,13 @@ PYTHONPATH=src .venv/bin/python scripts/run_ladder_coherence.py
 PYTHONPATH=src .venv/bin/python scripts/buy_historical_props.py \
     --from 2025-01-05 --to 2025-01-05
 
-# One event: find out which prop markets the provider retains at all.
+# Which prop markets does the provider retain at all? Probes --probe-events
+# events (five by default) spread across the window. Each one not already
+# bought is gated at up to 10 x markets x regions (140 at the defaults) before
+# it is asked, and the day listings come out of the same cap, so a cap of 60
+# probes only what the cache already holds.
 PYTHONPATH=src .venv/bin/python scripts/buy_historical_props.py \
-    --probe --live --credit-cap 60
+    --probe --live --from 2026-01-10 --to 2026-01-10 --credit-cap 60
 
 # Free: which (event, snapshot) pairs the raw cache holds. Pick one the
 # store has, so the venues are compared at the same moment.

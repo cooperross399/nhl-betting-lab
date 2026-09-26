@@ -50,10 +50,20 @@ def main(argv: list[str] | None = None) -> int:
         preview = ", ".join(str(item) for item in result.games_malformed[:10])
         print(f"Malformed or missing stats: {preview}")
     if result.names_unresolved:
+        # This used to say "Run the fetch with the registry enabled", and the
+        # fetch then served the same cached registry: 2026-27's, cached in
+        # August naming nobody, would have left every newcomer nameless all
+        # season however often the advice was followed. The fetch now asks
+        # again for a season still being played; a closed season's registry
+        # is settled and read from cache, so replacing one means deleting it.
         print(
-            f"{result.names_unresolved} player-game rows have no full name. "
-            "Run the fetch with the registry enabled; a row without a full "
-            "name cannot be joined to a prop price."
+            f"{result.names_unresolved} player-game rows have no full name, "
+            "and a row without a full name cannot be joined to a prop price. "
+            "Run scripts/fetch_nhl_data.py: it asks the stats API again for "
+            "the registry of any season still being played, so a newcomer is "
+            "named once the API lists him. A closed season's registry is read "
+            "from data/raw/nhl/registry/<season>.json; delete that file to "
+            "have the fetch replace it."
         )
     if args.dry_run:
         print("Dry run: nothing was written.")
