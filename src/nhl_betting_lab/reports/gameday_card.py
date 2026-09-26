@@ -833,6 +833,75 @@ def _rows_table(rows: Sequence[Mapping[str, Any]], *, staked: bool) -> list[str]
     return lines
 
 
+def _demoted_leans_by_reason(leans: Sequence[Mapping[str, Any]]) -> list[str]:
+    """Every lean that was good enough to stake, listed under WHY it was not.
+
+    A demoted lean silently sitting in the leans table would make the
+    demotion invisible to the only reader who could judge it, so each one is
+    listed again with its reason. Two passes demote, for two different
+    reasons, and each group gets its own heading: until 2026-09-26 every row
+    carrying a reason was listed under the ladder heading, so a lone `points`
+    rung that no ladder ever touched was told a sibling rung had taken its
+    stake.
+
+    Grouped on the reason the ROW carries, never re-derived here, so the card
+    and the JSON cannot disagree about why. Every demoted row lands in
+    exactly one group -- a reason neither pass is known to write still gets
+    listed, under a heading that claims nothing about it -- because a lean
+    that vanished from this list would be the hidden opinion the demotion
+    exists to avoid.
+    """
+    ladder: list[Mapping[str, Any]] = []
+    excluded: dict[tuple[str, str], list[Mapping[str, Any]]] = {}
+    other: list[Mapping[str, Any]] = []
+    for row in leans:
+        reason = str(row.get("demotion_reason") or "").strip()
+        if not reason:
+            continue
+        market = str(row.get("market", ""))
+        if reason.startswith(LADDER_DEMOTION_PREFIX):
+            ladder.append(row)
+        elif reason == str(STAKE_EXCLUDED_MARKETS.get(market, "")).strip():
+            excluded.setdefault((market, reason), []).append(row)
+        else:
+            other.append(row)
+
+    lines: list[str] = []
+    if ladder:
+        # The reason names the rung that kept the stake, so it differs row
+        # by row and is printed on each.
+        lines.extend(
+            [
+                "One stake per outcome: where a ladder priced one outcome "
+                "at several lines, one rung is staked and the rest are "
+                "recorded here.",
+                "",
+            ]
+        )
+        lines.extend(
+            f"- {_label(row)} (`{row.get('market', '-')}`): "
+            f"{row.get('demotion_reason')}"
+            for row in ladder
+        )
+        lines.append("")
+    for (market, reason), rows in excluded.items():
+        # One reason per market, so it is printed once as the heading and
+        # every rung it withheld is listed beneath. These are leans at zero
+        # units, never passes: the opinion cleared every bar the card sets.
+        lines.extend([f"Stake withheld on `{market}`: {reason}", ""])
+        lines.extend(f"- {_label(row)} (`{market}`)" for row in rows)
+        lines.append("")
+    if other:
+        lines.extend(["Recorded as a lean at zero units, for the reason given:", ""])
+        lines.extend(
+            f"- {_label(row)} (`{row.get('market', '-')}`): "
+            f"{row.get('demotion_reason')}"
+            for row in other
+        )
+        lines.append("")
+    return lines
+
+
 def render_card(card: GamedayCard) -> str:
     lines = [
         "# NHL gameday card",
@@ -876,30 +945,7 @@ def render_card(card: GamedayCard) -> str:
             if card.leans
             else ["_No leans._", ""]
         )
-        # A rung demoted by the one-stake-per-outcome pass is a lean that was
-        # good enough to stake, so the card says which rung took the stake
-        # instead. Silently sitting in the leans table would make the pass
-        # invisible to the only reader who could judge it.
-        demoted = [
-            row
-            for row in card.leans
-            if str(row.get("demotion_reason") or "").strip()
-        ]
-        if demoted:
-            lines.extend(
-                [
-                    "One stake per outcome: where a ladder priced one outcome "
-                    "at several lines, one rung is staked and the rest are "
-                    "recorded here.",
-                    "",
-                ]
-            )
-            lines.extend(
-                f"- {_label(row)} (`{row.get('market', '-')}`): "
-                f"{row.get('demotion_reason')}"
-                for row in demoted
-            )
-            lines.append("")
+        lines.extend(_demoted_leans_by_reason(card.leans))
         lines.extend(
             [
                 "Leans are recorded and not staked.",
