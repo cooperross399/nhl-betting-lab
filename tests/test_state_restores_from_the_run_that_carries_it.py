@@ -35,25 +35,82 @@ from nhl_betting_lab.config import PROJECT_ROOT
 
 SCRIPT = PROJECT_ROOT / "scripts" / "restore_state.py"
 
+#: A stand-in for `gh` that extracts the way the real one does.
+#:
+#: `gh run download <run> --name X --dir D` unpacks X's zip straight into D,
+#: in the zip's entry order, opening each file with
+#: O_WRONLY|O_CREATE|O_EXCL, and stops at the first entry it cannot create
+#: (cli/cli internal/zip; measured with gh 2.97.0: `error extracting
+#: "gameday_card.json": ... file exists`, exit 1, nothing after it written).
+#: This fake used to `shutil.copytree(source, dest, dirs_exist_ok=True)`,
+#: which overwrites where gh refuses, so Publish Site's `--also
+#: gameday-reports=data/outputs` passed here while it failed on every runner
+#: (tests/test_the_reports_restore_over_what_the_checkout_holds.py).
+#:
+#: An artifact is a directory (entries in sorted order) or
+#: {"root": dir, "order": [entry, ...]} for upload-artifact's listed order.
+#: A run with no artifact at all, and a run without the named one, say what
+#: gh 2.97.0 says for each; `fail` maps "run:name" to any other failure.
 FAKE_GH = r'''#!{python}
-import json, os, shutil, sys
+import json, os, sys
 from pathlib import Path
 scenario = json.loads(Path(os.environ["FAKE_GH_SCENARIO"]).read_text())
 with open(os.environ["FAKE_GH_LOG"], "a") as log:
     log.write(" ".join(sys.argv[1:]) + "\n")
 args = sys.argv[1:]
+
+def value(flag):
+    return args[args.index(flag) + 1] if flag in args else None
+
 if args[:2] == ["run", "list"]:
-    workflow = args[args.index("--workflow") + 1]
-    print(json.dumps(scenario["runs"].get(workflow, [])))
+    runs = scenario["runs"].get(value("--workflow"), [])
+    status = value("--status")
+    if status:
+        runs = [r for r in runs if status in (r.get("status"), r.get("conclusion"))]
+    jq = value("--jq")
+    if jq is None:
+        print(json.dumps(runs))
+    elif jq == ".[0].databaseId // empty":
+        if runs:
+            print(runs[0]["databaseId"])
+    else:
+        print("fake gh: unsupported --jq " + jq, file=sys.stderr)
+        sys.exit(2)
     sys.exit(0)
 if args[:2] == ["run", "download"]:
-    run_id, name = args[2], args[args.index("--name") + 1]
-    dest = Path(args[args.index("--dir") + 1])
-    source = scenario["artifacts"].get(run_id, {{}}).get(name)
-    if source is None or run_id in scenario.get("broken", []):
+    run_id, name, dest = args[2], value("--name"), Path(value("--dir"))
+    held = scenario["artifacts"].get(run_id, {{}})
+    if run_id in scenario.get("broken", []):
+        print("error fetching artifacts: HTTP 502: Bad Gateway", file=sys.stderr)
+        sys.exit(1)
+    if not held:
         print("no valid artifacts found to download", file=sys.stderr)
         sys.exit(1)
-    shutil.copytree(source, dest, dirs_exist_ok=True)
+    if name not in held:
+        print("no artifact matches any of the names or patterns provided",
+              file=sys.stderr)
+        sys.exit(1)
+    failure = scenario.get("fail", {{}}).get(run_id + ":" + name)
+    if failure:
+        print("error downloading " + name + ": " + failure, file=sys.stderr)
+        sys.exit(1)
+    source = held[name]
+    root = Path(source["root"] if isinstance(source, dict) else source)
+    order = (source.get("order") if isinstance(source, dict) else None) or sorted(
+        p.relative_to(root).as_posix() for p in root.rglob("*") if p.is_file()
+    )
+    for entry in order:
+        target = dest / entry
+        target.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            handle = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
+        except OSError as error:
+            print("error downloading " + name + ": error extracting zip archive: "
+                  "error extracting \"" + entry + "\": open " + str(target) + ": "
+                  + (error.strerror or "").lower(), file=sys.stderr)
+            sys.exit(1)
+        with os.fdopen(handle, "wb") as out:
+            out.write((root / entry).read_bytes())
     sys.exit(0)
 print("fake gh: unhandled " + " ".join(args), file=sys.stderr)
 sys.exit(2)
