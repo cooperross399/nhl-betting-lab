@@ -147,15 +147,65 @@ def test_every_by_market_row_prints_the_corrected_intervals() -> None:
     assert checked == 18, "three columns, two views, three markets"
 
 
+def _by_game(rows: pd.DataFrame, z: float) -> tuple[str, str, str]:
+    """The pooled table's intervals, counting the game.
+
+    Each game here holds one row in each of the three markets, so the
+    All-opinions table pools three rows a game. Its intervals are clustered
+    on the game (tests/test_clv_intervals_count_games_not_rows.py): CR1 for
+    the means and Wilson at the clustered effective size for the rate, each
+    never narrower than on the rows."""
+    games = list(zip(rows["home_team"], rows["away_team"], rows["game_date"]))
+
+    def mean_interval(values: list[float], keys: list, fmt: str) -> str:
+        mean = statistics.fmean(values)
+        residual: dict = {}
+        for value, key in zip(values, keys):
+            residual[key] = residual.get(key, 0.0) + value - mean
+        count = len(residual)
+        se = max(
+            statistics.stdev(values) / math.sqrt(len(values)),
+            math.sqrt(count / (count - 1) * sum(r * r for r in residual.values()))
+            / len(values),
+        )
+        return f"[{mean - z * se:{fmt}}, {mean + z * se:{fmt}}]"
+
+    tally: dict = {}
+    for beat, key in zip(rows["beat_close"], games):
+        hits, size = tally.get(key, (0, 0))
+        tally[key] = (hits + int(beat), size + 1)
+    n = len(rows)
+    p = sum(hits for hits, _ in tally.values()) / n
+    deff = max(1.0, sum((h - p * s) ** 2 for h, s in tally.values()) / (n * p * (1 - p)))
+    n_eff = n / deff
+    denominator = 1.0 + z * z / n_eff
+    centre = (p + z * z / (2 * n_eff)) / denominator
+    margin = z * math.sqrt(p * (1 - p) / n_eff + z * z / (4 * n_eff * n_eff)) / denominator
+    beat = f"[{max(0.0, centre - margin):.1%}, {min(1.0, centre + margin):.1%}]"
+    has_ev = rows["ev_at_close"].notna()
+    return (
+        beat,
+        mean_interval([float(v) for v in rows["clv_pct"]], games, "+.2%"),
+        mean_interval([float(v) for v in rows["ev_at_close"][has_ev]],
+                      [g for g, keep in zip(games, has_ev) if keep], "+.1%"),
+    )
+
+
 def test_the_all_opinions_table_is_one_test_and_keeps_the_plain_interval() -> None:
+    """One test, so the plain 95% interval and not the family-wise one. It is
+    the game-clustered interval: this asserted the interval on the 120 rows
+    of 40 games, which counted each game three times."""
     rendered, rows = _rendered()
 
-    beat, clv, ev = _expected(rows, Z95)
+    assert rows["market"].nunique() == 3 and len(rows) == 3 * GAMES
+    beat, clv, ev = _by_game(rows, Z95)
     section = rendered.split("## All opinions", 1)[1].split("## All bets", 1)[0]
     (row,) = [line for line in section.splitlines()
               if line.startswith("| ") and "---" not in line and "Rows" not in line]
 
     assert beat in row and clv in row and ev in row
+    for cell in _by_game(rows, _z(3)):
+        assert cell not in row, f"{cell} is the family-wise interval: {row}"
 
 
 def test_the_by_market_heading_names_the_correction_and_its_factor() -> None:

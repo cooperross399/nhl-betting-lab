@@ -316,8 +316,10 @@ be dispatched by hand to force a paid capture. Gameday Refresh reads that
 store and writes
 `data/outputs/closing_line_value.md`: beat-the-close rate, CLV%, and the
 de-vigged expected value at the closing line, for opinions and for bets
-separately. It is the earliest honest signal that the model is finding
-something — and it is not profit, which the report says out loud.
+separately, with every interval clustered by game (one game's sides, rungs
+and players are not independent trials). It is the earliest honest signal
+that the model is finding something — and it is not profit, which the
+report says out loud.
 
 **Closing Lines is disabled as of 2026-09-25**, pending a decision about
 publishing captured odds on this public repository's `closing-lines` branch.
