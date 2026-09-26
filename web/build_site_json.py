@@ -12,13 +12,16 @@ Sources, in order of trust:
     game type, records, finals. Works in preseason, when nothing else does.
   * data/outputs/gameday_card.json: the card's selections and passes, which
     carry the model probability, edge and best price for every team market.
-  * data/staging/*.csv: current prices; data/processed/line_movement/: the
-    earliest capture of the day, used as the open. Publish Site restores
-    NEITHER — its two artifacts carry no data/staging and no line_movement —
-    so there every regular-season game is published unpriced (`priced:
-    false`, no line, no pick) and every open is missing. The board says so
-    rather than reading as a pass, and so does the next morning's Results
-    page, which grades no game that carried no pick.
+  * data/staging/*.csv: current prices, the total's line read from the bulk
+    file's featured rows alone; data/processed/line_movement/<day>.csv: each
+    game's market at the first capture that held it, used as the open. The
+    capture holds no bulk market, so every open total is missing (its totals
+    are ladder rungs) and so is every open moneyline (it asks for no h2h).
+    Publish Site restores NEITHER — its two artifacts carry no data/staging
+    and no line_movement — so there every regular-season game is published
+    unpriced (`priced: false`, no line, no pick) and every open is missing.
+    The board says so rather than reading as a pass, and so does the next
+    morning's Results page, which grades no game that carried no pick.
   * data/processed/team_games.csv + TeamModel: expected goals per side,
     with the back-to-back adjustment only while the recorded `team_b2b`
     verdict ships it — the same verdict, read the same way, as the card.
@@ -36,7 +39,6 @@ from __future__ import annotations
 
 import argparse
 import csv
-import glob
 import json
 import sys
 import urllib.request
@@ -128,20 +130,99 @@ def to_american(p: float) -> int:
     return round(-100 * p / (1 - p)) if p >= 0.5 else round(100 * (1 - p) / p)
 
 
-def read_prices(staging: Path) -> list[dict]:
+#: The staged file holding the bulk endpoint's featured lines and nothing
+#: else: `run_provider_shadow.py` writes `fetch_team_markets` here, and the
+#: per-event fetch, alternate ladders included, to `player_props_staging.csv`.
+#: Spelled out rather than imported for the reason USER_AGENT gives; the
+#: tests stage through `odds_api.write_staging` under the provider's own
+#: constant, so a rename there leaves this board with no line and fails them.
+FEATURED_PRICES_FILENAME = "odds_api_prices_staging.csv"
+
+#: Where `scripts/capture_line_movement.py::capture_path` writes a day's
+#: captures: `line_movement/<day>.csv`, every capture of the day appended to
+#: one file, each row stamped with its `captured_at`.
+MOVEMENT_DIRNAME = "line_movement"
+
+#: Markets whose every row in a line-movement capture is an alternate rung.
+#: The capture asks for the per-event markets and their ladders and never the
+#: bulk `spreads` or `totals`, so its puck_line rows are `alternate_spreads`
+#: and its total_goals rows are `alternate_totals`; and a normalized row does
+#: not say which rung, if any, is the featured line.
+LADDER_ONLY_IN_CAPTURE = frozenset({"puck_line", "total_goals"})
+
+
+def read_prices(staging: Path, *, featured_only: bool = False) -> list[dict]:
+    """Staged team-market rows. `featured_only` reads the bulk file alone.
+
+    Every staged file used to be pooled for everything, including the line a
+    total is published at. `player_props_staging.csv` holds the per-event
+    fetch, `alternate_totals` staged as `total_goals`, so the most common
+    staged line was whichever rung the ladders repeated: 4.5 (over -350,
+    under +295) against a bulk main line of 6.0. The prices at a line stay
+    pooled (a quote at 6.0 is the same bet in either market); which line is
+    THE line is read from the featured rows alone.
+    """
+    paths = [staging / FEATURED_PRICES_FILENAME] if featured_only else sorted(staging.glob("*.csv"))
     rows: list[dict] = []
-    for path in staging.glob("*.csv"):
+    for path in paths:
+        if not path.is_file():
+            continue
         with path.open(newline="", encoding="utf-8") as fh:
             rows.extend(csv.DictReader(fh))
     return [r for r in rows if r.get("market") in MARKET_LABEL]
 
 
+def _moment(value: object) -> datetime | None:
+    """A capture's `captured_at`, or None when it cannot be placed in time."""
+    try:
+        moment = datetime.fromisoformat(str(value or "").strip().replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return moment if moment.tzinfo is not None else None
+
+
 def earliest_capture(processed: Path, day: date) -> list[dict]:
-    files = sorted(glob.glob(str(processed / "line_movement" / f"{day.isoformat()}*.csv")))
-    if not files:
+    """Each game's market as the first capture that held it saw it: the open.
+
+    This globbed `line_movement/<day>*.csv` and returned every row of the
+    first file. The capture writes one file per day and appends every capture
+    to it, so the "open" was the whole day pooled, and each later capture
+    moved it: a 14:00 total of 6.5 read 5.5 once an 18:00 capture was
+    appended, and a captured moneyline opening at +110 read +135, the best
+    price of the day. The only test of the open read `<day>_1300.csv`, a name
+    no writer produces. Now the file is the one `capture_path` names, and a
+    row is kept only if its `captured_at` is the first moment its game and
+    market were captured. A row that cannot be placed in time is no capture's
+    and is dropped: missing stays missing.
+
+    The ladder markets are dropped too (LADDER_ONLY_IN_CAPTURE). The most
+    common line among them published a rung as the open total, 4.5 against a
+    current line of 6.0. Until a capture records which of its rows is the
+    featured line, it has no open total to give.
+
+    The capture asks for no bulk `h2h` today (a spending decision left to the
+    owner), so every moneyline open is missing and the page prints a dash.
+    """
+    path = processed / MOVEMENT_DIRNAME / f"{day.isoformat()}.csv"
+    if not path.is_file():
         return []
-    with open(files[0], newline="", encoding="utf-8") as fh:
-        return [r for r in csv.DictReader(fh) if r.get("market") in MARKET_LABEL]
+    stamped: list[tuple[datetime, dict]] = []
+    with path.open(newline="", encoding="utf-8") as fh:
+        for r in csv.DictReader(fh):
+            if r.get("market") not in MARKET_LABEL or r.get("market") in LADDER_ONLY_IN_CAPTURE:
+                continue
+            moment = _moment(r.get("captured_at"))
+            if moment is not None:
+                stamped.append((moment, r))
+
+    def key(r: dict) -> tuple:
+        return r.get("home_team"), r.get("away_team"), r.get("market")
+
+    first: dict[tuple, datetime] = {}
+    for moment, r in stamped:
+        if key(r) not in first or moment < first[key(r)]:
+            first[key(r)] = moment
+    return [r for moment, r in stamped if moment == first[key(r)]]
 
 
 def best_price(rows: list[dict], home: str, away: str, market: str, selection: str, line: float | None = None) -> float | None:
@@ -251,6 +332,7 @@ def build_board(day: date, lab: Path, history_dir: Path) -> dict:
         card = json.loads(card_path.read_text(encoding="utf-8"))
     candidates = [r for r in card.get("best_bets", []) + card.get("leans", []) + card.get("passes", []) if r.get("market") in MARKET_LABEL]
     prices = read_prices(lab / "data" / "staging") if not preseason else []
+    featured = read_prices(lab / "data" / "staging", featured_only=True) if not preseason else []
     opens = earliest_capture(lab / "data" / "processed", day) if not preseason else []
     lab_model = load_model(lab / "data" / "processed", lab / "data" / "outputs") if not preseason else None
 
@@ -297,8 +379,9 @@ def build_board(day: date, lab: Path, history_dir: Path) -> dict:
             if provider_home and provider_away:
                 row["priced"] = True
                 cur, opn = ml_pair(prices, provider_home, provider_away), ml_pair(opens, provider_home, provider_away)
-                # The open is the day's first line-movement capture, or it is
-                # missing. It used to fall back to the current price, and
+                # The open is the game's first line-movement capture
+                # (earliest_capture), or it is missing. It used to fall back
+                # to the current price, and
                 # Publish Site restores no capture, so every "Open" it could
                 # publish was the current price under another name: a line
                 # that never moved because it was only ever read once.
@@ -310,7 +393,10 @@ def build_board(day: date, lab: Path, history_dir: Path) -> dict:
                     "price": best_price(prices, provider_home, provider_away, "puck_line", "home" if fav_home else "away", -1.5),
                     "coverProb": round(pl["home_minus" if fav_home else "away_minus"], 4),
                 }
-                line = headline_line(prices, provider_home, provider_away, "total_goals")
+                # The line from the featured rows only; a ladder rung is not
+                # the line (read_prices). The open total is None while the
+                # capture holds nothing but rungs (earliest_capture).
+                line = headline_line(featured, provider_home, provider_away, "total_goals")
                 if line is not None:
                     tot = m.total_probabilities(home_key, away_key, line=line, **rest)
                     row["total"] = {
