@@ -574,13 +574,28 @@ jobs:
         run: |
           set -u
           REMOTE="https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}"
+          STORE=data/processed/closing_line_captures.csv
           mkdir -p data/processed
-          if git fetch "$REMOTE" +refs/heads/closing-lines:refs/closing-tip 2>/dev/null \
-             && git cat-file -e refs/closing-tip:closing_line_captures.csv 2>/dev/null; then
-            git show refs/closing-tip:closing_line_captures.csv \
-              > data/processed/closing_line_captures.csv
-          else
+          # The restore of gameday-state put the previous run's store here,
+          # because that artifact carries data/processed whole. It goes first,
+          # so the report can only read what THIS run fetched. A fetch that
+          # failed used to fall through to "No capture store yet" and leave
+          # yesterday's store to be scored as today's, with nothing saying so.
+          rm -f "$STORE"
+          # "The branch does not exist" and "the branch could not be read"
+          # are told apart: the first is not a fault (Closing Lines is
+          # disabled by the owner, so it is the expected state), the second
+          # is, and degrades the run like every other fault.
+          if ! HEADS=$(git ls-remote --heads "$REMOTE" refs/heads/closing-lines 2>/dev/null); then
+            echo "The closing-lines branch could not be reached, so the closing-line value report scored no capture store today rather than an earlier run's." >> run_degraded.txt
+          elif [ -z "$HEADS" ]; then
             echo "No capture store yet; the report will say so rather than guess."
+          elif git fetch "$REMOTE" +refs/heads/closing-lines:refs/closing-tip 2>/dev/null \
+             && git show refs/closing-tip:closing_line_captures.csv > "$STORE" 2>/dev/null; then
+            echo "Read the capture store from the closing-lines branch."
+          else
+            rm -f "$STORE"
+            echo "The closing-lines branch exists but its capture store could not be fetched, so the closing-line value report scored no capture store today rather than an earlier run's." >> run_degraded.txt
           fi
           python scripts/run_closing_line_value.py
 
