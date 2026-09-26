@@ -267,7 +267,7 @@ PYTHONPATH=src .venv/bin/python scripts/run_policy_pr_gate.py
 PYTHONPATH=src .venv/bin/python scripts/check_verdict_drift.py
 
 PYTHONPATH=src .venv/bin/python -m pytest -q
-PYTHONPATH=src .venv/bin/python -m compileall -q -f src scripts tests
+PYTHONPATH=src .venv/bin/python -m compileall -q -f src scripts tests web
 ```
 
 `pytest -q` over the whole suite is the only run there is. A subset run — a
