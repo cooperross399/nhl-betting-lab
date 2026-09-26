@@ -11,8 +11,11 @@ the only evidence hits would ever have, which is the report contradicting
 the backtest it sits next to.
 
 The regulation three-way is still true to the sentence: it is per-event only
-and no historical price for it exists, so the forward ledger remains its only
-possible price evidence. The fix removes hits from the claim and keeps the
+and has never been bought historically (it was never requested, so whether a
+book retains it is unasked, not known to be "no"), so the forward ledger
+remains its only possible price evidence — and the sentence must say "never
+bought", not "no book retains", or it repeats the unasked-probe mistake the
+hits correction undoes. The fix removes hits from the claim and keeps the
 three-way in it; these tests pin both halves, on an empty ledger (the report
 a fresh season publishes) and on a ledger with a settled row, and hold the
 module docstring and the maintained status doc to the same statement.
@@ -39,6 +42,7 @@ REPO = Path(__file__).resolve().parents[1]
 #: with "hits".
 NO_PRICES = (
     "no book retains",
+    "never been bought",
     "no historical price",
     "only possible price evidence",
     "only price evidence",
@@ -96,14 +100,20 @@ def test_the_report_still_names_the_three_way_as_forward_only(rendered) -> None:
     claims = _three_way_claims(rendered)
     assert claims, "the three-way lost its forward-only statement"
     assert all("only" in s for s in claims), claims
+    # Non-retention was never asked, so it must not be asserted.
+    assert not any("no book retains" in s for s in claims), claims
 
 
 def test_the_module_docstring_says_the_same() -> None:
     assert _hits_claims(fe.__doc__) == []
-    assert _three_way_claims(fe.__doc__)
+    claims = _three_way_claims(fe.__doc__)
+    assert claims
+    assert not any("no book retains" in s for s in claims), claims
 
 
 def test_the_status_doc_says_the_same() -> None:
     text = (REPO / "docs" / "project_status_for_claude.md").read_text()
     assert _hits_claims(text) == []
-    assert _three_way_claims(text)
+    claims = _three_way_claims(text)
+    assert claims
+    assert not any("no book retains" in s for s in claims), claims
