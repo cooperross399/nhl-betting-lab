@@ -4,9 +4,11 @@ The historical backtest re-prices past games with walk-forward fits, which is
 honest but reconstructed. This is the stronger thing the docs promise: **the
 opinion the live card actually held, written down before puck drop, settled
 against the boxscore after, and never revised.** It is also the only possible
-price evidence for the markets no book retains historically — hits and the
-regulation three-way — and the accumulating out-of-sample test for every
-market and every shipped policy at once.
+price evidence for the regulation three-way, which has never been bought
+historically (it is per-event only and was never requested), and the
+accumulating out-of-sample test for every market and every shipped policy at
+once. (Hits was once named beside the three-way here;
+the 9.5-hour card-window purchase gave it historical prices after all.)
 
 Three stages, each idempotent:
 
@@ -1010,9 +1012,10 @@ def render_forward_report(payload: dict) -> str:
         (
             "The opinion the live card actually held, written down before "
             "puck drop, settled against the boxscore after, never revised. "
-            "This is the only possible price evidence for the markets no "
-            "book retains historically — hits and the regulation three-way — "
-            "and the accumulating out-of-sample test for everything else."
+            "This is the only possible price evidence for the regulation "
+            "three-way, which has never been bought historically (it is "
+            "per-event only and was never requested), and the accumulating "
+            "out-of-sample test for everything else."
         ),
         "",
         f"- Generated: {payload['generated_at']}",
