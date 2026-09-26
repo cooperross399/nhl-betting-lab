@@ -17,8 +17,13 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 import pandas as pd
+import yaml
 
 from nhl_betting_lab import closing_lines as cl
+from nhl_betting_lab.config import PROJECT_ROOT
+
+
+WORKFLOWS = PROJECT_ROOT / ".github" / "workflows"
 
 
 FACE_OFF = datetime(2026, 10, 8, 23, 0, tzinfo=timezone.utc)
@@ -118,13 +123,63 @@ def test_a_capture_one_second_past_the_bound_is_not_a_close() -> None:
     assert counts["no_close_not_near_face_off"] == 1
 
 
+def _in_season_rounds() -> list[int]:
+    """Minutes past midnight UTC of every in-season Line Movement round, read
+    from the workflow itself so a moved cron moves this test with it.
+
+    In-season means every day of the month (day-of-month `*`); the opening-
+    week crons name days and are not the regular schedule.
+    """
+    document = yaml.safe_load(
+        (WORKFLOWS / "line-movement.yml").read_text(encoding="utf-8")
+    )
+    # PyYAML reads the bare key `on` as the boolean True.
+    triggers = document.get("on", document.get(True)) or {}
+    rounds = []
+    for entry in triggers.get("schedule") or []:
+        minute, hour, day, _month, _weekday = str(entry["cron"]).split()
+        if day != "*":
+            continue
+        rounds.append(int(hour) * 60 + int(minute))
+    assert rounds, "no in-season cron was read from line-movement.yml"
+    return sorted(set(rounds))
+
+
+def _leads(start_utc_minutes: int, rounds: list[int]) -> list[int]:
+    """Minutes from each daily round to the start, nearest first. Strictly
+    before face-off, so a round AT the start is a day away, never zero."""
+    return sorted(
+        (start_utc_minutes - r) % (24 * 60) or 24 * 60 for r in rounds
+    )
+
+
+#: Common evening starts, as (label, UTC minutes past midnight). EDT is
+#: UTC-4 (October, and from mid-March), EST is UTC-5.
+EVENING_STARTS = [
+    (f"{et} {zone}", ((h + offset) % 24) * 60 + m)
+    for et, h, m in (("19:00", 19, 0), ("19:30", 19, 30), ("22:00", 22, 0))
+    for zone, offset in (("EDT", 4), ("EST", 5))
+]
+
+
 def test_the_bound_is_what_the_capture_schedule_can_meet() -> None:
-    """The evening rounds are two hours apart (21:00, 23:00, 01:00 UTC), and
-    a 19:00 EDT start is 23:00 UTC, whose own round lands at or after
-    face-off. The 21:00 round must still close that game, or every such
-    game would fall in the bucket on a night nothing went wrong. A missed
-    round leaves at least three hours, which must not close it."""
-    assert timedelta(hours=2) < cl.CLOSE_MAX_LEAD < timedelta(hours=3)
+    """Every common evening start has a scheduled round within the bound,
+    so on a normal night it closes. A 19:00 EDT start is 23:00 UTC, whose
+    own round lands at or after face-off; the 21:00 round, two hours out,
+    must still close it, which is why 60-90 minutes was not chosen.
+
+    Lateness cannot break this: a late stamp is nearer face-off, and a
+    round that slips past face-off hands the close to the previous round,
+    stamped late by the same drift. The afternoon starts the schedule
+    cannot close are recorded in `CLOSE_MAX_LEAD`'s comment, not here.
+    """
+    rounds = _in_season_rounds()
+    for label, start in EVENING_STARTS:
+        nearest = _leads(start, rounds)[0]
+        assert timedelta(minutes=nearest) <= cl.CLOSE_MAX_LEAD, (
+            f"a {label} start's nearest round is {nearest} minutes out, "
+            "beyond the bound, so it could never close"
+        )
 
 
 def test_a_live_price_does_not_rescue_a_stale_one() -> None:
@@ -177,6 +232,35 @@ def test_the_report_prints_how_many_had_no_close_near_face_off() -> None:
     assert report["counts"]["matched"] == 1
     assert report["counts"]["no_close_not_near_face_off"] == 1
     assert "no close near face-off: **1**" in text
+
+
+def test_the_report_split_counts_too_early_apart_from_uncaptured() -> None:
+    """Uncaptured, too early, and books-pulled are three disjoint reasons.
+    A moneyline opinion in a market never captured for the game, and a
+    shots opinion priced only nine hours out: neither is "the other", so
+    no opinion may be explained as a line the books pulled or moved."""
+    captures = pd.DataFrame([_capture(timedelta(hours=9))])
+    opinions = pd.concat(
+        [
+            _opinion(),
+            _opinion(
+                market="moneyline", player="", selection="away", line=None
+            ),
+        ],
+        ignore_index=True,
+    )
+
+    report = cl.build_clv_report(opinions, captures)
+    text = cl.render_clv(report)
+
+    assert report["counts"]["no_close"] == 2
+    assert report["counts"]["no_close_uncaptured"] == 1
+    assert report["counts"]["no_close_not_near_face_off"] == 1
+    assert "Of those, **1** are in a market" in text
+    assert "no close near face-off: **1**" in text
+    assert "The other" not in text, (
+        "a too-early opinion was explained as a line the books pulled"
+    )
 
 
 def test_the_report_prints_the_bucket_even_when_it_is_empty() -> None:

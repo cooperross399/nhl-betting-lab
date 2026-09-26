@@ -354,20 +354,34 @@ def _key_of(row) -> tuple:
 #:
 #: The close was the last capture strictly before puck drop however early it
 #: was, so on a night the last round before face-off missed, a 14:00Z price
-#: for a 23:00Z game was scored as that game's close. The bound comes from
-#: what `.github/workflows/line-movement.yml` can meet, not from a wish:
-#: its rounds run at 14:00, 18:00, 21:00, 23:00 and 01:00 UTC, stamped with
-#: the wall clock when they run (never early, often a few minutes late).
-#: A 19:00 EDT start is 23:00 UTC, and the 23:00 round lands at or after
-#: face-off, so it is never a close under the strictly-before rule; the
-#: 21:00 round, two hours out, is the best that game can get. 60-90 minutes
-#: would therefore put every 19:00 EDT game in the bucket on a night
-#: nothing went wrong. Two and a half hours keeps the two-hour evening gap
-#: plus half an hour of scheduler lateness (a 19:30 EDT start whose 23:00
-#: round slips past face-off still closes at 21:00), and rejects what a
-#: missed round leaves: three hours or more (21:00 for a 00:00 UTC EST
-#: start once 23:00 misses; 18:00 for a 23:00 start once 21:00 misses).
-#: It is a judgement, and Cooper may revise it.
+#: for a 23:00Z game was scored as that game's close. Scoring a price three
+#: or four hours old as the close is the defect itself, so the bound stays
+#: tight even where the schedule cannot meet it.
+#:
+#: What `.github/workflows/line-movement.yml` can meet: its in-season rounds
+#: run at 14:00, 18:00, 21:00, 23:00 and 01:00 UTC, stamped with the wall
+#: clock when they run (never early, often a few minutes late). A 19:00 EDT
+#: start is 23:00 UTC, and the 23:00 round lands at or after face-off, so it
+#: is never a close under the strictly-before rule; the 21:00 round, two
+#: hours out, is the best that game can get. 60-90 minutes would therefore
+#: put every 19:00 EDT game in the bucket on a night nothing went wrong.
+#: The evening rounds are two hours apart, so every common evening start
+#: (19:00, 19:30 and 22:00 ET, EDT and EST) has a round at most two hours
+#: before it. Lateness never lengthens that lead: a late stamp is nearer
+#: face-off, and a round that slips past face-off hands the close to the
+#: previous round, itself stamped late by the same drift. The half hour
+#: above two hours is headroom, and it admits 12:30 EDT and 22:30 EST
+#: starts, whose nearest round is exactly 150 minutes out.
+#:
+#: What it cannot meet, on a normal night with every round on time:
+#: 13:00 ET starts (EDT and EST), 12:30 EST, 16:00 EST and 17:00 EDT have
+#: NO round within the bound, and neither do 19:00 EDT games on 29-30
+#: September, when only the 18:00 and 23:00 rounds are scheduled. Those
+#: games have no close near face-off; their opinions are counted under
+#: `no_close_not_near_face_off`, never scored. Only an extra round around
+#: 15:30-16:00 UTC would give the afternoon starts a real close, and that
+#: spends credits, so it is Cooper's decision. The bound itself is a
+#: judgement, and Cooper may revise it.
 CLOSE_MAX_LEAD = timedelta(minutes=150)
 
 
@@ -1016,13 +1030,14 @@ def render_clv(report: dict, *, generated: str = "") -> str:
         f"- Opinions considered: **{counts.get('opinions', 0)}**; "
         f"matched to a closing price: **{counts.get('matched', 0)}**; "
         f"no closing price found: **{counts.get('no_close', 0)}**.",
-        # Printed every time, zero included, so a night whose last round
-        # before face-off missed cannot pass unseen.
+        # Printed every time, zero included, so a game with no capture near
+        # face-off (a round missed, or none scheduled that close) cannot
+        # pass unseen.
         "- Within that count, priced before face-off but no close near face-off: "
-        f"**{counts.get('no_close_not_near_face_off', 0)}** — their "
-        f"latest pre-start price is more than {_lead_text(CLOSE_MAX_LEAD)} "
-        "before the start. That is an intraday price, not the market's "
-        "last word, so they are not scored.",
+        f"**{counts.get('no_close_not_near_face_off', 0)}** — no capture "
+        f"was taken within {_lead_text(CLOSE_MAX_LEAD)} of face-off (a round "
+        "missed, or none is scheduled that close). An older price is an "
+        "intraday price, not the market's last word, so they are not scored.",
     ]
     # Split, not added to: every opinion below is already in the count above.
     # All of them used to be explained by the paragraph after this, as
@@ -1089,13 +1104,14 @@ def render_clv(report: dict, *, generated: str = "") -> str:
                 "",
             ]
         elif stale:
-            # Prices were captured; the last round before face-off was not.
+            # Prices were captured, but none near enough face-off: a round
+            # missed, or the schedule has none that close to this start.
             lines += [
                 "No opinion has been matched to a closing price. This is NOT",
                 "the empty state before a season: the store holds prices from",
-                f"before face-off, but for {stale} of these opinions none within",
-                f"{_lead_text(CLOSE_MAX_LEAD)} of it. The capture round nearest",
-                "face-off missed or never ran.",
+                f"before face-off, but for {stale} of these opinions no capture",
+                f"was taken within {_lead_text(CLOSE_MAX_LEAD)} of face-off (a",
+                "round missed, or none is scheduled that close).",
                 "",
             ]
         elif report.get("unreadable_snapshots"):
