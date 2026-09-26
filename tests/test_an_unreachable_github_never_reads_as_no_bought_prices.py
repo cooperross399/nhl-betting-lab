@@ -473,9 +473,13 @@ class Purchase:
         for name in scripts:
             shutil.copy(SCRIPTS / name, work / "scripts" / name)
         # The unfixed step downloaded into a fixed /tmp/probe; moved into
-        # this run's scratch, and nothing else under /tmp is allowed.
+        # this run's scratch, and nothing else under /tmp is allowed. Checked
+        # on the step as written, before the move: on a Linux runner pytest's
+        # own tmp_path is under /tmp, so the moved text always holds "/tmp/".
+        assert "/tmp/" not in text.replace("/tmp/probe", ""), (
+            f"{step['name']!r} writes to a fixed path under /tmp"
+        )
         text = text.replace("/tmp/probe", str(runner_temp / "probe"))
-        assert "/tmp/" not in text, f"{step['name']!r} writes to a fixed path under /tmp"
         step_env = dict(env)
         for key, raw in (step.get("env") or {}).items():
             raw = str(raw)
