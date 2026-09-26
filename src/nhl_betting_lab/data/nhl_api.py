@@ -12,7 +12,8 @@ The rule has one exception and it is explicit: a schedule day, or a boxscore
 for a game that is not final, is *incomplete evidence*. Those are cached too,
 but `is_final` is recorded alongside so a later run knows to fetch again. A
 cache that cannot tell "finished" from "in progress" would freeze a game at
-the second period forever.
+the second period forever. The player registry of a season that has not
+closed is incomplete evidence in the same way (`registry_is_settled`).
 
 Nothing here needs a credential, so nothing here can leak one.
 """
@@ -30,7 +31,7 @@ from typing import Any
 
 import requests
 
-from nhl_betting_lab.config import RAW_DIR
+from nhl_betting_lab.config import RAW_DIR, SEASON_ROLLOVER_MONTH
 
 
 API_BASE_URL = "https://api-web.nhle.com"
@@ -357,56 +358,127 @@ def current_rosters(
     return rosters
 
 
-def fetch_player_registry(
-    season_id: int,
-    *,
-    requester: Requester | None = None,
-    raw_dir: Path | None = None,
-    refresh: bool = False,
-) -> CacheEntry:
-    """`playerId` -> full name, for one season, from the stats API.
+#: The registry's two lists, the stats-API endpoint each is read from, and
+#: the field that endpoint spells the full name in.
+REGISTRY_ENDPOINTS = (
+    ("skaters", "skater/summary", "skaterFullName"),
+    ("goalies", "goalie/summary", "goalieFullName"),
+)
 
-    The boxscore abbreviates first names (`"S. Noesen"`); the odds provider
-    spells them out (`"Stefan Noesen"`). Joining prop prices to results needs
-    the full form, and this is the only thing the stats API is used for.
+#: Rows per stats-API page.
+REGISTRY_PAGE_SIZE = 100
 
-    It is deliberately not a model input: its per-player endpoints return
-    season-to-date totals with no as-of date, so feeding them to a walk-forward
-    fit would leak the rest of the season into a game being priced. Names
-    cannot leak anything.
+#: The order the registry's pages are asked for in. The stats API pages with
+#: `start`/`limit`, and without a sort each page is its own query in its own
+#: order, so pages overlap and players fall between them. The cached 2025-26
+#: registry, paged that way, holds 918 distinct players where a fetch sorted
+#: on playerId returns 940, and 2024-25 holds 899 of 924 (measured against
+#: the live API on 2026-09-26: the sort is honoured, pages come back in
+#: ascending playerId, and 977 rows is 940 players because each traded
+#: player's playoff row is listed a second time).
+REGISTRY_SORT = json.dumps([{"property": "playerId", "direction": "ASC"}])
+
+
+def _utc_now() -> datetime:
+    """The moment a fetched registry is stamped with; a seam a test can fix."""
+    return datetime.now(timezone.utc)
+
+
+def registry_closes_on(season_id: int) -> date:
+    """The first day a season's registry can no longer change.
+
+    The rollover month of the season's second year: the same boundary
+    `config.current_season_id` uses to stop calling it the season being
+    played. 20252026 closes on 2026-08-01.
     """
-    season = int(season_id)
-    if len(str(season)) != 8:
+    text = str(int(season_id))
+    if len(text) != 8:
         raise NhlApiError(f"{season_id!r} is not an eight-digit NHL season id.")
-    path = _cache_root(raw_dir) / "registry" / f"{season}.json"
+    return date(int(text[4:]), SEASON_ROLLOVER_MONTH, 1)
 
-    if not refresh:
-        cached = _read_cache(path)
-        if cached is not None:
-            return CacheEntry(
-                path=path, payload=cached, from_cache=True, complete=False
-            )
 
-    request = requester or _default_requester
-    combined: dict[str, list[Any]] = {"skaters": [], "goalies": []}
-    for role, endpoint, name_field in (
-        ("skaters", "skater/summary", "skaterFullName"),
-        ("goalies", "goalie/summary", "goalieFullName"),
-    ):
+def _registry_names(payload: Any) -> dict[str, dict[int, dict[str, Any]]]:
+    """{role: {player id: row}} for every row that carries an id and a name."""
+    named: dict[str, dict[int, dict[str, Any]]] = {}
+    for role, _, _ in REGISTRY_ENDPOINTS:
+        rows = payload.get(role) if isinstance(payload, dict) else None
+        named[role] = {}
+        for row in rows if isinstance(rows, list) else []:
+            if not isinstance(row, dict) or not str(row.get("fullName", "")).strip():
+                continue
+            try:
+                player_id = int(row.get("playerId"))
+            except (TypeError, ValueError):
+                continue
+            named[role].setdefault(player_id, row)
+    return named
+
+
+def registry_is_settled(payload: Any, season_id: int) -> bool:
+    """Whether a cached registry is the season's final answer.
+
+    Only when it names at least one player AND was fetched on or after the
+    day the season closed. A registry fetched while its season is still being
+    played is a snapshot of who had played by that day, as an unfinished
+    boxscore is a snapshot of the second period, and it is fetched again.
+    A missing or unreadable `fetched_at` cannot show it was fetched late
+    enough, so it is not settled either.
+    """
+    if not any(_registry_names(payload).values()):
+        return False
+    stamp = str(payload.get("fetched_at") or "").strip()
+    try:
+        fetched = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    if fetched.tzinfo is None:
+        fetched = fetched.replace(tzinfo=timezone.utc)
+    return fetched.astimezone(timezone.utc).date() >= registry_closes_on(season_id)
+
+
+def _registry_pages(
+    season: int, request: Requester, polite_seconds: float
+) -> dict[str, list[dict[str, Any]]]:
+    """Every row the stats API lists for one season, in playerId order.
+
+    Raises rather than returning a short list. A page that is not a data
+    list used to end the list as if it were the last page, and whatever had
+    been gathered was cached as the season: a truncated registry is worse
+    than none, because nothing downstream can tell it is short.
+    """
+    combined: dict[str, list[dict[str, Any]]] = {"skaters": [], "goalies": []}
+    asked = 0
+    for role, endpoint, name_field in REGISTRY_ENDPOINTS:
         start = 0
+        received = 0
+        counted: int | None = None
         while True:
+            # Paced like every other live request `fetch_nhl_data` makes: the
+            # season being played is asked on every run now, about a dozen
+            # pages, and run 32909961346 lost 2026-27's registry to a 429.
+            if asked and polite_seconds > 0:
+                time.sleep(polite_seconds)
+            asked += 1
             payload = _get_json(
                 f"{STATS_BASE_URL}/{endpoint}",
                 requester=request,
                 params={
-                    "limit": "100",
+                    "limit": str(REGISTRY_PAGE_SIZE),
                     "start": str(start),
                     "cayenneExp": f"seasonId={season}",
+                    "sort": REGISTRY_SORT,
                 },
             )
             rows = payload.get("data") if isinstance(payload, dict) else None
-            if not isinstance(rows, list) or not rows:
-                break
+            if not isinstance(rows, list):
+                raise NhlApiError(
+                    f"The stats API answered {season} {role} from row {start} "
+                    "with no list of players; the registry was not cached."
+                )
+            total = payload.get("total")
+            if isinstance(total, int) and not isinstance(total, bool):
+                counted = total if counted is None else max(counted, total)
+            received += len(rows)
             for row in rows:
                 if not isinstance(row, dict):
                     continue
@@ -423,19 +495,94 @@ def fetch_player_registry(
                         "teamAbbrevs": str(row.get("teamAbbrevs", "")).strip(),
                     }
                 )
-            if len(rows) < 100:
+            if len(rows) < REGISTRY_PAGE_SIZE:
                 break
-            start += 100
+            start += REGISTRY_PAGE_SIZE
             if start > 5000:  # a season has ~1,000 players; this is a runaway guard
                 break
+        if counted is not None and received < counted:
+            raise NhlApiError(
+                f"The stats API counts {counted} {role} rows for {season} and "
+                f"its pages returned {received}; a short registry was not cached."
+            )
+    return combined
 
-    payload = {
-        "seasonId": season,
-        "fetched_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        **combined,
-    }
+
+def fetch_player_registry(
+    season_id: int,
+    *,
+    requester: Requester | None = None,
+    raw_dir: Path | None = None,
+    refresh: bool = False,
+    polite_seconds: float = 0.0,
+) -> CacheEntry:
+    """`playerId` -> full name, for one season, from the stats API.
+
+    The boxscore abbreviates first names (`"S. Noesen"`); the odds provider
+    spells them out (`"Stefan Noesen"`). Joining prop prices to results needs
+    the full form, and this is the only thing the stats API is used for.
+
+    It is deliberately not a model input: its per-player endpoints return
+    season-to-date totals with no as-of date, so feeding them to a walk-forward
+    fit would leak the rest of the season into a game being priced. Names
+    cannot leak anything.
+
+    **The cache is read only when the registry is settled.** This used to
+    serve any cached file that parsed, and `fetch_nhl_data` never asked for a
+    refresh, so a season's first answer stood as its answer. 2026-27's first
+    answer came in August, before a game had been played: the stats API lists
+    nobody for a season that has not started (`{"data": [], "total": 0}`),
+    Gameday Refresh cached that on 2026-08-26 and served it on every run
+    after, and every player whose first NHL game falls in 2026-27 would have
+    had no name all season. His props land under "Names that could not be
+    matched": no opinion, no card, no forward-ledger row. On the 2025-26
+    analog that is 160 players, 58 of them past the model's 15-game minimum,
+    3,033 of 52,478 player-game rows. Now a registry fetched before its
+    season closed is asked again on every call (`registry_is_settled`), as
+    an unfinished boxscore is, and a closed season's is read from cache.
+
+    What an answer may do to the cached file:
+
+    * one naming nobody is never written. It is today's answer (the season
+      has not started, or the API blinked), not the season's: it leaves any
+      cached file as it was, and it cannot stamp a stale file with a time
+      late enough to settle it;
+    * one naming players is merged with the cached file by playerId, the
+      fresh spelling winning. A refresh never unnames a player it had named;
+    * one that is short or malformed raises `NhlApiError` and writes nothing
+      (`_registry_pages`), so the caller counts a failed request, not a
+      registry.
+    """
+    season = int(season_id)
+    if len(str(season)) != 8:
+        raise NhlApiError(f"{season_id!r} is not an eight-digit NHL season id.")
+    path = _cache_root(raw_dir) / "registry" / f"{season}.json"
+
+    cached = _read_cache(path)
+    if not refresh and registry_is_settled(cached, season):
+        return CacheEntry(path=path, payload=cached, from_cache=True, complete=True)
+
+    fresh = _registry_pages(season, requester or _default_requester, polite_seconds)
+    stamp = _utc_now().astimezone(timezone.utc).isoformat(timespec="seconds")
+    if not any(fresh.values()):
+        # The answer, returned and never written: no names, not the season.
+        answer = {"seasonId": season, "fetched_at": stamp, "skaters": [], "goalies": []}
+        return CacheEntry(path=path, payload=answer, from_cache=False, complete=False)
+
+    fresh_named = _registry_names(fresh)
+    cached_named = _registry_names(cached)
+    merged: dict[str, list[dict[str, Any]]] = {}
+    for role, _, _ in REGISTRY_ENDPOINTS:
+        rows = {**cached_named[role], **fresh_named[role]}
+        merged[role] = [rows[player_id] for player_id in sorted(rows)]
+    payload = {"seasonId": season, "fetched_at": stamp, **merged}
     _write_cache(path, payload)
-    return CacheEntry(path=path, payload=payload, from_cache=False, complete=False)
+    return CacheEntry(
+        path=path,
+        payload=payload,
+        from_cache=False,
+        complete=registry_is_settled(payload, season),
+    )
 
 
 def cached_boxscore_ids(raw_dir: Path | None = None) -> list[int]:
