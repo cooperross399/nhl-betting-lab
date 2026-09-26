@@ -320,7 +320,8 @@ be dispatched by hand to force a paid capture. Gameday Refresh reads that
 store and writes
 `data/outputs/closing_line_value.md`: beat-the-close rate, CLV%, and the
 de-vigged expected value at the closing line, for opinions and for bets
-separately, with every interval clustered by game (one game's sides, rungs
+separately (a "bet" there, as in the forward-evidence report, is an opinion
+clearing the 6% prop / 3.5% team measurement bar, not a bet the card staked), with every interval clustered by game (one game's sides, rungs
 and players are not independent trials). It is the earliest honest signal
 that the model is finding something — and it is not profit, which the
 report says out loud.
