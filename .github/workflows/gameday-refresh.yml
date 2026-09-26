@@ -350,6 +350,10 @@ jobs:
           # it wrote `degraded` at all — so the coldest run read as clean.
           games=$(find data/raw/nhl/boxscore -name '*.json' 2>/dev/null | wc -l || true)
           echo "Boxscores cached: $games"
+          # 1000 is config.THIN_HISTORY_GAMES: the public board projects
+          # nothing from a history below it either, and
+          # tests/test_the_board_refuses_a_thin_history.py runs this step at
+          # that line to keep the two in one place.
           if [ ! -f data/processed/player_game_logs.csv ]; then
             echo "No player logs: no prop can be priced, so no card can be built. The NHL API could not be reached and no previous cache was restored." >> run_degraded.txt
           elif [ "$games" -lt 1000 ]; then
