@@ -587,7 +587,9 @@ def _settle_prop_row(
         # boxscore lists the backup who sat all night with no ice time and no
         # saves. The historical backtest scores no goalie game under
         # GOALIE_START_SECONDS, so the ledger voids by the same rule; an
-        # unrecorded ice time is not a start and is not guessed at.
+        # unrecorded ice time is not a start and is not guessed at. The rule
+        # is the backtest's, not a book's: a starter pulled early is voided
+        # here and dropped there, where a book would grade him.
         if toi_seconds is None:
             return "unsettleable", None, 0.0
         if toi_seconds < GOALIE_START_SECONDS:

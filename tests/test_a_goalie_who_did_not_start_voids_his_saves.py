@@ -178,3 +178,12 @@ def test_a_skater_is_untouched_by_the_goalie_rule(tmp_path: Path) -> None:
     )
 
     assert fe.load_ledger(tmp_path / "processed").iloc[0]["outcome"] == "won"
+
+
+def test_logs_without_an_ice_time_column_grade_no_goalie(tmp_path: Path) -> None:
+    """A log frame that never carried ice time is the unrecorded case for
+    every goalie in it, not a start for all of them."""
+    logs = _goalie_logs(3600, 31.0).drop(columns=["toi_seconds"])
+    row = _settle_one(tmp_path, "over", logs)
+
+    assert row["outcome"] == "unsettleable"

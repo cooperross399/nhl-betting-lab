@@ -835,7 +835,14 @@ Re-derive rather than trust if the data has moved.
   produces no sample and so no bet — so the ledger was settling by a rule the
   backtest it is compared with never used. It now voids a `goalie_saves` row
   under that threshold, and leaves one with no recorded ice time
-  unsettleable rather than guessing. Skater props are untouched. The model,
+  unsettleable rather than guessing. Skater props are untouched. **This is
+  the backtest's rule, not a book's**: books grade a starter pulled at 28
+  minutes as action, and this voids him, as the backtest always has dropped
+  him. So pulled starters — mostly under wins — are missing from both sides
+  of the comparison, a survivorship bias the two share on purpose rather
+  than one the ledger alone would carry. Settling both on the boxscore's
+  starter flag, which `build_datasets` does not yet record, is the fix for
+  that and would move historical figures, so it is not made here. The model,
   the edge bar, the market list, the staking rule and the ledger's schema
   are unchanged, and the ledger held zero rows when this landed.
   `tests/test_a_goalie_who_did_not_start_voids_his_saves.py`.
