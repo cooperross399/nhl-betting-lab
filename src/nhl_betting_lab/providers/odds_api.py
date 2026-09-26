@@ -127,6 +127,15 @@ STAGING_PRICES_FILENAME = "odds_api_prices_staging.csv"
 STAGING_PROPS_FILENAME = "player_props_staging.csv"
 PROVENANCE_FILENAME = "staging_provenance.json"
 
+#: The sentence `_get` ends every request failure with. It is true where the
+#: failure ends the run before anything is staged — the bulk team fetch, the
+#: one `run_provider_shadow.py` stops on — and false for a per-event failure,
+#: after which the loop goes on and the script stages what it has. It was
+#: recorded there anyway: every per-event error in the provenance and the
+#: verification report read "No staging file was written." beside a written
+#: `player_props_staging.csv`. `_event_error` leaves it off.
+NO_STAGING_WRITTEN = "No staging file was written."
+
 PRICE_COLUMNS = (
     "date",
     "commence_time",
@@ -171,6 +180,13 @@ class EmptySlateError(ProviderError):
 
 def _default_requester(url: str, **kwargs: Any) -> Any:
     return requests.get(url, **kwargs)
+
+
+def _event_error(event_id: str, exc: Exception) -> str:
+    """One per-event failure as the provenance records it, without the
+    staging claim a per-event failure cannot make (see NO_STAGING_WRITTEN)."""
+    text = " ".join(str(exc).replace(NO_STAGING_WRITTEN, "").split())
+    return f"Event {event_id}: {text}"
 
 
 def american_price(value: object) -> float | None:
@@ -471,14 +487,14 @@ class OddsApiProvider:
             raise ProviderError(
                 redact(
                     f"The odds provider could not be reached "
-                    f"({type(exc).__name__}). No staging file was written."
+                    f"({type(exc).__name__}). {NO_STAGING_WRITTEN}"
                 )
             ) from exc
         status = int(getattr(response, "status_code", 0) or 0)
         if status != 200:
             raise ProviderError(
                 f"The odds provider returned HTTP {status or 'unknown'}. "
-                "No staging file was written."
+                f"{NO_STAGING_WRITTEN}"
             )
         try:
             payload = response.json()
@@ -773,9 +789,7 @@ class OddsApiProvider:
                             ),
                         )
                     except ProviderError as retry_exc:
-                        result.errors.append(
-                            f"Event {event_id}: {retry_exc}"
-                        )
+                        result.errors.append(_event_error(event_id, retry_exc))
                         continue
                     if not degraded_to_core:
                         degraded_to_core = True
@@ -790,7 +804,7 @@ class OddsApiProvider:
                             "prop on every event with it."
                         )
                 else:
-                    result.errors.append(f"Event {event_id}: {exc}")
+                    result.errors.append(_event_error(event_id, exc))
                     continue
             result.credits_spent += per_event
             if headers.get("x-requests-remaining"):

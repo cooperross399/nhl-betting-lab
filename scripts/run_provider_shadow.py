@@ -18,6 +18,12 @@ places nothing.
 
 The credential comes from `NHL_ODDS_API_KEY` in the environment, a gitignored
 `.env`, or a GitHub Secret. It is never accepted as a command argument.
+
+Exit codes: 0, everything asked was answered (however little the books
+quoted); 2, the team-market fetch failed and nothing was staged; 3, no NHL
+games are on the board, which is not a fault; 4, at least one per-event
+request failed, so those games' props, regulation three-way and alternate
+ladders are missing — everything else was still staged and reported.
 """
 
 from __future__ import annotations
@@ -39,6 +45,13 @@ from nhl_betting_lab.reports.provider_shadow import (
     save_shadow_reports,
 )
 from nhl_betting_lab.staging_provider_policy import load_policy
+
+
+#: At least one per-event request failed. Everything was still staged and
+#: reported, so the card can be built from what arrived; the code exists so
+#: the run cannot read as clean. Gameday Refresh turns it into a degraded
+#: note, which is what summons the backup trigger.
+EXIT_PER_EVENT_INCOMPLETE = 4
 
 
 def _staged_prices(staging_dir: Path) -> pd.DataFrame:
@@ -135,6 +148,7 @@ def main(argv: list[str] | None = None) -> int:
     quota = ""
     warnings: list[str] = []
     errors: list[str] = []
+    per_event_failures: list[str] = []
 
     if args.live:
         provider = odds_api.OddsApiProvider()
@@ -232,6 +246,33 @@ def main(argv: list[str] | None = None) -> int:
             # player props — a label that says otherwise sends whoever reads
             # the log hunting for a prop-pricing bug that does not exist.
             print(f"Per-event markets: {props.summary_line()}")
+            # Keyed on the errors, not on the rows: a fetch whose requests
+            # were all answered and in which no book quoted a prop is an
+            # absence and exits 0, and a budget skip is a stated warning.
+            #
+            # This used to be recorded in the provenance and nowhere else,
+            # and the script returned 0. Gameday Refresh reads only the exit,
+            # so a run in which every per-event request answered HTTP 503
+            # was a clean run: the failure-shape audit replayed 3 games at 2
+            # books with 3 of 3 per-event calls failing (503, 429 or a
+            # timeout alike) and got exit 0, a 0-row props file, a card
+            # excluding all nine per-event markets as "The provider returned
+            # no rows", a 36-row snapshot holding no prop, and
+            # `degraded=false`, so the backup trigger stood down. One of
+            # three failing gave exit 0 too, with every per-event market
+            # INCOMPLETE — a card with no prop on it.
+            per_event_failures = list(props.errors)
+            if per_event_failures:
+                print(
+                    f"{len(per_event_failures)} per-event request(s) failed, "
+                    "so those games' props, regulation three-way and "
+                    "alternate ladders are missing — absent, not unquoted. "
+                    "Everything else is still staged and reported; this run "
+                    f"exits {EXIT_PER_EVENT_INCOMPLETE}.",
+                    file=sys.stderr,
+                )
+                for failure in per_event_failures:
+                    print(f"  {failure}", file=sys.stderr)
 
         odds_api.write_provenance(
             odds_api.FetchResult(
@@ -274,6 +315,10 @@ def main(argv: list[str] | None = None) -> int:
         "Shadow run only. Nothing was allowlisted, no staging was promoted, "
         "no bet was placed, and no credential was written."
     )
+    # Last, so a failed per-event request never costs the staging files,
+    # the provenance or the reports the card is still built from.
+    if per_event_failures:
+        return EXIT_PER_EVENT_INCOMPLETE
     return 0
 
 
