@@ -708,7 +708,7 @@ Re-derive rather than trust if the data has moved.
   a game with no result inside fourteen days is counted unsettleable, never
   guessed. `data/outputs/forward_evidence.md` restates what the ledger
   supports, in the house vocabulary. This is the only price evidence the
-  regulation three-way will have, since it has never been bought
+  regulation three-way has so far, since it has never been bought
   historically (it is per-event only and was never requested); the only
   price evidence `team_total` has so far, since it too has never been
   measured against real prices; and the accumulating out-of-sample test for
