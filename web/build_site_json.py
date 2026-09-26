@@ -647,6 +647,18 @@ def settle(day: date, history_dir: Path) -> dict:
         base.update(phase="preseason", notice="No projections were published for the exhibition games, so there is nothing to settle. "
                     "The first results page lands the morning after opening night, September 30.")
         return base
+    shown = board.get("games") or []
+    if shown and not any("projGoals" in (g.get("home") or {}) for g in shown):
+        # A regular-season board frozen without the model (build_board's
+        # schedule-only notice) grades nothing below, and this set no notice,
+        # so the page fell back to "No games were settled for this date."
+        # with Straight up 0–0 about a slate that was played to a final: in
+        # the failure-shape audit's replay, 0 of 10 finals on 2026-10-08
+        # after one failed state listing froze the schedule alone. What was
+        # published had nothing to settle, and that is what the page says.
+        base["notice"] = ("The board published for this date showed the schedule only, with no projection, "
+                          "so there is nothing to settle.")
+        return base
     finals = {str(g["id"]): g for g in schedule_for(day) if g.get("gameState") in {"OFF", "FINAL"}}
     s = base["summary"]
     for g in board["games"]:
