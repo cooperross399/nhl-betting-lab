@@ -116,6 +116,15 @@ jobs:
           done
 
       - name: Capture prices
+        # The script reports on itself. It exits 0 on a round it captured,
+        # and a per-event request that failed inside that round is named in
+        # a ::warning:: (the games that answered are kept). It exits 2 when
+        # nothing was captured because the events list or the per-event
+        # requests failed, which makes this step red. That is the report, not
+        # the damage: every step below is `if: always()`, so the uploads and
+        # the closing-price hand-off still run.
+        # tests/test_a_failed_price_request_is_not_an_unquoted_game.py holds
+        # both rules.
         env:
           NHL_ODDS_API_KEY: ${{ secrets.NHL_ODDS_API_KEY }}
           PYTHONPATH: src

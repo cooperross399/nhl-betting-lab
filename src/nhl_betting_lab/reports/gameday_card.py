@@ -33,6 +33,44 @@ sold. Every edge on this card is therefore **understated**, uniformly, and
 being wrong in the conservative direction on both is better than being right
 on one and incomparable across the two.
 
+## Why one outcome gets one stake, whatever the ladder quotes
+
+`selection_key` carries the line, and `markets.ALTERNATE_PROVIDER_KEYS` maps
+every alternate ladder back onto the project market it is a ladder *of*. So a
+single player's points ladder arrives as `over 0.5`, `over 1.5`, `over 2.5` —
+three rows, three keys, three model opinions, and, before this, three staked
+selections on **one** outcome. A player who records a point settles all three
+together; they are not three positions, they are one position sized three
+times, at three prices, without anything on the staking path noticing.
+
+That is the same shape `selection_key`'s own docstring already records and
+already fixed once — two book spellings of one player, and "the card listed
+one outcome twice" — and the same reason anytime-scorer is collapsed into
+`goals` over 0.5 rather than carried as a second market.
+
+So among the rows that would be staked, one rung per outcome keeps the stake
+and the rest become leans at zero units, each naming the rung that kept it.
+The grouping is every component of `selection_key` **except** the line, which
+is deliberately narrow:
+
+* On a prop the side rides in `selection` (`over`/`under`), so rungs of one
+  side collapse and the two sides do not.
+* On `team_total` the side rides in `selection` too (`home_over` …
+  `away_under`), so a home total and an away total in one game stay two
+  outcomes. `puck_line`, `total_goals`, `regulation_3_way` and `moneyline`
+  keep their sides apart the same way.
+* `over` against `under` is a *contradiction*, not a duplication, and
+  `ladder_coherence.py` is the tool for that. Collapsing them here would hide
+  it.
+
+It caps nothing else. There is no per-game, per-slate, cross-market or
+bankroll cap here, because those would be new staking policy rather than a
+count of one outcome. **Nothing is hidden by it**: a demoted rung is still a
+lean on the card with its reason, and the forward snapshot freezes off the
+unfiltered priced frame before the card is built, so every priced opinion
+still reaches the ledger exactly as before. This reduces stakes, never
+opinions.
+
 Two rules run through all of it:
 
 **A blocked card produces no selections, not placeholder ones.** An empty card
@@ -50,6 +88,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping, Sequence
+from types import SimpleNamespace
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -98,6 +137,13 @@ BEST_BET_PROP_EDGE = 0.12
 
 #: Flat stakes by tier, in units. Small on purpose: these are positions whose
 #: expected value is genuinely uncertain, and the sizing should say so.
+#: The opening words of every reason `_one_stake_per_outcome` writes. Single
+#: sourced so the pass that WRITES the reason and the check that READS it can
+#: never drift apart, and so a rung demoted for any other cause is never
+#: mistaken for a collapsed ladder rung.
+LADDER_DEMOTION_PREFIX = "One stake per outcome:"
+
+
 TIER_UNITS = {"A": 0.5, "B": 0.25, "C": 0.1}
 
 #: Markets that cannot produce a selection without information this lab does
@@ -110,6 +156,37 @@ HARD_GATED_MARKETS: dict[str, str] = {
         "has no confirmed-starter source, so goalie saves cannot produce a "
         "selection. See docs/goalie_props_need_a_confirmed_starter.md. This is "
         "not a judgement that the market has no value."
+    )
+}
+
+
+#: Markets the CARD does not stake, on measured return, whatever the policy
+#: allows and whatever the model says tonight.
+#:
+#: Deliberately NOT HARD_GATED_MARKETS. That dict is about information this
+#: lab does not have, and says so: "This is not a judgement that the market
+#: has no value." This one is exactly that judgement, and it is reversible by
+#: deleting an entry.
+#:
+#: A market named here stays allowlisted, stays eligible, stays priced, and
+#: keeps every opinion it produces. `write_snapshot` runs on the unfiltered
+#: price frame before `build_card` is called at all, so the forward ledger
+#: accumulates these rows identically either way. `docs/when_this_ends.md` is
+#: explicit that the forward test measures opinions rather than bets -- "the
+#: card is dark and places none, but a frozen opinion scored against the price
+#: it was frozen at is the same test" -- so NOTHING measurable is given up by
+#: declining to stake a market. What is given up is the recommendation.
+STAKE_EXCLUDED_MARKETS: dict[str, str] = {
+    "points": (
+        "`points` is the one market this lab has measured as a loss that "
+        "survives correction: -4.2% over 6,140 card-window wagers, 95% "
+        "interval -6.7% to -1.7%, -7.6% to -0.7% after correcting for the "
+        "eight markets tested, and -256.8 units realised. It holds within "
+        "2025-26 alone (-5.4% over 3,468). The evidence bundle's verdict is "
+        "that \"a loss that survives the correction still argues against "
+        "enabling this market, not for it\". The opinion is still recorded "
+        "and still settles into the forward ledger; only the stake is "
+        "withheld."
     )
 }
 
@@ -135,6 +212,11 @@ class Candidate:
     tier: str
     suggested_units: float
     section: str
+    #: Why this rung is a lean rather than a stake, when the stake went to
+    #: another rung of the same ladder. Empty on every other candidate. It is
+    #: carried on the candidate rather than computed at render time so that
+    #: the card, the JSON and any reader downstream see the same sentence.
+    demotion_reason: str = ""
 
     def as_row(self) -> dict[str, Any]:
         return dict(self.__dict__)
@@ -218,6 +300,78 @@ def _tier_for(edge: float, is_prop: bool) -> str:
     return "C"
 
 
+def outcome_group(key: tuple) -> tuple:
+    """The tuple a stake is unique within: `selection_key` minus the line.
+
+    Built by unpacking the real key rather than by re-deriving its parts, for
+    the same reason `selection_key` itself is one function: two hand-built
+    copies of a key disagree silently, and a key mismatch is indistinguishable
+    from "no modelled opinion".
+
+    `selection` stays in, which is the whole reason this is safe. It is what
+    keeps `home_over` and `away_over` on one game's `team_total` apart, what
+    keeps the two sides of a puck line apart, and what keeps an `over` from
+    being collapsed against its own `under` — that last one is a
+    contradiction for `ladder_coherence.py`, not a duplicate for this.
+    """
+    market, player, home, away, selection, _line, day = key
+    return (market, player, home, away, selection, day)
+
+
+def _rung_order(item: tuple[tuple, Candidate]) -> tuple:
+    """Which rung of one outcome keeps the stake: highest edge, then fixed.
+
+    Every component after the edge exists only to make a tie resolve the same
+    way twice. Two rungs of one ladder can price to the same edge exactly —
+    the model's distribution and the book's ladder are both coarse — and a
+    card that staked whichever one `dict` happened to yield first would
+    change its selections between two runs over identical inputs, which reads
+    as a live line move and is not one. Better price next, then the lower
+    line; within a group the line is unique, so this is a total order.
+    """
+    key, candidate = item
+    line = key[5]
+    return (
+        -float(candidate.edge),
+        -float(candidate.american_odds),
+        float("inf") if line is None else float(line),
+    )
+
+
+def _demotion_reason(keeper: Candidate) -> str:
+    """The sentence a demoted rung carries, naming the rung that kept the stake."""
+    return (
+        f"{LADDER_DEMOTION_PREFIX} the stake went to "
+        f"{_label(keeper.as_row())} at {_price(keeper.american_odds)} "
+        f"(edge {keeper.edge:+.1%}, {keeper.suggested_units:g} unit(s)). "
+        "This rung is the same opinion at another line, so it is recorded as "
+        "a lean and staked at zero."
+    )
+
+
+def _one_stake_per_outcome(staked: Sequence[tuple[tuple, Candidate]]) -> None:
+    """Leave one staked rung per outcome; demote the rest to leans in place.
+
+    Mutates the candidates it is given, because they are already in the
+    caller's `selections` list and the demoted ones must stay there. A
+    dropped rung would be a hidden opinion; a demoted one is a visible lean.
+    """
+    groups: dict[tuple, list[tuple[tuple, Candidate]]] = {}
+    for item in staked:
+        groups.setdefault(outcome_group(item[0]), []).append(item)
+
+    for rungs in groups.values():
+        if len(rungs) < 2:
+            continue
+        rungs.sort(key=_rung_order)
+        keeper = rungs[0][1]
+        reason = _demotion_reason(keeper)
+        for _key, candidate in rungs[1:]:
+            candidate.section = LEANS_SECTION
+            candidate.suggested_units = 0.0
+            candidate.demotion_reason = reason
+
+
 def build_candidates(
     prices: pd.DataFrame,
     probabilities: Mapping[tuple, float],
@@ -234,9 +388,19 @@ def build_candidates(
     key is not a pass — it is a row with no model opinion, and it appears in
     neither list. Passes are genuine judgements about rows the model *did*
     price.
+
+    Among the rows that clear every gate, one rung per outcome is staked and
+    the other rungs of that ladder are returned as leans at zero units — see
+    the module docstring. Every candidate is still returned; nothing is
+    dropped, and the probability map this reads is untouched, so the forward
+    snapshot is unaffected.
     """
     selections: list[Candidate] = []
     passes: list[Candidate] = []
+    #: The staked rungs, each beside the `selection_key` it was priced under,
+    #: so the one-stake-per-outcome pass groups on the real key rather than on
+    #: a rebuilt copy of it.
+    staked: list[tuple[tuple, Candidate]] = []
     if prices.empty:
         return selections, passes
 
@@ -321,9 +485,25 @@ def build_candidates(
         candidate.section = (
             BEST_BETS_SECTION if edge >= best_bar else LEANS_SECTION
         )
+        if (
+            candidate.section == BEST_BETS_SECTION
+            and market_key in STAKE_EXCLUDED_MARKETS
+        ):
+            # Demoted to a lean, never to a pass and never deleted: the
+            # opinion cleared every bar the card sets and the record should
+            # say so. Only the stake is withheld.
+            candidate.section = LEANS_SECTION
+            candidate.demotion_reason = STAKE_EXCLUDED_MARKETS[market_key]
         if candidate.section == BEST_BETS_SECTION:
             candidate.suggested_units = TIER_UNITS.get(candidate.tier, 0.1)
+            staked.append((key, candidate))
         selections.append(candidate)
+
+    # One outcome, one stake. Runs over the rows that would be STAKED, after
+    # every gate above has had its say, so a rung this pass demotes is one
+    # that genuinely cleared the bar — it becomes a lean, not a pass, and not
+    # a deletion.
+    _one_stake_per_outcome(staked)
 
     selections.sort(key=lambda item: (-item.edge, item.market, item.player))
     passes.sort(key=lambda item: (-item.edge, item.market, item.player))
@@ -471,6 +651,14 @@ def build_card(
     card.leans = [
         row for row in guarded.playable if row["section"] == LEANS_SECTION
     ]
+    for label in _outcomes_the_guard_left_unstaked(guarded.playable):
+        card.notes.append(
+            f"{label} carries no stake: the rung that held it was quarantined "
+            "by the puck-drop guard after one-stake-per-outcome had already "
+            "demoted its siblings. The outcome keeps its leans and its ledger "
+            "rows; only the stake is gone. This happens when one game's rows "
+            "disagree about their start time."
+        )
     # Passes are also checked: a pass on a game that has started is not a
     # useful thing to publish either, and letting one through would mean the
     # guard's coverage depended on which section a row landed in.
@@ -512,6 +700,10 @@ def _standing_notes(juice_limit: int) -> list[str]:
         "alternate lines are preferred over forcing a heavy price.",
         "Leans are recorded and not staked. The smallest edges are mostly "
         "estimation error, and in the EPL lab they lost.",
+        "One outcome is staked once. Where an alternate ladder prices the "
+        "same outcome at several lines, the highest-edge rung is staked and "
+        "the rest are recorded as leans naming it. This is not a per-game, "
+        "per-slate or bankroll cap; there is none.",
         "No edge here is a demonstrated edge. See "
         "`data/outputs/what_we_can_claim.md` for what the evidence actually "
         "supports.",
@@ -526,14 +718,69 @@ def _price(value: object) -> str:
     return f"{int(number):+d}" if float(number).is_integer() else f"{number:+.1f}"
 
 
+#: Selections whose line is a HANDICAP rather than a threshold. For these the
+#: sign is the bet: `home -1.5` and `home +1.5` are opposite sides of two goals
+#: and `:g` renders the second as a bare `1.5`, which reads as the first. Every
+#: other market's line is a threshold on a count, where a sign would be noise.
+_HANDICAP_SELECTIONS: frozenset[str] = frozenset({"home", "away"})
+
+
 def _label(row: Mapping[str, Any]) -> str:
     player = str(row.get("player") or "").strip()
     line = row.get("line")
     selection = str(row.get("selection", ""))
-    line_text = "" if line is None or pd.isna(line) else f" {float(line):g}"
+    if line is None or pd.isna(line):
+        line_text = ""
+    elif selection in _HANDICAP_SELECTIONS:
+        line_text = f" {float(line):+g}"
+    else:
+        line_text = f" {float(line):g}"
     if player:
         return f"{player} {selection}{line_text}".strip()
     return f"{selection}{line_text}".strip()
+
+def _outcomes_the_guard_left_unstaked(playable: Sequence[Mapping[str, Any]]) -> list[str]:
+    """Outcomes whose only staked rung was quarantined after the collapse.
+
+    `_one_stake_per_outcome` runs inside `build_candidates`; the puck-drop
+    guard runs later, on the rows. Every rung of one outcome sits on the same
+    game, so the guard normally takes a whole outcome or none of it. They come
+    apart only when one game's rows disagree about `commence_time` -- an
+    unparseable or stale value on the very rung that kept the stake.
+
+    Before the collapse a sibling rung would have carried the stake on. That
+    is a real, narrow regression, and this does not repair it: promoting a
+    sibling would mean staking a rung the card already decided against, on the
+    strength of a timestamp it could not read. It says so instead, because a
+    stake that vanishes between two passes is exactly the kind of thing that
+    reads as "no opinion" and never gets asked about.
+    """
+    staked: set[tuple] = set()
+    demoted: dict[tuple, str] = {}
+    for row in playable:
+        # Through `selection_key` and `outcome_group`, never hand-built. A
+        # second copy of a key is the drift this whole change exists to
+        # avoid, and the row carries the DISPLAY player name where the key
+        # carries `player_key(...)` — hand-building here would group two
+        # spellings of one player as two outcomes and miss the very case it
+        # is looking for.
+        group = outcome_group(
+            selection_key(
+                SimpleNamespace(**dict(row)),
+                market=str(row.get("market", "")),
+                selection=str(row.get("selection", "")),
+                line=row.get("line"),
+            )
+        )
+        if row.get("section") == BEST_BETS_SECTION:
+            staked.add(group)
+        elif str(row.get("demotion_reason") or "").startswith(
+            LADDER_DEMOTION_PREFIX
+        ):
+            demoted.setdefault(group, _label(row))
+    return [
+        label for group, label in sorted(demoted.items()) if group not in staked
+    ]
 
 
 def _start_eastern(row: Mapping[str, Any]) -> str:
@@ -629,6 +876,30 @@ def render_card(card: GamedayCard) -> str:
             if card.leans
             else ["_No leans._", ""]
         )
+        # A rung demoted by the one-stake-per-outcome pass is a lean that was
+        # good enough to stake, so the card says which rung took the stake
+        # instead. Silently sitting in the leans table would make the pass
+        # invisible to the only reader who could judge it.
+        demoted = [
+            row
+            for row in card.leans
+            if str(row.get("demotion_reason") or "").strip()
+        ]
+        if demoted:
+            lines.extend(
+                [
+                    "One stake per outcome: where a ladder priced one outcome "
+                    "at several lines, one rung is staked and the rest are "
+                    "recorded here.",
+                    "",
+                ]
+            )
+            lines.extend(
+                f"- {_label(row)} (`{row.get('market', '-')}`): "
+                f"{row.get('demotion_reason')}"
+                for row in demoted
+            )
+            lines.append("")
         lines.extend(
             [
                 "Leans are recorded and not staked.",

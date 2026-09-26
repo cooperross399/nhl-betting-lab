@@ -24,7 +24,7 @@ approval takes.
 from __future__ import annotations
 
 import json
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -99,6 +99,7 @@ def build_shadow_summary(
     staging_files: Sequence[Path | str] = (),
     now: datetime | None = None,
     requested_markets: Iterable[str] | None = None,
+    failed_events: Iterable[Mapping[str, Any]] | None = None,
 ) -> tuple[ShadowSummary, EligibilityReport, DiscoveryReport]:
     """Assess a staged price frame without changing anything.
 
@@ -108,18 +109,28 @@ def build_shadow_summary(
     market nobody asked for reads "the provider returned no rows" and "no
     book returned this market", which is how the scheduled bulk-only
     discovery run published nine unasked markets as unquoted.
+
+    `failed_events` is this run's record of per-event requests that got no
+    usable answer. Both reports need that too: until 2026-09-26 it reached
+    only the exit code, and a run whose every per-event request answered
+    HTTP 503 published the same nine markets as a run whose books quoted
+    nothing.
     """
     moment = now or datetime.now(timezone.utc)
     slate = slate_games_from(prices)
     requested = None if requested_markets is None else tuple(requested_markets)
+    failed = None if failed_events is None else tuple(failed_events)
     eligibility = assess_markets(
         prices,
         slate_games=slate,
         policy=policy,
         provider_name=provider_name,
         requested=requested,
+        failed_events=failed,
     )
-    discovery = discover_coverage(prices, requested=requested)
+    discovery = discover_coverage(
+        prices, requested=requested, failed_events=failed
+    )
     summary = ShadowSummary(
         generated_at=moment.isoformat(timespec="seconds"),
         provider_name=provider_name,

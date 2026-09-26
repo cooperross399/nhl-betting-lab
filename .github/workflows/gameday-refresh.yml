@@ -87,6 +87,25 @@ concurrency:
   group: gameday-refresh
   cancel-in-progress: false
 
+# Every `run:` block below runs as `bash --noprofile --norc -eo pipefail {0}`,
+# which is what the comments in this file and every test that replays its
+# steps assume. Until 2026-09-26 nothing here said so, and GitHub runs a
+# block that names no shell as `bash -e {0}`: errexit with no pipefail. (Run
+# 33142173149 printed `shell: /usr/bin/bash -e {0}` 14 times and pipefail not
+# once.) Under that shell `NUMBER=$(gh issue list … | jq …)` took jq's status,
+# and jq exits 0 on empty input, so a single HTTP 502 from the listing read
+# as "no home issue exists". The post step then created, pinned and commented
+# on a second "Operating Home" issue that every later card followed, and it
+# recorded decision=post on a green step. The suite never saw this: rewriting
+# its 275 pipefail replays to `bash -e` left all 2504 tests passing. Every
+# pipeline in this file was audited for a left side that may exit non-zero
+# before this was added. The two `find | wc -l` counts carry `|| true` for
+# exactly that reason. tests/test_the_post_step_fails_closed_under_the_runners_shell.py
+# resolves each step's shell from this file the way GitHub does and pins it.
+defaults:
+  run:
+    shell: bash
+
 jobs:
   precheck:
     # The second scheduled trigger exists only to cover a dropped first one,
@@ -191,8 +210,22 @@ jobs:
           # artifact and is the fallback when no refresh run carries one —
           # without it the very first refresh refetches four thousand
           # boxscores already sitting in an artifact.
+          #
+          # Three attempts at every listing and download, and a record of
+          # whatever still could not be asked, which "Record what went
+          # wrong" turns into a degraded run. This made one attempt and
+          # read a failed listing as "no refresh run carries it": one HTTP
+          # 502 restored the purchase's state, which has no snapshot
+          # archive, so the snapshot frozen the day before never settled,
+          # the run was green, and the next run restored that green run
+          # with nothing laid underneath — the day's frozen opinions left
+          # the forward ledger for good. A failed listing no longer falls
+          # through to the purchase at all, and a red run is what makes the
+          # next restore lay the last good state underneath and bring the
+          # missed snapshot back.
           python scripts/restore_state.py --artifact gameday-state --dest data \
             --workflow gameday-refresh.yml --workflow historical-props-purchase.yml \
+            --attempts 3 --problem-file restore_problem.txt \
             || echo "::warning::The previous state could not be restored; this run starts without it."
           # Nothing above exits early: the ledger fallback below must run
           # whenever the ledger did not come back, however the restore ended.
@@ -203,9 +236,10 @@ jobs:
             mv data/outputs/gameday_card.json previous_card.json
             echo "Restored the previous card for the selections diff."
           fi
-          # `|| true`: the shell is `bash -eo pipefail`, and with nothing
-          # restored `find` fails on the missing directory — which used to
-          # end the step here, before the ledger fallback below.
+          # `|| true`: the shell is `bash -eo pipefail` (declared under
+          # `defaults:` above), and with nothing restored `find` fails on the
+          # missing directory. That would end the step here, before the
+          # ledger fallback below.
           find data/raw/nhl/boxscore -name '*.json' 2>/dev/null | wc -l \
             | xargs echo "Cached boxscores restored:" || true
           # If the chain broke, take the ledger from the card-feed branch
@@ -345,17 +379,32 @@ jobs:
           set -u
           : > run_degraded.txt
           : > run_quiet.txt
-          # `|| true`: under the runner's bash -eo pipefail, `find` on a
-          # missing cache fails the substitution and ended this step before
-          # it wrote `degraded` at all — so the coldest run read as clean.
+          # `|| true`: under bash -eo pipefail (declared under `defaults:`
+          # above), `find` on a missing cache fails the substitution. That
+          # ends this step before it writes `degraded` at all, so the coldest
+          # run would read as clean.
           games=$(find data/raw/nhl/boxscore -name '*.json' 2>/dev/null | wc -l || true)
           echo "Boxscores cached: $games"
+          # 1000 is config.THIN_HISTORY_GAMES: the public board projects
+          # nothing from a history below it either, and
+          # tests/test_the_board_refuses_a_thin_history.py runs this step at
+          # that line to keep the two in one place.
           if [ ! -f data/processed/player_game_logs.csv ]; then
             echo "No player logs: no prop can be priced, so no card can be built. The NHL API could not be reached and no previous cache was restored." >> run_degraded.txt
           elif [ "$games" -lt 1000 ]; then
             echo "Only $games games are cached, so the models are fitted on a thin history. The fetch is capped per run and the cache fills over consecutive days; this resolves itself." >> run_degraded.txt
           elif [ "${{ steps.results.outcome }}" = "failure" ]; then
             echo "Results could not be refreshed; the models were fitted on the previously cached games." >> run_degraded.txt
+          fi
+          # What the restore could not ask GitHub (restore_state.py
+          # --problem-file). Nothing read it, so a restore that fell back to
+          # an older or thinner state after a failed call finished green,
+          # and a green run is never laid under anything: the snapshot it
+          # missed was lost for good. Red, the next run lays the last good
+          # state underneath this one and settles it.
+          if [ -s restore_problem.txt ]; then
+            cat restore_problem.txt >> run_degraded.txt
+            echo "The previous state was not fully restored, so a snapshot an earlier run froze may be missing here and did not settle. Because this run is degraded, the next one lays the last successful state underneath it, and whatever that state holds settles then." >> run_degraded.txt
           fi
           if [ "${{ steps.prices.outputs.empty_slate }}" = "true" ]; then
             echo "No NHL games are scheduled, so there was nothing to price. Not a fault." >> run_quiet.txt
@@ -377,31 +426,77 @@ jobs:
       - name: Rebuild the measurement reports
         # Soft: a measurement failure must never cost a card, and the card's
         # own gates do not depend on these reports.
+        #
+        # A REPORT MEASURED AGAINST PRICES IS REBUILT ONLY FROM PRICES THIS
+        # RUNNER HOLDS. Every command here used to run unconditionally, and
+        # the bought prices are not on this runner: the restore above takes
+        # this workflow's own newest carrier and lays the purchase's state in
+        # only when no Gameday run carries one, and the carrier it restores
+        # (run 33142173149, 31,815,033 bytes against the purchase's
+        # 86,454,131) holds neither price store. So every run measured
+        # nothing and published it, exit 0, to the gameday-reports artifact:
+        # "0 market(s) have any price-based evidence", a claims headline of
+        # "nothing has been measured against real prices yet", and 12 of 12
+        # markets "no price-based measurement exists" in the bundle, against
+        # a committed record of ten measured markets (-0.3% over 25,911
+        # `late` bets; `points` -4.4% over 6,194). Carrying the prices into
+        # this job is not the fix: it uploads data/processed whole to a
+        # public artifact every day, which would republish paid-for prices
+        # daily for the season. So a store this runner does not hold leaves
+        # the checkout's committed report standing, and the log says so.
         continue-on-error: true
         env:
           PYTHONPATH: src
         run: |
           python scripts/run_props_calibration.py --reuse-samples || \
             python scripts/run_props_calibration.py
-          # The window is named because the store holds two — 4.0 hours before
-          # face-off and 9.5 — and `--phase auto` refuses to measure the
-          # mixture. This step is soft, so an unnamed window would have left
-          # the previous report in place looking current. `late` runs last on
-          # purpose: every run writes the contract filename too.
-          python scripts/run_player_props_backtest.py --phase card --label card
-          python scripts/run_player_props_backtest.py --phase late
-          # The team store holds two windows too, and prices captured after
-          # face-off; the measurement now refuses an unnamed window rather
-          # than taking the better of two moments. `late` is the window
-          # nearest the card's and holds most of the store.
-          python scripts/run_team_markets_measurement.py --reuse-samples --phase late || \
-            python scripts/run_team_markets_measurement.py --phase late
-          python scripts/run_what_we_can_claim.py
-          # The bundle is assembled here and not on a laptop, because this is
-          # the one place every evidence file exists at once — the shadow
-          # verification and coverage reports only come from live runs, which
-          # only happen where the key lives. A bundle assembled anywhere else
-          # correctly reports itself incomplete.
+          # A store holds prices when it has a row under its header. A file
+          # test alone would take a header-only store for one, and measuring
+          # it reads "nothing bought" exactly as an absent store did.
+          holds_prices() {
+            awk 'NR == 2 { found = 1; exit } END { exit !found }' "$1" 2>/dev/null
+          }
+          props=no
+          team=no
+          if holds_prices data/processed/historical_prop_prices.csv; then props=yes; fi
+          if holds_prices data/processed/historical_team_prices.csv; then team=yes; fi
+          if [ "$props" = yes ]; then
+            # The window is named because the store holds two — 4.0 hours
+            # before face-off and 9.5 — and `--phase auto` refuses to measure
+            # the mixture. This step is soft, so an unnamed window would have
+            # left the previous report in place looking current. `late` runs
+            # last on purpose: every run writes the contract filename too.
+            python scripts/run_player_props_backtest.py --phase card --label card
+            python scripts/run_player_props_backtest.py --phase late
+          else
+            echo "::notice::No bought prop prices are on this runner (data/processed/historical_prop_prices.csv holds no row), so the props backtests were not rebuilt and the committed player_props_backtest.md and player_props_backtest_card.md stand. Measured here, they would report that nothing has been measured, which is false."
+          fi
+          if [ "$team" = yes ]; then
+            # The team store holds two windows too, and prices captured after
+            # face-off; the measurement now refuses an unnamed window rather
+            # than taking the better of two moments. `late` is the window
+            # nearest the card's and holds most of the store.
+            python scripts/run_team_markets_measurement.py --reuse-samples --phase late || \
+              python scripts/run_team_markets_measurement.py --phase late
+          else
+            echo "::notice::No bought team prices are on this runner (data/processed/historical_team_prices.csv holds no row), so the team measurement was not rebuilt and the committed team_markets_measurement.md stands."
+          fi
+          # The claims document summarises both measurements and covers
+          # everything or is not the claims document, so it is rebuilt only
+          # when both were; otherwise the committed one stands beside the
+          # committed reports it was written from.
+          if [ "$props" = yes ] && [ "$team" = yes ]; then
+            python scripts/run_what_we_can_claim.py
+          else
+            echo "::notice::The claims document summarises both price measurements and this runner could not rebuild both, so the committed what_we_can_claim.md stands."
+          fi
+          # The bundle is assembled here because the shadow verification and
+          # coverage reports only come from live runs, which only happen
+          # where the key lives. This said it was "the one place every
+          # evidence file exists at once"; it is not, because the bought
+          # prices are not here. The bundle checksums the reports on disk and
+          # names each verdict input it could not read, rather than reading
+          # a measurement it does not have as no measurement.
           python scripts/run_allowlist_evidence.py
 
       - name: Render the card
@@ -520,12 +615,34 @@ jobs:
             echo "No NHL games are scheduled; there is no card to post."
             exit 0
           fi
-          DECISION=$(python scripts/post_card_to_issue.py \
-            --previous-json previous_card.json \
-            --out card_comment.md --title-out card_title.txt \
-            --body-out issue_body.md \
-            --degraded-file run_degraded.txt --run-url "$RUN_URL" \
-            ${{ inputs.force_post == true && '--force' || '' }} | tail -1)
+          # The two reads below check their own exit status, so this step
+          # fails closed whatever shell runs it, not only under the pipefail
+          # declared at the top. Both used to be `$(producer | consumer)`,
+          # which under GitHub's default `bash -e` takes the consumer's
+          # status. `$(python … | tail -1)` let a post script that crashed
+          # before deciding read as an empty decision. The step said "the run
+          # was clean", stayed green, and card-feed recorded degraded=false,
+          # so the 15:00 backup stood down. A decision is now the script's
+          # last line only when the script succeeded, and only when that line
+          # is `post` or `skip`. Anything else is a failed post, which the
+          # final health reports.
+          if ! POST_OUTPUT=$(python scripts/post_card_to_issue.py \
+              --previous-json previous_card.json \
+              --out card_comment.md --title-out card_title.txt \
+              --body-out issue_body.md \
+              --degraded-file run_degraded.txt --run-url "$RUN_URL" \
+              ${{ inputs.force_post == true && '--force' || '' }}); then
+            echo "::error::The post script failed before deciding; nothing was posted."
+            exit 1
+          fi
+          DECISION=$(printf '%s\n' "$POST_OUTPUT" | tail -n 1)
+          case "$DECISION" in
+            post|skip) ;;
+            *)
+              echo "::error::The post script ended without a decision (post or skip); nothing was posted."
+              exit 1
+              ;;
+          esac
           if [ "$DECISION" != "post" ]; then
             echo "decision=$DECISION" >> "$GITHUB_OUTPUT"
             echo "Not posting: the run was clean and the selections did not change."
@@ -540,10 +657,20 @@ jobs:
           # issues rather than through the search API: the title contains an em
           # dash, and a search quietly returning nothing would create a
           # duplicate issue every run.
+          #
+          # The listing is its own command so that its failure is seen. As
+          # `$(gh issue list … | jq …)` under `bash -e`, one HTTP 502 left
+          # jq reading empty input, which jq answers with nothing and exit 0.
+          # That read as "no home issue exists", so the step created, pinned
+          # and commented on a second home, and recorded decision=post. A
+          # listing that fails is now a failed post that opens nothing.
           TITLE=$(cat card_title.txt)
-          NUMBER=$(gh issue list --state open --limit 200 --json number,title \
-            | jq -r --arg t "$TITLE" \
-              '[.[] | select(.title == $t)] | .[0].number // empty')
+          if ! LISTING=$(gh issue list --state open --limit 200 --json number,title); then
+            echo "::error::The open issues could not be listed, so the operating home could not be found. Nothing was posted rather than opening a second home."
+            exit 1
+          fi
+          NUMBER=$(printf '%s' "$LISTING" | jq -r --arg t "$TITLE" \
+            '[.[] | select(.title == $t)] | .[0].number // empty')
           if [ -z "$NUMBER" ]; then
             echo "Creating the operating-home issue."
             NUMBER=$(gh issue create --title "$TITLE" \

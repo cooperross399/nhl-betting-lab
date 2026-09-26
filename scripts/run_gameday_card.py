@@ -17,6 +17,7 @@ shipped in.
 from __future__ import annotations
 
 import argparse
+import json
 from datetime import date, datetime, timezone
 from pathlib import Path
 
@@ -86,6 +87,62 @@ def _staged_prices(staging_dir: Path) -> pd.DataFrame:
     if not frames:
         return pd.DataFrame(columns=list(odds_api.PRICE_COLUMNS))
     return pd.concat(frames, ignore_index=True)
+
+
+def _failed_per_event_requests(
+    staging_dir: Path, prices: pd.DataFrame
+) -> list[dict]:
+    """The per-event requests the fetch behind these prices recorded as
+    failed, from the staging provenance it wrote beside them.
+
+    Until 2026-09-26 the card never read them. When a run's three per-event
+    requests all answered HTTP 503, the Gameday comment said under "What
+    went wrong" that the per-event fetch had failed. Under "Excluded
+    markets" it gave nine markets as "The provider returned no rows for this
+    market ... Check per-bookmaker coverage including alternate lines before
+    concluding it is not offered". The two now agree.
+
+    They are used only when the provenance and the prices come from one
+    run: every staged row carries the `fetched_at` stamp the provenance
+    records as `generated_at`. Otherwise the card cannot tie another run's
+    failures to these prices. It says so, and judges every market on its
+    rows alone, as it did before.
+    """
+    path = staging_dir / odds_api.PROVENANCE_FILENAME
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    if not isinstance(payload, dict):
+        return []
+    recorded = payload.get("failed_events")
+    if not isinstance(recorded, list):
+        return []
+    failed = [item for item in recorded if isinstance(item, dict)]
+    if not failed:
+        return []
+    stamp = str(payload.get("generated_at", "") or "").strip()
+    staged = (
+        set(prices["fetched_at"].astype(str).str.strip())
+        if "fetched_at" in prices.columns
+        else set()
+    )
+    if not stamp or staged != {stamp}:
+        print(
+            f"The staging provenance records {len(failed)} failed per-event "
+            f"request(s) from the fetch at {stamp or 'an unrecorded time'}, "
+            "but the staged prices are not all from that fetch "
+            f"({len(staged)} fetch stamp(s) among them), so the card cannot "
+            "tie those failures to these prices and judges every market on "
+            "its rows alone."
+        )
+        return []
+    print(
+        f"{len(failed)} per-event request(s) failed in the fetch behind these "
+        "prices; a market missing games for that reason says so rather than "
+        "reading as a market no book quotes."
+    )
+    return failed
 
 
 def _dated_before(frame: pd.DataFrame, day: date) -> pd.DataFrame:
@@ -199,6 +256,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Verdicts read from: {read_from}.")
 
     prices = _staged_prices(staging)
+    failed_events = _failed_per_event_requests(staging, prices)
 
     # Freshness, as the policy states it: `max_provider_run_age_hours`, the
     # stricter of the policy-wide limit and the provider entry's (12 and 12
@@ -352,6 +410,7 @@ def main(argv: list[str] | None = None) -> int:
         slate_games=slate,
         policy=policy,
         provider_name=odds_api.PROVIDER_NAME,
+        failed_events=failed_events,
     )
     print(eligibility.summary_line())
 
