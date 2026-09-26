@@ -67,10 +67,27 @@ jobs:
           # it, whatever its conclusion; a skipped run is a success with no
           # artifact and used to be chosen. Later workflows are laid over
           # earlier ones, as before. See scripts/restore_state.py.
+          #
+          # A failure to ask GitHub stops the run; it is never an absence.
+          # This used to end `|| true` with neither flag, so one HTTP 502
+          # while listing or downloading the purchase runs was recorded and
+          # passed over: the bought prices came from an older run, or from
+          # the older copy gameday-state carries, the check below passed on
+          # that file, and every verdict was re-decided on prices nobody
+          # knew were old. With no older copy it failed as "the bought prices
+          # did not restore", naming an absence where GitHub had not
+          # answered. --refuse-unreachable exits 1 on a listing or download
+          # that fails after --attempts tries, as Historical Props Purchase's
+          # restores of the same prices do. A listing that answers and holds
+          # no carrier still exits 0, and the checks below decide on what
+          # arrived, as before.
           for wf in gameday-refresh.yml historical-props-purchase.yml; do
             for name in gameday-state historical-props; do
               python scripts/restore_state.py --artifact "$name" --dest data \
-                --workflow "$wf" --no-merge || true
+                --workflow "$wf" --no-merge --refuse-unreachable --attempts 3 || {
+                echo "::error::GitHub could not be reached to restore $name from $wf (gh's own words are above). Re-deciding without it would decide on older or missing inputs and report the result as this week's verdicts, so this run stops. Dispatch it again once GitHub answers."
+                exit 1
+              }
             done
           done
           games=$(find data/raw/nhl/boxscore -name '*.json' 2>/dev/null | wc -l)
