@@ -52,11 +52,18 @@ def game_priced(g: dict) -> bool:
     written by a lab whose builder does not set it, is read by its lines: the
     NHL builder attached `moneyline` under exactly the condition that now sets
     `priced` (as web/build_site_json.py::build_results reads it), and any
-    numeric market value in SERIES is a price the board carried.
+    numeric market value in SERIES is a price the board carried. So is a pick
+    quoting a numeric `price`: SERIES does not cover every market a lab
+    publishes (EPL corners and double chance, or a total carrying only its
+    probabilities), and a best bet on one of those is still a priced call.
+    An explicit `priced: false` overrides all of it.
     """
     if "priced" in g:
         return g["priced"] is True
-    return "moneyline" in g or any(dig(g, p) is not None for paths in SERIES.values() for p in paths)
+    if "moneyline" in g or any(dig(g, p) is not None for paths in SERIES.values() for p in paths):
+        return True
+    pick = g.get("pick")
+    return isinstance(pick, dict) and dig(pick, ("price",)) is not None
 
 
 def board_date(board: dict) -> str:

@@ -108,6 +108,37 @@ def test_a_board_frozen_before_the_flag_is_read_by_its_lines(tmp_path: Path) -> 
     assert entries["2026-04-02"]["bets"] == 1
 
 
+def test_an_explicit_unpriced_flag_outranks_a_line_the_game_carries(tmp_path: Path) -> None:
+    entry = index_for(tmp_path, {"2026-10-08": [game("1", priced=False, moneyline=True, pick=BET)]})["2026-10-08"]
+    assert entry["bets"] is None
+
+
+def test_a_flagless_game_is_priced_by_any_market_value_it_carries(tmp_path: Path) -> None:
+    """Another lab's board, or an older one, with no `priced` flag and no moneyline."""
+    def flagless(gid: str, pick=None, **markets) -> dict:
+        return {**game(gid, pick=pick), **markets}
+
+    corners = {"market": "corners_total_9_5", "label": "Over 9.5 corners", "price": 110, "edgePct": 6.0, "kind": "bet"}
+    unquoted = {"market": "corners_total_9_5", "label": "Over 9.5 corners", "edgePct": 6.0, "kind": "bet"}
+    entries = index_for(tmp_path, {
+        # The pick quotes no price here, so only the line makes these priced.
+        "2026-10-01": [flagless("1", total={"current": 2.5, "over": -110}, pick=unquoted)],
+        "2026-10-02": [flagless("2", spread={"current": -1.5}, pick=unquoted)],
+        # Probabilities are the model's, not a price anyone quoted.
+        "2026-10-03": [flagless("3", total={"overProb": 0.55}, btts={"yesProb": 0.6})],
+        # SERIES does not cover corners; a best bet quoting a price still is one.
+        "2026-10-04": [flagless("4", pick=corners)],
+        "2026-10-05": [flagless("5", pick=corners), flagless("6", total={"current": 2.5, "over": -110}, pick=BET)],
+        "2026-10-06": [flagless("7", pick=unquoted)],
+    })
+    assert entries["2026-10-01"]["bets"] == 1
+    assert entries["2026-10-02"]["bets"] == 1
+    assert entries["2026-10-03"]["bets"] is None
+    assert entries["2026-10-04"]["bets"] == 1
+    assert entries["2026-10-05"]["bets"] == 2
+    assert entries["2026-10-06"]["bets"] is None
+
+
 def test_an_empty_board_is_not_called_unpriced(tmp_path: Path) -> None:
     entry = index_for(tmp_path, {"2026-07-01": []})["2026-07-01"]
     assert entry["games"] == 0 and entry["bets"] == 0
