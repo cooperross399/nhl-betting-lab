@@ -292,8 +292,11 @@ def test_a_market_that_did_not_move_ties_every_opinion(tmp_path, store) -> None:
 
     assert "matched to a closing price: **6**" in text
     # Rows | Beat close | Tied | Beat rate | Mean CLV% ...: all six tied, none
-    # beat, and the mean CLV is exactly zero.
-    assert "| 6 | 0 | 6 | 0.0% [0.0%, 100.0%] | +0.00% [+0.00%, +0.00%] |" in text
+    # beat, and the mean CLV is exactly zero. The six are one game, so no
+    # interval can be bounded: this read "[+0.00%, +0.00%]", an interval
+    # on six rows of one game (tests/test_clv_intervals_count_games_not_rows.py).
+    assert "| 6 | 0 | 6 | 0.0% [0.0%, 100.0%] | +0.00% n too small |" in text
+    assert "(6) | 1 |" in text, "one game behind the six rows"
 
 
 def test_the_runner_scores_each_opinion_at_its_best_price(tmp_path) -> None:
