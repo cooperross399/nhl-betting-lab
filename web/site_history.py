@@ -10,7 +10,8 @@ Does three things, all inside --data:
      build, and injects the series into board.json as `lineHistory[gameId][key]`
      so the page can draw the movement.
   3. Rewrites history/index.json, newest first, with game and best-bet counts
-     (`bets: null` for a board on which no game was priced).
+     (`bets: null` for a board on which no game was priced; no `bets` at all
+     for an exhibition board, where the model abstains).
 
 The workflow restores the previous run's history artifact into --data/history before
 this runs and uploads it again afterwards, so the series survive between builds.
@@ -156,6 +157,13 @@ def main(argv=None) -> int:
             e["slot"] = m.group(2)
         if b.get("phase") == "preseason":
             e["note"] = "exhibition"
+            # The model abstains on exhibitions and nobody looks for a price,
+            # so neither a count nor "not priced" is true of one (the board
+            # page says "Exhibition · model abstains", web/lib/sports.js).
+            # Every preseason game is `priced: false`, so this entry was
+            # `bets: null` and the Archive read "exhibition · not priced".
+            # No count at all is what the Archive prints as nothing.
+            del e["bets"]
         entries.append(e)
     entries.sort(key=lambda e: (e["date"], e.get("slot", "")), reverse=True)
     dump(hist / "index.json", {"generatedAt": stamp, "dates": entries})

@@ -58,13 +58,15 @@ def game(gid: str, *, priced=None, pick=None, moneyline=False) -> dict:
     return g
 
 
-def index_for(tmp_path: Path, boards: dict[str, list[dict]]) -> dict[str, dict]:
+def index_for(tmp_path: Path, boards: dict[str, list[dict]], phases: dict[str, str] | None = None) -> dict[str, dict]:
     """Freeze each board through the real main() and return the index by date."""
     data = tmp_path / "data"
     data.mkdir()
     module = history_module()
     for day, games in boards.items():
         board = {"boardDate": day, "generatedAt": f"{day}T12:00:00Z", "games": games}
+        if phases and day in phases:
+            board["phase"] = phases[day]
         (data / "board.json").write_text(json.dumps(board), encoding="utf-8")
         assert module.main(["--data", str(data)]) == 0
     index = json.loads((data / "history" / "index.json").read_text(encoding="utf-8"))
@@ -209,3 +211,30 @@ def test_the_archive_lists_an_unpriced_board_as_not_priced(tmp_path: Path) -> No
 def test_an_index_entry_without_a_count_prints_no_count(tmp_path: Path) -> None:
     items = render_archive({"dates": [{"date": "2026-04-01", "file": "2026-04-01.json", "games": 3}]}, tmp_path)
     assert items[0]["bets"] == ""
+
+
+def test_an_exhibition_board_is_neither_counted_nor_called_unpriced(tmp_path: Path) -> None:
+    """The model abstains on a preseason board and nobody looked for a price.
+
+    Every preseason game is `priced: false`, so the index wrote `bets: null`
+    and the Archive read "exhibition · not priced", where the board page
+    itself says "Exhibition · model abstains" (web/lib/sports.js). An
+    unpriced regular-season board beside it still reads "not priced".
+    """
+    entries = index_for(
+        tmp_path,
+        {"2026-09-22": [game("1", priced=False), game("2", priced=False)],
+         "2026-10-08": [game("3", priced=False), game("4", priced=False)]},
+        phases={"2026-09-22": "preseason", "2026-10-08": "regular"},
+    )
+    assert entries["2026-09-22"]["note"] == "exhibition"
+    assert "bets" not in entries["2026-09-22"], entries["2026-09-22"]
+    assert entries["2026-10-08"]["bets"] is None
+
+    items = {item["href"].split("date=")[1]: item
+             for item in render_archive({"dates": list(entries.values())}, tmp_path)}
+    exhibition, regular = items["2026-09-22.json"], items["2026-10-08.json"]
+    assert exhibition["slot"] == "exhibition"
+    assert exhibition["bets"] == "", exhibition
+    assert "not priced" not in json.dumps(exhibition)
+    assert regular["bets"] == "not priced"
