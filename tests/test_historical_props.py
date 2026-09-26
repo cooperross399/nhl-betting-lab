@@ -763,15 +763,26 @@ def test_the_cap_holds_when_the_estimate_is_too_low() -> None:
     provider bills per market RETURNED and every alternate ladder bills on
     its own. So the estimate can be wrong, and when it is, the only gate that
     still works is the one reading what was actually charged.
+
+    This pinned the text `buy.credits_spent >= credit_cap` until 2026-09-26,
+    which was itself the defect: it only asked whether the cap had already
+    been reached, so the last event could carry the total past it (107
+    charged against 70 estimated, cap 200, spent 214). The gate now projects
+    one event ahead. What it DOES is held by running the buy against a stub
+    in `test_the_cap_holds_on_measured_spend.py` and
+    `test_the_props_buy_never_spends_past_its_cap.py`; this only keeps the
+    reached-not-projected form from coming back.
     """
     source = (
         Path(__file__).resolve().parents[1] / "src" / "nhl_betting_lab"
         / "providers" / "historical_props.py"
     ).read_text(encoding="utf-8")
 
-    assert "buy.credits_spent >= credit_cap" in source, (
-        "the cap must be enforced against measured spend, not only an estimate"
+    assert "buy.credits_spent + largest_charge > credit_cap" in source, (
+        "the cap must be enforced against measured spend projected one event "
+        "ahead, not only an estimate"
     )
+    assert "buy.credits_spent >= credit_cap" not in source
     # And the estimate itself must no longer claim to be a guarantee.
     assert "can only ever be over-respected, never breached" not in source
 

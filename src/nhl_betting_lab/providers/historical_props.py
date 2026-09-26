@@ -696,6 +696,11 @@ def buy_historical_props(
     )
     buy = HistoricalBuy(events_requested=len(events))
     worst_case_spent = 0
+    # The dearest event the provider has actually charged so far, never
+    # below the estimate: the best available forecast of the next charge.
+    # Before the first event is measured the estimate is all there is.
+    largest_charge = worst_case_per_event
+    stopped_on_measured = False
 
     for entry in events:
         event_id = str(entry.get("event_id", "")).strip()
@@ -716,20 +721,31 @@ def buy_historical_props(
             #
             # The second gate is the one that cannot be wrong: what the
             # provider says it has actually charged, read from
-            # `x-requests-last` as it is spent. An estimate can be
-            # mis-specified; a running total of measured spend cannot.
+            # `x-requests-last` as it is spent, projected one event ahead at
+            # the dearest charge seen. An estimate can be mis-specified; a
+            # running total of measured spend cannot.
+            #
+            # Until 2026-09-26 this asked only whether the total had already
+            # REACHED the cap (`credits_spent >= credit_cap`), so the last
+            # event it started could carry the total past it: seven markets
+            # on one region, 70 estimated and 107 charged, a cap of 200
+            # bought two events and spent 214 with no error. Projecting, as
+            # the team buy and the retention probe do, means the run cannot
+            # pass the cap once a charge has been measured. Skipped, not
+            # stopped, so an event already cached further on is still read.
             if worst_case_spent + worst_case_per_event > credit_cap:
                 buy.events_skipped_for_budget += 1
                 continue
-            if buy.credits_spent >= credit_cap:
+            if buy.credits_spent + largest_charge > credit_cap:
                 buy.events_skipped_for_budget += 1
-                buy.errors.append(
-                    f"Stopped at the {credit_cap:,}-credit cap on MEASURED "
-                    f"spend ({buy.credits_spent:,} charged). The per-event "
-                    "estimate was too low, which is exactly what this second "
-                    "gate exists for."
-                )
-                break
+                if not stopped_on_measured:
+                    stopped_on_measured = True
+                    buy.errors.append(
+                        f"Stopped buying at the {credit_cap:,}-credit cap on "
+                        f"MEASURED spend ({buy.credits_spent:,} charged; the "
+                        f"next event could cost {largest_charge:,})."
+                    )
+                continue
             try:
                 payload, headers = provider._get(  # noqa: SLF001
                     f"{provider.base_url}/v4/historical/sports/"
@@ -749,7 +765,9 @@ def buy_historical_props(
                 continue
             measured = _measured_cost(headers)
             worst_case_spent += worst_case_per_event
-            buy.credits_spent += measured or worst_case_per_event
+            charged = measured or worst_case_per_event
+            buy.credits_spent += charged
+            largest_charge = max(largest_charge, charged)
             buy.credits_remaining = str(
                 headers.get("x-requests-remaining", "")
             ) or buy.credits_remaining
