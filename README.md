@@ -339,7 +339,13 @@ finish.
 Each run starts from the previous run's state, restored by
 `scripts/restore_state.py` from the newest run on `main` that actually carries
 the `gameday-state` artifact — whatever its conclusion, with the newest
-successful state laid underneath a red one. A run dispatched on a feature
+successful state laid underneath a red one. A listing or download GitHub does
+not answer is tried three times, and one that still fails makes the run
+degraded rather than reading as "nothing to restore": one HTTP 502 used to
+restore the purchase's state instead, which has no snapshot archive, so the
+day's frozen snapshot never settled and the green run passed the gap on for
+good. A red run is what makes the next restore lay the last good state
+underneath it. A run dispatched on a feature
 branch is never a source: it ran code nobody reviewed, and Line Movement's
 only unexpired artifact on 2026-09-25 was such a rehearsal, which would have
 seeded the season's capture chain. Choosing "the newest successful run" picked a
@@ -348,7 +354,12 @@ run's cache and frozen snapshot. Line Movement Capture restores its captures
 the same way, and then unions every day file, row by row, with the two
 carriers before the newest (`--union 3`): a red run's scratch list and line
 units used to fall out of the chain, and a run whose own restore found nothing
-must not become the base the season is lost from.
+must not become the base the season is lost from. Historical Props Purchase
+restores its bought prices and its state with `--refuse-unreachable`. If
+GitHub cannot be asked, the run stops before it spends a credit or uploads
+anything. Only an answer that no run carries them starts it without them: one
+HTTP 502 used to read as "no purchase carries bought prices", and the run
+bought the window again and uploaded a thin copy as the newest carrier.
 
 | Workflow | Trigger | Spends credits |
 |:---------|:--------|:---------------|
@@ -363,7 +374,7 @@ must not become the base the season is lost from.
 | Experiment Refresh | weekly | no |
 | Publish Site | daily, and after each Gameday Refresh | no |
 
-The public site is deployed from `web/` by **Publish Site**, which reads the lab's own outputs and the NHL's free schedule API, and deploys through the Pages API without pushing to any branch. Its history (each day's frozen board, which Results settles against, and the line series) comes from the newest successful publish's `site-history` artifact through `scripts/restore_state.py --success-only --require-newest`, and `scripts/site_history_floor.py` refuses to keep or deploy a history holding less than the one restored. A run that cannot restore the history fails without deploying, and the site keeps its last build: a failed API call used to read as "the history starts today" and truncate the public archive for good. Only a dispatch with `start_history_afresh` starts it over deliberately. It joins market lines and the card's picks through the staged prices, which Publish Site does not restore, so today every regular-season game is published unpriced: projections, no line, no pick, and the page says "Not priced" rather than calling the game a pass. Whether provider prices may appear on the public page at all is an open decision. The forward ledger shows its size in wagers and never its return; no season accuracy record is tallied, so none is shown.
+The public site is deployed from `web/` by **Publish Site**, which reads the lab's own outputs and the NHL's free schedule API, and deploys through the Pages API without pushing to any branch. Its history (each day's frozen board, which Results settles against, and the line series) comes from the newest successful publish's `site-history` artifact through `scripts/restore_state.py --success-only --require-newest`, and `scripts/site_history_floor.py` refuses to keep or deploy a history holding less than the one restored. A run that cannot restore the history fails without deploying, and the site keeps its last build: a failed API call used to read as "the history starts today" and truncate the public archive for good. Only a dispatch with `start_history_afresh` starts it over deliberately. It joins market lines and the card's picks through the staged prices, which Publish Site does not restore, so today every regular-season game is published unpriced: projections, no line, no pick, and the page says "Not priced" rather than calling the game a pass. Whether provider prices may appear on the public page at all is an open decision. The forward ledger shows its size in wagers and never its return; no season accuracy record is tallied, so none is shown. The lab's state comes from the newest Gameday Refresh run that carries `gameday-state`, through `--require-listing --listing-attempts 3`: a listing that never answers stops the run before anything is built or frozen, where one HTTP 502 used to read as "no run carries the state" and freeze the schedule alone as the day's board. A listing that answers with no carrier still builds the schedule, and the next morning's Results says that board had no projection to settle.
 
 ## Safety boundaries
 

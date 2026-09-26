@@ -92,10 +92,33 @@ def main(argv: list[str] | None = None) -> int:
         credits += per_event.credits_spent
         for warning in per_event.warnings:
             print(f"  warning: {warning}")
+        # This used to print the warnings and never `per_event.errors`, so a
+        # game whose request failed was simply missing. In the failure-shape
+        # audit's replay, one 503 of three printed "Captured 10 selection(s)
+        # ... from 10 raw price rows" and exited 0, with no mention of 503.
+        # Each failed request is now named. The exit stays 0 on purpose:
+        # Closing Lines publishes only after a successful Capture step, so a
+        # nonzero code here would throw away the team markets and the games
+        # that did answer.
+        failures = list(per_event.errors)
+        if failures:
+            print(
+                f"::warning::{len(failures)} per-event price request(s) failed, "
+                "so those games' per-event markets are absent from this "
+                "capture, not unquoted; the rest were kept: "
+                + "; ".join(failures)
+            )
+            print(
+                f"{len(failures)} per-event request(s) failed; the team "
+                "markets and the games that answered were still captured.",
+                file=sys.stderr,
+            )
+            for failure in failures:
+                print(f"  {failure}", file=sys.stderr)
     except odds_api.ProviderError as exc:
         # A failed per-event capture still leaves the team markets recorded.
-        # Partial evidence about the close beats none, and the rows that are
-        # missing are counted rather than imagined.
+        # Partial evidence about the close beats none, and what is missing
+        # is named, never imagined: here, and above for a single request.
         print(f"Per-event capture failed: {exc}", file=sys.stderr)
 
     best = best_prices(_frame(rows), captured_at=stamp)

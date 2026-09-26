@@ -25,6 +25,9 @@ Sources, in order of trust:
   * data/processed/team_games.csv + TeamModel: expected goals per side,
     with the back-to-back adjustment only while the recorded `team_b2b`
     verdict ships it — the same verdict, read the same way, as the card.
+    Nothing is projected from a table holding fewer games than
+    `config.THIN_HISTORY_GAMES`, the line below which Gameday Refresh calls
+    its own run degraded (load_model).
   * data/outputs/forward_evidence.json: the forward ledger's SIZE, in wagers.
     Never its return, and never a season record: nothing here tallies one.
 
@@ -264,9 +267,35 @@ def ml_pair(rows, home, away):
     return {"home": h, "away": a} if h is not None and a is not None else None
 
 
+class ThinHistory(Exception):
+    """The game history on disk is below the floor the lab calls thin."""
+
+
 def load_model(processed: Path, outputs: Path):
     """The fitted team model, the team-name resolver, the schedule's rest
     fact, and whether that fact may move a price.
+
+    ## A thin history projects nothing
+
+    Raises `ThinHistory` when `team_games.csv` holds fewer games than
+    `config.THIN_HISTORY_GAMES`, the line below which Gameday Refresh calls
+    its own run degraded ("the models are fitted on a thin history").
+
+    This refused only an empty table. Publish Site restores the newest
+    Gameday run that carries the state, whatever its conclusion, and lays
+    nothing underneath (`--no-merge`), so after a Gameday run that started
+    cold — its restore found nothing, and the fetch caches the 600 oldest
+    game ids — the board fitted the model on 600 games from 2023-10-10 to
+    2024-01-04, published every projection from it, froze that as the day's
+    opinion and graded straight up on it the next morning. Measured on the
+    real tables against all 3,936 games: VAN @ EDM home win 0.447 against
+    0.623, LAK @ COL 0.495 against 0.601, CAR @ PHI 0.512 against 0.410 and
+    BOS @ MIN 0.432 against 0.531, every projected winner flipped. A history
+    the lab will not stand behind for its own run is not a public opinion,
+    so the board shows the schedule and says why, as it already did for a
+    missing history. The restore is unchanged: the state and the reports
+    still come from one run
+    (tests/test_the_board_refuses_a_thin_history.py).
 
     ## Rest moves a price only while its verdict ships
 
@@ -293,6 +322,7 @@ def load_model(processed: Path, outputs: Path):
     pick priced without it.
     """
     try:
+        from nhl_betting_lab.config import THIN_HISTORY_GAMES
         from nhl_betting_lab.data.build_datasets import load_team_games
         from nhl_betting_lab.models.team_model import TeamModel
         from nhl_betting_lab.providers.team_names import build_team_name_map, resolve_team
@@ -303,6 +333,13 @@ def load_model(processed: Path, outputs: Path):
     games = load_team_games(processed)
     if games.empty:
         return None
+    if len(games) < THIN_HISTORY_GAMES:
+        print(
+            f"The game history holds {len(games)} games, fewer than the "
+            f"{THIN_HISTORY_GAMES} below which Gameday Refresh calls its run "
+            "degraded, so the board projects nothing from it."
+        )
+        raise ThinHistory(len(games))
     model = TeamModel().fit(games)
     names = build_team_name_map()
     last = last_played_dates(games)
@@ -334,7 +371,12 @@ def build_board(day: date, lab: Path, history_dir: Path) -> dict:
     prices = read_prices(lab / "data" / "staging") if not preseason else []
     featured = read_prices(lab / "data" / "staging", featured_only=True) if not preseason else []
     opens = earliest_capture(lab / "data" / "processed", day) if not preseason else []
-    lab_model = load_model(lab / "data" / "processed", lab / "data" / "outputs") if not preseason else None
+    lab_model, thin = None, False
+    if not preseason:
+        try:
+            lab_model = load_model(lab / "data" / "processed", lab / "data" / "outputs")
+        except ThinHistory:
+            thin = True
 
     for g in games:
         away, home = g["awayTeam"], g["homeTeam"]
@@ -441,6 +483,11 @@ def build_board(day: date, lab: Path, history_dir: Path) -> dict:
         notice = ("Exhibition slate. The model is fitted on regular-season games only and prices nothing before opening night on "
                   "September 29. Tonight shows the schedule; projections and market lines arrive with the first regular-season "
                   f"card. {gate}, and the model has no demonstrated edge.")
+    elif thin:
+        # The history was there, and too thin to stand behind (load_model):
+        # "not available" would misstate why nothing is projected.
+        notice = ("The model's game history on this run is too thin to project from, so the board shows the schedule only: "
+                  "no projection, no market line and no pick.")
     elif not lab_model:
         # This said "the schedule and market lines only". The lines are
         # attached inside the model's branch above, so a board without the
@@ -646,6 +693,18 @@ def settle(day: date, history_dir: Path) -> dict:
     if board.get("phase") == "preseason":
         base.update(phase="preseason", notice="No projections were published for the exhibition games, so there is nothing to settle. "
                     "The first results page lands the morning after opening night, September 30.")
+        return base
+    shown = board.get("games") or []
+    if shown and not any("projGoals" in (g.get("home") or {}) for g in shown):
+        # A regular-season board frozen without the model (build_board's
+        # schedule-only notice) grades nothing below, and this set no notice,
+        # so the page fell back to "No games were settled for this date."
+        # with Straight up 0–0 about a slate that was played to a final: in
+        # the failure-shape audit's replay, 0 of 10 finals on 2026-10-08
+        # after one failed state listing froze the schedule alone. What was
+        # published had nothing to settle, and that is what the page says.
+        base["notice"] = ("The board published for this date showed the schedule only, with no projection, "
+                          "so there is nothing to settle.")
         return base
     finals = {str(g["id"]): g for g in schedule_for(day) if g.get("gameState") in {"OFF", "FINAL"}}
     s = base["summary"]
