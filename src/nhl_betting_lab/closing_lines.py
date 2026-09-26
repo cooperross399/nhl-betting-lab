@@ -367,21 +367,30 @@ def _key_of(row) -> tuple:
 #: put every 19:00 EDT game in the bucket on a night nothing went wrong.
 #: The evening rounds are two hours apart, so every common evening start
 #: (19:00, 19:30 and 22:00 ET, EDT and EST) has a round at most two hours
-#: before it. Lateness never lengthens that lead: a late stamp is nearer
-#: face-off, and a round that slips past face-off hands the close to the
-#: previous round, itself stamped late by the same drift. The half hour
-#: above two hours is headroom, and it admits 12:30 EDT and 22:30 EST
-#: starts, whose nearest round is exactly 150 minutes out.
+#: before it when every round runs on time. The half hour above two hours
+#: is headroom, and it admits 12:30 EDT and 22:30 EST starts, whose nearest
+#: round is exactly 150 minutes out.
 #:
-#: What it cannot meet, on a normal night with every round on time:
-#: 13:00 ET starts (EDT and EST), 12:30 EST, 16:00 EST and 17:00 EDT have
-#: NO round within the bound, and neither do 19:00 EDT games on 29-30
-#: September, when only the 18:00 and 23:00 rounds are scheduled. Those
-#: games have no close near face-off; their opinions are counted under
-#: `no_close_not_near_face_off`, never scored. Only an extra round around
-#: 15:30-16:00 UTC would give the afternoon starts a real close, and that
-#: spends credits, so it is Cooper's decision. The bound itself is a
-#: judgement, and Cooper may revise it.
+#: Lateness can cost a close. A late round that still lands before face-off
+#: only shortens the lead, but one that slips past face-off is excluded,
+#: and the close falls to the previous round, which may be over the bound.
+#: So a round running more than about an hour late behaves as a missed one:
+#: 19:00 EST and 22:00 EDT starts lose their close past 60 minutes late,
+#: 19:30 EST past 90, 19:00 EDT and 22:00 EST past 120. Only 19:30 EDT keeps
+#: a close however late its nearest round runs (its fallback is the 21:00
+#: round, exactly 150 minutes out).
+#:
+#: What it cannot meet, on a normal night with every round on time,
+#: sweeping every half hour from 11:00 to 23:00 ET: starts from roughly
+#: 13:00-14:00 EDT (13:00, 13:30, 14:00) and 12:00-13:00 EST (12:00, 12:30,
+#: 13:00), plus 17:00 EDT, 16:00 EST and 23:00 EST, have NO round within
+#: the bound, and neither do 19:00 EDT games on 29-30 September, when only
+#: the 18:00 and 23:00 rounds are scheduled. Those games have no close near
+#: face-off; their opinions are counted under `no_close_not_near_face_off`,
+#: never scored. Only an extra round around 15:30-16:00 UTC would give the
+#: afternoon starts a real close, and that spends credits, so it is
+#: Cooper's decision. The bound itself is a judgement, and Cooper may
+#: revise it.
 CLOSE_MAX_LEAD = timedelta(minutes=150)
 
 

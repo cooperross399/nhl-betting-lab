@@ -168,10 +168,12 @@ def test_the_bound_is_what_the_capture_schedule_can_meet() -> None:
     own round lands at or after face-off; the 21:00 round, two hours out,
     must still close it, which is why 60-90 minutes was not chosen.
 
-    Lateness cannot break this: a late stamp is nearer face-off, and a
-    round that slips past face-off hands the close to the previous round,
-    stamped late by the same drift. The afternoon starts the schedule
-    cannot close are recorded in `CLOSE_MAX_LEAD`'s comment, not here.
+    This holds for rounds on time. A round that runs more than about an
+    hour late slips past face-off and behaves as a missed one, handing the
+    close to a previous round that may be over the bound; only 19:30 EDT
+    keeps a close however late its nearest round runs. That, and the
+    afternoon starts the schedule cannot close at all, are recorded in
+    `CLOSE_MAX_LEAD`'s comment, not asserted here.
     """
     rounds = _in_season_rounds()
     for label, start in EVENING_STARTS:
