@@ -111,6 +111,13 @@ jobs:
           # with no artifact — and published a board with no model history.
           # Nothing is laid underneath: an older run's card must never fill
           # in for today's. See scripts/restore_state.py.
+          # So after a Gameday run that started cold (its restore found
+          # nothing, and its fetch caches the 600 oldest games) this takes
+          # that run's thin tables alone, and they used to become the public
+          # board, frozen as the day's opinion. The build below now projects
+          # nothing from a history under config.THIN_HISTORY_GAMES, the line
+          # Gameday calls degraded, and says so on the board (load_model in
+          # the site builder).
           mkdir -p data/outputs
           python scripts/restore_state.py --artifact gameday-state --dest data \
             --workflow gameday-refresh.yml --no-merge \

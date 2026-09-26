@@ -1128,6 +1128,12 @@ def save_backtest(
         "outcomes_without_a_model_opinion": report.outcomes_without_a_model_opinion,
         "outcomes_below_threshold": report.outcomes_below_threshold,
         "bets": len(report.bets),
+        # Every price row this measurement was handed, before any window.
+        # Without it a JSON from a run with no store on disk read exactly as
+        # a measurement that placed no bet, and the claims document and the
+        # allowlist bundle concluded "nothing has been measured" from Gameday
+        # Refresh, which holds no store (see `what_we_can_claim.unread_reason`).
+        "rows_read": report.rows_read,
         "unmeasurable_markets": report.unmeasurable_markets,
         "notes": report.notes,
         "overall": _interval_payload(report.overall),
