@@ -337,9 +337,12 @@ A day with no new `card-feed` commit means the workflow itself did not
 finish.
 
 Each run starts from the previous run's state, restored by
-`scripts/restore_state.py` from the newest run that actually carries the
-`gameday-state` artifact — whatever its conclusion, with the newest successful
-state laid underneath a red one. Choosing "the newest successful run" picked a
+`scripts/restore_state.py` from the newest run on `main` that actually carries
+the `gameday-state` artifact — whatever its conclusion, with the newest
+successful state laid underneath a red one. A run dispatched on a feature
+branch is never a source: it ran code nobody reviewed, and Line Movement's
+only unexpired artifact on 2026-09-25 was such a rehearsal, which would have
+seeded the season's capture chain. Choosing "the newest successful run" picked a
 skipped backup run (a success with no artifact) and threw away every degraded
 run's cache and frozen snapshot. Line Movement Capture restores its captures
 the same way, and then unions every day file, row by row, with the two
