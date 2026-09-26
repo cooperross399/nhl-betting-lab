@@ -67,12 +67,24 @@ pinned by a test in `tests/test_periphery_markets.py`:
    nothing and report every per-event market at zero coverage, writing a
    live market off for exactly the reason this lab keeps warning about.
 
-Caps scale with the number of markets asked, because the cap bills every
-asked market whether a book quotes it or not: nineteen markets now, so the
-gameday cap is 320 (sixteen games, the largest possible slate) and the probe
-cap 380 (twenty events). The old 60 bought six events when ten markets were
-asked and would buy three today — and a starved fetch reads exactly like a
+Caps scale with the number of markets asked and the number of regions asked,
+because the cap bills every asked market in every asked region whether a book
+quotes it or not: nineteen markets at two regions (`us,us2`) is 38 credits an
+event, so the gameday cap of 320 buys 8 events and the probe cap of 380 buys
+10 events. The old 60 bought six events when ten markets were asked at one
+region, and would buy one today — and a starved fetch reads exactly like a
 market nobody quotes.
+
+(Corrected 2026-09-25. This paragraph said 320 covered sixteen games, the
+largest possible slate, and 380 twenty events. That was one region's
+arithmetic: the caps were set on 2026-08-28 and the second region, `us2`, was
+added the same day, halving both. Measured on the real 2026-27 club
+schedules, 320 clips 72 of the 185 nights and leaves 254 games unpriced; on
+those nights every market only the per-event fetch prices is INCOMPLETE and
+excluded. The probe's `--max-events 20` now outruns its cap, so a props
+dispatch at the defaults reports every per-event market priced for 10 of 20
+games. 608 is the smallest gameday cap that clips no night. Raising either cap
+spends credits and is Cooper's decision, still pending; neither has changed.)
 
 ## Deferred, with the reason on the record
 

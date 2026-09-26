@@ -34,6 +34,7 @@ import pytest
 from conftest import boxscore_payload
 from nhl_betting_lab.config import PROJECT_ROOT
 from nhl_betting_lab.providers import team_names as tn
+from test_no_test_reads_the_checkouts_data import point_default_data_dirs_at
 
 
 def load_script(name: str) -> ModuleType:
@@ -66,7 +67,12 @@ def _one_boxscore(raw: Path) -> None:
 @pytest.fixture
 def empty_cache(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Default raw and processed directories that hold nothing, so the real
-    boxscore cache cannot rescue a test or make it pass by checkout."""
+    boxscore cache cannot rescue a test or make it pass by checkout.
+
+    Every other default goes too: this used to redirect only the team-name
+    ones, and the card still read the checkout's club schedules (384 files in
+    the operator's checkout) and the tracked verdicts."""
+    point_default_data_dirs_at(monkeypatch, tmp_path / "checkout_defaults")
     raw = tmp_path / "default_raw"
     processed = tmp_path / "default_processed"
     raw.mkdir()

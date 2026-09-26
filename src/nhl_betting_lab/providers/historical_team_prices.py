@@ -1,10 +1,12 @@
 """Buying historical team-market prices, which are far cheaper than props.
 
-Props are per-event: ten credits per market per event, so one game-day of
-twelve games across six markets is 720. Team markets come from the **bulk**
-historical endpoint, which returns every game on the board at one instant for
-`10 x markets x regions` — sixty credits for the whole slate at the lab's two
-regions (`us,us2`), whether that slate is four games or fourteen.
+Props are per-event: ten credits per market per event, per region, so one
+game-day of twelve games across six markets is 1,440 at the lab's two regions
+(720 until 2026-09-25, which left the region out). Team markets come from
+the **bulk** historical endpoint, which returns every game on the board at
+one instant for `10 x markets x regions` — sixty credits for the whole slate
+at the lab's two regions (`us,us2`), whether that slate is four games or
+fourteen.
 
 That difference is why the team markets went unmeasured for so long while the
 props were bought twice: the props were expensive enough to think about and

@@ -117,7 +117,11 @@ def _count(dest: Path) -> int:
 
 
 def _run(run_id: int, conclusion: str, status: str = "completed") -> dict:
-    return {"databaseId": run_id, "conclusion": conclusion, "status": status}
+    # Every run these scenarios describe is a run on main. `headBranch` is in
+    # the row because the script now asks `gh` for it and restores only
+    # main's runs (tests/test_state_restores_only_from_the_default_branch.py).
+    return {"databaseId": run_id, "conclusion": conclusion, "status": status,
+            "headBranch": "main"}
 
 
 def test_a_skipped_backup_run_is_not_the_restore_source(tmp_path: Path) -> None:

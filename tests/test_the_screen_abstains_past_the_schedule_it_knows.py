@@ -58,6 +58,7 @@ from nhl_betting_lab.data.build_datasets import TEAM_GAMES_FILENAME
 from nhl_betting_lab.forward_evidence import snapshots_dir
 from nhl_betting_lab.providers import odds_api
 from nhl_betting_lab.providers import team_names as tn
+from test_no_test_reads_the_checkouts_data import point_default_data_dirs_at
 from nhl_betting_lab.season import (
     known_regular_season_games,
     schedule_cache_is_complete,
@@ -208,7 +209,9 @@ def _stage(staging: Path, games: list[tuple[str, str, str]]) -> None:
 def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, object]:
     """A complete season's schedule cache that ends on 2026-10-31, the
     boxscores the team map needs, and last season's results. Every default
-    directory the card could fall back to points here."""
+    directory the card could fall back to points here, the recorded verdicts
+    included: a scratch --output-dir fell back to the tracked ones (#151)."""
+    point_default_data_dirs_at(monkeypatch, tmp_path / "checkout_defaults")
     raw = tmp_path / "raw"
     monkeypatch.setattr(config, "RAW_DIR", raw)
     monkeypatch.setattr(tn, "RAW_DIR", raw)
