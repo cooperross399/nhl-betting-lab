@@ -128,6 +128,29 @@ first. It is now said and red rather than read as "nothing to restore";
 whether such a run should freeze at all changes which opinions the forward
 ledger holds, and is the owner's decision, not this script's.
 
+**`--require-listing --listing-attempts N`, for Publish Site's
+`gameday-state`.** That restore passed neither flag, so one `gh run list`
+that failed (an HTTP 502) was printed, read as no runs, and followed by
+"No completed run of gameday-refresh.yml on main carries gameday-state" —
+false — and exit 0. The build then had no game history and published the
+schedule alone, and that board was frozen as the day's first published
+opinion, which nothing may re-freeze. In the failure-shape audit's replay on
+the real 2026-10-08 slate, 0 of 10 games on the frozen board carried a
+projection (10 of 10 without the 502); a healthy build later that day
+projected all ten and left the frozen board byte-identical; and the next
+morning's Results graded 0 of 10 final games, Straight up 0–0 where the
+control read 8–2. Under `--require-listing` a listing that fails on every
+attempt exits 1, and the caller builds nothing; a listing that answers with
+no carrier still starts without the artifact, which is the one case that
+may. It is not `--require-newest`, because downloads stay as they were: the
+15:00 backup is skipped whenever the primary ran clean, and GitHub records
+it as a success with no artifact, so under `--require-newest` Publish Site's
+run after every such backup would fail. `--listing-attempts` retries the
+listing alone (default: `--attempts`), so the listing can be retried
+without raising the download attempts. (Since #195 a download gh answers as
+absent is not asked again whatever `--attempts` says; only a download that
+failed for another reason is retried.)
+
 **`--also NAME=DIR`** takes a second artifact from the same chosen run
 (Publish Site: the run's reports, beside its state). It goes through an
 empty temporary directory like the first and is then copied over DIR, the
@@ -336,11 +359,15 @@ def restore(
     success_only: bool = False,
     require_newest: bool = False,
     attempts: int = 1,
+    require_listing: bool = False,
+    listing_attempts: int | None = None,
 ) -> dict:
     """Restore `artifact` into `dest`; returns what it did, for the log and tests.
 
     With `require_newest`, raises `Unreachable` when a listing fails or the
-    newest listed run's download fails; see the module docstring.
+    newest listed run's download fails; with `require_listing`, only when a
+    listing fails. Each listing is tried `listing_attempts` times (default
+    `attempts`), each download `attempts` times; see the module docstring.
 
     Otherwise nothing here raises, and `report["unreached"]` holds a plain
     sentence for everything GitHub could not be asked: a listing that failed
@@ -358,13 +385,19 @@ def restore(
     dest.mkdir(parents=True, exist_ok=True)
     for position, workflow in enumerate(workflows):
         later = workflows[position + 1:]
+        # A listing that fails used to be read as no runs whenever
+        # `require_newest` was off, so Publish Site's gameday-state restore
+        # said "No completed run ... carries gameday-state" after one 502 and
+        # the day's frozen board was the schedule alone (module docstring).
+        tries = listing_attempts or attempts
         runs = completed_runs(workflow, limit, branch, success_only=success_only,
-                              attempts=attempts, strict=require_newest)
+                              attempts=tries,
+                              strict=require_newest or require_listing)
         if runs is None:
             _unreached(
                 report,
                 f"GitHub did not answer when asked for the {workflow} runs on "
-                f"{branch} ({attempts} attempt(s)), so whether one carries "
+                f"{branch} ({tries} attempt(s)), so whether one carries "
                 f"{artifact} is unknown.{_not_consulted(later, artifact)}",
             )
             break
@@ -696,6 +729,22 @@ def main(argv: list[str] | None = None) -> int:
         help="Try each listing and download up to N times, pausing between.",
     )
     parser.add_argument(
+        "--require-listing", action="store_true",
+        help=(
+            "Each workflow's run listing must answer: one that fails on every "
+            "attempt exits 1 instead of reading as no runs. Downloads are not "
+            "made strict: a run without the artifact (a skipped backup) is "
+            "still passed over for the run before it."
+        ),
+    )
+    parser.add_argument(
+        "--listing-attempts", type=int, default=None, metavar="N",
+        help=(
+            "Try each listing up to N times (default: --attempts). Downloads "
+            "keep --attempts, so a run without the artifact is not asked again."
+        ),
+    )
+    parser.add_argument(
         "--problem-file", default="", metavar="FILE",
         help=(
             "Append a sentence to FILE for everything GitHub could not be "
@@ -708,6 +757,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.attempts < 1:
         parser.error("--attempts must be at least 1")
+    if args.listing_attempts is not None and args.listing_attempts < 1:
+        parser.error("--listing-attempts must be at least 1")
     also = []
     for item in args.also:
         name, _, directory = item.partition("=")
@@ -727,6 +778,8 @@ def main(argv: list[str] | None = None) -> int:
             success_only=args.success_only,
             require_newest=args.require_newest,
             attempts=args.attempts,
+            require_listing=args.require_listing,
+            listing_attempts=args.listing_attempts,
         )
     except Unreachable as exc:
         print(f"::error::{exc}")

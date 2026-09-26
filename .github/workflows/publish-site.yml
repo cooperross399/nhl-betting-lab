@@ -23,7 +23,8 @@ name: Publish Site
 # artifact so the next morning settles the opinion that was actually shown.
 # That history only grows: a run that cannot restore it, or that would upload
 # less than it restored, fails before anything is kept or deployed, and the
-# site keeps its last build until the next run.
+# site keeps its last build until the next run. So does a run that cannot
+# ask GitHub for the lab's state: what it would freeze is the schedule alone.
 on:
   schedule:
     - cron: "45 14 * * *"   # 10:45 New York, after the 09:30 card
@@ -79,9 +80,27 @@ jobs:
 
       - name: Restore the lab's latest state
         # Allowed to find nothing: on a bare repository, or in preseason
-        # before the first card, the site is schedule-only and says so. The
-        # step reports what it found.
-        continue-on-error: true
+        # before the first card, GitHub answers with no run that carries the
+        # state, and the site is schedule-only and says so. The step reports
+        # what it found.
+        #
+        # NOT allowed to read a listing that never answered as that answer,
+        # and so no longer continue-on-error. It passed no flag, and one HTTP
+        # 502 on `gh run list` printed "No completed run ... carries
+        # gameday-state" and exited 0, so the `|| echo` that stood here never
+        # fired: the build had no game history, published the schedule
+        # alone, and froze it as the day's first published opinion, which no
+        # later build may replace. In the failure-shape audit's replay on the
+        # real 2026-10-08 slate the frozen board projected 0 of 10 games
+        # (10 of 10 without the 502), and the next morning's Results settled
+        # 0 of 10 finals as "No games were settled for this date". Now the
+        # listing is asked three times, and if it never answers the job stops
+        # here, before anything is built, frozen, kept or deployed; the site
+        # keeps its last build, and the next publish (the 14:45 cron, or the
+        # run after the next Gameday Refresh) builds the day from the lab's
+        # state. Downloads stay as they were: the skipped 15:00 backup is a
+        # success with no artifact and is passed over, which is why this is
+        # not --require-newest.
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -103,7 +122,10 @@ jobs:
           python scripts/restore_state.py --artifact gameday-state --dest data \
             --workflow gameday-refresh.yml --no-merge \
             --also gameday-reports=data/outputs \
-            || echo "No Gameday Refresh state could be restored; building schedule-only."
+            --require-listing --listing-attempts 3 || {
+            echo "::error::The lab's state could not be restored, so nothing is built, kept or deployed: a board built without it would show the schedule alone and stand as the day's first published opinion for good. The public site keeps its last build, and the next publish builds the day from the lab's state."
+            exit 1
+          }
 
       - name: Restore the site's history
         # NOT continue-on-error, and it must not become so. This used to sit
