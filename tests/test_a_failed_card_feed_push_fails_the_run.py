@@ -82,6 +82,9 @@ def _report(work: Path, *, degraded: str, published: str,
         "steps.final.outputs.degraded": degraded,
         "steps.prices.outputs.empty_slate": empty_slate,
         f"steps.{_publish_id()}.outcome": published,
+        # The two reports that fail the run the same way ran clean here.
+        "steps.rebuild.outcome": "success",
+        "steps.clv.outcome": "success",
     })
     return _bash(block, work, dict(os.environ))
 

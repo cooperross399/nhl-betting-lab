@@ -451,8 +451,9 @@ jobs:
         # Soft, but not silent. With no id nothing could read this step's
         # outcome, so a rebuild that failed left the committed reports, or an
         # earlier run's, standing in this run's artifacts looking current,
-        # and the run said it was clean. "Record whether the evidence was
-        # kept" reads it now.
+        # and the run said it was clean. "Report the outcome" reads it now,
+        # and fails the run without degrading it: a backup would rebuild with
+        # the same scripts and fail the same way, so it is not sent for.
         id: rebuild
         continue-on-error: true
         env:
@@ -580,7 +581,9 @@ jobs:
         # Reads the capture store the Closing Lines workflow publishes and
         # scores every frozen opinion against the market's last word. Offline
         # and read-only: it fetches no prices and spends nothing. Exits 2 on
-        # a damaged snapshot or capture store, which the step below reads.
+        # a damaged snapshot or capture store, which "Report the outcome"
+        # reads and fails the run on, without degrading it: the backup would
+        # read the same damaged files, so it is not sent for.
         id: clv
         if: always()
         continue-on-error: true
@@ -601,25 +604,24 @@ jobs:
           python scripts/run_closing_line_value.py
 
       - name: Record whether the evidence was kept
-        # The three soft steps that keep the season's evidence, read into the
-        # run's health after the last of them and before the summary, the
-        # comment, the final health, card-feed and the run's exit. They were
-        # `continue-on-error` with no id, so a failure in any of them reached
-        # none of those: from opening night one torn ledger would have failed
+        # The settlement, read into the run's health before the summary, the
+        # comment, the final health, card-feed and the run's exit. It was
+        # `continue-on-error` with no id, so its failure reached none of
+        # those: from opening night one torn ledger would have failed
         # settlement on every run while card-feed said `degraded: false` and
         # the 15:00 backup stood down. Anything but success degrades the run.
         # Nothing that failed to settle is marked settled, so the backup, and
         # every later run, retries it.
+        #
+        # The rebuild and the closing-line value report are NOT recorded
+        # here. A degraded run sends for the backup, which buys the prices
+        # again, and a report script that fails or a capture store that is
+        # damaged fails the backup identically. "Report the outcome" fails
+        # the run on them instead, so the failure notice still arrives.
         if: always()
         run: |
-          if [ "${{ steps.rebuild.outcome }}" != "success" ]; then
-            echo "The measurement reports were not all rebuilt (the rebuild step's log names the script), so a report in this run's artifacts may be the committed copy or an earlier run's, looking current. The card does not depend on them." >> run_degraded.txt
-          fi
           if [ "${{ steps.settle.outcome }}" != "success" ]; then
             echo "The forward ledger was not settled (the settle step's log says why: a ledger or snapshot that could not be read, a team map that resolves nothing, or a ledger that would have shrunk), so finished games did not reach the out-of-sample record. Nothing that failed to settle was marked settled; it is retried on the next run." >> run_degraded.txt
-          fi
-          if [ "${{ steps.clv.outcome }}" != "success" ]; then
-            echo "The closing-line value report did not finish clean (its step's log names the damaged snapshot or capture store), so today's closing-line value is incomplete or missing." >> run_degraded.txt
           fi
 
       - name: Write the card to the run summary
@@ -898,8 +900,29 @@ jobs:
           # said so; a failed push published no status for today at all, so
           # the next trigger's precheck finds no clean card and the backup
           # runs.
+          #
+          # The rebuild and the closing-line value report fail the run the
+          # same way, and for the same reason are kept out of the health: a
+          # backup would run the same scripts on the same files and fail
+          # identically, so a degraded status would only buy the prices
+          # again. All three are checked before the exit, so each is named.
+          # Only a FAILED rebuild is read: the step has no `if: always()`, so
+          # it is skipped when an earlier step failed the job, which fails
+          # the run on its own and has not run the rebuild at all.
+          failed=0
           if [ "${{ steps.cardfeed.outcome }}" != "success" ]; then
             echo "::error::Today's card and status could not be published to the card-feed branch, so the morning brief has nothing to read for today and the forward ledger has no copy there. The run's own health (degraded=${{ steps.final.outputs.degraded }}) is unchanged; see the publish step's log."
+            failed=1
+          fi
+          if [ "${{ steps.rebuild.outcome }}" = "failure" ]; then
+            echo "::error::Rebuild the measurement reports failed (its log names the script), so a report in this run's artifacts may be the committed copy or an earlier run's, looking current. The card does not depend on them. The run's health (degraded=${{ steps.final.outputs.degraded }}) is unchanged, so no backup was sent for."
+            failed=1
+          fi
+          if [ "${{ steps.clv.outcome }}" = "failure" ]; then
+            echo "::error::Report closing-line value failed (its log names the damaged snapshot or capture store), so today's closing-line value is incomplete or missing. The run's health (degraded=${{ steps.final.outputs.degraded }}) is unchanged, so no backup was sent for."
+            failed=1
+          fi
+          if [ "$failed" != 0 ]; then
             exit 1
           fi
           if [ "${{ steps.prices.outputs.empty_slate }}" = "true" ]; then
