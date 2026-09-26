@@ -88,17 +88,18 @@ jobs:
         # FROM THE NEWEST RUN THAT CARRIES THEM, WHATEVER ITS CONCLUSION. This
         # used to restore `gh run list --status success --limit 1`. A run goes
         # red when the price capture's events list fails or when the line
-        # units were not captured (the gate at the end), and either way the
-        # steps marked `if: always()` still captured and uploaded: the
-        # deployment and line units on a price failure, the prices and the
-        # deployment on a line failure. The next restore skipped that run, so
-        # its rows fell out of the chain; in the failure-shape audit's replay
-        # (14:00 green, 18:00 red, 21:00 green) the 18:00 scratch list and PP1
-        # promotion were first seen at 21:00, three hours late, and neither
-        # source keeps an archive. `--union 3` then folds in, row by row, what
-        # the two carriers before the newest hold that it lacks, so a run
-        # whose own restore found nothing cannot become the base the season
-        # is lost from. See scripts/restore_state.py.
+        # units or the scratch list were not captured (the gates at the end),
+        # and either way the steps marked `if: always()` still captured and
+        # uploaded: the deployment and line units on a price failure, the
+        # prices and the deployment on a line failure, the prices and the line
+        # units on a scratch-list failure. The next restore skipped such a
+        # run, so its rows fell out of the chain; in the failure-shape
+        # audit's replay (14:00 green, 18:00 red, 21:00 green) the 18:00
+        # scratch list and PP1 promotion were first seen at 21:00, three hours
+        # late, and neither source keeps an archive. `--union 3` then folds
+        # in, row by row, what the two carriers before the newest hold that it
+        # lacks, so a run whose own restore found nothing cannot become the
+        # base the season is lost from. See scripts/restore_state.py.
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
@@ -123,6 +124,7 @@ jobs:
             --credit-cap "${{ inputs.credit_cap || '600' }}"
 
       - name: Capture deployment
+        id: deployment
         # Taken in the SAME run as the prices, so the two share an instant and
         # can be joined. That is the whole design: the question worth asking
         # is not "who was scratched" but "was the scratch public before the
@@ -130,7 +132,8 @@ jobs:
         #
         # Free and inside the NHL API licence the lab already relies on. It
         # spends no provider credits, so it runs even when the price capture
-        # is capped or fails.
+        # is capped or fails. The id is what the last step reads: without one,
+        # this step's outcome could not be read by anything.
         if: always()
         continue-on-error: true
         env:
@@ -273,4 +276,23 @@ jobs:
         if: always() && steps.lines.outcome == 'failure'
         run: |
           echo "::error::The Daily Faceoff line units were NOT captured this run (the price capture reports on itself). That source keeps no archive, so this night's line units cannot be collected later."
+          exit 1
+
+      - name: Fail the run when the scratch list was not captured
+        # The same report for the NHL scratch list, which the gate above left
+        # out. "Capture deployment" is continue-on-error so it can never cost
+        # the prices, and until 2026-09-25 it had no id, so nothing read its
+        # outcome; the script also exited 0 when every right-rail fetch failed.
+        # In the failure-shape audit's replay two games with every fetch
+        # refused (HTTP 403, 503 past the retries, or unreachable) ran green
+        # and wrote no file. Who was scratched can be rebuilt from box scores;
+        # when the list became public cannot, and that instant is the capture.
+        # The script exits 0 on a night with no games or when at least one
+        # game was captured (a partial capture warns and names the games it
+        # lost), and 2 when the schedule could not be read or no game was.
+        # Runs after every upload, so the red X reports the loss without
+        # causing any.
+        if: always() && steps.deployment.outcome == 'failure'
+        run: |
+          echo "::error::The NHL scratch list was NOT captured this run: no game's list was read, or the schedule could not be (see Capture deployment). The API keeps no archive of when a scratch list became public, so this run's instant cannot be collected later."
           exit 1
