@@ -339,6 +339,10 @@ routines read the card and track the season without any GitHub API
 credential: a cloud session cloning this repository sees it over plain git.
 A day with no new `card-feed` commit means the workflow itself did not
 finish.
+Only runs on the default branch post to the operating home or publish to
+`card-feed`: a run dispatched on a feature branch builds and gates the card
+as a rehearsal and publishes nothing, and the status line names the ref that
+wrote it so the backup's precheck counts only a card `main` published.
 
 Each run starts from the previous run's state, restored by
 `scripts/restore_state.py` from the newest run on `main` that actually carries

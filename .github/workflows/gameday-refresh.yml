@@ -148,14 +148,22 @@ jobs:
           STATUS=$(git show refs/card-feed-tip:latest_status.json 2>/dev/null || echo '{}')
           FEED_DAY=$(printf '%s' "$STATUS" | jq -r '.date // ""')
           DEGRADED=$(printf '%s' "$STATUS" | jq -r '.degraded // "unknown"')
-          # Only a CLEAN card for today counts. A degraded run is exactly the
-          # case the backup trigger exists for, so it must not satisfy it.
-          if [ "$FEED_DAY" = "$DAY" ] && [ "$DEGRADED" = "false" ]; then
+          FEED_REF=$(printf '%s' "$STATUS" | jq -r '.ref // ""')
+          # Only a CLEAN card for today, published by the DEFAULT branch,
+          # counts. A degraded run is exactly the case the backup trigger
+          # exists for, so it must not satisfy it. Nor may a run dispatched on
+          # a feature branch: the publish step no longer runs there, but every
+          # branch cut before 2026-09-26 still carries the copy that did, and
+          # its status line names no ref. Such a line costs at most one
+          # duplicate run on the day this landed; trusting it would cost the
+          # day's card and its frozen opinions.
+          if [ "$FEED_DAY" = "$DAY" ] && [ "$DEGRADED" = "false" ] \
+             && [ "$FEED_REF" = "refs/heads/${{ github.event.repository.default_branch }}" ]; then
             echo "already=true" >> "$GITHUB_OUTPUT"
             echo "Today's card ($DAY) is already published and clean. Skipping."
           else
             echo "already=false" >> "$GITHUB_OUTPUT"
-            echo "Feed day '$FEED_DAY' (degraded=$DEGRADED) is not a clean card for $DAY. Running."
+            echo "Feed day '$FEED_DAY' (degraded=$DEGRADED, ref='$FEED_REF') is not a clean card for $DAY from the default branch. Running."
           fi
 
   refresh:
@@ -605,8 +613,15 @@ jobs:
         # the reader to ignore them. But a degraded run always posts, because
         # silence is only safe to read as "nothing moved" if anything going
         # wrong breaks the silence.
+        # Only on the default branch. A run dispatched on a feature branch is
+        # code nobody has reviewed: it still fetches, prices, gates and renders
+        # the card (so a dispatch is a full rehearsal, and the card is in the
+        # run summary), but it must not email its card to the operating home
+        # as if it were today's. Until 2026-09-26 nothing here read the ref.
+        # The comparison is the one Closing Lines makes for its hand-off.
+        # tests/test_a_branch_run_never_publishes_the_card.py evaluates it.
         id: post
-        if: always()
+        if: always() && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
@@ -714,7 +729,15 @@ jobs:
         # commit-tree build the two-file commit without touching it. Each
         # push parents on the current tip, so it is always a fast-forward —
         # never a force.
-        if: always()
+        #
+        # Only on the default branch, for the reason the post step gives and
+        # one more. A branch run published today's date with degraded=false,
+        # so main's next scheduled precheck read today's card as already
+        # published and stood the whole run down; and main restores state only
+        # from main's runs, so the branch's frozen snapshot never reached the
+        # forward ledger. That day's opinions were lost for good. The status
+        # line also records the ref that wrote it, which the precheck reads.
+        if: always() && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
@@ -736,8 +759,9 @@ jobs:
             --arg degraded "${{ steps.final.outputs.degraded || 'unknown' }}" \
             --arg empty_slate "${{ steps.prices.outputs.empty_slate || 'false' }}" \
             --arg run_url "$RUN_URL" \
+            --arg ref "${{ github.ref }}" \
             '{date: $date, decision: $decision, degraded: $degraded,
-              empty_slate: $empty_slate, run_url: $run_url}' > card_status.json
+              empty_slate: $empty_slate, run_url: $run_url, ref: $ref}' > card_status.json
           BLOB_MD=$(git hash-object -w card_comment.md)
           BLOB_JSON=$(git hash-object -w card_status.json)
           ENTRIES=$(printf '100644 blob %s\tlatest_card_comment.md\n100644 blob %s\tlatest_status.json' \

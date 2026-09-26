@@ -451,13 +451,18 @@ def _git_env(tmp_path: Path, day: str) -> dict:
     }
 
 
-def _publish(work: Path, tmp_path: Path, degraded: str, day: str) -> dict:
+def _publish(work: Path, tmp_path: Path, degraded: str, day: str,
+             *, ref: str = "refs/heads/main") -> dict:
+    """The publish step's block. It runs only on the default branch (its
+    `if:` says so; tests/test_a_branch_run_never_publishes_the_card.py
+    evaluates that), and records the ref that wrote the status line."""
     env = _git_env(tmp_path, day)
     subprocess.run(["git", "init", "-q"], cwd=work, env=env, check=True)
     block = _render(_step(name="Publish the card to the card-feed branch")["run"], {
         "github.repository": "o/r",
         "github.server_url": "https://github.com",
         "github.run_id": "1",
+        "github.ref": ref,
         "steps.post.outputs.decision || 'none'": "post",
         "steps.final.outputs.degraded || 'unknown'": degraded,
         "steps.prices.outputs.empty_slate || 'false'": "false",
@@ -482,6 +487,7 @@ def _precheck(tmp_path: Path, day: str) -> str:
     output.write_text("", encoding="utf-8")
     block = _render(_step(id_="feed")["run"], {
         "github.event_name": "schedule", "github.repository": "o/r",
+        "github.event.repository.default_branch": "main",
     })
     result = _bash(block, checkout, {**env, "GITHUB_OUTPUT": str(output)})
     assert result.returncode == 0, result.stderr
