@@ -1,5 +1,5 @@
-"""A failed settlement was recorded as a clean run, and so were a failed
-measurement rebuild and a failed closing-line value report.
+"""A failed settlement, measurement rebuild or closing-line value report was
+recorded as a clean run.
 
 "Settle the forward ledger", "Report closing-line value" and "Rebuild the
 measurement reports" were `continue-on-error: true` with no `id:`, and no
@@ -9,34 +9,28 @@ it cannot read (`CorruptStoreError`), a team map that resolves nothing
 it is not missed"), and 1 when the shrink guard refuses a shorter ledger;
 `run_closing_line_value.py` exits 2 on a damaged snapshot or capture store.
 The run read those exits as nothing. From opening night, one torn ledger
-would fail settlement on every run while every run finished green, card-feed
-said `degraded: false`, and the 15:00 backup's precheck stood down. The
-ledger, the season's only out-of-sample record, would silently stop growing.
+would fail settlement on every run while every run finished green and
+nobody was told. The ledger, the season's only out-of-sample record, would
+silently stop growing.
 
 Confirmed on main d0cc593 by reading the steps: none of the three has an
 `id:`, so no expression anywhere in the job can name its outcome.
 
-Each step now has an id, and the two kinds of failure are told apart by what
-a backup run could do about them:
-
-* a failed SETTLEMENT is a degraded run. "Record whether the evidence was
-  kept" writes it into `run_degraded.txt`, so the summary, the comment, the
-  final health, card-feed's status and the run's exit all say so, and the
-  backup runs and retries it (nothing that failed to settle was marked
-  settled, so it stays pending);
-* a failed REBUILD or CLV REPORT fails the run red in "Report the outcome",
-  naming the step, and does NOT degrade it. A backup buys the prices again,
-  and a report script that fails or a capture store that is damaged fails
-  the backup identically, so the published status stays `degraded: false`
-  and the backup stands down.
+Each step now has an id, and "Report the outcome" fails the run red on any
+of them, naming the step. None of them degrades the run. A degraded run
+sends for the 15:00 backup, which buys the prices again, and every one of
+these faults is a property of the restored state or of the scripts: the
+backup restores the same files (the red run is the newest carrier), runs
+the same scripts, and fails identically. So the published status stays
+`degraded: false` and the backup stands down. Nothing that failed to settle
+was marked settled, so a later run settles it once the state is repaired.
 
 These tests read the workflow with `yaml.safe_load` and run its own step
 blocks under `bash -eo pipefail`, with a stub `python` that exits as told and
 a stub `git` that reaches no network, then take each step's outcome from its
-exit as the runner does, and carry it through the record, the final health,
-"Report the outcome", card-feed (real git plumbing into a local bare remote)
-and the next trigger's precheck, the way
-`test_a_blocked_card_is_a_degraded_run.py` does.
+exit as the runner does, and carry it through the final health, "Report the
+outcome", card-feed (real git plumbing into a local bare remote) and the next
+trigger's precheck, the way `test_a_blocked_card_is_a_degraded_run.py` does.
 """
 
 from __future__ import annotations
@@ -67,18 +61,14 @@ SETTLE = "Settle the forward ledger"
 CLV = "Report closing-line value"
 REBUILD = "Rebuild the measurement reports"
 REPORT = "Report the outcome"
-#: The soft steps whose outcome the run now reads.
+#: The soft steps whose failure the run now reads, in the order they run.
 WATCHED = (REBUILD, SETTLE, CLV)
-
-#: Every step that tells anyone the run was clean. The record must come
-#: before all of them, or a failed settlement cannot reach them.
-READERS = (
-    "Write the card to the run summary",
-    "Post the card to the operating home",
-    "Record whether the card was delivered",
-    "Publish the card to the card-feed branch",
-    "Report the outcome",
-)
+#: The script whose exit each one's failure comes from, in the stub.
+SCRIPT = {
+    SETTLE: "run_forward_evidence.py",
+    CLV: "run_closing_line_value.py",
+    REBUILD: "run_allowlist_evidence.py",
+}
 
 NO_STORE = "No capture store yet"
 
@@ -115,23 +105,6 @@ def _id(name: str) -> str:
     found = _step(name).get("id")
     assert found, f"{name!r} has no id, so no step can read its outcome"
     return found
-
-
-def _recorder() -> tuple[int, dict]:
-    """The one step that reads the settlement's outcome into the run's
-    health. It must NOT read the rebuild's or the CLV report's: those fail
-    the run without sending for a backup that would fail the same way."""
-    expression = f"steps.{_id(SETTLE)}.outcome"
-    found = [
-        (index, step) for index, step in enumerate(_steps())
-        if expression in step.get("run", "")
-    ]
-    assert len(found) == 1, f"{len(found)} steps read {expression}"
-    for name in (REBUILD, CLV):
-        assert f"steps.{_id(name)}.outcome" not in found[0][1]["run"], (
-            f"the record degrades the run on {name!r}"
-        )
-    return found[0]
 
 
 # --------------------------------------------------------------------------
@@ -194,31 +167,28 @@ def _outcome(result: subprocess.CompletedProcess) -> str:
     return "success" if result.returncode == 0 else "failure"
 
 
-def _record(work: Path, outcomes: dict[str, str]) -> str:
-    _, step = _recorder()
-    values = {f"steps.{_id(SETTLE)}.outcome": outcomes.get(SETTLE, "success")}
-    result = _bash(_render(step["run"], values), work, dict(os.environ))
-    assert result.returncode == 0, result.stderr
-    return (work / "run_degraded.txt").read_text(encoding="utf-8")
-
-
-def _report(work: Path, degraded: str, outcomes: dict[str, str],
-            *, empty_slate: str = "false") -> subprocess.CompletedProcess:
-    """"Report the outcome", with the card-feed publish having worked."""
+def _report(work: Path, degraded: str, outcomes: dict[str, str], *,
+            empty_slate: str = "false", cardfeed: str = "success"
+            ) -> subprocess.CompletedProcess:
     values = {
         "steps.final.outputs.degraded": degraded,
         "steps.prices.outputs.empty_slate": empty_slate,
-        "steps.cardfeed.outcome": "success",
+        "steps.cardfeed.outcome": cardfeed,
     }
-    for name in (REBUILD, CLV):
+    for name in WATCHED:
         values[f"steps.{_id(name)}.outcome"] = outcomes.get(name, "success")
     return _bash(_render(_step(REPORT)["run"], values), work, dict(os.environ))
 
 
+def _errors(report: subprocess.CompletedProcess) -> list[str]:
+    return [line for line in report.stdout.splitlines()
+            if line.startswith("::error::")]
+
+
 def _the_run(tmp_path: Path, exits: dict[str, int]
-             ) -> tuple[Path, dict, dict, str]:
-    """The three watched steps as the runner runs them, then the record.
-    Returns the workspace, each step's outcome and log, and the notes."""
+             ) -> tuple[Path, dict, dict]:
+    """The three watched steps as the runner runs them. Returns the
+    workspace and each step's outcome and log."""
     work = _workspace(tmp_path)
     env = _stubs(tmp_path, exits)
     outcomes: dict[str, str] = {}
@@ -227,124 +197,110 @@ def _the_run(tmp_path: Path, exits: dict[str, int]
         result = _run(name, work, env)
         outcomes[name] = _outcome(result)
         logs[name] = result.stdout + result.stderr
-    notes = _record(work, outcomes)
-    return work, outcomes, logs, notes
+    return work, outcomes, logs
 
 
 # --------------------------------------------------------------------------
-# The order, from the YAML.
+# The shape, from the YAML.
 # --------------------------------------------------------------------------
 
-def test_the_steps_stay_soft_and_the_record_runs_before_anyone_is_told() -> None:
-    index, recorder = _recorder()
+def test_the_steps_stay_soft_and_only_the_outcome_reads_them() -> None:
+    """Soft, so none of them costs the card. Read only by "Report the
+    outcome", the last step, and by no step that writes the run's health,
+    so none of them sends for a backup that would fail the same way."""
+    steps = _steps()
 
+    assert _index(REPORT) == len(steps) - 1
     for name in WATCHED:
-        assert _step(name).get("continue-on-error") is True, (
-            f"{name!r} must stay soft: its failure never costs the card"
-        )
-    assert _index(SETTLE) < index and _index(CLV) < index
-    assert recorder.get("if") == "always()"
-    assert "continue-on-error" not in recorder
-    for name in READERS:
-        assert index < _index(name), f"{name!r} runs before the record"
-
-
-def test_the_outcome_reads_the_rebuild_and_the_clv_report() -> None:
-    """"Report the outcome" is the last step, so it runs after both."""
-    report = _step(REPORT)["run"]
-
-    assert _index(REPORT) == len(_steps()) - 1
-    for name in (REBUILD, CLV):
-        assert f"steps.{_id(name)}.outcome" in report, name
+        assert _step(name).get("continue-on-error") is True, name
+        expression = f"steps.{_id(name)}.outcome"
+        readers = [step.get("name") for step in steps
+                   if expression in step.get("run", "")]
+        assert readers == [REPORT], (name, readers)
 
 
 # --------------------------------------------------------------------------
 # The real run blocks, under stubs.
 # --------------------------------------------------------------------------
 
-@pytest.mark.parametrize("code", [2, 1], ids=["exit-2", "shrink-guard-exit-1"])
-def test_a_failed_settlement_is_a_degraded_run(tmp_path: Path, code: int) -> None:
-    work, outcomes, _, notes = _the_run(tmp_path, {"run_forward_evidence.py": code})
-
-    assert "forward ledger" in notes, notes
-    assert len(notes.splitlines()) == 1, notes
-    degraded = _final(work, tmp_path)
-    assert degraded == "true"
-    assert _report(work, degraded, outcomes).returncode != 0
-
-
 @pytest.mark.parametrize(
-    ("script", "code", "step"),
-    [
-        ("run_closing_line_value.py", 2, CLV),
-        ("run_allowlist_evidence.py", 1, REBUILD),
-    ],
-    ids=["clv-exit-2", "rebuild-exit-1"],
+    ("step", "code"),
+    [(SETTLE, 2), (SETTLE, 1), (CLV, 2), (REBUILD, 1)],
+    ids=["settle-exit-2", "settle-shrink-guard-exit-1", "clv-exit-2",
+         "rebuild-exit-1"],
 )
-def test_a_failed_report_fails_the_run_without_degrading_it(
-    tmp_path: Path, script: str, code: int, step: str
+def test_a_failed_step_fails_the_run_without_degrading_it(
+    tmp_path: Path, step: str, code: int
 ) -> None:
-    work, outcomes, _, notes = _the_run(tmp_path, {script: code})
+    work, outcomes, _ = _the_run(tmp_path, {SCRIPT[step]: code})
 
     assert outcomes[step] == "failure"
-    assert notes == "", "a failed report must not send for the backup"
+    assert (work / "run_degraded.txt").read_text(encoding="utf-8") == "", (
+        "a failure a backup would repeat must not send for the backup"
+    )
     degraded = _final(work, tmp_path)
     assert degraded == "false"
     report = _report(work, degraded, outcomes)
     assert report.returncode != 0, report.stdout
-    assert f"::error::{step} failed" in report.stdout, report.stdout
+    errors = _errors(report)
+    assert len(errors) == 1, report.stdout
+    assert errors[0].startswith(f"::error::{step} failed"), errors
     assert "This run was degraded" not in report.stdout
 
 
-@pytest.mark.parametrize("step", [CLV, REBUILD])
-def test_a_failed_report_is_not_excused_by_an_empty_slate(
+@pytest.mark.parametrize("step", WATCHED)
+def test_a_failed_step_is_not_excused_by_an_empty_slate(
     tmp_path: Path, step: str
 ) -> None:
     report = _report(_workspace(tmp_path), "false", {step: "failure"},
                      empty_slate="true")
 
     assert report.returncode != 0, report.stdout
+    assert "No NHL games on the slate" not in report.stdout
 
 
-def test_both_failed_reports_are_named(tmp_path: Path) -> None:
-    report = _report(_workspace(tmp_path), "false",
-                     {REBUILD: "failure", CLV: "failure"})
-
-    assert report.returncode != 0
-    assert f"::error::{REBUILD} failed" in report.stdout, report.stdout
-    assert f"::error::{CLV} failed" in report.stdout, report.stdout
-
-
-def test_a_degraded_run_still_names_every_other_failure(tmp_path: Path) -> None:
+def test_every_failure_is_named_before_the_exit(tmp_path: Path) -> None:
     """The degraded check used to exit on the spot, so a degraded run that
-    also failed its rebuild, its CLV report or its card-feed publish named
-    only that it was degraded. Every failure is printed before the exit."""
-    work, outcomes, _, notes = _the_run(tmp_path, {
-        "run_forward_evidence.py": 2,
-        "run_allowlist_evidence.py": 1,
-        "run_closing_line_value.py": 2,
+    also failed a watched step or its card-feed publish named only that it
+    was degraded. Every failure is printed, then the step exits once."""
+    work, outcomes, _ = _the_run(tmp_path, {
+        SCRIPT[SETTLE]: 2, SCRIPT[REBUILD]: 1, SCRIPT[CLV]: 2,
     })
+    # Degraded by something else this run: the card could not be rendered.
+    (work / "run_degraded.txt").write_text("The card could not be rendered.\n",
+                                          encoding="utf-8")
     degraded = _final(work, tmp_path)
-    values = {
-        "steps.final.outputs.degraded": degraded,
-        "steps.prices.outputs.empty_slate": "true",
-        "steps.cardfeed.outcome": "failure",
-    }
-    for name in (REBUILD, CLV):
-        values[f"steps.{_id(name)}.outcome"] = outcomes[name]
 
-    report = _bash(_render(_step(REPORT)["run"], values), work, dict(os.environ))
+    report = _report(work, degraded, outcomes, empty_slate="true",
+                     cardfeed="failure")
 
-    assert degraded == "true", notes
+    assert degraded == "true"
     assert report.returncode != 0
-    errors = [line for line in report.stdout.splitlines()
-              if line.startswith("::error::")]
-    assert len(errors) == 4, report.stdout
+    errors = _errors(report)
+    assert len(errors) == 5, report.stdout
     assert "This run was degraded" in errors[0]
-    assert any(f"{REBUILD} failed" in line for line in errors), errors
-    assert any(f"{CLV} failed" in line for line in errors), errors
+    for step in WATCHED:
+        assert any(line.startswith(f"::error::{step} failed") for line in errors), (
+            step, errors
+        )
     assert any("card-feed" in line for line in errors), errors
     assert "No NHL games on the slate" not in report.stdout
+
+
+def test_a_degraded_run_with_a_failed_rebuild_names_both(tmp_path: Path) -> None:
+    work, outcomes, _ = _the_run(tmp_path, {SCRIPT[REBUILD]: 1})
+    (work / "run_degraded.txt").write_text("The card could not be rendered.\n",
+                                          encoding="utf-8")
+    degraded = _final(work, tmp_path)
+
+    report = _report(work, degraded, outcomes)
+
+    assert degraded == "true"
+    assert report.returncode != 0
+    errors = _errors(report)
+    assert len(errors) == 2, report.stdout
+    assert "This run was degraded" in errors[0]
+    assert errors[1].startswith(f"::error::{REBUILD} failed"), errors
 
 
 def test_a_skipped_rebuild_is_not_named_as_a_failed_one(tmp_path: Path) -> None:
@@ -358,9 +314,9 @@ def test_a_skipped_rebuild_is_not_named_as_a_failed_one(tmp_path: Path) -> None:
 
 
 def test_a_clean_run_stays_clean(tmp_path: Path) -> None:
-    work, outcomes, _, notes = _the_run(tmp_path, {})
+    work, outcomes, _ = _the_run(tmp_path, {})
 
-    assert notes == ""
+    assert set(outcomes.values()) == {"success"}
     degraded = _final(work, tmp_path)
     assert degraded == "false"
     report = _report(work, degraded, outcomes)
@@ -372,11 +328,10 @@ def test_no_capture_store_yet_is_not_a_fault(tmp_path: Path) -> None:
     """Closing Lines is disabled by the owner, so there is no capture store
     on the branch it would publish, and the report exits 0 saying so. That
     is the expected state: not degraded, and not red."""
-    work, outcomes, logs, notes = _the_run(tmp_path, {})
+    work, outcomes, logs = _the_run(tmp_path, {})
 
     assert NO_STORE in logs[CLV], logs[CLV]
     assert outcomes[CLV] == "success"
-    assert notes == ""
     degraded = _final(work, tmp_path)
     assert degraded == "false"
     assert _report(work, degraded, outcomes).returncode == 0
@@ -401,55 +356,29 @@ def test_a_rebuild_that_falls_back_and_succeeds_is_clean(tmp_path: Path) -> None
     assert _report(work, "false", {REBUILD: _outcome(result)}).returncode == 0
 
 
-@pytest.mark.parametrize("outcome", ["failure", "cancelled", "skipped"])
-def test_only_a_settlement_that_succeeded_is_left_out_of_the_notes(
-    tmp_path: Path, outcome: str
-) -> None:
-    notes = _record(_workspace(tmp_path), {SETTLE: outcome})
-
-    assert len(notes.splitlines()) == 1, notes
-
-
-def test_an_earlier_note_survives_the_record(tmp_path: Path) -> None:
-    work = _workspace(tmp_path)
-    (work / "run_degraded.txt").write_text("The card could not be rendered.\n",
-                                          encoding="utf-8")
-
-    notes = _record(work, {SETTLE: "failure"})
-
-    assert notes.startswith("The card could not be rendered.\n")
-    assert len(notes.splitlines()) == 2
-
-
 # --------------------------------------------------------------------------
 # End to end: through card-feed into the backup's precheck.
 # --------------------------------------------------------------------------
 
 @pytest.mark.parametrize(
-    ("exits", "degraded", "red", "backup_stands_down"),
-    [
-        ({"run_forward_evidence.py": 2}, "true", True, False),
-        ({"run_closing_line_value.py": 2}, "false", True, True),
-        ({"run_allowlist_evidence.py": 1}, "false", True, True),
-        ({}, "false", False, True),
-    ],
+    ("step", "code"),
+    [(SETTLE, 2), (CLV, 2), (REBUILD, 1), (None, 0)],
     ids=["settle-fails", "clv-fails", "rebuild-fails", "clean"],
 )
-def test_only_a_failed_settlement_sends_for_the_backup(
-    tmp_path: Path, exits: dict[str, int], degraded: str, red: bool,
-    backup_stands_down: bool,
+def test_no_failure_a_backup_would_repeat_sends_for_it(
+    tmp_path: Path, step: str | None, code: int
 ) -> None:
-    work, outcomes, _, _ = _the_run(tmp_path, exits)
+    work, outcomes, _ = _the_run(tmp_path, {SCRIPT[step]: code} if step else {})
 
-    health = _final(work, tmp_path)
-    status = _publish(work, tmp_path, health, DAY)
+    degraded = _final(work, tmp_path)
+    status = _publish(work, tmp_path, degraded, DAY)
     already = _precheck(tmp_path, DAY)
-    report = _report(work, health, outcomes)
+    report = _report(work, degraded, outcomes)
 
-    assert health == degraded
-    assert status["date"] == DAY and status["degraded"] == degraded
-    assert (report.returncode != 0) is red, report.stdout
-    assert already == ("true" if backup_stands_down else "false"), (
-        "the backup ran on a failure it would repeat, or stood down on a day "
-        "whose games never reached the ledger"
+    assert degraded == "false"
+    assert status["date"] == DAY and status["degraded"] == "false"
+    assert (report.returncode != 0) is (step is not None), report.stdout
+    assert already == "true", (
+        "the backup ran on a failure it would only repeat, buying the "
+        "prices again for nothing"
     )
