@@ -32,8 +32,11 @@ quoted); 2, the team-market fetch failed and nothing was staged, which
 includes a refused market list whose moneyline check failed, and "no NHL odds
 at all" on a day the cached NHL schedule lists a regular-season game; 3, no
 NHL games are on the board, which is not a fault; 4, at least one per-event
-request failed, so those games' props, regulation three-way and alternate
-ladders are missing — everything else was still staged and reported.
+request failed, or the free events list they start from did, so those games'
+props, regulation three-way and alternate ladders are missing — everything
+else was still staged and reported. (Until 2026-09-26 a failed events list
+escaped as a traceback and exit 1, after the team file was staged and before
+the provenance and the reports were written.)
 """
 
 from __future__ import annotations
@@ -105,6 +108,63 @@ def _project_markets(provider_keys: Iterable[str]) -> set[str]:
         if market is not None:
             found.add(market.key)
     return found
+
+
+def _listing_failed(
+    staged_rows: Iterable[dict],
+    markets: Iterable[str],
+    exc: Exception,
+    *,
+    fetched_at: str,
+) -> odds_api.FetchResult:
+    """The per-event fetch's result when the events list it starts from failed.
+
+    No per-event request was made, so every game the bulk fetch staged is
+    missing everything only the per-event request asks for. That is one
+    failure (one line in `errors`) that left every staged game unanswered
+    (one `failed_events` entry each), recorded in the shape
+    `fetch_player_props` gives a failed per-event request. The games come
+    from the staged team rows because they are the only list this run has,
+    and the eligibility gate keys a failure to its game through the
+    `provider_event_id` those rows carry. A game in the window that the
+    bulk fetch returned with no usable price has no row, and so no entry.
+
+    The error drops "No staging file was written.", which `_get` ends every
+    failure with and which is false here: the team file is already staged.
+    """
+    cause = " ".join(str(exc).replace(odds_api.NO_STAGING_WRITTEN, "").split())
+    games: dict[str, dict] = {}
+    for row in staged_rows:
+        event_id = str(row.get("provider_event_id", "") or "").strip()
+        if event_id and event_id not in games:
+            games[event_id] = row
+    ordered = sorted(
+        games.items(),
+        key=lambda item: (str(item[1].get("commence_time", "") or ""), item[0]),
+    )
+    asked = sorted(_project_markets(markets))
+    result = odds_api.FetchResult(fetched_at=fetched_at)
+    result.errors.append(
+        f"Events list: {cause} The per-event fetch lists the games before it "
+        "asks about any, so no per-event request was made for any of the "
+        f"{len(ordered)} game(s) the bulk fetch staged."
+    )
+    for event_id, row in ordered:
+        result.failed_events.append(
+            {
+                "provider_event_id": event_id,
+                "date": str(row.get("date", "") or "").strip(),
+                "commence_time": str(row.get("commence_time", "") or "").strip(),
+                "home_team": str(row.get("home_team", "") or "").strip(),
+                "away_team": str(row.get("away_team", "") or "").strip(),
+                "markets": list(asked),
+                "error": (
+                    f"Event {event_id}: not asked, because the events list "
+                    f"failed: {cause}"
+                ),
+            }
+        )
+    return result
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -310,13 +370,48 @@ def main(argv: list[str] | None = None) -> int:
             # front-to-back, so without it the budget buys prices for games
             # days away while starving the slate this card is actually for;
             # tomorrow's run fetches tomorrow's games at tomorrow's prices.
-            props = provider.fetch_player_props(
-                markets=per_event,
-                max_events=args.max_events,
-                credit_cap=args.credit_cap,
-                fetched_at=stamp,
-                league_days=league_days,
-            )
+            try:
+                props = provider.fetch_player_props(
+                    markets=per_event,
+                    max_events=args.max_events,
+                    credit_cap=args.credit_cap,
+                    fetched_at=stamp,
+                    league_days=league_days,
+                )
+            except odds_api.ProviderError as exc:
+                # The events list failed. `fetch_player_props` asks the free
+                # `/events` endpoint for the slate before it asks any game's
+                # `/events/{id}/odds`, and that one request sits outside the
+                # per-event loop's `except`. Everything else it raises before
+                # the loop cannot happen here: the bulk call has already
+                # proved the credential, the argument parser refused a cap
+                # that is not positive, and the market list is fixed.
+                #
+                # This call used to have no guard, so the failure escaped
+                # `main` after the team file was staged. The failure-shape
+                # sweep (s1x2-run-provider-shadow-269, 3 of 3 refuters)
+                # replayed a bulk call pricing 3 games at 2 books and a 502
+                # on `/events`. The script died with a traceback and exit 1,
+                # outside its 0/2/3/4 contract. It said "No staging file was
+                # written." beside a 36-row team file. It wrote no props
+                # file, no provenance and neither report, and exit 1 meant
+                # the price step wrote no per-event note. The card, finding
+                # no provenance, excluded all 9 per-event markets as "The
+                # provider returned no rows for this market ... Check
+                # per-bookmaker coverage", the wording #193 was merged to
+                # stop, where a per-event 502 on the same slate gives 0 of
+                # 9. A refused connection took the same path, and the
+                # interpreter's traceback printed the chained `requests`
+                # error, whose URL carries `apiKey=`.
+                #
+                # It is recorded as what it is: a per-event fetch that failed
+                # for every game the bulk fetch staged. Only `str(exc)` is
+                # printed, never a traceback. It then falls through to the
+                # same staging, provenance, reports and exit 4 as any failed
+                # per-event request.
+                props = _listing_failed(
+                    team.rows, per_event, exc, fetched_at=stamp
+                )
             written.append(
                 odds_api.write_staging(
                     props.rows,
