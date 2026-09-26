@@ -366,9 +366,11 @@ def _key_of(row) -> tuple:
 #: is never a close under the strictly-before rule; the 21:00 round, two
 #: hours out, is the best that game can get. 60-90 minutes would therefore
 #: put every 19:00 EDT game in the bucket on a night nothing went wrong.
-#: The evening rounds are two hours apart, so every common evening start
-#: (19:00, 19:30 and 22:00 ET, EDT and EST) has a round at most two hours
-#: before it when every round runs on time. The half hour above two hours
+#: The evening rounds are two hours apart, so on every in-season day every
+#: common evening start (19:00, 19:30 and 22:00 ET, EDT and EST) has a
+#: round at most two hours before it when every round runs on time.
+#: 29-30 September are not in-season days; see below. The half hour above
+#: two hours
 #: is headroom, and it admits 12:30 EDT and 22:30 EST starts, whose nearest
 #: round is exactly 150 minutes out.
 #:
@@ -385,14 +387,17 @@ def _key_of(row) -> tuple:
 #: sweeping every half hour from 11:00 to 23:00 ET: starts from roughly
 #: 13:00-14:00 EDT (13:00, 13:30, 14:00) and 12:00-13:00 EST (12:00, 12:30,
 #: 13:00), plus 17:00 EDT, 16:00 EST and 23:00 EST, have NO round within
-#: the bound, and neither do 19:00 EDT games on 29-30 September, when only
-#: the 18:00 and 23:00 rounds are scheduled. Those games have no close near
-#: face-off; their opinions are counted under `no_close_not_near_face_off`,
-#: never scored. An extra round around 15:30-16:00 UTC would close only the
+#: the bound. Opening week is thinner still: on 29-30 September only the
+#: 18:00 and 23:00 UTC rounds run, so on both days every start from 11:00
+#: to 14:00 EDT and from 17:00 to 19:00 EDT has none, and on 29 September
+#: 22:00, 22:30 and 23:00 EDT have none either (the 23:00 round is 180-240
+#: minutes out). 30 September's late starts are covered by the 01:00 UTC
+#: round on 1 October. Those games have no close near face-off; their
+#: opinions are counted under `no_close_not_near_face_off`, never scored. An extra round around 15:30-16:00 UTC would close only the
 #: 12:00-14:00 ET starts; 17:00 EDT and 16:00 EST (both 21:00Z) and 23:00
 #: EST would still need rounds of their own. Every extra round spends
-#: credits, so it is Cooper's decision. The bound itself is a judgement, and Cooper may
-#: revise it.
+#: credits, so it is Cooper's decision. The bound itself is a judgement,
+#: and Cooper may revise it.
 CLOSE_MAX_LEAD = timedelta(minutes=150)
 
 

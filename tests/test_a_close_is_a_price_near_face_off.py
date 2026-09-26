@@ -163,8 +163,12 @@ EVENING_STARTS = [
 
 
 def test_the_bound_is_what_the_capture_schedule_can_meet() -> None:
-    """Every common evening start has a scheduled round within the bound,
-    so on a normal night it closes. A 19:00 EDT start is 23:00 UTC, whose
+    """On every in-season day, every common evening start has a scheduled
+    round within the bound, so on a normal night it closes. The opening-week
+    days (29-30 September), which have only the 18:00 and 23:00 UTC rounds,
+    are excluded here and do NOT all close: `CLOSE_MAX_LEAD`'s comment lists
+    the starts that miss, including 22:00 EDT on 29 September. A 19:00 EDT
+    start is 23:00 UTC, whose
     own round lands at or after face-off; the 21:00 round, two hours out,
     must still close it, which is why 60-90 minutes was not chosen.
 
