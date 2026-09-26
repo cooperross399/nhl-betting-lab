@@ -10,6 +10,23 @@ So this probes each candidate **individually**. A market that answers is
 served; a market that 422s is not; and because each request is separate, one
 bad name cannot hide the others.
 
+A request that fails any other way is **no verdict at all**. A 503, a 500, a
+timeout, unreadable JSON, a 401 (the key refused or the credits spent) or a
+429 (rate limited) says the provider did not answer, not that the market does
+not exist; those markets are listed under `not_answered`. A 401 or a 429
+stops the probe, since every request after it would fail the same way, and
+the markets it never asked are listed under `not_asked`, as are those a
+credit-cap stop leaves. And a 422 is only believed once `h2h` — the one
+market every sport serves, asked first — has answered on the same event:
+before that, a 422 cannot be told from the provider refusing the request
+itself (the event, the regions).
+
+Exit codes: 0 when every candidate got a verdict (served, valid but
+unpriced, or not a market); 2 when the events list failed; 3 when no event
+is on the board; 4 when the record was written but some candidate has no
+verdict, so a continue-on-error step reads `failure` rather than a complete
+probe.
+
     PYTHONPATH=src .venv/bin/python scripts/discover_nhl_markets.py --live \
         --credit-cap 120
 
@@ -58,6 +75,24 @@ CANDIDATE_MARKETS: tuple[str, ...] = (
     "player_total_saves_alternate", "player_goals_alternate",
 )
 
+#: The one market every sport serves, and the first one asked. Until it has
+#: answered on this event, a 422 is the provider refusing the request (a
+#: dead event, a bad regions list), not a verdict on the market asked about —
+#: the same control `OddsApiProvider.fetch_team_markets` uses to tell a
+#: refused market list from an empty board.
+CONTROL_MARKET = "h2h"
+
+#: Statuses that every later request in a back-to-back probe would meet too.
+#: The probe stops on one, so the rest are recorded as not asked rather than
+#: failed one by one — and, before 2026-09-26, written off one by one.
+STOP_STATUSES: dict[int, str] = {
+    401: "the key was refused or the credits are spent",
+    429: "the provider is rate-limiting",
+}
+
+#: The record was written, but at least one candidate has no verdict.
+EXIT_PROBE_INCOMPLETE = 4
+
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -92,10 +127,18 @@ def main(argv: list[str] | None = None) -> int:
     served: dict[str, dict[str, object]] = {}
     refused: list[str] = []
     unpriced: list[str] = []
+    # Asked, and the provider did not answer: no verdict on the market.
+    not_answered: dict[str, str] = {}
+    # Never asked, because the probe stopped first.
+    not_asked: list[str] = []
+    stopped_because: str | None = None
+    control_answered = False
     spent = 0
 
-    for market in CANDIDATE_MARKETS:
+    for index, market in enumerate(CANDIDATE_MARKETS):
         if args.credit_cap and spent >= args.credit_cap:
+            stopped_because = f"the {args.credit_cap}-credit cap was reached"
+            not_asked = list(CANDIDATE_MARKETS[index:])
             print(f"Stopping at the {args.credit_cap}-credit cap.")
             break
         try:
@@ -107,9 +150,45 @@ def main(argv: list[str] | None = None) -> int:
                 ),
             )
         except ProviderError as exc:
-            refused.append(market)
-            print(f"  {market:<34} not served ({exc})"[:110])
+            # This used to put EVERY failure here in `not_a_market`. Replayed
+            # with only the transport stubbed, a 503, a 429, a 500 and a read
+            # timeout on four live markets beside one genuine 422 read "38
+            # priced now, 0 valid but unpriced, 5 not a market at all" and
+            # exited 0; a 401 from the 21st request wrote off all 23 player
+            # markets; an account out of credits wrote off all 43, h2h
+            # included. Only a 422 is the provider saying "no such market",
+            # and only once the control has shown the request itself is good.
+            if exc.status == 422 and control_answered:
+                refused.append(market)
+                print(f"  {market:<34} not a market (HTTP 422)")
+                continue
+            reason = " ".join(str(exc).split())
+            if exc.status == 422 and market == CONTROL_MARKET:
+                reason += (
+                    f" {CONTROL_MARKET} is the one market every sport serves, "
+                    "so this is the provider refusing the request, not the "
+                    "market."
+                )
+            elif exc.status == 422:
+                reason += (
+                    f" But {CONTROL_MARKET}, the one market every sport "
+                    "serves, had not answered on this event, so this 422 "
+                    "cannot be told from the request itself being refused."
+                )
+            not_answered[market] = reason
+            print(f"  {market:<34} NO ANSWER, no verdict ({reason})"[:110])
+            if exc.status in STOP_STATUSES:
+                stopped_because = (
+                    f"the provider answered HTTP {exc.status} to {market} "
+                    f"({STOP_STATUSES[exc.status]}), so the probe stopped "
+                    "asking"
+                )
+                not_asked = list(CANDIDATE_MARKETS[index + 1:])
+                print(f"Stopping: {stopped_because}.")
+                break
             continue
+        if market == CONTROL_MARKET:
+            control_answered = True
         try:
             cost = int(str(headers.get("x-requests-last", "0")).strip() or 0)
         except ValueError:
@@ -165,6 +244,10 @@ def main(argv: list[str] | None = None) -> int:
                 "valid_but_unpriced": unpriced,
                 "not_a_market": refused,
                 "served_but_unmapped": unmapped,
+                "not_answered": not_answered,
+                "not_asked": not_asked,
+                "stopped_because": stopped_because,
+                "probe_complete": not (not_answered or not_asked),
             },
             indent=2,
             sort_keys=True,
@@ -176,9 +259,28 @@ def main(argv: list[str] | None = None) -> int:
         f"\n{len(served)} priced now, {len(unpriced)} valid but unpriced, "
         f"{len(refused)} not a market at all. {spent} credits spent."
     )
+    if not_answered:
+        print(
+            f"{len(not_answered)} asked and not answered: the request failed, "
+            "which says nothing about whether the market exists: "
+            f"{', '.join(not_answered)}"
+        )
+    if not_asked:
+        print(
+            f"{len(not_asked)} not asked, because {stopped_because}: "
+            f"{', '.join(not_asked)}"
+        )
     if unmapped:
         print(f"Served but this lab does not price: {', '.join(unmapped)}")
     print(f"Written to {directory / DISCOVERY_FILENAME}.")
+    if not_answered or not_asked:
+        print(
+            f"The probe is incomplete: {len(not_answered) + len(not_asked)} of "
+            f"{len(CANDIDATE_MARKETS)} candidate markets have no verdict. "
+            f"Exit {EXIT_PROBE_INCOMPLETE}.",
+            file=sys.stderr,
+        )
+        return EXIT_PROBE_INCOMPLETE
     return 0
 
 

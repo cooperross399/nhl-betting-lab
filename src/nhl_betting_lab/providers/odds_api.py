@@ -167,7 +167,22 @@ Requester = Callable[..., Any]
 
 
 class ProviderError(RuntimeError):
-    """The provider could not answer safely. No staging file is written."""
+    """The provider could not answer safely. No staging file is written.
+
+    `status` is the HTTP status when the provider answered with one, and
+    None when it was never reached, its answer could not be read, or the
+    refusal is this adapter's own. A caller that must tell a 422 (the
+    provider refusing what was asked) from a 503, a 429, a 401 or a timeout
+    (the provider not answering) reads it here rather than matching text.
+    Until 2026-09-26 the error carried nothing but its message, and
+    `scripts/discover_nhl_markets.py` recorded every failed request as "not
+    a market at all" — a 503, a 429, a 500 and a read timeout alike, next to
+    one genuine 422 — because nothing on the error told them apart.
+    """
+
+    def __init__(self, *args: object, status: int | None = None) -> None:
+        super().__init__(*args)
+        self.status = status
 
 
 class MissingCredentialError(ProviderError):
@@ -506,7 +521,8 @@ class OddsApiProvider:
         if status != 200:
             raise ProviderError(
                 f"The odds provider returned HTTP {status or 'unknown'}. "
-                f"{NO_STAGING_WRITTEN}"
+                f"{NO_STAGING_WRITTEN}",
+                status=status or None,
             )
         try:
             payload = response.json()
