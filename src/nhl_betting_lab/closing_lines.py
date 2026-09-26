@@ -809,6 +809,35 @@ def _row(*cells: str) -> str:
     return "| " + " | ".join(cells) + " |"
 
 
+def _unreadable_snapshot_lines(report: dict) -> list[str]:
+    """One bullet per priced snapshot the runner could not read.
+
+    Before these were named, a damaged snapshot either stopped the runner
+    (half a character: no report at all) or left its day out of the counts
+    without a word (an unclosed quote, zero bytes, half a header: the audit's
+    run counted 64 of 128 frozen rows and exited 0). Printed above every
+    other line, in every shape of the report, so no count below is read
+    without it.
+    """
+    damaged = report.get("unreadable_snapshots") or []
+    if not damaged:
+        return []
+    lines = [
+        f"- **{len(damaged)}** priced snapshot file(s) could not be read, so "
+        "no opinion frozen only in them is counted below:",
+    ]
+    for entry in damaged:
+        held = int(entry.get("ledger_rows", 0) or 0)
+        counted = (
+            f"the forward ledger holds {held} row(s) frozen that day, and "
+            "those are counted"
+            if held
+            else "no row frozen that day is counted"
+        )
+        lines.append(f"  - `{entry.get('name')}` ({entry.get('reason')}): {counted}.")
+    return lines
+
+
 def render_clv(report: dict, *, generated: str = "") -> str:
     counts = report.get("counts", {})
     lines = [
@@ -823,6 +852,7 @@ def render_clv(report: dict, *, generated: str = "") -> str:
     ]
     if generated:
         lines += [f"- Generated: {generated}"]
+    lines += _unreadable_snapshot_lines(report)
     unreadable = report.get("unreadable_store")
     if unreadable:
         # Never "Nothing to measure yet" and never "no closing price found":
@@ -908,6 +938,15 @@ def render_clv(report: dict, *, generated: str = "") -> str:
                 f"prices, and {uncaptured} of these opinions are in a market it",
                 "never priced for their game. That is a gap in what is",
                 "captured.",
+                "",
+            ]
+        elif report.get("unreadable_snapshots"):
+            # "Not a fault" would sit under a list of damaged evidence files.
+            lines += [
+                "No opinion has been matched to a closing price. On its own",
+                "that is the state before a season, or on a day the capture",
+                "job has not run. This run is still not clean: the snapshot",
+                "file(s) named above could not be read.",
                 "",
             ]
         else:
