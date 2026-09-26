@@ -662,7 +662,10 @@ def test_a_loss_is_demonstrated_only_once_a_second_window_confirms_it(
         ).verdicts if v.market == "points"
     )
     assert "This is a demonstrated deficit" not in unconfirmed.reason
-    assert "did not confirm it (untestable)" in unconfirmed.reason
+    # Untestable is not unconfirmed: nothing was tested (see
+    # test_an_untestable_replication_is_not_an_unconfirmed_one.py).
+    assert "did not confirm" not in unconfirmed.reason
+    assert "Nothing was tested on the held-out window (untestable)" in unconfirmed.reason
     assert "argues against enabling" in unconfirmed.reason
     assert unconfirmed.supported is False
 
