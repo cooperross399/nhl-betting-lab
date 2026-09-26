@@ -114,6 +114,13 @@ class PlacedBet:
     push: bool
     profit: float
     book: str = ""
+    #: P(refund) at this line under the model: zero on a half-point line.
+    #: `model_probability` is conditional on no push (see
+    #: `CountDistribution.over_probability`), while the ROI keeps a push in
+    #: its denominator at zero profit, so the claimed return per unit staked
+    #: needs this to be on the ROI's basis. Not written to the bets CSV,
+    #: whose columns stay as they were.
+    push_probability: float = 0.0
 
 
 @dataclass
@@ -613,6 +620,7 @@ def run_backtest(
                 push=push,
                 profit=profit,
                 book=str(getattr(row, "book", "")),
+                push_probability=distribution.push_probability(line),
             )
         )
 
@@ -942,16 +950,51 @@ def render_backtest(report: BacktestReport) -> str:
             )
 
         if report.bets:
-            claimed = sum(bet.edge for bet in report.bets) / len(report.bets)
+            # The claim is set against the realised ROI in the ROI's own unit:
+            # the model's expected return per unit staked at each bet's own
+            # price. This paragraph used to print the mean `edge` (side
+            # probability minus implied, in probability points) beside the ROI
+            # and call the difference shrinkage, but a point of probability is
+            # worth the decimal price in return, at every price — 45% at +200
+            # is 11.7 points and +35% per unit — so part of that "gap" was the
+            # units. `model_probability` is conditional on no push, and the
+            # ROI counts a push as a unit staked for nothing, so a bet's claim
+            # is (1 - P(push)) * (p * decimal - 1), averaged over every bet —
+            # pushes included, as the ROI's denominator includes them. The
+            # point edge is still stated, labelled as points, and nothing is
+            # subtracted from it.
+            count = len(report.bets)
+            claimed = (
+                sum(
+                    (1.0 - bet.push_probability)
+                    * (
+                        bet.model_probability
+                        * (1.0 + profit_on_win(bet.american_odds))
+                        - 1.0
+                    )
+                    for bet in report.bets
+                )
+                / count
+            )
+            points = sum(bet.edge for bet in report.bets) / count
             realised = report.overall.roi if report.overall else 0.0
             lines.extend(
                 [
                     "### The claimed edge against the realised one",
                     "",
                     (
-                        f"The average selected bet claimed a "
-                        f"**{claimed:+.1%}** edge and the flat-stake return "
-                        f"was **{realised:+.1%}**. That gap is not a mystery "
+                        f"Over {count} bet{'s' if count != 1 else ''}, the "
+                        "average selected bet claimed an expected return of "
+                        f"**{claimed:+.1%}** per unit staked (the model's own "
+                        "probability times the decimal price, less the "
+                        "stake) and the flat-stake return was "
+                        f"**{realised:+.1%}** per unit staked. (In probability "
+                        f"the same bets averaged {points * 100:+.1f} points "
+                        "above the price's implied probability; that is a "
+                        "different unit — a point of probability is worth the "
+                        "decimal price in return, at any price — so it is not "
+                        "the figure the gap is read from.) That gap "
+                        "is not a mystery "
                         "and not a fault in the measurement: bets are "
                         "selected wherever the model most disagrees with the "
                         "price, which is exactly where the model's own "
@@ -1158,7 +1201,12 @@ def save_backtest(
         encoding="utf-8",
     )
     csv_path = directory / BACKTEST_CSV_FILENAME
-    pd.DataFrame([bet.__dict__ for bet in report.bets]).to_csv(
+    pd.DataFrame(
+        [
+            {k: v for k, v in bet.__dict__.items() if k != "push_probability"}
+            for bet in report.bets
+        ]
+    ).to_csv(
         csv_path, index=False, lineterminator="\n"
     )
     written = {
