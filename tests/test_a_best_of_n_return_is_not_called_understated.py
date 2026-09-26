@@ -25,6 +25,7 @@ the return is taken at the best of the books quoting and leans optimistic.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pandas as pd
@@ -38,6 +39,35 @@ def _backtest_text() -> str:
         pd.DataFrame(columns=["market"]), pd.DataFrame(columns=["market"])
     )
     return bt.render_backtest(report)
+
+
+def _sentences_calling_the_return_understated(text: str) -> list[str]:
+    """Every sentence that speaks of the return and calls it understated.
+
+    A sentence qualifies when it mentions the return (or ROI, or the
+    measurement) AND either says "understat..." or calls it conservative
+    without the "not" in front. So "leans optimistic, not conservative"
+    passes and so does a sentence about the vig making the SELECTION edge
+    harder to clear, while "the measured return is therefore understated"
+    or "..., so it understates the edge" inside a sentence about the return
+    does not.
+    """
+    offending = []
+    for sentence in re.split(r"(?<=[.!?])\s+", " ".join(text.split())):
+        lower = sentence.lower()
+        about_return = re.search(r"\breturn|\broi\b|\bmeasure", lower)
+        understated = "understat" in lower or re.search(
+            r"(?<!not )\bconservative", lower
+        )
+        if about_return and understated:
+            offending.append(sentence)
+    return offending
+
+
+def _standing_notes_section(rendered: str) -> str:
+    head, marker, rest = rendered.partition("## Standing notes")
+    assert marker, "the backtest report lost its standing notes section"
+    return rest.split("\n## ", 1)[0]
 
 
 def _claims_text(tmp_path: Path) -> str:
@@ -84,3 +114,31 @@ def test_the_backtest_module_docstring_no_longer_calls_it_conservative() -> None
 
     assert "conservative in that" not in doc
     assert "best price" in doc
+
+
+def test_no_backtest_standing_note_calls_the_return_understated() -> None:
+    notes = _standing_notes_section(_backtest_text())
+
+    assert "one-sided at most books" in notes
+    assert _sentences_calling_the_return_understated(notes) == []
+
+
+def test_the_backtest_docstring_does_not_call_the_return_understated() -> None:
+    assert _sentences_calling_the_return_understated(bt.__doc__ or "") == []
+
+
+def test_the_sentence_check_itself_catches_the_contradiction() -> None:
+    # Pins the checker, so a later loosening of it cannot leave the two
+    # tests above passing vacuously.
+    assert _sentences_calling_the_return_understated(
+        "The measured return leans optimistic, so it understates the edge."
+    )
+    assert _sentences_calling_the_return_understated(
+        "The measurement is conservative in that one direction."
+    )
+    assert not _sentences_calling_the_return_understated(
+        "The measured return therefore leans optimistic, not conservative."
+    )
+    assert not _sentences_calling_the_return_understated(
+        "The vig understates the edge used for bet selection."
+    )
