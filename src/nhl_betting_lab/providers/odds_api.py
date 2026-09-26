@@ -145,7 +145,10 @@ PROVENANCE_FILENAME = "staging_provenance.json"
 #: after which the loop goes on and the script stages what it has. It was
 #: recorded there anyway: every per-event error in the provenance and the
 #: verification report read "No staging file was written." beside a written
-#: `player_props_staging.csv`. `_event_error` leaves it off.
+#: `player_props_staging.csv`. `_event_error` leaves it off. It is false as
+#: well for the events list `fetch_player_props` starts from, which fails
+#: after the team file is staged; `run_provider_shadow._listing_failed`
+#: leaves it off there.
 NO_STAGING_WRITTEN = "No staging file was written."
 
 PRICE_COLUMNS = (
