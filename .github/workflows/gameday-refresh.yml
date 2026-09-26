@@ -447,6 +447,13 @@ jobs:
         # public artifact every day, which would republish paid-for prices
         # daily for the season. So a store this runner does not hold leaves
         # the checkout's committed report standing, and the log says so.
+        #
+        # Soft, but not silent. With no id nothing could read this step's
+        # outcome, so a rebuild that failed left the committed reports, or an
+        # earlier run's, standing in this run's artifacts looking current,
+        # and the run said it was clean. "Record whether the evidence was
+        # kept" reads it now.
+        id: rebuild
         continue-on-error: true
         env:
           PYTHONPATH: src
@@ -555,6 +562,13 @@ jobs:
         # price evidence for hits and the regulation three-way, and the
         # out-of-sample stream for everything else — losing it would mean the
         # season taught nothing.
+        #
+        # Soft so a settlement fault never costs the card, and read below:
+        # it exits non-zero on purpose when it could not settle (a ledger or
+        # snapshot it cannot read, a team map that resolves nothing, a
+        # ledger that would shrink), and with no id that exit reached no
+        # one. The run finished green and the ledger stopped growing.
+        id: settle
         if: always()
         continue-on-error: true
         env:
@@ -565,7 +579,9 @@ jobs:
       - name: Report closing-line value
         # Reads the capture store the Closing Lines workflow publishes and
         # scores every frozen opinion against the market's last word. Offline
-        # and read-only: it fetches no prices and spends nothing.
+        # and read-only: it fetches no prices and spends nothing. Exits 2 on
+        # a damaged snapshot or capture store, which the step below reads.
+        id: clv
         if: always()
         continue-on-error: true
         env:
@@ -583,6 +599,28 @@ jobs:
             echo "No capture store yet; the report will say so rather than guess."
           fi
           python scripts/run_closing_line_value.py
+
+      - name: Record whether the evidence was kept
+        # The three soft steps that keep the season's evidence, read into the
+        # run's health after the last of them and before the summary, the
+        # comment, the final health, card-feed and the run's exit. They were
+        # `continue-on-error` with no id, so a failure in any of them reached
+        # none of those: from opening night one torn ledger would have failed
+        # settlement on every run while card-feed said `degraded: false` and
+        # the 15:00 backup stood down. Anything but success degrades the run.
+        # Nothing that failed to settle is marked settled, so the backup, and
+        # every later run, retries it.
+        if: always()
+        run: |
+          if [ "${{ steps.rebuild.outcome }}" != "success" ]; then
+            echo "The measurement reports were not all rebuilt (the rebuild step's log names the script), so a report in this run's artifacts may be the committed copy or an earlier run's, looking current. The card does not depend on them." >> run_degraded.txt
+          fi
+          if [ "${{ steps.settle.outcome }}" != "success" ]; then
+            echo "The forward ledger was not settled (the settle step's log says why: a ledger or snapshot that could not be read, a team map that resolves nothing, or a ledger that would have shrunk), so finished games did not reach the out-of-sample record. Nothing that failed to settle was marked settled; it is retried on the next run." >> run_degraded.txt
+          fi
+          if [ "${{ steps.clv.outcome }}" != "success" ]; then
+            echo "The closing-line value report did not finish clean (its step's log names the damaged snapshot or capture store), so today's closing-line value is incomplete or missing." >> run_degraded.txt
+          fi
 
       - name: Write the card to the run summary
         if: always()
@@ -714,6 +752,13 @@ jobs:
         # commit-tree build the two-file commit without touching it. Each
         # push parents on the current tip, so it is always a fast-forward —
         # never a force.
+        #
+        # Soft, because the reports and the state still upload after it, and
+        # read by "Report the outcome": a push that failed left no status and
+        # no ledger backup for today while the run finished green. Its
+        # failure fails the run there. It is not written into the health,
+        # which is what this step publishes and was decided before it ran.
+        id: cardfeed
         if: always()
         continue-on-error: true
         env:
@@ -844,6 +889,17 @@ jobs:
           # dark; a fault that hides on them is a fault that hides.
           if [ "${{ steps.final.outputs.degraded }}" != "false" ]; then
             echo "::error::This run was degraded (or its health was never recorded). See the job summary."
+            exit 1
+          fi
+          # A card-feed publish that failed is a failed run, on a dark night
+          # too: the morning brief reads today's card there and nowhere else.
+          # It is reported as what it is, not as a degraded run. The health
+          # was decided before the publish and the status it tried to publish
+          # said so; a failed push published no status for today at all, so
+          # the next trigger's precheck finds no clean card and the backup
+          # runs.
+          if [ "${{ steps.cardfeed.outcome }}" != "success" ]; then
+            echo "::error::Today's card and status could not be published to the card-feed branch, so the morning brief has nothing to read for today and the forward ledger has no copy there. The run's own health (degraded=${{ steps.final.outputs.degraded }}) is unchanged; see the publish step's log."
             exit 1
           fi
           if [ "${{ steps.prices.outputs.empty_slate }}" = "true" ]; then

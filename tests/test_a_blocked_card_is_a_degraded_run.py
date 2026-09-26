@@ -419,6 +419,8 @@ def _report(work: Path, degraded: str) -> int:
     block = _render(_step(name="Report the outcome")["run"], {
         "steps.final.outputs.degraded": degraded,
         "steps.prices.outputs.empty_slate": "false",
+        # The card-feed publish ran; its failure is its own test's business.
+        "steps.cardfeed.outcome": "success",
     })
     return _bash(block, work, dict(os.environ)).returncode
 
