@@ -122,7 +122,13 @@ function nhlBoard(data) {
       // staged prices, so without this arm every regular-season game read
       // "No market clears the edge bar" while the card held a best bet.
       // Pinned by tests/test_site_never_calls_an_unpriced_game_a_pass.py.
-      cells, pick: pickView(p, unit, { noneLabel: pre ? "Exhibition · model abstains"
+      //
+      // Nor does either apply to a game that is not a regular-season game,
+      // on a night that also holds one: build_site_json publishes it as
+      // schedule only (no projection, no price), and "Not priced" would say
+      // a price failed to arrive for a game nobody looked for one on.
+      cells, pick: pickView(p, unit, { noneLabel: pre || g.gameType === 1 ? "Exhibition · model abstains"
+        : typeof g.gameType === "number" && g.gameType !== 2 ? "Not a regular-season game · model abstains"
         : g.priced === false ? "Not priced · no market price reached this board"
         : (data.allowlistedMarkets || []).length ? "No market clears the edge bar"
         : "No market is allowlisted for selection" }),

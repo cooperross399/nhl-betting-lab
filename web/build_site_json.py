@@ -33,7 +33,9 @@ Sources, in order of trust:
 
 Preseason (gameType 1) is published as schedule only. The models are fitted
 on regular-season games and the card excludes exhibitions, so no projection
-or pick is invented for them — the page says so instead.
+or pick is invented for them — the page says so instead. That holds per game,
+not per night: an exhibition on a night that also holds a regular-season game
+(2026-09-29) is published, frozen and settled as schedule only too.
 
 Nothing here fetches odds, spends a credit, or places a bet.
 """
@@ -52,6 +54,10 @@ from zoneinfo import ZoneInfo
 ET = ZoneInfo("America/New_York")
 NHL = "https://api-web.nhle.com/v1"
 SEASON_OPENS = date(2026, 9, 29)
+#: The NHL API's gameType for a regular-season game (1 is preseason, 3 the
+#: playoffs). The lab's own `config.REGULAR_SEASON_GAME_TYPE`, spelled out
+#: for the reason USER_AGENT gives.
+REGULAR_SEASON_GAME_TYPE = 2
 
 TEAMS = {
     "ANA": ("Anaheim Ducks", "Ducks", "#F47A38", "#000000"),
@@ -399,8 +405,22 @@ def build_board(day: date, lab: Path, history_dir: Path) -> dict:
             # (MTL @ TOR moneyline home +112, edge 0.110), and the history
             # froze 0 bets for the day. A game nobody priced is not a pass.
             "priced": False,
+            # Whether this game is anything but a regular-season game. The
+            # night used to be judged once, `preseason` above, and this loop
+            # never read the game's own gameType: on a mixed night (one
+            # regular-season game and one exhibition, 2026-09-29) the board
+            # read "regular", projected and priced BOTH, froze both, and
+            # settle() graded both the next morning. The models are fitted on
+            # regular-season games and the card never prices an exhibition,
+            # so an exhibition is published as schedule only, whatever else
+            # is on the night — no projection, no line, no pick — and with no
+            # projGoals, settle() and site_history's bet count pass it by.
+            # The game type is published so the page can say why the game
+            # carries nothing, which "Not priced" would misstate. A game with
+            # no type reads as preseason, as `preseason` above reads it.
+            "gameType": int(g.get("gameType", 1)),
         }
-        if not preseason and lab_model:
+        if not preseason and lab_model and row["gameType"] == REGULAR_SEASON_GAME_TYPE:
             home_key = lab_model["resolve"](f"{home.get('placeName', {}).get('default', '')} {home.get('commonName', {}).get('default', '')}".strip()) or h
             away_key = lab_model["resolve"](f"{away.get('placeName', {}).get('default', '')} {away.get('commonName', {}).get('default', '')}".strip()) or a
             hb, ab = lab_model["b2b"](home_key, day.isoformat()), lab_model["b2b"](away_key, day.isoformat())
