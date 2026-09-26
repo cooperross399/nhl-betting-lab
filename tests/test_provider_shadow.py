@@ -88,12 +88,19 @@ def test_the_summary_asserts_what_the_run_did_not_do(tmp_path: Path) -> None:
     }
 
 
-def test_the_report_says_the_card_cannot_read_staging(tmp_path: Path) -> None:
+def test_the_report_says_the_card_reads_staging_only_through_its_gates(
+    tmp_path: Path,
+) -> None:
+    """This asserted "The card cannot read those files", which was the
+    defect: run_gameday_card.py reads data/staging/ by name. What keeps a
+    staged price off the card is the policy's gates, so the report names
+    them (tests/test_the_docs_state_the_cap_and_staging_truthfully.py)."""
     summary, eligibility, discovery = _summary(tmp_path)
 
     rendered = provider_shadow.render_shadow(summary, eligibility, discovery)
 
-    assert "The card cannot read those files" in rendered
+    assert "The card cannot read those files" not in rendered
+    assert "The gameday card reads `data/staging/`" in rendered
     assert "allowlists a provider or a market" in rendered
 
 

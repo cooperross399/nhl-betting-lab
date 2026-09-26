@@ -342,8 +342,10 @@ def test_publish_site_does_not_publish_a_branch_dispatchs_board(tmp_path: Path) 
     (site / "index.json").write_text('{"dates": []}', encoding="utf-8")
     history.append(_run(8001, workflow="publish-site.yml",
                         artifacts={"site-history": site}))
-    block = _step("publish-site.yml",
-                  "Restore the lab's latest state and the site's history")
+    # #175 split this step: the lab's state, then the site's history (which
+    # restore_state.py also reads from main only). The board is built from
+    # the first.
+    block = _step("publish-site.yml", "Restore the lab's latest state")
 
     work, _ = _run_step(tmp_path, block, history)
 

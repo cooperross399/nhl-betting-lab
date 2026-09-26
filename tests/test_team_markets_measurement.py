@@ -7,6 +7,26 @@ import pandas as pd
 import pytest
 
 from nhl_betting_lab.reports import team_markets_measurement as tmm
+from test_no_test_reads_the_checkouts_data import point_default_data_dirs_at
+
+
+@pytest.fixture(autouse=True)
+def no_checkout_data(
+    tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Every test here resolves team names as CI does: from its rows and any
+    map it passes, never from the checkout's gitignored team-name map.
+
+    Six tests here pass neither `team_names` nor `processed_dir`, so this
+    module used to read `data/processed/team_names.csv` wherever it existed:
+    6 spellings on CI, where "TOR" resolved only through `_team_code`'s
+    samples-codes fallback, and 101 in the operator's checkout, where it
+    resolved through the map. Deleting that fallback failed all six on CI and
+    none of them in the operator's checkout (failure-shape audit, finding 88).
+    """
+    point_default_data_dirs_at(
+        monkeypatch, tmp_path_factory.mktemp("checkout_defaults")
+    )
 
 
 def _samples(count: int = 3000) -> pd.DataFrame:
@@ -375,7 +395,7 @@ def test_the_report_prints_the_match_rate_per_market() -> None:
     rendered = tmm.render_team_measurement(report)
 
     assert "Where every price landed" in rendered
-    assert "prices seen" in rendered
+    assert "wager(s) seen" in rendered
     assert "DOES NOT RECONCILE" not in rendered
 
 
