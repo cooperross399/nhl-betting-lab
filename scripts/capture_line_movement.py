@@ -39,6 +39,43 @@ from nhl_betting_lab.season import LEAGUE_TIMEZONE
 
 MOVEMENT_DIRNAME = "line_movement"
 
+#: Nothing was captured: the events list could not be read, or per-event
+#: requests failed and no game's price came back. The Capture prices step
+#: goes red on it, and every step after that one is `if: always()`.
+EXIT_NOTHING_CAPTURED = 2
+
+
+def report_failed_requests(
+    failures: list[str], *, captured_nothing: bool
+) -> None:
+    """Name every per-event request that failed, on the run page and in the log.
+
+    A failed request is an absence of a different kind from a game no book
+    quoted, and the capture has to say which one it was. `summary_line()`
+    cannot: "4 price rows from 2 of 3 events" reads the same either way.
+    """
+    count = len(failures)
+    named = "; ".join(failures)
+    if captured_nothing:
+        print(
+            f"::error::No price was captured this round and {count} per-event "
+            f"request(s) failed, so this round is lost, not empty: {named}"
+        )
+    else:
+        print(
+            f"::warning::{count} per-event price request(s) failed this round, "
+            "so those games are absent from it, not unquoted; the games that "
+            f"answered were kept: {named}"
+        )
+    print(
+        f"{count} per-event request(s) failed. Those games' prices are absent "
+        "from this round, not unquoted, and if it was a game's last round "
+        "before face-off its closing price is an earlier round's.",
+        file=sys.stderr,
+    )
+    for failure in failures:
+        print(f"  {failure}", file=sys.stderr)
+
 
 def capture_path(day: str, *, processed_dir: Path | None = None) -> Path:
     """One file per league game date, so a season is many small files.
@@ -99,12 +136,37 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     except odds_api.ProviderError as exc:
         print(f"Capture failed: {exc}", file=sys.stderr)
-        return 2
+        return EXIT_NOTHING_CAPTURED
 
+    # Keyed on the errors, not the rows. This script used to ignore
+    # `result.errors` completely: it printed `summary_line()` and the
+    # warnings and then returned 0. `fetch_player_props` records a failed
+    # per-event request (a 503, a 429, a timeout, or a 422 the core-market
+    # fallback could not recover) and moves on to the next game. So when one
+    # request of three answered HTTP 503, the failure-shape audit's replay
+    # exited 0 and logged "4 price rows from 2 of 3 events". That is the same
+    # line a game no book quoted produces, apart from the credit figure, and
+    # 503 never appeared. The round was lost for that game, and this source
+    # keeps no archive. The same round is the one the closing-line store uses
+    # as the close, so if it was the last one before face-off, CLV silently
+    # fell back to the earlier round's price. When every request failed, the
+    # log read "No rows returned; nothing written." with exit 0, the same as
+    # a board nobody had priced.
+    #
+    # The rule now matches the one `capture_deployment.py` follows in this
+    # same job. A partial round keeps what came back, exits 0, and names the
+    # failed requests in a `::warning::`: one blip is not a red run. A round
+    # where requests failed and nothing came back exits 2, and the Capture
+    # prices step goes red. A game answered with no book, and a credit-cap
+    # skip, are absences rather than failures, and they stay as they were.
+    failures = list(result.errors)
     if not result.rows:
         print("No rows returned; nothing written.")
         for warning in result.warnings:
             print(f"  warning: {warning}")
+        if failures:
+            report_failed_requests(failures, captured_nothing=True)
+            return EXIT_NOTHING_CAPTURED
         return 0
 
     frame = pd.DataFrame(result.rows)
@@ -135,6 +197,9 @@ def main(argv: list[str] | None = None) -> int:
     print(result.summary_line())
     for warning in result.warnings:
         print(f"  warning: {warning}")
+    # After both writes, so the games that answered are kept either way.
+    if failures:
+        report_failed_requests(failures, captured_nothing=False)
     print(
         "This capture wrote no staging file, froze no opinion, edited no "
         "policy, and placed no bet."
