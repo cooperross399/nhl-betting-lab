@@ -39,9 +39,29 @@ from nhl_betting_lab import forward_evidence as fe
 from nhl_betting_lab.config import PROJECT_ROOT
 from nhl_betting_lab.providers import odds_api
 from nhl_betting_lab.reports.card_pricing import selection_key
+from test_no_test_reads_the_checkouts_data import point_default_data_dirs_at
 
 
 CARD_AT = datetime(2026, 12, 20, 13, 30, tzinfo=timezone.utc)
+
+
+@pytest.fixture(autouse=True)
+def no_checkout_data(
+    tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The card here reads no schedule, boxscore or verdict of the checkout's.
+
+    It used to read all three. The operator's 2026-27 club-schedule cache
+    knows the real slate for 2026-12-20 and not this module's Boston-Rangers
+    evening game, so there the card excluded that game as "not regular
+    season", froze no snapshot, and the Global Series test failed — while it
+    passed on CI, whose checkout holds no schedule. With no schedule the
+    preseason screen abstains and says so; what is under test here is only
+    which priced rows reach the snapshot.
+    """
+    point_default_data_dirs_at(
+        monkeypatch, tmp_path_factory.mktemp("checkout_defaults")
+    )
 
 
 def _row(commence: str, home: str = "Chicago Blackhawks",

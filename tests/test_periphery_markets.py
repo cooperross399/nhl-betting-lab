@@ -557,20 +557,31 @@ def test_a_missing_line_is_unsettleable_rather_than_an_under_that_won() -> None:
 
 
 def test_a_scratch_run_cannot_freeze_into_the_real_evidence_archive(
-    tmp_path,
+    tmp_path, monkeypatch
 ) -> None:
     """Found by running the card end to end against synthetic prices: with
     `--output-dir` pointed at a scratch directory, the snapshot still froze
     into the real archive — dated to opening night. Because the first
     opinion of a day stands and is never repriced, the real opening-night
     card could then never have frozen its own, and test rows would have
-    become the season's first forward evidence."""
-    from nhl_betting_lab.config import DATA_DIR
+    become the season's first forward evidence.
 
+    The default archive is `forward_evidence.snapshots_dir()` with no
+    directory, and it is pointed at a scratch one first, with every other
+    default. This used to watch the checkout's real `data/archive`, so a
+    regression of exactly this defect would have frozen test rows into the
+    operator's real evidence archive before failing, and the card read the
+    checkout's boxscores, club schedules and verdicts on the way (5,664 files
+    in the operator's checkout)."""
+    from nhl_betting_lab import forward_evidence
+
+    from test_no_test_reads_the_checkouts_data import point_default_data_dirs_at
     from test_scripts import load_script
 
+    point_default_data_dirs_at(monkeypatch, tmp_path / "checkout_defaults")
     module = load_script("run_gameday_card.py")
-    real_archive = DATA_DIR / "archive" / "priced_snapshots"
+    real_archive = forward_evidence.snapshots_dir()
+    assert tmp_path in real_archive.parents, real_archive
     before = set(real_archive.glob("*")) if real_archive.is_dir() else set()
 
     code = module.main(
