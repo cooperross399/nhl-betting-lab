@@ -64,6 +64,21 @@ def outcome_group(key: tuple) -> tuple:
     return card_module.outcome_group(key)
 
 
+def _label(row) -> str:
+    """Reached through the module for the same reason as `outcome_group`."""
+    return card_module._label(row)
+
+
+def _outcomes_the_guard_left_unstaked(playable) -> list:
+    """Reached through the module for the same reason as `outcome_group`."""
+    return card_module._outcomes_the_guard_left_unstaked(playable)
+
+
+def _ladder_prefix() -> str:
+    """Reached through the module for the same reason as `outcome_group`."""
+    return card_module.LADDER_DEMOTION_PREFIX
+
+
 NOW = datetime(2026, 10, 8, 18, 0, tzinfo=timezone.utc)
 
 
@@ -517,3 +532,102 @@ def test_the_group_keeps_the_market_the_player_the_game_and_the_side() -> None:
     assert group != outcome_group(_key(_row(line=1.5, away="MTL")))
     assert group != outcome_group(_key(_row(line=1.5, selection="under")))
     assert group != outcome_group(_key(_row(line=1.5, hours=52)))
+
+
+# --- Findings from the adversarial review of this change -------------------
+
+
+def test_a_handicap_line_always_shows_its_sign():
+    """`home -1.5` and `home +1.5` are opposite sides of two goals.
+
+    `:g` renders the second as a bare `1.5`, which reads as the first — and
+    the demotion sentence names the keeper by this label, so an unsigned
+    handicap makes the record say the opposite of what happened.
+    """
+    assert _label({"selection": "home", "line": 1.5}) == "home +1.5"
+    assert _label({"selection": "home", "line": -1.5}) == "home -1.5"
+    assert _label({"selection": "away", "line": 2.5}) == "away +2.5"
+
+
+def test_a_threshold_line_does_not_show_a_sign():
+    """Every other market's line is a threshold on a count, where a `+` is
+    noise and would change how every existing row renders."""
+    assert _label({"selection": "over", "line": 2.5}) == "over 2.5"
+    assert _label({"selection": "home_over", "line": 3.5}) == "home_over 3.5"
+    assert (
+        _label({"player": "Auston Matthews", "selection": "over", "line": 0.5})
+        == "Auston Matthews over 0.5"
+    )
+
+
+def test_the_demotion_sentence_names_a_signed_handicap():
+    """The two fixes meet here: the keeper's label goes into the reason.
+
+    Both rungs are priced inside the juice limit on purpose. At -200 the
+    second rung is heavy juice and never reaches the staking path at all, so
+    the collapse would have nothing to demote and the test would pass
+    vacuously.
+    """
+    rows = [
+        _row(market="puck_line", player="", selection="home", line=-1.5, price=150),
+        _row(market="puck_line", player="", selection="home", line=1.5, price=-110),
+    ]
+    probabilities = {_key(row): 0.90 for row in rows}
+    leans = _leans(rows, probabilities)
+    assert len(leans) == 1
+    assert "home -1.5" in leans[0].demotion_reason
+
+
+def test_the_group_separates_two_home_teams():
+    """The review found the group test never varied `home_team`: a grouping
+    that dropped it would have passed. One player, one market, one side, two
+    different home teams is two outcomes."""
+    a = _row(home="TOR", away="BOS")
+    b = _row(home="MTL", away="BOS")
+    assert outcome_group(_key(a)) != outcome_group(_key(b))
+
+
+def test_the_group_separates_two_away_teams():
+    a = _row(home="TOR", away="BOS")
+    b = _row(home="TOR", away="OTT")
+    assert outcome_group(_key(a)) != outcome_group(_key(b))
+
+
+def test_the_prefix_the_check_reads_is_the_prefix_the_pass_writes():
+    """Single-sourced on purpose: a demotion the guard-check cannot recognise
+    would let a vanished stake go unreported."""
+    rows = [row for row, _p in LADDER]
+    probabilities = {_key(row): prob for row, prob in LADDER}
+    leans = _leans(rows, probabilities)
+    assert leans
+    for lean in leans:
+        assert lean.demotion_reason.startswith(_ladder_prefix())
+
+
+def test_an_outcome_the_guard_leaves_unstaked_is_reported_not_silent():
+    """The narrow regression this change introduces, made loud.
+
+    Every rung of one outcome sits on the same game, so the puck-drop guard
+    normally takes a whole outcome or none of it. They come apart only when
+    one game's rows disagree about `commence_time`. When that happens the
+    stake is gone and the card must say so rather than look like no opinion.
+    """
+    kept = dict(_row(line=0.5), section=BEST_BETS_SECTION, suggested_units=0.5)
+    sibling = dict(
+        _row(line=1.5),
+        section=LEANS_SECTION,
+        suggested_units=0.0,
+        demotion_reason=_ladder_prefix() + " the stake went to over 0.5.",
+    )
+    # The keeper was quarantined, so only the demoted sibling is playable.
+    reported = _outcomes_the_guard_left_unstaked([sibling])
+    assert reported == ["Auston Matthews over 1.5"]
+    # With the keeper still playable, there is nothing to report.
+    assert _outcomes_the_guard_left_unstaked([kept, sibling]) == []
+
+
+def test_a_lean_demoted_for_another_reason_is_not_reported_as_a_lost_stake():
+    """Only a rung THIS pass demoted counts. An ordinary lean never had a
+    stake to lose, and reporting it would cry wolf on every card."""
+    ordinary = dict(_row(line=1.5), section=LEANS_SECTION, suggested_units=0.0)
+    assert _outcomes_the_guard_left_unstaked([ordinary]) == []

@@ -88,6 +88,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping, Sequence
+from types import SimpleNamespace
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -136,6 +137,13 @@ BEST_BET_PROP_EDGE = 0.12
 
 #: Flat stakes by tier, in units. Small on purpose: these are positions whose
 #: expected value is genuinely uncertain, and the sizing should say so.
+#: The opening words of every reason `_one_stake_per_outcome` writes. Single
+#: sourced so the pass that WRITES the reason and the check that READS it can
+#: never drift apart, and so a rung demoted for any other cause is never
+#: mistaken for a collapsed ladder rung.
+LADDER_DEMOTION_PREFIX = "One stake per outcome:"
+
+
 TIER_UNITS = {"A": 0.5, "B": 0.25, "C": 0.1}
 
 #: Markets that cannot produce a selection without information this lab does
@@ -298,7 +306,7 @@ def _rung_order(item: tuple[tuple, Candidate]) -> tuple:
 def _demotion_reason(keeper: Candidate) -> str:
     """The sentence a demoted rung carries, naming the rung that kept the stake."""
     return (
-        "One stake per outcome: the stake went to "
+        f"{LADDER_DEMOTION_PREFIX} the stake went to "
         f"{_label(keeper.as_row())} at {_price(keeper.american_odds)} "
         f"(edge {keeper.edge:+.1%}, {keeper.suggested_units:g} unit(s)). "
         "This rung is the same opinion at another line, so it is recorded as "
@@ -519,6 +527,14 @@ def build_card(
     card.leans = [
         row for row in guarded.playable if row["section"] == LEANS_SECTION
     ]
+    for label in _outcomes_the_guard_left_unstaked(guarded.playable):
+        card.notes.append(
+            f"{label} carries no stake: the rung that held it was quarantined "
+            "by the puck-drop guard after one-stake-per-outcome had already "
+            "demoted its siblings. The outcome keeps its leans and its ledger "
+            "rows; only the stake is gone. This happens when one game's rows "
+            "disagree about their start time."
+        )
     # Passes are also checked: a pass on a game that has started is not a
     # useful thing to publish either, and letting one through would mean the
     # guard's coverage depended on which section a row landed in.
@@ -578,14 +594,69 @@ def _price(value: object) -> str:
     return f"{int(number):+d}" if float(number).is_integer() else f"{number:+.1f}"
 
 
+#: Selections whose line is a HANDICAP rather than a threshold. For these the
+#: sign is the bet: `home -1.5` and `home +1.5` are opposite sides of two goals
+#: and `:g` renders the second as a bare `1.5`, which reads as the first. Every
+#: other market's line is a threshold on a count, where a sign would be noise.
+_HANDICAP_SELECTIONS: frozenset[str] = frozenset({"home", "away"})
+
+
 def _label(row: Mapping[str, Any]) -> str:
     player = str(row.get("player") or "").strip()
     line = row.get("line")
     selection = str(row.get("selection", ""))
-    line_text = "" if line is None or pd.isna(line) else f" {float(line):g}"
+    if line is None or pd.isna(line):
+        line_text = ""
+    elif selection in _HANDICAP_SELECTIONS:
+        line_text = f" {float(line):+g}"
+    else:
+        line_text = f" {float(line):g}"
     if player:
         return f"{player} {selection}{line_text}".strip()
     return f"{selection}{line_text}".strip()
+
+def _outcomes_the_guard_left_unstaked(playable: Sequence[Mapping[str, Any]]) -> list[str]:
+    """Outcomes whose only staked rung was quarantined after the collapse.
+
+    `_one_stake_per_outcome` runs inside `build_candidates`; the puck-drop
+    guard runs later, on the rows. Every rung of one outcome sits on the same
+    game, so the guard normally takes a whole outcome or none of it. They come
+    apart only when one game's rows disagree about `commence_time` -- an
+    unparseable or stale value on the very rung that kept the stake.
+
+    Before the collapse a sibling rung would have carried the stake on. That
+    is a real, narrow regression, and this does not repair it: promoting a
+    sibling would mean staking a rung the card already decided against, on the
+    strength of a timestamp it could not read. It says so instead, because a
+    stake that vanishes between two passes is exactly the kind of thing that
+    reads as "no opinion" and never gets asked about.
+    """
+    staked: set[tuple] = set()
+    demoted: dict[tuple, str] = {}
+    for row in playable:
+        # Through `selection_key` and `outcome_group`, never hand-built. A
+        # second copy of a key is the drift this whole change exists to
+        # avoid, and the row carries the DISPLAY player name where the key
+        # carries `player_key(...)` — hand-building here would group two
+        # spellings of one player as two outcomes and miss the very case it
+        # is looking for.
+        group = outcome_group(
+            selection_key(
+                SimpleNamespace(**dict(row)),
+                market=str(row.get("market", "")),
+                selection=str(row.get("selection", "")),
+                line=row.get("line"),
+            )
+        )
+        if row.get("section") == BEST_BETS_SECTION:
+            staked.add(group)
+        elif str(row.get("demotion_reason") or "").startswith(
+            LADDER_DEMOTION_PREFIX
+        ):
+            demoted.setdefault(group, _label(row))
+    return [
+        label for group, label in sorted(demoted.items()) if group not in staked
+    ]
 
 
 def _start_eastern(row: Mapping[str, Any]) -> str:
