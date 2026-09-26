@@ -18,16 +18,21 @@ otherwise see.
 
 ## When a comment is posted at all
 
-Only when the selections changed, or the run was degraded.
+Only when the selections changed, the run was degraded, no card could be built,
+or the caller forced a post (Gameday Refresh's `force_post` input).
 
 Posting every run would put five emails a week in front of a reader and train
 them to ignore all five. But silence is only safe to read as "nothing moved" if
 anything going wrong breaks the silence — so a degraded run always posts, even
 when the selections are identical.
 
-A card that is *blocked* is a degraded run, not a quiet one. "No card, because
-no market is allowlisted" is information, and the first time it appears it must
-arrive.
+A card that is *blocked* is never a quiet run. "No card, because no market is
+allowlisted" is information, and the first time it appears it must arrive. It
+is not always a degraded run, though (below), and the comment says which.
+
+A forced post says why it is there too. A clean run with unchanged selections
+posts only when forced, and its comment says it was posted on request rather
+than calling the run degraded.
 
 That rule is about posting. Whether the *run* is degraded is decided in
 Gameday Refresh, from the card's `nothing_to_card`. A degraded run finishes
@@ -104,7 +109,16 @@ def decide(
     force: bool = False,
 ) -> NotificationDecision:
     """Decide whether this card is worth an email."""
-    degraded = bool(degraded_notes) or not card.card_generated
+    # A blocked card is a fault unless the card says, in `nothing_to_card`,
+    # why it is not: nothing allowlisted, or no game left to card today. This
+    # reads that field exactly as Gameday Refresh does ("a blocked card with
+    # it empty is a degraded run"). Reading `card_generated` alone called
+    # both benign blocks degraded, so the comment said "the run was degraded"
+    # about a run that published `degraded: false` and finished green.
+    benign_block = not card.card_generated and bool(card.nothing_to_card)
+    degraded = bool(degraded_notes) or (
+        not card.card_generated and not card.nothing_to_card
+    )
     current = card.selection_fingerprint()
     # A first run has no previous fingerprint. That is a change — there was
     # nothing and now there is something — and treating "no previous" as "no
@@ -127,6 +141,18 @@ def decide(
             ),
             selections_changed=changed,
             degraded=True,
+        )
+    if benign_block:
+        # Still posts every run: "no card" is information, and the reader
+        # hears why there is none. It is simply not called a fault.
+        return NotificationDecision(
+            post=True,
+            reason=(
+                "No card could be built, and the card says why that is not a "
+                "fault."
+            ),
+            selections_changed=changed,
+            degraded=False,
         )
     if changed:
         return NotificationDecision(
@@ -176,6 +202,14 @@ def render_comment(
 ) -> str:
     """The comment body. The marker, when it applies, is in paragraph one."""
     opening: list[str] = []
+    # Why a blocked card is not a fault, when the card says it is not. Only
+    # read when the decision agrees the run is clean: degraded notes speak for
+    # the whole run, and a benign block never talks over them.
+    benign_reason = (
+        card.nothing_to_card
+        if not card.card_generated and not decision.degraded
+        else ""
+    )
     if decision.selections_changed:
         # Contract: this phrase, in this paragraph. Everything else in the
         # sentence is prose and may be reworded; the phrase may not.
@@ -188,11 +222,17 @@ def render_comment(
                 else "there is no card this run, and the previous run had one "
                 "or this is the first run."
             )
+            + (f" {benign_reason}" if benign_reason else "")
         )
     elif decision.degraded:
         opening.append(
             "Selections are unchanged since the previous card; this comment "
             "is here because the run was degraded."
+        )
+    elif benign_reason:
+        opening.append(
+            "Selections are unchanged since the previous card: there is no "
+            f"card this run either. {benign_reason}"
         )
     else:
         # Unchanged and clean only posts when the caller forced it. Saying
