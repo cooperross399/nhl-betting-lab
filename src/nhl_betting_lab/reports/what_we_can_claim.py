@@ -112,6 +112,16 @@ class MarketClaim:
         # six markets and its overall figure (8 for `hits`, from the card
         # window's seven): see `stats.correction_family`.
         family = correction_family(self.looks, self.family)
+        if self.bets < 30:
+            # `RoiInterval.survives_correction` is False below thirty bets
+            # whatever the interval, so "does not survive" there says nothing
+            # about zero. On 22 wins and 3 losses at even money, seven looks,
+            # the corrected interval ran +40% to +112% and this sentence said
+            # it did not exclude zero. Say what `RoiInterval.verdict()` says.
+            return (
+                f"{base} {self.bets} bets is far too few to measure anything. "
+                f"**{NO_DEMONSTRATED_EDGE.capitalize()}**."
+            )
         if not self.survives_correction:
             correction = (
                 f" Correcting for the {family}, it does not exclude zero."

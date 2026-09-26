@@ -126,6 +126,14 @@ class MarketVerdict:
     calibration_samples: int = 0
     supported: bool = False
     reason: str = ""
+    #: What a corrected interval excluding zero made of this market, when
+    #: one did: "candidate" (positive, not confirmed on a held-out window),
+    #: "deficit" (negative), or "sign unknown". Empty for every market whose
+    #: line does not say its corrected interval excludes zero. The
+    #: recommendation reads it so its headline never denies its own lines.
+    conclusive: str = ""
+    #: Whether a held-out window confirmed the result the line reports.
+    replicated: bool = False
 
     def sentence(self) -> str:
         return f"`{self.market}`: **{'supported' if self.supported else 'not supported'}** — {self.reason}"
@@ -179,11 +187,7 @@ class EvidenceBundle:
                 "finding, so the picture is incomplete."
             )
         if not self.supported_markets:
-            return (
-                "**The evidence supports enabling nothing.** Every market is "
-                "either unmeasured against real prices or measured with an "
-                f"interval that includes zero, which means {NO_DEMONSTRATED_EDGE}."
-            )
+            return self._nothing_supported()
         return (
             "The evidence is consistent with enabling "
             f"{', '.join(f'`{m}`' for m in self.supported_markets)}. That is "
@@ -204,6 +208,69 @@ class EvidenceBundle:
                 else ""
             )
         )
+
+
+    def _nothing_supported(self) -> str:
+        """Why nothing is supported, market by market where it differs.
+
+        This used to say "every market is either unmeasured against real
+        prices or measured with an interval that includes zero" whatever the
+        lines below it said -- and on the real evidence they said `points`
+        loses with a corrected interval excluding zero, and `blocked_shots`
+        wins with one on a single window. A headline contradicting its own
+        lines is the one thing an evidence document cannot afford, so each
+        market whose corrected interval excludes zero is named for what it
+        is, and the old sentence is kept for the markets it is true of.
+        """
+        opening = "**The evidence supports enabling nothing.**"
+        closing = (
+            "unmeasured against real prices or measured with an interval "
+            f"that includes zero, which means {NO_DEMONSTRATED_EDGE}."
+        )
+        named = [item for item in self.verdicts if item.conclusive]
+        if not named:
+            return f"{opening} Every market is either {closing}"
+
+        def listed(kind: str, *, replicated: bool | None = None) -> str:
+            return ", ".join(
+                f"`{item.market}`"
+                for item in named
+                if item.conclusive == kind
+                and (replicated is None or item.replicated == replicated)
+            )
+
+        sentences = [opening]
+        candidates = listed("candidate")
+        if candidates:
+            sentences.append(
+                f"{candidates}: the corrected interval excludes zero on the "
+                "winning side on one window, and a held-out window has not "
+                "confirmed it, so it is a candidate, not a finding."
+            )
+        demonstrated = listed("deficit", replicated=True)
+        if demonstrated:
+            sentences.append(
+                f"{demonstrated}: a loss whose corrected interval excludes "
+                "zero, confirmed on a held-out window. That is a "
+                "demonstrated deficit, and it argues against enabling, not "
+                "for it."
+            )
+        deficits = listed("deficit", replicated=False)
+        if deficits:
+            sentences.append(
+                f"{deficits}: a loss whose corrected interval excludes zero, "
+                "not confirmed on a held-out window. A loss that survives "
+                "the correction still argues against enabling, not for it."
+            )
+        unknown = listed("sign unknown")
+        if unknown:
+            sentences.append(
+                f"{unknown}: the corrected interval excludes zero, but the "
+                "return could not be read, so its sign is unknown."
+            )
+        if len(named) < len(self.verdicts):
+            sentences.append(f"Every other market is either {closing}")
+        return " ".join(sentences)
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -393,6 +460,7 @@ def assess_markets(*, output_dir: Path) -> list[MarketVerdict]:
         )
 
         if bets < MINIMUM_BETS_TO_READ:
+            conclusive = ""
             reason = (
                 f"only {bets} measured bet(s), below the "
                 f"{MINIMUM_BETS_TO_READ} needed before a result is worth "
@@ -402,6 +470,7 @@ def assess_markets(*, output_dir: Path) -> list[MarketVerdict]:
             supported = False
         elif not conclusive_and_positive and survives:
             # Conclusive, and conclusively bad.
+            conclusive = "deficit" if roi_value is not None else "sign unknown"
             reason = (
                 (
                     f"**{roi_value:+.1%} over {bets:,} bets, and the "
@@ -430,6 +499,7 @@ def assess_markets(*, output_dir: Path) -> list[MarketVerdict]:
             )
             supported = False
         elif not survives:
+            conclusive = ""
             corrected = (
                 f" Corrected for the {family} "
                 f"it runs {float(adjusted_low):+.1%} to "
@@ -456,6 +526,9 @@ def assess_markets(*, output_dir: Path) -> list[MarketVerdict]:
                 else f"{bets:,} bets, and the corrected interval excludes zero."
             )
             supported = replicated
+            # A supported market is named by the recommendation's other
+            # branch; only an unconfirmed one is a candidate.
+            conclusive = "" if replicated else "candidate"
             if replicated:
                 reason += (
                     " **A held-out window confirmed it.** Two windows "
@@ -482,6 +555,8 @@ def assess_markets(*, output_dir: Path) -> list[MarketVerdict]:
                 calibration_samples=samples,
                 supported=supported,
                 reason=reason,
+                conclusive=conclusive,
+                replicated=replicated,
             )
         )
     return verdicts
