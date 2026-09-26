@@ -13,15 +13,22 @@ over-respected.
 So it does nothing without `--live`, it takes a mandatory `--credit-cap`, and
 the cap is enforced before each request rather than checked afterwards. A
 probe that quietly became a full-season purchase is exactly the accident these
-two flags exist to make impossible.
+two flags exist to make impossible. (The probe itself never read the cap until
+2026-09-26, and the example below named no window, so it could not run: the
+one path that did, the workflow's, spent 536 credits under a cap of 60. The
+listings, the probe and the purchase are now all paid out of the cap.)
 
     # Free: print what a purchase would cost and stop.
     PYTHONPATH=src .venv/bin/python scripts/buy_historical_props.py \
         --from 2025-01-05 --to 2025-01-05
 
-    # One event, one snapshot: does the provider retain these markets at all?
+    # Does the provider retain these markets at all? `--probe-events` events
+    # (five by default), spread across the window a probe needs. Each one not
+    # already bought is gated at up to 10 x markets x regions (140 at the
+    # defaults) before it is asked, so the cap decides how many are paid for,
+    # and this one probes only what the cache already holds.
     PYTHONPATH=src .venv/bin/python scripts/buy_historical_props.py \
-        --probe --live --credit-cap 60
+        --probe --live --from 2026-01-10 --to 2026-01-10 --credit-cap 60
 
     # A real purchase, capped.
     PYTHONPATH=src .venv/bin/python scripts/buy_historical_props.py \
@@ -67,8 +74,9 @@ def _events_in_window(
     *,
     hours_before: float,
     raw_dir: Path,
+    credit_cap: int,
     every_n_days: int = 1,
-) -> tuple[list[dict[str, str]], int]:
+) -> tuple[list[dict[str, str]], int, int]:
     """Event ids and per-event snapshots for a past window.
 
     This walks the **historical** events endpoint, one listing per day. The
@@ -92,24 +100,50 @@ def _events_in_window(
     buying consecutive days. Consecutive days share injuries, road trips and
     goalie rotations, so a hundred consecutive events carry a good deal less
     independent information than a hundred spread across a season.
+
+    **The listings are paid out of `credit_cap`.** A day's listing that is
+    not already on disk is asked only if the listings so far, plus the
+    dearest listing charge seen (never below the documented one credit), fit
+    inside the cap. They used to be paid for before the cap was read at all,
+    and the cap then went to the purchase less what they had cost, floored
+    at zero: a month's window listed thirty-one days for thirty-one credits
+    against a cap of ten, on the buy path and the probe alike. A day that
+    does not fit is skipped rather than ending the walk, so a listing already
+    on disk further on is still read for nothing. A listing that failed is
+    held against the cap at the dearest charge seen, as a failed purchase is,
+    without being reported as spent. Returns the events, the credits the
+    listings were charged, and what they hold against the cap.
     """
     events: list[dict[str, str]] = []
     listing_cost = 0
+    held = 0
+    largest_charge = hist.HISTORICAL_EVENTS_LIST_COST
+    unlisted: list[date] = []
     seen: set[str] = set()
     cursor = start
+    step = timedelta(days=every_n_days)
     while cursor <= end:
         snapshot = f"{cursor.isoformat()}T12:00:00Z"
         window_start = datetime.fromisoformat(f"{cursor.isoformat()}T12:00:00+00:00")
         window_end = window_start + timedelta(days=1)
+        cached = hist.listing_is_cached(snapshot=snapshot, raw_dir=raw_dir)
+        if not cached and held + largest_charge > credit_cap:
+            unlisted.append(cursor)
+            cursor += step
+            continue
         try:
             found, cost, _ = list_historical_events(
                 provider, snapshot=snapshot, raw_dir=raw_dir
             )
         except ProviderError as exc:
             print(f"  {cursor}: {exc}", file=sys.stderr)
-            cursor += timedelta(days=every_n_days)
+            if not cached:
+                held += largest_charge
+            cursor += step
             continue
         listing_cost += cost
+        held += cost
+        largest_charge = max(largest_charge, cost)
         for raw in found:
             commence = str(raw.get("commence_time", "")).strip()
             event_id = str(raw.get("id", "")).strip()
@@ -138,8 +172,16 @@ def _events_in_window(
                     "away_team": str(raw.get("away_team", "")),
                 }
             )
-        cursor += timedelta(days=every_n_days)
-    return events, listing_cost
+        cursor += step
+    if unlisted:
+        print(
+            f"{len(unlisted)} day(s) of the window were not listed, "
+            f"{unlisted[0]} to {unlisted[-1]}: the listings hold {held} of the "
+            f"{credit_cap}-credit cap and the next could cost {largest_charge}. "
+            "Nothing on those days is bought or probed.",
+            file=sys.stderr,
+        )
+    return events, listing_cost, held
 
 
 def _write_retention_from_cache(
@@ -270,7 +312,11 @@ def main(argv: list[str] | None = None) -> int:
         "--credit-cap",
         type=int,
         default=0,
-        help="Hard cap. Required with --live; the run stops rather than exceed it.",
+        help=(
+            "Hard cap. Required with --live; the run stops rather than exceed "
+            "it. The day listings, the probe and the purchase are all paid "
+            "out of it."
+        ),
     )
     parser.add_argument(
         "--markets",
@@ -338,6 +384,10 @@ def main(argv: list[str] | None = None) -> int:
     # exactly what the old quote left out.
     provider = OddsApiProvider()
     listing_cost = 0
+    # What the listings hold against the cap: their charges, and the worst
+    # case for any that failed. Whatever is left is the budget for the
+    # per-event requests, on the probe and the buy alike.
+    listing_held = 0
     if args.events_file:
         events = json.loads(Path(args.events_file).read_text(encoding="utf-8"))
     elif args.start and args.end:
@@ -349,12 +399,13 @@ def main(argv: list[str] | None = None) -> int:
             )
             return 0
         try:
-            events, listing_cost = _events_in_window(
+            events, listing_cost, listing_held = _events_in_window(
                 provider,
                 date.fromisoformat(args.start),
                 date.fromisoformat(args.end),
                 hours_before=args.hours_before,
                 raw_dir=Path(args.raw_dir),
+                credit_cap=args.credit_cap,
                 every_n_days=max(1, args.every_n_days),
             )
         except ProviderError as exc:
@@ -401,21 +452,61 @@ def main(argv: list[str] | None = None) -> int:
     outputs = Path(args.output_dir)
     outputs.mkdir(parents=True, exist_ok=True)
 
+    # What the per-event requests may spend: the cap, less what the listings
+    # hold against it. Floored at zero, which admits no uncached event.
+    budget = max(0, args.credit_cap - listing_held)
+
     if args.probe:
-        probes = []
-        for event in events:
-            probe = hist.probe_retention(
-                provider,
-                event_id=event["event_id"],
-                snapshot=event["snapshot"],
-                markets=markets,
-                raw_dir=Path(args.raw_dir),
-            )
+        # Held to the cap by the same two gates as the buy, in the provider
+        # module beside it. This loop used to call `probe_retention` for every
+        # event it picked and never read the cap: with the workflow's own
+        # flags, its default cap of 60, and the recorded 107 credits an event,
+        # it sent five requests and spent 536 (a cap of 1 spent the same, and
+        # sixteen events 1,713), where the buy, given the same cap and slate,
+        # spent 1.
+        run = hist.probe_retention_under_cap(
+            provider,
+            events=events,
+            markets=markets,
+            credit_cap=budget,
+            raw_dir=Path(args.raw_dir),
+        )
+        probes = run.probes
+        for probe in probes:
             print(probe.summary_line())
-            probes.append(probe)
+        for error in run.errors[:10]:
+            print(f"  {error}", file=sys.stderr)
+        print(run.summary_line())
+        spent = run.credits_spent + listing_cost
+        total = (
+            f"Total spend this run: {spent} credit(s), against a cap of "
+            f"{args.credit_cap}."
+        )
+        per_event = hist.estimate_credits(
+            events=1, markets=len(markets), regions=provider.region_count
+        )
+        if not probes:
+            # Nothing was asked, so there is no answer to record, and an
+            # empty one would replace whatever the record holds with "no
+            # probe has been run".
+            print(total)
+            reason = (
+                f"{budget} credit(s) of the {args.credit_cap}-credit cap were "
+                "left after the listings, and an event not already bought is "
+                f"gated at up to {per_event} ({len(markets)} market(s) x "
+                f"{provider.region_count} region(s) x "
+                f"{hist.HISTORICAL_CREDITS_UPPER_BOUND_PER_MARKET})"
+                if run.events_skipped_for_budget
+                else "no selected event had an id and a snapshot to ask about"
+            )
+            print(
+                f"Nothing was probed: {reason}. "
+                f"{outputs / RETENTION_FILENAME} is left as it was.",
+                file=sys.stderr,
+            )
+            return 2
         table = hist.retention_table(probes)
         print(table)
-        spent = sum(probe.credits_spent for probe in probes) + listing_cost
         failed = [probe for probe in probes if probe.error]
         if failed:
             # A probe with a failed request is a degraded probe, and it writes
@@ -445,8 +536,28 @@ def main(argv: list[str] | None = None) -> int:
                     f"  {probe.event_id} at {probe.snapshot}: {probe.error}",
                     file=sys.stderr,
                 )
-            print(f"Total spend this run: {spent} credit(s).")
+            print(total)
             return 2
+        if run.events_skipped_for_budget:
+            # A probe the cap cut short writes nothing either, for the same
+            # reason as a failed request above (#202): it answers fewer events
+            # than were asked, and the record it would replace is read by the
+            # props backtest (`table`, `unmeasurable`). Written, a three-event
+            # probe put "too few to call it absent" over a record built from
+            # every response already bought. Everything it did buy is cached,
+            # so a larger cap later asks only for the rest, and
+            # `--from-cache` rebuilds the record from the cache for nothing.
+            print(total)
+            print(
+                f"The cap cut this probe to {len(probes)} of the {len(events)} "
+                f"event(s) it selected: {run.events_skipped_for_budget} could "
+                f"not be afforded (up to {per_event} credits an event not "
+                f"already bought). {outputs / RETENTION_FILENAME} is left as "
+                "it is rather than replaced with an answer to fewer events "
+                "than were asked. What was bought is cached.",
+                file=sys.stderr,
+            )
+            return 3
         provider_to_key = {
             market.provider_key: market.key for market in PROP_MARKETS
         }
@@ -460,6 +571,12 @@ def main(argv: list[str] | None = None) -> int:
                     # Distinct events, as the table counts them and as the
                     # `--from-cache` record does.
                     "events_probed": hist.events_probed(probes),
+                    # Beside the count, so the record says what was asked for
+                    # and what the cap allowed.
+                    "events_selected": len(events),
+                    "events_from_cache": run.events_from_cache,
+                    "events_skipped_for_budget": run.events_skipped_for_budget,
+                    "credit_cap": args.credit_cap,
                     "snapshots": [probe.snapshot for probe in probes],
                     "markets_seen": sorted(
                         {
@@ -478,7 +595,7 @@ def main(argv: list[str] | None = None) -> int:
             + "\n",
             encoding="utf-8",
         )
-        print(f"Total spend this run: {spent} credit(s).")
+        print(total)
         print(f"Retention written to {outputs / RETENTION_FILENAME}.")
         return 0
 
@@ -486,7 +603,7 @@ def main(argv: list[str] | None = None) -> int:
         provider,
         events=events,
         markets=markets,
-        credit_cap=max(0, args.credit_cap - listing_cost),
+        credit_cap=budget,
         raw_dir=Path(args.raw_dir),
     )
     print(buy.summary_line())

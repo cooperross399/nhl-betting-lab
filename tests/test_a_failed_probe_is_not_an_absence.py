@@ -597,7 +597,11 @@ def _run_probe_step(tmp_path: Path, answer: str) -> subprocess.CompletedProcess:
         step["run"],
         {
             "inputs.start_date": NIGHT,
-            "inputs.credit_cap": "60",
+            # Five uncached events at 7 markets x 2 regions x 10 = 140 each,
+            # plus 1 for the day's listing. This read "60" while the probe
+            # ignored its cap; held to it, 60 affords no uncached event and
+            # the step would send no request at all.
+            "inputs.credit_cap": "701",
             "inputs.hours_before": "4",
         },
     )
