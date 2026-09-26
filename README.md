@@ -354,7 +354,12 @@ run's cache and frozen snapshot. Line Movement Capture restores its captures
 the same way, and then unions every day file, row by row, with the two
 carriers before the newest (`--union 3`): a red run's scratch list and line
 units used to fall out of the chain, and a run whose own restore found nothing
-must not become the base the season is lost from.
+must not become the base the season is lost from. Historical Props Purchase
+restores its bought prices and its state with `--refuse-unreachable`. If
+GitHub cannot be asked, the run stops before it spends a credit or uploads
+anything. Only an answer that no run carries them starts it without them: one
+HTTP 502 used to read as "no purchase carries bought prices", and the run
+bought the window again and uploaded a thin copy as the newest carrier.
 
 | Workflow | Trigger | Spends credits |
 |:---------|:--------|:---------------|

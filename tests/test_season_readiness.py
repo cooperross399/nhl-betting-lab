@@ -472,11 +472,19 @@ def test_a_damaged_store_is_readable_as_absent_but_never_appendable(
 
 def test_the_purchase_restores_the_prices_it_already_bought() -> None:
     """Every purchase uploaded its bought cache and none restored it, so each
-    run re-bought what the last one owned."""
+    run re-bought what the last one owned.
+
+    This looked for `--name historical-props`, the spelling of the inline
+    `gh run download` whose listing read no status, so an HTTP 502 read as
+    "no purchase carries bought prices" and the window was bought again
+    (tests/test_an_unreachable_github_never_reads_as_no_bought_prices.py).
+    The restore now goes through restore_state.py, whose every download
+    passes `--name` (test_state_restore_names_the_artifact_it_wants)."""
     text = _workflow("historical-props-purchase.yml")
 
-    assert "--name historical-props" in text
-    restore = text.index("--name historical-props")
+    call = "restore_state.py --artifact historical-props"
+    assert call in text
+    restore = text.index(call)
     upload = text.index("name: historical-props\n")
     assert restore < upload, "the restore must read what an earlier run wrote"
 
