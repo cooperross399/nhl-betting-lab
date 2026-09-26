@@ -86,6 +86,9 @@ jobs:
           python scripts/probe_low_vig_venues.py --regions "${{ inputs.regions }}" \
             --event-id "${{ inputs.event_id }}" --snapshot "${{ inputs.snapshot }}"
 
+      # Exits 3 when any planned call went unanswered (refused by the
+      # provider, or ruled out by the cap), after writing the report. The
+      # run goes red and the two steps below still publish what came back.
       - name: Probe the venues
         env:
           NHL_ODDS_API_KEY: ${{ secrets.NHL_ODDS_API_KEY }}

@@ -253,12 +253,33 @@ def _shown(directory: Path) -> str:
         return str(directory)
 
 
+#: Where each measurement output records how many historical price rows it
+#: was handed: the props backtest every row passed to it (`rows_read`), the
+#: team measurement every row on disk before a window was chosen
+#: (`stored_rows`). An output without the field predates it and is read as
+#: it always was.
+PRICE_ROWS_FIELDS: tuple[str, ...] = ("rows_read", "stored_rows")
+
+
 def unread_reason(path: Path) -> str:
-    """Why a measurement output could not be read, or "" when it was.
+    """Why no verdict can be read from a measurement output, or "" when one can.
 
     `_read_json` returns `{}` for a file that is absent, truncated, or not an
     object, which is right for reading and wrong for reporting: `{}` is also
     what a measurement with nothing in it looks like.
+
+    A MEASUREMENT HANDED NO PRICE HAS NO VERDICT TO READ EITHER. A
+    measurement run where the bought store is not — Gameday Refresh, whose
+    restored state holds neither price store, or any fresh checkout — writes
+    a perfectly readable JSON with no bet in it, and this returned "" for it. The
+    readers then concluded from the empty measurement rather than about it:
+    the claims headline read "nothing has been measured against real prices
+    yet" and the allowlist bundle gave 12 of 12 markets "no price-based
+    measurement exists", published from every Gameday run against a
+    committed record of ten measured markets (-0.3% over 25,911 `late`
+    bets). An output that records it was handed no price is now named here,
+    so both readers say which output measured nothing and why, and neither
+    says that nothing was ever measured or bought.
     """
     where = _shown(path.parent)
     if not path.is_file():
@@ -269,6 +290,13 @@ def unread_reason(path: Path) -> str:
         payload = None
     if not isinstance(payload, dict):
         return f"`{path.name}` in `{where}` could not be read"
+    for name in PRICE_ROWS_FIELDS:
+        rows = payload.get(name)
+        if isinstance(rows, int) and not isinstance(rows, bool) and rows == 0:
+            return (
+                f"`{path.name}` in `{where}` records a measurement that was "
+                "handed no historical price where it ran"
+            )
     return ""
 
 

@@ -241,6 +241,12 @@ class FetchResult:
     warnings: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
     fetched_at: str = ""
+    #: One entry per per-event request that got no usable answer, beside its
+    #: line in `errors`: the event, the date and teams its rows would have
+    #: carried, the project `markets` it asked for, and the `error`. The
+    #: reports and the card read this to tell a failed fetch from a market no
+    #: book quotes; they never parse `errors` for it.
+    failed_events: list[dict[str, Any]] = field(default_factory=list)
 
     def summary_line(self) -> str:
         return (
@@ -757,6 +763,34 @@ class OddsApiProvider:
             if market in set(PER_EVENT_PROVIDER_MARKETS)
         ] or list(wanted)
         degraded_to_core = False
+        asked_markets = sorted(
+            {
+                market.key
+                for market in map(market_for_provider_key, wanted)
+                if market is not None
+            }
+        )
+
+        def _failed(event: Mapping[str, Any], event_id: str, text: str) -> None:
+            # Until 2026-09-26 only `text` was kept, and a report reading the
+            # empty market could not tell this from a book posting nothing
+            # (see `market_eligibility.failed_requests`). Every market asked
+            # is recorded: a 422 that the core retry could not recover loses
+            # the whole list, not only the core.
+            commence = str(event.get("commence_time", "") or "").strip()
+            result.errors.append(text)
+            result.failed_events.append(
+                {
+                    "provider_event_id": event_id,
+                    # The date `normalize_event` stages this game's rows under.
+                    "date": commence[:10],
+                    "commence_time": commence,
+                    "home_team": str(event.get("home_team", "") or "").strip(),
+                    "away_team": str(event.get("away_team", "") or "").strip(),
+                    "markets": list(asked_markets),
+                    "error": text,
+                }
+            )
 
         skipped_for_budget = 0
         for event in selected:
@@ -801,7 +835,7 @@ class OddsApiProvider:
                             ),
                         )
                     except ProviderError as retry_exc:
-                        result.errors.append(_event_error(event_id, retry_exc))
+                        _failed(event, event_id, _event_error(event_id, retry_exc))
                         continue
                     if not degraded_to_core:
                         degraded_to_core = True
@@ -816,13 +850,13 @@ class OddsApiProvider:
                             "prop on every event with it."
                         )
                 else:
-                    result.errors.append(_event_error(event_id, exc))
+                    _failed(event, event_id, _event_error(event_id, exc))
                     continue
             result.credits_spent += per_event
             if headers.get("x-requests-remaining"):
                 result.quota_remaining = headers["x-requests-remaining"]
             if not isinstance(payload, Mapping):
-                result.errors.append(f"Event {event_id}: malformed payload.")
+                _failed(event, event_id, f"Event {event_id}: malformed payload.")
                 continue
             rows = normalize_event(payload, fetched_at=stamp)
             if rows:
@@ -890,6 +924,10 @@ def write_provenance(
         "rows": len(result.rows),
         "warnings": list(result.warnings),
         "errors": list(result.errors),
+        # Which games' per-event requests failed and which markets that left
+        # unanswered. The card reads it so its excluded markets can say a
+        # failed fetch rather than "The provider returned no rows".
+        "failed_events": [dict(item) for item in result.failed_events],
         "staging_files": [str(path.name) for path in staging_files],
         "shadow_only": True,
         # This note read "Staging is invisible to the card" until 2026-09-25,

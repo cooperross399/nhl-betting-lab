@@ -67,6 +67,7 @@ import pandas as pd
 import pytest
 
 from nhl_betting_lab import verdicts
+from nhl_betting_lab.config import THIN_HISTORY_GAMES
 from nhl_betting_lab.data.build_datasets import TEAM_GAME_COLUMNS, load_team_games
 from nhl_betting_lab.models.team_model import TeamModel
 from nhl_betting_lab.providers import team_names
@@ -111,7 +112,18 @@ WITHDRAWN: list[str] = []
 
 def _team_games(path: Path) -> None:
     """Nothing constant: counts vary by block, and a side on the second
-    night scores less and concedes more than it does rested."""
+    night scores less and concedes more than it does rested.
+
+    Before the blocks come enough earlier games that the table holds
+    `THIN_HISTORY_GAMES`, the fewest the board projects from
+    (tests/test_the_board_refuses_a_thin_history.py). The blocks alone are
+    136 games, which the board now calls thin and projects nothing from, so
+    every test here, each of which reads the board's projections, asserted
+    that it projects from a history Gameday Refresh calls degraded. The
+    earlier games rotate the same four clubs one game a day, so each plays
+    every other day and none is ever on a back-to-back, and the last of them
+    is three days before FIRST_DAY, so night one is still rested for all.
+    """
     rows: list[list] = []
 
     def add(day: date, home: str, away: str, hg: int, ag: int, regulation: bool) -> None:
@@ -119,6 +131,11 @@ def _team_games(path: Path) -> None:
                      f"{day.isoformat()}T23:30:00Z", home, away, hg, ag, 30, 28,
                      regulation])
 
+    earlier = THIN_HISTORY_GAMES - (3 * BLOCKS + 1)
+    for index in range(earlier):
+        day = FIRST_DAY - timedelta(days=3 + earlier - 1 - index)
+        home, away = (("TOR", "MTL"), ("BOS", "NYI"), ("MTL", "TOR"), ("NYI", "BOS"))[index % 4]
+        add(day, home, away, 2 + index % 3, 1 + (index // 4) % 3, index % 5 != 0)
     for block in range(BLOCKS):
         first = FIRST_DAY + timedelta(days=4 * block)
         second = first + timedelta(days=1)

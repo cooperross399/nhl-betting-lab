@@ -39,14 +39,22 @@ population now bought and the figure was noise; it is recorded here rather
 than deleted, because a number this document once published is part of what it
 is for.
 
-**Nothing is allowlisted.** Cooper approved all eleven markets on 2026-08-27,
-overriding this document's enable-nothing recommendation in his own quoted
-words; the approval was withdrawn on 2026-08-29 when the evidence it cited
-moved, and `data/manual/staging_provider_policy.json` has allowlisted nothing
-since. The superseded receipt is kept as the record of a decision that was
-really made. So the card prices every market, recommends nothing, and says
-why — and the only way the answer above ever changes is the forward ledger:
-out-of-sample, priced, settled, and counted.
+**Twelve markets are allowlisted, and this document still recommends enabling
+nothing.** Cooper approved all eleven markets on 2026-08-27, overriding this
+document's enable-nothing recommendation in his own quoted words; the approval
+was withdrawn on 2026-08-29 when the evidence it cited moved, and
+`data/manual/staging_provider_policy.json` allowlisted nothing from then until
+2026-09-23, when Cooper approved twelve markets against the same
+recommendation — re-attested three times on 2026-09-24, under receipt
+`odds_api-20260924T150657-0400-cooperross399`. The withdrawn and superseded
+receipts are kept as the record of decisions that were really made, and
+approve nothing from there. **This section read "Nothing is allowlisted" until
+2026-09-25**, two days after the approval it describes; that is recorded here
+rather than deleted, on the same principle as the superseded figure above.
+Allowlisting says a market's prices may be used. It is not a claim that the
+model beats them, it does not change the answer above, and the only way that
+answer ever changes is the forward ledger: out-of-sample, priced, settled, and
+counted.
 
 ## A population is not a result until it exists on disk
 
