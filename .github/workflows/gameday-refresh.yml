@@ -323,6 +323,17 @@ jobs:
             echo "::notice::No NHL games are scheduled, so there was nothing to price. Not a fault."
             exit 0
           fi
+          # 4 means at least one per-event request failed (a 5xx, a 429, a
+          # timeout, a 422 the core-market fallback could not recover). The
+          # team prices and whatever did arrive are staged, so the card is
+          # still built; the step still exits 4. It used to exit 0, which
+          # made a run with every per-event request refused a clean run:
+          # card-feed read degraded=false and the backup stood down. The note
+          # says what is missing, and "Record what went wrong" carries it.
+          if [ "$code" -eq 4 ]; then
+            echo "The per-event price fetch failed for at least one game (the provider refused or did not answer; the errors are listed in provider_shadow_verification.md), so the props, the regulation three-way and the alternate ladders are missing for those games — absent, not unquoted, and not books declining to post them. If this run froze today's snapshot, it lacks them, and because the day's first snapshot stands, no later run today can add them." > price_fetch_incomplete.txt
+            echo "::warning::Per-event prices are missing for at least one game; see the job summary."
+          fi
           exit "$code"
 
       - name: Record what went wrong
@@ -348,6 +359,10 @@ jobs:
           fi
           if [ "${{ steps.prices.outputs.empty_slate }}" = "true" ]; then
             echo "No NHL games are scheduled, so there was nothing to price. Not a fault." >> run_quiet.txt
+          elif [ -s price_fetch_incomplete.txt ]; then
+            # Before the generic failure below: this fetch staged prices, and
+            # "built from whatever was already staged" would misdescribe it.
+            cat price_fetch_incomplete.txt >> run_degraded.txt
           elif [ "${{ steps.prices.outcome }}" = "failure" ]; then
             echo "The price fetch failed, so the card was built from whatever was already staged. No price was invented." >> run_degraded.txt
           fi
