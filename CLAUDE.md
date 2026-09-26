@@ -650,13 +650,18 @@ Re-derive rather than trust if the data has moved.
 - **`closing-lines.yml` stays unscheduled on purpose, and CLV works anyway.**
   It was about to be given a cron for ~24,600 credits a season before the
   obvious question got asked: the line-movement capture already runs **five
-  times a day** in season, writes every column a closing price needs, and its
-  23:00 UTC snapshot lands at face-off for a 19:00 ET start. A second job
+  times a day** in season and writes every column a closing price needs. Its
+  rounds (14:00, 18:00, 21:00, 23:00 and 01:00 UTC) close a 19:00 ET start
+  with the 23:00 round in EST, an hour out; in EDT that round lands at or
+  after a 19:00 face-off and the strictly-before rule excludes it, so the
+  close is the 21:00 round, two hours out. A second job
   would have re-bought the same board and added another scheduled surface to
   fire and fix. `closing_lines.load_captures` now falls back to the movement
   store, the dedicated store still wins when it holds anything, and the
-  closing rule is unchanged — the last price captured strictly before the
-  face-off. **"CLV works anyway" was true on a laptop and false in CI until
+  closing rule is the same for both — the last price captured strictly before
+  the face-off and, since 2026-09-26, no more than 150 minutes before it
+  (`closing_lines.CLOSE_MAX_LEAD`; the dated entry below says which starts
+  that leaves with no close). **"CLV works anyway" was true on a laptop and false in CI until
   2026-09-24:** the movement store lives on Line Movement's runner, Gameday
   Refresh never downloaded it, and the `closing-lines` branch it reads had no
   writer and did not exist, so every in-season CLV report would have read
@@ -703,8 +708,11 @@ Re-derive rather than trust if the data has moved.
   a game with no result inside fourteen days is counted unsettleable, never
   guessed. `data/outputs/forward_evidence.md` restates what the ledger
   supports, in the house vocabulary. This is the only possible price
-  evidence for hits and the regulation three-way, and the accumulating
-  out-of-sample test for every market and every shipped policy at once.
+  evidence for the regulation three-way, which no book retains historically,
+  and the accumulating out-of-sample test for every market and every shipped
+  policy at once. (Until 2026-09-26 this line named hits too; hits has had
+  historical prices since the 9.5-hour purchase, 5,178 settled wagers — see
+  "Hits is retained historically after all" below.)
 - **2026-09-25, a defect fix recorded as `docs/when_this_ends.md` requires:
   the forward report counts one bet per wager.** The snapshot and the ledger
   keep one row per book — they are evidence, and the CLV report reads them —
@@ -735,6 +743,142 @@ Re-derive rather than trust if the data has moved.
   zero. **The committed reports under `data/outputs` still carry the
   pre-fix figures, and the receipts pin them by checksum** — regenerating
   them and re-attesting is Cooper's call, not a side effect of the fix.
+- **2026-09-26, a defect fix recorded as `docs/when_this_ends.md` requires:
+  the forward report's zero column reads the corrected interval.**
+  `build_forward_report` already computed the interval corrected across the
+  markets measured — the one the 2027-04-25 rule reads — but only the
+  verdict sentence used it. The payload's `low`/`high`/`includes_zero` and
+  the table's "Includes zero" column were the plain 95% interval, so a market
+  could read "no" there while its corrected interval spanned zero and the
+  verdict beneath it said no demonstrated edge (the test fixture: 100
+  even-money bets at 60-40 over two markets, plain +0.7% .. +39.3%,
+  corrected −2.1% .. +42.1%). The payload now also carries `adjusted_low`,
+  `adjusted_high`, `survives_correction` and `looks` from the same
+  `RoiInterval`; the table labels "95% interval, uncorrected" and "Corrected
+  interval", and its "Survives correction" column reads the verdict's own
+  `survives_correction` — yes, no, or "too few (<30)" under the 30-bet
+  floor below which nothing survives. `low`/`high`/`includes_zero` keep
+  their meaning. Counting, bet selection, the verdict rule, the model, the
+  edge bar, the market list, the staking rule and the ledger's schema are
+  unchanged, and the forward ledger held zero rows on 2026-09-26.
+  `tests/test_the_forward_zero_column_reads_the_corrected_interval.py`.
+- **2026-09-26, an open question, not a fix: which population the
+  registered statistic pools.** `docs/when_this_ends.md` decides the lab on
+  "the forward ledger's pooled return on frozen opinions, one bet per wager
+  at the best price the card could have taken, corrected across the markets
+  measured. Opinions, not bets", against a floor of "3,000 settled
+  opinions". That reads two ways: **every settled opinion**, both sides of
+  every line and every rung, with no edge bar; or **only the opinions that
+  clear the shipped edge bar**, which is how the card's historical headline
+  is measured. It awaits Cooper's decision, and neither reading is the
+  decision until he makes it. The registration itself is not edited.
+- **2026-09-26, a defect fix recorded as `docs/when_this_ends.md` requires:
+  a close is a price near face-off.** `closing_lines.closing_prices` took the
+  last capture strictly before face-off however early it was, so on a night
+  the last pre-face-off Line Movement round missed, a 14:00 UTC price for a
+  23:00 UTC game was scored as its close. A close must now also be no more
+  than `CLOSE_MAX_LEAD` — **150 minutes**, inclusive — before face-off. A
+  selection priced before face-off but never within the bound is counted
+  under `no_close_not_near_face_off`, a subset of `no_close` that every CLV
+  report prints, zero included: never scored, never dropped, and kept apart
+  from markets never captured at all. The bound comes from the crons: a
+  19:00 EDT start's best close is the 21:00 round, 120 minutes out, and
+  every 19:00, 19:30 and 22:00 ET start, EDT or EST, has a round within 120
+  minutes when the rounds run on time. **Some starts can never close under
+  today's crons**: 13:00, 13:30, 14:00 and 17:00 EDT; 12:00, 12:30, 13:00,
+  16:00 and 23:00 EST; and 19:00 EDT on 29-30 September, when only the 18:00
+  and 23:00 rounds are scheduled. Their opinions always land in that bucket.
+  A round more than about an hour late behaves as a missed one for most
+  evening starts; 19:30 EDT is the exception, its fallback round sitting
+  exactly 150 minutes out. A round at about 15:30-16:00 UTC would close the
+  afternoon starts at 38 credits an event, and adding one is Cooper's credit
+  decision; no cron changed. CLV is a report, not the 2027-04-25
+  measurement, so no opinion, ledger row or decision figure moves.
+  `tests/test_a_close_is_a_price_near_face_off.py`.
+- **2026-09-26: seven passages of wording said something the numbers did
+  not.** No
+  number, verdict, gate, stake or ledger row moved in any of them, and a
+  committed report under `data/outputs` that carries the old wording keeps
+  it until Cooper regenerates it (the receipts pin them by checksum).
+  `what_we_can_claim.md` and `player_props_backtest.md` called the prop
+  return "understated" and the measurement "conservative in that one
+  direction"; the one-sided vig makes only bet *selection* stricter, and
+  the printed return is best-of-N, which leans optimistic (both generators,
+  the backtest docstring and `docs/what_we_can_and_cannot_claim.md`). The
+  forward report called the ledger the only price evidence for hits; only
+  the regulation three-way is forward-only. The `points` stake-exclusion
+  reason on the card quoted two windows as one measurement; each figure now
+  names its window, as the staking-rule entry below does. The evidence
+  bundle said the held-out window "did not confirm" `points` when nothing
+  was tested — 2024-25 did not carry it alone, and 2025-26 excludes zero on
+  its own — and now names why a replication is untestable. The props
+  backtest set a probability-point claimed edge beside a per-unit ROI; it now
+  sets the model's expected return per unit staked, (1 − P(push)) × (p ×
+  decimal − 1) over every bet, against the ROI, and labels the point edge as
+  points (the bets CSV keeps its 14 columns). The card listed stake-excluded
+  `points` leans under the one-stake-per-outcome ladder heading; each
+  demoted lean now sits under the reason its row carries. And `web/SCHEMA.md`
+  named sources the site builder never reads: finals come from the live NHL
+  schedule endpoint (a build with no network fails and writes neither file),
+  and `record.forward` from `forward_evidence.json`, never `closing_lines`.
+- **2026-09-26: workflow faults that read as success, and one success that
+  read as a fault.** None moves a price, measurement, verdict, the model,
+  the edge bar, the market list, the staking rule or the ledger's schema.
+  Gameday Refresh: a failed fetch of `closing-lines` took the "No capture
+  store yet" branch and CLV then scored the previous run's restored
+  `closing_line_captures.csv` as today's; any restored store is now deleted
+  first, and `git ls-remote` tells an absent branch (clean, and expected
+  while Closing Lines is disabled) from an unreachable or unreadable one
+  (degraded). The `gameday-state` upload ran after the card-feed publish and
+  nothing read its outcome, so a failed upload published `degraded: false`
+  and stood the 15:00 backup down; it now runs straight after the last step
+  that writes state, and anything but a success goes into
+  `run_degraded.txt`. The card notification called a clean forced post, and
+  a card blocked only for a reason the card names as benign (an empty
+  allowlist, or no game left today),
+  "degraded" while the run published `degraded: false`; it now reads
+  `nothing_to_card` as the workflow does, and such a block still posts.
+  Experiment Refresh restored with `|| true` and no `--refuse-unreachable`,
+  so one 502 on the purchase listing re-decided every verdict on an older
+  price file with a green run; it now uses the purchase's
+  `--refuse-unreachable --attempts 3` and fails naming GitHub, and a listing
+  that answers with no carrier is still an absence. Its drift check's "not
+  re-decided" branch was held only by a source grep that the summary text
+  also matched, and is now behaviour-tested. Historical Props Purchase
+  dropped a day whose listing failed and exited 0, so a partial window, or
+  none, read as a finished buy and a probe wrote its retention record over a
+  thinned window; it now names each failed day and exits 2 (a buy still buys
+  the days that listed; a probe asks nothing). A purchase run refused at the
+  restore, or whose rebuild failed, printed the checkout's committed
+  `player_props_backtest.md` into its summary as its own measurement; it now
+  says no measurement was produced. And the `Full test suite` job's pyflakes
+  and compileall lines now read `web/`, with a test that fails any
+  top-level directory of Python the gates do not name.
+- **2026-09-26: four inputs that could go wrong without a word.** A capped
+  fetch spent on games already under way: `fetch_player_props` sorted the
+  board by start and spent `max_events` and the credit cap front to back,
+  nothing dropped a started game, and on the 15:00 UTC backup an afternoon
+  game in progress was bought first — then quarantined by the puck-drop
+  guard — while the evening games it displaced went unpriced. Both fetches
+  now drop, before the sort and the cap, every event whose start is at or
+  before the fetch instant or cannot be confirmed, and warn how many; the
+  bulk fetch drops them too, and the two scripts that run both fetches pass
+  one clock reading to each, because a game staged by one and not the other
+  would leave every per-event market "priced for N−1 of N". A started game
+  could never reach the card, so no opinion that could be frozen changes;
+  its rows are simply no longer staged. `fetch_club_season_schedule` cached
+  the API's `{"games": []}` for a season not yet published, and nothing
+  refreshes a club schedule, so a club asked too early had no game ids and
+  no boxscores all season; an answer with no regular-season game is now
+  never written and a cached one is asked again — the club-schedule twin of
+  the registry fix below. `run_forward_evidence.py` given `--output-dir` or
+  `--archive-dir` alone paired a scratch archive with the real forward
+  ledger, so a scratch card's snapshots settled into it; it now exits 2
+  unless `--processed-dir` is named, and Gameday Refresh, which passes no
+  flags, is unchanged. And the site's history index counted best bets
+  without reading `priced`, so the Archive listed a board with no priced
+  game as "0 best bets", an excluded state shown as a no-value call; it is
+  now `bets: null`, shown as "not priced".
 - **2026-09-26, NOT a defect fix: Cooper changed the staking rule before the
   decision date, which `docs/when_this_ends.md` lists under "may not".** The
   card no longer stakes `points`. This entry exists because the alternative
@@ -743,9 +887,12 @@ Re-derive rather than trust if the data has moved.
   `points` is the one market here measured as a loss that survives
   correction: **-4.2% over 6,140 card-window wagers**, 95% interval -6.7% to
   -1.7%, -7.6% to -0.7% corrected for the eight markets tested, -256.8 units
-  realised, holding within 2025-26 alone at -5.4% over 3,468. The evidence
-  bundle's verdict is that "a loss that survives the correction still argues
-  against enabling this market, not for it".
+  realised. In the late window it is -4.4% over 6,194, 95% interval -6.9% to
+  -2.0%, holding within that window's 2025-26 season alone at -5.4% over
+  3,468 (2,726 + 3,468 = 6,194; this sentence ran the two windows together
+  until 2026-09-26). On the late window the evidence bundle's verdict is that
+  "a loss that survives the correction still argues against enabling this
+  market, not for it".
   **Why this does not change what is being tested, which is the ground the
   decision stands on.** `write_snapshot` runs on the unfiltered priced frame
   before `build_card` is called, and the frozen row carries market, player,
@@ -1258,7 +1405,8 @@ PYTHONPATH=src .venv/bin/python scripts/run_gameday_card.py
 
 # Tests
 PYTHONPATH=src .venv/bin/python -m pytest -q
-PYTHONPATH=src .venv/bin/python -m compileall -q src scripts
+PYTHONPATH=src .venv/bin/python -m compileall -q -f src scripts tests web
+.venv/bin/python -m pyflakes src scripts tests web
 ```
 
 ## Provider automation

@@ -91,7 +91,7 @@ Prop market keys the provider prices for the NHL:
 | `player_assists` | `assists` | boxscore `assists` |
 | `player_total_saves` | `goalie_saves` | boxscore `saveShotsAgainst` numerator |
 | `player_blocked_shots` | `blocked_shots` | boxscore `blockedShots` |
-| `player_hits` | `hits` | boxscore `hits` — live only; see below |
+| `player_hits` | `hits` | boxscore `hits` — historical prices in the second region only; see below |
 
 Anytime goal scorer is priced by the provider as `player_goals` at the 0.5 line
 (and by some books as a dedicated market); this lab treats it as `goals` over
@@ -102,12 +102,15 @@ Team market keys: `h2h` (moneyline), `spreads` (puck line), `totals`, and
 `alternate_spreads` and `alternate_totals` are **per-event only** — asking for
 them on the bulk endpoint makes the provider refuse the entire request.
 
-**Hits is priced live and not retained historically.** A purchase requested
+**Hits is retained historically, in the second region.** A probe requested
 `player_hits` across 256 events spanning both sampled seasons and got zero
-rows back from every book — this time measured well past the probe floor, not
-concluded from one event. So hits can appear on a future card once approved,
-but it can never be backtested against past prices; its evidence will have to
-accumulate forward, one game-day at a time, like BTTS did in the EPL lab.
+rows back — but it asked one region, and both books that quote hits (ESPN BET
+and theScore Bet) are in the second. The 9.5-hour purchase asked `us,us2` and
+came back with 16,048 hits rows over 1,218 events, settling 5,178 wagers at
+−1.3%, 95% interval −4.0% to +1.4%: no demonstrated edge, measured in the
+`card` window only (the four-hour buy asked one region and holds none).
+Until 2026-09-26 this paragraph said hits could never be backtested; see
+"Hits is retained historically after all" in `CLAUDE.md`.
 
 Markets probed and deliberately not priced, with the reason:
 
