@@ -141,8 +141,11 @@ def _artifact(root: Path, *, boxscores: int = 0, prices: str | None = None) -> s
     root.mkdir(parents=True)
     box = root / "raw" / "nhl" / "boxscore"
     box.mkdir(parents=True)
+    # Final games, as a real cache holds: the step's floor counts only
+    # boxscores whose game is over, so an empty object would count as none.
+    final = json.dumps({"gameState": "OFF"}, indent=2)
     for game in range(boxscores):
-        (box / f"{game}.json").write_text("{}", encoding="utf-8")
+        (box / f"{game}.json").write_text(final, encoding="utf-8")
     if prices is not None:
         (root / PRICES).parent.mkdir(parents=True, exist_ok=True)
         (root / PRICES).write_text(prices, encoding="utf-8")
