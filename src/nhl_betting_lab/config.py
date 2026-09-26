@@ -37,6 +37,15 @@ SEASON_ROLLOVER_MONTH = 8
 REGULAR_SEASON_GAME_TYPE = 2
 PLAYOFF_GAME_TYPE = 3
 
+#: Fewer games than this and the history is thin. Gameday Refresh's "Record
+#: what went wrong" calls a run with fewer cached boxscores degraded ("the
+#: models are fitted on a thin history"), which is the lab's own line, and the
+#: public board (`web/build_site_json.py::load_model`) refuses to project from
+#: a `team_games.csv` holding fewer rows. The workflow cannot import this, so
+#: its literal is held to it by running that step:
+#: `tests/test_the_board_refuses_a_thin_history.py`.
+THIN_HISTORY_GAMES = 1000
+
 
 def current_season_id(today: date | None = None) -> int:
     """The NHL's id for the season being played, e.g. 20262027."""

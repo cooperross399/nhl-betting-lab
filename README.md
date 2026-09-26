@@ -339,7 +339,13 @@ finish.
 Each run starts from the previous run's state, restored by
 `scripts/restore_state.py` from the newest run on `main` that actually carries
 the `gameday-state` artifact — whatever its conclusion, with the newest
-successful state laid underneath a red one. A run dispatched on a feature
+successful state laid underneath a red one. A listing or download GitHub does
+not answer is tried three times, and one that still fails makes the run
+degraded rather than reading as "nothing to restore": one HTTP 502 used to
+restore the purchase's state instead, which has no snapshot archive, so the
+day's frozen snapshot never settled and the green run passed the gap on for
+good. A red run is what makes the next restore lay the last good state
+underneath it. A run dispatched on a feature
 branch is never a source: it ran code nobody reviewed, and Line Movement's
 only unexpired artifact on 2026-09-25 was such a rehearsal, which would have
 seeded the season's capture chain. Choosing "the newest successful run" picked a

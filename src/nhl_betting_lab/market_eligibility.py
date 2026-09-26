@@ -25,6 +25,17 @@ because conflating them is how a card starts lying:
     quotes it" read identically as `unavailable`, and the scheduled discovery
     probe — bulk markets only — published nine markets as the provider's
     absence that it had never asked about.
+``fetch_failed``
+    Asked for, and the per-event request that asks for it failed for every
+    game in the slate (an HTTP error, a timeout, an unreadable answer), so
+    there are no rows and nothing to judge. Not an absence at the provider:
+    retry the fetch. Only a caller that knows which requests failed can say
+    this — a live shadow run, and the card reading that run's staging
+    provenance. It exists because a run whose every per-event request
+    answered HTTP 503 read, row for row, like a run whose books posted
+    nothing: nine markets `unavailable`, "The provider returned no rows".
+    A market that is missing only SOME games for this reason keeps its
+    `unavailable` or `incomplete` state and names those games in its reason.
 ``not_allowlisted``
     Priced and complete, but no reviewed human approval covers it. This is the
     default state of every market in this repository.
@@ -75,6 +86,7 @@ ELIGIBLE = "eligible"
 INCOMPLETE = "incomplete"
 UNAVAILABLE = "unavailable"
 NOT_REQUESTED = "not_requested"
+FETCH_FAILED = "fetch_failed"
 NOT_ALLOWLISTED = "not_allowlisted"
 DISABLED = "disabled"
 
@@ -164,6 +176,87 @@ def _game_key(row: Mapping[str, object]) -> str:
     ).strip()
 
 
+@dataclass(frozen=True)
+class FailedRequest:
+    """One per-event request that got no usable answer, keyed to its game."""
+
+    game: str
+    #: The project markets it asked for that no answered request covered.
+    markets: tuple[str, ...]
+    error: str
+
+
+def failed_requests(
+    failed_events: Iterable[Mapping[str, object]] | None,
+    prices: pd.DataFrame | None = None,
+) -> tuple[FailedRequest, ...]:
+    """The per-event requests a fetch recorded as failed, each keyed to the
+    game exactly as the slate keys it.
+
+    `failed_events` is `FetchResult.failed_events` as `run_provider_shadow.py`
+    passes it on and the staging provenance keeps it. A failure is tied to
+    its game through the staged rows carrying its `provider_event_id` — the
+    bulk rows, which the slate is built from — and, where no row does, from
+    the date and teams it recorded. So a failure lands on the very game the
+    coverage is measured against, however the events listing spelled it.
+    """
+    if not failed_events:
+        return ()
+    games_by_event: dict[str, str] = {}
+    if (
+        prices is not None
+        and not prices.empty
+        and "provider_event_id" in prices.columns
+    ):
+        for row in prices.drop_duplicates("provider_event_id").to_dict("records"):
+            event_id = str(row.get("provider_event_id", "") or "").strip()
+            if event_id and event_id.lower() != "nan":
+                games_by_event.setdefault(event_id, _game_key(row))
+    found: list[FailedRequest] = []
+    for entry in failed_events:
+        if not isinstance(entry, Mapping):
+            continue
+        event_id = str(entry.get("provider_event_id", "") or "").strip()
+        if event_id in games_by_event:
+            game = games_by_event[event_id]
+        elif str(entry.get("home_team", "") or "").strip() and str(
+            entry.get("away_team", "") or ""
+        ).strip():
+            game = _game_key(entry)
+        else:
+            game = f"event {event_id or 'unknown'}"
+        markets = entry.get("markets") or ()
+        if isinstance(markets, str):
+            markets = (markets,)
+        found.append(
+            FailedRequest(
+                game=game,
+                markets=tuple(
+                    sorted({str(item).strip() for item in markets if str(item).strip()})
+                ),
+                error=str(entry.get("error", "") or "").strip(),
+            )
+        )
+    return tuple(found)
+
+
+def unanswered_games(
+    requests: Sequence[FailedRequest],
+) -> dict[str, dict[str, str]]:
+    """{project market: {game: why its request failed}}."""
+    found: dict[str, dict[str, str]] = {}
+    for request in requests:
+        for market in request.markets:
+            found.setdefault(market, {})[request.game] = request.error
+    return found
+
+
+def name_games(games: Sequence[str], *, limit: int = 4) -> str:
+    """A short list of game keys for a reason a person reads."""
+    shown = ", ".join(games[:limit])
+    return shown + (f" and {len(games) - limit} more" if len(games) > limit else "")
+
+
 def assess_markets(
     prices: pd.DataFrame,
     *,
@@ -174,6 +267,7 @@ def assess_markets(
     disabled: Iterable[str] = (),
     require_full_slate: bool = True,
     requested: Iterable[str] | None = None,
+    failed_events: Iterable[Mapping[str, object]] | None = None,
 ) -> EligibilityReport:
     """Decide each market's state for one slate.
 
@@ -191,12 +285,25 @@ def assess_markets(
     card, and any offline assessment of staged files) means "unknown", and
     every market is judged exactly as before. A market with rows is judged
     on its rows whatever this says; rows are never hidden behind a label.
+
+    `failed_events` is the fetch's record of per-event requests that got no
+    usable answer (`FetchResult.failed_events`). A market that has no rows
+    because its request failed for every game in the slate is
+    `fetch_failed`; one missing only some games for that reason keeps its
+    state and names them. Until 2026-09-26 nothing here could see a failed
+    request: a run whose three per-event requests all answered HTTP 503
+    exited 4 and still published nine markets as "The provider returned no
+    rows ... check per-bookmaker coverage including alternate lines", word
+    for word what a run whose books posted nothing publishes, and the card's
+    excluded markets said the same under a note that the fetch had failed.
+    None means no failure is known, and every market is judged as before.
     """
     keys = tuple(str(market) for market in (markets or MARKETS_BY_KEY))
     turned_off = {str(item).strip() for item in disabled}
     asked = (
         None if requested is None else {str(item).strip() for item in requested}
     )
+    unanswered = unanswered_games(failed_requests(failed_events, prices))
     slate = tuple(dict.fromkeys(str(game) for game in slate_games))
     report = EligibilityReport(
         provider_name=str(provider_name), games_in_slate=len(slate)
@@ -269,15 +376,66 @@ def assess_markets(
             )
             continue
 
+        failed_here = unanswered.get(key, {})
+        # The slate's games whose request for this market failed. With no
+        # slate at all (no market has a row), every failed game counts.
+        failed_games = (
+            tuple(game for game in slate if game in failed_here)
+            if slate
+            else tuple(sorted(failed_here))
+        )
+        failed_missing = tuple(game for game in missing if game in failed_here)
+
+        if not covered and failed_games and len(failed_missing) == len(missing):
+            scope = (
+                f"all {len(slate)} game(s) in the slate"
+                if slate
+                else f"{len(failed_games)} game(s)"
+            )
+            report.markets.append(
+                MarketEligibility(
+                    market=key,
+                    state=FETCH_FAILED,
+                    reason=(
+                        "No rows, because the per-event request that asks "
+                        f"for this market failed for {scope}: the provider "
+                        "refused it or did not answer. That is a failed "
+                        "fetch — not an absence at the provider, not a price "
+                        "of zero and not a no-value call — and it says "
+                        "nothing about whether any book quotes this market. "
+                        "Retry the fetch before concluding anything; the "
+                        "alternate lines were asked in the same request, and "
+                        "a wider region would not answer it."
+                    ),
+                    games_in_slate=len(slate),
+                    rows=0,
+                    missing_games=missing,
+                )
+            )
+            continue
+
         if not covered:
+            if failed_missing:
+                absence = (
+                    f"For {len(failed_missing)} of the {len(slate)} game(s) "
+                    f"({name_games(failed_missing)}) that is because the "
+                    "per-event request failed, not because no book quotes "
+                    "it: retry those before reading them either way. The "
+                    "rest is an absence, not a price of zero and not a "
+                    "no-value call."
+                )
+            else:
+                absence = (
+                    "That is an absence, not a price of zero and not a "
+                    "no-value call."
+                )
             report.markets.append(
                 MarketEligibility(
                     market=key,
                     state=UNAVAILABLE,
                     reason=(
-                        "The provider returned no rows for this market. That "
-                        "is an absence, not a price of zero and not a "
-                        "no-value call. Check per-bookmaker coverage "
+                        "The provider returned no rows for this market. "
+                        f"{absence} Check per-bookmaker coverage "
                         "including alternate lines before concluding it is "
                         "not offered."
                     ),
@@ -298,6 +456,15 @@ def assess_markets(
                         "Picking only where prices happen to exist is a "
                         "selection effect, not an edge, so the market is "
                         "excluded rather than half-used."
+                        + (
+                            f" Of the {len(missing)} missing game(s), "
+                            f"{len(failed_missing)} "
+                            f"({name_games(failed_missing)}) are missing "
+                            "because the per-event request failed, not "
+                            "because no book priced them."
+                            if failed_missing
+                            else ""
+                        )
                     ),
                     games_in_slate=len(slate),
                     games_priced=len(covered),
