@@ -36,6 +36,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pandas as pd
+import pytest
 
 from nhl_betting_lab.forward_evidence import write_snapshot
 from nhl_betting_lab.market_eligibility import (
@@ -46,6 +47,7 @@ from nhl_betting_lab.market_eligibility import (
 from nhl_betting_lab.reports import gameday_card as card_module
 from nhl_betting_lab.reports.card_pricing import selection_key
 from nhl_betting_lab.reports.gameday_card import (
+    STAKE_EXCLUDED_MARKETS,
     BEST_BETS_SECTION,
     LEANS_SECTION,
     build_candidates,
@@ -80,6 +82,26 @@ def _ladder_prefix() -> str:
 
 
 NOW = datetime(2026, 10, 8, 18, 0, tzinfo=timezone.utc)
+
+
+@pytest.fixture(autouse=True)
+def _ladder_tests_do_not_depend_on_the_stake_exclusion_list(monkeypatch):
+    """These tests are about the ladder COLLAPSE, not about which markets the
+    card happens to stake.
+
+    `points` is this module's fixture market because it is the real-world case
+    that motivated the fix -- the deepest ladder in the feed. It is also, since
+    `decide/points-not-staked`, in `STAKE_EXCLUDED_MARKETS`, so nothing on it
+    would reach the staking path at all and every assertion here would pass
+    vacuously against an empty list.
+
+    Clearing the entry keeps each test measuring the one mechanism it names.
+    The INTERACTION between the two -- that an excluded ladder keeps every rung
+    as a lean, and that an excluded market does not suppress a staked one
+    beside it -- is covered in test_a_market_can_be_eligible_and_unstaked.py,
+    where it belongs.
+    """
+    monkeypatch.delitem(STAKE_EXCLUDED_MARKETS, "points", raising=False)
 
 
 def _at(hours: float) -> str:
