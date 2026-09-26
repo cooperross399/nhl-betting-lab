@@ -21,6 +21,9 @@ name: Publish Site
 #
 # Each day's published board is frozen into a `site-history`
 # artifact so the next morning settles the opinion that was actually shown.
+# That history only grows: a run that cannot restore it, or that would upload
+# less than it restored, fails before anything is kept or deployed, and the
+# site keeps its last build until the next run.
 on:
   schedule:
     - cron: "45 14 * * *"   # 10:45 New York, after the 09:30 card
@@ -28,6 +31,14 @@ on:
     workflows: ["Gameday Refresh"]
     types: [completed]
   workflow_dispatch:
+    inputs:
+      start_history_afresh:
+        description: >-
+          Start the site's history again from today. Only for when the last
+          publish's site-history artifact is gone for good (expired or
+          deleted): every earlier frozen board leaves the public archive.
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -66,10 +77,10 @@ jobs:
           python -m pip install -r requirements.txt
           python -m pip install -e .
 
-      - name: Restore the lab's latest state and the site's history
-        # Both restores are allowed to find nothing: on a bare repository, or
-        # in preseason before the first card, the site is schedule-only and
-        # says so. The step reports which it found.
+      - name: Restore the lab's latest state
+        # Allowed to find nothing: on a bare repository, or in preseason
+        # before the first card, the site is schedule-only and says so. The
+        # step reports what it found.
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
@@ -86,14 +97,41 @@ jobs:
             --workflow gameday-refresh.yml --no-merge \
             --also gameday-reports=data/outputs \
             || echo "No Gameday Refresh state could be restored; building schedule-only."
-          last=$(gh run list --workflow publish-site.yml --status success \
-            --limit 1 --json databaseId --jq '.[0].databaseId // empty')
+
+      - name: Restore the site's history
+        # NOT continue-on-error, and it must not become so. This used to sit
+        # in the step above as `gh run list --status success --limit 1` and
+        # `gh run download ... || echo`, so a failed API call read as "No
+        # previous publish; the history starts today": the build froze
+        # today's board alone, index.json was rewritten with one entry, the
+        # run went green and uploaded that as site-history, and the next run
+        # restored from it. In the failure-shape audit's replay one HTTP 502
+        # took a three-board history to one, for good, and Results said "No
+        # board was published for this date" about a board published with 14
+        # games. Now the history comes from the newest successful publish —
+        # an older one would lose whatever the newest added — or the job
+        # stops here, before anything is built, kept or deployed, and the
+        # site keeps its last build until the next run. Only a listing that
+        # succeeds and holds no successful publish starts the history
+        # afresh, or an owner who dispatches with start_history_afresh.
+        env:
+          GH_TOKEN: ${{ github.token }}
+          START_HISTORY_AFRESH: ${{ inputs.start_history_afresh && 'true' || 'false' }}
+        run: |
+          set -u
           mkdir -p dist/data/history
-          if [ -n "$last" ]; then
-            gh run download "$last" --name site-history --dir dist/data/history || echo "No site-history artifact on run $last."
+          if [ "$START_HISTORY_AFRESH" = "true" ]; then
+            echo "::warning::Dispatched with start_history_afresh: the site's history starts again from today, and every earlier frozen board leaves the public archive."
           else
-            echo "No previous publish; the history starts today."
+            python scripts/restore_state.py --artifact site-history --dest dist/data/history \
+              --workflow publish-site.yml --success-only --require-newest --attempts 3 || {
+              echo "::error::The site's history could not be restored, so nothing is built, kept or deployed; the public site keeps its last build and the next run tries again. If the newest successful publish's site-history artifact has expired or been deleted it cannot come back, and dispatching Publish Site with start_history_afresh starts the history again from today."
+              exit 1
+            }
           fi
+          # The floor the upload is checked against, taken before the build.
+          python scripts/site_history_floor.py record --history dist/data/history \
+            --floor "$RUNNER_TEMP/site-history-floor.json"
 
       - name: Assemble the site
         run: |
@@ -111,6 +149,16 @@ jobs:
           python web/build_site_json.py --lab . --out dist/data
           python web/site_history.py --data dist/data
           printf '{"sport":"nhl"}' > dist/site.json
+
+      - name: Refuse a history shorter than the one restored
+        # Before the history is kept and before the site is deployed. Every
+        # frozen board the restore brought back must still be here and
+        # unchanged (it is the published opinion Results settles against),
+        # every line series too, and index.json — what the Archive reads —
+        # must still list every board. See scripts/site_history_floor.py.
+        run: |
+          python scripts/site_history_floor.py check --history dist/data/history \
+            --floor "$RUNNER_TEMP/site-history-floor.json"
 
       - name: Keep the history for tomorrow's settlement
         uses: actions/upload-artifact@v4

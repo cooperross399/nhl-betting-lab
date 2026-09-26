@@ -1,7 +1,10 @@
 """Shared fixtures, and the hooks that make "the suite passed" mean that.
 
 Every test here runs offline. Nothing in this suite makes a network request,
-reads a credential, or writes outside `tmp_path`.
+reads a credential, or writes outside `tmp_path`. For the evidence archive
+and the forward ledger that last clause is enforced, not only intended:
+`the_evidence_archive_is_never_the_checkouts` below points their default root
+at each test's own scratch directory before the test runs.
 
 The hooks live here as well, because a fixture file is the one module pytest
 loads before it decides what to run:
@@ -46,6 +49,7 @@ A subset run is refused by design; `python -m pytest -q` is the only run.
 from __future__ import annotations
 
 import ast
+import itertools
 import os
 from pathlib import Path
 from typing import Any
@@ -458,6 +462,55 @@ def boxscore_payload(
         "awayTeam": {"abbrev": away, "score": away_score, "sog": away_shots},
         "playerByGameStats": {"homeTeam": home_block, "awayTeam": away_block},
     }
+
+
+#: The package this suite tests, beside this file. The synthetic suites that
+#: `tests/test_the_guards_exist.py` builds copy this file into a tree with no
+#: package of its own, and so no evidence archive to protect.
+_PACKAGE = Path(__file__).resolve().parents[1] / "src" / "nhl_betting_lab"
+
+#: Numbers each test's default evidence root, so no two tests share one.
+_EVIDENCE_ROOTS = itertools.count()
+
+
+@pytest.fixture(autouse=True)
+def the_evidence_archive_is_never_the_checkouts(
+    monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest.TempPathFactory
+) -> None:
+    """Every test starts with the default evidence root in its own scratch directory.
+
+    `forward_evidence.DATA_DIR` is the root the card's snapshots freeze under
+    (`archive/priced_snapshots`, where the first opinion of a day stands and
+    is never replaced) and the root of the forward ledger's default
+    (`processed/forward_evidence.csv`, append-only). Both are the checkout's
+    own `data/` unless something points them away, and before this fixture
+    only a test's own fixture did. Four modules run the card's real `main()`
+    with fixtures that point every other default away and not this one. The
+    card's guard keeps a scratch run out of the real archive, and with that
+    guard deleted, on 68dcbb4, the suite went red (14 failed, 2412 passed)
+    and still left three snapshots of synthetic rows in the checkout's
+    `data/archive/priced_snapshots`: 2026-03-12, 2026-10-07 and 2026-10-15.
+    In the operator's checkout each would have stood as that night's first
+    opinion, for settlement to read (failure-shape audit, v5;
+    `tests/test_no_test_can_freeze_into_the_checkouts_archive.py`).
+
+    Pointed here before the test body runs, the root is out of every test's
+    reach, including a test written later that forgets, whichever guard
+    regresses. A test that means the root to be somewhere else sets it
+    after this, as `point_default_data_dirs_at` does. The directory is the
+    test's own, under the session's temporary directory, and is not created:
+    a test that never writes there leaves nothing behind, and a test that
+    does not ask for `tmp_path` is not made to create one (on 2,400 trivial
+    tests, an autouse `tmp_path` ran in 15.5 seconds against 3.0 without).
+    """
+    if not _PACKAGE.is_dir():
+        return
+    from nhl_betting_lab import forward_evidence
+
+    root = tmp_path_factory.getbasetemp() / "suite_default_data" / str(
+        next(_EVIDENCE_ROOTS)
+    )
+    monkeypatch.setattr(forward_evidence, "DATA_DIR", root)
 
 
 @pytest.fixture(autouse=True)
