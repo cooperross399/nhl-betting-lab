@@ -28,10 +28,17 @@ teams[ABBR]      {name, short, color, fg}
 games[]
   id, startUtc, venue, city, tv
   priced         true when this build attached market prices to the game; false renders "Not priced", never a pass
-  away | home    {abbr, record, projGoals, winProb, b2b, goalie:{name, status:"confirmed"|"projected"}}  — everything after abbr optional
-  moneyline      {open:{away,home} | null, current:{away,home}, fair:{away,home}}  — open is the day's first line-movement capture, null when none was captured
+  away | home    {abbr, record, projGoals, winProb, b2b, goalie:{name, status:"confirmed"|"projected"}}  — everything after abbr optional;
+                 b2b is the schedule fact (played the previous league day) and is published under either
+                 verdict; projGoals, winProb and the market figures below include the back-to-back
+                 adjustment only while the recorded team_b2b verdict ships it
+  moneyline      {open:{away,home} | null, current:{away,home}, fair:{away,home}}  — open is the game's moneyline at the first capture in
+                 line_movement/<day>.csv that held it (one capture, never the day pooled); null when none was captured, which
+                 today is every game: the capture asks for no bulk h2h
   puckLine       {favorite, line, price, coverProb}
-  total          {open | null, current, overPrice, underPrice, proj, overProb}
+  total          {open | null, current, overPrice, underPrice, proj, overProb}  — current is the most common line among the
+                 staged bulk (featured) totals, never an alternate-ladder rung; open is null, because every total a capture
+                 holds is an alternate_totals rung and no row says which line is the featured one
   regulation     {away, draw, home, prices:{away,draw,home}}
   pick           {market, label, price, edgePct} | null   ← one best market per game; null on a priced game means nothing cleared the edge bar, on an unpriced game it means nothing was assessed
 ```
@@ -49,7 +56,9 @@ games[]
   finish         "REG" | "OT" | "SO"
   projWinner     ABBR
   total          {line, proj, result:"over"|"under"|"push"}
-  pick           {market, label, price, result:"win"|"loss"|"push"}
+  priced         the frozen board's `priced` for this game (a board frozen before that flag: whether it carried a moneyline)
+  pick           {market, label, price, edgePct, result:"win"|"loss"|"push"} | null  ← null when the board carried no pick for the game;
+                 the page renders it "Not priced" unless priced is true, "No play" when it is, and grades neither and shows no price
 ```
 
-`web/build_site_json.py` is the reference writer. Source mapping in nhl-betting-lab: `moneyline`/`puckLine`/`total`/`regulation` come from `reports/card_pricing.price_team_markets` (TeamModel), `pick` from `reports/gameday_card.build_card` selections, `record.forward` from `forward_evidence.py` + `closing_lines.py`, finals from the boxscore cache via `build_datasets.load_team_games`.
+`web/build_site_json.py` is the reference writer. Source mapping in nhl-betting-lab: `projGoals`/`winProb`/`moneyline`/`puckLine`/`total`/`regulation` come from `models/team_model.TeamModel`, called directly rather than through `reports/card_pricing.price_team_markets`; the back-to-back adjustment reaches them only while `verdicts.ships("team_b2b")`, read from the lab's `data/outputs` as the card reads it, says it ships, so the board and the card price under one policy. `pick` comes from `reports/gameday_card.build_card` selections, `record.forward` from `forward_evidence.py` + `closing_lines.py`, finals from the boxscore cache via `build_datasets.load_team_games`.

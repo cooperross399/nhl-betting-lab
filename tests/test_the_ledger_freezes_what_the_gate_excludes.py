@@ -71,6 +71,7 @@ import pytest
 
 from conftest import boxscore_payload
 from test_scripts import load_script
+from test_no_test_reads_the_checkouts_data import point_default_data_dirs_at
 from nhl_betting_lab import config
 from nhl_betting_lab import staging_provider_policy
 from nhl_betting_lab.data import nhl_api
@@ -337,6 +338,9 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Path]:
     policy_root = tmp_path / "repository"
     for directory in (raw, processed, staging, outputs, policy_root):
         directory.mkdir()
+    # The recorded verdicts too, which the scratch --output-dir fell back to
+    # (#151) until this line; the ones after it override what this needs.
+    point_default_data_dirs_at(monkeypatch, tmp_path / "checkout_defaults")
     monkeypatch.setattr(config, "RAW_DIR", raw)
     monkeypatch.setattr(tn, "RAW_DIR", raw)
     monkeypatch.setattr(tn, "PROCESSED_DIR", processed)

@@ -560,6 +560,11 @@ def clv_rows(
         rows.append(
             {
                 "snapshot_date": str(getattr(row, "snapshot_date", "")),
+                # The game this row belongs to, which is the unit every
+                # interval in the report counts. See `_game_of`.
+                "home_team": str(getattr(row, "home_team", "")),
+                "away_team": str(getattr(row, "away_team", "")),
+                "game_date": row_game_date(row),
                 "market": str(getattr(row, "market", "")).strip(),
                 "selection": str(getattr(row, "selection", "")),
                 "player": str(getattr(row, "player", "") or ""),
@@ -577,6 +582,21 @@ def clv_rows(
     return pd.DataFrame(rows), counts
 
 
+def _game_of(frame: pd.DataFrame) -> list[tuple[str, str, str]]:
+    """(home, away, league game date) for every row: one game.
+
+    The date is the league game date `row_game_date` gives, so two meetings
+    of the same clubs on different nights are two games.
+    """
+    return list(
+        zip(
+            frame["home_team"].astype(str),
+            frame["away_team"].astype(str),
+            frame["game_date"].astype(str),
+        )
+    )
+
+
 def _summarise(frame: pd.DataFrame, *, looks: int = 1) -> dict:
     """One view's numbers. `looks` is how many markets share the table, so a
     per-market row is corrected for the search that produced it — the same
@@ -587,27 +607,63 @@ def _summarise(frame: pd.DataFrame, *, looks: int = 1) -> dict:
     when looks is 1. Only the CLV interval used to be corrected, and it was
     never rendered. The EV correction was computed and then dropped, and the
     beat-rate interval was never corrected at all.
+
+    ## Every interval counts the game, not the row
+
+    These were `wilson_interval(beat, decided)` and `roi_interval` over the
+    rows, as if every row were an independent trial. A row is one selection
+    at its best price, and the card freezes every priced row: one game
+    brings both sides of a market, every rung of every alternate ladder and
+    every player, and all of them move with that game's news. The
+    failure-shape audit ran the real runner on the bought prices. One game
+    of 162 rows printed beat rate 78.3% [64.4%, 87.7%] and "The interval
+    excludes zero on the positive side". The first week of 2025-26 (48
+    games, 8,552 rows) read [+0.251%, +0.404%], "excludes zero", where the
+    game-clustered interval is [-0.015%, +0.670%]. The design effect on mean
+    CLV was 17-23 for opinions and 1.2-1.6 for bets, and in a null
+    simulation the row-level page said "excludes zero" in 41% of runs. Almost
+    every flip flattered the model.
+
+    The beat rate is now `clustered_wilson_interval` over per-game (beat,
+    decided) tallies, and CLV% and EV at close are `clustered_mean_interval`
+    over the game, both corrected with the same `bonferroni_z(looks)`. Each
+    is exactly the old interval when every game holds one row, is never
+    narrower than it, and cannot be bounded from one game.
     """
-    from nhl_betting_lab.stats import bonferroni_z, roi_interval, wilson_interval
+    from nhl_betting_lab.stats import (
+        bonferroni_z,
+        clustered_mean_interval,
+        clustered_wilson_interval,
+    )
 
     if frame.empty:
         return {"bets": 0, "no_close": 0}
+    games = _game_of(frame)
     beat = int(frame["beat_close"].sum())
     tied = int(frame["tied_close"].sum())
     # A price that did not move is not a win over the market and not a loss
     # to it. Counting ties as misses would drag the rate below its true
     # value on exactly the markets that move least.
     decided = int(len(frame)) - tied
-    low, high = wilson_interval(beat, decided)
-    adjusted_low, adjusted_high = wilson_interval(
-        beat, decided, z=bonferroni_z(looks)
+    tallies: dict[tuple, list[int]] = {}
+    for game, won, tie in zip(games, frame["beat_close"], frame["tied_close"]):
+        tally = tallies.setdefault(game, [0, 0])
+        if not bool(tie):
+            tally[0] += int(bool(won))
+            tally[1] += 1
+    pairs = [(won, count) for won, count in tallies.values()]
+    low, high = clustered_wilson_interval(pairs)
+    adjusted_low, adjusted_high = clustered_wilson_interval(
+        pairs, z=bonferroni_z(looks)
     )
-    clv = roi_interval(
-        [float(value) for value in frame["clv_pct"]], looks=looks
+    clv = clustered_mean_interval(
+        [float(value) for value in frame["clv_pct"]], games, looks=looks
     )
-    priced = frame[frame["ev_at_close"].notna()]
+    has_ev = frame["ev_at_close"].notna()
+    priced = frame[has_ev]
     summary = {
         "bets": int(len(frame)),
+        "games": len(tallies),
         "beat_close": beat,
         "tied": tied,
         "decided": decided,
@@ -624,8 +680,10 @@ def _summarise(frame: pd.DataFrame, *, looks: int = 1) -> dict:
         "ev_rows": int(len(priced)),
     }
     if not priced.empty:
-        ev = roi_interval(
-            [float(value) for value in priced["ev_at_close"]], looks=looks
+        ev = clustered_mean_interval(
+            [float(value) for value in priced["ev_at_close"]],
+            [game for game, keep in zip(games, has_ev) if keep],
+            looks=looks,
         )
         summary["mean_ev"] = float(priced["ev_at_close"].mean())
         summary["ev_low"] = ev.low
@@ -758,7 +816,8 @@ def unreadable_store_report(
 #: The columns every CLV table carries, in order. One definition, so a row
 #: and its header cannot drift apart — they did, and every per-market number
 #: rendered one column left of its heading with the sample size swallowed by
-#: the cell before it.
+#: the cell before it. `Games` is the unit every interval counts; it is last
+#: so no column the earlier tables printed moves.
 TABLE_COLUMNS = (
     "Rows",
     "Beat close",
@@ -766,6 +825,7 @@ TABLE_COLUMNS = (
     "Beat rate [95%]",
     "Mean CLV% [95%]",
     "EV at close [95%] (n)",
+    "Games",
 )
 
 
@@ -782,7 +842,7 @@ def _summary_cells(summary: dict, *, corrected: bool = False) -> list[str]:
     It used to print the plain 95% ones there, so every by-market interval
     was about 18% too narrow at three markets (z 1.960 against 2.394)."""
     if not summary.get("bets"):
-        return ["0", "0", "0", "—", "—", "—"]
+        return ["0", "0", "0", "—", "—", "—", "0"]
     bound = "adjusted_" if corrected else ""
     ev = "—"
     if "mean_ev" in summary:
@@ -802,11 +862,41 @@ def _summary_cells(summary: dict, *, corrected: bool = False) -> list[str]:
         f"{summary['mean_clv_pct']:+.2%} "
         + _interval(summary[f"clv_{bound}low"], summary[f"clv_{bound}high"]),
         ev,
+        str(summary["games"]),
     ]
 
 
 def _row(*cells: str) -> str:
     return "| " + " | ".join(cells) + " |"
+
+
+def _unreadable_snapshot_lines(report: dict) -> list[str]:
+    """One bullet per priced snapshot the runner could not read.
+
+    Before these were named, a damaged snapshot either stopped the runner
+    (half a character: no report at all) or left its day out of the counts
+    without a word (an unclosed quote, zero bytes, half a header: the audit's
+    run counted 64 of 128 frozen rows and exited 0). Printed above every
+    other line, in every shape of the report, so no count below is read
+    without it.
+    """
+    damaged = report.get("unreadable_snapshots") or []
+    if not damaged:
+        return []
+    lines = [
+        f"- **{len(damaged)}** priced snapshot file(s) could not be read, so "
+        "no opinion frozen only in them is counted below:",
+    ]
+    for entry in damaged:
+        held = int(entry.get("ledger_rows", 0) or 0)
+        counted = (
+            f"the forward ledger holds {held} row(s) frozen that day, and "
+            "those are counted"
+            if held
+            else "no row frozen that day is counted"
+        )
+        lines.append(f"  - `{entry.get('name')}` ({entry.get('reason')}): {counted}.")
+    return lines
 
 
 def render_clv(report: dict, *, generated: str = "") -> str:
@@ -823,6 +913,7 @@ def render_clv(report: dict, *, generated: str = "") -> str:
     ]
     if generated:
         lines += [f"- Generated: {generated}"]
+    lines += _unreadable_snapshot_lines(report)
     unreadable = report.get("unreadable_store")
     if unreadable:
         # Never "Nothing to measure yet" and never "no closing price found":
@@ -897,6 +988,16 @@ def render_clv(report: dict, *, generated: str = "") -> str:
         "flatter the model precisely where it deserves scrutiny.",
         "",
     ]
+    if report.get("overall"):
+        lines += [
+            "Every interval below is clustered by game. One game brings both",
+            "sides of a market, every rung of a ladder and every player, and",
+            "they all move with that game's news, so they are not independent",
+            "trials. `Games` is the count each interval rests on. No interval",
+            "here is narrower than one on the rows would be, and one game",
+            "cannot bound an interval at all.",
+            "",
+        ]
     if not report.get("overall"):
         lines += ["## Nothing to measure yet", ""]
         if uncaptured:
@@ -908,6 +1009,15 @@ def render_clv(report: dict, *, generated: str = "") -> str:
                 f"prices, and {uncaptured} of these opinions are in a market it",
                 "never priced for their game. That is a gap in what is",
                 "captured.",
+                "",
+            ]
+        elif report.get("unreadable_snapshots"):
+            # "Not a fault" would sit under a list of damaged evidence files.
+            lines += [
+                "No opinion has been matched to a closing price. On its own",
+                "that is the state before a season, or on a day the capture",
+                "job has not run. This run is still not clean: the snapshot",
+                "file(s) named above could not be read.",
                 "",
             ]
         else:
@@ -1013,6 +1123,8 @@ def render_clv(report: dict, *, generated: str = "") -> str:
         "  only where the opposite side also closed, and the regulation",
         "  three-way is excluded entirely because a three-outcome market",
         "  cannot be de-vigged as a pair.",
+        "- **Games** is the sample each interval counts. A thousand rows",
+        "  from ten games are ten games of evidence, not a thousand.",
         "- Positive CLV with a losing record is variance against us; a",
         "  winning record with negative CLV is variance *for* us, and this",
         "  lab treats the second as the more dangerous of the two.",
