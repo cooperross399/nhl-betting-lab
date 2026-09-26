@@ -989,6 +989,18 @@ def build_forward_report(
             entry["low"] = interval.low
             entry["high"] = interval.high
             entry["includes_zero"] = interval.includes_zero
+            # The interval docs/when_this_ends.md registers the 2027-04-25
+            # decision on is the CORRECTED one ("corrected across the
+            # markets measured"). `low`/`high`/`includes_zero` above are the
+            # plain 95% interval and stay as they were; these are the same
+            # `RoiInterval`'s Bonferroni bounds for `looks` markets, which
+            # the verdict already read. Only the verdict used to carry them,
+            # so the table's zero column could say "no" beside a verdict of
+            # no demonstrated edge. With one market they equal the plain.
+            entry["looks"] = interval.looks
+            entry["adjusted_low"] = interval.adjusted_low
+            entry["adjusted_high"] = interval.adjusted_high
+            entry["survives_correction"] = interval.survives_correction
             entry["verdict"] = interval.verdict()
         else:
             entry["bets"] = 0
@@ -1002,7 +1014,11 @@ def build_forward_report(
 
 
 def render_forward_report(payload: dict) -> str:
-    from nhl_betting_lab.stats import NO_DEMONSTRATED_EDGE, bets_needed_to_detect
+    from nhl_betting_lab.stats import (
+        NO_DEMONSTRATED_EDGE,
+        bets_needed_to_detect,
+        correction_family,
+    )
 
     lines = [
         "# Forward evidence",
@@ -1094,24 +1110,49 @@ def render_forward_report(payload: dict) -> str:
         "## Accumulated so far, at the shipped edge bars",
         "",
         (
-            "| Market | Opinions | Bets | Profit | ROI | 95% interval "
-            "| Includes zero |"
+            "| Market | Opinions | Bets | Profit | ROI "
+            "| 95% interval, uncorrected | Corrected interval "
+            "| Corrected includes zero |"
         ),
-        "|:-------|---------:|-----:|-------:|----:|:-------------|:--|",
+        "|:-------|---------:|-----:|-------:|----:|:--|:--|:--|",
     ]
     for market, entry in sorted(payload["markets"].items()):
         if entry["bets"]:
+            # The zero column reads the CORRECTED interval, the one the
+            # registered rule reads. It used to read the plain one, and a
+            # market could show "no" here while its corrected interval —
+            # and its own verdict line below — said no demonstrated edge.
+            spans = entry["adjusted_low"] <= 0.0 <= entry["adjusted_high"]
             lines.append(
                 f"| `{market}` | {entry['opinions']:,} | {entry['bets']:,} "
                 f"| {entry['profit_units']:+.1f}u | {entry['roi']:+.1%} "
                 f"| {entry['low']:+.1%} .. {entry['high']:+.1%} "
-                f"| {'yes' if entry['includes_zero'] else 'no'} |"
+                f"| {entry['adjusted_low']:+.1%} .. "
+                f"{entry['adjusted_high']:+.1%} "
+                f"| {'yes' if spans else 'no'} |"
             )
         else:
             lines.append(
-                f"| `{market}` | {entry['opinions']:,} | 0 | — | — | — | — |"
+                f"| `{market}` | {entry['opinions']:,} | 0 | — | — | — | — "
+                "| — |"
             )
-    lines += [""]
+    looks = len(payload["markets"])
+    lines += [
+        "",
+        (
+            "The corrected interval is the 95% interval widened (Bonferroni) "
+            f"for the {correction_family(looks)}"
+            if looks > 1
+            else "With one market measured there is nothing to correct for, "
+            "so the corrected interval is the 95% interval"
+        )
+        + (
+            " — the interval docs/when_this_ends.md registers the decision "
+            "on, and the one the zero column reads. The uncorrected "
+            "interval is shown beside it for reference only."
+        ),
+        "",
+    ]
     for market, entry in sorted(payload["markets"].items()):
         lines.append(f"- `{market}`: {entry['verdict']}")
     lines += [
