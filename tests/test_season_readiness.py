@@ -8,8 +8,11 @@ something false without any error anywhere.
 
 from __future__ import annotations
 
+import ast
+import io
 import json
 import re
+import tokenize
 from pathlib import Path
 
 import pandas as pd
@@ -826,6 +829,178 @@ def test_the_what_may_bet_guard_reads_more_than_one_spelling() -> None:
             claim in _assertive_prose(prose) for claim in _CLAIMS_NOTHING_MAY_BET
         ), f"the guard would fire on legitimate history: {prose!r}"
 
+
+#: The trees swept for the same claim in Python prose. `tests/` is NOT swept:
+#: the phrase lists live there, and the test right above this one reproduces
+#: both shipped defects verbatim on purpose, so a sweep of it would fire on
+#: its own evidence. `docs/` beyond the one file already read is not swept
+#: either, and that gap is deliberate rather than pending —
+#: `docs/pre_registered_ladder_coherence.md` still says the policy
+#: "allowlists nothing" in its registered text and corrects it in an adjacent
+#: dated note, because a pre-registration records what was registered and is
+#: not rewritten when the world moves. A guard demanding that sentence change
+#: would be demanding the corruption of a registered protocol.
+_PROSE_ROOTS = ("src", "scripts")
+
+
+def _python_prose(path: Path) -> list[tuple[int, str]]:
+    """Every comment and docstring in a module, as (line, text).
+
+    Prose only. A string literal in executed code is deliberately excluded,
+    which is the same line `test_ladder_route_cannot_reach_the_ledger.py`
+    draws in the other direction — there only imports and code are read, and
+    the prose "may discuss the allowlist freely"; here only the prose counts.
+
+    That split is not tidiness, it is truth conditions. Two refusal messages
+    in this repository say a form of "nothing is allowlisted" —
+    `staging_provider_policy.refusal_reason` and
+    `reports.policy_pr_gate.summary_line` — and both are correct, because each
+    sits behind a branch that runs only when it IS true. A comment asserts
+    unconditionally, to a reader, and that is the thing that goes stale.
+
+    Consecutive comment lines are joined, so a claim wrapped across two `#`
+    lines is read as one sentence. That is the same hole `_assertive_prose`
+    closes for markdown by collapsing whitespace, and the stale comment this
+    guard exists for wrapped exactly that way.
+    """
+    source = path.read_text(encoding="utf-8")
+    found: list[tuple[int, str, bool]] = []
+    for token in tokenize.generate_tokens(io.StringIO(source).readline):
+        if token.type == tokenize.COMMENT:
+            found.append((token.start[0], token.string, True))
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(
+            node,
+            (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef),
+        ):
+            docstring = ast.get_docstring(node, clean=False)
+            if docstring:
+                found.append((getattr(node, "lineno", 1), docstring, False))
+
+    found.sort(key=lambda item: item[0])
+    merged: list[tuple[int, str]] = []
+    run: list[str] = []
+    start = 0
+    previous: int | None = None
+    for line, body, is_comment in found:
+        if is_comment and run and previous == line - 1:
+            run.append(body)
+            previous = line
+            continue
+        if run:
+            merged.append((start, " ".join(run)))
+        run, start = [body], line
+        previous = line if is_comment else None
+    if run:
+        merged.append((start, " ".join(run)))
+    return merged
+
+
+def test_no_source_prose_claims_the_card_may_not_bet() -> None:
+    """The third copy of the stale claim was a comment, and nothing read it.
+
+    `LADDER_CLASS_UNITS` in `ladder_coherence.py` explained itself with
+    "nothing is allowlisted and only Cooper may change that" for three days
+    after the twelve-market approval. The guard above had just been widened
+    across the two operating documents and stayed green anyway, because a
+    source comment is not one of the two files it reads: restoring that
+    comment and running the whole suite passed 2504 tests.
+
+    So the phrase lists are pointed at Python prose as well. Same lists, same
+    normalisation, same direction-aware comparison against the live policy.
+    """
+    from nhl_betting_lab.config import MANUAL_DIR
+    from nhl_betting_lab.providers.odds_api import PROVIDER_NAME
+    from nhl_betting_lab.staging_provider_policy import load_policy
+
+    root = Path(MANUAL_DIR).resolve().parents[1]
+    allowed = load_policy().allowed_markets(PROVIDER_NAME)
+    forbidden = _CLAIMS_NOTHING_MAY_BET if allowed else _CLAIMS_EVERYTHING_MAY_BET
+
+    swept = 0
+    for tree in _PROSE_ROOTS:
+        for module in sorted((root / tree).rglob("*.py")):
+            swept += 1
+            for line, body in _python_prose(module):
+                prose = _assertive_prose(body)
+                for claim in forbidden:
+                    assert claim not in prose, (
+                        f"{module.relative_to(root)}:{line} asserts "
+                        f"{claim!r}, and the policy allowlists "
+                        f"{sorted(allowed)}. The policy governs. Quote the "
+                        "superseded wording if it is being recorded rather "
+                        "than asserted."
+                    )
+    assert swept > 50, (
+        f"the sweep read only {swept} modules, so it is no longer reading the "
+        f"trees it names ({_PROSE_ROOTS}). A guard over nothing passes."
+    )
+
+
+def test_the_source_sweep_reads_prose_and_spares_conditional_messages(
+    tmp_path: Path,
+) -> None:
+    """Fired on the comment it missed, and on the four forms it must not break.
+
+    The sweep above passing on a clean tree proves nothing by itself — that is
+    exactly the state the old guard was in while three files contradicted the
+    policy. So it is fired here on the comment it should have caught, and held
+    off the prose it must leave alone.
+    """
+    shipped_and_missed = (
+        "#: What the card would stake, if a card were ever licensed to stake\n"
+        "#: anything. It is not: nothing is allowlisted and only Cooper may\n"
+        "#: change that. These exist so a band means something concrete.\n"
+        'UNITS = {"wide": 0.5}\n'
+    )
+
+    must_not_fire = (
+        # A refusal message: executed code, true only on the branch that
+        # prints it. `staging_provider_policy.refusal_reason` ships this.
+        "def refusal_reason(blockers: list[str]) -> str:\n"
+        "    if blockers:\n"
+        '        return "Policy is not usable, so nothing is allowlisted: x"\n'
+        '    return ""\n',
+        # Prose quoting the claim to record it, not to assert it.
+        # `reports.card_notification` ships this.
+        '"""A notifier.\n'
+        "\n"
+        "A card that is blocked is a degraded run, not a quiet one. "
+        '"No card,\n'
+        'because no market is allowlisted" is information, and the first time\n'
+        "it appears it must arrive.\n"
+        '"""\n',
+        # Prose whose subject is the script, not the policy.
+        # `scripts/run_provider_shadow` ships this.
+        '"""Run a shadow provider fetch.\n'
+        "\n"
+        "It adds no allowlist entry, promotes nothing, and places nothing.\n"
+        '"""\n',
+        # The comment as it now reads: superseded claim in quotation marks.
+        '#: It is not — but the reason is no longer that "nothing is\n'
+        '#: allowlisted". The policy has allowlisted twelve markets since\n'
+        "#: 2026-09-23, and only Cooper may change that.\n"
+        'UNITS = {"wide": 0.5}\n',
+    )
+
+    def sweep(source: str, name: str) -> list[str]:
+        module = tmp_path / f"{name}.py"
+        module.write_text(source, encoding="utf-8")
+        return [
+            claim
+            for _, body in _python_prose(module)
+            for claim in _CLAIMS_NOTHING_MAY_BET
+            if claim in _assertive_prose(body)
+        ]
+
+    assert sweep(shipped_and_missed, "shipped"), (
+        "the sweep would not have caught the LADDER_CLASS_UNITS comment, "
+        "which is the defect it exists for"
+    )
+    for index, source in enumerate(must_not_fire):
+        assert not sweep(source, f"benign_{index}"), (
+            f"the sweep fires on prose it must leave alone: {source!r}"
+        )
 
 def test_the_operating_file_does_not_repeat_itself_verbatim() -> None:
     """A duplicated paragraph is how a stale figure survives its correction.
