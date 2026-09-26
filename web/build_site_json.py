@@ -579,8 +579,8 @@ def load_record(path: Path) -> dict:
     The site used to read `overall.roi` / `roi_low` / `roi_high` / `clv`.
     None of those keys exist. `forward_evidence.build_forward_report` writes
     `generated_at`, `rows`, `markets`, `unsettleable` and `void`, and each
-    entry under `markets` carries its own `roi` / `low` / `high` — there is
-    no pooled figure anywhere, and inventing one here would have shown a
+    entry under `markets` carries its own `roi` / `low` / `high` — the site
+    reads no pooled figure, and inventing one here would have shown a
     permanently zeroed record instead.
 
     Publishing a pooled ROI is the thing this function deliberately will not

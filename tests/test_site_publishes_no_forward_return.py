@@ -31,7 +31,12 @@ BUILD_SCRIPT = PROJECT_ROOT / "web" / "build_site_json.py"
 
 #: Keys that would each be a published return. `bets` is not here: a count
 #: of wagers is a size, not a result.
-THE_RETURN = ("roi", "low", "high", "clv", "profit_units", "includes_zero")
+THE_RETURN = (
+    "roi", "low", "high", "clv", "profit_units", "includes_zero",
+    # The corrected interval the registered rule reads, and whether it
+    # clears zero: the decision itself, in the payload since g22.
+    "adjusted_low", "adjusted_high", "survives_correction",
+)
 
 
 def _module():
@@ -55,12 +60,16 @@ MID_SEASON = {
             "opinions": 2600, "first_date": "2026-09-29",
             "last_date": "2026-12-13", "bets": 900, "roi": 0.061,
             "low": -0.004, "high": 0.126, "includes_zero": True,
+            "looks": 2, "adjusted_low": -0.018, "adjusted_high": 0.140,
+            "survives_correction": False,
             "verdict": "no demonstrated edge",
         },
         "points": {
             "opinions": 1520, "first_date": "2026-09-30",
             "last_date": "2026-12-13", "bets": 410, "roi": -0.022,
             "low": -0.09, "high": 0.046, "includes_zero": True,
+            "looks": 2, "adjusted_low": -0.105, "adjusted_high": 0.061,
+            "survives_correction": False,
             "verdict": "no demonstrated edge",
         },
     },

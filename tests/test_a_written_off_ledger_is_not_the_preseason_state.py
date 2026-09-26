@@ -416,11 +416,16 @@ def test_the_runner_publishes_a_written_off_day_without_the_preseason_text(
     _assert_not_called_the_preseason_state(text, void=0, unsettleable=2)
     assert "results fetch" in _after_the_ledger_line(text)
     # The JSON beside it is unchanged in shape: the site reads it, and this
-    # fix adds no figure to anything published.
+    # fix adds no figure to anything published. `registered_statistic` was
+    # added later (g23: the pooled number docs/when_this_ends.md decides on);
+    # the site does not read it, and
+    # tests/test_the_forward_report_computes_the_registered_statistic.py
+    # holds that it publishes no return.
     published = json.loads(
         (tmp_path / "outputs" / fe.REPORT_JSON_FILENAME).read_text(encoding="utf-8")
     )
     assert set(published) == {
-        "generated_at", "rows", "wagers", "markets", "unsettleable", "void"
+        "generated_at", "rows", "wagers", "markets", "unsettleable", "void",
+        "registered_statistic",
     }
     assert (published["rows"], published["unsettleable"], published["markets"]) == (2, 2, {})
