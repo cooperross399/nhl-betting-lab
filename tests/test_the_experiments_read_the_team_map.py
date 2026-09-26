@@ -70,8 +70,14 @@ def _correction(tmp_path, monkeypatch, *, raises=None):
     # does: no verdict here ships props_b2b, so rest-ignored. Without it the
     # experiment refuses the file before any backtest runs, and the refusal
     # test below would pass on that instead of on the map.
-    pd.DataFrame([{"market": "shots_on_goal", "use_rest": False}]).to_csv(
+    # And the game it priced, beside logs holding that game, since the
+    # experiment also refuses samples the logs have outgrown.
+    pd.DataFrame([{"market": "shots_on_goal", "use_rest": False,
+                   "game_id": 2024020001, "date": "2025-01-05"}]).to_csv(
         outputs / "prop_calibration_samples.csv", index=False
+    )
+    pd.DataFrame([{"game_id": 2024020001, "date": "2025-01-05"}]).to_csv(
+        processed / "player_game_logs.csv", index=False
     )
     seen = []
 

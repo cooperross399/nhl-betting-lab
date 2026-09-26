@@ -241,8 +241,12 @@ def _correction(tmp_path, rows: list[dict]):
     outputs.mkdir(parents=True, exist_ok=True)
     # No verdict in this output directory ships props_b2b, so the samples
     # the experiment may use are the rest-ignored ones.
-    _prop_samples(use_rest=False).to_csv(
-        outputs / "prop_calibration_samples.csv", index=False
+    samples = _prop_samples(use_rest=False)
+    samples.to_csv(outputs / "prop_calibration_samples.csv", index=False)
+    # The logs they were built from, which the experiment holds their reach
+    # against: samples missing a game the logs hold are refused.
+    samples[["game_id", "date"]].to_csv(
+        processed / "player_game_logs.csv", index=False
     )
     code = module.main([
         "--processed-dir", str(processed), "--output-dir", str(outputs),
