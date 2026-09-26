@@ -21,9 +21,16 @@ name: Publish Site
 #
 # Each day's published board is frozen into a `site-history`
 # artifact so the next morning settles the opinion that was actually shown.
+# The cron below is meant to follow the 09:30 card, but GitHub fires both
+# late and sometimes drops the card's primary, and the restore takes only
+# completed runs: a cron build that starts before today's Gameday Refresh
+# finishes is built on YESTERDAY's state. That board used to freeze first
+# and stand, with every back-to-back flag lost. Now the build that follows
+# today's run replaces it, because it was built on later results, as long
+# as no game has started (web/site_history.py::supersedes).
 on:
   schedule:
-    - cron: "45 14 * * *"   # 10:45 New York, after the 09:30 card
+    - cron: "45 14 * * *"   # 10:45 New York; the build does not rely on the card being done
   workflow_run:
     workflows: ["Gameday Refresh"]
     types: [completed]

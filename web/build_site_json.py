@@ -5,7 +5,9 @@
 
 Writes `board.json` (today's slate) and `results.json` (yesterday, settled),
 and keeps one frozen copy of each board under `history/YYYY-MM-DD.json` so
-tomorrow's settlement reads the opinion that was actually published.
+tomorrow's settlement reads the opinion that was actually published. A board
+built on later results replaces that copy until the first game starts, and
+never after (`web/site_history.py::supersedes`).
 
 Sources, in order of trust:
   * NHL API schedule (free, keyless): slate, start times, venues, TV,
@@ -34,6 +36,7 @@ from __future__ import annotations
 import argparse
 import csv
 import glob
+import importlib.util
 import json
 import sys
 import urllib.request
@@ -194,11 +197,44 @@ def load_model(processed: Path):
     model = TeamModel().fit(games)
     names = build_team_name_map()
     last = last_played_dates(games)
-    return {"model": model, "resolve": lambda label: resolve_team(label, names), "b2b": lambda team, day: played_previous_day(last, team, day)}
+    return {"model": model, "resolve": lambda label: resolve_team(label, names), "b2b": lambda team, day: played_previous_day(last, team, day),
+            "through": results_through(last)}
+
+
+def results_through(last_played: dict[str, str]) -> str | None:
+    """The last league date whose results the model was fitted on.
+
+    Read off the same per-team dates the back-to-back flag is read from, so
+    it says exactly what that flag could see: a board built on state whose
+    results stop two days back cannot flag anyone who played last night,
+    and this is how a later build knows its own board is the better one.
+    """
+    days = []
+    for day in last_played.values():
+        try:
+            days.append(date.fromisoformat(str(day)).isoformat())
+        except ValueError:
+            continue
+    return max(days) if days else None
+
+
+def _site_history():
+    """`web/site_history.py`, loaded from beside this file.
+
+    It owns the rule for when a frozen board may be replaced, and it freezes
+    the same file after this script does. One copy of the rule, so the two
+    freezes cannot disagree about what the day's record is.
+    """
+    path = Path(__file__).resolve().with_name("site_history.py")
+    spec = importlib.util.spec_from_file_location("_nhl_site_history", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def build_board(day: date, lab: Path, history_dir: Path) -> dict:
-    now = datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+    moment = datetime.now(timezone.utc)
+    now = moment.isoformat(timespec="seconds").replace("+00:00", "Z")
     games = schedule_for(day)
     preseason = all(int(g.get("gameType", 1)) == 1 for g in games) if games else day < SEASON_OPENS
     teams: dict[str, dict] = {}
@@ -327,11 +363,26 @@ def build_board(day: date, lab: Path, history_dir: Path) -> dict:
         "generatedAt": now, "season": "2026–27", "phase": "preseason" if preseason else "regular",
         "boardDate": day.isoformat(), "notice": notice, "record": record, "teams": teams, "games": out_games,
         "allowlistedMarkets": allowlisted,
+        # The last league date whose results the model was fitted on; None
+        # when no model was. It is what decides whether this board may
+        # replace the one already frozen for the day.
+        "resultsThrough": lab_model["through"] if lab_model else None,
     }
     history_dir.mkdir(parents=True, exist_ok=True)
+    # This was `if not frozen.exists()`: the day's first board stood, even
+    # when it was built on yesterday's state. The 14:45 cron build restores
+    # only COMPLETED Gameday Refresh runs, so when it started before today's
+    # run finished it froze yesterday's state — every back-to-back flag lost
+    # (430 of 430 on 2025-26), the model fitted without last night's games,
+    # 40 projected winners flipped — and the next morning graded that board,
+    # not the one shown from the moment today's run landed. A board built on
+    # later results now replaces the frozen one until the first game starts.
+    # Within one state, and from the first puck drop, the first stands.
     frozen = history_dir / f"{day.isoformat()}.json"
-    if not frozen.exists():  # the day's first published opinion stands
-        frozen.write_text(json.dumps(board, indent=1), encoding="utf-8")
+    done = _site_history().freeze(board, frozen, moment)
+    if done == "replaced":
+        print(f"history/{frozen.name}: replaced by this board, built on results through "
+              f"{board['resultsThrough']}; no game had started.")
     return board
 
 

@@ -15,6 +15,9 @@ season           "2026–27"
 phase            "preseason" | "regular"  — preseason games carry schedule fields only; the page renders dashes and "model abstains"
 notice           optional sentence shown under the headline (why the board is thin, degraded run, etc.)
 boardDate        "YYYY-MM-DD" (league date of the slate)
+resultsThrough   "YYYY-MM-DD" | null — the last league date whose results the model was fitted on; null when no model was.
+                 The day's frozen history/<boardDate>.json is replaced by a board with a later resultsThrough until the
+                 first game starts, and never after (web/site_history.py::supersedes)
 record
   straightUp     {w, l} | null        — null until a season tally is kept; nothing tallies one today, so it is null
   puckLine       {w, l, p} | null     — null: nothing grades the model's puck line
