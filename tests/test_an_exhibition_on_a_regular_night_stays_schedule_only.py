@@ -202,3 +202,45 @@ def test_any_game_that_is_not_regular_season_is_schedule_only(tmp_path: Path, mo
     assert "moneyline" not in other and "projGoals" in regular["home"]
     shown = next(g for g in page_games(render_board(board, tmp_path)) if g["sides"][1]["abbr"] == "TOR")
     assert shown["pick"]["label"] == "Not a regular-season game · model abstains", shown["pick"]
+
+
+def test_a_game_with_no_game_type_on_a_regular_night_is_not_projected(tmp_path: Path, monkeypatch) -> None:
+    """A game the schedule gives no type is read as preseason, as the
+    night-level check reads it, and never assumed to be regular season."""
+    lab = make_lab(tmp_path, monkeypatch, staged=True)
+    out = tmp_path / "out"
+    module = site_module()
+
+    def schedule_for(day):
+        games = schedule(day)
+        for game in games:
+            if str(game["id"]) == SLATE[0][2]:
+                del game["gameType"]
+        return games
+
+    monkeypatch.setattr(module, "allowlisted_markets", lambda _lab: ["moneyline"])
+    monkeypatch.setattr(module, "schedule_for", schedule_for)
+    assert module.main(["--lab", str(lab), "--out", str(out), "--date", BOARD_DAY.isoformat()]) == 0
+    board = json.loads((out / "board.json").read_text(encoding="utf-8"))
+
+    untyped, regular = _split(board["games"], SLATE[0][2])
+    assert board["phase"] == "regular"
+    assert "projGoals" not in untyped["home"] and "moneyline" not in untyped and untyped["pick"] is None, untyped
+    assert untyped["gameType"] == 1
+    assert "projGoals" in regular["home"] and regular["gameType"] == 2
+
+
+def test_a_board_frozen_before_game_types_is_not_called_non_regular(tmp_path: Path) -> None:
+    """A regular-night board frozen before rows carried `gameType` renders as
+    it did: an unpriced game there is "Not priced", never a game the model
+    abstained on for its type."""
+    board = {"generatedAt": "2026-10-08T15:00:00Z", "season": "2026–27", "phase": "regular",
+             "boardDate": "2026-10-08", "notice": None, "record": {}, "teams": {},
+             "allowlistedMarkets": ["moneyline"],
+             "games": [{"id": "1", "startUtc": "2026-10-08T23:00:00Z", "away": {"abbr": "MTL"},
+                        "home": {"abbr": "TOR"}, "pick": None, "priced": False}]}
+
+    game = page_games(render_board(board, tmp_path))[0]
+
+    assert "regular-season" not in game["pick"]["label"], game["pick"]
+    assert game["pick"]["label"].startswith("Not priced"), game["pick"]
