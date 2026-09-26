@@ -19,7 +19,8 @@ and the run exits 2. A damaged movement day now follows that rule.
 What these tests hold, through the real `run_closing_line_value.main()`:
 
 * each damaged shape (a ragged row, an unterminated quote, zero bytes, a
-  file missing a capture column, stray quotes that shorten the parse) is
+  file missing a capture column, stray quotes that shorten the parse, a
+  parse exactly one row short, an undecodable byte) is
   named in the report and in an `::error::`, and the runner exits 2;
 * the good day beside it is still read and still scored;
 * "Nothing to measure yet ... not a fault" is never printed over a damaged
@@ -112,8 +113,28 @@ def _stray_quotes(path: Path) -> None:
     assert len(pd.read_csv(path)) < ROUNDS, "the damage must shorten the parse"
 
 
-DAMAGE = [_ragged_row, _unterminated_quote, _zero_bytes, _missing_column, _stray_quotes]
-IDS = ["ragged-row", "unterminated-quote", "zero-bytes", "missing-column", "stray-quotes"]
+def _one_row_short(path: Path) -> None:
+    """The smallest short parse: two adjacent lines merge into one row."""
+    lines = path.read_text(encoding="utf-8").splitlines()
+    lines[3] = lines[3].replace(",DraftKings", ',"DraftKings')
+    lines[4] = lines[4].replace(",DraftKings", ',DraftKings"')
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    assert len(pd.read_csv(path)) == ROUNDS - 1, "the damage must lose exactly one row"
+
+
+def _undecodable_byte(path: Path) -> None:
+    """A byte that is not UTF-8 inside a row: pandas raises UnicodeDecodeError."""
+    data = path.read_bytes()
+    cut = data.index(b"A Skater", len(data) // 2)
+    path.write_bytes(data[:cut] + b"\xff" + data[cut + 1:])
+    with pytest.raises(UnicodeDecodeError):
+        pd.read_csv(path)
+
+
+DAMAGE = [_ragged_row, _unterminated_quote, _zero_bytes, _missing_column,
+          _stray_quotes, _one_row_short, _undecodable_byte]
+IDS = ["ragged-row", "unterminated-quote", "zero-bytes", "missing-column",
+       "stray-quotes", "one-row-short", "undecodable-byte"]
 
 
 def _run(tmp_path: Path, capsys) -> tuple[int, str, str]:
