@@ -40,7 +40,9 @@ games[]
                  staged bulk (featured) totals, never an alternate-ladder rung; open is null, because every total a capture
                  holds is an alternate_totals rung and no row says which line is the featured one
   regulation     {away, draw, home, prices:{away,draw,home}}
-  pick           {market, label, price, edgePct} | null   ← one best market per game; null on a priced game means nothing cleared the edge bar, on an unpriced game it means nothing was assessed
+  pick           {kind:"bet"|"lean", market, label, price, edgePct} | null   ← one market per game: the card's highest-edge best bet, or
+                 its highest-edge lean only when the game holds no best bet; null on a priced game means nothing cleared the edge bar,
+                 on an unpriced game it means nothing was assessed. A pick without `kind` (frozen before it existed) reads as "bet"
 ```
 
 ## results.json
@@ -48,7 +50,7 @@ games[]
 ```
 generatedAt, season, phase, notice (shown when games is empty)
 resultsDate      "YYYY-MM-DD"
-summary          {straightUp:{w,l}, picks:{w,l,p}, totals:{w,l,p}}
+summary          {straightUp:{w,l}, picks:{w,l,p}, totals:{w,l,p}}   ← picks counts best bets only; a lean is graded on its row and not here
 teams[ABBR]      {name, short, color, fg}
 games[]
   id, startUtc
@@ -57,7 +59,7 @@ games[]
   projWinner     ABBR
   total          {line, proj, result:"over"|"under"|"push"}
   priced         the frozen board's `priced` for this game (a board frozen before that flag: whether it carried a moneyline)
-  pick           {market, label, price, edgePct, result:"win"|"loss"|"push"} | null  ← null when the board carried no pick for the game;
+  pick           {kind, market, label, price, edgePct, result:"win"|"loss"|"push"} | null  ← null when the board carried no pick for the game;
                  the page renders it "Not priced" unless priced is true, "No play" when it is, and grades neither and shows no price
 ```
 

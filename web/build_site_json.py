@@ -451,13 +451,27 @@ def build_board(day: date, lab: Path, history_dir: Path) -> dict:
                     "home": round(reg["home"], 4), "draw": round(reg["draw"], 4), "away": round(reg["away"], 4),
                     "prices": {s: best_price(prices, provider_home, provider_away, "regulation_3_way", s) for s in ("home", "draw", "away")},
                 }
-                mine = [c for c in candidates if c.get("home_team") == provider_home and c.get("away_team") == provider_away and c.get("section") != "Passes / notable avoids"]
-                if mine:
-                    top = max(mine, key=lambda c: float(c.get("edge", 0)))
-                    row["pick"] = {
-                        "market": MARKET_LABEL[top["market"]], "label": pick_label(top, h, a),
-                        "price": int(float(top["american_odds"])), "edgePct": round(float(top["edge"]) * 100, 1),
-                    }
+                # A best bet first, and a lean only on a game with none; the
+                # pick says which it is. This took the highest edge among
+                # every row but the passes and set no `kind`, and the page
+                # reads a pick without one as a bet. So a lean was headed
+                # "Best bet", counted in the strip and in history/index.json's
+                # `bets`, and graded into the Results record. A lean's edge
+                # can be the game's largest precisely because what stopped it
+                # was not the edge (a stake-excluded market, a rung that
+                # one-stake-per-outcome demoted), so it also displaced the
+                # game's real best bet. Pinned by
+                # tests/test_a_lean_is_never_published_as_a_best_bet.py.
+                mine = [c for c in candidates if c.get("home_team") == provider_home and c.get("away_team") == provider_away]
+                for section, kind in (("Best bets", "bet"), ("Leans", "lean")):
+                    rows = [c for c in mine if c.get("section") == section]
+                    if rows:
+                        top = max(rows, key=lambda c: float(c.get("edge", 0)))
+                        row["pick"] = {
+                            "kind": kind, "market": MARKET_LABEL[top["market"]], "label": pick_label(top, h, a),
+                            "price": int(float(top["american_odds"])), "edgePct": round(float(top["edge"]) * 100, 1),
+                        }
+                        break
         out_games.append(row)
 
     record = load_record(lab / "data" / "outputs" / "forward_evidence.json")
@@ -739,7 +753,12 @@ def settle(day: date, history_dir: Path) -> dict:
         pick = g.get("pick")
         if pick:
             outcome = grade_pick(pick, ha, aa, hs, as_, finish)
-            s["picks"]["w" if outcome == "win" else "l" if outcome == "loss" else "p"] += 1
+            # The record is the best bets'. A lean is judged on its own row
+            # and kept out of it: it was recorded, not staked. A pick frozen
+            # before `kind` existed reads as a bet, as site_history.py and
+            # the page read it.
+            if pick.get("kind", "bet") == "bet":
+                s["picks"]["w" if outcome == "win" else "l" if outcome == "loss" else "p"] += 1
             row["pick"] = {**pick, "result": outcome}
         else:
             # A game with no pick settles with no pick. This used to write
