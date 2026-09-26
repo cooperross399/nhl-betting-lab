@@ -61,6 +61,8 @@ REGULAR = (
     ("WPG", "COL"), ("WSH", "PIT"), ("ANA", "EDM"), ("BOS", "FLA"),
     ("CAR", "TBL"), ("DAL", "STL"), ("VGK", "SEA"), ("LAK", "SJS"),
 )
+#: LAK-SJS at 19:00 PT: the next UTC day, the same league day (2026-09-29).
+WEST_COAST_START = "2026-09-30T02:00:00Z"
 EXHIBITION_IDS = [f"exh{index}" for index in range(len(EXHIBITIONS))]
 REGULAR_IDS = [f"reg{index}" for index in range(len(REGULAR))]
 
@@ -120,15 +122,23 @@ def _event(event_id: str, commence: str, home_abbrev: str, away_abbrev: str) -> 
 
 
 def _board() -> list[dict]:
-    """The posted board: exhibitions at 22:0xZ, regular games from 23:00Z."""
+    """The posted board: exhibitions at 22:0xZ, regular games from 23:00Z,
+    and the last regular game a West-coast 19:00 PT face-off.
+
+    That one's UTC date is the next day (02:00Z on 2026-09-30) while the
+    schedule files it under 2026-09-29, so the screen keeps it only by
+    matching on the LEAGUE date. A screen keyed on the raw UTC date would
+    drop a real game every night the league plays out West.
+    """
     board = [
         _event(f"exh{index}", f"{TONIGHT}T22:{index:02d}:00Z", home, away)
         for index, (home, away) in enumerate(EXHIBITIONS)
     ]
     board += [
         _event(f"reg{index}", f"{TONIGHT}T23:{index:02d}:00Z", home, away)
-        for index, (home, away) in enumerate(REGULAR)
+        for index, (home, away) in enumerate(REGULAR[:-1])
     ]
+    board.append(_event(f"reg{len(REGULAR) - 1}", WEST_COAST_START, *REGULAR[-1]))
     return board
 
 
@@ -377,6 +387,8 @@ def test_the_provider_screens_before_it_sorts_and_caps() -> None:
 
     assert _bought(requester) == ["reg0", "reg1"]
     assert result.events_not_regular_season == len(EXHIBITIONS)
+    # What was left to price, as the bulk fetch counts it too.
+    assert result.events_seen == len(REGULAR)
     assert any(
         "not on the cached regular-season schedule" in warning
         for warning in result.warnings

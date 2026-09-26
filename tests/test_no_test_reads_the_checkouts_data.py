@@ -178,6 +178,34 @@ CHECKOUT_SENSITIVE_TESTS: tuple[str, ...] = (
     "tests/test_the_screen_abstains_past_the_schedule_it_knows.py::test_inside_the_schedule_an_unknown_game_is_still_excluded_and_counted",
     "tests/test_toi_corrections.py::test_the_card_applies_corrections_only_on_the_recorded_verdict",
     "tests/test_verdicts.py::test_describe_names_every_policy",
+    # The club-schedule cache, through the shadow run's preseason screen
+    # (#242): with a real season cached, every fake game here would be
+    # screened out as "not regular season" before either fetch.
+    "tests/test_exhibitions_never_spend_the_per_event_cap.py::test_on_a_mixed_night_the_cap_buys_the_regular_season_games",
+    "tests/test_exhibitions_never_spend_the_per_event_cap.py::test_the_probe_s_event_cap_selects_the_same_games_in_both_fetches",
+    "tests/test_exhibitions_never_spend_the_per_event_cap.py::test_an_incomplete_schedule_cache_screens_nothing",
+    "tests/test_exhibitions_never_spend_the_per_event_cap.py::test_past_the_last_date_the_cache_knows_the_screen_abstains",
+    "tests/test_a_failed_events_listing_is_a_failed_per_event_fetch.py::test_a_failed_listing_exits_4_and_still_writes_what_the_card_reads",
+    "tests/test_a_failed_events_listing_is_a_failed_per_event_fetch.py::test_the_provenance_names_every_staged_game_as_unasked",
+    "tests/test_a_failed_events_listing_is_a_failed_per_event_fetch.py::test_both_reports_read_the_per_event_markets_as_a_failed_fetch",
+    "tests/test_a_failed_events_listing_is_a_failed_per_event_fetch.py::test_the_card_names_the_failed_fetch_for_the_markets_it_excludes",
+    "tests/test_a_failed_fetch_never_reads_as_an_absent_market.py::test_every_request_failing_reads_as_a_failed_fetch_in_the_discovery_report",
+    "tests/test_a_failed_fetch_never_reads_as_an_absent_market.py::test_every_request_failing_reads_as_a_failed_fetch_in_the_verification_report",
+    "tests/test_a_failed_fetch_never_reads_as_an_absent_market.py::test_a_market_another_request_answered_is_judged_on_that_answer",
+    "tests/test_a_failed_fetch_never_reads_as_an_absent_market.py::test_one_failed_game_is_named_as_the_fetchs_gap_not_the_books",
+    "tests/test_a_failed_fetch_never_reads_as_an_absent_market.py::test_the_provenance_records_which_games_failed_and_what_they_left_unasked",
+    "tests/test_a_failed_fetch_never_reads_as_an_absent_market.py::test_a_failed_game_is_keyed_through_the_staged_rows",
+    "tests/test_a_failed_fetch_never_reads_as_an_absent_market.py::test_the_discovery_run_summary_names_the_failed_requests",
+    "tests/test_a_failed_fetch_never_reads_as_an_absent_market.py::test_the_card_names_the_failed_fetch_for_the_markets_it_excludes",
+    "tests/test_a_failed_fetch_never_reads_as_an_absent_market.py::test_the_card_does_not_pin_another_runs_failures_on_these_prices",
+    "tests/test_a_failed_per_event_fetch_is_a_degraded_run.py::test_every_per_event_request_failing_is_not_a_clean_exit",
+    "tests/test_a_failed_per_event_fetch_is_a_degraded_run.py::test_one_failed_event_of_three_is_not_a_clean_exit",
+    "tests/test_a_failed_per_event_fetch_is_a_degraded_run.py::test_a_complete_per_event_fetch_exits_zero",
+    "tests/test_a_failed_per_event_fetch_is_a_degraded_run.py::test_a_budget_skip_is_a_warning_not_a_failure",
+    "tests/test_a_failed_per_event_fetch_is_a_degraded_run.py::test_a_per_event_error_does_not_claim_no_staging_file_was_written",
+    "tests/test_a_failed_per_event_fetch_is_a_degraded_run.py::test_the_run_health_follows_the_per_event_fetch",
+    "tests/test_an_unasked_market_never_reads_as_unquoted.py::test_the_scheduled_bulk_only_run_says_it_never_asked_for_per_event_markets",
+    "tests/test_an_unasked_market_never_reads_as_unquoted.py::test_a_market_the_run_asked_for_and_nobody_quoted_still_reads_as_absent",
 )
 
 #: Every club, so the stand-in's club-schedule cache is complete for 2026-27.
@@ -311,7 +339,9 @@ def test_probe_after_isolation_sees_nothing(tmp_path, monkeypatch):
 def _stand_in_checkout(root: Path) -> Path:
     """This checkout's code and tracked data, with data/ populated the way the
     operator's is. Written only under `root`; the real tree is never touched."""
-    for name in ("src", "scripts"):
+    # `.github` because some listed tests run a workflow's own step against
+    # the shadow run's output, reading the step from the workflow file.
+    for name in ("src", "scripts", ".github"):
         shutil.copytree(
             PROJECT_ROOT / name, root / name,
             ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.egg-info"),

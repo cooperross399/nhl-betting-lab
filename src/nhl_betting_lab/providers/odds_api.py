@@ -320,6 +320,9 @@ def _screen_events(
     dropped = len(events) - len(kept)
     if dropped:
         result.events_not_regular_season = dropped
+        # What was left to price, in both fetches alike: the summary line
+        # and the bulk fetch's credit estimate read this.
+        result.events_seen = len(kept)
         result.warnings.append(
             f"{dropped} posted event(s) are not on the cached regular-season "
             "schedule — preseason, or a game it cannot recognise — and were "
@@ -763,8 +766,6 @@ class OddsApiProvider:
         # exhibition games stages nothing rather than reading as no games.
         # Before the cap, so the first N are the first N the card can use.
         events = _screen_events(events, keep_event, result)
-        if result.events_not_regular_season:
-            result.events_seen = len(events)
         if max_events:
             # The eligibility gate and the coverage report both derive the
             # slate from the staged rows, so a bulk fetch of the whole board

@@ -135,11 +135,12 @@ def _preseason_screen(today: str) -> tuple[odds_api.EventScreen | None, str]:
     look identical to it; with no cache it abstains; and past the last date
     the cache knows it keeps the game. A leaked exhibition costs one place
     under the cap, and the card still drops it; a dropped real game would be
-    a game the card never sees. `known_regular_season_games` is used rather
-    than `scheduled_regular_season_starts` for that reason: a regular-season
-    game the schedule calls off is still one the card's screen keeps, and
-    screening it here alone would leave its bulk rows in the slate with no
-    per-event rows beside them.
+    a game the card never sees. `known_regular_season_games` is used, and
+    not `scheduled_regular_season_starts`, because it is the function the
+    card's screen reads. Whatever it decides about a game (a called-off one
+    included), the two screens read one function and so decide alike. A
+    game screened here and kept by the card would leave its bulk rows in
+    the card's slate with no per-event rows beside them.
     """
     schedule = known_regular_season_games()
     if not schedule:
