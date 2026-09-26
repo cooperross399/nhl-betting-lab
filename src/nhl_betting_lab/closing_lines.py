@@ -353,10 +353,11 @@ def _key_of(row) -> tuple:
 #: How far before face-off a capture may be and still count as the close.
 #:
 #: The close was the last capture strictly before puck drop however early it
-#: was, so on a night the last round before face-off missed, a 14:00Z price
-#: for a 23:00Z game was scored as that game's close. Scoring a price three
-#: or four hours old as the close is the defect itself, so the bound stays
-#: tight even where the schedule cannot meet it.
+#: was: on a night the 21:00 round missed, a 23:00Z game closed at the 18:00
+#: price, five hours out, and with 18:00 missed too, at the 14:00 price, nine
+#: hours out. Scoring a price three or four hours old as the close is the
+#: defect itself, so the bound stays tight even where the schedule cannot
+#: meet it.
 #:
 #: What `.github/workflows/line-movement.yml` can meet: its in-season rounds
 #: run at 14:00, 18:00, 21:00, 23:00 and 01:00 UTC, stamped with the wall
@@ -387,9 +388,10 @@ def _key_of(row) -> tuple:
 #: the bound, and neither do 19:00 EDT games on 29-30 September, when only
 #: the 18:00 and 23:00 rounds are scheduled. Those games have no close near
 #: face-off; their opinions are counted under `no_close_not_near_face_off`,
-#: never scored. Only an extra round around 15:30-16:00 UTC would give the
-#: afternoon starts a real close, and that spends credits, so it is
-#: Cooper's decision. The bound itself is a judgement, and Cooper may
+#: never scored. An extra round around 15:30-16:00 UTC would close only the
+#: 12:00-14:00 ET starts; 17:00 EDT and 16:00 EST (both 21:00Z) and 23:00
+#: EST would still need rounds of their own. Every extra round spends
+#: credits, so it is Cooper's decision. The bound itself is a judgement, and Cooper may
 #: revise it.
 CLOSE_MAX_LEAD = timedelta(minutes=150)
 

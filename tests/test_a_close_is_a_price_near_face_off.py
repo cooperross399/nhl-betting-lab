@@ -2,7 +2,7 @@
 
 `closing_prices` took the last capture strictly before puck drop however
 early it was. The line-movement capture runs five times a day, so on a night
-the last pre-face-off round misses, a 14:00Z price for a 23:00Z game was
+the 21:00 and 18:00 rounds both missed, a 14:00Z price for a 23:00Z game was
 returned as that game's close, and CLV scored an intraday price as the
 market's last word. The close now has to be within `CLOSE_MAX_LEAD` of
 face-off. A selection whose only pre-face-off price is older than that is
