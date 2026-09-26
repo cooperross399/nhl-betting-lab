@@ -394,7 +394,10 @@ jobs:
           elif [ "$games" -lt 1000 ]; then
             echo "Only $games games are cached, so the models are fitted on a thin history. The fetch is capped per run and the cache fills over consecutive days; this resolves itself." >> run_degraded.txt
           elif [ "${{ steps.results.outcome }}" = "failure" ]; then
-            echo "Results could not be refreshed; the models were fitted on the previously cached games." >> run_degraded.txt
+            # fetch_nhl_data.py fails on results, rosters, or (since the live
+            # season's name registry is asked again every run) the registry,
+            # so this names all three and points at the log that says which.
+            echo "Results, rosters or player names could not be refreshed (the NHL fetch step's log says which); the models were fitted on the previously cached games, and a player new since the last registry refresh has no name to be priced under." >> run_degraded.txt
           fi
           # What the restore could not ask GitHub (restore_state.py
           # --problem-file). Nothing read it, so a restore that fell back to
