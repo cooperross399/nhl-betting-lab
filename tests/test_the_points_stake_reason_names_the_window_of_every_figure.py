@@ -64,11 +64,34 @@ def _points_row(report: str) -> str:
     raise AssertionError(f"no points row in {report}")
 
 
+#: A count as the reports print it: bare today, perhaps with thousands
+#: separators after a regeneration.
+COUNT = r"(\d{1,3}(?:,\d{3})+|\d+)"
+
+
+def _find(pattern: str, text: str, source: str) -> str:
+    """The first group of `pattern` in `text`, or a failure naming both."""
+    found = re.search(pattern, text)
+    assert found, f"{source}: no match for {pattern!r}; has the report's wording changed?"
+    return found.group(1)
+
+
+def _count(token: str) -> int:
+    return int(token.replace(",", ""))
+
+
 def _evidence(report: str) -> str:
     """The points row, the pricing distance and the correction count."""
     text = (OUTPUTS / report).read_text()
-    hours = re.search(r"Priced \*\*([\d.]+) hours", text).group(1)
-    tested = re.search(r"points`: .*?correcting for the (\d+) markets", text).group(1)
+    hours = _find(r"Priced \*\*([\d.]+) hours", text, report)
+    # The committed reports say "correcting for the 8 markets tested"; the
+    # generator now writes "correcting for the 8 figures measured on the same
+    # data (7 markets and the overall figure)" (`stats.correction_family`).
+    # Either reading is the same count, and both must be accepted, or the
+    # next regeneration breaks this test for a reason unrelated to its claim.
+    tested = _find(
+        rf"points`: .*?correcting for the {COUNT} (?:markets|figures)", text, report
+    )
     return f"{_points_row(report)} {hours} {tested}"
 
 
@@ -89,11 +112,19 @@ def sentences() -> list[str]:
 
 def test_the_replication_split_is_the_late_window():
     """The premise: 2024-25 + 2025-26 in replication.md is the late count."""
-    split = re.findall(r"/ (\d+) bets", _points_row("replication.md"))
-    late_bets = re.search(r"\| (\d+) \|", _points_row("player_props_backtest.md")).group(1)
-    card_bets = re.search(r"\| (\d+) \|", _points_row("player_props_backtest_card.md")).group(1)
-    assert sum(map(int, split)) == int(late_bets)
-    assert sum(map(int, split)) != int(card_bets)
+    split = re.findall(rf"/ {COUNT} bets", _points_row("replication.md"))
+    assert len(split) == 2, f"replication.md: expected two season counts, got {split}"
+    late_bets = _find(
+        rf"\| {COUNT} \|", _points_row("player_props_backtest.md"), "player_props_backtest.md"
+    )
+    card_bets = _find(
+        rf"\| {COUNT} \|",
+        _points_row("player_props_backtest_card.md"),
+        "player_props_backtest_card.md",
+    )
+    seasons = sum(map(_count, split))
+    assert seasons == _count(late_bets)
+    assert seasons != _count(card_bets)
 
 
 def test_every_sentence_with_a_figure_names_exactly_one_window(sentences):
