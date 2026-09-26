@@ -89,6 +89,36 @@ listing that succeeds and holds no run starts without the artifact.
 red streak longer than `--limit` cannot hide the last good run and read as
 "there has never been one".
 
+**`--refuse-unreachable --attempts N`, for Historical Props Purchase's
+bought prices.** A failure to ask GitHub is never read as an answer. Without
+it, a listing that fails prints and reads as "no runs", and a download that
+fails moves on to an older run. In the purchase that was the whole chain.
+Its `historical-props` listing was inline and read no status, so one HTTP
+502 became "No purchase run on main carries bought prices. Anything bought
+this run is bought fresh." (exit 0 under the `bash -e` GitHub runs). The
+buy then found no cached event and paid for the window again. In the
+failure-shape audit's replay that was 12 events and 1,284 credits that a
+working restore served from the cache for 0. The CSV it wrote held that
+run's 7,961 rows alone, and both uploads carried them. The carrier before
+held 40,942, and the next purchase and Experiment Refresh took the thin one
+as the chain.
+
+Under this flag, these exit 1 after N attempts:
+* a listing that fails;
+* a download that fails, from the chosen run or from any run the fill or
+  the union reads, unless gh says the run holds no such artifact.
+
+The purchase then stops before it spends or uploads. gh's two answers for
+"not here" (`ABSENT`) are answers, so they are not retried, and that run is
+passed over as before. `--require-newest` refuses that too, which is right
+for a history that every successful publish adds to. It would be wrong for
+the purchase. A purchase that is refused or cancelled uploads nothing, and
+under `--require-newest` it would become a newest run that no later
+purchase could get past. `--record-run FILE` writes the chosen run's id to
+FILE, or an empty FILE when the listing holds no carrier, so a calling step
+can name its source without parsing this log. FILE is emptied before
+anything is asked, so a refused restore never leaves an id behind.
+
 **`--also NAME=DIR`** takes a second artifact from the same chosen run
 (Publish Site: the run's reports, beside its state). It goes through an
 empty temporary directory like the first and is then copied over DIR, the
@@ -199,9 +229,55 @@ def _download(run_id: object, artifact: str, into: Path) -> subprocess.Completed
 #: that is there, and is reported as gh's own words, never as an absence.
 NO_SUCH_ARTIFACT = "no artifact matches any of the names or patterns provided"
 
+#: What gh 2.97.0 prints when the run holds no valid artifact at all: none
+#: was uploaded (a refused or cancelled run), or every one has expired.
+NO_ARTIFACTS = "no valid artifacts found to download"
+
+#: gh's answers that a run holds no such artifact. Under `--refuse-unreachable`
+#: every other failed download is a failure to ask, never an absence.
+ABSENT = (NO_SUCH_ARTIFACT, NO_ARTIFACTS)
+
 
 def download(run_id: object, artifact: str, into: Path) -> bool:
     return _download(run_id, artifact, into).returncode == 0
+
+
+def _said(result: subprocess.CompletedProcess) -> str:
+    return " ".join((result.stderr or "").split()) or f"nothing (exit {result.returncode})"
+
+
+def _obtain(run_id: object, artifact: str, into: Path, attempts: int) -> bool:
+    """Download for `--refuse-unreachable`: True when it downloaded, False
+    when gh says the run holds no such artifact (an answer, so not retried),
+    and `Unreachable` when any other failure outlasts `attempts` tries, each
+    into an emptied folder."""
+    for attempt in range(attempts):
+        if attempt:
+            _pause(attempt)
+            shutil.rmtree(into)
+            into.mkdir()
+        result = _download(run_id, artifact, into)
+        if result.returncode == 0:
+            return True
+        said = _said(result)
+        if any(answer in said for answer in ABSENT):
+            return False
+        print(f"Attempt {attempt + 1} of {attempts} to download {artifact} "
+              f"from run {run_id} failed: {said}")
+    raise Unreachable(
+        f"Could not download {artifact} from run {run_id} after {attempts} "
+        f"attempt(s), and gh did not say the run holds none. An older run "
+        "cannot stand in for it: whatever this one added would be lost."
+    )
+
+
+def _take(run_id: object, artifact: str, into: Path, refuse_after: int) -> bool:
+    """The fill's and the union's download. By default a failure reads as
+    "this run has none" and the next one is tried, as it always has; with
+    `refuse_after` (`--refuse-unreachable`'s attempts) that is `_obtain`."""
+    if refuse_after:
+        return _obtain(run_id, artifact, into, refuse_after)
+    return download(run_id, artifact, into)
 
 
 def _fetch(run_id: object, artifact: str, into: Path, attempts: int) -> bool:
@@ -255,22 +331,30 @@ def restore(
     success_only: bool = False,
     require_newest: bool = False,
     attempts: int = 1,
+    refuse_unreachable: bool = False,
 ) -> dict:
     """Restore `artifact` into `dest`; returns what it did, for the log and tests.
 
     With `require_newest`, raises `Unreachable` when a listing fails or the
-    newest listed run's download fails; see the module docstring.
+    newest listed run's download fails. With `refuse_unreachable`, raises it
+    when a listing fails or any download fails for a reason other than gh
+    saying the run holds none. See the module docstring.
     """
+    refuse_after = attempts if refuse_unreachable else 0
     report: dict = {"run": None, "conclusion": None, "filled_from": None,
                     "filled": 0, "ledger_from": None, "unioned_from": [],
                     "rows_recovered": 0, "not_merged": [], "also": {}}
     dest.mkdir(parents=True, exist_ok=True)
     for workflow in workflows:
         runs = completed_runs(workflow, limit, branch, success_only=success_only,
-                              attempts=attempts, strict=require_newest)
+                              attempts=attempts,
+                              strict=require_newest or refuse_unreachable)
         for index, run in enumerate(runs):
             with tempfile.TemporaryDirectory() as scratch:
-                if not _fetch(run["databaseId"], artifact, Path(scratch), attempts):
+                if refuse_unreachable:
+                    if not _obtain(run["databaseId"], artifact, Path(scratch), attempts):
+                        continue
+                elif not _fetch(run["databaseId"], artifact, Path(scratch), attempts):
                     if require_newest:
                         raise Unreachable(
                             f"Could not download {artifact} from {workflow} run "
@@ -291,11 +375,12 @@ def restore(
             if union > 1:
                 _union_older(
                     runs[index + 1:], artifact, dest, workflow, report,
-                    carriers=union - 1,
+                    carriers=union - 1, refuse_after=refuse_after,
                 )
             elif merge and run.get("conclusion") != "success":
                 _fill_from_last_success(
-                    runs[index + 1:], artifact, dest, workflow, report
+                    runs[index + 1:], artifact, dest, workflow, report,
+                    refuse_after=refuse_after,
                 )
             return report
     if require_newest:
@@ -354,14 +439,15 @@ def _restore_also(run_id: object, name: str, directory: Path) -> int | None:
 
 
 def _fill_from_last_success(
-    older: list[dict], artifact: str, dest: Path, workflow: str, report: dict
+    older: list[dict], artifact: str, dest: Path, workflow: str, report: dict,
+    *, refuse_after: int = 0,
 ) -> None:
     for run in older:
         if run.get("conclusion") != "success":
             continue
         with tempfile.TemporaryDirectory() as scratch:
             base = Path(scratch)
-            if not download(run["databaseId"], artifact, base):
+            if not _take(run["databaseId"], artifact, base, refuse_after):
                 continue
             report["filled_from"] = run["databaseId"]
             report["filled"] = _copy(base, dest, overwrite=False)
@@ -443,7 +529,7 @@ def union_csv(older: Path, newer: Path) -> int | None:
 
 def _union_older(
     older: list[dict], artifact: str, dest: Path, workflow: str, report: dict,
-    *, carriers: int,
+    *, carriers: int, refuse_after: int = 0,
 ) -> None:
     """Union `dest` with up to `carriers` older runs' copies of `artifact`."""
     for run in older:
@@ -451,7 +537,7 @@ def _union_older(
             return
         with tempfile.TemporaryDirectory() as scratch:
             base = Path(scratch)
-            if not download(run["databaseId"], artifact, base):
+            if not _take(run["databaseId"], artifact, base, refuse_after):
                 continue
             recovered = 0
             for path in sorted(base.rglob("*")):
@@ -526,7 +612,11 @@ def main(argv: list[str] | None = None) -> int:
         "--success-only", action="store_true",
         help="Only successful runs are sources, filtered by GitHub (--status success).",
     )
-    parser.add_argument(
+    # Two contracts that differ on one case, a run that holds none: the
+    # first refuses it, the second passes over it. Asked for both, refuse to
+    # guess which was meant.
+    strictness = parser.add_mutually_exclusive_group()
+    strictness.add_argument(
         "--require-newest", action="store_true",
         help=(
             "The newest listed run must yield the artifact: a failed listing, "
@@ -535,9 +625,27 @@ def main(argv: list[str] | None = None) -> int:
             "that succeeds and holds no run starts without it."
         ),
     )
+    strictness.add_argument(
+        "--refuse-unreachable", action="store_true",
+        help=(
+            "A failed listing, or a download that fails for any reason other "
+            "than gh saying the run holds no such artifact, exits 1 instead "
+            "of reading as \"no runs\" or falling back to an older run. A run "
+            "that holds none is passed over; only a listing that succeeds "
+            "and holds no carrier starts without it."
+        ),
+    )
     parser.add_argument(
         "--attempts", type=int, default=1, metavar="N",
         help="Try each listing and download up to N times, pausing between.",
+    )
+    parser.add_argument(
+        "--record-run", metavar="FILE",
+        help=(
+            "Write the id of the run the artifact was restored from to FILE, "
+            "or an empty FILE when no run carries it. FILE is emptied first, "
+            "so a restore that fails leaves no id in it."
+        ),
     )
     args = parser.parse_args(argv)
     if args.attempts < 1:
@@ -548,8 +656,13 @@ def main(argv: list[str] | None = None) -> int:
         if not name or not directory:
             parser.error(f"--also takes NAME=DIR, not {item!r}")
         also.append((name, Path(directory)))
+    if args.record_run:
+        # Emptied before GitHub is asked, so no failure can leave an earlier
+        # id standing for the caller to read as this restore's source. The
+        # caller's refusal to go on must not rest on the file being absent.
+        Path(args.record_run).write_text("", encoding="utf-8")
     try:
-        restore(
+        report = restore(
             artifact=args.artifact,
             dest=Path(args.dest),
             workflows=list(args.workflow),
@@ -561,10 +674,15 @@ def main(argv: list[str] | None = None) -> int:
             success_only=args.success_only,
             require_newest=args.require_newest,
             attempts=args.attempts,
+            refuse_unreachable=args.refuse_unreachable,
         )
     except Unreachable as exc:
         print(f"::error::{exc}")
         return 1
+    if args.record_run:
+        Path(args.record_run).write_text(
+            "" if report["run"] is None else f"{report['run']}\n", encoding="utf-8"
+        )
     return 0
 
 
