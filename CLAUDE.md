@@ -965,26 +965,37 @@ Re-derive rather than trust if the data has moved.
   evidence checksums stopped matching — which is exactly what that check is
   for. Claude withdrew it, which is the only direction Claude may move that
   file, because withdrawal can only ever reduce what the card may do.
-  **Re-enabling anything needs Cooper to read the current evidence and sign
-  a new receipt**, and the superseded one is kept under
-  `data/manual/human_acceptance_receipts/superseded/` as the record of a
-  decision that was really made. The card therefore produces no selection,
-  no lean, no pass and no stake, and says why. `goalie_saves` still cannot
+  **Re-enabling anything needed Cooper to read the current evidence and sign
+  a new receipt, and that is what happened on 2026-09-23**, re-attested three
+  times on 2026-09-24. Four receipts are kept under
+  `data/manual/human_acceptance_receipts/superseded/` — the withdrawn
+  2026-08-27 one and the three superseded re-attestations — each the record
+  of a decision that was really made; a receipt in that directory approves
+  nothing, and the shipped policy cites none of them. **This bullet is the
+  history of the withdrawal, not the current state**: what the card produces
+  now is decided by the remaining gates — completeness, freshness and
+  puck-drop — and not by the allowlist. `goalie_saves` still cannot
   produce a selection even if allowlisted, for want of a confirmed-starter
   source (`docs/goalie_props_need_a_confirmed_starter.md`).
-  **The withdrawal cited a number this file now records as wrong, and it
-  still stands.** "−1.6% over 73,918" was per-quote counting, and the
-  reproducible figure is −0.3% over 25,911 — which spans zero, so it
-  demonstrates no edge either. The correction therefore reinstates nothing on
-  its own: withdrawal only ever reduces what the card may do, and only Cooper
-  reading the current evidence and signing a new receipt can move it back.
+  **The withdrawal cited a number this file now records as wrong, and the
+  withdrawal stood anyway.** "−1.6% over 73,918" was per-quote counting, and
+  the reproducible figure is −0.3% over 25,911 — which spans zero, so it
+  demonstrates no edge either. That correction reinstated nothing on its own:
+  withdrawal only ever reduces what the card may do, and only Cooper reading
+  the evidence and signing a new receipt could move it back, which is the
+  step that then happened.
   `data/manual/staging_provider_policy.json` is the state that governs. It
   allowlisted nothing from the withdrawal until Cooper approved twelve
   markets on 2026-09-23, which is what it holds now. **An earlier version of this file also carried a
   bullet saying all eleven markets were allowlisted**, contradicting this one
   forty lines further down, alongside a verbatim duplicate of the quota
-  paragraph. Both are gone. Two bullets disagreeing about whether the card
-  may bet is the worst possible thing for this file to be unsure of.
+  paragraph. Both are gone. **This bullet then carried the mirror-image
+  defect**: after the twelve-market approval landed it went on asserting that
+  the card "produces no selection, no lean, no pass and no stake", so the file
+  again disagreed with itself about whether the card may bet — this time by
+  understating what the policy allows. Two bullets disagreeing about that is
+  the worst possible thing for this file to be unsure of, in either
+  direction.
 - **The provider's whole NHL catalogue is either wired or recorded as
   deferred with its reason** (`docs/periphery_markets_decision.md`,
   2026-08-27): the six prop alternate ladders and the anytime scorer land on
