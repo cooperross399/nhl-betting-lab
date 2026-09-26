@@ -559,8 +559,18 @@ def build_claims_report(
         "Calibration can rule a model out. It can never rule one in. A market "
         "with only a calibration number has no price-based evidence, and this "
         "document will not present one as though it did.",
-        "Prop prices are one-sided at most books, so every measured prop edge "
-        "here is understated rather than overstated.",
+        # This note used to say every prop edge here was "understated rather
+        # than overstated", on the strength of the one-sided vig. The vig
+        # point concerns only which bets clear the threshold; the return
+        # printed above is taken at the best of N books, which the backtest
+        # itself calls optimistically biased (the best price is the stale
+        # one disproportionately often).
+        "Every prop return above is taken at the best price across the books "
+        "quoting it, which is the most favourable price on the board and "
+        "disproportionately the stale one about to move. It therefore leans "
+        "optimistic, not conservative: the honest figure sits between it and "
+        "the every-quote average (see "
+        "`docs/where_the_remaining_error_lives.md`).",
         "The first genuinely out-of-sample evidence this project will ever "
         "have is the season being played, one game-day at a time. That is "
         "worth more than any further slicing of the seasons already in the "
