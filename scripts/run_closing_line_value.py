@@ -148,7 +148,27 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--processed-dir", default=str(PROCESSED_DIR))
     parser.add_argument("--output-dir", default=str(OUTPUTS_DIR))
     parser.add_argument("--archive-dir", default="")
+    parser.add_argument(
+        "--now",
+        default="",
+        help=(
+            "ISO instant to treat as now, for reproducing a past report. "
+            "Defaults to the clock. An opinion whose game starts after it is "
+            "counted as not yet played rather than as having no close."
+        ),
+    )
     args = parser.parse_args(argv)
+
+    # Gameday Refresh runs this minutes after the card froze tonight's slate,
+    # so every report is built before tonight's games start. Without a clock
+    # every one of those opinions read as "no closing price found".
+    now = (
+        datetime.fromisoformat(args.now)
+        if args.now
+        else datetime.now(timezone.utc)
+    )
+    if now.tzinfo is None:
+        parser.error("--now must carry a timezone; commence times do.")
 
     processed = Path(args.processed_dir)
     archive = Path(args.archive_dir) if args.archive_dir else None
@@ -182,7 +202,7 @@ def main(argv: list[str] | None = None) -> int:
         "price(s) in the store."
     )
 
-    report = build_clv_report(opinions, captures)
+    report = build_clv_report(opinions, captures, now=now)
     report["unreadable_snapshots"] = damaged
     path = save_clv_report(
         report, output_dir=Path(args.output_dir), generated=generated
@@ -190,7 +210,8 @@ def main(argv: list[str] | None = None) -> int:
     counts = report.get("counts", {})
     print(
         f"Matched {counts.get('matched', 0)} of {counts.get('opinions', 0)} "
-        f"opinion(s) to a closing price; {counts.get('no_close', 0)} had none."
+        f"opinion(s) to a closing price; {counts.get('no_close', 0)} had none; "
+        f"{counts.get('not_yet_played', 0)} not yet played."
     )
     _say_unreadable_snapshots(damaged)
     print(f"  report: {path}")

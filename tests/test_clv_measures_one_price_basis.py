@@ -156,7 +156,9 @@ def _report(processed: Path, archive: Path, output: Path) -> str:
 
     module = load_script("run_closing_line_value.py")
     code = module.main(["--processed-dir", str(processed), "--archive-dir",
-                        str(archive), "--output-dir", str(output)])
+                        str(archive), "--output-dir", str(output),
+                        # After every game here: unplayed games are left out.
+                        "--now", "2027-06-01T00:00:00+00:00"])
     assert code == 0
     text = (output / cl.REPORT_FILENAME).read_text(encoding="utf-8")
     return "\n".join(line for line in text.splitlines()
