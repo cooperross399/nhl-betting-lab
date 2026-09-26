@@ -66,6 +66,7 @@ from nhl_betting_lab.markets import (
     market_for_provider_key,
 )
 from nhl_betting_lab.providers.env_file import redact
+from nhl_betting_lab.puck_drop import parse_commence_time
 from nhl_betting_lab.season import game_date
 
 
@@ -253,6 +254,61 @@ def _commence_key(event: Mapping[str, Any]) -> str:
     return str(event.get("commence_time", "") or "")
 
 
+def _provider_clock() -> datetime:
+    """The instant a fetch tells a started game by, when no `now` is passed.
+
+    One named function rather than `datetime.now` inline so the test suite can
+    pin it: fixtures date their games in October 2026, and a suite that read
+    the wall clock here would go red on the first of them.
+    """
+    return datetime.now(timezone.utc)
+
+
+def _fetch_moment(now: datetime | None) -> datetime:
+    moment = now if now is not None else _provider_clock()
+    if moment.tzinfo is None:
+        raise ValueError(
+            "A fetch tells a started game by an aware instant. A naive `now` "
+            "is a bug, not a fallback."
+        )
+    return moment.astimezone(timezone.utc)
+
+
+def _drop_started(
+    events: Sequence[Mapping[str, Any]], moment: datetime
+) -> tuple[list[Any], int]:
+    """The events whose puck drop is still ahead of `moment`, and how many were
+    dropped. Shared by both fetches, so they describe the same slate.
+
+    A game already under way cannot reach the card: the puck-drop guard
+    quarantines it. Buying its prices anyway is not harmless, because the
+    per-event cap spends front-to-back in start-time order and a started game
+    sorts first. On the 15:00 UTC backup run an afternoon game in progress
+    was bought before the evening slate, and the games the card could still
+    play were the ones the cap left unpriced.
+
+    The rule is `puck_drop.check_commence_time`'s: at or before `moment` is
+    started, with no grace period, and a start time that is missing,
+    unparseable or naive counts as started too. Ambiguity falls on the
+    not-a-play side here for the same reason it does there.
+    """
+    kept = []
+    for event in events:
+        start = parse_commence_time(event.get("commence_time"))
+        if start is not None and start > moment:
+            kept.append(event)
+    return kept, len(events) - len(kept)
+
+
+def _started_warning(dropped: int, moment: datetime) -> str:
+    return (
+        f"{dropped} event(s) had already started by "
+        f"{moment.isoformat(timespec='seconds')}, or carried no start time "
+        "that could be confirmed, and were not priced. A game under way "
+        "cannot be played; its markets are absent, not empty."
+    )
+
+
 def _line_of(outcome: Mapping[str, Any]) -> float | None:
     point = outcome.get("point")
     if point is None:
@@ -281,6 +337,9 @@ class FetchResult:
     #: reports and the card read this to tell a failed fetch from a market no
     #: book quotes; they never parse `errors` for it.
     failed_events: list[dict[str, Any]] = field(default_factory=list)
+    #: Events dropped before any cap was applied because their game had
+    #: started, or its start time could not be confirmed (`_drop_started`).
+    events_already_started: int = 0
 
     def summary_line(self) -> str:
         return (
@@ -590,6 +649,7 @@ class OddsApiProvider:
         fetched_at: str = "",
         league_days: Sequence[str] | None = None,
         max_events: int = 0,
+        now: datetime | None = None,
     ) -> FetchResult:
         """Bulk team markets for the whole slate.
 
@@ -607,8 +667,15 @@ class OddsApiProvider:
         alternate ladders are per-event and asking for them here makes the
         provider refuse the entire request, which is not obvious from the
         response — a 422 with no indication of which market caused it.
+
+        Games already under way at `now` (default: the clock) are dropped
+        before `max_events` truncates, by the same rule the per-event fetch
+        uses. The slate is derived from these rows, so a started game kept
+        here and skipped there would read as every per-event market missing
+        one game.
         """
         self._require_credential()
+        moment = _fetch_moment(now)
         stamp = fetched_at or datetime.now(timezone.utc).isoformat(timespec="seconds")
         markets = list(BULK_PROVIDER_MARKETS)
         try:
@@ -717,6 +784,13 @@ class OddsApiProvider:
                 )
             result.events_seen = len(in_window)
             events = in_window
+        # Before the cap, so the first N are the first N still to be played:
+        # the same N `fetch_player_props` selects.
+        events, started = _drop_started(events, moment)
+        if started:
+            result.events_already_started = started
+            result.events_seen = len(events)
+            result.warnings.append(_started_warning(started, moment))
         if max_events:
             # The eligibility gate and the coverage report both derive the
             # slate from the staged rows, so a bulk fetch of the whole board
@@ -756,6 +830,7 @@ class OddsApiProvider:
         credit_cap: int | None = None,
         fetched_at: str = "",
         league_days: Sequence[str] | None = None,
+        now: datetime | None = None,
     ) -> FetchResult:
         """Per-event player props, under a hard credit cap.
 
@@ -779,8 +854,15 @@ class OddsApiProvider:
         unfiltered fetch starves today's slate to buy prices for games days
         away that tomorrow's run will fetch again anyway. None means no
         filter, which is what a probe wants and a daily card must not use.
+
+        Games already under way at `now` (default: the clock), or whose start
+        time cannot be confirmed, are dropped before the cap is applied. They
+        sort first, and until 2026-09-26 the 15:00 UTC backup run spent its
+        budget on an afternoon game in progress, which the puck-drop guard
+        then quarantined, while the evening games went unpriced.
         """
         self._require_credential()
+        moment = _fetch_moment(now)
         stamp = fetched_at or datetime.now(timezone.utc).isoformat(timespec="seconds")
         wanted = list(markets) if markets is not None else list(PROP_PROVIDER_MARKETS)
         if not wanted:
@@ -811,6 +893,13 @@ class OddsApiProvider:
                     "their own game day fetches them."
                 )
             events = in_window
+        # A started game is dropped here, before the sort and the cap, so it
+        # can never take a place in the budget from a game still to be
+        # played.
+        events, started = _drop_started(events, moment)
+        if started:
+            result.events_already_started = started
+            result.warnings.append(_started_warning(started, moment))
         # Ordered by start time, so "the first N events" means the same N
         # events here and in the bulk fetch. Truncating two differently
         # ordered lists to the same length is how a coverage table ends up

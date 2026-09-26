@@ -51,6 +51,7 @@ from __future__ import annotations
 import ast
 import itertools
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -511,6 +512,33 @@ def the_evidence_archive_is_never_the_checkouts(
         next(_EVIDENCE_ROOTS)
     )
     monkeypatch.setattr(forward_evidence, "DATA_DIR", root)
+
+
+#: The instant every live-provider fetch in the suite runs at, unless a test
+#: passes its own `now`. Before every game any fixture dates (the earliest is
+#: October 2026), so no fixture's game has started.
+PROVIDER_FETCH_CLOCK = datetime(2026, 9, 1, tzinfo=timezone.utc)
+
+
+@pytest.fixture(autouse=True)
+def the_provider_fetch_never_reads_the_wall_clock(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Every fetch in the suite tells a started game by a fixed instant.
+
+    `fetch_team_markets` and `fetch_player_props` drop games already under
+    way before the cap is applied, by the clock unless a `now` is passed.
+    Dozens of tests drive those fetches through the scripts, which pass no
+    `now`, with games dated in October 2026: read from the wall clock, each
+    would start dropping its own games on the date its fixture names, and the
+    suite would go red on a calendar rather than on a change. A test about
+    the started-game rule passes its own `now`, which this does not touch.
+    """
+    if not _PACKAGE.is_dir():
+        return
+    from nhl_betting_lab.providers import odds_api
+
+    monkeypatch.setattr(odds_api, "_provider_clock", lambda: PROVIDER_FETCH_CLOCK)
 
 
 @pytest.fixture(autouse=True)
