@@ -190,7 +190,11 @@ def test_a_lowercase_team_abbreviation_is_normalised_not_refused(
 
 
 def test_the_club_schedule_is_cached_per_team_and_season(tmp_path: Path) -> None:
-    requester = RecordingRequester({"club-schedule-season": FakeResponse({"games": []})})
+    # One regular-season game: an answer listing none is never cached
+    # (tests/test_a_club_schedule_cached_before_the_league_published_it_is_asked_again.py).
+    requester = RecordingRequester(
+        {"club-schedule-season": FakeResponse({"games": [{"id": 2026020001, "gameType": 2}]})}
+    )
 
     nhl_api.fetch_club_season_schedule(
         "TOR", 20262027, requester=requester, raw_dir=tmp_path
