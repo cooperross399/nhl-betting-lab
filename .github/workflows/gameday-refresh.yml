@@ -584,6 +584,48 @@ jobs:
           fi
           python scripts/run_closing_line_value.py
 
+      - name: Upload the state for the next run
+        # The boxscore cache and the previous card are the only link between
+        # one gameday and the next, which is why they outlive the reports. The
+        # card in particular: without it the "selections changed" marker cannot
+        # mean anything.
+        #
+        # Here, straight after the last step that writes state and before
+        # anyone is told how the run went. It used to run after the card-feed
+        # publish, and nothing read its outcome: an upload that failed left
+        # card-feed saying `degraded: false`, the 15:00 backup's precheck read
+        # a clean card and stood down, and the next day restored yesterday's
+        # state, with today's frozen snapshot missing from the chain for good.
+        # `continue-on-error` so the step below records the failure and the
+        # run degrades, rather than the upload ending the job's say in it.
+        id: state
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: gameday-state
+          path: |
+            data/raw/nhl/boxscore
+            data/raw/nhl/registry
+            data/processed
+            data/outputs/gameday_card.json
+            data/outputs/prop_calibration_samples.csv
+            data/outputs/team_market_samples.csv
+            data/archive/priced_snapshots
+            data/processed/forward_evidence.csv
+          if-no-files-found: warn
+          retention-days: 90
+
+      - name: Record whether the state was saved
+        # Anything but a clean upload is a degraded run, so the summary, the
+        # comment, card-feed's status and the run's exit all say so, and the
+        # backup runs and carries today's state forward instead.
+        if: always()
+        run: |
+          if [ "${{ steps.state.outcome }}" != "success" ]; then
+            echo "The state for the next run could not be uploaded, so tomorrow's run would restore an older state and today's frozen snapshot would not settle. The backup run carries it forward instead." >> run_degraded.txt
+          fi
+
       - name: Write the card to the run summary
         if: always()
         run: |
@@ -805,27 +847,6 @@ jobs:
             data/outputs/closing_line_value.md
           if-no-files-found: warn
           retention-days: 30
-
-      - name: Upload the state for the next run
-        # The boxscore cache and the previous card are the only link between
-        # one gameday and the next, which is why they outlive the reports. The
-        # card in particular: without it the "selections changed" marker cannot
-        # mean anything.
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: gameday-state
-          path: |
-            data/raw/nhl/boxscore
-            data/raw/nhl/registry
-            data/processed
-            data/outputs/gameday_card.json
-            data/outputs/prop_calibration_samples.csv
-            data/outputs/team_market_samples.csv
-            data/archive/priced_snapshots
-            data/processed/forward_evidence.csv
-          if-no-files-found: warn
-          retention-days: 90
 
       - name: Report the outcome
         # Last, and the only step that can fail the job. Everything above is
