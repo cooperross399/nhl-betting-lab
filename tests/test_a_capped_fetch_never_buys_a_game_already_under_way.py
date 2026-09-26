@@ -314,14 +314,14 @@ class _RunClock(datetime):
         return RUN_AT.astimezone(tz) if tz else RUN_AT.replace(tzinfo=None)
 
 
-def _advancing_provider_clock(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A clock that has crossed the first face-off by its second reading."""
-    ticks = iter([RUN_AT, RUN_AT + timedelta(seconds=4)])
-    last = [RUN_AT]
+def _forbid_provider_clock(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A script must hand both fetches its own instant, so the fetch's default
+    clock is never read. Reading it at all fails the test: a clock that merely
+    agreed with the script on its first reading let a script that passed
+    `now` to one fetch and not the other through."""
 
     def clock() -> datetime:
-        last[0] = next(ticks, last[0])
-        return last[0]
+        pytest.fail("a script must pass its own `now` to every fetch")
 
     monkeypatch.setattr(odds_api, "_provider_clock", clock)
 
@@ -385,7 +385,7 @@ def _wire(module: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
         lambda: ProviderEnvLoadResult(path=tmp_path / ".env"),
     )
     monkeypatch.setattr(module, "datetime", _RunClock)
-    _advancing_provider_clock(monkeypatch)
+    _forbid_provider_clock(monkeypatch)
 
 
 def _games(frame: pd.DataFrame, market: str) -> set[str]:
