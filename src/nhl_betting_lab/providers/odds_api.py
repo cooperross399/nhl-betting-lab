@@ -167,7 +167,17 @@ Requester = Callable[..., Any]
 
 
 class ProviderError(RuntimeError):
-    """The provider could not answer safely. No staging file is written."""
+    """The provider could not answer safely. No staging file is written.
+
+    `status` is the HTTP status the provider refused a request with, and None
+    when there was no refusal to read: a request that never came back, or one
+    answered 200 with an unreadable body. A caller that has to tell one
+    refusal from another reads this, not the words of the message.
+    """
+
+    def __init__(self, *args: object, status: int | None = None) -> None:
+        super().__init__(*args)
+        self.status = status
 
 
 class MissingCredentialError(ProviderError):
@@ -183,10 +193,26 @@ class EmptySlateError(ProviderError):
     alarming red run every single day of the off-season, and a red that fires
     daily for four months is a red nobody reads in October.
 
-    A 422 is only ever reported as an empty slate after the free events
-    endpoint confirms the board really is empty. The same status can mean a
-    malformed request, and quietly reading "your markets parameter is wrong"
-    as "the season has not started" would hide a real bug for months.
+    The same status can mean a malformed request, and quietly reading "your
+    markets parameter is wrong" as "the season has not started" would hide a
+    real bug for months. So a 422 is reported as an empty slate
+    (`NoOddsServedError`) only when a plain moneyline request is refused with
+    a 422 as well; see `fetch_team_markets`. (This said the free events
+    endpoint confirmed it. That check was removed in #21, because through
+    September the October schedule is listed while no book has priced
+    anything, and nothing replaced it.)
+    """
+
+
+class NoOddsServedError(EmptySlateError):
+    """The provider refused the market list AND a plain moneyline with HTTP 422.
+
+    Between seasons that is the ordinary state. The provider's answer is the
+    only evidence behind it, though. A parameter both requests share, such as
+    a region the provider stops serving, would draw the same two refusals on
+    every run of a season. A caller that has the NHL schedule should check
+    it before calling a scheduled game day empty (`run_provider_shadow.py`
+    does).
     """
 
 
@@ -506,7 +532,8 @@ class OddsApiProvider:
         if status != 200:
             raise ProviderError(
                 f"The odds provider returned HTTP {status or 'unknown'}. "
-                f"{NO_STAGING_WRITTEN}"
+                f"{NO_STAGING_WRITTEN}",
+                status=status or None,
             )
         try:
             payload = response.json()
@@ -576,7 +603,9 @@ class OddsApiProvider:
                 self._params(regions=self.regions, markets=",".join(markets)),
             )
         except ProviderError as exc:
-            if "422" not in str(exc):
+            # The status the provider refused with, not "422" in the words of
+            # the message, which is what this read until 2026-09-26.
+            if exc.status != 422:
                 raise
             # A 422 means one of two things and they need separating.
             #
@@ -590,21 +619,46 @@ class OddsApiProvider:
             # October schedule is listed while no book has priced anything, so
             # "events exist" is true in exactly the case being tested for.
             # What separates them is asking again for `h2h` alone, which is
-            # the one market every sport serves. If that is refused too, there
-            # are no odds. If it succeeds, the market list was the problem.
+            # the one market every sport serves. If that is refused with a 422
+            # too, there are no odds. If it succeeds, the market list was the
+            # problem. If it fails any other way, nothing was learned.
+            #
+            # That last case used to be read as the off-season. The retry sat
+            # in a bare `except ProviderError`, so a 503, a 429, a 500, a 401,
+            # a read timeout, a refused connection or an unreadable body
+            # raised EmptySlateError. Replayed by the failure-shape audit
+            # (c3x0-odds-api-600), a game day with a bulk 422 and a retry 503
+            # made run_provider_shadow.py exit 3, and Gameday Refresh then
+            # recorded empty_slate=true and degraded=false and posted
+            # nothing. The job was green, and the 15:00 backup stood down: no
+            # card, no snapshot, and no sign anything was wrong. A check that
+            # could not be made is a failed fetch, and it is reported as one.
             try:
                 self._get(
                     f"{self.base_url}/v4/sports/{self.sport_key}/odds",
                     self._params(regions=self.regions, markets="h2h"),
                 )
-            except ProviderError:
-                raise EmptySlateError(
-                    "The provider is serving no NHL odds at all — even a "
-                    "plain moneyline request is refused — so there is nothing "
-                    "to price. That is the ordinary state between the end of "
-                    "one season and the day books post the next, and it is "
-                    "not a fault."
-                ) from exc
+            except ProviderError as retry_exc:
+                if retry_exc.status == 422:
+                    raise NoOddsServedError(
+                        "The provider is serving no NHL odds at all — even a "
+                        "plain moneyline request is refused — so there is "
+                        "nothing to price. That is the ordinary state between "
+                        "the end of one season and the day books post the "
+                        "next, and it is not a fault."
+                    ) from exc
+                failure = " ".join(
+                    str(retry_exc).replace(NO_STAGING_WRITTEN, "").split()
+                )
+                raise ProviderError(
+                    "The provider refused this market list with HTTP 422, and "
+                    "the plain moneyline request that tells an off-season "
+                    "from a request problem failed as well, so there is no "
+                    f"answer to read ({failure}). Only a 422 to both means "
+                    "no NHL odds are served, so this cannot be read as the "
+                    f"off-season. {NO_STAGING_WRITTEN}",
+                    status=retry_exc.status,
+                ) from retry_exc
             raise ProviderError(
                 "The provider refused this market list but served a plain "
                 f"moneyline request, so one of {markets} is not a market it "
