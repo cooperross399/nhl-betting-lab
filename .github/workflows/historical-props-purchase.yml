@@ -127,12 +127,31 @@ jobs:
           # A single window has cost 157,870 credits; re-buying it is not a
           # rounding error, and a cached event costs nothing.
           #
-          # Taken from the most recent run that produced one, successful or
-          # not: the run that spends the credits and the run that finishes
-          # green are not always the same run — the purchase that prompted
-          # this fix bought 2,710 events and then died writing the CSV.
+          # Taken from the most recent run ON MAIN that produced one,
+          # successful or not: the run that spends the credits and the run
+          # that finishes green are not always the same run — the purchase
+          # that prompted this fix bought 2,710 events and then died writing
+          # the CSV.
+          #
+          # On main, by gh's `--branch` AND by each run's own headBranch. This
+          # listing used to have neither. The purchase is dispatch-only, so it
+          # runs on any branch, and the next main purchase took the newest
+          # carrier on ANY branch and copied its responses into the raw cache
+          # the price files are rebuilt from: evidence written by code nobody
+          # reviewed, which both uploads below then carry forward under a main
+          # run's id, past every main-only restore downstream. Replayed with
+          # one branch dispatch that had bought two responses for one event,
+          # 1,430 of the 9,391 rebuilt rows came from it. It was the one
+          # listing left outside scripts/restore_state.py when #178 made that
+          # read main only; latent on 2026-09-25, when all 11 purchase runs
+          # were on main. Each half does what the other cannot: `--branch`
+          # keeps a burst of branch probes out of the 20-run window, and the
+          # headBranch check means the restore does not rest on a flag this
+          # step cannot see honoured. The conclusion is still not filtered
+          # on, on purpose.
           bought=$(gh run list --workflow historical-props-purchase.yml \
-            --limit 20 --json databaseId --jq '.[].databaseId' | while read -r id; do
+            --branch main --limit 20 --json databaseId,headBranch \
+            --jq '.[] | select(.headBranch == "main") | .databaseId' | while read -r id; do
               if gh run download "$id" --name historical-props --dir /tmp/probe 2>/dev/null; then
                 echo "$id"; break
               fi
@@ -142,9 +161,9 @@ jobs:
             cp -R /tmp/probe/raw/historical_props/. data/raw/historical_props/ 2>/dev/null || true
             cp -R /tmp/probe/processed/. data/processed/ 2>/dev/null || true
             cached=$(find data/raw/historical_props -name '*.json' 2>/dev/null | wc -l)
-            echo "Bought-price cache restored from run $bought: $cached response(s)."
+            echo "Bought-price cache restored from run $bought on main: $cached response(s)."
           else
-            echo "No previous purchase artifact. Anything bought this run is bought fresh."
+            echo "No purchase run on main carries bought prices. Anything bought this run is bought fresh."
           fi
           if [ "$restored" -eq 0 ]; then
             echo "::warning::No boxscores were restored; this run rebuilds the cache from scratch."
