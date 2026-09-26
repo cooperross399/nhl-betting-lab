@@ -25,7 +25,9 @@ network):
 * `fetch_boxscore` never writes a boxscore that is not final, removes a
   non-final one an older run left, and never overwrites a final one;
 * the health step counts final boxscores only, and agrees with
-  `game_is_final` on which those are.
+  `game_is_final` on which those are;
+* so does Experiment Refresh's restore, whose 500-boxscore floor the same
+  future-game files padded.
 """
 
 from __future__ import annotations
@@ -33,6 +35,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import stat
 import subprocess
 import sys
 from pathlib import Path
@@ -363,3 +366,70 @@ def test_the_health_count_is_zero_with_no_cache(tmp_path: Path) -> None:
 
     assert "Boxscores cached: 0" in stdout
     assert "thin history" in notes
+
+
+# -- Experiment Refresh's restore floor counts finals only -----------------------
+
+
+FAKE_PYTHON = """#!/bin/bash
+# restore_state.py, build_datasets.py and the rest: the cache is laid out
+# by the test, so each does nothing here.
+exit 0
+"""
+
+
+def _experiment_restore_step() -> str:
+    workflow = yaml.safe_load(
+        (PROJECT_ROOT / ".github" / "workflows" / "experiment-refresh.yml").read_text(
+            encoding="utf-8"
+        )
+    )
+    for job in workflow["jobs"].values():
+        for step in job.get("steps", []):
+            if step.get("id") == "restore":
+                assert "${{" not in step["run"], step["run"]
+                return step["run"]
+    raise AssertionError("experiment-refresh.yml has no step with id: restore")
+
+
+@pytest.mark.parametrize(
+    "shell", [["-e"], ["-eo", "pipefail"]], ids=["github-bash-e", "pipefail"]
+)
+@pytest.mark.parametrize("finals", [0, 499, 500], ids=["none", "one-below", "at-the-floor"])
+def test_experiment_refresh_does_not_count_future_games_toward_its_floor(
+    tmp_path: Path, finals: int, shell: list[str]
+) -> None:
+    """The restore refuses fewer than 500 boxscores. A thousand scheduled
+    games on top of 499 finals is still 499. Run under GitHub's own `bash -e`
+    (the workflow declares no shell) and under pipefail."""
+    box = tmp_path / "data" / "raw" / "nhl" / "boxscore"
+    # Every spelling `game_is_final` accepts, so the count agrees with it.
+    final_states = [("OFF", "FINAL", "off", "final")[i % 4] for i in range(finals)]
+    for game_id, state in enumerate(final_states + ["FUT"] * 1000, start=1):
+        nhl_api._write_cache(box / f"{game_id}.json", {"id": game_id, "gameState": state})
+    assert all(nhl_api.game_is_final({"gameState": s}) for s in final_states)
+    (tmp_path / "data" / "processed").mkdir(parents=True)
+    (tmp_path / "data" / "processed" / "historical_prop_prices.csv").write_text("x\n")
+    (tmp_path / "data" / "outputs").mkdir(parents=True)
+    (tmp_path / "data" / "outputs" / "prop_calibration_samples.csv").write_text("x\n")
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    python = bin_dir / "python"
+    python.write_text(FAKE_PYTHON, encoding="utf-8")
+    python.chmod(python.stat().st_mode | stat.S_IEXEC)
+
+    result = subprocess.run(
+        ["bash", "--noprofile", "--norc", *shell, "-c", _experiment_restore_step()],
+        cwd=tmp_path,
+        env={**os.environ, "PATH": f"{bin_dir}:{os.environ.get('PATH', '')}"},
+        capture_output=True, text=True,
+    )
+    output = result.stdout + result.stderr
+
+    assert f"Boxscores restored: {finals}\n" in result.stdout, output
+    if finals < 500:
+        assert result.returncode == 1, output
+        assert f"Only {finals} boxscores restored" in result.stdout, output
+    else:
+        assert result.returncode == 0, output
+        assert "::error::" not in result.stdout, output
