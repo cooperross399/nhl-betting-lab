@@ -30,7 +30,9 @@ night]`, plus one — two regions (`us,us2`) since 2026-08-28, a factor this
 line left out until 2026-09-25.
 
 Nothing spends a credit without an explicit `--live` and a `credit_cap`, and
-the cap is checked before each request rather than after.
+the cap is checked before each request rather than after. (Until 2026-09-26
+the retention probe was the exception: its loop never read the cap, and
+spent 536 credits under a cap of 60. `probe_retention_under_cap` holds it.)
 
 ## Retention is not uniform, and pretending it is would be the real failure
 
@@ -143,6 +145,42 @@ class RetentionProbe:
                 else "."
             )
             + detail
+        )
+
+
+@dataclass
+class RetentionRun:
+    """A retention probe over several events, held to a credit cap.
+
+    `probes` holds one entry per event actually asked, whether it was paid
+    for or read from the cache. An event the cap could not afford is counted
+    in `events_skipped_for_budget` and never probed, so it can never be read
+    as "asked and not seen".
+    """
+
+    probes: list[RetentionProbe] = field(default_factory=list)
+    events_requested: int = 0
+    #: Per-event requests actually sent, failed ones included.
+    requests_sent: int = 0
+    events_from_cache: int = 0
+    events_skipped_for_budget: int = 0
+    #: Measured from `x-requests-last`, summed. Not an estimate.
+    credits_spent: int = 0
+    credits_remaining: str = ""
+    errors: list[str] = field(default_factory=list)
+
+    def summary_line(self) -> str:
+        return (
+            f"{len(self.probes)} of {self.events_requested} event(s) probed "
+            f"({self.requests_sent} paid request(s), "
+            f"{self.events_from_cache} from the cache); "
+            f"{self.credits_spent} credit(s) actually spent"
+            + (
+                f", {self.credits_remaining} remaining"
+                if self.credits_remaining
+                else ""
+            )
+            + f"; {self.events_skipped_for_budget} event(s) skipped for budget."
         )
 
 
@@ -350,9 +388,14 @@ def probe_retention(
 ) -> RetentionProbe:
     """Ask one historical snapshot which markets it actually carries.
 
-    One event, so the cost is bounded and known. The answer feeds the
-    per-market retention table, which is what lets the backtest say "this
-    market cannot be measured historically" as a measured fact.
+    One event, one request, and no cap: this is the primitive, and nothing
+    here stops it. A probe of several events goes through
+    `probe_retention_under_cap`, which holds the run to its credit cap. The
+    comment that stood here, "one event, so the cost is bounded and known",
+    outlived the one-event probe: the script's loop called this for every
+    event it picked and paid 536 credits under a cap of 60. The answer feeds
+    the per-market retention table, which is what lets the backtest say
+    "this market cannot be measured historically" as a measured fact.
     """
     wanted = tuple(
         markets
@@ -408,6 +451,119 @@ def probe_retention(
     probe.markets_returned = tuple(sorted(returned & set(wanted)))
     probe.books_returned = tuple(sorted(book for book in books if book))
     return probe
+
+
+def probe_retention_under_cap(
+    provider: OddsApiProvider,
+    *,
+    events: Sequence[Mapping[str, str]],
+    markets: Sequence[str] | None = None,
+    credit_cap: int,
+    raw_dir: Path | None = None,
+) -> RetentionRun:
+    """Probe retention over several events, and never spend past `credit_cap`.
+
+    Until 2026-09-26 `buy_historical_props.py --probe` looped over its events
+    calling `probe_retention` with no running total: `--credit-cap` was
+    checked to be positive and then ignored. The probe had grown from one
+    event (which the Historical Props Purchase workflow's default cap of 60
+    was sized for: six markets, one region, measured at 50) to five, at seven
+    markets and two regions, and nothing passed the cap to the new loop.
+    Replayed with the workflow's own flags, its default cap of 60, and the
+    recorded 107 credits an event, it sent five requests and spent 536; a
+    cap of 1 spent the same; sixteen events spent 1,713. The buy path, given
+    the same cap and slate, skipped every event and spent 1.
+
+    So this carries the buy's two gates, checked before every event that is
+    not already on disk. The first is the pessimistic estimate: an event is
+    started only if the worst case of everything asked so far, this one
+    included, fits inside the cap, and a request that failed is charged at
+    that worst case, because a failed request may still have cost quota. The
+    second is MEASURED spend, projected one event ahead at the dearest charge
+    seen so far (never below the estimate), which is the team buy's form of
+    the gate (#159): the estimate has already been wrong in production (107
+    charged against 70 predicted), and projecting, rather than stopping once
+    the total has reached the cap, means the run cannot pass it. Both skip
+    rather than stop, so an event already bought further on is still read,
+    and a cached event costs nothing and passes neither gate.
+
+    `credit_cap` is keyword-only and has no default: a loop over paid
+    requests that can be called without one is how this went unnoticed.
+    """
+    wanted = tuple(
+        markets
+        if markets is not None
+        else (market.provider_key for market in PROP_MARKETS)
+    )
+    if not wanted:
+        raise ProviderError("A retention probe needs at least one market.")
+    worst_case_per_event = estimate_credits(
+        events=1, markets=len(wanted), regions=provider.region_count
+    )
+    run = RetentionRun(events_requested=len(events))
+    worst_case_spent = 0
+    # The dearest event the provider has actually charged so far, never
+    # below the estimate: the best available forecast of the next charge.
+    largest_charge = worst_case_per_event
+    stopped_on_measured = False
+
+    for entry in events:
+        event_id = str(entry.get("event_id", "")).strip()
+        snapshot = str(entry.get("snapshot", "")).strip()
+        if not event_id or not snapshot:
+            run.errors.append(f"Skipped an event with no id or snapshot: {entry!r}")
+            continue
+        cached = (
+            _read_cache(
+                _cache_path(event_id, snapshot, raw_dir=raw_dir, markets=wanted)
+            )
+            is not None
+        )
+        if not cached:
+            if worst_case_spent + worst_case_per_event > credit_cap:
+                run.events_skipped_for_budget += 1
+                continue
+            if run.credits_spent + largest_charge > credit_cap:
+                run.events_skipped_for_budget += 1
+                if not stopped_on_measured:
+                    stopped_on_measured = True
+                    run.errors.append(
+                        f"Stopped probing at the {credit_cap:,}-credit cap on "
+                        f"MEASURED spend ({run.credits_spent:,} charged; the "
+                        f"next event could cost {largest_charge:,})."
+                    )
+                continue
+        probe = probe_retention(
+            provider,
+            event_id=event_id,
+            snapshot=snapshot,
+            markets=wanted,
+            raw_dir=raw_dir,
+        )
+        if cached:
+            run.events_from_cache += 1
+        else:
+            # Charged at the worst case whether or not it succeeded. Assuming
+            # a failure was free is how a run of failures walks past its cap.
+            worst_case_spent += worst_case_per_event
+            run.requests_sent += 1
+            run.credits_spent += probe.credits_spent
+            largest_charge = max(largest_charge, probe.credits_spent)
+            run.credits_remaining = probe.credits_remaining or run.credits_remaining
+        run.probes.append(probe)
+    return run
+
+
+def listing_is_cached(*, snapshot: str, raw_dir: Path | None = None) -> bool:
+    """Whether the slate listing at `snapshot` is already on disk, and so free.
+
+    `list_historical_events` reads the same file first; a caller holding a
+    cap asks this before deciding whether a listing still fits inside it.
+    """
+    return (
+        _read_cache(_cache_path("events", snapshot, raw_dir=raw_dir, markets=None))
+        is not None
+    )
 
 
 def retention_from_cache(
