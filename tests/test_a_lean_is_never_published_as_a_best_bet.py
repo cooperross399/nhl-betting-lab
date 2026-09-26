@@ -61,8 +61,17 @@ def _card_with_leans(outputs: Path) -> None:
     card = GamedayCard(
         generated_at=f"{BOARD_DAY.isoformat()}T13:30:00+00:00", card_generated=True,
         slate_games=len(SLATE), included_markets=("moneyline", "puck_line", "total_goals"),
-        best_bets=[_candidate("MTL", "TOR", market="moneyline", selection="home",
-                              odds=112, edge=0.050, section=BEST_BETS_SECTION)],
+        # Two smaller best bets flank the moneyline on the same game, so
+        # the pick is the section's largest edge and not whichever row the
+        # card happens to list first or last.
+        best_bets=[
+            _candidate("MTL", "TOR", market="puck_line", selection="home",
+                       odds=210, edge=0.030, section=BEST_BETS_SECTION, line=-1.5),
+            _candidate("MTL", "TOR", market="moneyline", selection="home",
+                       odds=112, edge=0.050, section=BEST_BETS_SECTION),
+            _candidate("MTL", "TOR", market="regulation_3_way", selection="home",
+                       odds=150, edge=0.040, section=BEST_BETS_SECTION),
+        ],
         leans=[
             _candidate("MTL", "TOR", market="total_goals", selection="over",
                        odds=-110, edge=0.200, section=LEANS_SECTION, line=6.0),
