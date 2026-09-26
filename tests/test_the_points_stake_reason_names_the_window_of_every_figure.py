@@ -92,7 +92,22 @@ def _evidence(report: str) -> str:
     tested = _find(
         rf"points`: .*?correcting for the {COUNT} (?:markets|figures)", text, report
     )
-    return f"{_points_row(report)} {hours} {tested}"
+    return f"{_points_row(report)} {hours} {tested} {_market_rows(report)}"
+
+
+def _market_rows(report: str) -> int:
+    """How many markets the report's result table measures.
+
+    The correction's family is these plus the overall "All props" row, which
+    is why the committed card report's "8 markets tested" is 7 markets.
+    """
+    rows = [
+        line
+        for line in (OUTPUTS / report).read_text().split("### ")[0].splitlines()
+        if line.startswith("| `")
+    ]
+    assert rows, f"{report}: no market rows found in the result table"
+    return len(rows)
 
 
 @pytest.fixture(scope="module")
@@ -173,3 +188,33 @@ def test_the_quoted_bundle_verdict_is_attributed_to_the_late_window(sentences):
     for sentence in quoting:
         assert "late window" in sentence.lower(), sentence
         assert "card window" not in sentence.lower(), sentence
+
+
+def test_the_card_correction_counts_figures_not_markets(sentences):
+    """The card window's family is its markets plus the overall figure.
+
+    `stats.correction_family` records the error this guards: "8 markets
+    tested" for a window that measures 7. The committed report still says
+    it that way, so the count is read from the report (either wording) and
+    the market count from its table, and the reason must say figures.
+    """
+    report = "player_props_backtest_card.md"
+    text = (OUTPUTS / report).read_text()
+    looks = _count(
+        _find(rf"points`: .*?correcting for the {COUNT} (?:markets|figures)", text, report)
+    )
+    markets = _market_rows(report)
+    assert looks == markets + 1, (
+        f"{report}: expected the family to be {markets} markets plus the "
+        f"overall figure, found {looks} looks"
+    )
+
+    card = [s for s in sentences if "card window" in s.lower()]
+    assert card, "no sentence names the card window"
+    card_text = " ".join(card)
+    assert re.search(rf"\b{looks} figures measured\b", card_text), card_text
+    assert f"({markets} markets and the overall figure)" in card_text, card_text
+    assert not re.search(r"\b(?:eight|8) markets\b", card_text, re.IGNORECASE), (
+        "the card window's correction counts the overall figure too; "
+        f"calling all {looks} looks markets is the error correction_family names"
+    )

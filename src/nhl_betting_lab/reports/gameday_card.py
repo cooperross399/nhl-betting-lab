@@ -185,14 +185,18 @@ HARD_GATED_MARKETS: dict[str, str] = {
 #: and the evidence bundle's verdict are both cut from the late one (2,726 +
 #: 3,468 = its 6,194 bets). This text once ran the two together as one
 #: measurement; tests/test_the_points_stake_reason_names_the_window_of_every_figure.py
-#: reads the figures back out of those reports.
+#: reads the figures back out of those reports. The correction count is
+#: phrased as `stats.correction_family` phrases it: the card window's family
+#: is its 7 markets plus the overall figure, which the committed report still
+#: calls "8 markets tested".
 STAKE_EXCLUDED_MARKETS: dict[str, str] = {
     "points": (
         "`points` is the one market this lab has measured as a loss that "
         "survives correction, and it does so in both windows the backtest "
         "prices. In the card window, 9.6 hours before face-off: -4.2% over "
         "6,140 wagers, 95% interval -6.7% to -1.7%, -7.6% to -0.7% after "
-        "correcting for the eight markets tested, and -256.8 units realised. "
+        "correcting for the 8 figures measured on the same data (7 markets "
+        "and the overall figure), and -256.8 units realised. "
         "In the late window, 4.1 hours before face-off: -4.4% over 6,194 "
         "wagers, 95% interval -6.9% to -2.0%, and it holds within that "
         "window's 2025-26 season alone "
