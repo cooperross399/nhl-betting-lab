@@ -48,6 +48,7 @@ import yaml
 
 from nhl_betting_lab.config import PROJECT_ROOT
 from nhl_betting_lab.providers import odds_api
+from nhl_betting_lab.season import LEAGUE_TIMEZONE
 
 from test_scripts import load_script
 
@@ -473,8 +474,23 @@ def test_a_truncated_header_with_no_rows_is_named(tmp_path: Path) -> None:
     assert "missing column(s)" in record["unreadable_captures"][0]["reason"]
 
 
+#: The clock is pinned at 2026-10-04T01:30Z: still TODAY in the league's
+#: zone, already the next day in UTC. That is the last capture of a league
+#: day, and a step computing its day in UTC (or with `date -u`) would name
+#: tomorrow's file, so damage in the file it had just appended to would read
+#: as an earlier day's warning and that league day would never go red. The
+#: zone is `capture_line_movement.py`'s own, so the step must name the day
+#: the capture wrote to.
+UTC_DAY = "2026-10-04"
 DATE_STUB = f"""#!/bin/sh
-echo {TODAY}
+for argument in "$@"; do
+  case "$argument" in -u|--utc|--universal) echo {UTC_DAY}; exit 0;; esac
+done
+if [ "${{TZ:-}}" = "{LEAGUE_TIMEZONE.key}" ]; then
+  echo {TODAY}
+else
+  echo {UTC_DAY}
+fi
 """
 
 
