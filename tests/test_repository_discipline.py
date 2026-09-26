@@ -356,7 +356,10 @@ def test_state_restore_names_the_artifact_it_wants(workflow: str) -> None:
 
 
 def test_a_failed_restore_is_warned_about_rather_than_passed_over() -> None:
-    """It is `continue-on-error`, so silence would look like success."""
+    """A restore that GitHub answered with no boxscores goes on and rebuilds
+    the cache, so it says so; silence would look like a warm cache. (A
+    restore that could not ask GitHub stops the job instead; see
+    test_an_unreachable_github_never_reads_as_no_bought_prices.)"""
     text = _read(".github/workflows/historical-props-purchase.yml")
 
     assert "No boxscores were restored" in text

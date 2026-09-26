@@ -105,8 +105,34 @@ jobs:
         # Without this, every run refetches four thousand boxscores. They
         # never change once a game is final, so this is the difference
         # between a two-minute job and an hour-long one.
+        #
+        # NOT continue-on-error, and it must not become so. Both artifacts
+        # below carry prices that were paid for, and a restore that could not
+        # ASK GitHub used to read exactly like one that was told there is
+        # nothing. The historical-props listing was inline and read no
+        # status. The gameday-state restore read a failed listing as "no
+        # runs", and a failed download as "try an older run". So one HTTP 502
+        # printed "No purchase run on main carries bought prices" and exited
+        # 0 under the `bash -e` GitHub runs a step with no `shell:` under.
+        # The buy then found no cached event and paid for the window again.
+        # In the failure-shape audit's replay that was 12 events and 1,284
+        # credits, where a working restore served all 12 from the cache for
+        # 0. The price file it wrote held that run's 7,961 rows alone, and
+        # both uploads below carried them, where the carrier before held
+        # 40,942. The next purchase took the thin run as the chain, and so
+        # did Experiment Refresh. A full window has cost 157,870 to 289,984
+        # credits.
+        #
+        # Now, under --refuse-unreachable, a listing that fails, or a
+        # download that fails for any reason but gh saying the run holds
+        # none, is tried three times. If it still fails, the step fails and
+        # the job stops here: before the credential check, before any paid
+        # request, and with both uploads gated on this step. Only a listing
+        # that answers with no carrier starts without them. A run that holds
+        # none, such as a refused or expired one, is passed over, which is
+        # why this is not --require-newest: a refused run uploads nothing,
+        # and under that flag no later purchase could get past it.
         id: restore
-        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -118,10 +144,17 @@ jobs:
           # matters, and restore_state.py always passes it: without it `gh`
           # puts each artifact in a subdirectory named after itself, so the
           # cache lands in `data/gameday-state/raw/...` where nothing looks.
+          # The purchase's own state is the only copy of the raw team
+          # responses, so it is held to the same contract as the prices.
           python scripts/restore_state.py --artifact gameday-state --dest data \
             --workflow historical-props-purchase.yml --workflow gameday-refresh.yml \
-            || echo "No usable previous state; rebuilding."
-          restored=$(find data/raw/nhl/boxscore -name '*.json' 2>/dev/null | wc -l)
+            --refuse-unreachable --attempts 3 || {
+            echo "::error::The previous state could not be restored because GitHub could not be asked (gh's own words are above). It carries the bought prices and the raw team responses, so this run stops before it spends a credit or uploads anything. Dispatch it again once GitHub answers."
+            exit 1
+          }
+          # `|| true`: with nothing restored `find` fails on the missing
+          # directory, and under pipefail that would end the step here.
+          restored=$(find data/raw/nhl/boxscore -name '*.json' 2>/dev/null | wc -l || true)
           echo "Cached boxscores restored: $restored"
 
           # The bought prices themselves. This artifact was uploaded by every
@@ -131,34 +164,31 @@ jobs:
           # rounding error, and a cached event costs nothing.
           #
           # Taken from the most recent run ON MAIN that produced one,
-          # successful or not: the run that spends the credits and the run
-          # that finishes green are not always the same run — the purchase
-          # that prompted this fix bought 2,710 events and then died writing
-          # the CSV.
+          # successful or not (`--no-merge`: that run alone, as always): the
+          # run that spends the credits and the run that finishes green are
+          # not always the same run — the purchase that prompted this fix
+          # bought 2,710 events and then died writing the CSV.
           #
-          # On main, by gh's `--branch` AND by each run's own headBranch. This
-          # listing used to have neither. The purchase is dispatch-only, so it
-          # runs on any branch, and the next main purchase took the newest
-          # carrier on ANY branch and copied its responses into the raw cache
-          # the price files are rebuilt from: evidence written by code nobody
-          # reviewed, which both uploads below then carry forward under a main
-          # run's id, past every main-only restore downstream. Replayed with
-          # one branch dispatch that had bought two responses for one event,
-          # 1,430 of the 9,391 rebuilt rows came from it. It was the one
-          # listing left outside scripts/restore_state.py when #178 made that
-          # read main only; latent on 2026-09-25, when all 11 purchase runs
-          # were on main. Each half does what the other cannot: `--branch`
-          # keeps a burst of branch probes out of the 20-run window, and the
-          # headBranch check means the restore does not rest on a flag this
-          # step cannot see honoured. The conclusion is still not filtered
-          # on, on purpose.
-          bought=$(gh run list --workflow historical-props-purchase.yml \
-            --branch main --limit 20 --json databaseId,headBranch \
-            --jq '.[] | select(.headBranch == "main") | .databaseId' | while read -r id; do
-              if gh run download "$id" --name historical-props --dir /tmp/probe 2>/dev/null; then
-                echo "$id"; break
-              fi
-            done)
+          # On main only, as restore_state.py reads every listing: by gh's
+          # `--branch` AND by each run's own headBranch. The inline listing
+          # this replaces once had neither. The purchase is dispatch-only, so
+          # it runs on any branch, and the next main purchase took the newest
+          # carrier on ANY branch: evidence written by code nobody reviewed,
+          # which both uploads below then carried forward under a main run's
+          # id. Replayed with one branch dispatch that had bought two
+          # responses for one event, 1,430 of the 9,391 rebuilt rows came
+          # from it (#185). That listing then read no status either, which is
+          # the failure described above the step; restore_state.py is the one
+          # place both are handled. `--limit 20` is that listing's window.
+          # Into a scratch folder, as before: only the raw responses and the
+          # price files are taken from it, not the reports beside them.
+          python scripts/restore_state.py --artifact historical-props --dest /tmp/probe \
+            --workflow historical-props-purchase.yml --limit 20 --no-merge \
+            --refuse-unreachable --attempts 3 --record-run /tmp/probe.run || {
+            echo "::error::GitHub could not be asked which purchase run on main carries the bought prices (gh's own words are above), so this run stops before it spends a credit or uploads anything. Starting without them would buy again what the lab already owns, and this run's uploads, holding only that, would become the chain's newest carrier. Dispatch it again once GitHub answers."
+            exit 1
+          }
+          bought=$(cat /tmp/probe.run)
           if [ -n "$bought" ]; then
             mkdir -p data/raw/historical_props data/processed
             cp -R /tmp/probe/raw/historical_props/. data/raw/historical_props/ 2>/dev/null || true
@@ -325,7 +355,12 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload what was bought
-        if: always()
+        # Always, so a purchase that spent its credits and then failed still
+        # keeps what it bought, but only after a restore that succeeded. The
+        # checkout tracks reports under data/outputs, so a run that restored
+        # nothing still uploaded an artifact of this name without one bought
+        # response, and the next purchase took it as the chain.
+        if: ${{ always() && steps.restore.outcome == 'success' }}
         uses: actions/upload-artifact@v4
         with:
           name: historical-props
@@ -345,8 +380,10 @@ jobs:
         # The boxscore cache and the walk-forward samples are what make a
         # second run cheap. The bought prices go with them because they are
         # evidence: historical prices never change, so re-buying one is a
-        # credit spent on something already owned.
-        if: always()
+        # credit spent on something already owned. Gated on the restore for
+        # the same reason as the upload above: from a run that could not
+        # restore, it held only the checkout's tracked data/processed files.
+        if: ${{ always() && steps.restore.outcome == 'success' }}
         uses: actions/upload-artifact@v4
         with:
           name: gameday-state

@@ -14,7 +14,10 @@ and the one reduced-juice operator already inside `us` (LowVig.ag) quotes
 NHL moneylines and totals and **no props at all**. That is the pattern this
 probe exists to confirm or refute for the venues that matter: a venue that
 lists the moneyline but not the props cannot carry a props model, and that
-is the decisive negative.
+is the decisive negative — but only when every props call was answered. A
+call the provider refused, or the cap ruled out, asked nothing: a run with
+no props call answered says "No measurement", one with some unanswered
+names them, and any unanswered call exits 3 after the report is written.
 
 **This spends credits.** It does nothing without `--live`, it takes a
 mandatory `--credit-cap`, and the cap is enforced against the **measured**
@@ -81,6 +84,11 @@ CREDITS_PER_MARKET_PER_REGION = 10
 JSON_FILENAME = "low_vig_venue_probe.json"
 MARKDOWN_FILENAME = "low_vig_venue_probe.md"
 CACHE_DIRNAME = "venue_probe"
+
+#: A run in which any planned call went unanswered — refused by the provider
+#: or ruled out by the cap — exits with this, after the report is written.
+#: It is the code this script already gives a provider refusal.
+EXIT_UNANSWERED = 3
 
 
 def _prop_keys() -> tuple[str, ...]:
@@ -177,15 +185,99 @@ def _plan(regions: list[str], prop_keys: tuple[str, ...]) -> list[dict[str, Any]
     return plan
 
 
-def _verdict(venues: dict[str, dict[str, Any]], reference: dict[str, Any]) -> str:
+def _asks_props(step: dict[str, Any], prop_keys: tuple[str, ...]) -> bool:
+    return bool(set(step["markets"]) & set(prop_keys))
+
+
+def _why(call: Mapping[str, Any]) -> str:
+    """Why a call got no answer, in a few words: the provider's own first
+    sentence for a refusal, or the cap. The Calls table keeps the detail."""
+    if call.get("skipped"):
+        return "skipped for the cap"
+    return str(call.get("error", "no answer")).split(". ")[0].rstrip(".")
+
+
+def _coverage(plan: list[dict[str, Any]], calls: list[dict[str, Any]], answered: Mapping[str, Any], prop_keys: tuple[str, ...]) -> dict[str, Any]:
+    """Which planned calls were answered, and why each of the others was not.
+
+    A call is answered when its response reached `answered` — an HTTP 200
+    the venue table was built from. A refusal or a cap skip is not an
+    answer, however the table reads afterwards."""
+    by_step = {c["step"]: c for c in calls}
+    unanswered = {p["step"]: _why(by_step.get(p["step"], {})) for p in plan if p["step"] not in answered}
+    props = [p["step"] for p in plan if _asks_props(p, prop_keys)]
+    return {
+        "props_asked": props,
+        "props_answered": [s for s in props if s in answered],
+        "unanswered": unanswered,
+    }
+
+
+def _named(steps: list[str], unanswered: Mapping[str, str]) -> str:
+    return ", ".join(f"{s} ({unanswered[s]})" for s in steps)
+
+
+def _verdict(venues: dict[str, dict[str, Any]], reference: dict[str, Any], coverage: Mapping[str, Any]) -> str:
+    """The run's one-line answer, stated no further than its answers reach.
+
+    This used to read only the venue table. A refused call and a call the
+    cap ruled out never reach that table, so a run in which all 9 calls
+    answered HTTP 503 — or a mistyped event id answered 404, or a cap of 5
+    sent nothing — left it empty, and an empty table printed the decisive
+    negative, "The venue route cannot carry the props model", on 0 credits
+    and exit 0. Failing only `props@eu` and `props@bookmakers`, the two calls
+    that carried every prop the real 2026-09-02 run found, was enough to turn
+    that run's answer into the same negative. Now the negative closes the
+    route only when every props call was answered; none answered is "No
+    measurement"; and any call that went unanswered is named with why, so
+    no line reads as covering a venue that was never asked.
+    """
+    unanswered: Mapping[str, str] = coverage["unanswered"]
+    props_asked: list[str] = list(coverage["props_asked"])
+    props_answered: list[str] = list(coverage["props_answered"])
+    props_missing = [s for s in props_asked if s not in props_answered]
+    others_missing = [s for s in unanswered if s not in props_asked]
+    also = (
+        f" Also unanswered: {_named(others_missing, unanswered)}, so the "
+        "h2h column does not cover those calls."
+        if others_missing else ""
+    )
+    if not props_answered:
+        return (
+            f"No measurement: none of the {len(props_asked)} props calls was "
+            f"answered — {_named(props_missing, unanswered)}. Nothing can be "
+            "concluded about which venues quote NHL player props, and this "
+            "run neither opens nor closes the venue route."
+        ) + also
     quoting = {v: d for v, d in venues.items() if d["prop_markets"]}
     if not quoting:
+        if props_missing:
+            return (
+                "No target venue returned an NHL player-prop market in the "
+                f"{len(props_answered)} of {len(props_asked)} props calls that "
+                f"were answered ({', '.join(props_answered)}). "
+                f"{_named(props_missing, unanswered)} went unanswered, so a "
+                "venue quoted only there was not measured, and this run does "
+                "not close the venue route."
+            ) + also
         return (
             "No target venue returned a single NHL player-prop market on this "
             "event. The venue route cannot carry the props model: a book "
             "that lists the moneyline and not the props offers nothing for a "
             "props opinion to be placed against."
-        )
+        ) + also
+    gap = (
+        f" Not measured: {_named(props_missing, unanswered)} went unanswered, "
+        "so a venue absent from this line may still quote props there."
+        if props_missing else ""
+    )
+    positive = _positive(quoting, reference)
+    if gap or also:
+        positive = positive if positive.endswith(".") else positive + "."
+    return positive + gap + also
+
+
+def _positive(quoting: dict[str, dict[str, Any]], reference: dict[str, Any]) -> str:
     lines = []
     ref_best = None
     if reference.get("available"):
@@ -383,7 +475,8 @@ def main(argv: list[str] | None = None, *, provider: OddsApiProvider | None = No
         "venues": venues,
         "reference": reference,
     }
-    result["verdict"] = _verdict(venues, reference)
+    coverage = _coverage(plan, calls, responses, prop_keys)
+    result["verdict"] = _verdict(venues, reference, coverage)
 
     outputs = Path(args.output_dir)
     outputs.mkdir(parents=True, exist_ok=True)
@@ -391,6 +484,22 @@ def main(argv: list[str] | None = None, *, provider: OddsApiProvider | None = No
     (outputs / MARKDOWN_FILENAME).write_text(redact(render(result)), encoding="utf-8")
     print(redact(result["verdict"]))
     print(f"Measured spend this run: {spent} credit(s) against a cap of {args.credit_cap}.")
+    # This returned 0 whatever happened, so a run with no call answered went
+    # green and the Venue Probe workflow published its verdict as a
+    # measurement. The report is written first, so the summary and the
+    # artifact still show what came back; the exit then says the run did not
+    # get the answers it planned.
+    unanswered = coverage["unanswered"]
+    if unanswered:
+        print(
+            redact(
+                f"{len(unanswered)} of {len(plan)} planned call(s) got no answer: "
+                f"{_named(list(unanswered), unanswered)}. The report was written; "
+                f"exiting {EXIT_UNANSWERED} because the run did not get every answer it planned."
+            ),
+            file=sys.stderr,
+        )
+        return EXIT_UNANSWERED
     return 0
 
 

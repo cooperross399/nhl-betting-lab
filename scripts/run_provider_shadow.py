@@ -2,7 +2,7 @@
 """Run a shadow provider fetch and write the verification reports.
 
 A shadow run fetches real prices into `data/staging/` and reports what it
-found. It allowlists nothing, promotes nothing, and places nothing. The
+found. It adds no allowlist entry, promotes nothing, and places nothing. The
 gameday card reads `data/staging/` — Gameday Refresh runs this script to
 fetch the card's prices — and uses a market from it only if the provider
 policy allowlists it, it is priced for every game in the slate, and the
@@ -195,6 +195,11 @@ def main(argv: list[str] | None = None) -> int:
     warnings: list[str] = []
     errors: list[str] = []
     per_event_failures: list[str] = []
+    # Which games' per-event requests failed, and which markets that left
+    # with no answer. It goes to the provenance (the card reads it there)
+    # and to both reports, so none of them reads a failed request as a
+    # market no book quotes.
+    failed_events: list[dict] = []
     # The project markets this run asked the provider for. Without it both
     # reports read an unasked market as an unquoted one: the scheduled
     # discovery run (no `--props`, so the three bulk markets only) published
@@ -347,6 +352,28 @@ def main(argv: list[str] | None = None) -> int:
             # three failing gave exit 0 too, with every per-event market
             # INCOMPLETE — a card with no prop on it.
             per_event_failures = list(props.errors)
+            # And the exit code was all the failure reached. Both reports
+            # and the card still read the nine per-event markets of that
+            # all-503 run as "No book returned this market" and "The
+            # provider returned no rows", and the discovery report was
+            # byte-identical to one from a run whose books quoted nothing.
+            #
+            # A failed per-event request leaves unanswered only the markets
+            # no other request answered for that game. The bulk request
+            # asked moneyline, puck line and totals for every game and was
+            # answered, so a failed request costs those their alternate
+            # rungs, not the market: `puck_line` with no `spreads` quoted is
+            # still the books' answer, and must not read as a failed fetch.
+            answered_in_bulk = _project_markets(odds_api.BULK_PROVIDER_MARKETS)
+            failed_events = [
+                {
+                    **entry,
+                    "markets": sorted(
+                        set(entry.get("markets", ())) - answered_in_bulk
+                    ),
+                }
+                for entry in props.failed_events
+            ]
             if per_event_failures:
                 print(
                     f"{len(per_event_failures)} per-event request(s) failed, "
@@ -368,6 +395,7 @@ def main(argv: list[str] | None = None) -> int:
                 quota_remaining=quota,
                 warnings=warnings,
                 errors=errors,
+                failed_events=failed_events,
             ),
             configuration=provider.public_configuration(),
             staging_files=written,
@@ -389,6 +417,7 @@ def main(argv: list[str] | None = None) -> int:
         errors=errors,
         staging_files=written,
         requested_markets=requested,
+        failed_events=failed_events,
     )
     paths = save_shadow_reports(
         summary, eligibility, discovery, output_dir=Path(args.output_dir)

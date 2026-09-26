@@ -58,6 +58,7 @@ from pathlib import Path
 
 import pytest
 
+from nhl_betting_lab.config import THIN_HISTORY_GAMES
 from nhl_betting_lab.providers import team_names
 from nhl_betting_lab.reports.gameday_card import (
     BEST_BETS_SECTION,
@@ -174,15 +175,24 @@ def _boxscore(path: Path, home: str, away: str) -> None:
 
 
 def _team_games(path: Path) -> None:
-    """A month of results, so TeamModel fits and every club is known."""
+    """Results ending on 2026-04-05, so TeamModel fits and every club is known.
+
+    Exactly `THIN_HISTORY_GAMES` of them, the fewest the board projects from
+    (tests/test_the_board_refuses_a_thin_history.py). This held a month, 36
+    games, and every test here that reads the board's projections asserted
+    that the board projects from it; the board now calls that history thin
+    and projects nothing, as Gameday Refresh calls a run fitted on it
+    degraded. The history ends on the same day and repeats the same six
+    results, only further back.
+    """
     columns = ["game_id", "season", "game_type", "date", "start_time_utc",
                "home_team", "away_team", "home_goals", "away_goals",
                "home_shots", "away_shots", "regulation"]
     pairs = [("TOR", "MTL", 4, 2), ("MTL", "TOR", 2, 3), ("NYI", "BOS", 3, 3),
              ("BOS", "NYI", 2, 1), ("TOR", "BOS", 5, 2), ("NYI", "MTL", 2, 4)]
     rows = []
-    start = date(2026, 3, 1)
-    for index in range(36):
+    start = date(2026, 4, 5) - timedelta(days=THIN_HISTORY_GAMES - 1)
+    for index in range(THIN_HISTORY_GAMES):
         home, away, hg, ag = pairs[index % len(pairs)]
         day = start + timedelta(days=index)
         rows.append([2025020000 + index, 20252026, 2, day.isoformat(),
