@@ -191,12 +191,19 @@ def roi_interval(
     which is the right shape here because a flat-stake series is a mean of
     bounded, independent-ish draws.
 
-    It is *not* exact, and the docs say so: bets on the same game-day share
-    lineup and game-script dependence, which makes the true interval slightly
-    wider than this one. Reporting a slightly-too-narrow interval that
-    includes zero is safe; the error would only matter for a result that
-    barely excludes zero, and this project treats such a result as noise
-    anyway.
+    It is *not* exact: rows that share a game share its lineup, its script
+    and its news, and this interval counts every row as an independent
+    draw. This docstring used to call the true interval "slightly wider"
+    and the error one that only matters for a result that barely excludes
+    zero. That was measured false where rows pile up inside a game. The
+    closing-line report pooled every side, rung and player of each game
+    through this function, and the game-clustered interval was two to five
+    times wider (a design effect of 17-23 on mean CLV for the opinions view,
+    2.05x the standard error over the whole bought store); a week of 2025-26
+    read "excludes zero" at [+0.251%, +0.404%] where the game says
+    [-0.015%, +0.670%]. Where several rows can come from one game, use
+    `clustered_mean_interval`, which is this interval exactly when every
+    game holds one row.
     """
     rows = [float(value) for value in returns]
     bets = len(rows)
@@ -241,6 +248,81 @@ def roi_interval(
         pushes=pushes,
         looks=looks,
         standard_error=standard_error,
+        family=family,
+    )
+
+
+def clustered_mean_interval(
+    values: Sequence[float],
+    clusters: Sequence[object],
+    *,
+    looks: int = 1,
+    family: str = "",
+) -> RoiInterval:
+    """`roi_interval`, with the rows of one cluster counted as one draw.
+
+    `clusters` names each value's cluster, in the same order: the game, when
+    every side, ladder rung and player of one game moves with that game's
+    news. The mean is the pooled one. Its standard error is the
+    cluster-robust (CR1) one, `sqrt(G / (G - 1) * sum_g(sum_i(x_i -
+    mean)) ** 2) / n` over G clusters and n values, and the Bonferroni
+    bounds (`adjusted_low/high`) use that same error. Three conventions,
+    the ones `clustered_wilson_interval` states for a rate:
+
+    * clusters of one are independent rows, and the result is exactly
+      `roi_interval(values)` — CR1 is then the row error algebraically, and
+      this returns the row interval itself so it is equal bit for bit;
+    * an error below the one on rows — rows inside a cluster that move in
+      opposite directions, like the over and the under of one line — is
+      held at the row error (Korn and Graubard), so the interval is never
+      narrower than the one on rows;
+    * with fewer than two clusters no between-cluster variance can be
+      measured, so the interval is unbounded (the way `roi_interval` treats
+      a single row) rather than assuming the rows inside one game are
+      independent.
+
+    Repeating every row of a cluster k times therefore moves nothing. The
+    critical value is the normal one, as everywhere in this module; with a
+    handful of clusters even this is optimistic.
+    """
+    rows = [float(value) for value in values]
+    keys = list(clusters)
+    if len(keys) != len(rows):
+        raise ValueError(
+            f"{len(rows)} value(s) and {len(keys)} cluster label(s): each "
+            "value needs the cluster it came from."
+        )
+    plain = roi_interval(rows, looks=looks, family=family)
+    residuals: dict[object, float] = {}
+    for key, value in zip(keys, rows):
+        residuals[key] = residuals.get(key, 0.0) + (value - plain.roi)
+    count = len(residuals)
+    if plain.bets == 0 or count == plain.bets:
+        return plain
+    if count < 2:
+        return RoiInterval(
+            bets=plain.bets,
+            staked=plain.staked,
+            profit=plain.profit,
+            roi=plain.roi,
+            low=float("-inf"),
+            high=float("inf"),
+            looks=looks,
+            family=family,
+        )
+    spread = sum(residual * residual for residual in residuals.values())
+    clustered = math.sqrt(count / (count - 1) * spread) / plain.bets
+    if clustered <= plain.standard_error:
+        return plain
+    return RoiInterval(
+        bets=plain.bets,
+        staked=plain.staked,
+        profit=plain.profit,
+        roi=plain.roi,
+        low=plain.roi - Z95 * clustered,
+        high=plain.roi + Z95 * clustered,
+        looks=looks,
+        standard_error=clustered,
         family=family,
     )
 
@@ -311,8 +393,14 @@ def wilson_interval_on_rate(
 
 def clustered_wilson_interval(
     clusters: Iterable[tuple[int, int]],
+    *,
+    z: float = Z95,
 ) -> tuple[float, float]:
     """95% Wilson interval on a hit rate whose trials arrive in clusters.
+
+    95% unless `z` says otherwise: a rate that is one row of a family passes
+    `bonferroni_z(looks)`, as `wilson_interval` does. The CLV report's
+    by-market beat rates need both the cluster and the correction.
 
     `clusters` is `(hits, trials)` per cluster: per game, when every
     selection at every line of one game shares its scoreline, or when every
@@ -354,13 +442,13 @@ def clustered_wilson_interval(
     if trials_total <= 0:
         return 0.0, 1.0
     if len(pairs) == trials_total:
-        return wilson_interval(hits_total, trials_total)
+        return wilson_interval(hits_total, trials_total, z=z)
     rate = hits_total / trials_total
     if len(pairs) < 2 or hits_total in (0, trials_total):
-        return wilson_interval_on_rate(rate, float(len(pairs)))
+        return wilson_interval_on_rate(rate, float(len(pairs)), z=z)
     spread = sum((won - rate * size) ** 2 for won, size in pairs)
     design_effect = max(1.0, spread / (trials_total * rate * (1.0 - rate)))
-    return wilson_interval_on_rate(rate, trials_total / design_effect)
+    return wilson_interval_on_rate(rate, trials_total / design_effect, z=z)
 
 
 def looks_significant_but_is_a_multiple_comparison(

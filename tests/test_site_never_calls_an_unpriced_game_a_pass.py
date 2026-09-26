@@ -67,6 +67,8 @@ from nhl_betting_lab.reports.gameday_card import (
     save_card,
 )
 
+from test_scripts import load_script
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 WEB = PROJECT_ROOT / "web"
 BUILD_SCRIPT = WEB / "build_site_json.py"
@@ -269,8 +271,16 @@ def make_lab(tmp_path: Path, monkeypatch, *, staged: bool, model: bool = True,
     if staged:
         _write_csv(lab / "data" / "staging" / "odds_api_prices_staging.csv", _price_rows())
     if opens:
-        _write_csv(processed / "line_movement" / f"{BOARD_DAY.isoformat()}_1300.csv",
-                   _price_rows(offset=20))
+        # Where and how `capture_line_movement.main` writes: one file per
+        # league day, each row stamped with its capture's moment. This wrote
+        # `<day>_1300.csv`, a name no writer produces, with no `captured_at`
+        # (tests/test_the_open_is_one_capture_and_never_a_ladder_rung.py).
+        # The rows are the bulk moneyline and total, which the capture does
+        # not ask for today; they stand for capturing the team markets too.
+        movement = load_script("capture_line_movement.py")
+        _write_csv(movement.capture_path(BOARD_DAY.isoformat(), processed_dir=processed),
+                   [{**row, "captured_at": f"{BOARD_DAY.isoformat()}T13:00:00+00:00"}
+                    for row in _price_rows(offset=20)])
     return lab
 
 
@@ -440,7 +450,11 @@ def test_a_captured_open_is_published_as_the_open(tmp_path: Path, monkeypatch) -
     tor = next(g for g in board["games"] if g["home"]["abbr"] == "TOR")
     assert tor["moneyline"]["open"] == {"home": 132.0, "away": -150.0}
     assert tor["moneyline"]["current"] == {"home": 112.0, "away": -130.0}
-    assert tor["total"]["open"] == 6.0
+    # This asserted 6.0. A captured total row cannot say whether it is the
+    # featured line or a rung of `alternate_totals`, and the capture asks for
+    # the ladder alone, so no open total is read from a capture.
+    assert tor["total"]["open"] is None, tor["total"]
+    assert tor["total"]["current"] == 6.0, tor["total"]
 
 
 def test_a_board_without_the_model_does_not_promise_market_lines(

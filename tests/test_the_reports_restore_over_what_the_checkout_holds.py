@@ -62,7 +62,7 @@ from test_state_restores_from_the_run_that_carries_it import (
 
 
 WORKFLOWS = PROJECT_ROOT / ".github" / "workflows"
-RESTORE_STEP = "Restore the lab's latest state and the site's history"
+RESTORE_STEP = "Restore the lab's latest state"
 #: Committed under data/outputs AND listed in the gameday-reports upload, so
 #: every Publish Site checkout already holds them when the reports arrive.
 CHECKED_IN = (

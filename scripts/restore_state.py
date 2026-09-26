@@ -47,6 +47,48 @@ be merged safely (different headers, or a parse that disagrees with the
 line count) keeps the newer copy and says so. When the older copy is a byte
 prefix of the newer one — every ordinary run — nothing is parsed at all.
 
+**Only runs on the default branch are sources** (`--branch`, default
+`main`). The listing used to pass no `--branch` and never read a run's
+`headBranch`, so the newest carrier on ANY branch became the state main's
+next run started from. A feature-branch dispatch runs code nobody has
+reviewed, and every store restored here is append-only or first-opinion-
+stands: a branch's frozen snapshot would have stood as the day's opinion
+and settled into the pre-registered forward ledger, and Publish Site would
+have frozen the public board from it. It was already set to happen: Line
+Movement's only unexpired artifact (run 33691822845, 2026-09-02, branch
+`rehearse-the-line-fetch`, expiring 2026-12-01; the two main runs before it
+carry none) would have seeded the season's capture chain on 2026-09-29.
+The branch is filtered twice, and each half does work the other cannot:
+`gh run list --branch` keeps branch runs out of the `--limit` window, so a
+burst of dispatches cannot crowd main's carriers out of it; and each run's
+own `headBranch` is checked, so the restore does not rest on a flag whose
+effect it cannot see. Every older carrier the fill and the union read is
+sliced from that same list. On 2026-09-25 `gh run list --branch main`
+returned exactly the unfiltered list for Gameday Refresh and Historical
+Props Purchase, so no carrier this lab holds is lost; a branch's artifact
+is restored only when `--branch` names that branch.
+
+Standard library only, so it runs before anything is installed. By default
+it never fails the calling step: whatever it restores, it says, and a
+restore that finds nothing is a statement, not an error.
+
+**`--success-only --require-newest --attempts N`, for Publish Site's
+`site-history`.** That restore was `gh run list --status success --limit 1`
+and `gh run download ... || echo`, so a failed API call read exactly like
+"there has never been a publish": the build froze today's board alone, the
+run went green, and its one-board history became the next run's source. In
+the failure-shape audit's replay one HTTP 502 took a three-board history to
+one, for good, and Results said "No board was published" about a day whose
+board had 14 games. The history is not a cache that an older copy can stand
+in for: every publish may add the day's frozen board, so a download from an
+older run loses whatever the newest added. So under `--require-newest` a
+listing that fails, or a download from the newest listed run that fails,
+exits 1 after N attempts — the caller refuses to publish — and only a
+listing that succeeds and holds no run starts without the artifact.
+`--success-only` has GitHub filter the listing (`--status success`), so a
+red streak longer than `--limit` cannot hide the last good run and read as
+"there has never been one".
+
 **`--also NAME=DIR`** takes a second artifact from the same chosen run
 (Publish Site: the run's reports, beside its state). It goes through an
 empty temporary directory like the first and is then copied over DIR, the
@@ -54,10 +96,6 @@ chosen run's files winning. It used to be downloaded straight into DIR, and
 gh refuses to overwrite: into a data/outputs already holding the committed
 reports it stopped at the first one, so forward_evidence.json never reached
 the site, and the log blamed a missing artifact. See `_restore_also`.
-
-Standard library only, so it runs before anything is installed. It never
-fails the calling step: whatever it restores, it says, and a restore that
-finds nothing is a statement, not an error.
 """
 
 from __future__ import annotations
@@ -65,10 +103,12 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import os
 import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from collections import Counter
 from pathlib import Path
 
@@ -76,25 +116,82 @@ from pathlib import Path
 #: Relative to the artifact root. Append-only; the longer copy is the truth.
 LEDGER = Path("processed") / "forward_evidence.csv"
 
+#: The only branch whose runs are restored from unless `--branch` says
+#: otherwise: the protected one, where code arrives only through review.
+#: A literal, so no caller has to pass it: a workflow expression that came
+#: out empty would name no branch, restore nothing and start every store
+#: cold.
+DEFAULT_BRANCH = "main"
+
+
+class Unreachable(RuntimeError):
+    """GitHub could not be asked, which is not the same as having nothing."""
+
 
 def _gh(*args: str) -> subprocess.CompletedProcess:
     return subprocess.run(["gh", *args], capture_output=True, text=True)
 
 
-def completed_runs(workflow: str, limit: int) -> list[dict]:
-    """The workflow's completed runs, newest first, of every conclusion."""
-    result = _gh(
-        "run", "list", "--workflow", workflow, "--limit", str(limit),
-        "--json", "databaseId,conclusion,status",
-    )
-    if result.returncode != 0:
-        print(f"Could not list {workflow} runs: {result.stderr.strip()}")
-        return []
-    try:
-        runs = json.loads(result.stdout or "[]")
-    except json.JSONDecodeError:
-        return []
-    return [r for r in runs if r.get("status") == "completed"]
+def _pause(attempt: int) -> None:
+    """Wait before the next attempt: 10s, then 20s, and so on. The tests set
+    RESTORE_STATE_RETRY_SECONDS to 0; nothing else needs to."""
+    time.sleep(float(os.environ.get("RESTORE_STATE_RETRY_SECONDS", "10")) * attempt)
+
+
+def completed_runs(
+    workflow: str, limit: int, branch: str = DEFAULT_BRANCH, *,
+    success_only: bool = False, attempts: int = 1, strict: bool = False,
+) -> list[dict]:
+    """The workflow's completed runs on `branch`, newest first, of every
+    conclusion — or, with `success_only`, its successes as GitHub filters them.
+
+    This listed every branch: no `--branch`, no `headBranch`. Line Movement's
+    newest carrier is a 2026-09-02 dispatch on `rehearse-the-line-fetch`, and
+    it would have seeded the season's capture chain; a Gameday Refresh
+    dispatched on a branch would have become the day's frozen opinion. `gh`
+    filters by branch so branch runs cannot fill the `--limit` window, and
+    each run's `headBranch` is checked as well, so nothing rests on a flag
+    whose effect this script cannot otherwise see.
+
+    A listing that fails is printed and read as no runs, unless `strict`,
+    when it raises `Unreachable` after `attempts` tries.
+    """
+    args = ["run", "list", "--workflow", workflow, "--branch", branch,
+            "--limit", str(limit),
+            "--json", "databaseId,conclusion,status,headBranch"]
+    if success_only:
+        args += ["--status", "success"]
+    problem = f"{workflow} runs were listed as something other than JSON."
+    for attempt in range(attempts):
+        if attempt:
+            _pause(attempt)
+        result = _gh(*args)
+        if result.returncode != 0:
+            problem = f"Could not list {workflow} runs: {result.stderr.strip()}"
+            print(problem)
+            continue
+        try:
+            runs = json.loads(result.stdout or "[]")
+        except json.JSONDecodeError:
+            continue
+        completed = [r for r in runs if r.get("status") == "completed"]
+        elsewhere = [r for r in completed if r.get("headBranch") != branch]
+        if elsewhere:
+            print(
+                f"::warning::gh listed {len(elsewhere)} completed {workflow} run(s) "
+                f"on other branches despite --branch {branch} ("
+                + ", ".join(f"{r.get('databaseId')} on {r.get('headBranch')!r}"
+                            for r in elsewhere)
+                + "); none of them is a restore source."
+            )
+        return [r for r in completed if r.get("headBranch") == branch]
+    if strict:
+        raise Unreachable(f"{problem} ({attempts} attempt(s))")
+    return []
+
+
+def _download(run_id: object, artifact: str, into: Path) -> subprocess.CompletedProcess:
+    return _gh("run", "download", str(run_id), "--name", artifact, "--dir", str(into))
 
 
 #: What gh 2.97.0 prints when the run holds no artifact of that name (or only
@@ -103,14 +200,24 @@ def completed_runs(workflow: str, limit: int) -> list[dict]:
 NO_SUCH_ARTIFACT = "no artifact matches any of the names or patterns provided"
 
 
-def _download(run_id: object, artifact: str, into: Path) -> subprocess.CompletedProcess:
-    return _gh(
-        "run", "download", str(run_id), "--name", artifact, "--dir", str(into)
-    )
-
-
 def download(run_id: object, artifact: str, into: Path) -> bool:
     return _download(run_id, artifact, into).returncode == 0
+
+
+def _fetch(run_id: object, artifact: str, into: Path, attempts: int) -> bool:
+    """`download`, tried up to `attempts` times, each into an emptied folder."""
+    for attempt in range(attempts):
+        if attempt:
+            _pause(attempt)
+            shutil.rmtree(into)
+            into.mkdir()
+        result = _download(run_id, artifact, into)
+        if result.returncode == 0:
+            return True
+        if attempts > 1:
+            print(f"Attempt {attempt + 1} of {attempts} to download {artifact} "
+                  f"from run {run_id} failed: {result.stderr.strip()}")
+    return False
 
 
 def _rows(path: Path) -> int:
@@ -144,23 +251,40 @@ def restore(
     merge: bool = True,
     also: list[tuple[str, Path]] = (),
     union: int = 0,
+    branch: str = DEFAULT_BRANCH,
+    success_only: bool = False,
+    require_newest: bool = False,
+    attempts: int = 1,
 ) -> dict:
-    """Restore `artifact` into `dest`; returns what it did, for the log and tests."""
+    """Restore `artifact` into `dest`; returns what it did, for the log and tests.
+
+    With `require_newest`, raises `Unreachable` when a listing fails or the
+    newest listed run's download fails; see the module docstring.
+    """
     report: dict = {"run": None, "conclusion": None, "filled_from": None,
                     "filled": 0, "ledger_from": None, "unioned_from": [],
                     "rows_recovered": 0, "not_merged": [], "also": {}}
     dest.mkdir(parents=True, exist_ok=True)
     for workflow in workflows:
-        runs = completed_runs(workflow, limit)
+        runs = completed_runs(workflow, limit, branch, success_only=success_only,
+                              attempts=attempts, strict=require_newest)
         for index, run in enumerate(runs):
             with tempfile.TemporaryDirectory() as scratch:
-                if not download(run["databaseId"], artifact, Path(scratch)):
+                if not _fetch(run["databaseId"], artifact, Path(scratch), attempts):
+                    if require_newest:
+                        raise Unreachable(
+                            f"Could not download {artifact} from {workflow} run "
+                            f"{run['databaseId']}, the newest "
+                            f"{'successful ' if success_only else ''}run, after "
+                            f"{attempts} attempt(s). An older run cannot stand in "
+                            "for it: whatever the newest added would be lost."
+                        )
                     continue
                 _copy(Path(scratch), dest, overwrite=True)
             report.update(run=run["databaseId"], conclusion=run.get("conclusion"))
             print(
                 f"Restored {artifact} from {workflow} run {run['databaseId']} "
-                f"({run.get('conclusion')})."
+                f"({run.get('conclusion')}) on {branch}."
             )
             for name, directory in also:
                 report["also"][name] = _restore_also(run["databaseId"], name, directory)
@@ -174,9 +298,15 @@ def restore(
                     runs[index + 1:], artifact, dest, workflow, report
                 )
             return report
+    if require_newest:
+        print(
+            f"GitHub lists no {'successful' if success_only else 'completed'} "
+            f"run of {', '.join(workflows)}; this run starts without {artifact}."
+        )
+        return report
     print(
-        f"No completed run of {', '.join(workflows)} carries {artifact}; "
-        "this run starts without it."
+        f"No completed run of {', '.join(workflows)} on {branch} carries "
+        f"{artifact}; this run starts without it."
     )
     return report
 
@@ -385,22 +515,56 @@ def main(argv: list[str] | None = None) -> int:
             "newest, instead of laying the last success underneath."
         ),
     )
+    parser.add_argument(
+        "--branch", default=DEFAULT_BRANCH,
+        help=(
+            "Restore only from runs on this branch (default: %(default)s). A "
+            "run dispatched on a feature branch ran unreviewed code."
+        ),
+    )
+    parser.add_argument(
+        "--success-only", action="store_true",
+        help="Only successful runs are sources, filtered by GitHub (--status success).",
+    )
+    parser.add_argument(
+        "--require-newest", action="store_true",
+        help=(
+            "The newest listed run must yield the artifact: a failed listing, "
+            "or a failed download from that run, exits 1 instead of falling "
+            "back to an older run or starting without it. Only a listing "
+            "that succeeds and holds no run starts without it."
+        ),
+    )
+    parser.add_argument(
+        "--attempts", type=int, default=1, metavar="N",
+        help="Try each listing and download up to N times, pausing between.",
+    )
     args = parser.parse_args(argv)
+    if args.attempts < 1:
+        parser.error("--attempts must be at least 1")
     also = []
     for item in args.also:
         name, _, directory = item.partition("=")
         if not name or not directory:
             parser.error(f"--also takes NAME=DIR, not {item!r}")
         also.append((name, Path(directory)))
-    restore(
-        artifact=args.artifact,
-        dest=Path(args.dest),
-        workflows=list(args.workflow),
-        limit=args.limit,
-        merge=not args.no_merge,
-        also=also,
-        union=args.union,
-    )
+    try:
+        restore(
+            artifact=args.artifact,
+            dest=Path(args.dest),
+            workflows=list(args.workflow),
+            limit=args.limit,
+            merge=not args.no_merge,
+            also=also,
+            union=args.union,
+            branch=args.branch,
+            success_only=args.success_only,
+            require_newest=args.require_newest,
+            attempts=args.attempts,
+        )
+    except Unreachable as exc:
+        print(f"::error::{exc}")
+        return 1
     return 0
 
 

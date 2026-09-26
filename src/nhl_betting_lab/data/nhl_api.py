@@ -232,7 +232,19 @@ def fetch_club_season_schedule(
     raw_dir: Path | None = None,
     refresh: bool = False,
 ) -> CacheEntry:
-    """Every game one club plays in one season, scheduled or completed."""
+    """Every game one club plays in one season, scheduled or completed.
+
+    Only a JSON object is a schedule; the API's own "no games" answer is an
+    object with an empty `games` list. This used to serve any cached body
+    that parsed and to cache any HTTP 200 body as it came, so a `[]` stored
+    once was served on every later run: `fetch_nhl_data` never refreshes a
+    club schedule. That file stopped every card until
+    `season.known_regular_season_games` learned to skip it, and after that
+    the card's partial-cache warning would have sent the operator to run the
+    one script that could not replace it. Now a cached non-object is a miss
+    and is fetched again, and a fetched one is a failed request: nothing is
+    cached, and `fetch_nhl_data` counts and names it as failed, not ok.
+    """
     abbrev = str(team).strip().upper()
     if not TEAM_PATTERN.fullmatch(abbrev):
         raise NhlApiError(f"{team!r} is not a three-letter NHL team abbreviation.")
@@ -243,7 +255,7 @@ def fetch_club_season_schedule(
 
     if not refresh:
         cached = _read_cache(path)
-        if cached is not None:
+        if isinstance(cached, dict):
             return CacheEntry(
                 path=path, payload=cached, from_cache=True, complete=False
             )
@@ -252,6 +264,11 @@ def fetch_club_season_schedule(
         f"{API_BASE_URL}/v1/club-schedule-season/{abbrev}/{season}",
         requester=requester or _default_requester,
     )
+    if not isinstance(payload, dict):
+        raise NhlApiError(
+            f"The NHL API answered {abbrev}'s {season} schedule with "
+            f"{json.dumps(payload)[:40]}, not a JSON object; nothing was cached."
+        )
     _write_cache(path, payload)
     return CacheEntry(path=path, payload=payload, from_cache=False, complete=False)
 
