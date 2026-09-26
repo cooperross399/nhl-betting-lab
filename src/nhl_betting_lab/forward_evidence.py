@@ -82,6 +82,42 @@ REPORT_JSON_FILENAME = "forward_evidence.json"
 #: boxscore means the row will never settle against the game it priced.
 PATIENCE_DAYS = 14
 
+#: The pre-registered stop/continue decision (docs/when_this_ends.md). Both
+#: are copied from the registration, never tuned here, and
+#: tests/test_the_forward_report_computes_the_registered_statistic.py reads
+#: the doc to hold the copies to it.
+DECISION_DATE = "2027-04-25"
+SAMPLE_FLOOR = 3000
+
+#: The registration's result table, word for word: (the "Result" cell,
+#: "What it means", "What happens"), bold and all. Keyed by the `reading` the payload
+#: carries, so the report can only ever speak in the registered vocabulary.
+REGISTERED_OUTCOMES: dict[str, tuple[str, str, str]] = {
+    "excludes_zero_positive": (
+        "Corrected interval **excludes zero, positive**",
+        "A candidate, on one season",
+        "**Not a green light.** A second season confirms or kills it. No "
+        "stake is placed on one season, ever.",
+    ),
+    "spans_zero": (
+        "Corrected interval **spans zero**",
+        "No edge after a clean out-of-sample season, on top of everything "
+        "already measured",
+        "**Stop.** Archive both labs, disable the routines, write the "
+        "closing note.",
+    ),
+    "excludes_zero_negative": (
+        "Corrected interval **excludes zero, negative**",
+        "Confirmed loser",
+        "**Stop**, same as above.",
+    ),
+    "below_floor": (
+        f"Fewer than {SAMPLE_FLOOR:,} settled opinions",
+        "The test did not run",
+        "Diagnose the pipeline. Do not read the number.",
+    ),
+}
+
 SNAPSHOT_COLUMNS = (
     "snapshot_date",
     "commence_time",
@@ -913,6 +949,83 @@ def load_ledger(processed_dir: Path | None = None) -> pd.DataFrame:
     return pd.read_csv(path)
 
 
+def registered_statistic(
+    settled: pd.DataFrame, markets: list[str], *, now: datetime
+) -> dict:
+    """The one number docs/when_this_ends.md decides the lab on, and its floor.
+
+    The registration: "the forward ledger's pooled return on frozen
+    opinions, one bet per wager at the best price the card could have taken,
+    corrected across the markets measured. Opinions, not bets", read against
+    a floor of 3,000 settled opinions on 2027-04-25. Until this existed the
+    report produced only per-market figures, and per market only for the
+    rows clearing the edge bar, so nothing in the house computed the number
+    the rule reads.
+
+    `settled` is the report's own settled wagers — already collapsed by
+    `closing_lines.collapse_to_best`, so this counts exactly what the
+    per-market table counts — and `markets` the markets among them.
+
+    Where the registration could be read more than one way, this takes the
+    most literal reading and says so rather than choosing the kinder one:
+
+    * **Population**: every settled opinion (won, lost or push), every
+      market, pooled — "opinions, not bets", so NO edge bar. The per-market
+      "bets" view is a different stream and is not this number. Voids
+      returned the stake and unsettleable rows produced no result, so
+      neither is a settled opinion and neither counts toward the floor.
+    * **Correction**: the pooled interval widened (Bonferroni) for the
+      number of markets measured, as the per-market intervals are — the
+      registration says "corrected across the markets measured" of the
+      pooled return itself.
+    * **Interval**: `stats.roi_interval`, the same interval every
+      per-market figure in this report uses. It treats every wager as an
+      independent draw; the doc names no clustering.
+
+    Below the floor the number is still computed and kept in the payload —
+    it is evidence — but `reading` is "below_floor", and the rendered page
+    does not print it: "Do not read the number."
+
+    `decision_due` is False before the decision date. Nothing before that
+    date is the decision, whatever the reading: "If a mid-season result
+    looks strong, the correct action is nothing."
+    """
+    from nhl_betting_lab.stats import roi_interval
+
+    count = int(len(settled))
+    stat: dict = {
+        "decision_date": DECISION_DATE,
+        "decision_due": now.date().isoformat() >= DECISION_DATE,
+        "sample_floor": SAMPLE_FLOOR,
+        "settled_opinions": count,
+        "meets_floor": count >= SAMPLE_FLOOR,
+        "markets": list(markets),
+        "looks": len(markets),
+        "reading": "below_floor",
+    }
+    if count:
+        interval = roi_interval(
+            settled["profit_units"].astype(float).tolist(),
+            wins=int((settled["outcome"] == "won").sum()),
+            pushes=int((settled["outcome"] == "push").sum()),
+            looks=len(markets),
+        )
+        stat["profit_units"] = interval.profit
+        stat["roi"] = interval.roi
+        stat["low"] = interval.low
+        stat["high"] = interval.high
+        stat["adjusted_low"] = interval.adjusted_low
+        stat["adjusted_high"] = interval.adjusted_high
+    if stat["meets_floor"]:
+        if stat["adjusted_low"] > 0.0:
+            stat["reading"] = "excludes_zero_positive"
+        elif stat["adjusted_high"] < 0.0:
+            stat["reading"] = "excludes_zero_negative"
+        else:
+            stat["reading"] = "spans_zero"
+    return stat
+
+
 def build_forward_report(
     ledger: pd.DataFrame, *, now: datetime | None = None
 ) -> dict:
@@ -955,6 +1068,9 @@ def build_forward_report(
         "void": 0,
     }
     if ledger.empty:
+        payload["registered_statistic"] = registered_statistic(
+            ledger, [], now=moment
+        )
         return payload
 
     wagers = collapse_to_best(ledger)
@@ -964,6 +1080,9 @@ def build_forward_report(
     payload["void"] = int((wagers["outcome"] == "void").sum())
 
     markets = sorted(set(settled["market"].astype(str)))
+    payload["registered_statistic"] = registered_statistic(
+        settled, markets, now=moment
+    )
     for market_key in markets:
         subset = settled[settled["market"].astype(str) == market_key]
         market = MARKETS_BY_KEY.get(market_key)
@@ -1013,6 +1132,104 @@ def build_forward_report(
     return payload
 
 
+def _registered_section(stat: dict | None) -> list[str]:
+    """The registered decision statistic, in the registration's own words.
+
+    It states the current reading and never announces a decision early:
+    before the decision date every reading, a strong one included, is
+    labelled as not the decision. Below the floor the pooled number is not
+    printed, because the registration's instruction for that row is "Do not
+    read the number" — it stays in the JSON payload as evidence.
+    """
+    if not stat:
+        # A payload written before the statistic existed. Say nothing
+        # rather than guess at it.
+        return []
+    floor = int(stat["sample_floor"])
+    count = int(stat["settled_opinions"])
+    looks = int(stat.get("looks", 0))
+    lines = [
+        "## Registered decision statistic",
+        "",
+        (
+            "docs/when_this_ends.md registers the stop/continue decision on "
+            "one number: the forward ledger's pooled return on frozen "
+            "opinions, one bet per wager at the best price the card could "
+            "have taken, corrected across the markets measured. This is that "
+            "number on its most literal reading: every settled opinion in "
+            "every market, pooled, one per wager after the best-price "
+            "collapse, with no edge bar (\"opinions, not bets\"); its 95% "
+            "interval widened (Bonferroni) for the markets measured; each "
+            "wager treated as an independent draw, as in the table above. "
+            "That reading is recorded, not chosen for its result. It pools "
+            "every priced side, both sides of a two-sided line included; "
+            "pooling only the opinions that clear the shipped edge bar (the "
+            "Bets column above) is another reading and would give another "
+            "number. Which one the registration means, and whether its "
+            "interval should be clustered by game, are open owner "
+            "decisions, not this report's."
+        ),
+        "",
+        (
+            f"- Decision date: {stat['decision_date']}. "
+            + (
+                "The date has arrived; the reading below is the registered "
+                "outcome."
+                if stat["decision_due"]
+                else f"The decision is not due until {stat['decision_date']}"
+                ", and nothing on this page before then is the decision. "
+                "\"If a mid-season result looks strong, the correct action "
+                "is nothing.\""
+            )
+        ),
+        (
+            f"- Settled opinions: {count:,}, against the registration's "
+            f"floor of {floor:,}"
+            + (" — floor met." if stat["meets_floor"] else " — below the floor.")
+        ),
+        "",
+    ]
+    result, means, happens = REGISTERED_OUTCOMES[stat["reading"]]
+    if stat["reading"] == "below_floor":
+        lines.append(
+            f"Current reading: {result}. What it means under the "
+            f"registration: {means.lower()}. What happens: {happens}"
+        )
+        lines.append("")
+        lines.append(
+            (
+                "On the decision date this row means the pipeline failed, "
+                "not the model. Before then it is where every season starts. "
+                if not stat["decision_due"]
+                else "This means the pipeline failed, not the model. "
+            )
+            + "The pooled number is kept in forward_evidence.json as "
+            "evidence and deliberately not printed here."
+        )
+        lines.append("")
+        return lines
+    lines.append(
+        f"Current reading: {result} — pooled return "
+        f"{stat['roi']:+.1%} ({stat['profit_units']:+.1f}u) over {count:,} "
+        f"settled opinions in {looks} market(s); 95% interval "
+        f"{stat['low']:+.1%} .. {stat['high']:+.1%} uncorrected, "
+        f"{stat['adjusted_low']:+.1%} .. {stat['adjusted_high']:+.1%} "
+        "corrected."
+    )
+    lines.append("")
+    lines.append(f"What it means under the registration: {means}. "
+                 f"What happens: {happens}")
+    lines.append("")
+    if not stat["decision_due"]:
+        lines.append(
+            "This is the current reading, not the decision. The decision is "
+            f"not due until {stat['decision_date']}, and a reading before "
+            "then decides nothing."
+        )
+        lines.append("")
+    return lines
+
+
 def render_forward_report(payload: dict) -> str:
     from nhl_betting_lab.stats import (
         NO_DEMONSTRATED_EDGE,
@@ -1055,6 +1272,11 @@ def render_forward_report(payload: dict) -> str:
             ),
             "",
         ]
+        # No registered-statistic section on the empty ledger: the preseason
+        # page stays word for word
+        # (tests/test_a_written_off_ledger_is_not_the_preseason_state.py),
+        # and the JSON beside it still carries the statistic's frame — the
+        # date, the floor, zero settled opinions.
         return "\n".join(lines)
     if not payload["markets"]:
         # ROWS, AND NONE OF THEM A RESULT. This used to share the branch
@@ -1104,6 +1326,7 @@ def render_forward_report(payload: dict) -> str:
             ),
             "",
         ]
+        lines += _registered_section(payload.get("registered_statistic"))
         return "\n".join(lines)
 
     lines += [
@@ -1155,8 +1378,9 @@ def render_forward_report(payload: dict) -> str:
     ]
     for market, entry in sorted(payload["markets"].items()):
         lines.append(f"- `{market}`: {entry['verdict']}")
+    lines.append("")
+    lines += _registered_section(payload.get("registered_statistic"))
     lines += [
-        "",
         "## How far along the road this is",
         "",
         (
