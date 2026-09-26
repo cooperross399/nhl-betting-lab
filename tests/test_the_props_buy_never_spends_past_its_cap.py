@@ -36,6 +36,7 @@ What these tests hold:
 
 from __future__ import annotations
 
+import json
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -259,3 +260,179 @@ def test_a_refusal_is_a_skip_and_a_cached_event_is_still_read(
     assert buy.events_from_cache == 1
     assert buy.events_skipped_for_budget == 8
     assert {row["provider_event_id"] for row in buy.rows} == {"evt00", "evt09"}
+
+
+# --- Charges that vary --------------------------------------------------------
+#
+# The gate forecasts the next charge at the dearest one measured so far. That
+# bounds an overshoot by how much the next charge exceeds the dearest one
+# seen, and rules it out while charges do not rise; it does not make it
+# impossible. Found by the independent review of #234.
+
+
+def _charging_in_turn(charges: list[int]) -> RecordingRequester:
+    """A provider that charges each historical request the next of `charges`."""
+    remaining = iter(charges)
+
+    def answer(url: str, **_kwargs: Any) -> FakeResponse:
+        event_id = url.split("/events/")[1].split("/")[0]
+        return FakeResponse(
+            {"timestamp": SNAPSHOT, "data": {"id": event_id, "bookmakers": []}},
+            headers={"x-requests-last": str(next(remaining))},
+        )
+
+    return RecordingRequester({"/historical/": answer})
+
+
+def _buy_in_turn(
+    tmp_path: Path,
+    charges: list[int],
+    *,
+    cap: int,
+    markets: list[str],
+    regions: str = "us",
+    events: int = 6,
+) -> tuple[hist.HistoricalBuy, RecordingRequester]:
+    requester = _charging_in_turn(charges)
+    provider = OddsApiProvider(environment={}, requester=requester, regions=regions)
+    buy = hist.buy_historical_props(
+        provider,
+        events=_events(events),
+        markets=markets,
+        credit_cap=cap,
+        raw_dir=tmp_path / "raw",
+    )
+    return buy, requester
+
+
+def test_the_forecast_is_the_dearest_charge_not_the_last_one(
+    tmp_path: Path,
+) -> None:
+    """Charged 150, then 50, under a cap of 320 at an estimate of 10. The
+    third event is forecast at the dearest charge seen, 150, so 200 + 150 =
+    350 refuses it. Forecast at the LAST charge, 50, it would be bought, and
+    charged 150 the run would end at 350."""
+    buy, requester = _buy_in_turn(
+        tmp_path, [150, 50, 150, 150], cap=320, markets=["player_points"]
+    )
+
+    assert len(_calls(requester)) == 2
+    assert buy.events_bought == 2
+    assert buy.credits_spent == 200
+    assert buy.events_skipped_for_budget == 4
+    assert any("next event could cost 150" in error for error in buy.errors), (
+        buy.errors
+    )
+    assert not any("OVERSPENT" in error for error in buy.errors)
+
+
+def test_a_rising_charge_passes_the_cap_by_no_more_than_the_rise(
+    tmp_path: Path,
+) -> None:
+    """107 then 200 under a cap of 300: the second event was forecast at 107
+    (214 fits) and charged 200, so the run ends at 307. A gate cannot know a
+    charge before it is made; it bounds the overshoot by the rise (7 is
+    within 200 - 107), and the run says it overspent."""
+    buy, _ = _buy_in_turn(
+        tmp_path, [107, 200, 200, 200], cap=300, markets=ALL_PROP_KEYS
+    )
+
+    assert buy.events_bought == 2
+    assert buy.credits_spent == 307
+    assert buy.credits_spent - 300 <= 200 - 107
+    overspent = [error for error in buy.errors if "OVERSPENT" in error]
+    assert len(overspent) == 1, buy.errors
+    assert "307" in overspent[0] and "300" in overspent[0]
+
+
+@pytest.mark.parametrize(
+    ("charges", "cap", "regions", "spent"),
+    [
+        # The first event has only the estimate (70) to go on. Charged 500,
+        # the estimate gate then refused the rest without a word, and
+        # `errors` was empty.
+        pytest.param(
+            [500, 1, 1, 1, 1, 1], 100, "us", 500, id="first-charge-past-the-cap"
+        ),
+        # Two regions, estimate 140: 107, then 250 under a cap of 300.
+        pytest.param(
+            [107, 250, 1, 1, 1, 1], 300, "us,us2", 357, id="two-regions-rising"
+        ),
+    ],
+)
+def test_an_overspend_is_never_silent(
+    tmp_path: Path, charges: list[int], cap: int, regions: str, spent: int
+) -> None:
+    buy, _ = _buy_in_turn(
+        tmp_path, charges, cap=cap, markets=ALL_PROP_KEYS, regions=regions
+    )
+
+    assert buy.credits_spent == spent > cap
+    overspent = [error for error in buy.errors if "OVERSPENT" in error]
+    assert len(overspent) == 1, buy.errors
+    assert f"{spent:,}" in overspent[0] and f"{cap:,}" in overspent[0]
+
+
+def test_a_run_that_lands_on_its_cap_reports_no_overspend(tmp_path: Path) -> None:
+    buy, _ = _buy_in_turn(
+        tmp_path, [107, 107, 107], cap=214, markets=ALL_PROP_KEYS, events=3
+    )
+    assert buy.credits_spent == 214
+    assert not any("OVERSPENT" in error for error in buy.errors), buy.errors
+
+
+# --- The script's exit code ---------------------------------------------------
+
+
+def _run_script(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    charges: list[int],
+    *,
+    cap: int,
+) -> int:
+    from test_scripts import load_script
+
+    requester = _charging_in_turn(charges)
+    module = load_script("buy_historical_props.py")
+    monkeypatch.setattr(module, "load_provider_env", lambda *a, **k: None)
+    monkeypatch.setattr(
+        module,
+        "OddsApiProvider",
+        lambda *a, **k: OddsApiProvider(
+            environment={}, requester=requester, regions="us"
+        ),
+    )
+    events_file = tmp_path / "events.json"
+    events_file.write_text(json.dumps(_events(3)), encoding="utf-8")
+    return module.main(
+        [
+            "--live",
+            "--events-file", str(events_file),
+            "--credit-cap", str(cap),
+            "--raw-dir", str(tmp_path / "raw"),
+            "--output-dir", str(tmp_path / "out"),
+            "--processed-dir", str(tmp_path / "processed"),
+        ]
+    )
+
+
+def test_the_script_fails_a_run_that_spent_past_its_cap(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Exit 2, the fault code #223 gives a failed listing, with the overspend
+    named on stderr. What was bought is still written."""
+    code = _run_script(tmp_path, monkeypatch, [500, 1, 1], cap=100)
+
+    assert code == 2
+    err = capsys.readouterr().err
+    assert "OVERSPENT" in err and "500" in err
+    assert (tmp_path / "processed").is_dir()
+
+
+def test_the_script_passes_a_run_inside_its_cap(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    assert _run_script(tmp_path, monkeypatch, [107, 107, 107], cap=214) == 0

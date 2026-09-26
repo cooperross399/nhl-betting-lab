@@ -40,9 +40,13 @@ function with a stubbed requester (no network, no key, no credits), and a
 provider that charges MORE than the estimate, so that only the measured gate
 can stop the buy:
 
-* the buy refuses any event that would carry measured spend past the cap, so
-  once a charge has been measured it cannot pass the cap; only the first
-  event, whose charge is unknown until it is measured, can;
+* the buy refuses any event that the dearest charge seen so far would carry
+  past the cap, so it can pass the cap by at most how much the next charge
+  exceeds that dearest one, and not at all while charges do not rise; here
+  every request costs the same, so only the first event, whose charge
+  nothing has measured yet, can end the run past it (and the run then says
+  it OVERSPENT; see `test_the_props_buy_never_spends_past_its_cap.py` for
+  charges that vary);
 * the spend recorded is the sum of what each request was charged;
 * the prices it paid for are kept, and the stop is reported as MEASURED.
 
@@ -200,13 +204,15 @@ def test_measured_spend_stops_a_buy_the_estimate_would_let_through(
     assert len(calls) == bought, "one request per event bought, and no more"
     # The spend recorded is what each request was charged, summed.
     assert buy.credits_spent == spent == bought * charged
-    # No request was started that measured spend said would pass the cap,
-    # so only a first request, whose charge nothing had measured yet, can
-    # end the run past it.
+    # No request was started that the dearest charge seen said would pass
+    # the cap. Every request here costs the same, so only a first request,
+    # whose charge nothing had measured yet, can end the run past it.
     if charged <= cap:
         assert buy.credits_spent <= cap
+        assert not any("OVERSPENT" in error for error in buy.errors)
     else:
         assert bought == 1
+        assert any("OVERSPENT" in error for error in buy.errors), buy.errors
     assert buy.credits_spent + charged > cap, "and it stopped no earlier"
     # It stopped at the first event it could not afford, in order, and kept
     # the prices it paid for.

@@ -483,7 +483,9 @@ def probe_retention_under_cap(
     seen so far (never below the estimate), which is the team buy's form of
     the gate (#159): the estimate has already been wrong in production (107
     charged against 70 predicted), and projecting, rather than stopping once
-    the total has reached the cap, means the run cannot pass it. Both skip
+    the total has reached the cap, bounds any overshoot by how much the next
+    charge exceeds the dearest one seen, and rules it out while charges do
+    not rise. It is a forecast, not a guarantee: charges vary. Both skip
     rather than stop, so an event already bought further on is still read,
     and a cached event costs nothing and passes neither gate.
 
@@ -730,9 +732,15 @@ def buy_historical_props(
             # event it started could carry the total past it: seven markets
             # on one region, 70 estimated and 107 charged, a cap of 200
             # bought two events and spent 214 with no error. Projecting, as
-            # the team buy and the retention probe do, means the run cannot
-            # pass the cap once a charge has been measured. Skipped, not
-            # stopped, so an event already cached further on is still read.
+            # the team buy and the retention probe do, bounds the overshoot:
+            # the run can pass the cap by at most how much the next charge
+            # exceeds the dearest one seen so far, and not at all while
+            # charges do not rise. It is still a forecast -- charges vary
+            # (107 then 200 under a cap of 300 spends 307), and the first
+            # event has only the estimate to go on -- so an overspend that
+            # gets through anyway is reported after the loop, never left
+            # silent. Skipped, not stopped, so an event already cached
+            # further on is still read.
             if worst_case_spent + worst_case_per_event > credit_cap:
                 buy.events_skipped_for_budget += 1
                 continue
@@ -785,6 +793,20 @@ def buy_historical_props(
         for row in rows:
             row["snapshot"] = snapshot
         buy.rows.extend(rows)
+
+    # The gates forecast the next charge; they cannot know it. A first event
+    # dearer than the whole cap, or a charge that rose past the dearest one
+    # seen, still lands past the cap, and the estimate gate then refuses the
+    # rest without a word -- so a first charge of 500 under a cap of 100 used
+    # to finish with `errors` empty. Whatever the path, a run that spent past
+    # its cap says so, with both numbers.
+    if buy.credits_spent > credit_cap:
+        buy.errors.append(
+            f"OVERSPENT: {buy.credits_spent:,} credit(s) actually charged "
+            f"against a {credit_cap:,}-credit cap. The gates forecast each "
+            "charge from the estimate and the dearest one measured, and the "
+            "provider charged more than that forecast."
+        )
 
     return buy
 
