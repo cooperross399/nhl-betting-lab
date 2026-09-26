@@ -948,6 +948,17 @@ def edge_bar(market_key: str) -> float:
     return MIN_PROP_EDGE if market is not None and market.is_prop else MIN_EDGE
 
 
+def clears_edge_bar(rows: pd.DataFrame) -> pd.DataFrame:
+    """The rows whose edge reaches their own market's shipped bar — at the
+    bar counts. The one filter behind both the per-market Bets view and the
+    registered statistic's edge-bar population, so the two can never draw
+    the line in different places."""
+    if rows.empty:
+        return rows
+    bars = rows["market"].astype(str).map(edge_bar)
+    return rows[rows["edge"].astype(float) >= bars]
+
+
 def _population_statistic(
     rows: pd.DataFrame, markets: list[str], definition: str
 ) -> dict:
@@ -1022,7 +1033,7 @@ def registered_statistic(
     price it was frozen at is the same test", and the edge bar is among the
     things the doc freezes for the test, which reads as the opinions the
     card would have bet: B, `population_clears_edge_bar`, the per-market
-    Bets stream's own rule (`edge_bar`). Choosing between them is Cooper's
+    Bets stream's own filter (`clears_edge_bar`). Choosing between them is Cooper's
     decision, not code's, so both are computed the same way, each is
     counted against the floor in its own settled opinions, and
     `population_undecided` is True. Neither carries a registered outcome.
@@ -1041,11 +1052,7 @@ def registered_statistic(
     date is the decision whatever the population: "If a mid-season result
     looks strong, the correct action is nothing."
     """
-    if len(settled):
-        bars = settled["market"].astype(str).map(edge_bar)
-        clears = settled[settled["edge"].astype(float) >= bars]
-    else:
-        clears = settled
+    clears = clears_edge_bar(settled)
     return {
         "decision_date": DECISION_DATE,
         "decision_due": now.date().isoformat() >= DECISION_DATE,
@@ -1122,7 +1129,7 @@ def build_forward_report(
     )
     for market_key in markets:
         subset = settled[settled["market"].astype(str) == market_key]
-        bets = subset[subset["edge"].astype(float) >= edge_bar(market_key)]
+        bets = clears_edge_bar(subset)
         entry: dict = {
             "opinions": int(len(subset)),
             "first_date": str(subset["snapshot_date"].min()),
@@ -1228,10 +1235,10 @@ def _registered_section(stat: dict | None) -> list[str]:
             "which population it means, and Cooper must decide before "
             f"{date}.** \"Opinions, not bets\" reads as every settled "
             "opinion (A), which pools both sides of every priced line and so "
-            "carries the whole margin. \"A frozen opinion scored against the "
-            "price it was frozen at is the same test\", with the edge bar "
-            "among what the registration freezes, reads as the opinions the "
-            "card would have bet (B). Both are computed below the same way: "
+            "carries the whole margin. The words \"a frozen opinion scored "
+            "against the price it was frozen at is the same test\", with the "
+            "edge bar among what the registration freezes, read as the "
+            "opinions the card would have bet (B). Both are computed below the same way: "
             "one per wager after the best-price collapse, pooled across "
             "markets, the 95% interval widened (Bonferroni) for the markets "
             "measured, each wager an independent draw, and each counted "

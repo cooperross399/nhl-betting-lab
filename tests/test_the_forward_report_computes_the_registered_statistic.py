@@ -204,6 +204,24 @@ def test_b_uses_each_market_s_own_bar() -> None:
     assert payload["markets"]["shots_on_goal"]["bets"] == 0
 
 
+def test_an_opinion_exactly_at_the_bar_is_in_b() -> None:
+    # Edge set to the bar exactly, for a prop and for a team market: the
+    # Bets view counts both (">= bar"), so B must too, and B stays equal to
+    # the Bets total.
+    rows = _market("shots_on_goal", 3, 2) + _market("moneyline", 3, 2, start=50)
+    for row in rows:
+        row["edge"] = (fe.MIN_PROP_EDGE if row["market"] == "shots_on_goal"
+                       else fe.MIN_EDGE)
+    payload = fe.build_forward_report(_ledger(rows), now=BEFORE)
+    stat = payload["registered_statistic"]
+    assert payload["markets"]["shots_on_goal"]["bets"] == 5
+    assert payload["markets"]["moneyline"]["bets"] == 5
+    assert stat[CLEARS]["settled_opinions"] == 10
+    assert stat[CLEARS]["settled_opinions"] == sum(
+        entry["bets"] for entry in payload["markets"].values()
+    )
+
+
 def test_each_population_meets_the_floor_in_its_own_units() -> None:
     # 3,000 settled opinions, 2,999 of them clearing the bar: A meets the
     # floor exactly, B is one short and must not print.
