@@ -148,7 +148,9 @@ def test_a_refused_market_list_falls_back_to_the_core_markets() -> None:
     requester = RecordingRequester(
         {
             "/events/evt1/odds": odds,
-            "/events": FakeResponse(payload=[{"id": "evt1"}]),
+            "/events": FakeResponse(
+                payload=[{"id": "evt1", "commence_time": "2026-10-09T23:00:00Z"}]
+            ),
         }
     )
     provider = odds_api.OddsApiProvider(

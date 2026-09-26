@@ -63,12 +63,15 @@ def main(argv: list[str] | None = None) -> int:
 
     load_provider_env()
     provider = odds_api.OddsApiProvider()
-    stamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    # One instant for both fetches, so a game that starts between them is
+    # dropped by both or by neither (see run_provider_shadow.py).
+    fetched = datetime.now(timezone.utc)
+    stamp = fetched.isoformat(timespec="seconds")
     today = datetime.now(LEAGUE_TIMEZONE).date().isoformat()
 
     try:
         team = provider.fetch_team_markets(
-            fetched_at=stamp, league_days=[today]
+            fetched_at=stamp, league_days=[today], now=fetched
         )
     except EmptySlateError as exc:
         # Same contract as the card: an off-day is not a fault.
@@ -87,6 +90,7 @@ def main(argv: list[str] | None = None) -> int:
             credit_cap=args.credit_cap,
             fetched_at=stamp,
             league_days=[today],
+            now=fetched,
         )
         rows.extend(per_event.rows)
         credits += per_event.credits_spent
