@@ -9,6 +9,7 @@ something false without any error anywhere.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pandas as pd
@@ -697,6 +698,53 @@ def test_a_measured_market_is_not_also_reported_unmeasurable() -> None:
     )
 
 
+#: A claim about what may bet, stated as the current state. Each entry is
+#: matched against whitespace-collapsed prose with quoted spans removed, so a
+#: phrase still counts when it wraps across lines and stops counting when the
+#: file is quoting its own superseded text.
+#:
+#: Present tense only, on purpose. "allowlisted nothing from the withdrawal
+#: until Cooper approved twelve markets" is a true sentence about history and
+#: must stay sayable; "allowlists nothing" is a claim about now.
+_CLAIMS_NOTHING_MAY_BET = (
+    "no market is allowlisted",
+    "nothing is allowlisted",
+    "allowlists nothing",
+    "produces no selection, no lean, no pass and no stake",
+    "recommends nothing, and says why",
+)
+
+_CLAIMS_EVERYTHING_MAY_BET = (
+    "all 11 markets are allowlisted",
+    "all eleven markets are allowlisted",
+)
+
+
+def _assertive_prose(text: str) -> str:
+    """Prose with quoted spans dropped and whitespace collapsed.
+
+    Two separate holes, both of which this repository has shipped through.
+
+    A guard that greps for one spelling proves only that the spelling is
+    absent: this test looked for `**No market is allowlisted.` and stayed
+    green while CLAUDE.md said the card "produces no selection, no lean, no
+    pass and no stake" and `what_we_can_and_cannot_claim.md` said "Nothing is
+    allowlisted" — two files, both contradicting the policy, neither spelled
+    the way the guard read. Collapsing whitespace also means a claim that
+    wraps across a line break still counts, which a literal substring over the
+    raw file does not.
+
+    Dropping quoted spans is what makes the first half safe to widen. Both
+    files record superseded text rather than deleting it, so the phrases above
+    appear on purpose as history; the convention elsewhere in this lab is to
+    phrase around a guarded spelling, which does not work for prose whose
+    whole job is to quote what it used to say. Quoting it is the signal that
+    it is no longer being asserted.
+    """
+    collapsed = " ".join(text.split())
+    return re.sub(r'"[^"]*"', " ", collapsed).lower()
+
+
 def test_the_operating_docs_agree_with_the_policy_about_what_may_bet() -> None:
     """CLAUDE.md carried both "no market is allowlisted" and "all 11 are".
 
@@ -707,6 +755,11 @@ def test_the_operating_docs_agree_with_the_policy_about_what_may_bet() -> None:
     opinion, it is a false one — and the direction of the error matters,
     because a reader who believes the stale bullet believes the card is
     live.
+
+    It has since been wrong in the other direction too, which is why the
+    phrase lists are lists: after the twelve-market approval of 2026-09-23
+    both files went on saying the card could not bet, in wording this test did
+    not read.
     """
     from nhl_betting_lab.config import MANUAL_DIR
     from nhl_betting_lab.providers.odds_api import PROVIDER_NAME
@@ -716,24 +769,62 @@ def test_the_operating_docs_agree_with_the_policy_about_what_may_bet() -> None:
     policy = load_policy()
     allowed = policy.allowed_markets(PROVIDER_NAME)
 
-    claims_nothing = "**No market is allowlisted."
-    claims_everything = "**All 11 markets are allowlisted"
     for name in ("CLAUDE.md", "docs/what_we_can_and_cannot_claim.md"):
-        prose = (root / name).read_text(encoding="utf-8")
+        prose = _assertive_prose((root / name).read_text(encoding="utf-8"))
         if allowed:
-            assert claims_nothing not in prose, (
-                f"{name} says no market is allowlisted, and the policy "
-                f"allowlists {sorted(allowed)}"
-            )
+            for claim in _CLAIMS_NOTHING_MAY_BET:
+                assert claim not in prose, (
+                    f"{name} asserts {claim!r}, and the policy allowlists "
+                    f"{sorted(allowed)}. The policy governs."
+                )
         else:
-            assert claims_everything not in prose, (
-                f"{name} says every market is allowlisted, and the policy "
-                "allowlists nothing. The policy governs."
-            )
+            for claim in _CLAIMS_EVERYTHING_MAY_BET:
+                assert claim not in prose, (
+                    f"{name} asserts {claim!r}, and the policy allowlists "
+                    "nothing. The policy governs."
+                )
+
+    operating = _assertive_prose((root / "CLAUDE.md").read_text(encoding="utf-8"))
     assert not (
-        claims_nothing in (root / "CLAUDE.md").read_text(encoding="utf-8")
-        and claims_everything in (root / "CLAUDE.md").read_text(encoding="utf-8")
+        any(claim in operating for claim in _CLAIMS_NOTHING_MAY_BET)
+        and any(claim in operating for claim in _CLAIMS_EVERYTHING_MAY_BET)
     ), "CLAUDE.md must not hold both answers at once"
+
+
+def test_the_what_may_bet_guard_reads_more_than_one_spelling() -> None:
+    """The guard above is the thing that failed, so it gets its own test.
+
+    Both defects it missed are replayed here as prose, against a policy that
+    allows something. A guard that cannot fail on these is the guard that let
+    them ship.
+    """
+    shipped_and_missed = (
+        'The card therefore produces no selection, no lean, no pass and no '
+        "stake, and says why.",
+        "**Nothing is allowlisted.** Cooper approved all eleven markets on "
+        "2026-08-27.",
+        # The same claim, wrapped the way markdown wraps it. A literal
+        # substring over the raw file does not see this one at all.
+        "**No market is\nallowlisted.** The 2026-08-27 approval was withdrawn.",
+    )
+    for prose in shipped_and_missed:
+        assert any(
+            claim in _assertive_prose(prose) for claim in _CLAIMS_NOTHING_MAY_BET
+        ), f"the guard would not have caught: {prose!r}"
+
+    # And the history-preserving forms must stay sayable, or the fix to the
+    # docs cannot be written down.
+    still_allowed = (
+        'This section read "Nothing is allowlisted" until 2026-09-25.',
+        'It went on asserting that the card "produces no selection, no lean, '
+        'no pass and no stake".',
+        "It allowlisted nothing from the withdrawal until Cooper approved "
+        "twelve markets on 2026-09-23, which is what it holds now.",
+    )
+    for prose in still_allowed:
+        assert not any(
+            claim in _assertive_prose(prose) for claim in _CLAIMS_NOTHING_MAY_BET
+        ), f"the guard would fire on legitimate history: {prose!r}"
 
 
 def test_the_operating_file_does_not_repeat_itself_verbatim() -> None:
