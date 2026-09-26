@@ -89,7 +89,13 @@ def test_an_opinion_with_no_close_is_counted_not_dropped() -> None:
     )
 
     assert rows.empty
-    assert counts == {"opinions": 1, "matched": 0, "no_close": 1}
+    assert counts == {
+        "opinions": 1,
+        "matched": 0,
+        "no_close": 1,
+        # Nothing was priced before face-off at all, so none of it is stale.
+        "no_close_not_near_face_off": 0,
+    }
 
 
 def test_clv_is_positive_when_the_price_shortened_after_we_took_it() -> None:

@@ -190,7 +190,9 @@ def main(argv: list[str] | None = None) -> int:
     counts = report.get("counts", {})
     print(
         f"Matched {counts.get('matched', 0)} of {counts.get('opinions', 0)} "
-        f"opinion(s) to a closing price; {counts.get('no_close', 0)} had none."
+        f"opinion(s) to a closing price; {counts.get('no_close', 0)} had none, "
+        f"of which {counts.get('no_close_not_near_face_off', 0)} were priced "
+        "before face-off but not near it."
     )
     _say_unreadable_snapshots(damaged)
     print(f"  report: {path}")
