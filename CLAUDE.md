@@ -735,6 +735,42 @@ Re-derive rather than trust if the data has moved.
   zero. **The committed reports under `data/outputs` still carry the
   pre-fix figures, and the receipts pin them by checksum** — regenerating
   them and re-attesting is Cooper's call, not a side effect of the fix.
+- **2026-09-26, NOT a defect fix: Cooper changed the staking rule before the
+  decision date, which `docs/when_this_ends.md` lists under "may not".** The
+  card no longer stakes `points`. This entry exists because the alternative
+  was the change landing silently, and in April nobody could have said what
+  was actually tested.
+  `points` is the one market here measured as a loss that survives
+  correction: **-4.2% over 6,140 card-window wagers**, 95% interval -6.7% to
+  -1.7%, -7.6% to -0.7% corrected for the eight markets tested, -256.8 units
+  realised, holding within 2025-26 alone at -5.4% over 3,468. The evidence
+  bundle's verdict is that "a loss that survives the correction still argues
+  against enabling this market, not for it".
+  **Why this does not change what is being tested, which is the ground the
+  decision stands on.** `write_snapshot` runs on the unfiltered priced frame
+  before `build_card` is called, and the frozen row carries market, player,
+  selection, line, price, book, model probability and edge -- and **no
+  column for a section, a stake, a unit count or a tier**. So the forward
+  ledger, and every interval computed from it, is identical whether or not
+  the card staked the row. `when_this_ends.md` says the test scores
+  "opinions, not bets"; the opinions are untouched. Two tests now pin this
+  (`test_an_excluded_market_still_freezes_into_the_snapshot`,
+  `test_the_snapshot_schema_carries_no_stake_at_all`), the second so that a
+  later change cannot make the ledger stake-dependent without going red.
+  So the LETTER of the freeze names the staking rule and the PURPOSE of the
+  freeze -- "a test whose subject changes mid-run measures nothing" -- is not
+  engaged, because the subject is unchanged. Cooper decided on 2026-09-26
+  that the purpose governs. That is a judgement, not a derivation, and it is
+  recorded as his.
+  The mechanism is `STAKE_EXCLUDED_MARKETS`, deliberately separate from
+  `HARD_GATED_MARKETS`, which is about information this lab lacks and says
+  outright it is "not a judgement that the market has no value". This is that
+  judgement. An excluded rung becomes a lean at zero units naming the
+  measurement that withheld the stake -- never a pass, never deleted.
+  Reversible by deleting one dict entry. The model, the edge bar and the
+  market list are unchanged, and `points` stays allowlisted. It landed before
+  the first live card: forward ledger **zero rows**, card-feed's last card
+  2026-08-28 (`decision: none`).
 - **2026-09-26, a defect fix recorded as `docs/when_this_ends.md` requires:
   one outcome is staked once.** `selection_key` includes the line and
   `ALTERNATE_PROVIDER_KEYS` maps every alternate ladder back to one project

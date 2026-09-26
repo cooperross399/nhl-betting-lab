@@ -173,3 +173,61 @@ class TestItIsNotTheOtherKindOfGate:
             assert "wager" in reason or "bet" in reason, (
                 f"{market} states a return with no sample size beside it"
             )
+
+
+class TestTheForwardLedgerIsUnaffected:
+    """The claim this whole decision rests on, given a test.
+
+    Withholding a stake is only cheap if the market keeps being measured. If
+    the forward ledger recorded stakes instead of opinions, excluding `points`
+    would quietly drop it from the one test `docs/when_this_ends.md` says is
+    left, and the decision would be a real trade rather than a free one.
+    """
+
+    def test_an_excluded_market_still_freezes_into_the_snapshot(self, tmp_path):
+        from nhl_betting_lab.forward_evidence import write_snapshot
+
+        rows = [_row(line=0.5), _row(line=1.5), _row(line=2.5)]
+        probabilities = {_key(row): 0.90 for row in rows}
+
+        # Nothing on this market is staked...
+        assert _staked(rows) == []
+
+        # ...and every rung is frozen anyway.
+        written = write_snapshot(
+            pd.DataFrame(rows),
+            probabilities,
+            key_for=selection_key,
+            verdicts_line="no verdict ships",
+            snapshot_date="2026-10-08",
+            now=NOW,
+            archive_dir=tmp_path,
+        )
+        assert written is not None
+        frozen = pd.read_csv(written)
+        assert sorted(frozen["line"].tolist()) == [0.5, 1.5, 2.5]
+        assert set(frozen["market"]) == {"points"}
+
+    def test_the_snapshot_schema_carries_no_stake_at_all(self, tmp_path):
+        """Not an accident to be preserved by luck: the frozen row has no
+        column for a stake, a section or a unit count, so no future change to
+        the staking path can reach the ledger without adding one."""
+        from nhl_betting_lab.forward_evidence import write_snapshot
+
+        rows = [_row(line=0.5)]
+        written = write_snapshot(
+            pd.DataFrame(rows),
+            {_key(rows[0]): 0.90},
+            key_for=selection_key,
+            verdicts_line="no verdict ships",
+            snapshot_date="2026-10-08",
+            now=NOW,
+            archive_dir=tmp_path,
+        )
+        columns = set(pd.read_csv(written).columns)
+        for forbidden in ("section", "suggested_units", "units", "stake", "tier"):
+            assert forbidden not in columns, (
+                f"the snapshot now carries `{forbidden}`, so the forward test "
+                "is no longer independent of what the card staked -- and "
+                "STAKE_EXCLUDED_MARKETS stopped being free"
+            )
