@@ -88,6 +88,14 @@ listing that succeeds and holds no run starts without the artifact.
 `--success-only` has GitHub filter the listing (`--status success`), so a
 red streak longer than `--limit` cannot hide the last good run and read as
 "there has never been one".
+
+**`--also NAME=DIR`** takes a second artifact from the same chosen run
+(Publish Site: the run's reports, beside its state). It goes through an
+empty temporary directory like the first and is then copied over DIR, the
+chosen run's files winning. It used to be downloaded straight into DIR, and
+gh refuses to overwrite: into a data/outputs already holding the committed
+reports it stopped at the first one, so forward_evidence.json never reached
+the site, and the log blamed a missing artifact. See `_restore_also`.
 """
 
 from __future__ import annotations
@@ -186,6 +194,12 @@ def _download(run_id: object, artifact: str, into: Path) -> subprocess.Completed
     return _gh("run", "download", str(run_id), "--name", artifact, "--dir", str(into))
 
 
+#: What gh 2.97.0 prints when the run holds no artifact of that name (or only
+#: an expired one). Every other failure is a failure to download an artifact
+#: that is there, and is reported as gh's own words, never as an absence.
+NO_SUCH_ARTIFACT = "no artifact matches any of the names or patterns provided"
+
+
 def download(run_id: object, artifact: str, into: Path) -> bool:
     return _download(run_id, artifact, into).returncode == 0
 
@@ -249,7 +263,7 @@ def restore(
     """
     report: dict = {"run": None, "conclusion": None, "filled_from": None,
                     "filled": 0, "ledger_from": None, "unioned_from": [],
-                    "rows_recovered": 0, "not_merged": []}
+                    "rows_recovered": 0, "not_merged": [], "also": {}}
     dest.mkdir(parents=True, exist_ok=True)
     for workflow in workflows:
         runs = completed_runs(workflow, limit, branch, success_only=success_only,
@@ -273,9 +287,7 @@ def restore(
                 f"({run.get('conclusion')}) on {branch}."
             )
             for name, directory in also:
-                directory.mkdir(parents=True, exist_ok=True)
-                if not download(run["databaseId"], name, directory):
-                    print(f"Run {run['databaseId']} carries no {name}.")
+                report["also"][name] = _restore_also(run["databaseId"], name, directory)
             if union > 1:
                 _union_older(
                     runs[index + 1:], artifact, dest, workflow, report,
@@ -297,6 +309,48 @@ def restore(
         f"{artifact}; this run starts without it."
     )
     return report
+
+
+def _restore_also(run_id: object, name: str, directory: Path) -> int | None:
+    """Lay artifact `name` from the chosen run over `directory`.
+
+    Returns how many files were written, or None when nothing was.
+
+    This used to run `gh run download --name NAME --dir DIRECTORY` straight
+    into the target. gh creates every zip entry with O_EXCL and stops at the
+    first one that exists, and Publish Site's target, data/outputs, already
+    holds five committed reports plus the gameday_card.json the state artifact
+    just restored — six of gameday-reports' 13 entries — so the download died
+    before forward_evidence.json (entry 12) on every run. The failure was then
+    logged as "Run N carries no gameday-reports", which was false (the API
+    listed the artifact at 15,257 bytes on the day it was measured), and the
+    site's forward-ledger chip read "Ledger size not reported" from opening
+    night on. So the artifact is downloaded into an empty temporary directory,
+    as the primary one always was, and copied over the target: the chosen
+    run's reports replace the checkout's committed copies and the state's card
+    (the same run's card), which is what pairing "the state and the reports
+    from one run" means. Nothing on the runner is committed back.
+
+    "carries no" is printed only when gh itself says no artifact of that name
+    is there. Any other failure prints gh's own words as a warning, so a
+    failed extraction or a network error is never reported as an absence.
+    """
+    directory.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory() as scratch:
+        result = _download(run_id, name, Path(scratch))
+        if result.returncode == 0:
+            written = _copy(Path(scratch), directory, overwrite=True)
+            print(f"Restored {name} from the same run: {written} file(s) into {directory}.")
+            return written
+    said = " ".join((result.stderr or "").split())
+    if NO_SUCH_ARTIFACT in said:
+        print(f"Run {run_id} carries no {name}.")
+    else:
+        print(
+            f"::warning::{name} from run {run_id} could not be restored; gh "
+            f"said: {said or f'nothing (exit {result.returncode})'}"
+        )
+    return None
 
 
 def _fill_from_last_success(
@@ -448,7 +502,10 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--also", action="append", default=[], metavar="NAME=DIR",
-        help="Another artifact to download from the same chosen run.",
+        help=(
+            "Another artifact from the same chosen run, copied over DIR "
+            "(its files replace any already there)."
+        ),
     )
     parser.add_argument(
         "--union", type=int, default=0, metavar="N",
