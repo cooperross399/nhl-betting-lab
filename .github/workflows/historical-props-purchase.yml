@@ -345,7 +345,14 @@ jobs:
         # LOAD-BEARING: every run also writes `player_props_backtest.md`, so
         # `late` goes last and keeps the filename that
         # `run_what_we_can_claim.py` and the operating docs read.
-        if: always()
+        #
+        # `always()`, so a buy that spent its credits and then failed is
+        # still measured, but only after a restore that succeeded. A run
+        # refused at the restore holds none of the bought prices, and
+        # measuring what the checkout happens to track is not a measurement
+        # of anything this run owns.
+        id: backtest
+        if: ${{ always() && steps.restore.outcome == 'success' }}
         continue-on-error: true
         env:
           PYTHONPATH: src
@@ -354,8 +361,16 @@ jobs:
           python scripts/run_player_props_backtest.py --phase late
           python scripts/run_what_we_can_claim.py
 
+      # Exactly one of the next three steps writes the run summary. The
+      # checkout TRACKS data/outputs/player_props_backtest.md, so the file is
+      # always there: after a refused restore or a failed rebuild it is the
+      # last committed report (or, if `late` failed, the card window's, which
+      # writes the same name first). Until 2026-09-26 the summary `cat`ted it
+      # under `always()`, and a run refused before it spent a credit showed
+      # the committed report under "What can be measured" as though it had
+      # measured it. It is read only after a rebuild that succeeded.
       - name: Write the result to the run summary
-        if: always()
+        if: ${{ always() && steps.backtest.outcome == 'success' }}
         run: |
           {
             echo "## What can be measured"
@@ -363,6 +378,16 @@ jobs:
             cat data/outputs/player_props_backtest.md 2>/dev/null \
               || echo "No backtest report was produced."
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Say the refused run measured nothing
+        if: ${{ always() && steps.restore.outcome != 'success' }}
+        run: |
+          echo "This run was refused before it measured anything: the restore of the bought prices did not succeed, so no measurement was produced. The report in the checkout is the last committed one, not this run's, and is not shown." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Say the failed rebuild measured nothing
+        if: ${{ always() && steps.restore.outcome == 'success' && steps.backtest.outcome != 'success' }}
+        run: |
+          echo "The backtest rebuild did not complete (its log is above), so no measurement was produced. The report in the checkout is not this run's, and is not shown." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload what was bought
         # Always, so a purchase that spent its credits and then failed still
