@@ -825,6 +825,20 @@ Re-derive rather than trust if the data has moved.
   reach the 15-game minimum before mid-November, so no frozen opinion is
   re-cut.
   `tests/test_a_registry_cached_before_its_season_ended_is_asked_again.py`.
+- **2026-09-26, a defect fix recorded as `docs/when_this_ends.md` requires:
+  a saves prop on a goalie who did not start is void.** The boxscore lists
+  every goalie who dressed, so the backup who sat all night is in the logs
+  with no ice time and no saves, and forward settlement graded him: a saves
+  under on him settled as a win the book would have refunded, and an over as
+  a loss. The historical backtest never scored those games — a goalie
+  appearance under `walk_forward.GOALIE_START_SECONDS` (2,400 seconds)
+  produces no sample and so no bet — so the ledger was settling by a rule the
+  backtest it is compared with never used. It now voids a `goalie_saves` row
+  under that threshold, and leaves one with no recorded ice time
+  unsettleable rather than guessing. Skater props are untouched. The model,
+  the edge bar, the market list, the staking rule and the ledger's schema
+  are unchanged, and the ledger held zero rows when this landed.
+  `tests/test_a_goalie_who_did_not_start_voids_his_saves.py`.
 - **2026-09-25, a defect fix recorded as `docs/when_this_ends.md` requires:
   the card refuses stale prices.** The policy's `max_provider_run_age_hours`
   (12, policy-wide and on `the_odds_api`) was parsed and never applied —

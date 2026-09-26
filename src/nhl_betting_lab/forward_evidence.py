@@ -51,6 +51,7 @@ import pandas as pd
 
 from nhl_betting_lab.stores import CorruptStoreError, existing_row_count, read_store
 
+from nhl_betting_lab.backtest.walk_forward import GOALIE_START_SECONDS
 from nhl_betting_lab.backtest.team_walk_forward import (
     settle_moneyline,
     settle_puck_line,
@@ -521,10 +522,11 @@ def _unresolved_team_rows(
 
 def _player_index(
     logs: pd.DataFrame, game_date: str
-) -> dict[str, dict[int, tuple[str, float | None, dict[str, float]]]]:
-    """alias -> {player_id: (team, actuals per settlement column)} for one day."""
+) -> dict[str, dict[int, tuple[str, dict[str, float], float | None]]]:
+    """alias -> {player_id: (team, actuals per settlement column, ice time)}
+    for one day. Ice time is None where the logs do not record it."""
     day = logs[logs["date"].astype(str).str.slice(0, 10) == game_date]
-    index: dict[str, dict[int, tuple[str, dict[str, float]]]] = {}
+    index: dict[str, dict[int, tuple[str, dict[str, float], float | None]]] = {}
     for row in day.itertuples():
         actuals = {
             market.settles_on: float(
@@ -534,7 +536,9 @@ def _player_index(
             for market in MARKETS_BY_KEY.values()
             if market.is_prop
         }
-        entry = (str(row.team).strip().upper(), actuals)
+        toi = pd.to_numeric(getattr(row, "toi_seconds", None), errors="coerce")
+        toi_seconds = None if pd.isna(toi) else float(toi)
+        entry = (str(row.team).strip().upper(), actuals, toi_seconds)
         for alias in player_name_aliases(row.player):
             index.setdefault(alias, {})[int(row.player_id)] = entry
     return index
@@ -563,7 +567,7 @@ def _settle_prop_row(
     market = MARKETS_BY_KEY.get(str(row.market))
     if market is None or not market.settles_on:
         return "unsettleable", None, 0.0
-    candidates: dict[int, tuple[str, dict[str, float]]] = {}
+    candidates: dict[int, tuple[str, dict[str, float], float | None]] = {}
     for alias in player_name_aliases(row.player):
         candidates.update(player_index.get(alias, {}))
     if game_teams:
@@ -577,7 +581,17 @@ def _settle_prop_row(
     if not candidates:
         # The player never entered the game: books void the bet.
         return "void", None, 0.0
-    _, actuals = next(iter(candidates.values()))
+    _, actuals, toi_seconds = next(iter(candidates.values()))
+    if market.key == "goalie_saves":
+        # Books void a saves prop on a goalie who does not start, and the
+        # boxscore lists the backup who sat all night with no ice time and no
+        # saves. The historical backtest scores no goalie game under
+        # GOALIE_START_SECONDS, so the ledger voids by the same rule; an
+        # unrecorded ice time is not a start and is not guessed at.
+        if toi_seconds is None:
+            return "unsettleable", None, 0.0
+        if toi_seconds < GOALIE_START_SECONDS:
+            return "void", None, 0.0
     actual = actuals.get(market.settles_on)
     if actual is None:
         return "unsettleable", None, 0.0
