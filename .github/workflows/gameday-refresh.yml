@@ -87,6 +87,25 @@ concurrency:
   group: gameday-refresh
   cancel-in-progress: false
 
+# Every `run:` block below runs as `bash --noprofile --norc -eo pipefail {0}`,
+# which is what the comments in this file and every test that replays its
+# steps assume. Until 2026-09-26 nothing here said so, and GitHub runs a
+# block that names no shell as `bash -e {0}`: errexit with no pipefail. (Run
+# 33142173149 printed `shell: /usr/bin/bash -e {0}` 14 times and pipefail not
+# once.) Under that shell `NUMBER=$(gh issue list … | jq …)` took jq's status,
+# and jq exits 0 on empty input, so a single HTTP 502 from the listing read
+# as "no home issue exists". The post step then created, pinned and commented
+# on a second "Operating Home" issue that every later card followed, and it
+# recorded decision=post on a green step. The suite never saw this: rewriting
+# its 275 pipefail replays to `bash -e` left all 2504 tests passing. Every
+# pipeline in this file was audited for a left side that may exit non-zero
+# before this was added. The two `find | wc -l` counts carry `|| true` for
+# exactly that reason. tests/test_the_post_step_fails_closed_under_the_runners_shell.py
+# resolves each step's shell from this file the way GitHub does and pins it.
+defaults:
+  run:
+    shell: bash
+
 jobs:
   precheck:
     # The second scheduled trigger exists only to cover a dropped first one,
@@ -203,9 +222,10 @@ jobs:
             mv data/outputs/gameday_card.json previous_card.json
             echo "Restored the previous card for the selections diff."
           fi
-          # `|| true`: the shell is `bash -eo pipefail`, and with nothing
-          # restored `find` fails on the missing directory — which used to
-          # end the step here, before the ledger fallback below.
+          # `|| true`: the shell is `bash -eo pipefail` (declared under
+          # `defaults:` above), and with nothing restored `find` fails on the
+          # missing directory. That would end the step here, before the
+          # ledger fallback below.
           find data/raw/nhl/boxscore -name '*.json' 2>/dev/null | wc -l \
             | xargs echo "Cached boxscores restored:" || true
           # If the chain broke, take the ledger from the card-feed branch
@@ -345,9 +365,10 @@ jobs:
           set -u
           : > run_degraded.txt
           : > run_quiet.txt
-          # `|| true`: under the runner's bash -eo pipefail, `find` on a
-          # missing cache fails the substitution and ended this step before
-          # it wrote `degraded` at all — so the coldest run read as clean.
+          # `|| true`: under bash -eo pipefail (declared under `defaults:`
+          # above), `find` on a missing cache fails the substitution. That
+          # ends this step before it writes `degraded` at all, so the coldest
+          # run would read as clean.
           games=$(find data/raw/nhl/boxscore -name '*.json' 2>/dev/null | wc -l || true)
           echo "Boxscores cached: $games"
           if [ ! -f data/processed/player_game_logs.csv ]; then
@@ -493,12 +514,34 @@ jobs:
             echo "No NHL games are scheduled; there is no card to post."
             exit 0
           fi
-          DECISION=$(python scripts/post_card_to_issue.py \
-            --previous-json previous_card.json \
-            --out card_comment.md --title-out card_title.txt \
-            --body-out issue_body.md \
-            --degraded-file run_degraded.txt --run-url "$RUN_URL" \
-            ${{ inputs.force_post == true && '--force' || '' }} | tail -1)
+          # The two reads below check their own exit status, so this step
+          # fails closed whatever shell runs it, not only under the pipefail
+          # declared at the top. Both used to be `$(producer | consumer)`,
+          # which under GitHub's default `bash -e` takes the consumer's
+          # status. `$(python … | tail -1)` let a post script that crashed
+          # before deciding read as an empty decision. The step said "the run
+          # was clean", stayed green, and card-feed recorded degraded=false,
+          # so the 15:00 backup stood down. A decision is now the script's
+          # last line only when the script succeeded, and only when that line
+          # is `post` or `skip`. Anything else is a failed post, which the
+          # final health reports.
+          if ! POST_OUTPUT=$(python scripts/post_card_to_issue.py \
+              --previous-json previous_card.json \
+              --out card_comment.md --title-out card_title.txt \
+              --body-out issue_body.md \
+              --degraded-file run_degraded.txt --run-url "$RUN_URL" \
+              ${{ inputs.force_post == true && '--force' || '' }}); then
+            echo "::error::The post script failed before deciding; nothing was posted."
+            exit 1
+          fi
+          DECISION=$(printf '%s\n' "$POST_OUTPUT" | tail -n 1)
+          case "$DECISION" in
+            post|skip) ;;
+            *)
+              echo "::error::The post script ended without a decision (post or skip); nothing was posted."
+              exit 1
+              ;;
+          esac
           if [ "$DECISION" != "post" ]; then
             echo "decision=$DECISION" >> "$GITHUB_OUTPUT"
             echo "Not posting: the run was clean and the selections did not change."
@@ -513,10 +556,20 @@ jobs:
           # issues rather than through the search API: the title contains an em
           # dash, and a search quietly returning nothing would create a
           # duplicate issue every run.
+          #
+          # The listing is its own command so that its failure is seen. As
+          # `$(gh issue list … | jq …)` under `bash -e`, one HTTP 502 left
+          # jq reading empty input, which jq answers with nothing and exit 0.
+          # That read as "no home issue exists", so the step created, pinned
+          # and commented on a second home, and recorded decision=post. A
+          # listing that fails is now a failed post that opens nothing.
           TITLE=$(cat card_title.txt)
-          NUMBER=$(gh issue list --state open --limit 200 --json number,title \
-            | jq -r --arg t "$TITLE" \
-              '[.[] | select(.title == $t)] | .[0].number // empty')
+          if ! LISTING=$(gh issue list --state open --limit 200 --json number,title); then
+            echo "::error::The open issues could not be listed, so the operating home could not be found. Nothing was posted rather than opening a second home."
+            exit 1
+          fi
+          NUMBER=$(printf '%s' "$LISTING" | jq -r --arg t "$TITLE" \
+            '[.[] | select(.title == $t)] | .[0].number // empty')
           if [ -z "$NUMBER" ]; then
             echo "Creating the operating-home issue."
             NUMBER=$(gh issue create --title "$TITLE" \
