@@ -57,6 +57,7 @@ import pytest
 import yaml
 
 from conftest import FakeResponse, RecordingRequester
+from test_no_test_reads_the_checkouts_data import point_default_data_dirs_at
 from nhl_betting_lab.config import PROJECT_ROOT
 from nhl_betting_lab.market_eligibility import assess_markets
 from nhl_betting_lab.markets import ALL_MARKETS
@@ -185,6 +186,10 @@ def _run(
     monkeypatch: pytest.MonkeyPatch,
     requester: RecordingRequester | None = None,
 ) -> tuple[int, Path]:
+    # The script screens posted events against the cached club schedules,
+    # so a checkout holding a real season's cache would screen out every
+    # game here; none of the defaults is the checkout's.
+    point_default_data_dirs_at(monkeypatch, tmp_path / "defaults")
     module = _load_shadow_script()
     real_provider = odds_api.OddsApiProvider
     monkeypatch.setattr(module, "load_provider_env", lambda: _Loaded())
