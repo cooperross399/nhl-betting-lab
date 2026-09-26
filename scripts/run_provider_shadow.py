@@ -2,7 +2,7 @@
 """Run a shadow provider fetch and write the verification reports.
 
 A shadow run fetches real prices into `data/staging/` and reports what it
-found. It allowlists nothing, promotes nothing, and places nothing. The
+found. It adds no allowlist entry, promotes nothing, and places nothing. The
 gameday card reads `data/staging/` — Gameday Refresh runs this script to
 fetch the card's prices — and uses a market from it only if the provider
 policy allowlists it, it is priced for every game in the slate, and the
@@ -28,8 +28,10 @@ The credential comes from `NHL_ODDS_API_KEY` in the environment, a gitignored
 `.env`, or a GitHub Secret. It is never accepted as a command argument.
 
 Exit codes: 0, everything asked was answered (however little the books
-quoted); 2, the team-market fetch failed and nothing was staged; 3, no NHL
-games are on the board, which is not a fault; 4, at least one per-event
+quoted); 2, the team-market fetch failed and nothing was staged, which
+includes a refused market list whose moneyline check failed, and "no NHL odds
+at all" on a day the cached NHL schedule lists a regular-season game; 3, no
+NHL games are on the board, which is not a fault; 4, at least one per-event
 request failed, so those games' props, regulation three-way and alternate
 ladders are missing — everything else was still staged and reported.
 """
@@ -49,7 +51,7 @@ from nhl_betting_lab.markets import market_for_provider_key
 from nhl_betting_lab.providers import odds_api
 from nhl_betting_lab.providers.odds_api import EmptySlateError
 from nhl_betting_lab.providers.env_file import load_provider_env
-from nhl_betting_lab.season import LEAGUE_TIMEZONE
+from nhl_betting_lab.season import LEAGUE_TIMEZONE, scheduled_regular_season_starts
 from nhl_betting_lab.reports.provider_shadow import (
     build_shadow_summary,
     save_shadow_reports,
@@ -79,6 +81,20 @@ def _staged_prices(staging_dir: Path) -> pd.DataFrame:
     if not frames:
         return pd.DataFrame(columns=list(odds_api.PRICE_COLUMNS))
     return pd.concat(frames, ignore_index=True)
+
+
+def _scheduled_regular_season_games(days: Iterable[str]) -> int:
+    """Regular-season games the cached NHL club schedules list on `days`.
+
+    Games the schedule calls off are not counted, and neither are
+    exhibitions, which books may never price. With no cache there is
+    nothing to count, and the answer is 0.
+    """
+    wanted = set(days)
+    return sum(
+        1 for day, _home, _away in scheduled_regular_season_starts()
+        if day in wanted
+    )
 
 
 def _project_markets(provider_keys: Iterable[str]) -> set[str]:
@@ -179,6 +195,11 @@ def main(argv: list[str] | None = None) -> int:
     warnings: list[str] = []
     errors: list[str] = []
     per_event_failures: list[str] = []
+    # Which games' per-event requests failed, and which markets that left
+    # with no answer. It goes to the provenance (the card reads it there)
+    # and to both reports, so none of them reads a failed request as a
+    # market no book quotes.
+    failed_events: list[dict] = []
     # The project markets this run asked the provider for. Without it both
     # reports read an unasked market as an unquoted one: the scheduled
     # discovery run (no `--props`, so the three bulk markets only) published
@@ -214,6 +235,34 @@ def main(argv: list[str] | None = None) -> int:
                 max_events=args.max_events,
             )
         except EmptySlateError as exc:
+            # A 422 to the market list and to a plain moneyline is the
+            # provider's only evidence for "no NHL odds at all". Until
+            # 2026-09-26 it was taken on that evidence alone, and exit 3 is
+            # what makes Gameday Refresh record empty_slate=true and
+            # degraded=false, post nothing, and stand the 15:00 backup down.
+            # A parameter both requests share, such as a region the provider
+            # stops serving, would draw the same two refusals on every run of
+            # a season, and every one of those runs would be green with no
+            # card. The NHL schedule this run's "Fetch results" cached can
+            # tell: books post regular-season lines days ahead, so a game
+            # scheduled in the window makes "no odds at all" a fault
+            # (failure-shape audit, c3x0-odds-api-600).
+            if isinstance(exc, odds_api.NoOddsServedError):
+                days = league_days or [datetime.now(LEAGUE_TIMEZONE).date().isoformat()]
+                scheduled = _scheduled_regular_season_games(days)
+                if scheduled:
+                    print(
+                        "Team-market fetch failed: the provider refused the "
+                        "market list and a plain moneyline with HTTP 422, "
+                        "which reads as the off-season, but the cached NHL "
+                        f"schedule lists {scheduled} regular-season game(s) "
+                        f"on {', '.join(days)}. Books price regular-season "
+                        "games days ahead, so this is a provider or request "
+                        "fault and not an empty slate. "
+                        f"{odds_api.NO_STAGING_WRITTEN}",
+                        file=sys.stderr,
+                    )
+                    return 2
             # Exit 3 marks a state the caller should not treat as a failure.
             # The off-season lasts four months; a red run every day of it is a
             # red nobody reads in October.
@@ -303,6 +352,28 @@ def main(argv: list[str] | None = None) -> int:
             # three failing gave exit 0 too, with every per-event market
             # INCOMPLETE — a card with no prop on it.
             per_event_failures = list(props.errors)
+            # And the exit code was all the failure reached. Both reports
+            # and the card still read the nine per-event markets of that
+            # all-503 run as "No book returned this market" and "The
+            # provider returned no rows", and the discovery report was
+            # byte-identical to one from a run whose books quoted nothing.
+            #
+            # A failed per-event request leaves unanswered only the markets
+            # no other request answered for that game. The bulk request
+            # asked moneyline, puck line and totals for every game and was
+            # answered, so a failed request costs those their alternate
+            # rungs, not the market: `puck_line` with no `spreads` quoted is
+            # still the books' answer, and must not read as a failed fetch.
+            answered_in_bulk = _project_markets(odds_api.BULK_PROVIDER_MARKETS)
+            failed_events = [
+                {
+                    **entry,
+                    "markets": sorted(
+                        set(entry.get("markets", ())) - answered_in_bulk
+                    ),
+                }
+                for entry in props.failed_events
+            ]
             if per_event_failures:
                 print(
                     f"{len(per_event_failures)} per-event request(s) failed, "
@@ -324,6 +395,7 @@ def main(argv: list[str] | None = None) -> int:
                 quota_remaining=quota,
                 warnings=warnings,
                 errors=errors,
+                failed_events=failed_events,
             ),
             configuration=provider.public_configuration(),
             staging_files=written,
@@ -345,6 +417,7 @@ def main(argv: list[str] | None = None) -> int:
         errors=errors,
         staging_files=written,
         requested_markets=requested,
+        failed_events=failed_events,
     )
     paths = save_shadow_reports(
         summary, eligibility, discovery, output_dir=Path(args.output_dir)

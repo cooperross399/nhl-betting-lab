@@ -169,15 +169,15 @@ Requester = Callable[..., Any]
 class ProviderError(RuntimeError):
     """The provider could not answer safely. No staging file is written.
 
-    `status` is the HTTP status when the provider answered with one, and
-    None when it was never reached, its answer could not be read, or the
-    refusal is this adapter's own. A caller that must tell a 422 (the
-    provider refusing what was asked) from a 503, a 429, a 401 or a timeout
-    (the provider not answering) reads it here rather than matching text.
-    Until 2026-09-26 the error carried nothing but its message, and
-    `scripts/discover_nhl_markets.py` recorded every failed request as "not
-    a market at all" — a 503, a 429, a 500 and a read timeout alike, next to
-    one genuine 422 — because nothing on the error told them apart.
+    `status` is the HTTP status the provider refused a request with, and None
+    when there was no refusal to read: a request that never came back, or one
+    answered 200 with an unreadable body. A caller that has to tell one
+    refusal from another reads this, not the words of the message. Until
+    2026-09-26 the error carried nothing but its message: `fetch_team_markets`
+    read any failure of its h2h check as the off-season (#201), and
+    `scripts/discover_nhl_markets.py` recorded every failed request as "not a
+    market at all" — a 503, a 429, a 500 and a read timeout alike, next to one
+    genuine 422 — because nothing on the error told them apart.
     """
 
     def __init__(self, *args: object, status: int | None = None) -> None:
@@ -198,10 +198,26 @@ class EmptySlateError(ProviderError):
     alarming red run every single day of the off-season, and a red that fires
     daily for four months is a red nobody reads in October.
 
-    A 422 is only ever reported as an empty slate after the free events
-    endpoint confirms the board really is empty. The same status can mean a
-    malformed request, and quietly reading "your markets parameter is wrong"
-    as "the season has not started" would hide a real bug for months.
+    The same status can mean a malformed request, and quietly reading "your
+    markets parameter is wrong" as "the season has not started" would hide a
+    real bug for months. So a 422 is reported as an empty slate
+    (`NoOddsServedError`) only when a plain moneyline request is refused with
+    a 422 as well; see `fetch_team_markets`. (This said the free events
+    endpoint confirmed it. That check was removed in #21, because through
+    September the October schedule is listed while no book has priced
+    anything, and nothing replaced it.)
+    """
+
+
+class NoOddsServedError(EmptySlateError):
+    """The provider refused the market list AND a plain moneyline with HTTP 422.
+
+    Between seasons that is the ordinary state. The provider's answer is the
+    only evidence behind it, though. A parameter both requests share, such as
+    a region the provider stops serving, would draw the same two refusals on
+    every run of a season. A caller that has the NHL schedule should check
+    it before calling a scheduled game day empty (`run_provider_shadow.py`
+    does).
     """
 
 
@@ -256,6 +272,12 @@ class FetchResult:
     warnings: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
     fetched_at: str = ""
+    #: One entry per per-event request that got no usable answer, beside its
+    #: line in `errors`: the event, the date and teams its rows would have
+    #: carried, the project `markets` it asked for, and the `error`. The
+    #: reports and the card read this to tell a failed fetch from a market no
+    #: book quotes; they never parse `errors` for it.
+    failed_events: list[dict[str, Any]] = field(default_factory=list)
 
     def summary_line(self) -> str:
         return (
@@ -592,7 +614,9 @@ class OddsApiProvider:
                 self._params(regions=self.regions, markets=",".join(markets)),
             )
         except ProviderError as exc:
-            if "422" not in str(exc):
+            # The status the provider refused with, not "422" in the words of
+            # the message, which is what this read until 2026-09-26.
+            if exc.status != 422:
                 raise
             # A 422 means one of two things and they need separating.
             #
@@ -606,21 +630,46 @@ class OddsApiProvider:
             # October schedule is listed while no book has priced anything, so
             # "events exist" is true in exactly the case being tested for.
             # What separates them is asking again for `h2h` alone, which is
-            # the one market every sport serves. If that is refused too, there
-            # are no odds. If it succeeds, the market list was the problem.
+            # the one market every sport serves. If that is refused with a 422
+            # too, there are no odds. If it succeeds, the market list was the
+            # problem. If it fails any other way, nothing was learned.
+            #
+            # That last case used to be read as the off-season. The retry sat
+            # in a bare `except ProviderError`, so a 503, a 429, a 500, a 401,
+            # a read timeout, a refused connection or an unreadable body
+            # raised EmptySlateError. Replayed by the failure-shape audit
+            # (c3x0-odds-api-600), a game day with a bulk 422 and a retry 503
+            # made run_provider_shadow.py exit 3, and Gameday Refresh then
+            # recorded empty_slate=true and degraded=false and posted
+            # nothing. The job was green, and the 15:00 backup stood down: no
+            # card, no snapshot, and no sign anything was wrong. A check that
+            # could not be made is a failed fetch, and it is reported as one.
             try:
                 self._get(
                     f"{self.base_url}/v4/sports/{self.sport_key}/odds",
                     self._params(regions=self.regions, markets="h2h"),
                 )
-            except ProviderError:
-                raise EmptySlateError(
-                    "The provider is serving no NHL odds at all — even a "
-                    "plain moneyline request is refused — so there is nothing "
-                    "to price. That is the ordinary state between the end of "
-                    "one season and the day books post the next, and it is "
-                    "not a fault."
-                ) from exc
+            except ProviderError as retry_exc:
+                if retry_exc.status == 422:
+                    raise NoOddsServedError(
+                        "The provider is serving no NHL odds at all — even a "
+                        "plain moneyline request is refused — so there is "
+                        "nothing to price. That is the ordinary state between "
+                        "the end of one season and the day books post the "
+                        "next, and it is not a fault."
+                    ) from exc
+                failure = " ".join(
+                    str(retry_exc).replace(NO_STAGING_WRITTEN, "").split()
+                )
+                raise ProviderError(
+                    "The provider refused this market list with HTTP 422, and "
+                    "the plain moneyline request that tells an off-season "
+                    "from a request problem failed as well, so there is no "
+                    f"answer to read ({failure}). Only a 422 to both means "
+                    "no NHL odds are served, so this cannot be read as the "
+                    f"off-season. {NO_STAGING_WRITTEN}",
+                    status=retry_exc.status,
+                ) from retry_exc
             raise ProviderError(
                 "The provider refused this market list but served a plain "
                 f"moneyline request, so one of {markets} is not a market it "
@@ -773,6 +822,34 @@ class OddsApiProvider:
             if market in set(PER_EVENT_PROVIDER_MARKETS)
         ] or list(wanted)
         degraded_to_core = False
+        asked_markets = sorted(
+            {
+                market.key
+                for market in map(market_for_provider_key, wanted)
+                if market is not None
+            }
+        )
+
+        def _failed(event: Mapping[str, Any], event_id: str, text: str) -> None:
+            # Until 2026-09-26 only `text` was kept, and a report reading the
+            # empty market could not tell this from a book posting nothing
+            # (see `market_eligibility.failed_requests`). Every market asked
+            # is recorded: a 422 that the core retry could not recover loses
+            # the whole list, not only the core.
+            commence = str(event.get("commence_time", "") or "").strip()
+            result.errors.append(text)
+            result.failed_events.append(
+                {
+                    "provider_event_id": event_id,
+                    # The date `normalize_event` stages this game's rows under.
+                    "date": commence[:10],
+                    "commence_time": commence,
+                    "home_team": str(event.get("home_team", "") or "").strip(),
+                    "away_team": str(event.get("away_team", "") or "").strip(),
+                    "markets": list(asked_markets),
+                    "error": text,
+                }
+            )
 
         skipped_for_budget = 0
         for event in selected:
@@ -817,7 +894,7 @@ class OddsApiProvider:
                             ),
                         )
                     except ProviderError as retry_exc:
-                        result.errors.append(_event_error(event_id, retry_exc))
+                        _failed(event, event_id, _event_error(event_id, retry_exc))
                         continue
                     if not degraded_to_core:
                         degraded_to_core = True
@@ -832,13 +909,13 @@ class OddsApiProvider:
                             "prop on every event with it."
                         )
                 else:
-                    result.errors.append(_event_error(event_id, exc))
+                    _failed(event, event_id, _event_error(event_id, exc))
                     continue
             result.credits_spent += per_event
             if headers.get("x-requests-remaining"):
                 result.quota_remaining = headers["x-requests-remaining"]
             if not isinstance(payload, Mapping):
-                result.errors.append(f"Event {event_id}: malformed payload.")
+                _failed(event, event_id, f"Event {event_id}: malformed payload.")
                 continue
             rows = normalize_event(payload, fetched_at=stamp)
             if rows:
@@ -906,6 +983,10 @@ def write_provenance(
         "rows": len(result.rows),
         "warnings": list(result.warnings),
         "errors": list(result.errors),
+        # Which games' per-event requests failed and which markets that left
+        # unanswered. The card reads it so its excluded markets can say a
+        # failed fetch rather than "The provider returned no rows".
+        "failed_events": [dict(item) for item in result.failed_events],
         "staging_files": [str(path.name) for path in staging_files],
         "shadow_only": True,
         # This note read "Staging is invisible to the card" until 2026-09-25,

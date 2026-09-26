@@ -242,7 +242,13 @@ def collect_files(
 
 
 def unread_verdict_inputs(output_dir: Path) -> dict[str, str]:
-    """Each of `VERDICT_INPUTS` that is absent or unreadable, with why."""
+    """Each of `VERDICT_INPUTS` no verdict can be read from, with why.
+
+    Absent, unreadable, or recording a measurement that was handed no price
+    (`what_we_can_claim.unread_reason`). The last used to reach the verdicts
+    as a measurement with no bets, and every market read "no price-based
+    measurement exists" in the bundle each Gameday Refresh run uploaded.
+    """
     problems = {
         name: unread_reason(Path(output_dir) / name) for name in VERDICT_INPUTS
     }
