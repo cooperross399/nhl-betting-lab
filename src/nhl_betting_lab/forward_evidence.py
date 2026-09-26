@@ -89,32 +89,16 @@ PATIENCE_DAYS = 14
 DECISION_DATE = "2027-04-25"
 SAMPLE_FLOOR = 3000
 
-#: The registration's result table, word for word: (the "Result" cell,
-#: "What it means", "What happens"), bold and all. Keyed by the `reading` the payload
-#: carries, so the report can only ever speak in the registered vocabulary.
-REGISTERED_OUTCOMES: dict[str, tuple[str, str, str]] = {
-    "excludes_zero_positive": (
-        "Corrected interval **excludes zero, positive**",
-        "A candidate, on one season",
-        "**Not a green light.** A second season confirms or kills it. No "
-        "stake is placed on one season, ever.",
+#: The two populations the registration can be read to mean, keyed as the
+#: payload carries them. Which one it means is Cooper's decision; until he
+#: makes it, both are computed and neither is the registered statistic.
+REGISTERED_POPULATIONS: dict[str, str] = {
+    "population_every_opinion": (
+        "every settled opinion in every market, whatever its edge"
     ),
-    "spans_zero": (
-        "Corrected interval **spans zero**",
-        "No edge after a clean out-of-sample season, on top of everything "
-        "already measured",
-        "**Stop.** Archive both labs, disable the routines, write the "
-        "closing note.",
-    ),
-    "excludes_zero_negative": (
-        "Corrected interval **excludes zero, negative**",
-        "Confirmed loser",
-        "**Stop**, same as above.",
-    ),
-    "below_floor": (
-        f"Fewer than {SAMPLE_FLOOR:,} settled opinions",
-        "The test did not run",
-        "Diagnose the pipeline. Do not read the number.",
+    "population_clears_edge_bar": (
+        "the settled opinions that clear the shipped edge bar for their "
+        "market (the Bets stream above)"
     ),
 }
 
@@ -956,65 +940,43 @@ def load_ledger(processed_dir: Path | None = None) -> pd.DataFrame:
 TOO_FEW_TO_SURVIVE = 30
 
 
-def registered_statistic(
-    settled: pd.DataFrame, markets: list[str], *, now: datetime
+def edge_bar(market_key: str) -> float:
+    """The shipped edge bar for a market: the prop bar for a prop, else the
+    team bar. One copy, read by the per-market Bets view and by the
+    registered statistic's edge-bar population alike."""
+    market = MARKETS_BY_KEY.get(market_key)
+    return MIN_PROP_EDGE if market is not None and market.is_prop else MIN_EDGE
+
+
+def _population_statistic(
+    rows: pd.DataFrame, markets: list[str], definition: str
 ) -> dict:
-    """The one number docs/when_this_ends.md decides the lab on, and its floor.
+    """One population's pooled return, corrected, against the floor.
 
-    The registration: "the forward ledger's pooled return on frozen
-    opinions, one bet per wager at the best price the card could have taken,
-    corrected across the markets measured. Opinions, not bets", read against
-    a floor of 3,000 settled opinions on 2027-04-25. Until this existed the
-    report produced only per-market figures, and per market only for the
-    rows clearing the edge bar, so nothing in the house computed the number
-    the rule reads.
-
-    `settled` is the report's own settled wagers — already collapsed by
-    `closing_lines.collapse_to_best`, so this counts exactly what the
-    per-market table counts — and `markets` the markets among them.
-
-    Where the registration could be read more than one way, this takes the
-    most literal reading and says so rather than choosing the kinder one:
-
-    * **Population**: every settled opinion (won, lost or push), every
-      market, pooled — "opinions, not bets", so NO edge bar. The per-market
-      "bets" view is a different stream and is not this number. Voids
-      returned the stake and unsettleable rows produced no result, so
-      neither is a settled opinion and neither counts toward the floor.
-    * **Correction**: the pooled interval widened (Bonferroni) for the
-      number of markets measured, as the per-market intervals are — the
-      registration says "corrected across the markets measured" of the
-      pooled return itself.
-    * **Interval**: `stats.roi_interval`, the same interval every
-      per-market figure in this report uses. It treats every wager as an
-      independent draw; the doc names no clustering.
-
-    Below the floor the number is still computed and kept in the payload —
-    it is evidence — but `reading` is "below_floor", and the rendered page
-    does not print it: "Do not read the number."
-
-    `decision_due` is False before the decision date. Nothing before that
-    date is the decision, whatever the reading: "If a mid-season result
-    looks strong, the correct action is nothing."
+    `rows` are settled wagers (won, lost or push) after the best-price
+    collapse. The floor is counted in this population's own units — its
+    own settled opinions. The interval is widened (Bonferroni) for the
+    markets measured, the same family every per-market interval uses.
+    `corrected_interval` describes that interval — below the floor,
+    spanning zero, or excluding it on one side — and nothing more: which
+    registered outcome it would be depends on a population nobody has yet
+    chosen.
     """
     from nhl_betting_lab.stats import roi_interval
 
-    count = int(len(settled))
+    count = int(len(rows))
     stat: dict = {
-        "decision_date": DECISION_DATE,
-        "decision_due": now.date().isoformat() >= DECISION_DATE,
-        "sample_floor": SAMPLE_FLOOR,
+        "definition": definition,
         "settled_opinions": count,
         "meets_floor": count >= SAMPLE_FLOOR,
-        "markets": list(markets),
         "looks": len(markets),
-        "reading": "below_floor",
+        "corrected_interval": "below_floor",
     }
     if count:
         interval = roi_interval(
-            settled["profit_units"].astype(float).tolist(),
-            wins=int((settled["outcome"] == "won").sum()),
-            pushes=int((settled["outcome"] == "push").sum()),
+            rows["profit_units"].astype(float).tolist(),
+            wins=int((rows["outcome"] == "won").sum()),
+            pushes=int((rows["outcome"] == "push").sum()),
             looks=len(markets),
         )
         stat["profit_units"] = interval.profit
@@ -1025,18 +987,80 @@ def registered_statistic(
         stat["adjusted_high"] = interval.adjusted_high
         # The same `RoiInterval` rule the per-market column reads: under
         # TOO_FEW_TO_SURVIVE bets nothing survives, whatever the bounds say.
-        # The 3,000 floor makes that unreachable for a reading, and the
-        # reading is taken from this property anyway, so it can never say
-        # "excludes zero" of a sample the verdicts call far too few.
+        # The 3,000 floor makes that unreachable here, and the description
+        # is taken from this property anyway, so it can never say "excludes
+        # zero" of a sample the verdicts call far too few.
         stat["survives_correction"] = interval.survives_correction
     if stat["meets_floor"]:
         if not stat["survives_correction"]:
-            stat["reading"] = "spans_zero"
+            stat["corrected_interval"] = "spans_zero"
         elif stat["adjusted_low"] > 0.0:
-            stat["reading"] = "excludes_zero_positive"
+            stat["corrected_interval"] = "excludes_zero_positive"
         else:
-            stat["reading"] = "excludes_zero_negative"
+            stat["corrected_interval"] = "excludes_zero_negative"
     return stat
+
+
+def registered_statistic(
+    settled: pd.DataFrame, markets: list[str], *, now: datetime
+) -> dict:
+    """The number docs/when_this_ends.md decides the lab on — twice, because
+    the registration can be read to mean two populations.
+
+    The registration: "the forward ledger's pooled return on frozen
+    opinions, one bet per wager at the best price the card could have taken,
+    corrected across the markets measured", read against a floor of 3,000
+    settled opinions on 2027-04-25. Until this existed the report produced
+    only per-market figures, so nothing in the house computed the number the
+    rule reads.
+
+    It does not say which opinions. "Opinions, not bets" reads as every
+    settled opinion, whatever its edge: A, `population_every_opinion`. That
+    pools both sides of every priced line, so it carries the whole margin
+    and reads negative from the vig alone. The same sentence goes on "the
+    card is dark and places none, but a frozen opinion scored against the
+    price it was frozen at is the same test", and the edge bar is among the
+    things the doc freezes for the test, which reads as the opinions the
+    card would have bet: B, `population_clears_edge_bar`, the per-market
+    Bets stream's own rule (`edge_bar`). Choosing between them is Cooper's
+    decision, not code's, so both are computed the same way, each is
+    counted against the floor in its own settled opinions, and
+    `population_undecided` is True. Neither carries a registered outcome.
+
+    `settled` is the report's own settled wagers — already collapsed by
+    `closing_lines.collapse_to_best`, so both populations count exactly
+    what the per-market table counts — and `markets` the markets among
+    them. Both populations use the same family of `len(markets)` looks.
+
+    Below the floor a population's number is still computed and kept in the
+    payload, as evidence, but the rendered page does not print it: "Do not
+    read the number."
+
+    `decision_due` is False before the decision date. Nothing on the page is
+    the decision while the population is undecided, and nothing before that
+    date is the decision whatever the population: "If a mid-season result
+    looks strong, the correct action is nothing."
+    """
+    if len(settled):
+        bars = settled["market"].astype(str).map(edge_bar)
+        clears = settled[settled["edge"].astype(float) >= bars]
+    else:
+        clears = settled
+    return {
+        "decision_date": DECISION_DATE,
+        "decision_due": now.date().isoformat() >= DECISION_DATE,
+        "sample_floor": SAMPLE_FLOOR,
+        "population_undecided": True,
+        "markets": list(markets),
+        "population_every_opinion": _population_statistic(
+            settled, markets,
+            REGISTERED_POPULATIONS["population_every_opinion"],
+        ),
+        "population_clears_edge_bar": _population_statistic(
+            clears, markets,
+            REGISTERED_POPULATIONS["population_clears_edge_bar"],
+        ),
+    }
 
 
 def build_forward_report(
@@ -1098,11 +1122,7 @@ def build_forward_report(
     )
     for market_key in markets:
         subset = settled[settled["market"].astype(str) == market_key]
-        market = MARKETS_BY_KEY.get(market_key)
-        bar = (
-            MIN_PROP_EDGE if market is not None and market.is_prop else MIN_EDGE
-        )
-        bets = subset[subset["edge"].astype(float) >= bar]
+        bets = subset[subset["edge"].astype(float) >= edge_bar(market_key)]
         entry: dict = {
             "opinions": int(len(subset)),
             "first_date": str(subset["snapshot_date"].min()),
@@ -1145,101 +1165,106 @@ def build_forward_report(
     return payload
 
 
-def _registered_section(stat: dict | None) -> list[str]:
-    """The registered decision statistic, in the registration's own words.
+#: How each population is labelled on the page, in the order shown.
+_POPULATION_LABELS = (
+    ("population_every_opinion", "A. Every settled opinion"),
+    ("population_clears_edge_bar", "B. Opinions clearing the edge bar"),
+)
 
-    It states the current reading and never announces a decision early:
-    before the decision date every reading, a strong one included, is
-    labelled as not the decision. Below the floor the pooled number is not
-    printed, because the registration's instruction for that row is "Do not
-    read the number" — it stays in the JSON payload as evidence.
+
+def _population_row(label: str, stat: dict, floor: int) -> str:
+    """One population's row: its count against the floor and, at or above
+    the floor, its interval described — never a registered outcome."""
+    count = int(stat["settled_opinions"])
+    against = (
+        f"{count:,}, against the floor of {floor:,}"
+        + (" — floor met" if stat["meets_floor"] else " — below the floor")
+    )
+    if not stat["meets_floor"]:
+        return (
+            f"| {label} | {against} | Not printed: below the floor. Do not "
+            "read the number. | — | — | — |"
+        )
+    spans = {
+        "spans_zero": "spans zero (no demonstrated edge)",
+        "excludes_zero_positive": "excludes zero, positive",
+        "excludes_zero_negative": "excludes zero, negative",
+    }[stat["corrected_interval"]]
+    return (
+        f"| {label} | {against} | {stat['roi']:+.1%} "
+        f"({stat['profit_units']:+.1f}u) "
+        f"| {stat['low']:+.1%} .. {stat['high']:+.1%} "
+        f"| {stat['adjusted_low']:+.1%} .. {stat['adjusted_high']:+.1%} "
+        f"| {spans} |"
+    )
+
+
+def _registered_section(stat: dict | None) -> list[str]:
+    """Both readings of the registered statistic, side by side, and no
+    outcome attached to either.
+
+    The registration is ambiguous on which population it means, so this
+    names the ambiguity, shows each population's definition and its count
+    against the floor, and says in terms that no reading is the decision:
+    not before 2027-04-25, and not after it either until Cooper has decided
+    the population. Below the floor a population's number is not printed
+    ("Do not read the number"); it stays in the JSON as evidence.
     """
     if not stat:
         # A payload written before the statistic existed. Say nothing
         # rather than guess at it.
         return []
     floor = int(stat["sample_floor"])
-    count = int(stat["settled_opinions"])
-    looks = int(stat.get("looks", 0))
+    date = stat["decision_date"]
     lines = [
         "## Registered decision statistic",
         "",
         (
             "docs/when_this_ends.md registers the stop/continue decision on "
-            "one number: the forward ledger's pooled return on frozen "
-            "opinions, one bet per wager at the best price the card could "
-            "have taken, corrected across the markets measured. This is that "
-            "number on its most literal reading: every settled opinion in "
-            "every market, pooled, one per wager after the best-price "
-            "collapse, with no edge bar (\"opinions, not bets\"); its 95% "
-            "interval widened (Bonferroni) for the markets measured; each "
-            "wager treated as an independent draw, as in the table above. "
-            "That reading is recorded, not chosen for its result. It pools "
-            "every priced side, both sides of a two-sided line included; "
-            "pooling only the opinions that clear the shipped edge bar (the "
-            "Bets column above) is another reading and would give another "
-            "number. Which one the registration means, and whether its "
-            "interval should be clustered by game, are open owner "
-            "decisions, not this report's."
+            "\"the forward ledger's pooled return on frozen opinions, one "
+            "bet per wager at the best price the card could have taken, "
+            "corrected across the markets measured\", against a floor of "
+            f"{floor:,} settled opinions. **The registration is ambiguous on "
+            "which population it means, and Cooper must decide before "
+            f"{date}.** \"Opinions, not bets\" reads as every settled "
+            "opinion (A), which pools both sides of every priced line and so "
+            "carries the whole margin. \"A frozen opinion scored against the "
+            "price it was frozen at is the same test\", with the edge bar "
+            "among what the registration freezes, reads as the opinions the "
+            "card would have bet (B). Both are computed below the same way: "
+            "one per wager after the best-price collapse, pooled across "
+            "markets, the 95% interval widened (Bonferroni) for the markets "
+            "measured, each wager an independent draw, and each counted "
+            "against the floor in its own settled opinions."
         ),
         "",
         (
-            f"- Decision date: {stat['decision_date']}. "
+            "**No reading here is the decision.** No registered outcome is "
+            "attached to either population while the population is "
+            "undecided. "
             + (
-                "The date has arrived; the reading below is the registered "
-                "outcome."
+                "The decision date has arrived; the decision waits on "
+                "Cooper's choice of population."
                 if stat["decision_due"]
-                else f"The decision is not due until {stat['decision_date']}"
-                ", and nothing on this page before then is the decision. "
-                "\"If a mid-season result looks strong, the correct action "
-                "is nothing.\""
+                else f"The decision is not due until {date}, and a reading "
+                "before then decides nothing: \"If a mid-season result looks "
+                "strong, the correct action is nothing.\""
             )
-        ),
-        (
-            f"- Settled opinions: {count:,}, against the registration's "
-            f"floor of {floor:,}"
-            + (" — floor met." if stat["meets_floor"] else " — below the floor.")
         ),
         "",
+        (
+            "| Population | Settled opinions | Pooled return "
+            "| 95% interval, uncorrected | Corrected interval "
+            "| Against zero |"
+        ),
+        "|:--|:--|:--|:--|:--|:--|",
     ]
-    result, means, happens = REGISTERED_OUTCOMES[stat["reading"]]
-    if stat["reading"] == "below_floor":
-        lines.append(
-            f"Current reading: {result}. What it means under the "
-            f"registration: {means.lower()}. What happens: {happens}"
-        )
-        lines.append("")
-        lines.append(
-            (
-                "On the decision date this row means the pipeline failed, "
-                "not the model. Before then it is where every season starts. "
-                if not stat["decision_due"]
-                else "This means the pipeline failed, not the model. "
-            )
-            + "The pooled number is kept in forward_evidence.json as "
-            "evidence and deliberately not printed here."
-        )
-        lines.append("")
-        return lines
-    lines.append(
-        f"Current reading: {result} — pooled return "
-        f"{stat['roi']:+.1%} ({stat['profit_units']:+.1f}u) over {count:,} "
-        f"settled opinions in {looks} market(s); 95% interval "
-        f"{stat['low']:+.1%} .. {stat['high']:+.1%} uncorrected, "
-        f"{stat['adjusted_low']:+.1%} .. {stat['adjusted_high']:+.1%} "
-        "corrected."
-    )
+    for key, label in _POPULATION_LABELS:
+        lines.append(_population_row(label, stat[key], floor))
     lines.append("")
-    lines.append(f"What it means under the registration: {means}. "
-                 f"What happens: {happens}")
+    for key, label in _POPULATION_LABELS:
+        lines.append(f"- **{label}**: {stat[key]['definition']}.")
     lines.append("")
-    if not stat["decision_due"]:
-        lines.append(
-            "This is the current reading, not the decision. The decision is "
-            f"not due until {stat['decision_date']}, and a reading before "
-            "then decides nothing."
-        )
-        lines.append("")
     return lines
 
 
