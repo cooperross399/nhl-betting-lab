@@ -61,7 +61,12 @@ a default directory is not in it, and nothing here will notice; the probe
 proves only that the helper covers every default in the list, not that every
 test uses it. The audit hook this module installs in its subprocess is the
 tool that finds the next one: run the whole suite under it in a checkout that
-holds data.
+holds data. One default is the exception, because it is the one a test can
+WRITE the evidence of record into: `forward_evidence.DATA_DIR` is pointed at
+each test's own scratch directory by `tests/conftest.py` before any test
+runs (`tests/test_no_test_can_freeze_into_the_checkouts_archive.py`). The
+stand-in run here loads no conftest, so every listed test still points it
+away itself.
 """
 
 from __future__ import annotations
