@@ -170,7 +170,7 @@ def _state(root: Path, *, games: int, settled: tuple[str, ...] = (),
     box = root / "raw" / "nhl" / "boxscore"
     box.mkdir(parents=True)
     for game in range(games):
-        (box / f"{2025020001 + game}.json").write_text("{}", encoding="utf-8")
+        (box / f"{2025020001 + game}.json").write_text('{"gameState": "OFF"}', encoding="utf-8")
     processed = root / "processed"
     processed.mkdir(parents=True)
     (processed / "player_game_logs.csv").write_text("game_id,player_id\n1,2\n",

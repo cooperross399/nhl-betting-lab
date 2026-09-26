@@ -300,7 +300,10 @@ jobs:
           # inside any sensible job timeout, and a run killed at the timeout
           # produces no card at all. A cold cache therefore fills over
           # consecutive days rather than in one heroic run; in steady season
-          # there are about a dozen new games a night and this is instant.
+          # there are about a dozen new games a night. A game the schedule
+          # says has not been played is not asked for at all: it used to be,
+          # every run, so a season's worth of future games was re-requested
+          # nightly and could take the cap's places from real finals.
           #
           # The fetch fails when the NHL API could not be reached, and that
           # failure is what "Record what went wrong" reads to call the run
@@ -380,10 +383,16 @@ jobs:
           : > run_degraded.txt
           : > run_quiet.txt
           # `|| true`: under bash -eo pipefail (declared under `defaults:`
-          # above), `find` on a missing cache fails the substitution. That
-          # ends this step before it writes `degraded` at all, so the coldest
-          # run would read as clean.
-          games=$(find data/raw/nhl/boxscore -name '*.json' 2>/dev/null | wc -l || true)
+          # above), `grep` on a missing cache, or one holding no final game,
+          # fails the substitution. That ends this step before it writes
+          # `degraded` at all, so the coldest run would read as clean.
+          #
+          # FINAL boxscores only, the same states as nhl_api.game_is_final.
+          # This counted every file, and until fetch_boxscore stopped caching
+          # non-final answers the fetch left one per scheduled game, so a
+          # thin history padded with a season of future games read as
+          # healthy. A restored cache can still hold those files.
+          games=$(grep -rliE --include='*.json' '"gameState":[[:space:]]*"(OFF|FINAL)"' data/raw/nhl/boxscore 2>/dev/null | wc -l || true)
           echo "Boxscores cached: $games"
           # 1000 is config.THIN_HISTORY_GAMES: the public board projects
           # nothing from a history below it either, and
