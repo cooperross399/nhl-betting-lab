@@ -426,31 +426,77 @@ jobs:
       - name: Rebuild the measurement reports
         # Soft: a measurement failure must never cost a card, and the card's
         # own gates do not depend on these reports.
+        #
+        # A REPORT MEASURED AGAINST PRICES IS REBUILT ONLY FROM PRICES THIS
+        # RUNNER HOLDS. Every command here used to run unconditionally, and
+        # the bought prices are not on this runner: the restore above takes
+        # this workflow's own newest carrier and lays the purchase's state in
+        # only when no Gameday run carries one, and the carrier it restores
+        # (run 33142173149, 31,815,033 bytes against the purchase's
+        # 86,454,131) holds neither price store. So every run measured
+        # nothing and published it, exit 0, to the gameday-reports artifact:
+        # "0 market(s) have any price-based evidence", a claims headline of
+        # "nothing has been measured against real prices yet", and 12 of 12
+        # markets "no price-based measurement exists" in the bundle, against
+        # a committed record of ten measured markets (-0.3% over 25,911
+        # `late` bets; `points` -4.4% over 6,194). Carrying the prices into
+        # this job is not the fix: it uploads data/processed whole to a
+        # public artifact every day, which would republish paid-for prices
+        # daily for the season. So a store this runner does not hold leaves
+        # the checkout's committed report standing, and the log says so.
         continue-on-error: true
         env:
           PYTHONPATH: src
         run: |
           python scripts/run_props_calibration.py --reuse-samples || \
             python scripts/run_props_calibration.py
-          # The window is named because the store holds two — 4.0 hours before
-          # face-off and 9.5 — and `--phase auto` refuses to measure the
-          # mixture. This step is soft, so an unnamed window would have left
-          # the previous report in place looking current. `late` runs last on
-          # purpose: every run writes the contract filename too.
-          python scripts/run_player_props_backtest.py --phase card --label card
-          python scripts/run_player_props_backtest.py --phase late
-          # The team store holds two windows too, and prices captured after
-          # face-off; the measurement now refuses an unnamed window rather
-          # than taking the better of two moments. `late` is the window
-          # nearest the card's and holds most of the store.
-          python scripts/run_team_markets_measurement.py --reuse-samples --phase late || \
-            python scripts/run_team_markets_measurement.py --phase late
-          python scripts/run_what_we_can_claim.py
-          # The bundle is assembled here and not on a laptop, because this is
-          # the one place every evidence file exists at once — the shadow
-          # verification and coverage reports only come from live runs, which
-          # only happen where the key lives. A bundle assembled anywhere else
-          # correctly reports itself incomplete.
+          # A store holds prices when it has a row under its header. A file
+          # test alone would take a header-only store for one, and measuring
+          # it reads "nothing bought" exactly as an absent store did.
+          holds_prices() {
+            awk 'NR == 2 { found = 1; exit } END { exit !found }' "$1" 2>/dev/null
+          }
+          props=no
+          team=no
+          if holds_prices data/processed/historical_prop_prices.csv; then props=yes; fi
+          if holds_prices data/processed/historical_team_prices.csv; then team=yes; fi
+          if [ "$props" = yes ]; then
+            # The window is named because the store holds two — 4.0 hours
+            # before face-off and 9.5 — and `--phase auto` refuses to measure
+            # the mixture. This step is soft, so an unnamed window would have
+            # left the previous report in place looking current. `late` runs
+            # last on purpose: every run writes the contract filename too.
+            python scripts/run_player_props_backtest.py --phase card --label card
+            python scripts/run_player_props_backtest.py --phase late
+          else
+            echo "::notice::No bought prop prices are on this runner (data/processed/historical_prop_prices.csv holds no row), so the props backtests were not rebuilt and the committed player_props_backtest.md and player_props_backtest_card.md stand. Measured here, they would report that nothing has been measured, which is false."
+          fi
+          if [ "$team" = yes ]; then
+            # The team store holds two windows too, and prices captured after
+            # face-off; the measurement now refuses an unnamed window rather
+            # than taking the better of two moments. `late` is the window
+            # nearest the card's and holds most of the store.
+            python scripts/run_team_markets_measurement.py --reuse-samples --phase late || \
+              python scripts/run_team_markets_measurement.py --phase late
+          else
+            echo "::notice::No bought team prices are on this runner (data/processed/historical_team_prices.csv holds no row), so the team measurement was not rebuilt and the committed team_markets_measurement.md stands."
+          fi
+          # The claims document summarises both measurements and covers
+          # everything or is not the claims document, so it is rebuilt only
+          # when both were; otherwise the committed one stands beside the
+          # committed reports it was written from.
+          if [ "$props" = yes ] && [ "$team" = yes ]; then
+            python scripts/run_what_we_can_claim.py
+          else
+            echo "::notice::The claims document summarises both price measurements and this runner could not rebuild both, so the committed what_we_can_claim.md stands."
+          fi
+          # The bundle is assembled here because the shadow verification and
+          # coverage reports only come from live runs, which only happen
+          # where the key lives. This said it was "the one place every
+          # evidence file exists at once"; it is not, because the bought
+          # prices are not here. The bundle checksums the reports on disk and
+          # names each verdict input it could not read, rather than reading
+          # a measurement it does not have as no measurement.
           python scripts/run_allowlist_evidence.py
 
       - name: Render the card
