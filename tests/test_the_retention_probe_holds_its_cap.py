@@ -45,8 +45,10 @@ What these tests hold, each through the real `main()`:
 * the listing is paid out of the same cap, and stops listing at it;
 * an event already bought costs nothing and is read under any cap, including
   one past the point where buying stopped;
-* a probe the cap cut short records the cut and exits nonzero; one the cap
-  covers probes every selected event and exits 0;
+* a probe the cap cut short leaves the retention record as it was and exits
+  3 (it answers fewer events than were asked, the same reason #202 refuses a
+  probe with a failed request); one the cap covers probes every selected
+  event, writes the record and exits 0;
 * the documented probe commands name a window and hold their cap.
 """
 
@@ -272,6 +274,17 @@ def _probe(
     )
 
 
+SEEDED = '{"events_probed": 2723, "table": "built from the cache"}\n'
+
+
+def _seed_record(tmp_path: Path) -> Path:
+    """A retention record already on disk, as the cache-derived one is."""
+    path = tmp_path / "out" / "historical_props_retention.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(SEEDED, encoding="utf-8")
+    return path
+
+
 def _record(tmp_path: Path) -> dict:
     return json.loads(
         (tmp_path / "out" / "historical_props_retention.json").read_text(
@@ -376,6 +389,7 @@ def test_the_cap_admits_only_what_the_estimate_affords(
     two it could not afford were skipped."""
     selected = _selected()
     _cache(tmp_path, selected[4])
+    kept = _seed_record(tmp_path)
     fake = _Historical(charge=107)
 
     code = _probe(tmp_path, monkeypatch, fake, cap=300)
@@ -383,16 +397,13 @@ def test_the_cap_admits_only_what_the_estimate_affords(
 
     assert fake.asked == [selected[0]["id"], selected[1]["id"]]
     assert fake.billed == 1 + 2 * 107 == 215 <= 300
-    record = _record(tmp_path)
-    assert record["events_probed"] == 3
-    assert record["events_from_cache"] == 1
-    assert record["events_skipped_for_budget"] == 2
-    assert record["events_selected"] == 5
-    assert record["credit_cap"] == 300
-    assert record["credits_spent"] == 215
     assert "Total spend this run: 215 credit(s), against a cap of 300." in printed.out
-    # Cut short by the cap: the record says so, and so does the exit code.
+    assert "cut this probe to 3 of the 5 event(s)" in printed.err
+    assert "2 could not be afforded" in printed.err
+    # Cut short by the cap: the exit says so, and the record it would have
+    # thinned is left exactly as it was.
     assert code == 3
+    assert kept.read_text(encoding="utf-8") == SEEDED
 
 
 def test_a_charge_above_the_estimate_stops_on_measured_spend(
@@ -411,17 +422,18 @@ def test_a_charge_above_the_estimate_stops_on_measured_spend(
     fake = _Historical(charge=400)
     assert 5 * PER_EVENT <= 1000 and 1 + 4 * 400 > 1001
 
+    kept = _seed_record(tmp_path)
+
     code = _probe(tmp_path, monkeypatch, fake, cap=1001)
     printed = capsys.readouterr()
 
     assert fake.asked == [selected[0]["id"], selected[1]["id"]]
     assert fake.billed == 801 <= 1001
     assert "MEASURED" in printed.out + printed.err
-    record = _record(tmp_path)
-    assert record["events_probed"] == 3
-    assert record["events_skipped_for_budget"] == 2
-    assert record["credits_spent"] == 801
+    assert "Total spend this run: 801 credit(s), against a cap of 1001." in printed.out
+    assert "cut this probe to 3 of the 5 event(s)" in printed.err
     assert code == 3
+    assert kept.read_text(encoding="utf-8") == SEEDED
 
 
 def test_a_failed_request_is_charged_the_worst_case(

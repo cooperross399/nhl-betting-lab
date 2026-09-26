@@ -97,6 +97,12 @@ jobs:
         # bulk endpoint, and asking for it there makes the provider refuse the
         # whole request with a 422 that names nothing. Asking one at a time
         # means a single bad name cannot hide the others.
+        #
+        # Only a 422 is "not a market". A 5xx, a timeout, a 401 or a 429 is
+        # listed under not_answered / not_asked and the script exits 4, so
+        # this step's outcome is `failure` and the summary below says the
+        # probe is incomplete. Until 2026-09-26 every failed request was
+        # written off as "not a market at all" and the step went green.
         id: probe
         if: ${{ inputs.probe_every_market == true }}
         continue-on-error: true
@@ -168,6 +174,10 @@ jobs:
             echo "### Markets the provider serves"
             echo
             if [ -f data/outputs/nhl_market_discovery.json ]; then
+              if [ "${PROBE_OUTCOME:-}" = "failure" ]; then
+                echo 'The probe did not get a verdict on every candidate market (outcome: failure). A market under `not_answered` was asked and the request failed; one under `not_asked` was never asked. Neither says anything about whether the market exists: only `not_a_market` (an HTTP 422 after `h2h` answered) does.'
+                echo
+              fi
               echo '```json'
               cat data/outputs/nhl_market_discovery.json
               echo '```'
