@@ -24,7 +24,8 @@ historical backtest uses, because a second copy of either is how every join
 bug in this repository started. Settled rows append to the forward ledger; a
 player who never dressed voids (stake returned), and a row whose game never
 produced a result within the patience window is recorded as unsettleable,
-counted, never guessed.
+counted, never guessed. The ledger is rewritten whole or not at all, and a
+ledger that cannot be read is refused by name rather than written over.
 
 **Report.** `data/outputs/forward_evidence.md`: per-market accumulating
 intervals in the house vocabulary — sample sizes beside every number,
@@ -40,14 +41,15 @@ import json
 import math
 import os
 import secrets
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
 import pandas as pd
 
-from nhl_betting_lab.stores import existing_row_count, read_store
+from nhl_betting_lab.stores import CorruptStoreError, existing_row_count, read_store
 
 from nhl_betting_lab.backtest.team_walk_forward import (
     settle_moneyline,
@@ -282,6 +284,23 @@ def _publish_whole(frame: pd.DataFrame, target: Path) -> bool:
     as the in-place write raised it. The encoding and line ending are the
     ones `to_csv(target)` used, so a complete snapshot's bytes are unchanged.
     """
+    with _durable_temporary(frame, target) as temporary:
+        try:
+            os.link(temporary, target)
+        except FileExistsError:
+            return False
+        return True
+
+
+@contextmanager
+def _durable_temporary(frame: pd.DataFrame, target: Path) -> Iterator[Path]:
+    """`frame` written, flushed and fsynced to a temporary beside `target`.
+
+    The one implementation of the first half of `_publish_whole` and
+    `_replace_whole`; each decides how the name is published. The temporary
+    is named as `_publish_whole` describes and is removed on the way out,
+    whatever happened; once published it is already gone.
+    """
     temporary = target.with_name(
         f".{target.name}.{os.getpid()}.{secrets.token_hex(4)}{PARTIAL_SUFFIX}"
     )
@@ -290,13 +309,56 @@ def _publish_whole(frame: pd.DataFrame, target: Path) -> bool:
             frame.to_csv(stream, index=False, lineterminator="\n")
             stream.flush()
             os.fsync(stream.fileno())
-        try:
-            os.link(temporary, target)
-        except FileExistsError:
-            return False
-        return True
+        yield temporary
     finally:
         temporary.unlink(missing_ok=True)
+
+
+def _replace_whole(frame: pd.DataFrame, target: Path) -> None:
+    """Put `frame` at `target` whole or not at all, over what stood there.
+
+    ## A cut-short ledger write used to stand, and cost settled rows for good
+
+    `settle_snapshots` rewrites the whole forward ledger on every pass that
+    settles a day, old rows first, and did it with
+    `frame.to_csv(ledger_path)` straight onto the file: #146 made snapshots
+    atomic and left this writer in place. A write cut short (the job
+    cancelled or timed out, the disk full) left part of a ledger standing.
+    The failure-shape audit reproduced it through the real runner on six
+    real April 2026 slates, where the second pass rewrote 14,281,893 bytes.
+    Cut inside the quoted verdicts field, the ledger stopped parsing and
+    every later run died with a ParserError and wrote no report. Cut at a
+    row boundary in 2026-04-13, 5,171 of its 10,340 rows were lost, and the
+    rows that did land marked the day settled, so the rest never settled.
+    Cut inside history an earlier pass had settled and marked, 7,508 of
+    2026-04-09's 15,015 rows and all 15,339 of 2026-04-11's were lost with
+    both days still marked. A SIGKILL 20 ms into rewriting a 25,800-row
+    ledger left 3,158 rows, and the next pass exited 0. The shrink guard
+    could not fire: its floor is counted off the torn file itself.
+
+    So the ledger goes the way a snapshot does: the bytes are written to a
+    temporary in the same directory and fsynced there, and only then is the
+    ledger's name moved onto them. `os.replace` rather than `os.link`,
+    because the ledger is meant to be superseded: runs are serialised by the
+    Gameday Refresh concurrency group, and the shrink guard has already
+    compared this frame against the file it replaces. A rename within one
+    directory is atomic, so the name holds the old ledger or the new one and
+    never a prefix of either. The directory is fsynced after the rename, so
+    the new name is durable before `settle_snapshots` marks a day settled on
+    the strength of it.
+    """
+    with _durable_temporary(frame, target) as temporary:
+        os.replace(temporary, target)
+    _fsync_directory(target.parent)
+
+
+def _fsync_directory(directory: Path) -> None:
+    """Make a rename in `directory` durable."""
+    descriptor = os.open(directory, os.O_RDONLY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
 
 
 def read_snapshot(path: Path) -> tuple[pd.DataFrame | None, str]:
@@ -339,6 +401,67 @@ def read_snapshot(path: Path) -> tuple[pd.DataFrame | None, str]:
     if missing:
         return None, f"missing column(s) {', '.join(missing)}"
     return frame, ""
+
+
+def _read_ledger(path: Path) -> pd.DataFrame:
+    """The whole forward ledger, or `CorruptStoreError` naming the file.
+
+    No ledger yet is an empty one. A ledger holding only its header is empty
+    too: it has nothing to lose.
+
+    ## A damaged ledger used to kill every later pass with a bare traceback
+
+    `settle_snapshots` began with `pd.read_csv(ledger_path,
+    usecols=["snapshot_date"])` and no handler, and `run_forward_evidence.py`
+    catches nothing it raises but `UnresolvedTeamsError`. A ledger torn by a
+    cut-short write (see `_replace_whole`) made that read raise, so the
+    runner exited 1 on that pass and on every later one, with no report and
+    nothing settled; the audit measured "EOF inside string starting at row
+    45122" on a 10,940,638-byte cut. No bytes at all, or half a character,
+    raised the same way. Half a header parsed as a ledger with no rows and
+    the wrong columns, which the append then wrote over.
+
+    Now each of those is refused here, by name, before any day is settled or
+    marked, and the file is left exactly as it is. The runner reports it
+    with `::error::` and exits 2. Nothing is guessed: a ledger with no
+    header, which the writer never produces, is damage, not emptiness, and
+    writing a day's rows over it would publish that day as the season. The
+    one read serves the append as well, so what is appended to is what was
+    checked here.
+    """
+    if not path.is_file():
+        return pd.DataFrame(columns=list(LEDGER_COLUMNS))
+    with path.open("rb") as handle:
+        has_header = any(line.strip() for line in handle)
+    if not has_header:
+        raise CorruptStoreError(_unreadable_ledger(path, "it holds no header"))
+    try:
+        frame = read_store(path, columns=LEDGER_COLUMNS, for_append=True)
+    except CorruptStoreError as error:
+        cause = error.__cause__ or error
+        detail = str(cause).strip().splitlines()
+        raise CorruptStoreError(
+            _unreadable_ledger(
+                path, f"{type(cause).__name__}: {detail[0] if detail else ''}"
+            )
+        ) from error
+    missing = [column for column in LEDGER_COLUMNS if column not in frame.columns]
+    if missing:
+        raise CorruptStoreError(
+            _unreadable_ledger(path, f"missing column(s) {', '.join(missing)}")
+        )
+    return frame
+
+
+def _unreadable_ledger(path: Path, reason: str) -> str:
+    return (
+        f"{path} cannot be read as the forward ledger ({reason}). Nothing was "
+        "settled, marked or appended, and the file was left exactly as it "
+        "is: the ledger is append-only and cannot be rebuilt, so writing over "
+        "a damaged one would publish a shorter history as the whole season. "
+        "Restore the last whole copy from the card-feed branch's history or "
+        "a gameday-state artifact, then re-run."
+    )
 
 
 @dataclass
@@ -602,12 +725,11 @@ def settle_snapshots(
         marker.name.removesuffix(".settled")
         for marker in directory.glob("*.settled")
     }
-    if ledger_path.is_file():
-        settled_days |= set(
-            pd.read_csv(ledger_path, usecols=["snapshot_date"])[
-                "snapshot_date"
-            ].astype(str)
-        )
+    # Read once, strictly, before anything is marked: a ledger that cannot
+    # be read is refused here by name (see `_read_ledger`), and the same
+    # frame is what the new rows are appended to below.
+    existing = _read_ledger(ledger_path)
+    settled_days |= set(existing["snapshot_date"].astype(str))
 
     pending: list[tuple[str, pd.DataFrame]] = []
     for path in sorted(directory.glob("*.csv")):
@@ -725,9 +847,9 @@ def settle_snapshots(
         frame = pd.DataFrame(new_rows, columns=list(LEDGER_COLUMNS))
         existing_rows = 0
         if ledger_path.is_file():
-            existing = read_store(
-                ledger_path, columns=LEDGER_COLUMNS, for_append=True
-            )
+            # `existing` is the strict read taken at the top of the pass,
+            # through `read_store(for_append=True)`.
+            #
             # THE FLOOR IS NOT THE PARSE. `len(existing)` is what pandas
             # managed to read; `existing_row_count` is a line count taken
             # straight off the file. A guard whose floor comes from the same
@@ -761,7 +883,13 @@ def settle_snapshots(
                 "append-only and cannot be rebuilt; something upstream lost "
                 "rows."
             )
-        frame.to_csv(ledger_path, index=False, lineterminator="\n")
+        # Whole or not at all. This was `frame.to_csv(ledger_path)`, written
+        # in place: a cut-short rewrite left a torn ledger standing, which
+        # lost the tail of the pass, or days settled and marked long before
+        # it, or stopped every later pass (see `_replace_whole`). A failure
+        # now leaves the old ledger byte for byte and no day marked, so the
+        # next pass settles them all again.
+        _replace_whole(frame, ledger_path)
     # MARKED ONLY NOW. These were touched inside the loop, before the write,
     # so when `read_store` refused a damaged ledger or the shrink guard
     # refused a short one, every day of the pass was already marked, its
