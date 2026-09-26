@@ -29,6 +29,16 @@ A card that is *blocked* is a degraded run, not a quiet one. "No card, because
 no market is allowlisted" is information, and the first time it appears it must
 arrive.
 
+That rule is about posting. Whether the *run* is degraded is decided in
+Gameday Refresh, from the card's `nothing_to_card`. A degraded run finishes
+red, publishes `degraded: true` to card-feed, and leaves the 15:00 backup free
+to run. A card blocked by the policy alone, or on a day with no game left to
+card, still posts but leaves the run clean, because no later run could build a
+card either. Every other block is a fault and degrades the run. Until
+2026-09-26 the workflow never read the card. A card blocked because the board
+priced 7 of 8 games therefore posted here as degraded, while the run
+published itself as clean and the backup stood down.
+
 ## What "changed" means
 
 The fingerprint compares selections — market, player, side, line — and not

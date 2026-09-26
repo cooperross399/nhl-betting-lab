@@ -937,6 +937,16 @@ Re-derive rather than trust if the data has moved.
   whenever the primary did not finish or finished degraded.
 - **Gameday Refresh runs green end to end** (verified 2026-08-26: live team
   prices staged, models fitted, card correctly blocked, comment posted).
+  That card was blocked by the policy alone, because nothing was allowlisted
+  then, and such a block is still a green run. **Since 2026-09-26 a card
+  blocked by anything else on a game day is a degraded run**: red,
+  `degraded: true` on card-feed, and the 15:00 backup runs. That covers a
+  market priced for 7 of 8 games, stale prices, a model that would not fit,
+  no prices at all, and a policy file that does not load. Until then the
+  workflow read only the card step's exit, which is 0 on every blocked card,
+  so such a run published itself as clean and stood the backup down
+  (`tests/test_a_blocked_card_is_a_degraded_run.py`). The card's
+  `nothing_to_card` says which kind of block it is.
   Props return no rows this far from the season — an absence, not a fault.
   The alternate ladders and all per-event markets ride the per-event fetch;
   asking the bulk endpoint for them 422s the whole request.

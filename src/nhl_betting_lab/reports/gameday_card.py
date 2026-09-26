@@ -159,6 +159,10 @@ class GamedayCard:
     #: question a reader asks, and the answer must not be buried in a log.
     unresolved_names: list[str] = field(default_factory=list)
     blockers: list[str] = field(default_factory=list)
+    #: Why a card that was not built is NOT a fault, when it is not; empty
+    #: otherwise (see `why_nothing_to_card`). Gameday Refresh reads this: a
+    #: blocked card with it empty is a degraded run.
+    nothing_to_card: str = ""
     notes: list[str] = field(default_factory=list)
     safety: dict[str, bool] = field(
         default_factory=lambda: {
@@ -326,6 +330,70 @@ def build_candidates(
     return selections, passes
 
 
+#: The two blocked cards that are not faults. Everything else that blocks a
+#: card is one.
+NOTHING_ALLOWLISTED = (
+    "The provider policy allowlists no market this card can pick from, so no "
+    "run today could build one. That is the policy's decision, not a fault, "
+    "and it does not degrade the run."
+)
+NO_GAME_LEFT = (
+    "No regular-season game is left to card today: the slate holds none, and "
+    "the schedule has none still to be played on this league day. Not a "
+    "fault, and it does not degrade the run."
+)
+
+
+def why_nothing_to_card(
+    *,
+    faults: Sequence[str],
+    eligible: Sequence[str],
+    slate_games: int,
+    allowlisted_markets: Sequence[str] | None,
+    scheduled_games: int | None,
+) -> str:
+    """Why a blocked card is not a fault, or "" when it is one.
+
+    Gameday Refresh used to judge the run by the card step's exit alone, and
+    that step exits 0 on every blocked card. Found by the failure-shape
+    audit on the real 2026-10-01 slate: 8 games scheduled and the 09:30
+    board pricing 7, so moneyline, puck_line and total_goals each read
+    "Priced for 7 of 8 games" and the card was blocked. The run still
+    published `degraded: false` to card-feed, finished green, and stood the
+    15:00 backup down, while the comment went out as a degraded run. The
+    same card at 15:00Z, with the eighth game posted, builds.
+
+    So a blocked card is a fault, and degrades the run, unless no later run
+    today could build a card either:
+
+    * the policy allowlists no market the card may pick from. The lab
+      shipped in this state, the 2026-08-29 withdrawal returned it to this
+      state, and CLAUDE.md records the 2026-08-26 run in this state as
+      green. A backup would buy the slate again only to be refused again.
+      A withdrawal must only ever reduce what the card does, never double
+      what the day spends; or
+    * no regular-season game is left to card on this league day: nothing on
+      the slate, and none in the schedule still to be played, as on an
+      October morning whose board carries only exhibition games.
+
+    Only the "no market is eligible" block can be either of those. A fault
+    the caller names (stale prices, a model that would not fit, no logs) is
+    always a fault, since it costs the forward ledger the day's opinions
+    whatever the policy says. None means the caller cannot vouch: a policy
+    that did not load, or a schedule cache with holes, never makes a block
+    benign.
+    """
+    if faults or eligible:
+        return ""
+    if allowlisted_markets is not None and not any(
+        market not in HARD_GATED_MARKETS for market in allowlisted_markets
+    ):
+        return NOTHING_ALLOWLISTED
+    if slate_games == 0 and scheduled_games == 0:
+        return NO_GAME_LEFT
+    return ""
+
+
 def build_card(
     prices: pd.DataFrame,
     probabilities: Mapping[tuple, float],
@@ -335,8 +403,17 @@ def build_card(
     now: datetime | None = None,
     juice_limit: int = MAX_DEFAULT_JUICE,
     unresolved_names: Sequence[str] = (),
+    allowlisted_markets: Sequence[str] | None = None,
+    scheduled_games: int | None = None,
 ) -> GamedayCard:
-    """Assemble the card, or explain why there is not one."""
+    """Assemble the card, or explain why there is not one.
+
+    `allowlisted_markets` is what the provider policy allowlists, and
+    `scheduled_games` is how many regular-season games the schedule still
+    has to play on the card's league day. A caller that cannot vouch for
+    either passes None. Both exist only to fill `nothing_to_card`, which
+    says whether a blocked card is a fault (see `why_nothing_to_card`).
+    """
     moment = now or datetime.now(timezone.utc)
     card = GamedayCard(
         generated_at=moment.isoformat(timespec="seconds"),
@@ -366,6 +443,13 @@ def build_card(
     card.notes = _standing_notes(juice_limit)
 
     if card.blockers:
+        card.nothing_to_card = why_nothing_to_card(
+            faults=blockers,
+            eligible=eligible,
+            slate_games=card.slate_games,
+            allowlisted_markets=allowlisted_markets,
+            scheduled_games=scheduled_games,
+        )
         return card
 
     usable = prices[

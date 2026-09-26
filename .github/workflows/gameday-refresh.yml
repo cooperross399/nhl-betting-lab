@@ -417,10 +417,37 @@ jobs:
         # never know the card crashed. It could not, and a crashed card was
         # published as a clean run. The post step reads this file too, so a
         # run with no card posts that instead of staying silent.
+        #
+        # Nor could it know the card came out BLOCKED: the card step exits 0
+        # on a blocked card, rightly, and this step asked only for the exit.
+        # A card blocked because the board priced 7 of the 8 scheduled games
+        # (every market "Priced for 7 of 8 games") so published
+        # `degraded: false`, finished green and stood the 15:00 backup down,
+        # while the comment went out as a degraded run; the same card at
+        # 15:00Z, with the eighth game posted, builds. A skip_provider_fetch
+        # dispatch on a game day did the same with no prices at all, and one
+        # dispatched before 13:30 UTC stood down both scheduled runs, leaving
+        # the day no card and no frozen snapshot. The card now says in
+        # `nothing_to_card` when its block is NOT a fault (the policy
+        # allowlists nothing it may pick from, or no regular-season game is
+        # left to card today, where a rerun would buy the slate again to
+        # learn nothing), and every other blocked card degrades the run. An
+        # empty slate, which the health step wrote to run_quiet.txt, stays
+        # quiet as before.
         if: always()
         run: |
           if [ "${{ steps.card.outcome }}" != "success" ]; then
             echo "The card could not be rendered, so there is no card for today; no earlier card stands in for it." >> run_degraded.txt
+          elif [ -s run_quiet.txt ]; then
+            echo "No NHL games on the board, so a blocked card is not a fault."
+          elif ! blocked=$(jq -r '
+              if .card_generated == true or (.nothing_to_card // "") != "" then empty
+              else "The card was blocked, so there is no card for today: "
+                + ([.blockers[]? | tostring] | join(" "))
+              end' data/outputs/gameday_card.json 2>/dev/null); then
+            echo "The card step finished, but it left no card that could be read, so there is no card for today." >> run_degraded.txt
+          elif [ -n "$blocked" ]; then
+            printf '%s\n' "$blocked" >> run_degraded.txt
           fi
 
       - name: Settle the forward ledger
