@@ -126,7 +126,10 @@ def test_the_regular_game_keeps_its_pick_beside_an_exhibition(tmp_path: Path, mo
     board, _, _ = build_mixed(lab, tmp_path / "out", monkeypatch, SLATE[1][2])
 
     tor = next(g for g in board["games"] if g["home"]["abbr"] == "TOR")
-    assert tor["pick"] == {"market": "Moneyline", "label": "TOR +112", "price": 112, "edgePct": 11.0}
+    # `kind` (bet or lean) is another test's subject; this one is about the
+    # game keeping its pick at all, so it compares the pick without it.
+    pick = {k: v for k, v in tor["pick"].items() if k != "kind"}
+    assert pick == {"market": "Moneyline", "label": "TOR +112", "price": 112, "edgePct": 11.0}
 
 
 @EXHIBITION_IS
