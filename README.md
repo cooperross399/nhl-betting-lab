@@ -148,7 +148,9 @@ PYTHONPATH=src .venv/bin/python scripts/discover_nhl_markets.py --live \
 PYTHONPATH=src .venv/bin/python scripts/run_provider_shadow.py
 
 # Live shadow fetch. Team markets are a handful of credits; props are one
-# credit per market per event and the cap is hard.
+# credit per market per region per event and the cap is hard: 19 markets at
+# the default two regions count 38 credits an event, so 190 buys 5 events.
+# The card reads what this stages, through the policy's gates.
 PYTHONPATH=src .venv/bin/python scripts/run_provider_shadow.py --live --props \
     --credit-cap 190
 
@@ -225,14 +227,15 @@ PYTHONPATH=src .venv/bin/python scripts/buy_historical_team_prices.py \
     --from 2024-10-08 --to 2026-04-15
 ```
 
-Props: between one and ten credits per market per event. The provider documents ten
-for its bulk historical endpoint and is ambiguous about the per-event one, so
-the real rate is read from `x-requests-last` as it is spent and the cap is
-enforced against the pessimistic reading. Team markets come from the bulk
-historical endpoint at `10 x markets x regions` **per snapshot**, so a whole
-slate costs sixty credits at the lab's two regions (`us,us2`) whether it holds
-four games or fourteen. Either way this is a spending decision rather than a
-default.
+Props: between one and ten credits per market per event, per region, and the
+lab asks two regions (`us,us2`). The provider documents ten for its bulk
+historical endpoint and is ambiguous about the per-event one, so the real rate
+is read from `x-requests-last` as it is spent and the cap is enforced against
+the pessimistic reading; measured, it is ten per market returned, per region.
+Team markets come from the bulk historical endpoint at `10 x markets x regions`
+**per snapshot**, so a whole slate costs sixty credits at the lab's two regions
+(`us,us2`) whether it holds four games or fourteen. Either way this is a
+spending decision rather than a default.
 
 ### Gates and tests
 
@@ -348,7 +351,7 @@ must not become the base the season is lost from.
 | Provider Policy PR Gate | PRs touching policy or receipts | no |
 | Gameday Refresh | daily in season, and on demand | yes, capped |
 | Closing Lines | after every Line Movement run; by hand | only when dispatched by hand, capped |
-| Provider Market Discovery | on demand | yes, capped |
+| Provider Market Discovery | on demand; once on 15 October, which asks the three bulk markets only (props, ladders and candidates need a dispatch) | yes, capped |
 | Historical Props Purchase | on demand only, never scheduled | yes, capped, required cap |
 | Venue Probe | on demand only, never scheduled | yes, capped, required cap |
 | Line Movement Capture | several times daily in season | yes, capped |

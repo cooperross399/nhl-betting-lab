@@ -507,9 +507,14 @@ def build_bundle(
         "The checksums above are what makes an approval current. The PR gate "
         "recomputes them, so a receipt citing a report that has since changed "
         "fails rather than passing quietly.",
-        "Allowlisting a market does not skip any other gate. Staging "
-        "validation, completeness, freshness and the puck-drop guard all "
-        "still run on every card.",
+        # Until 2026-09-25 this named "Staging validation" first. No such
+        # gate exists: the card skips a staged file it cannot parse, and its
+        # markets then read as unavailable. The committed bundle, pinned by
+        # the receipt's checksum, still carries the old sentence.
+        "Allowlisting a market does not skip any other gate. Completeness, "
+        "freshness and the puck-drop guard all still run on every card. "
+        "Nothing validates the staged files beyond that: a file the card "
+        "cannot parse is skipped and its markets read as unavailable.",
         "An approval made against this evidence's recommendation is a "
         "legitimate decision, and it stays on the record as one. The EPL lab "
         "has exactly that on file.",
