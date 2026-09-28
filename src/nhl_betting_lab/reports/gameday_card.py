@@ -176,17 +176,35 @@ HARD_GATED_MARKETS: dict[str, str] = {
 #: card is dark and places none, but a frozen opinion scored against the price
 #: it was frozen at is the same test" -- so NOTHING measurable is given up by
 #: declining to stake a market. What is given up is the recommendation.
+#:
+#: Each figure names the window it was measured in, because the backtest
+#: prices at two distances from face-off and they are two different
+#: questions. The card window (9.6 hours out) is
+#: `data/outputs/player_props_backtest_card.md`; the late window (4.1 hours
+#: out) is `player_props_backtest.md`, and `replication.md`'s per-season split
+#: and the evidence bundle's verdict are both cut from the late one (2,726 +
+#: 3,468 = its 6,194 bets). This text once ran the two together as one
+#: measurement; tests/test_the_points_stake_reason_names_the_window_of_every_figure.py
+#: reads the figures back out of those reports. The correction count is
+#: phrased as `stats.correction_family` phrases it: the card window's family
+#: is its 7 markets plus the overall figure, which the committed report still
+#: calls "8 markets tested".
 STAKE_EXCLUDED_MARKETS: dict[str, str] = {
     "points": (
         "`points` is the one market this lab has measured as a loss that "
-        "survives correction: -4.2% over 6,140 card-window wagers, 95% "
-        "interval -6.7% to -1.7%, -7.6% to -0.7% after correcting for the "
-        "eight markets tested, and -256.8 units realised. It holds within "
-        "2025-26 alone (-5.4% over 3,468). The evidence bundle's verdict is "
-        "that \"a loss that survives the correction still argues against "
-        "enabling this market, not for it\". The opinion is still recorded "
-        "and still settles into the forward ledger; only the stake is "
-        "withheld."
+        "survives correction, and it does so in both windows the backtest "
+        "prices. In the card window, 9.6 hours before face-off: -4.2% over "
+        "6,140 wagers, 95% interval -6.7% to -1.7%, -7.6% to -0.7% after "
+        "correcting for the 8 figures measured on the same data (7 markets "
+        "and the overall figure), and -256.8 units realised. "
+        "In the late window, 4.1 hours before face-off: -4.4% over 6,194 "
+        "wagers, 95% interval -6.9% to -2.0%, and it holds within that "
+        "window's 2025-26 season alone "
+        "(-5.4% over 3,468). On the late window the evidence bundle's "
+        "verdict is that \"a loss that survives the correction still argues "
+        "against enabling this market, not for it\". The opinion is still "
+        "recorded and still settles into the forward ledger; only the stake "
+        "is withheld."
     )
 }
 
@@ -833,6 +851,75 @@ def _rows_table(rows: Sequence[Mapping[str, Any]], *, staked: bool) -> list[str]
     return lines
 
 
+def _demoted_leans_by_reason(leans: Sequence[Mapping[str, Any]]) -> list[str]:
+    """Every lean that was good enough to stake, listed under WHY it was not.
+
+    A demoted lean silently sitting in the leans table would make the
+    demotion invisible to the only reader who could judge it, so each one is
+    listed again with its reason. Two passes demote, for two different
+    reasons, and each group gets its own heading: until 2026-09-26 every row
+    carrying a reason was listed under the ladder heading, so a lone `points`
+    rung that no ladder ever touched was told a sibling rung had taken its
+    stake.
+
+    Grouped on the reason the ROW carries, never re-derived here, so the card
+    and the JSON cannot disagree about why. Every demoted row lands in
+    exactly one group -- a reason neither pass is known to write still gets
+    listed, under a heading that claims nothing about it -- because a lean
+    that vanished from this list would be the hidden opinion the demotion
+    exists to avoid.
+    """
+    ladder: list[Mapping[str, Any]] = []
+    excluded: dict[tuple[str, str], list[Mapping[str, Any]]] = {}
+    other: list[Mapping[str, Any]] = []
+    for row in leans:
+        reason = str(row.get("demotion_reason") or "").strip()
+        if not reason:
+            continue
+        market = str(row.get("market", ""))
+        if reason.startswith(LADDER_DEMOTION_PREFIX):
+            ladder.append(row)
+        elif reason == str(STAKE_EXCLUDED_MARKETS.get(market, "")).strip():
+            excluded.setdefault((market, reason), []).append(row)
+        else:
+            other.append(row)
+
+    lines: list[str] = []
+    if ladder:
+        # The reason names the rung that kept the stake, so it differs row
+        # by row and is printed on each.
+        lines.extend(
+            [
+                "One stake per outcome: where a ladder priced one outcome "
+                "at several lines, one rung is staked and the rest are "
+                "recorded here.",
+                "",
+            ]
+        )
+        lines.extend(
+            f"- {_label(row)} (`{row.get('market', '-')}`): "
+            f"{row.get('demotion_reason')}"
+            for row in ladder
+        )
+        lines.append("")
+    for (market, reason), rows in excluded.items():
+        # One reason per market, so it is printed once as the heading and
+        # every rung it withheld is listed beneath. These are leans at zero
+        # units, never passes: the opinion cleared every bar the card sets.
+        lines.extend([f"Stake withheld on `{market}`: {reason}", ""])
+        lines.extend(f"- {_label(row)} (`{market}`)" for row in rows)
+        lines.append("")
+    if other:
+        lines.extend(["Recorded as a lean at zero units, for the reason given:", ""])
+        lines.extend(
+            f"- {_label(row)} (`{row.get('market', '-')}`): "
+            f"{row.get('demotion_reason')}"
+            for row in other
+        )
+        lines.append("")
+    return lines
+
+
 def render_card(card: GamedayCard) -> str:
     lines = [
         "# NHL gameday card",
@@ -876,30 +963,7 @@ def render_card(card: GamedayCard) -> str:
             if card.leans
             else ["_No leans._", ""]
         )
-        # A rung demoted by the one-stake-per-outcome pass is a lean that was
-        # good enough to stake, so the card says which rung took the stake
-        # instead. Silently sitting in the leans table would make the pass
-        # invisible to the only reader who could judge it.
-        demoted = [
-            row
-            for row in card.leans
-            if str(row.get("demotion_reason") or "").strip()
-        ]
-        if demoted:
-            lines.extend(
-                [
-                    "One stake per outcome: where a ladder priced one outcome "
-                    "at several lines, one rung is staked and the rest are "
-                    "recorded here.",
-                    "",
-                ]
-            )
-            lines.extend(
-                f"- {_label(row)} (`{row.get('market', '-')}`): "
-                f"{row.get('demotion_reason')}"
-                for row in demoted
-            )
-            lines.append("")
+        lines.extend(_demoted_leans_by_reason(card.leans))
         lines.extend(
             [
                 "Leans are recorded and not staked.",

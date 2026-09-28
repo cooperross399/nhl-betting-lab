@@ -75,8 +75,10 @@ goalie saves still cannot produce a selection without a confirmed starter.
 
 1. Let `Gameday Refresh` run daily (its schedule covers Sept 29-30 and then
    Oct-Apr) and let the forward ledger accumulate. It is the only genuinely
-   out-of-sample evidence stream, and the only one hits and the regulation
-   three-way will ever have.
+   out-of-sample evidence stream, and the only price evidence the regulation
+   three-way has, which has never been bought historically (it is per-event
+   only and was never requested). (Hits has historical prices from the
+   9.5-hour purchase.)
 2. Watch for books posting player-prop lines in late September; until then
    the card carries team markets only, and that absence is the provider's,
    not a fault.

@@ -236,16 +236,19 @@ def _pay_for(raw: Path, event_id: str) -> None:
 
 
 def _carrier(root: Path, *, events: tuple[str, ...], boxscores: int = 0,
-             team: bool = False) -> Path:
+             team: bool = False, box_state: str = "OFF") -> Path:
     """An artifact rooted where the upload roots it (`data/`): the raw
-    responses, and the price file the real rebuild makes of them."""
+    responses, and the price file the real rebuild makes of them. Its
+    boxscores are final unless `box_state` says otherwise; the restore counts
+    final ones only."""
     raw = root / "raw"
     for event_id in events:
         _pay_for(raw, event_id)
     box = raw / "nhl" / "boxscore"
     for game in range(boxscores):
         box.mkdir(parents=True, exist_ok=True)
-        (box / f"{game}.json").write_text("{}", encoding="utf-8")
+        (box / f"{game}.json").write_text(
+            json.dumps({"id": game, "gameState": box_state}), encoding="utf-8")
     if team:
         (raw / "historical_team_prices").mkdir(parents=True)
         (raw / "historical_team_prices" / TEAM_FILE).write_text(
@@ -659,6 +662,34 @@ def test_a_listing_that_holds_no_carrier_still_buys_fresh(
     assert run.paid == ["Buy a window"], run.paid
     assert run.spent == list(WINDOW)
     assert sorted(run.artifacts) == ["gameday-state", "historical-props"]
+
+
+# --------------------------------------------------------------------------
+# The restore counts final boxscores, not files.
+# --------------------------------------------------------------------------
+
+@pytest.mark.parametrize("shell", SHELLS)
+@pytest.mark.parametrize(("box_state", "counted"), [("OFF", 3), ("FUT", 0)],
+                         ids=["finals", "only-future-games"])
+def test_a_cache_of_future_games_is_said_to_hold_no_boxscores(
+    tmp_path: Path, box_state: str, counted: int, shell: str,
+) -> None:
+    """Until fetch_boxscore stopped caching non-final answers, Gameday Refresh
+    left a `FUT` file per scheduled game in gameday-state. The restore counted
+    files, so a cache holding no result at all read as restored and "No
+    boxscores were restored" stayed silent (tests/test_a_future_game_is_not_
+    fetched_every_run.py)."""
+    chain = Purchase(tmp_path, shell)
+    chain.carrier(GAMEDAY_RUN, workflow=GAMEDAY, artifacts={
+        "gameday-state": _carrier(tmp_path / "a-gameday", events=(), boxscores=3,
+                                  box_state=box_state)})
+
+    run = chain.run("buy")
+
+    assert run.conclusion == "success", run.log
+    assert f"Cached boxscores restored: {counted}\n" in run.log, run.log
+    warned = "No boxscores were restored" in run.log
+    assert warned is (counted == 0), run.log
 
 
 # --------------------------------------------------------------------------
