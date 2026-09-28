@@ -235,7 +235,10 @@ def estimate_credits(*, events: int, markets: int, regions: int = 1) -> int:
     markets, because every alternate ladder bills on its own — so a bound
     computed from the keys asked for is not an upper bound on what is
     charged. The caller therefore also enforces the cap against MEASURED
-    spend, which is the gate that cannot be mis-specified.
+    spend, projected one event ahead at the dearest charge seen: far harder
+    to mis-specify than this estimate, though not impossible, because a
+    per-event charge that rises past the dearest one seen can still carry a
+    run past its cap. `buy_historical_props` reports any such overspend.
 
     `regions` is the multiplier this function omitted for its whole life.
     The provider bills `10 x markets returned x regions`, and the lab asks
@@ -721,11 +724,13 @@ def buy_historical_props(
             # ladder bills on its own — so an estimate built from the keys
             # asked for is not an upper bound at all.
             #
-            # The second gate is the one that cannot be wrong: what the
-            # provider says it has actually charged, read from
-            # `x-requests-last` as it is spent, projected one event ahead at
-            # the dearest charge seen. An estimate can be mis-specified; a
-            # running total of measured spend cannot.
+            # The second gate reads what the provider says it has actually
+            # charged, from `x-requests-last` as it is spent, projected one
+            # event ahead at the dearest charge seen. That is far harder to
+            # mis-specify than an estimate, though not impossible: the total
+            # it adds up is measured, but the next charge is still a
+            # forecast, and a per-event charge that rises past the dearest
+            # one seen overruns it (below).
             #
             # Until 2026-09-26 this asked only whether the total had already
             # REACHED the cap (`credits_spent >= credit_cap`), so the last

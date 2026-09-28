@@ -1,4 +1,4 @@
-"""The historical props buy could spend past its cap by one event, and now cannot.
+"""The historical props buy could spend past its cap by one event; now only a rising charge can, and never silently.
 
 `buy_historical_props` gated its second, MEASURED, gate on
 `buy.credits_spent >= credit_cap`: it asked whether the running total had
@@ -6,9 +6,11 @@ already reached the cap, never what the next event would cost. So the last
 event it started could carry the total straight past the cap. Its siblings,
 `historical_team_prices.buy_team_prices` and
 `probe_retention_under_cap`, project one request ahead at the dearest charge
-seen so far (`credits_spent + largest_charge > cap`), and CLAUDE.md says the
+seen so far (`credits_spent + largest_charge > cap`), and CLAUDE.md said the
 cap is "enforced against the measured running total", the gate that "cannot
-be mis-specified".
+be mis-specified". That overstated it even after this fix (a rising charge
+can still overrun the projection, below), and #247 softens it to "far harder
+to mis-specify than an estimate, though not impossible".
 
 Found by the sweep and proven with a stub (no network, no key, no credits):
 seven markets on one region, an estimate of 70 an event, a provider charging
