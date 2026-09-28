@@ -44,6 +44,7 @@ import yaml
 
 from conftest import FakeResponse, RecordingRequester
 from nhl_betting_lab.config import PROJECT_ROOT
+from nhl_betting_lab.preseason_screen import preseason_screen, schedule_team_names
 from nhl_betting_lab.providers import odds_api
 from nhl_betting_lab.providers.env_file import ProviderEnvLoadResult
 from nhl_betting_lab.providers.team_names import (
@@ -145,19 +146,31 @@ def _requester(board: list[dict]) -> RecordingRequester:
 
 
 def _cache_schedule(
-    raw: Path, clubs: tuple[str, ...], *, with_names: bool = False
+    raw: Path,
+    clubs: tuple[str, ...],
+    *,
+    with_names: bool = False,
+    names: dict[str, dict] | None = None,
+    foreign_opponent: bool = False,
 ) -> None:
     """Club schedules as the NHL API returns them, one file per club in
     `clubs`: tonight's exhibitions as gameType 1, tonight's regular-season
     games as gameType 2, and an October game for every club so each file
     holds a regular-season game and the cache's range runs past tonight.
-    `with_names` carries each club's `placeName` and `commonName`."""
+
+    `with_names` carries each club's `placeName` and `commonName` as
+    `_name` composes them; `names` replaces a club's name fields outright
+    (an empty dict carries none). `foreign_opponent` adds an exhibition in
+    ANA's file against a club outside the league, which carries its own
+    names whatever `with_names` says, as a European touring side would."""
     directory = raw / "nhl" / "club_schedule"
     directory.mkdir(parents=True, exist_ok=True)
 
     def club(abbrev: str) -> dict:
         side = {"abbrev": abbrev}
-        if with_names:
+        if names is not None and abbrev in names:
+            side.update(names[abbrev])
+        elif with_names:
             side["placeName"] = {"default": f"Town {abbrev}"}
             side["commonName"] = {"default": f"Club{abbrev}"}
         return side
@@ -176,6 +189,16 @@ def _cache_schedule(
     games += [game(TONIGHT, home, away, 2) for home, away in REGULAR]
     for index in range(0, len(CLUBS), 2):
         games.append(game("2026-10-20", CLUBS[index], CLUBS[index + 1], 2))
+    if foreign_opponent:
+        games.append({
+            "gameType": 1,
+            "gameDate": "2026-09-28",
+            "gameScheduleState": "OK",
+            "startTimeUTC": "2026-09-28T17:00:00Z",
+            "homeTeam": {"abbrev": "EHC", "placeName": {"default": "Red Bull"},
+                         "commonName": {"default": "Kings"}},
+            "awayTeam": club("ANA"),
+        })
     for abbrev in clubs:
         own = [
             item for item in games
@@ -215,6 +238,7 @@ def _capture(
     clubs: tuple[str, ...] | None = CLUBS,
     saved_map: bool = True,
     schedule_names: bool = False,
+    foreign_opponent: bool = False,
     board: list[dict] | None = None,
 ) -> tuple[int, str, RecordingRequester]:
     """The real capture with the workflow's own flags, over a stub transport,
@@ -222,7 +246,10 @@ def _capture(
     and, when `saved_map`, a saved team-name map in its --processed-dir."""
     dirs = point_default_data_dirs_at(monkeypatch, tmp_path / "defaults")
     if clubs is not None:
-        _cache_schedule(dirs.raw, clubs, with_names=schedule_names)
+        _cache_schedule(
+            dirs.raw, clubs, with_names=schedule_names,
+            foreign_opponent=foreign_opponent,
+        )
     processed = tmp_path / "processed"
     if saved_map:
         _save_team_names(processed)
@@ -355,6 +382,195 @@ def test_the_shadow_run_and_the_capture_read_one_screen() -> None:
 
 
 # --------------------------------------------------------------------------
+# A game whose clubs do not both resolve is kept, never screened out.
+#
+# Review of #249: the map-wide abstention (`cache_derived_spellings == 0`)
+# asks whether the map holds anything, and what matters is whether EACH
+# game's two clubs resolve. An unresolved side used to put "" into the key,
+# so the game matched nothing and was dropped as preseason -- the loss
+# direction this screen exists never to fail in. This lab has recorded the
+# same lesson before: count rows that resolve BOTH teams, not map entries.
+# --------------------------------------------------------------------------
+
+def _screen(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, **schedule):
+    """The screen alone, over a complete cache shaped by `schedule`, with no
+    boxscores and no saved map: Line Movement's runner."""
+    dirs = point_default_data_dirs_at(monkeypatch, tmp_path / "defaults")
+    _cache_schedule(dirs.raw, CLUBS, **schedule)
+    out = io.StringIO()
+    monkeypatch.setattr(sys, "stdout", out)
+    try:
+        keep, note = preseason_screen(
+            TONIGHT, raw_dir=dirs.raw, processed_dir=dirs.processed
+        )
+        kept = [event["id"] for event in _board() if keep and keep(event)]
+    finally:
+        monkeypatch.setattr(sys, "stdout", sys.__stdout__)
+    return keep, note, kept, " ".join(out.getvalue().split())
+
+
+def test_one_foreign_opponent_s_names_do_not_let_the_screen_drop_the_board(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """No NHL club's names in the schedules, but a touring side's are: the
+    map is no longer aliases alone, so the map-wide abstention stood down,
+    and every posted game, resolving neither club, was screened out. The
+    round read "No rows returned; nothing written." and exited 0."""
+    code, out, requester = _capture(
+        tmp_path, monkeypatch, saved_map=False, foreign_opponent=True
+    )
+
+    assert code == 0, out
+    # Nothing on the board can be judged, so nothing is screened: the cap
+    # is spent in plain face-off order, as with no screen at all.
+    assert _bought(requester) == EXHIBITION_IDS
+    assert "No rows returned" not in out
+    assert "not on the cached regular-season schedule" not in out
+
+
+def test_a_club_spelled_another_way_keeps_its_real_game(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The schedule spells LAK in a way the provider does not. Its real
+    game used to be dropped with a count and no name; it is kept, and the
+    spelling that did not resolve is named."""
+    keep, _note, kept, out = _screen(
+        tmp_path, monkeypatch, with_names=True,
+        names={"LAK": {"placeName": {"default": "LA"},
+                       "commonName": {"default": "Kings"}}},
+    )
+
+    assert keep is not None
+    assert kept == REGULAR_IDS
+    assert _name("LAK") in out
+
+
+def test_a_club_whose_schedule_carries_no_place_name_keeps_its_games(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    keep, _note, kept, _out = _screen(
+        tmp_path, monkeypatch, with_names=True,
+        names={"BOS": {"commonName": {"default": "ClubBOS"}}},
+    )
+
+    assert keep is not None
+    assert "reg0" in kept  # BOS at FLA
+    assert kept == REGULAR_IDS
+
+
+def test_an_exhibition_between_two_resolved_clubs_is_still_screened(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The fix keeps what it cannot judge, not what it can: an exhibition
+    whose two clubs both resolve is still dropped."""
+    keep, _note, kept, _out = _screen(tmp_path, monkeypatch, with_names=True)
+
+    assert keep is not None
+    assert kept == REGULAR_IDS
+    assert not set(EXHIBITION_IDS) & set(kept)
+
+
+def test_a_game_posted_with_home_and_away_swapped_is_kept(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A neutral-site game can be posted the other way round from the
+    schedule. Both clubs resolve and the game is on the schedule, so it is
+    a real game, not an exhibition."""
+    dirs = point_default_data_dirs_at(monkeypatch, tmp_path / "defaults")
+    _cache_schedule(dirs.raw, CLUBS, with_names=True)
+    keep, _ = preseason_screen(TONIGHT, raw_dir=dirs.raw, processed_dir=dirs.processed)
+    swapped = _event("swap", REGULAR_STARTS[0], REGULAR[0][1], REGULAR[0][0])
+
+    assert keep is not None and keep(swapped)
+
+
+def test_the_card_s_map_wins_over_the_schedule_s_names(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The schedule's names only fill gaps. Here ANA's schedule entry
+    composes to BOS's provider spelling, and ANA's file is read first, so
+    the schedule's own names say ANA; the saved map (the card's) says BOS,
+    and BOS's real game is kept. Laid the other way round it read ANA at
+    FLA, not on the schedule, and was dropped."""
+    dirs = point_default_data_dirs_at(monkeypatch, tmp_path / "defaults")
+    _cache_schedule(
+        dirs.raw, CLUBS, with_names=True,
+        names={"ANA": {"placeName": {"default": "Town BOS"},
+                       "commonName": {"default": "ClubBOS"}}},
+    )
+    _save_team_names(dirs.processed)
+    keep, _ = preseason_screen(TONIGHT, raw_dir=dirs.raw, processed_dir=dirs.processed)
+
+    # The precondition: the schedule alone would name BOS's spelling ANA.
+    assert schedule_team_names(dirs.raw)[normalize_team_name(_name("BOS"))] == "ANA"
+    assert keep is not None
+    assert [event["id"] for event in _board() if keep(event)] == REGULAR_IDS
+
+
+def test_a_place_name_alone_composes_no_name(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Two clubs share a place ("New York"). A name composed from the place
+    alone would hand one of them the other's games, so a side missing its
+    common name adds nothing to the map."""
+    dirs = point_default_data_dirs_at(monkeypatch, tmp_path / "defaults")
+    _cache_schedule(
+        dirs.raw, CLUBS, with_names=True,
+        names={"SEA": {"placeName": {"default": "Town SEA"}}},
+    )
+    names = schedule_team_names(dirs.raw)
+
+    assert "SEA" not in names.values()
+    assert normalize_team_name("Town SEA") not in names
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [
+        {"placeName": "Town BOS", "commonName": "ClubBOS"},
+        {"placeName": ["Town BOS"], "commonName": {"default": "ClubBOS"}},
+        {"placeName": {"default": None}, "commonName": {"default": 7}},
+    ],
+    ids=["plain-strings", "a-list", "not-text"],
+)
+def test_a_name_field_of_another_shape_is_skipped_not_raised(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fields
+) -> None:
+    """`placeName` as a plain string used to raise AttributeError out of
+    the screen, and the capture has nothing around it: the whole round was
+    lost. The side is skipped like one carrying no names."""
+    dirs = point_default_data_dirs_at(monkeypatch, tmp_path / "defaults")
+    _cache_schedule(dirs.raw, CLUBS, with_names=True, names={"BOS": fields})
+
+    names = schedule_team_names(dirs.raw)
+    keep, _ = preseason_screen(TONIGHT, raw_dir=dirs.raw, processed_dir=dirs.processed)
+
+    assert "BOS" not in names.values()
+    assert keep is not None
+    assert [event["id"] for event in _board() if keep(event)] == REGULAR_IDS
+
+
+def test_a_screen_that_cannot_be_built_costs_the_capture_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Whatever goes wrong building the screen, the round is still captured,
+    unscreened, and the capture says so."""
+    module = _load("capture_line_movement.py")
+
+    def broken(*_args, **_kwargs):
+        raise ValueError("a cache shape nobody foresaw")
+
+    monkeypatch.setattr(module, "preseason_screen", broken)
+    monkeypatch.setattr(sys.modules[__name__], "_load", lambda _name: module)
+    code, out, requester = _capture(tmp_path, monkeypatch)
+
+    assert code == 0, out
+    assert _bought(requester) == EXHIBITION_IDS
+    assert "nothing was screened for preseason" in out
+    assert "a cache shape nobody foresaw" in out
+
+
+# --------------------------------------------------------------------------
 # The runner: Line Movement caches the club schedules, for free, first.
 # --------------------------------------------------------------------------
 
@@ -377,6 +593,13 @@ def test_line_movement_caches_the_club_schedules_before_it_spends_a_credit() -> 
     # Free and never fatal: a failed fetch leaves a partial or empty cache,
     # and the screen abstains on that.
     assert step.get("continue-on-error") is True
+    # And never slow enough to cost the capture. A hanging NHL API retries
+    # four times at 30 s for each of 32 clubs, about 71 minutes, and the job
+    # is cancelled at 20, before "Capture prices" has run. The step's own
+    # limit is well inside that, and continue-on-error covers a timeout too.
+    job = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))["jobs"]["capture"]
+    assert 0 < int(step.get("timeout-minutes", 0)) <= 3
+    assert int(step["timeout-minutes"]) < int(job["timeout-minutes"])
     assert "NHL_ODDS_API_KEY" not in json.dumps(step)
 
 

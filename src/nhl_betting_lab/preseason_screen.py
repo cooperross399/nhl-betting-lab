@@ -36,7 +36,20 @@ tell the two apart:
   which is why the map also reads the clubs' names from the club schedules
   themselves (below).
 
-And past the last date the cache knows, it keeps the game.
+And past the last date the cache knows, it keeps the game. And, game by
+game, it keeps any game whose two clubs do not both resolve: the map-wide
+check above says only that the map holds something, and what matters is
+whether THIS game's clubs resolve. Without the per-game rule, one club
+spelled another way lost its real game, and a touring side's names in a
+cache holding no NHL club's stood the map-wide check down and dropped the
+whole board. This lab has recorded that lesson before: count rows that
+resolve BOTH teams, not map entries.
+
+So the screen drops a game only when both its clubs resolve and the
+schedule holds that pairing on that league date in neither orientation.
+Every game it drops, the card drops too (the card's key is the same one
+orientation, and an unresolved side matches nothing there); it keeps some
+games the card drops, which costs a place under a cap and nothing else.
 
 `known_regular_season_games` is read, and not
 `scheduled_regular_season_starts`, because it is the function the card's
@@ -78,6 +91,21 @@ from nhl_betting_lab.season import (
 )
 
 
+def _default_name(field: object) -> str:
+    """A localised name's `default` text, or "" for any other shape.
+
+    The NHL API sends `{"default": "Toronto", "fr": ...}`. A plain string, a
+    list or a non-text default used to reach `.get` and raise out of the
+    screen, which the line capture called with nothing around it, so one
+    odd file cost the whole round. Such a side is skipped like one carrying
+    no names, and its games are kept (see `preseason_screen`).
+    """
+    if not isinstance(field, Mapping):
+        return ""
+    value = field.get("default")
+    return value.strip() if isinstance(value, str) else ""
+
+
 def schedule_team_names(raw_dir: Path | None = None) -> dict[str, str]:
     """`normalized full name` -> abbreviation, from the cached club schedules.
 
@@ -108,8 +136,11 @@ def schedule_team_names(raw_dir: Path | None = None) -> dict[str, str]:
                 if not isinstance(team, Mapping):
                     continue
                 abbrev = str(team.get("abbrev", "")).strip().upper()
-                place = (team.get("placeName") or {}).get("default", "")
-                common = (team.get("commonName") or {}).get("default", "")
+                place = _default_name(team.get("placeName"))
+                common = _default_name(team.get("commonName"))
+                # Both parts or nothing. A place alone is not a club's name:
+                # two clubs play in New York, and a map holding "new york"
+                # would hand one of them the other's games.
                 if not abbrev or not place or not common:
                     continue
                 mapping.setdefault(normalize_team_name(f"{place} {common}"), abbrev)
@@ -164,19 +195,41 @@ def preseason_screen(
             "per-event cap is spent in plain face-off order."
         )
     known_until = max(day for day, _, _ in schedule)
+    # Each unresolved spelling is named once, however many fetches ask.
+    unresolved: set[str] = set()
 
     def keep(event: Mapping) -> bool:
         day = game_date(event.get("commence_time"))
         if day > known_until:
             return True  # abstain: the cache cannot judge this date
-        return (
-            day,
-            resolve_team(event.get("home_team", ""), team_names) or "",
-            resolve_team(event.get("away_team", ""), team_names) or "",
-        ) in schedule
+        names = (str(event.get("home_team", "")), str(event.get("away_team", "")))
+        home, away = (resolve_team(name, team_names) for name in names)
+        if not home or not away:
+            # Abstain for this game: it cannot be judged, so it is kept. A
+            # side that does not resolve used to put "" into the key, the
+            # key matched nothing, and the game was dropped as preseason:
+            # one club spelled another way lost its real game, and one
+            # touring side's names in a cache holding no NHL club's were
+            # enough to stand the map-wide abstention down and drop the
+            # whole board. What counts is that THIS game's two clubs
+            # resolve, not that the map holds something.
+            for name, club in zip(names, (home, away)):
+                if not club and name not in unresolved:
+                    unresolved.add(name)
+                    print(
+                        f"Preseason screen: {name!r} does not resolve to a "
+                        "club, so its games are kept unscreened (a place "
+                        "under the cap may go to an exhibition)."
+                    )
+            return True
+        # Either way round: a neutral-site game can be posted with home and
+        # away swapped from the schedule, and a club plays once a night, so
+        # the reversed key cannot be a different game.
+        return (day, home, away) in schedule or (day, away, home) in schedule
 
     return keep, (
-        "Preseason screen: posted events the cached regular-season schedule "
-        f"does not know (through {known_until}) are dropped before any cap "
-        "is applied, by the card's own rule."
+        "Preseason screen: posted events whose two clubs both resolve and "
+        "that the cached regular-season schedule does not know (through "
+        f"{known_until}) are dropped before any cap is applied, by the "
+        "card's own rule."
     )

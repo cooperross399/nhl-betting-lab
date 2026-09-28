@@ -133,9 +133,19 @@ def main(argv: list[str] | None = None) -> int:
     # shadow run's (`nhl_betting_lab.preseason_screen`), with its
     # abstentions: no club-schedule cache, a cache missing a club, or a
     # team-name map that resolves nothing screens nothing and says so.
-    screen, screen_note = preseason_screen(
-        today.isoformat(), processed_dir=processed
-    )
+    # Guarded: the screen reads cached files, and a round is worth more than
+    # a screen. Whatever goes wrong building it, the round is captured
+    # unscreened, as it was before the screen existed, and says so.
+    try:
+        screen, screen_note = preseason_screen(
+            today.isoformat(), processed_dir=processed
+        )
+    except Exception as exc:  # noqa: BLE001 -- any failure means no screen
+        screen, screen_note = None, (
+            "WARNING: the preseason screen could not be built "
+            f"({type(exc).__name__}: {exc}), so nothing was screened for "
+            "preseason. The per-event cap is spent in plain face-off order."
+        )
     print(screen_note)
     try:
         result = provider.fetch_player_props(

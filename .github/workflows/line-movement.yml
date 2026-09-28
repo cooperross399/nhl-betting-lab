@@ -129,6 +129,12 @@ jobs:
         # below already use. It spends no provider credit. Never fatal: a
         # failed or partial fetch leaves the cache incomplete, the screen
         # abstains on that and says so, and the capture runs unscreened.
+        # Never slow enough to cost the capture either: a hanging API
+        # retries 4 x 30 s for each of 32 clubs, about 71 minutes, and the
+        # job's 20-minute limit would cancel the run before "Capture prices".
+        # Three minutes is ten times a healthy fetch; continue-on-error
+        # covers the timeout too.
+        timeout-minutes: 3
         continue-on-error: true
         env:
           PYTHONPATH: src

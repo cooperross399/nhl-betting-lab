@@ -219,6 +219,8 @@ CHECKOUT_SENSITIVE_TESTS: tuple[str, ...] = (
     "tests/test_line_movement_never_spends_its_cap_on_exhibitions.py::test_a_map_of_aliases_alone_screens_nothing_rather_than_everything",
     "tests/test_line_movement_never_spends_its_cap_on_exhibitions.py::test_the_schedule_s_own_club_names_resolve_the_board",
     "tests/test_line_movement_never_spends_its_cap_on_exhibitions.py::test_past_the_last_date_the_cache_knows_the_screen_abstains",
+    "tests/test_line_movement_never_spends_its_cap_on_exhibitions.py::test_one_foreign_opponent_s_names_do_not_let_the_screen_drop_the_board",
+    "tests/test_line_movement_never_spends_its_cap_on_exhibitions.py::test_a_screen_that_cannot_be_built_costs_the_capture_nothing",
     "tests/test_a_failed_price_request_is_not_an_unquoted_game.py::test_one_failed_request_is_named_and_the_games_that_answered_are_kept",
     "tests/test_a_failed_price_request_is_not_an_unquoted_game.py::test_a_round_in_which_every_request_failed_is_a_failed_capture",
     "tests/test_a_failed_price_request_is_not_an_unquoted_game.py::test_an_absence_is_not_a_failure",
