@@ -180,9 +180,15 @@ def test_of_those_still_follows_the_count_it_splits() -> None:
     considered = next(i for i, line in enumerate(page)
                       if line.startswith("- Opinions considered"))
     assert "no closing price found: **2**" in page[considered]
-    assert page[considered + 1].startswith("- Of those, **1** are in a market")
-    assert page[considered + 2].startswith("- The other **1** are in a market")
-    assert page[considered + 3].startswith("- Not yet played: **1** opinion(s)")
+    # The lines that split the no-close count follow it directly. #230's
+    # "Within that count" line also splits that count, so it may sit between;
+    # the not-yet-played line may not.
+    split = page[considered + 1:]
+    while split and split[0].startswith("- Within that count"):
+        split = split[1:]
+    assert split[0].startswith("- Of those, **1** are in a market")
+    assert split[1].startswith("- The other **1** are in a market")
+    assert split[2].startswith("- Not yet played: **1** opinion(s)")
 
 
 def test_without_a_now_the_library_counts_every_opinion() -> None:
