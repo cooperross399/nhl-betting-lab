@@ -132,7 +132,9 @@ class MarketVerdict:
     #: line does not say its corrected interval excludes zero. The
     #: recommendation reads it so its headline never denies its own lines.
     conclusive: str = ""
-    #: Whether a held-out window confirmed the result the line reports.
+    #: Whether the replication record lists this market as "replicated".
+    #: Read beside `conclusive` only; on its own it says nothing about
+    #: whether this bundle's line reports a result that survives correction.
     replicated: bool = False
 
     def sentence(self) -> str:
@@ -220,14 +222,28 @@ class EvidenceBundle:
         wins with one on a single window. A headline contradicting its own
         lines is the one thing an evidence document cannot afford, so each
         market whose corrected interval excludes zero is named for what it
-        is, and the old sentence is kept for the markets it is true of.
+        is, and the markets left over get a sentence true of every one of
+        them. That includes a market under `MINIMUM_BETS_TO_READ`: its line
+        calls it too thin to read whatever its interval says, so it is
+        named nowhere above, and "measured with an interval that includes
+        zero" is not true of a thin market whose interval excludes zero.
         """
         opening = "**The evidence supports enabling nothing.**"
-        closing = (
-            "unmeasured against real prices or measured with an interval "
-            f"that includes zero, which means {NO_DEMONSTRATED_EDGE}."
-        )
         named = [item for item in self.verdicts if item.conclusive]
+        rest = [item for item in self.verdicts if not item.conclusive]
+        # Thin is read from the count the line was written from, the same
+        # test `assess_markets` applies before any interval is looked at.
+        thin = any(0 < item.bets < MINIMUM_BETS_TO_READ for item in rest)
+        closing = (
+            (
+                "unmeasured against real prices, too thin to read (under "
+                f"{MINIMUM_BETS_TO_READ} bets), or measured"
+                if thin
+                else "unmeasured against real prices or measured"
+            )
+            + " with an interval that includes zero, which means "
+            f"{NO_DEMONSTRATED_EDGE}."
+        )
         if not named:
             return f"{opening} Every market is either {closing}"
 
@@ -268,7 +284,7 @@ class EvidenceBundle:
                 f"{unknown}: the corrected interval excludes zero, but the "
                 "return could not be read, so its sign is unknown."
             )
-        if len(named) < len(self.verdicts):
+        if rest:
             sentences.append(f"Every other market is either {closing}")
         return " ".join(sentences)
 

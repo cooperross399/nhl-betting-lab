@@ -119,7 +119,8 @@ class MarketClaim:
             # the corrected interval ran +40% to +112% and this sentence said
             # it did not exclude zero. Say what `RoiInterval.verdict()` says.
             return (
-                f"{base} {self.bets} bets is far too few to measure anything. "
+                f"{base} {self.bets} bet{'' if self.bets == 1 else 's'} is "
+                "far too few to measure anything. "
                 f"**{NO_DEMONSTRATED_EDGE.capitalize()}**."
             )
         if not self.survives_correction:

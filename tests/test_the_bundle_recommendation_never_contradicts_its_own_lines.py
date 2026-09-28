@@ -48,7 +48,12 @@ POINTS = [0.9] * 2950 + [-1.0] * 3190
 SHOTS = [1.0] * 1515 + [-1.0] * 1485
 
 
-def _plant(directory: Path, by_market: dict, replication: list[dict]) -> ev.EvidenceBundle:
+def _plant(
+    directory: Path,
+    by_market: dict,
+    replication: list[dict],
+    overrides: dict[str, dict] | None = None,
+) -> ev.EvidenceBundle:
     directory.mkdir(parents=True, exist_ok=True)
     for name in ev.EVIDENCE_FILENAMES:
         (directory / name).write_text(f"# {name}\n", encoding="utf-8")
@@ -61,7 +66,10 @@ def _plant(directory: Path, by_market: dict, replication: list[dict]) -> ev.Evid
                 "rows_read": 100000,
                 "phase": "late",
                 "phase_hours": 4.1,
-                "by_market": {m: _interval(r) for m, r in by_market.items()},
+                "by_market": {
+                    m: {**_interval(r), **(overrides or {}).get(m, {})}
+                    for m, r in by_market.items()
+                },
                 "overall": _interval(everything),
             }
         ),
@@ -149,4 +157,71 @@ def test_a_replicated_loss_is_named_a_demonstrated_deficit(tmp_path: Path) -> No
     assert "`points`" in recommendation
     assert "demonstrated deficit" in recommendation
     assert "argues against enabling" in recommendation
+    # Named once, as confirmed -- never ALSO as the unconfirmed kind.
+    assert recommendation.count("`points`") == 1
+    assert "not confirmed on a held-out window" not in recommendation
     assert bundle.supported_markets == ()
+
+
+# 130 wins and 20 losses at even money: +73% over 150 bets, a corrected
+# interval far from zero, and below the 200 bets the bundle reads.
+THIN = [1.0] * 130 + [-1.0] * 20
+
+
+def test_a_thin_market_excluding_zero_is_not_said_to_include_it(tmp_path: Path) -> None:
+    """The fallback sentence must be true of every market it covers.
+
+    A market under `MINIMUM_BETS_TO_READ` is "too thin to read" on its own
+    line whatever its interval says, and is named nowhere else. Covered by
+    "unmeasured ... or measured with an interval that includes zero", a
+    thin market whose corrected interval excludes zero was described as
+    including it.
+    """
+    bundle = _plant(tmp_path, {"goals": THIN, "shots_on_goal": SHOTS}, [])
+    goals = next(v for v in bundle.verdicts if v.market == "goals")
+    assert goals.bets == 150 and goals.bets < ev.MINIMUM_BETS_TO_READ
+    payload = json.loads((tmp_path / "player_props_backtest.json").read_text())
+    assert payload["by_market"]["goals"]["adjusted_low"] > 0
+
+    recommendation = bundle.recommendation()
+    assert "supports enabling nothing" in recommendation
+    assert (
+        "unmeasured against real prices or measured with an interval that "
+        "includes zero" not in recommendation
+    )
+    assert f"too thin to read (under {ev.MINIMUM_BETS_TO_READ} bets)" in recommendation
+    assert bundle.supported_markets == ()
+
+
+def test_a_thin_market_beside_a_named_one_is_covered_truthfully(tmp_path: Path) -> None:
+    bundle = _plant(
+        tmp_path,
+        {"goals": THIN, "points": POINTS, "shots_on_goal": SHOTS},
+        [{"market": "points", "state": "untestable"}],
+    )
+    recommendation = bundle.recommendation()
+    assert "`points`" in recommendation
+    other = recommendation.split("Every other market is either", 1)
+    assert len(other) == 2, recommendation
+    assert "too thin to read" in other[1]
+
+
+def test_a_return_that_could_not_be_read_is_not_headlined_as_a_loss(tmp_path: Path) -> None:
+    """The line says the sign is unknown; so must the headline."""
+    bundle = _plant(
+        tmp_path,
+        {"points": POINTS, "shots_on_goal": SHOTS},
+        [{"market": "points", "state": "untestable"}],
+        overrides={"points": {"roi": None}},
+    )
+    points = next(v for v in bundle.verdicts if v.market == "points")
+    assert points.roi is None
+    assert "sign is unknown" in points.reason
+
+    recommendation = bundle.recommendation()
+    named = recommendation.split("`points`", 1)
+    assert len(named) == 2, recommendation
+    about_points = named[1].split("Every other market", 1)[0]
+    assert "sign is unknown" in about_points
+    assert "a loss" not in about_points
+    assert "argues against enabling" not in recommendation

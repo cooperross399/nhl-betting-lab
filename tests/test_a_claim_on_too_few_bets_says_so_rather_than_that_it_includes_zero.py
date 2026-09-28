@@ -66,3 +66,10 @@ def test_a_real_failure_to_survive_still_says_so() -> None:
     assert not measured.includes_zero and not measured.survives_correction
     assert "it does not exclude zero" in claim.sentence()
     assert "far too few" not in claim.sentence()
+
+
+def test_one_bet_is_one_bet() -> None:
+    claim, _ = _claim([1.0])
+    sentence = claim.sentence()
+    assert "1 bet is far too few" in sentence
+    assert "1 bets is" not in sentence
