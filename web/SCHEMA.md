@@ -15,6 +15,9 @@ season           "2026–27"
 phase            "preseason" | "regular"  — preseason games carry schedule fields only; the page renders dashes and "model abstains"
 notice           optional sentence shown under the headline (why the board is thin, degraded run, etc.)
 boardDate        "YYYY-MM-DD" (league date of the slate)
+cardGeneratedAt  ISO instant the Gameday card this board was built from was generated; null when no card was restored.
+                 A regular-season board with games whose card was generated on an earlier New York day is shown but
+                 never frozen into history/ (web/site_history.py::built_on_stale_state)
 record
   straightUp     {w, l} | null        — null until a season tally is kept; nothing tallies one today, so it is null
   puckLine       {w, l, p} | null     — null: nothing grades the model's puck line
