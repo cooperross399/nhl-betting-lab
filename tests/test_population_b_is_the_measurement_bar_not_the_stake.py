@@ -30,6 +30,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from pathlib import Path
+from types import SimpleNamespace
 
 import pandas as pd
 
@@ -42,11 +43,14 @@ from nhl_betting_lab.config import (
     MIN_PROP_EDGE,
 )
 from nhl_betting_lab.models.value import american_to_implied, profit_on_win
+from nhl_betting_lab.reports.card_pricing import selection_key
 from nhl_betting_lab.reports.gameday_card import (
     BEST_BET_EDGE,
     BEST_BET_PROP_EDGE,
+    BEST_BETS_SECTION,
     HARD_GATED_MARKETS,
     STAKE_EXCLUDED_MARKETS,
+    build_candidates,
 )
 
 
@@ -105,8 +109,11 @@ def _section(rendered: str, head: str) -> str:
 
 
 def _names_the_difference(text: str) -> None:
-    """The text says B is the measurement bar, not the stake, and names every
-    gate the card applies that the measurement bar does not."""
+    """The text says B is the measurement bar, not the stake, and names the
+    card's price gates (the best-bet bar, the juice and price limits, the
+    stake-excluded and hard-gated markets) and the non-price reasons B holds
+    opinions the card never staked (one stake per outcome, market
+    eligibility, a blocked card, the puck-drop guard)."""
     assert "measurement bar" in text
     assert NOT_STAKED in text
     for bar in (MIN_PROP_EDGE, MIN_EDGE, BEST_BET_PROP_EDGE, BEST_BET_EDGE):
@@ -115,6 +122,20 @@ def _names_the_difference(text: str) -> None:
     assert f"+{MAX_DEFAULT_PRICE}" in text
     for market in (*STAKE_EXCLUDED_MARKETS, *HARD_GATED_MARKETS):
         assert f"`{market}`" in text, f"{market} is not named"
+    # The reasons that are not about the price. The snapshot is frozen from
+    # the unfiltered prices before the card is built, so B holds every rung
+    # of a ladder (only one takes the outcome's stake), markets the card
+    # could not use that day, the opinions of a blocked card, and rows whose
+    # stake the puck-drop guard pulled.
+    for reason in (
+        "one stake per outcome",
+        "not allowlisted",
+        "incomplete",
+        "blocked",
+        "puck-drop guard",
+        "frozen from the unfiltered prices before the card is built",
+    ):
+        assert reason in text, f"{reason!r} is not named"
 
 
 def test_every_unstaked_opinion_is_still_in_population_b() -> None:
@@ -181,3 +202,55 @@ def test_no_source_or_docstring_repeats_the_claim() -> None:
             assert claim not in text, (
                 f"{Path(module.__file__).name} still says {claim!r}"
             )
+
+
+def _staked_at(price: float, probability: float) -> bool:
+    """Whether the card stakes one `shots_on_goal` over at this price, with
+    an edge well past the best-bet bar so only the price limits can refuse
+    it."""
+    prices = pd.DataFrame([{
+        "date": "2026-10-09", "commence_time": "2026-10-09T23:00:00Z",
+        "home_team": "Boston Bruins", "away_team": "New York Rangers",
+        "market": "shots_on_goal", "player": "David Pastrnak",
+        "selection": "over", "line": 2.5, "american_odds": price,
+        "book": "DK",
+    }])
+    (row,) = prices.to_dict("records")
+    key = selection_key(SimpleNamespace(**row), market="shots_on_goal",
+                        selection="over", line=2.5)
+    edge = probability - american_to_implied(price)
+    assert edge >= BEST_BET_PROP_EDGE, "the fixture must clear the best-bet bar"
+    selections, passes = build_candidates(prices, {key: probability})
+    staked = [c for c in selections
+              if c.section == BEST_BETS_SECTION and c.suggested_units > 0]
+    assert len(staked) + len(passes) == 1
+    return bool(staked)
+
+
+def test_the_price_limits_are_stated_at_their_real_boundaries() -> None:
+    """-160 is staked and -161 is not; +600 is staked and +601 is not. The
+    note says "shorter than -160" and "longer than +600" — so a note saying
+    "at or shorter than -160" would call a staked price unstaked."""
+    assert _staked_at(float(MAX_DEFAULT_JUICE), 0.85)
+    assert not _staked_at(float(MAX_DEFAULT_JUICE - 1), 0.85)
+    assert _staked_at(float(MAX_DEFAULT_PRICE), 0.35)
+    assert not _staked_at(float(MAX_DEFAULT_PRICE + 1), 0.35)
+
+    note = cl.measurement_bar_note()
+    assert (
+        f"nothing priced shorter than {MAX_DEFAULT_JUICE} or longer than "
+        f"+{MAX_DEFAULT_PRICE}"
+    ) in note
+    assert "at or " not in note and "or more" not in note
+
+
+def test_a_written_off_page_points_at_no_bets_column() -> None:
+    """With nothing settled the page shows no Bets column, and B's
+    definition must not send the reader to one "above"."""
+    ledger = _ledger().assign(outcome="void", profit_units=0.0)
+    rendered = fe.render_forward_report(
+        fe.build_forward_report(ledger, now=NOW)
+    )
+    assert "| Bets |" not in rendered
+    assert "Bets column above" not in rendered
+    assert "## Registered decision statistic" in rendered

@@ -732,7 +732,17 @@ def measurement_bar_note() -> str:
     called Bets the staking bar and the bankroll's record (sweep 3, A1). The card stakes only best bets, above a higher bar; a
     lean between the two is recorded and not staked; and past the juice
     limit, past the longest price, in a stake-excluded market or in a
-    hard-gated one it stakes nothing whatever the edge.
+    hard-gated one it stakes nothing whatever the edge. Nor is every gap
+    about the price: `run_gameday_card.py` freezes the snapshot from the
+    unfiltered prices before `build_card` runs, so the count also holds the
+    rungs one-stake-per-outcome demoted, markets eligibility kept off the
+    card (not allowlisted, or incomplete on a capped night), a blocked
+    card's opinions, and rows the puck-drop guard pulled.
+
+    The limits are strict: -160 and +600 are staked, -161 and +601 are not,
+    which is what "shorter than" and "longer than" say
+    (`is_heavy_juice` is `price < limit`; `build_candidates` refuses
+    `price > max_price`).
 
     Built from the constants the card and the filters read, so the sentence
     cannot drift from the gates it describes. Wording only: no count reads
@@ -765,7 +775,14 @@ def measurement_bar_note() -> str:
         f"nothing priced shorter than {MAX_DEFAULT_JUICE} or longer than "
         f"+{MAX_DEFAULT_PRICE}, nothing in a stake-excluded market "
         f"({excluded}) and nothing in a hard-gated market ({gated}), "
-        "whatever the edge. Every such opinion is still counted here."
+        "whatever the edge. Some reasons are not about the price at all: "
+        "the snapshot is frozen from the unfiltered prices before the card "
+        "is built, so this also counts every rung of a ladder after the one "
+        "that took the outcome's single stake (one stake per outcome), "
+        "markets the card could not use that day (not allowlisted, or "
+        "incomplete on a night the per-event fetch was capped), the "
+        "opinions of a day whose card was blocked, and rows whose stake the "
+        "puck-drop guard pulled. Every such opinion is still counted here."
     )
 
 

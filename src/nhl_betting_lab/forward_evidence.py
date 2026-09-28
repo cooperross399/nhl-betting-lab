@@ -105,8 +105,9 @@ REGISTERED_POPULATIONS: dict[str, str] = {
         "the settled opinions whose edge clears the measurement bar for "
         f"their market — {MIN_PROP_EDGE * 100:g}% for a prop, "
         f"{MIN_EDGE * 100:g}% for a team market, the bar the historical "
-        "backtest measures at (the Bets column above). These are not the "
-        "card's staked bets; the note below says how they differ"
+        "backtest measures at and the same filter as the per-market Bets "
+        "column. These are not the card's staked bets; the note below says "
+        "how they differ"
     ),
 }
 
