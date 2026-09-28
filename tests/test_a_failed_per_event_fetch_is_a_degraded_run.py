@@ -66,6 +66,7 @@ import requests
 import yaml
 
 from conftest import FakeResponse
+from test_no_test_reads_the_checkouts_data import point_default_data_dirs_at
 from nhl_betting_lab.config import PROJECT_ROOT
 from nhl_betting_lab.providers import odds_api
 from nhl_betting_lab.providers.env_file import ProviderEnvLoadResult
@@ -205,6 +206,10 @@ class _Frozen(datetime):
 def _shadow(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, per_event,
             *, cap: int = 320) -> tuple[int, str, str, Transport]:
     """The real script, with the workflow's own flags, over a stub transport."""
+    # The script screens posted events against the cached club schedules,
+    # so a checkout holding a real season's cache would screen out every
+    # game here; none of the defaults is the checkout's.
+    point_default_data_dirs_at(monkeypatch, tmp_path / "defaults")
     module = load_script()
     transport = Transport(per_event)
     real = odds_api.OddsApiProvider
