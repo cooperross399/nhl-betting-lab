@@ -35,6 +35,7 @@ from typing import Any
 from nhl_betting_lab.config import OUTPUTS_DIR, PROJECT_ROOT
 from nhl_betting_lab.markets import ALL_MARKETS
 from nhl_betting_lab.reports.player_props_backtest import by_market_with_other_windows
+from nhl_betting_lab.reports.replication import MINIMUM_TEST_BETS, UNTESTABLE
 from nhl_betting_lab.reports.what_we_can_claim import unread_reason
 from nhl_betting_lab.staging_provider_policy import file_sha256
 from nhl_betting_lab.stats import (
@@ -255,6 +256,34 @@ def unread_verdict_inputs(output_dir: Path) -> dict[str, str]:
     return {name: problem for name, problem in problems.items() if problem}
 
 
+def _untestable_sentence(record: dict[str, Any]) -> str:
+    """Why the held-out window tested nothing, in the record's own terms.
+
+    "Untestable" is not a replication that ran and failed. The bundle said of
+    `points` "The held-out window did not confirm it (untestable)" while
+    `replication.md` showed the held-out 2025-26 window excluding zero after
+    correction on its own: the 2024-25 discovery window did not carry the
+    result alone, so there was nothing for the second window to confirm.
+    `reports/replication.py` reaches this state three ways, and the record
+    carries the fields that say which; a record that carries none of them is
+    told in words that assume no cause.
+    """
+    discovery_bets = record.get("discovery_bets")
+    test_bets = record.get("test_bets")
+    if isinstance(discovery_bets, (int, float)) and discovery_bets <= 0:
+        cause = "the discovery window did not measure it"
+    elif record.get("discovery_survived") is False:
+        cause = "the discovery window did not carry it alone"
+    elif isinstance(test_bets, (int, float)) and test_bets < MINIMUM_TEST_BETS:
+        cause = (
+            f"the held-out window had only {int(test_bets)} bet(s), below the "
+            f"{MINIMUM_TEST_BETS} needed to test anything"
+        )
+    else:
+        cause = "there was no first-window result to replicate"
+    return f"Nothing was tested on the held-out window ({UNTESTABLE}), because {cause}"
+
+
 def assess_markets(*, output_dir: Path) -> list[MarketVerdict]:
     """What the measurements support, market by market."""
     props = _read_json(output_dir / "player_props_backtest.json")
@@ -274,10 +303,14 @@ def assess_markets(*, output_dir: Path) -> list[MarketVerdict]:
     # this record has no replication result at all, which is not the same as
     # passing one -- `.get` therefore yields None and the market cannot be
     # supported.
-    replication = {
-        str(item.get("market")): str(item.get("state", "")).strip()
+    replication_records = {
+        str(item.get("market")): item
         for item in (_read_json(output_dir / "replication.json").get("markets") or [])
         if isinstance(item, dict)
+    }
+    replication = {
+        market: str(item.get("state", "")).strip()
+        for market, item in replication_records.items()
     }
 
     # A prop market the contract window has no bets for is read from another
@@ -388,6 +421,8 @@ def assess_markets(*, output_dir: Path) -> list[MarketVerdict]:
         held_out = (
             f"The held-out verdict could not be read ({replication_unread})"
             if replication_unread
+            else _untestable_sentence(replication_records.get(market.key) or {})
+            if replication_state == UNTESTABLE
             else "The held-out window did not confirm it "
             f"({replication_state or 'no replication record'})"
         )
