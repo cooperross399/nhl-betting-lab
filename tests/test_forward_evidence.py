@@ -348,7 +348,9 @@ def test_the_report_speaks_the_house_vocabulary(tmp_path: Path) -> None:
     assert "written down before puck drop" in rendered
     assert "never revised" in rendered
     assert "no demonstrated edge" in rendered
-    assert "hits and the regulation three-way" in rendered
+    # Hits has historical prices since the 9.5-hour purchase; only the
+    # three-way still has no evidence but this stream.
+    assert "price evidence for the regulation three-way" in rendered
 
 
 def test_an_empty_snapshot_settles_exactly_once(tmp_path: Path) -> None:

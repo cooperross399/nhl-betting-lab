@@ -332,7 +332,12 @@ def test_the_props_cost_is_one_credit_per_market_per_region_per_event() -> None:
 
 
 def _props_requester(events: int) -> RecordingRequester:
-    listing = [{"id": f"evt{index}"} for index in range(events)]
+    # Each game dated ahead of the suite's fetch clock: a game with no start
+    # time is dropped as already started, before any cap is applied.
+    listing = [
+        {"id": f"evt{index}", "commence_time": "2026-10-09T23:00:00Z"}
+        for index in range(events)
+    ]
     return RecordingRequester(
         {
             "/events/": FakeResponse(_event(markets=[_shots()])),
@@ -384,7 +389,12 @@ def test_one_failing_event_does_not_lose_the_rest() -> None:
 
     def answer(url: str, **kwargs: object) -> object:
         if url.endswith("/events"):
-            return FakeResponse([{"id": "a"}, {"id": "b"}])
+            return FakeResponse(
+                [
+                    {"id": "a", "commence_time": "2026-10-09T23:00:00Z"},
+                    {"id": "b", "commence_time": "2026-10-09T23:30:00Z"},
+                ]
+            )
         calls["n"] += 1
         if calls["n"] == 1:
             return FakeResponse(status_code=500)

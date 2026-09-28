@@ -25,6 +25,7 @@ from nhl_betting_lab.forward_evidence import (
     load_ledger,
     save_forward_report,
     settle_snapshots,
+    snapshots_dir,
 )
 from nhl_betting_lab.providers.team_names import (
     UnresolvedTeamsError,
@@ -35,12 +36,15 @@ from nhl_betting_lab.stores import CorruptStoreError
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--processed-dir", default=str(PROCESSED_DIR))
+    # No default here, so that naming the processed directory (even the real
+    # one) can be told apart from leaving it out; see the pairing checks below.
+    parser.add_argument("--processed-dir", default=None)
     parser.add_argument("--output-dir", default=str(OUTPUTS_DIR))
     parser.add_argument("--archive-dir", default="")
     args = parser.parse_args(argv)
 
-    processed = Path(args.processed_dir)
+    processed_named = args.processed_dir is not None
+    processed = Path(args.processed_dir) if processed_named else PROCESSED_DIR
     outputs = Path(args.output_dir)
     archive = Path(args.archive_dir) if args.archive_dir else None
 
@@ -66,6 +70,29 @@ def main(argv: list[str] | None = None) -> int:
             "--archive-dir for the archive that belongs with this "
             "--processed-dir, or --output-dir (whose archive/ a scratch card "
             "freezes into).",
+            file=sys.stderr,
+        )
+        return 2
+    # The mirror of that split, refused the same way: a scratch archive (a
+    # non-default --archive-dir, or the one a non-default --output-dir
+    # implies) with the real ledger. `--output-dir /tmp/x` on its own used to
+    # settle the scratch card's days into the REAL forward ledger, and
+    # settlement only ever appends, so nothing took them out again. Pairing a
+    # scratch archive with the real ledger on purpose takes --processed-dir.
+    if (
+        archive is not None
+        and not processed_named
+        and snapshots_dir(archive).resolve() != snapshots_dir(None).resolve()
+    ):
+        print(
+            f"::error::Refusing to settle the snapshots under {archive} into "
+            f"the real forward ledger in {processed}. That archive is not the "
+            "real evidence archive (it came from --archive-dir, or from "
+            "--output-dir, whose archive/ a scratch card freezes into), and "
+            "settlement only ever appends: its days would stand in the real "
+            "ledger as if Gameday Refresh had frozen them. Pass "
+            "--processed-dir for the ledger that belongs with this archive "
+            f"(--processed-dir {processed} if the real ledger is really meant).",
             file=sys.stderr,
         )
         return 2
