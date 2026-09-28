@@ -130,6 +130,61 @@ def test_an_unreadable_start_is_never_treated_as_not_yet_played(start: str) -> N
     assert counts["bets_no_close"] == 1
 
 
+def test_a_game_captured_this_morning_is_still_not_yet_played() -> None:
+    """The backup run: tonight's game already has a 14:00Z capture when the
+    report is built at 15:00Z. It has not started, so that capture is not
+    its close yet — it is not yet played, never matched."""
+    opinions, captures = _yesterday_and_tonight()
+    captures = pd.concat(
+        [captures, pd.DataFrame([_capture(TONIGHT_START, "2026-10-09T14:00:00+00:00")])],
+        ignore_index=True,
+    )
+    backup = datetime(2026, 10, 9, 15, 0, tzinfo=timezone.utc)
+    counts = cl.build_clv_report(opinions, captures, now=backup)["counts"]
+
+    assert counts["not_yet_played"] == 1
+    assert counts["opinions"] == 1
+    assert counts["matched"] == 1
+    assert counts["no_close"] == 0
+    assert counts["bets_not_yet_played"] == 1
+
+
+def test_not_yet_played_counts_selections_not_book_rows() -> None:
+    """The snapshot freezes one row per book. "Not yet played" counts
+    selections at their best price, as "Opinions considered" does."""
+    opinions, captures = _yesterday_and_tonight()
+    books = pd.DataFrame([{**_opinion("2026-10-09", TONIGHT_START),
+                           "book": book, "american_odds": odds}
+                          for book, odds in (("FD", 115), ("MGM", 105))])
+    opinions = pd.concat([opinions, books], ignore_index=True)
+    report = cl.build_clv_report(opinions, captures, now=MORNING)
+    page = cl.render_clv(report, generated="t")
+
+    assert report["counts"]["not_yet_played"] == 1
+    assert report["counts"]["bets_not_yet_played"] == 1
+    assert "Not yet played: **1** opinion(s), 1 of them staked" in page
+
+
+def test_of_those_still_follows_the_count_it_splits() -> None:
+    """"Of those" and "The other" split the no-close count. The not-yet-played
+    line sits below them, so neither can be read as splitting it."""
+    opinions, captures = _yesterday_and_tonight()
+    moneyline = {**_opinion("2026-10-08", YESTERDAY_START), "market": "moneyline",
+                 "player": "", "selection": "home", "line": None}
+    gone = {**_opinion("2026-10-08", YESTERDAY_START), "line": 3.5}
+    opinions = pd.concat([opinions, pd.DataFrame([moneyline, gone])], ignore_index=True)
+    page = cl.render_clv(
+        cl.build_clv_report(opinions, captures, now=MORNING), generated="t"
+    ).splitlines()
+
+    considered = next(i for i, line in enumerate(page)
+                      if line.startswith("- Opinions considered"))
+    assert "no closing price found: **2**" in page[considered]
+    assert page[considered + 1].startswith("- Of those, **1** are in a market")
+    assert page[considered + 2].startswith("- The other **1** are in a market")
+    assert page[considered + 3].startswith("- Not yet played: **1** opinion(s)")
+
+
 def test_without_a_now_the_library_counts_every_opinion() -> None:
     counts = cl.build_clv_report(*_yesterday_and_tonight())["counts"]
     assert counts["opinions"] == 2
@@ -184,3 +239,11 @@ def test_the_runner_reads_the_real_clock_by_default(tmp_path: Path) -> None:
 def test_the_runner_refuses_a_now_without_a_timezone(tmp_path: Path) -> None:
     with pytest.raises(SystemExit):
         _run(tmp_path, (YESTERDAY_START, TONIGHT_START), "--now", "2026-10-09T13:30:00")
+
+
+def test_the_generated_stamp_is_the_now_the_report_was_built_for(tmp_path: Path) -> None:
+    code, page = _run(tmp_path, (YESTERDAY_START, TONIGHT_START),
+                      "--now", MORNING.isoformat())
+
+    assert code == 0
+    assert f"- Generated: {MORNING.isoformat(timespec='seconds')}" in page

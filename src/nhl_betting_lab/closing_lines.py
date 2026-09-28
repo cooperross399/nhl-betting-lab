@@ -1065,19 +1065,6 @@ def render_clv(report: dict, *, generated: str = "") -> str:
         f"matched to a closing price: **{counts.get('matched', 0)}**; "
         f"no closing price found: **{counts.get('no_close', 0)}**.",
     ]
-    not_yet = int(counts.get("not_yet_played", 0) or 0)
-    if not_yet:
-        # Added to, not split: none of these is in the count above. Their
-        # games start after this report was built, so no close exists yet,
-        # and they used to be counted as having none — and, with nothing in
-        # the store for their game yet, blamed on the capture.
-        lines += [
-            f"- Not yet played: **{not_yet}** opinion(s), "
-            f"{int(counts.get('bets_not_yet_played', 0) or 0)} of them staked, "
-            "whose game starts after this report was built. None has a "
-            "closing price yet and none is counted above; each is scored "
-            "against its close once its game has started.",
-        ]
     # Split, not added to: every opinion below is already in the count above.
     # All of them used to be explained by the paragraph after this, as
     # selections the books pulled — including every moneyline opinion, in a
@@ -1108,6 +1095,21 @@ def render_clv(report: dict, *, generated: str = "") -> str:
                 "face-off: the books pulled or moved it, or the capture's "
                 "ladders did not carry that line.",
             ]
+    not_yet = int(counts.get("not_yet_played", 0) or 0)
+    if not_yet:
+        # Added to, not split: none of these is in the count above. Their
+        # games start after this report was built, so no close exists yet,
+        # and they used to be counted as having none — and, with nothing in
+        # the store for their game yet, blamed on the capture. Printed BELOW
+        # "Of those" and "The other", which split the no-close count: placed
+        # between that count and them, they read as splitting this line.
+        lines += [
+            f"- Not yet played: **{not_yet}** opinion(s), "
+            f"{int(counts.get('bets_not_yet_played', 0) or 0)} of them staked, "
+            "whose game starts after this report was built. None has a "
+            "closing price yet and none is counted above; each is scored "
+            "against its close once its game has started.",
+        ]
     lines += [
         "",
         "A closing price is the last price captured **strictly before** the",

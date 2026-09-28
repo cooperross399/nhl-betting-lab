@@ -165,9 +165,12 @@ def main(argv: list[str] | None = None) -> int:
         "--now",
         default="",
         help=(
-            "ISO instant to treat as now, for reproducing a past report. "
-            "Defaults to the clock. An opinion whose game starts after it is "
-            "counted as not yet played rather than as having no close."
+            "ISO instant to treat as now. Defaults to the clock. An opinion "
+            "whose game starts after it is counted as not yet played rather "
+            "than as having no close. It moves the clock only: every snapshot "
+            "on disk is still read, so an opinion frozen after it appears as "
+            "not yet played rather than absent, as it would have been from a "
+            "report really built at that moment."
         ),
     )
     args = parser.parse_args(argv)
@@ -189,7 +192,9 @@ def main(argv: list[str] | None = None) -> int:
     unreadable: dict[str, str] = {}
     opinions = _opinions(processed, archive, unreadable=unreadable)
     damaged = _unreadable_snapshots(opinions, unreadable)
-    generated = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    # The page is stamped with the instant it was built FOR: under --now the
+    # "not yet played" line is relative to that, not to the wall clock.
+    generated = now.isoformat(timespec="seconds")
     # A damaged movement day is named and left out; the good days are still
     # scored. It used to be skipped without a word and exit 0.
     movement_unreadable: dict[str, str] = {}
