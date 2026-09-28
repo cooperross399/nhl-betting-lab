@@ -271,7 +271,14 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.live:
         provider = odds_api.OddsApiProvider()
-        stamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        # One instant for the whole run. Both fetches drop a game that has
+        # started by `now`, and each reading its own clock would let a game
+        # that starts between the two calls be staged by the bulk fetch and
+        # dropped by the per-event one: the slate would count it, and every
+        # per-event market would read "priced for N-1 of N" and leave the
+        # card.
+        fetched = datetime.now(timezone.utc)
+        stamp = fetched.isoformat(timespec="seconds")
         # ONE window over both fetches, or none over either. The eligibility
         # gate measures coverage against the slate the staged prices
         # describe: a bulk fetch covering the whole posted board while the
@@ -293,6 +300,7 @@ def main(argv: list[str] | None = None) -> int:
                 fetched_at=stamp,
                 league_days=league_days,
                 max_events=args.max_events,
+                now=fetched,
             )
         except EmptySlateError as exc:
             # A 422 to the market list and to a plain moneyline is the
@@ -377,6 +385,7 @@ def main(argv: list[str] | None = None) -> int:
                     credit_cap=args.credit_cap,
                     fetched_at=stamp,
                     league_days=league_days,
+                    now=fetched,
                 )
             except odds_api.ProviderError as exc:
                 # The events list failed. `fetch_player_props` asks the free

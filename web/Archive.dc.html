@@ -104,7 +104,7 @@ class Component extends DCLogic {
       const [y, m, dd] = d.date.split("-").map(Number), dt = new Date(y, m - 1, dd), k = `${y}-${m}`;
       if (!by.has(k)) by.set(k, { label: mf.format(dt), items: [] });
       by.get(k).items.push({ href: `Board.dc.html?date=${encodeURIComponent(d.file || d.date)}`, label: F.fmtDateOnly(d.date), slot: d.slot ? `${d.slot} card` : d.note || "",
-        games: typeof d.games === "number" ? `${d.games} ${sport === "epl" ? "fixtures" : "games"}` : "", bets: typeof d.bets === "number" ? `${d.bets} best bet${d.bets === 1 ? "" : "s"}` : "" });
+        games: typeof d.games === "number" ? `${d.games} ${sport === "epl" ? "fixtures" : "games"}` : "", bets: typeof d.bets === "number" ? `${d.bets} best bet${d.bets === 1 ? "" : "s"}` : d.bets === null ? "not priced" : "" });
     }
     const months = [...by.values()].map((m) => ({ ...m, countLabel: `${m.items.length} board${m.items.length === 1 ? "" : "s"}` }));
     const otherSports = S.ORDER.filter((k) => k !== sport).map((k, i) => ({ name: S.SPORTS[k].name, href: S.SPORTS[k].host, style: i === 0 ? "margin-left:10px;padding-left:22px;border-left:1px solid #d6d3cc;" : "" }));
