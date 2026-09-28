@@ -73,7 +73,14 @@ jobs:
                 --workflow "$wf" --no-merge || true
             done
           done
-          games=$(find data/raw/nhl/boxscore -name '*.json' 2>/dev/null | wc -l)
+          # FINAL boxscores only, the same states as nhl_api.game_is_final.
+          # This counted every file, and until fetch_boxscore stopped caching
+          # non-final answers Gameday Refresh left one per scheduled game in
+          # the state this restores, so a thin cache padded with a season of
+          # future games cleared the floor. `|| true`: grep exits non-zero on
+          # a missing cache or one with no final game, which under pipefail
+          # would end the step before the error below could say why.
+          games=$(grep -rliE --include='*.json' '"gameState":[[:space:]]*"(OFF|FINAL)"' data/raw/nhl/boxscore 2>/dev/null | wc -l || true)
           echo "Boxscores restored: $games"
           if [ "$games" -lt 500 ]; then
             echo "::error::Only $games boxscores restored. Re-deciding on a thin cache would report a verdict change that is really a data shortage."
