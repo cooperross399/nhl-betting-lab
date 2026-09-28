@@ -552,9 +552,10 @@ jobs:
         # After the card froze today's opinions and results were fetched
         # earlier in the run, every pending snapshot whose games are final
         # settles into the accumulating ledger. This is the only possible
-        # price evidence for hits and the regulation three-way, and the
-        # out-of-sample stream for everything else — losing it would mean the
-        # season taught nothing.
+        # price evidence for the regulation three-way, which has never been
+        # bought historically (it is per-event only and was never requested),
+        # and the out-of-sample stream for everything else — losing it would
+        # mean the season taught nothing.
         if: always()
         continue-on-error: true
         env:
