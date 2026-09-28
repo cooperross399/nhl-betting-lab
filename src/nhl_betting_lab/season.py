@@ -78,6 +78,21 @@ def row_game_date(row: object) -> str:
     return game_date(commence or clean_text(getattr(row, "date", "")))
 
 
+#: `gameScheduleState` for a game that will be played when the schedule says.
+#: Any other stated value (the real cache holds `CNCL`) is a game called off.
+SCHEDULED_STATE = "OK"
+
+
+def _is_scheduled(game: dict) -> bool:
+    """False only when a cached game's schedule state is stated and not OK.
+
+    The one rule both readers below apply, so they cannot disagree about a
+    postponed or cancelled game again.
+    """
+    state = str(game.get("gameScheduleState") or "").strip().upper()
+    return not state or state == SCHEDULED_STATE
+
+
 def known_regular_season_games(raw_dir=None) -> set[tuple[str, str, str]]:
     """(game date, HOME, AWAY) for every regular-season game the cache knows.
 
@@ -89,6 +104,17 @@ def known_regular_season_games(raw_dir=None) -> set[tuple[str, str, str]]:
     an unfiltered card would freeze opinions it has no business holding into
     the forward ledger, where they would rot as unsettleable noise for the
     two weeks before opening night.
+
+    A game the schedule positively calls off (`gameScheduleState` stated and
+    not `OK`, see `SCHEDULED_STATE`) is not in the set, by the same rule as
+    `scheduled_regular_season_starts`. This reader used to ignore the state,
+    so the two readers of one cache disagreed about a postponed game: a
+    `PPD` game stays in the cache under its original date, the provider can
+    go on listing it with a future commence time, and the card's screen,
+    which matches every price row against this set, let it through to be
+    priced, staked and frozen. That night's snapshot then waited out
+    `forward_evidence.PATIENCE_DAYS` for a game that never finals on that
+    date, and appended its rows as unsettleable.
     """
     import json
     from pathlib import Path
@@ -128,6 +154,11 @@ def known_regular_season_games(raw_dir=None) -> set[tuple[str, str, str]]:
                 continue
             if int(game.get("gameType", 0) or 0) != REGULAR_SEASON_GAME_TYPE:
                 continue
+            # A missing state is not a called-off game, and a game both
+            # clubs' files carry is known if either copy says it is on —
+            # the set gains it from that copy and nothing removes it.
+            if not _is_scheduled(game):
+                continue
             day = str(game.get("gameDate", ""))[:10]
             home = str((game.get("homeTeam") or {}).get("abbrev", "")).upper()
             away = str((game.get("awayTeam") or {}).get("abbrev", "")).upper()
@@ -136,9 +167,6 @@ def known_regular_season_games(raw_dir=None) -> set[tuple[str, str, str]]:
     return known
 
 
-#: `gameScheduleState` for a game that will be played when the schedule says.
-#: Any other stated value (the real cache holds `CNCL`) is a game called off.
-SCHEDULED_STATE = "OK"
 
 
 def scheduled_regular_season_starts(
@@ -180,8 +208,7 @@ def scheduled_regular_season_starts(
                 continue
             if int(game.get("gameType", 0) or 0) != REGULAR_SEASON_GAME_TYPE:
                 continue
-            state = str(game.get("gameScheduleState") or "").strip().upper()
-            if state and state != SCHEDULED_STATE:
+            if not _is_scheduled(game):
                 continue
             day = str(game.get("gameDate", ""))[:10]
             home = str((game.get("homeTeam") or {}).get("abbrev", "")).upper()
