@@ -24,6 +24,7 @@ import argparse
 import json
 import re
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from pathlib import Path
 
 #: series key -> candidate paths into a game dict, first numeric hit wins.
@@ -86,6 +87,57 @@ def dump(p: Path, obj) -> None:
     p.write_text(json.dumps(obj, indent=1, ensure_ascii=False), encoding="utf-8")
 
 
+#: The day a board belongs to, and the day a card was generated on, are both
+#: New York days: the card runs at 09:30 there and the slate is the NHL's.
+BOARD_ZONE = ZoneInfo("America/New_York")
+
+
+def built_on_stale_state(board: dict) -> bool:
+    """Whether this board must not be frozen: it was built on an earlier day's
+    card, so it stands for an opinion the lab did not hold today.
+
+    Publish Site builds on its 14:45 cron and again after each Gameday Refresh,
+    and the state it restores is the newest Gameday run that carries one. A
+    cron build that starts before today's run has finished restores
+    YESTERDAY's run: the model is fitted without last night's games and every
+    back-to-back flag is lost (430 of 430 sides on 2025-26; 40 projected
+    winners flip). The day's first build froze for good, so that board used to
+    become the record that Results grades.
+
+    The first published opinion still stands, and is still never edited: the
+    Archive page's promise is unchanged. What changes is that a stale build is
+    not a published opinion to begin with. It is shown on the live page and
+    not frozen; the build after today's Gameday Refresh freezes the day.
+
+    Stale is: a regular-season board with games, built on a card whose
+    `cardGeneratedAt` is a New York day before `boardDate` (or cannot be
+    read). A board with NO card is not stale by this rule: that is the lab's
+    no-state path, which publishes and freezes the schedule alone so Results
+    can say the board carried no projection, and it is guarded elsewhere
+    (the state restore refuses an unanswered listing; a thin history projects
+    nothing). Preseason and game-less boards are never stale either. The cost,
+    accepted: a day whose Gameday runs are ALL dropped after an earlier day's
+    card was restored freezes nothing, and settles as "No board was
+    published", which is true.
+    """
+    if board.get("phase") != "regular" or not board.get("games"):
+        return False
+    stamp = board.get("cardGeneratedAt")
+    if stamp is None:
+        return False
+    try:
+        day = datetime.fromisoformat(str(board.get("boardDate"))).date()
+    except ValueError:
+        return True
+    try:
+        made = datetime.fromisoformat(str(stamp).replace("Z", "+00:00"))
+    except ValueError:
+        return True
+    if made.tzinfo is None:
+        return True
+    return made.astimezone(BOARD_ZONE).date() < day
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--data", default="dist/data")
@@ -125,7 +177,10 @@ def main(argv=None) -> int:
     # 1. freeze
     fname = f"{date}_{slot}.json" if slot else f"{date}.json"
     frozen = hist / fname
-    if not frozen.exists():
+    if built_on_stale_state(board):
+        print(f"did not freeze {fname}: built on a card generated {board.get('cardGeneratedAt') or 'never'}, "
+              "not today; the build after today's Gameday Refresh freezes the day")
+    elif not frozen.exists():
         dump(frozen, board)
         print(f"froze {fname}")
 

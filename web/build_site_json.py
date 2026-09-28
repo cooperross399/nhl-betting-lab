@@ -44,6 +44,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import importlib.util
 import json
 import sys
 import urllib.request
@@ -362,6 +363,17 @@ def load_model(processed: Path, outputs: Path):
     }
 
 
+def _site_history():
+    """`web/site_history.py`, loaded from beside this file. It owns the rule
+    for when a board may be frozen, and freezes the same file after this
+    script does: one copy of the rule, so the two freezes cannot disagree."""
+    path = Path(__file__).resolve().with_name("site_history.py")
+    spec = importlib.util.spec_from_file_location("_nhl_site_history", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def build_board(day: date, lab: Path, history_dir: Path) -> dict:
     now = datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
     games = schedule_for(day)
@@ -540,10 +552,17 @@ def build_board(day: date, lab: Path, history_dir: Path) -> dict:
         "generatedAt": now, "season": "2026–27", "phase": "preseason" if preseason else "regular",
         "boardDate": day.isoformat(), "notice": notice, "record": record, "teams": teams, "games": out_games,
         "allowlistedMarkets": allowlisted,
+        # When the Gameday card this board was built from was generated; None
+        # when no card was restored. A board built on an earlier day's card is
+        # shown but not frozen (web/site_history.py::built_on_stale_state).
+        "cardGeneratedAt": card.get("generated_at") or None,
     }
     history_dir.mkdir(parents=True, exist_ok=True)
     frozen = history_dir / f"{day.isoformat()}.json"
-    if not frozen.exists():  # the day's first published opinion stands
+    if _site_history().built_on_stale_state(board):
+        print(f"history/{frozen.name}: not frozen; this board was built on a card generated "
+              f"{board['cardGeneratedAt'] or 'never'}, not today.")
+    elif not frozen.exists():  # the day's first published opinion stands
         frozen.write_text(json.dumps(board, indent=1), encoding="utf-8")
     return board
 
