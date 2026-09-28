@@ -99,9 +99,18 @@ REGISTERED_POPULATIONS: dict[str, str] = {
     "population_every_opinion": (
         "every settled opinion in every market, whatever its edge"
     ),
+    # B is the MEASUREMENT bar the historical backtest ships at, never the
+    # card's stake. The page used to call it the card's bets, while the card
+    # stakes only best bets and withholds the stake on gates this filter
+    # does not apply (sweep 3, A1); `closing_lines.measurement_bar_note`
+    # names them on the page. Wording only: the filter is unchanged.
     "population_clears_edge_bar": (
-        "the settled opinions that clear the shipped edge bar for their "
-        "market (the Bets stream above)"
+        "the settled opinions whose edge clears the measurement bar for "
+        f"their market — {MIN_PROP_EDGE * 100:g}% for a prop, "
+        f"{MIN_EDGE * 100:g}% for a team market, the bar the historical "
+        "backtest measures at and the same filter as the per-market Bets "
+        "column. These are not the card's staked bets; the note below says "
+        "how they differ"
     ),
 }
 
@@ -961,7 +970,12 @@ TOO_FEW_TO_SURVIVE = 30
 def edge_bar(market_key: str) -> float:
     """The shipped edge bar for a market: the prop bar for a prop, else the
     team bar. One copy, read by the per-market Bets view and by the
-    registered statistic's edge-bar population alike."""
+    registered statistic's edge-bar population alike.
+
+    This is the MEASUREMENT bar the historical backtest ships at, not the
+    card's staking bar: the card stakes only best bets, above
+    `BEST_BET_PROP_EDGE` / `BEST_BET_EDGE`, and applies gates this bar does
+    not (`closing_lines.measurement_bar_note`)."""
     market = MARKETS_BY_KEY.get(market_key)
     return MIN_PROP_EDGE if market is not None and market.is_prop else MIN_EDGE
 
@@ -1049,10 +1063,14 @@ def registered_statistic(
     and reads negative from the vig alone. The same sentence goes on "the
     card is dark and places none, but a frozen opinion scored against the
     price it was frozen at is the same test", and the edge bar is among the
-    things the doc freezes for the test, which reads as the opinions the
-    card would have bet: B, `population_clears_edge_bar`, the per-market
-    Bets stream's own filter (`clears_edge_bar`). Choosing between them is Cooper's
-    decision, not code's, so both are computed the same way, each is
+    things the doc freezes for the test, which reads as the opinions
+    clearing that bar: B, `population_clears_edge_bar`, the per-market
+    Bets stream's own filter (`clears_edge_bar`). B is the MEASUREMENT bar
+    (`MIN_PROP_EDGE` / `MIN_EDGE`), not the card's staked bets: the card
+    stakes only best bets, above a higher bar, and stakes nothing past the
+    juice limit or the longest price or in a stake-excluded or hard-gated
+    market, so B holds opinions the card never staked (sweep 3, A1).
+    Choosing between them is Cooper's decision, not code's, so both are computed the same way, each is
     counted against the floor in its own settled opinions, and
     `population_undecided` is True. Neither carries a registered outcome.
 
@@ -1190,6 +1208,23 @@ def build_forward_report(
     return payload
 
 
+def _not_staked() -> str:
+    """The words both pages use to say a measured bet is not a staked one."""
+    from nhl_betting_lab.closing_lines import NOT_STAKED_PHRASE
+
+    return NOT_STAKED_PHRASE
+
+
+def _bets_note(subject: str) -> str:
+    """`subject` (population B, or the Bets column) named as the measurement
+    bar and set against what the card stakes. The page used to call both the
+    opinions the card staked (sweep 3, A1); wording only, no count reads it.
+    """
+    from nhl_betting_lab.closing_lines import measurement_bar_note
+
+    return f"**What {subject} counts.** " + measurement_bar_note()
+
+
 #: How each population is labelled on the page, in the order shown.
 _POPULATION_LABELS = (
     ("population_every_opinion", "A. Every settled opinion"),
@@ -1256,7 +1291,9 @@ def _registered_section(stat: dict | None) -> list[str]:
             "carries the whole margin. The words \"a frozen opinion scored "
             "against the price it was frozen at is the same test\", with the "
             "edge bar among what the registration freezes, read as the "
-            "opinions the card would have bet (B). Both are computed below the same way: "
+            "opinions clearing the measurement bar (B) — "
+            f"{_not_staked()}; the note under the table says "
+            "how the two differ. Both are computed below the same way: "
             "one per wager after the best-price collapse, pooled across "
             "markets, the 95% interval widened (Bonferroni) for the markets "
             "measured, each wager an independent draw, and each counted "
@@ -1290,6 +1327,7 @@ def _registered_section(stat: dict | None) -> list[str]:
     for key, label in _POPULATION_LABELS:
         lines.append(f"- **{label}**: {stat[key]['definition']}.")
     lines.append("")
+    lines += [_bets_note("population B"), ""]
     return lines
 
 
@@ -1395,6 +1433,8 @@ def render_forward_report(payload: dict) -> str:
 
     lines += [
         "## Accumulated so far, at the shipped edge bars",
+        "",
+        _bets_note("the Bets column"),
         "",
         (
             "| Market | Opinions | Bets | Profit | ROI "

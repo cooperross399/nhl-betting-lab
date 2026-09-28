@@ -584,8 +584,9 @@ def collapse_to_best(opinions: pd.DataFrame) -> pd.DataFrame:
     The snapshot freezes every staged price row, which is one row per book.
     Scoring all of them would measure the books; scoring whichever row
     happened to survive a de-duplication would measure luck. Worse, the
-    survivor decides whether the selection clears the staking bar at all, so
-    an arbitrary pick silently moves bets in and out of the "bets" table —
+    survivor decides whether the selection clears the measurement bar at
+    all, so an arbitrary pick silently moves bets in and out of the "bets"
+    table —
     and it removes them exactly where the price was worst, which is where
     the losses live.
 
@@ -839,6 +840,80 @@ def _verdict(low: float, high: float, mean: float, quantity: str) -> str:
     )
 
 
+def _percent(value: float) -> str:
+    """0.06 -> "6%", 0.035 -> "3.5%": a bar as a reader writes it."""
+    return f"{value * 100:g}%"
+
+
+def measurement_bar_note() -> str:
+    """What a "bet" in the CLV and forward reports is, and what it is not.
+
+    Both reports count as a bet every opinion whose edge clears the
+    MEASUREMENT bar — `MIN_PROP_EDGE` for a prop, `MIN_EDGE` for a team
+    market, the bar the historical backtest measures at. That is not what
+    the card stakes, and both pages used to say it was — the forward page
+    called population B the card's would-be bets, and the CLV docstring
+    called Bets the staking bar and the bankroll's record (sweep 3, A1). The card stakes only best bets, above a higher bar; a
+    lean between the two is recorded and not staked; and past the juice
+    limit, past the longest price, in a stake-excluded market or in a
+    hard-gated one it stakes nothing whatever the edge. Nor is every gap
+    about the price: `run_gameday_card.py` freezes the snapshot from the
+    unfiltered prices before `build_card` runs, so the count also holds the
+    rungs one-stake-per-outcome demoted, markets eligibility kept off the
+    card (not allowlisted, or incomplete on a capped night), a blocked
+    card's opinions, and rows the puck-drop guard pulled.
+
+    The limits are strict: -160 and +600 are staked, -161 and +601 are not,
+    which is what "shorter than" and "longer than" say
+    (`is_heavy_juice` is `price < limit`; `build_candidates` refuses
+    `price > max_price`).
+
+    Built from the constants the card and the filters read, so the sentence
+    cannot drift from the gates it describes. Wording only: no count reads
+    it. Imported lazily because the card module is heavier than this one.
+    """
+    from nhl_betting_lab.config import (
+        MAX_DEFAULT_JUICE,
+        MAX_DEFAULT_PRICE,
+        MIN_EDGE,
+        MIN_PROP_EDGE,
+    )
+    from nhl_betting_lab.reports.gameday_card import (
+        BEST_BET_EDGE,
+        BEST_BET_PROP_EDGE,
+        HARD_GATED_MARKETS,
+        STAKE_EXCLUDED_MARKETS,
+    )
+
+    excluded = ", ".join(f"`{m}`" for m in sorted(STAKE_EXCLUDED_MARKETS))
+    gated = ", ".join(f"`{m}`" for m in sorted(HARD_GATED_MARKETS))
+    return (
+        "A bet here is an opinion whose edge clears the measurement bar "
+        f"({_percent(MIN_PROP_EDGE)} for a prop, {_percent(MIN_EDGE)} for a "
+        "team market — the bar the historical backtest measures at). These "
+        f"are {NOT_STAKED_PHRASE}, and they are not what a bankroll following "
+        "the card would have done. The card stakes only best bets, at an "
+        f"edge of {_percent(BEST_BET_PROP_EDGE)} for a prop or "
+        f"{_percent(BEST_BET_EDGE)} for a team market; an edge between the "
+        "two bars is a lean, recorded and not staked. It also stakes "
+        f"nothing priced shorter than {MAX_DEFAULT_JUICE} or longer than "
+        f"+{MAX_DEFAULT_PRICE}, nothing in a stake-excluded market "
+        f"({excluded}) and nothing in a hard-gated market ({gated}), "
+        "whatever the edge. Some reasons are not about the price at all: "
+        "the snapshot is frozen from the unfiltered prices before the card "
+        "is built, so this also counts every rung of a ladder after the one "
+        "that took the outcome's single stake (one stake per outcome), "
+        "markets the card could not use that day (not allowlisted, or "
+        "incomplete on a night the per-event fetch was capped), the "
+        "opinions of a day whose card was blocked, and rows whose stake the "
+        "puck-drop guard pulled. Every such opinion is still counted here."
+    )
+
+
+#: The words both pages use to say a measured "bet" is not a staked one.
+NOT_STAKED_PHRASE = "not the card's staked bets"
+
+
 REPORT_FILENAME = "closing_line_value.md"
 
 
@@ -848,9 +923,18 @@ def build_clv_report(
     """Opinions and bets, kept separate, because they answer two questions.
 
     **Opinions** is every priced row: it measures the model. **Bets** is the
-    subset that cleared the staking bar: it measures what the bankroll would
-    actually have done. Pooling them would let a large, weak opinion set bury
-    a small, bad betting record — or the reverse.
+    subset whose edge clears the MEASUREMENT bar — `MIN_PROP_EDGE` for a
+    prop, `MIN_EDGE` for a team market, the backtest's shipped bar: it
+    measures the model's confident opinions. Pooling them would let a large,
+    weak opinion set bury a small, bad confident set — or the reverse.
+
+    Bets is not what the card staked, and not the bankroll's outcome. The
+    card stakes only best bets, above a higher bar, and withholds the stake
+    past the juice limit or the longest price and in stake-excluded and
+    hard-gated markets; `measurement_bar_note` says so on the page.
+    (Sweep 3, A1: this docstring used to call Bets the staking bar and the
+    bankroll's record, and five opinions the card staked none of were five
+    bets here.)
     """
     from nhl_betting_lab.config import MIN_EDGE, MIN_PROP_EDGE
     from nhl_betting_lab.markets import MARKETS_BY_KEY
@@ -1308,6 +1392,7 @@ def render_clv(report: dict, *, generated: str = "") -> str:
         "  only where the opposite side also closed, and the regulation",
         "  three-way is excluded entirely because a three-outcome market",
         "  cannot be de-vigged as a pair.",
+        "- **Bets**: " + measurement_bar_note(),
         "- **Games** is the sample each interval counts. A thousand rows",
         "  from ten games are ten games of evidence, not a thousand.",
         "- Positive CLV with a losing record is variance against us; a",
