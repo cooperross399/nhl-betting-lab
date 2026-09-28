@@ -49,6 +49,7 @@ import json
 import os
 import subprocess
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from types import ModuleType
 
@@ -95,6 +96,18 @@ def _load_shadow_script() -> ModuleType:
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module
+
+
+#: The scheduled run's own moment (`0 16 15 10 *`), before any fixture game.
+#: The script passes its instant to both fetches as the moment a started game
+#: is told by, so it is frozen here rather than read from the calendar.
+RUN_AT = datetime(2026, 10, 15, 16, 0, tzinfo=timezone.utc)
+
+
+class _Frozen(datetime):
+    @classmethod
+    def now(cls, tz=None):  # type: ignore[override]
+        return RUN_AT.astimezone(tz) if tz else RUN_AT.replace(tzinfo=None)
 
 
 class _Loaded:
@@ -188,6 +201,7 @@ def _run(
     module = _load_shadow_script()
     real_provider = odds_api.OddsApiProvider
     monkeypatch.setattr(module, "load_provider_env", lambda: _Loaded())
+    monkeypatch.setattr(module, "datetime", _Frozen)
     # No policy file under tmp_path: the nothing-is-allowed policy. The
     # labels under test are decided before the allowlist is consulted.
     monkeypatch.setattr(
