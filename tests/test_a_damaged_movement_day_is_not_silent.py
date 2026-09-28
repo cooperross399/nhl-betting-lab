@@ -143,7 +143,9 @@ def _run(tmp_path: Path, capsys) -> tuple[int, str, str]:
     module = load_script("run_closing_line_value.py")
     code = module.main(["--processed-dir", str(tmp_path / "processed"),
                         "--archive-dir", str(tmp_path / "archive"),
-                        "--output-dir", str(tmp_path / "out")])
+                        "--output-dir", str(tmp_path / "out"),
+                        # After every game here: unplayed games are left out.
+                        "--now", "2027-06-01T00:00:00+00:00"])
     text = (tmp_path / "out" / cl.REPORT_FILENAME).read_text(encoding="utf-8")
     return code, text, capsys.readouterr().out
 

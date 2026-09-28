@@ -206,7 +206,9 @@ def _run(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> tuple[int, str, 
     module = load_script("run_closing_line_value.py")
     code = module.main(["--processed-dir", str(tmp_path / "processed"),
                         "--archive-dir", str(tmp_path / "archive"),
-                        "--output-dir", str(tmp_path / "out")])
+                        "--output-dir", str(tmp_path / "out"),
+                        # After every game here: unplayed games are left out.
+                        "--now", "2027-06-01T00:00:00+00:00"])
     report = tmp_path / "out" / cl.REPORT_FILENAME
     assert report.is_file(), "no closing_line_value.md was written"
     return code, report.read_text(encoding="utf-8"), capsys.readouterr().out

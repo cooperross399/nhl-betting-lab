@@ -917,8 +917,46 @@ NOT_STAKED_PHRASE = "not the card's staked bets"
 REPORT_FILENAME = "closing_line_value.md"
 
 
+def split_not_yet_played(
+    opinions: pd.DataFrame, now: datetime | None
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """(played, not yet played): opinions whose game starts after `now`.
+
+    A closing price is the last capture strictly before face-off, so a game
+    that has not started cannot have one yet. Gameday Refresh freezes the
+    day's opinions and then builds this report in the same job, hours before
+    the first face-off, so every report was built with tonight's whole slate
+    frozen and unplayed. All of it was counted under "no closing price
+    found", and — with no pre-start price in the store for those games yet —
+    explained as "No book pulled these. The capture never priced that market
+    for that game". Sweep 3's replay (yesterday's opinion closed two hours
+    before face-off, tonight's frozen at 23:00Z, the report built at 13:30Z)
+    read matched 1, no_close 1, no_close_uncaptured 1, bets_no_close 1.
+
+    Only an opinion whose start PARSES and lies strictly after `now` is not
+    yet played. A game starting at `now` exactly has started. An opinion
+    whose start will not parse stays with the played ones, in the ordinary
+    counts: an unreadable stamp is never a reason for an opinion to leave
+    the page. With `now` None nothing is split, which is what every caller
+    that measures finished history wants.
+    """
+    if now is None or opinions.empty or "commence_time" not in opinions.columns:
+        return opinions, opinions.iloc[0:0]
+    if now.tzinfo is None:
+        raise ValueError("now must carry a timezone; commence times do.")
+    pending = []
+    for value in opinions["commence_time"]:
+        start = moment(value)
+        pending.append(start is not None and start > now)
+    mask = pd.Series(pending, index=opinions.index, dtype=bool)
+    return opinions[~mask], opinions[mask]
+
+
 def build_clv_report(
-    opinions: pd.DataFrame, captures: pd.DataFrame
+    opinions: pd.DataFrame,
+    captures: pd.DataFrame,
+    *,
+    now: datetime | None = None,
 ) -> dict:
     """Opinions and bets, kept separate, because they answer two questions.
 
@@ -935,6 +973,11 @@ def build_clv_report(
     (Sweep 3, A1: this docstring used to call Bets the staking bar and the
     bankroll's record, and five opinions the card staked none of were five
     bets here.)
+
+    `now` is when the report is built. An opinion whose game starts after it
+    has no close YET, so it is counted as not yet played and in none of the
+    matched, no-close or uncaptured counts (`split_not_yet_played`). The
+    runner always passes it; None splits nothing.
     """
     from nhl_betting_lab.config import MIN_EDGE, MIN_PROP_EDGE
     from nhl_betting_lab.markets import MARKETS_BY_KEY
@@ -946,6 +989,19 @@ def build_clv_report(
             return float(edge) >= bar
         except (TypeError, ValueError):
             return False
+
+    # Split off first, so every count below is of games that have started.
+    # They are counted, on the page, not dropped: tomorrow's report scores
+    # them against their close like any other opinion.
+    opinions, pending = split_not_yet_played(opinions, now)
+    pending = collapse_to_best(pending)
+    pending_bets = int(
+        sum(
+            1
+            for row in pending.itertuples()
+            if _is_bet(getattr(row, "market", ""), getattr(row, "edge", 0.0))
+        )
+    )
 
     # Classified BEFORE the join, so the reconciliation can say how many
     # *bets* went unmatched. Counting only opinions would let a bet whose
@@ -964,6 +1020,8 @@ def build_clv_report(
 
     rows, counts = clv_rows(opinions, captures)
     counts["bets"] = staked_total
+    counts["not_yet_played"] = int(len(pending))
+    counts["bets_not_yet_played"] = pending_bets
     uncaptured = uncaptured_markets(opinions, captures)
     counts["no_close_uncaptured"] = sum(uncaptured.values())
     counts["store_has_closes"] = bool(closing_prices(captures))
@@ -1228,6 +1286,21 @@ def render_clv(report: dict, *, generated: str = "") -> str:
                 "face-off: the books pulled or moved it, or the capture's "
                 "ladders did not carry that line.",
             ]
+    not_yet = int(counts.get("not_yet_played", 0) or 0)
+    if not_yet:
+        # Added to, not split: none of these is in the count above. Their
+        # games start after this report was built, so no close exists yet,
+        # and they used to be counted as having none — and, with nothing in
+        # the store for their game yet, blamed on the capture. Printed BELOW
+        # "Of those" and "The other", which split the no-close count: placed
+        # between that count and them, they read as splitting this line.
+        lines += [
+            f"- Not yet played: **{not_yet}** opinion(s), "
+            f"{int(counts.get('bets_not_yet_played', 0) or 0)} of them staked, "
+            "whose game starts after this report was built. None has a "
+            "closing price yet and none is counted above; each is scored "
+            "against its close once its game has started.",
+        ]
     lines += [
         "",
         "A closing price is the last price captured **strictly before** the",

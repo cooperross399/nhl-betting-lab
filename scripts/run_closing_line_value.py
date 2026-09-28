@@ -161,7 +161,30 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--processed-dir", default=str(PROCESSED_DIR))
     parser.add_argument("--output-dir", default=str(OUTPUTS_DIR))
     parser.add_argument("--archive-dir", default="")
+    parser.add_argument(
+        "--now",
+        default="",
+        help=(
+            "ISO instant to treat as now. Defaults to the clock. An opinion "
+            "whose game starts after it is counted as not yet played rather "
+            "than as having no close. It moves the clock only: every snapshot "
+            "on disk is still read, so an opinion frozen after it appears as "
+            "not yet played rather than absent, as it would have been from a "
+            "report really built at that moment."
+        ),
+    )
     args = parser.parse_args(argv)
+
+    # Gameday Refresh runs this minutes after the card froze tonight's slate,
+    # so every report is built before tonight's games start. Without a clock
+    # every one of those opinions read as "no closing price found".
+    now = (
+        datetime.fromisoformat(args.now)
+        if args.now
+        else datetime.now(timezone.utc)
+    )
+    if now.tzinfo is None:
+        parser.error("--now must carry a timezone; commence times do.")
 
     processed = Path(args.processed_dir)
     archive = Path(args.archive_dir) if args.archive_dir else None
@@ -169,7 +192,9 @@ def main(argv: list[str] | None = None) -> int:
     unreadable: dict[str, str] = {}
     opinions = _opinions(processed, archive, unreadable=unreadable)
     damaged = _unreadable_snapshots(opinions, unreadable)
-    generated = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    # The page is stamped with the instant it was built FOR: under --now the
+    # "not yet played" line is relative to that, not to the wall clock.
+    generated = now.isoformat(timespec="seconds")
     # A damaged movement day is named and left out; the good days are still
     # scored. It used to be skipped without a word and exit 0.
     movement_unreadable: dict[str, str] = {}
@@ -198,7 +223,7 @@ def main(argv: list[str] | None = None) -> int:
         "price(s) in the store."
     )
 
-    report = build_clv_report(opinions, captures)
+    report = build_clv_report(opinions, captures, now=now)
     report["unreadable_snapshots"] = damaged
     movement_damaged = [
         {"name": name, "reason": reason}
@@ -214,7 +239,8 @@ def main(argv: list[str] | None = None) -> int:
         f"Matched {counts.get('matched', 0)} of {counts.get('opinions', 0)} "
         f"opinion(s) to a closing price; {counts.get('no_close', 0)} had none, "
         f"of which {counts.get('no_close_not_near_face_off', 0)} were priced "
-        "before face-off but not near it."
+        "before face-off but not near it; "
+        f"{counts.get('not_yet_played', 0)} not yet played."
     )
     _say_unreadable_snapshots(damaged)
     print(f"  report: {path}")

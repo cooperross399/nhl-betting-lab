@@ -259,7 +259,9 @@ def test_one_game_cannot_bound_an_interval_however_many_rows_it_has(tmp_path) ->
 
     code = load_script("run_closing_line_value.py").main(
         ["--processed-dir", str(processed), "--archive-dir", str(archive),
-         "--output-dir", str(output)]
+         "--output-dir", str(output),
+         # After every game here: the report now leaves unplayed games out.
+         "--now", "2027-06-01T00:00:00+00:00"]
     )
     rendered = (output / cl.REPORT_FILENAME).read_text(encoding="utf-8")
 
