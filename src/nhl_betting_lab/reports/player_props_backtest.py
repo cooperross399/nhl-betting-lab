@@ -20,9 +20,11 @@ rather than scoring it as a loss.
 
 **The prices are one-sided.** Books quote the Over and the Yes; there is often
 no quoted Under to devig against. Implied probability from a single quoted
-side includes the vig, which overstates the true probability and therefore
-**understates** every model edge here. The measurement is conservative in that
-one direction.
+side includes the vig, so the edge that decides whether a bet is placed is
+measured against a stricter bar than a devigged one. That concerns selection
+only. The return is priced at the best price across the books quoting each
+wager — best of N, disproportionately the stale quote — and so leans
+**optimistic**; the honest figure sits between it and the every-quote average.
 
 **Not every market can be measured.** The provider retains some markets
 historically and not others. A market that cannot be bought cannot be
@@ -787,10 +789,18 @@ def _standing_notes() -> list[str]:
         "Settlement comes from the NHL boxscore, never from the odds "
         "provider. A provider outage can change what was measured; it can "
         "never change what a bet did.",
-        "Prop prices are one-sided at most books, so the implied probability "
-        "used here includes the vig. That overstates the true probability and "
-        "therefore **understates** every edge below — the measurement is "
-        "conservative in that one direction.",
+        # This note used to end "the measurement is conservative in that one
+        # direction". The vig makes only the bet *selection* stricter; the
+        # return below is priced at the best of N books (see "ONE WAGER IS
+        # ONE BET" in `run_backtest`), and that leans the other way.
+        "Prop prices are one-sided at most books, so the edge used for bet "
+        "selection is measured against the price with the vig still in it, "
+        "which makes the threshold harder to clear. That says nothing about "
+        "the return: every bet below is settled at the best price across the "
+        "books quoting it, the most favourable price on the board and "
+        "disproportionately the stale one about to move. The measured return "
+        "therefore leans optimistic, not conservative; the honest figure sits "
+        "between it and the every-quote average.",
         "A player who did not dress produces no bet, matching how a book "
         "voids a prop on a player who never enters.",
         "A market the provider does not retain historically cannot be "
