@@ -134,18 +134,57 @@ def test_two_responses_inside_one_window_rebuild_to_one_row_per_quote(
 ) -> None:
     cache = tmp_path / "historical_props"
     _write(cache, CARD_FIRST, _prop_event(-110))
-    _write(cache, CARD_SECOND, _prop_event(-105))
+    _write(cache, CARD_SECOND, _prop_event(-115))
 
     rebuilt = _read(_rebuild(tmp_path) / "historical_prop_prices.csv")
 
     # Two quotes (over and under), each fetched twice inside `card`.
     assert len(rebuilt) == 2, rebuilt
     assert set(label_phases(rebuilt)["phase"]) == {"card"}
-    # The later response wins, as `keep="last"` gives it on a purchase that
-    # appends a newer fetch to the store.
+    # The later response wins even though its price is WORSE: the better of
+    # two moments is a price nobody held at one instant.
     over = rebuilt[rebuilt["selection"] == "over"]
-    assert over["american_odds"].tolist() == [-105]
+    assert over["american_odds"].tolist() == [-115]
     assert over["snapshot"].tolist() == [CARD_SECOND]
+
+
+def test_an_anytime_price_and_goals_over_half_in_one_response_keep_the_better(
+    tmp_path: Path,
+) -> None:
+    """One book, one instant, one identity, two prices: both were takeable.
+
+    The anytime scorer lands on goals over 0.5 by design, so a response
+    carrying both at one book holds one quote identity at two prices. The
+    whole-row rebuild kept both; a keep-last dedupe kept whichever the
+    payload listed last. The better one is kept.
+    """
+    event = _prop_event(-110)
+    event["bookmakers"][0]["markets"] = [
+        {
+            "key": "player_goal_scorer_anytime",
+            "outcomes": [
+                {"name": "Yes", "description": "Test Player", "price": 250}
+            ],
+        },
+        {
+            "key": "player_goals",
+            "outcomes": [
+                {
+                    "name": "Over",
+                    "description": "Test Player",
+                    "price": 210,
+                    "point": 0.5,
+                }
+            ],
+        },
+    ]
+    _write(tmp_path / "historical_props", CARD_FIRST, event)
+
+    rebuilt = _read(_rebuild(tmp_path) / "historical_prop_prices.csv")
+
+    assert len(rebuilt) == 1, rebuilt
+    assert rebuilt.iloc[0]["market"] == "goals"
+    assert rebuilt["american_odds"].tolist() == [250]
 
 
 def test_a_second_window_is_never_collapsed_onto_the_first(tmp_path: Path) -> None:
@@ -165,7 +204,7 @@ def test_the_rebuilt_prop_store_is_already_what_dedupe_prices_would_keep(
 ) -> None:
     cache = tmp_path / "historical_props"
     _write(cache, CARD_FIRST, _prop_event(-110))
-    _write(cache, CARD_SECOND, _prop_event(-105))
+    _write(cache, CARD_SECOND, _prop_event(-115))
     _write(cache, LATE, _prop_event(-120))
 
     rebuilt = _read(_rebuild(tmp_path) / "historical_prop_prices.csv")

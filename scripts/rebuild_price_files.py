@@ -96,8 +96,10 @@ def main(argv: list[str] | None = None) -> int:
         # take the better of two moments inside a window. `dedupe_prices` is
         # what both buy scripts write through, keyed on the quote plus the
         # window `label_phases` derives, so a second window is never merged
-        # into the first. The files are read in sorted order and the last
-        # copy is kept, as an append keeps the newer purchase.
+        # into the first. Inside a window it keeps the latest snapshot, and
+        # at one snapshot the better of two prices on one identity (an
+        # anytime scorer beside goals over 0.5), so the result does not
+        # depend on the order the cache files are read in.
         frame = dedupe_prices(pd.DataFrame(rows)) if rows else pd.DataFrame()
         if keep == "prop" and not frame.empty:
             from nhl_betting_lab.markets import PROP_MARKETS
