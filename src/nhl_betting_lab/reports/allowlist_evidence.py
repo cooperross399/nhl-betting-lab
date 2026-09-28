@@ -35,6 +35,7 @@ from typing import Any
 from nhl_betting_lab.config import OUTPUTS_DIR, PROJECT_ROOT
 from nhl_betting_lab.markets import ALL_MARKETS
 from nhl_betting_lab.reports.player_props_backtest import by_market_with_other_windows
+from nhl_betting_lab.reports.replication import MINIMUM_TEST_BETS, UNTESTABLE
 from nhl_betting_lab.reports.what_we_can_claim import unread_reason
 from nhl_betting_lab.staging_provider_policy import file_sha256
 from nhl_betting_lab.stats import (
@@ -126,6 +127,16 @@ class MarketVerdict:
     calibration_samples: int = 0
     supported: bool = False
     reason: str = ""
+    #: What a corrected interval excluding zero made of this market, when
+    #: one did: "candidate" (positive, not confirmed on a held-out window),
+    #: "deficit" (negative), or "sign unknown". Empty for every market whose
+    #: line does not say its corrected interval excludes zero. The
+    #: recommendation reads it so its headline never denies its own lines.
+    conclusive: str = ""
+    #: Whether the replication record lists this market as "replicated".
+    #: Read beside `conclusive` only; on its own it says nothing about
+    #: whether this bundle's line reports a result that survives correction.
+    replicated: bool = False
 
     def sentence(self) -> str:
         return f"`{self.market}`: **{'supported' if self.supported else 'not supported'}** — {self.reason}"
@@ -179,11 +190,7 @@ class EvidenceBundle:
                 "finding, so the picture is incomplete."
             )
         if not self.supported_markets:
-            return (
-                "**The evidence supports enabling nothing.** Every market is "
-                "either unmeasured against real prices or measured with an "
-                f"interval that includes zero, which means {NO_DEMONSTRATED_EDGE}."
-            )
+            return self._nothing_supported()
         return (
             "The evidence is consistent with enabling "
             f"{', '.join(f'`{m}`' for m in self.supported_markets)}. That is "
@@ -204,6 +211,83 @@ class EvidenceBundle:
                 else ""
             )
         )
+
+
+    def _nothing_supported(self) -> str:
+        """Why nothing is supported, market by market where it differs.
+
+        This used to say "every market is either unmeasured against real
+        prices or measured with an interval that includes zero" whatever the
+        lines below it said -- and on the real evidence they said `points`
+        loses with a corrected interval excluding zero, and `blocked_shots`
+        wins with one on a single window. A headline contradicting its own
+        lines is the one thing an evidence document cannot afford, so each
+        market whose corrected interval excludes zero is named for what it
+        is, and the markets left over get a sentence true of every one of
+        them. That includes a market under `MINIMUM_BETS_TO_READ`: its line
+        calls it too thin to read whatever its interval says, so it is
+        named nowhere above, and "measured with an interval that includes
+        zero" is not true of a thin market whose interval excludes zero.
+        """
+        opening = "**The evidence supports enabling nothing.**"
+        named = [item for item in self.verdicts if item.conclusive]
+        rest = [item for item in self.verdicts if not item.conclusive]
+        # Thin is read from the count the line was written from, the same
+        # test `assess_markets` applies before any interval is looked at.
+        thin = any(0 < item.bets < MINIMUM_BETS_TO_READ for item in rest)
+        closing = (
+            (
+                "unmeasured against real prices, too thin to read (under "
+                f"{MINIMUM_BETS_TO_READ} bets), or measured"
+                if thin
+                else "unmeasured against real prices or measured"
+            )
+            + " with an interval that includes zero, which means "
+            f"{NO_DEMONSTRATED_EDGE}."
+        )
+        if not named:
+            return f"{opening} Every market is either {closing}"
+
+        def listed(kind: str, *, replicated: bool | None = None) -> str:
+            return ", ".join(
+                f"`{item.market}`"
+                for item in named
+                if item.conclusive == kind
+                and (replicated is None or item.replicated == replicated)
+            )
+
+        sentences = [opening]
+        candidates = listed("candidate")
+        if candidates:
+            sentences.append(
+                f"{candidates}: the corrected interval excludes zero on the "
+                "winning side on one window, and a held-out window has not "
+                "confirmed it, so it is a candidate, not a finding."
+            )
+        demonstrated = listed("deficit", replicated=True)
+        if demonstrated:
+            sentences.append(
+                f"{demonstrated}: a loss whose corrected interval excludes "
+                "zero, confirmed on a held-out window. That is a "
+                "demonstrated deficit, and it argues against enabling, not "
+                "for it."
+            )
+        deficits = listed("deficit", replicated=False)
+        if deficits:
+            sentences.append(
+                f"{deficits}: a loss whose corrected interval excludes zero, "
+                "not confirmed on a held-out window. A loss that survives "
+                "the correction still argues against enabling, not for it."
+            )
+        unknown = listed("sign unknown")
+        if unknown:
+            sentences.append(
+                f"{unknown}: the corrected interval excludes zero, but the "
+                "return could not be read, so its sign is unknown."
+            )
+        if rest:
+            sentences.append(f"Every other market is either {closing}")
+        return " ".join(sentences)
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -255,6 +339,34 @@ def unread_verdict_inputs(output_dir: Path) -> dict[str, str]:
     return {name: problem for name, problem in problems.items() if problem}
 
 
+def _untestable_sentence(record: dict[str, Any]) -> str:
+    """Why the held-out window tested nothing, in the record's own terms.
+
+    "Untestable" is not a replication that ran and failed. The bundle said of
+    `points` "The held-out window did not confirm it (untestable)" while
+    `replication.md` showed the held-out 2025-26 window excluding zero after
+    correction on its own: the 2024-25 discovery window did not carry the
+    result alone, so there was nothing for the second window to confirm.
+    `reports/replication.py` reaches this state three ways, and the record
+    carries the fields that say which; a record that carries none of them is
+    told in words that assume no cause.
+    """
+    discovery_bets = record.get("discovery_bets")
+    test_bets = record.get("test_bets")
+    if isinstance(discovery_bets, (int, float)) and discovery_bets <= 0:
+        cause = "the discovery window did not measure it"
+    elif record.get("discovery_survived") is False:
+        cause = "the discovery window did not carry it alone"
+    elif isinstance(test_bets, (int, float)) and test_bets < MINIMUM_TEST_BETS:
+        cause = (
+            f"the held-out window had only {int(test_bets)} bet(s), below the "
+            f"{MINIMUM_TEST_BETS} needed to test anything"
+        )
+    else:
+        cause = "there was no first-window result to replicate"
+    return f"Nothing was tested on the held-out window ({UNTESTABLE}), because {cause}"
+
+
 def assess_markets(*, output_dir: Path) -> list[MarketVerdict]:
     """What the measurements support, market by market."""
     props = _read_json(output_dir / "player_props_backtest.json")
@@ -274,10 +386,14 @@ def assess_markets(*, output_dir: Path) -> list[MarketVerdict]:
     # this record has no replication result at all, which is not the same as
     # passing one -- `.get` therefore yields None and the market cannot be
     # supported.
-    replication = {
-        str(item.get("market")): str(item.get("state", "")).strip()
+    replication_records = {
+        str(item.get("market")): item
         for item in (_read_json(output_dir / "replication.json").get("markets") or [])
         if isinstance(item, dict)
+    }
+    replication = {
+        market: str(item.get("state", "")).strip()
+        for market, item in replication_records.items()
     }
 
     # A prop market the contract window has no bets for is read from another
@@ -388,11 +504,14 @@ def assess_markets(*, output_dir: Path) -> list[MarketVerdict]:
         held_out = (
             f"The held-out verdict could not be read ({replication_unread})"
             if replication_unread
+            else _untestable_sentence(replication_records.get(market.key) or {})
+            if replication_state == UNTESTABLE
             else "The held-out window did not confirm it "
             f"({replication_state or 'no replication record'})"
         )
 
         if bets < MINIMUM_BETS_TO_READ:
+            conclusive = ""
             reason = (
                 f"only {bets} measured bet(s), below the "
                 f"{MINIMUM_BETS_TO_READ} needed before a result is worth "
@@ -402,6 +521,7 @@ def assess_markets(*, output_dir: Path) -> list[MarketVerdict]:
             supported = False
         elif not conclusive_and_positive and survives:
             # Conclusive, and conclusively bad.
+            conclusive = "deficit" if roi_value is not None else "sign unknown"
             reason = (
                 (
                     f"**{roi_value:+.1%} over {bets:,} bets, and the "
@@ -430,6 +550,7 @@ def assess_markets(*, output_dir: Path) -> list[MarketVerdict]:
             )
             supported = False
         elif not survives:
+            conclusive = ""
             corrected = (
                 f" Corrected for the {family} "
                 f"it runs {float(adjusted_low):+.1%} to "
@@ -456,6 +577,9 @@ def assess_markets(*, output_dir: Path) -> list[MarketVerdict]:
                 else f"{bets:,} bets, and the corrected interval excludes zero."
             )
             supported = replicated
+            # A supported market is named by the recommendation's other
+            # branch; only an unconfirmed one is a candidate.
+            conclusive = "" if replicated else "candidate"
             if replicated:
                 reason += (
                     " **A held-out window confirmed it.** Two windows "
@@ -482,6 +606,8 @@ def assess_markets(*, output_dir: Path) -> list[MarketVerdict]:
                 calibration_samples=samples,
                 supported=supported,
                 reason=reason,
+                conclusive=conclusive,
+                replicated=replicated,
             )
         )
     return verdicts

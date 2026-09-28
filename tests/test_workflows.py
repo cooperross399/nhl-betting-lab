@@ -250,8 +250,8 @@ PERMITTED_SUITE_PREFIXES: frozenset[tuple[str, ...]] = frozenset(
 #: that reads the parse AND the rule that runs the shell.
 PINNED_TOOL_LINES: frozenset[str] = frozenset(
     {
-        "python -m pyflakes src scripts tests",
-        "python -m compileall -q -f src scripts tests",
+        "python -m pyflakes src scripts tests web",
+        "python -m compileall -q -f src scripts tests web",
         "python -m coverage run -m pytest -q",
         "python -m coverage report",
     }
@@ -293,7 +293,7 @@ SAFE_SHELLS = frozenset({"bash", "sh"})
 #: the sandbox before the swallow rule runs a block, so a block that opens with
 #: `test -d src || exit 1` reaches the command under test instead of being
 #: accepted for having died at its own guard.
-STANDARD_DIRECTORIES = ("src", "scripts", "tests", "data", "docs", ".github")
+STANDARD_DIRECTORIES = ("src", "scripts", "tests", "web", "data", "docs", ".github")
 
 #: Bash keywords are never stubbed (a function named `for` is a syntax error)
 #: and builtins are deliberately left real, so that `cmd || true` comes out as
@@ -1767,13 +1767,13 @@ jobs:
           python -m pip install -r requirements.txt
       - name: Lint for dead names
         run: |
-          python -m pyflakes src scripts tests
+          python -m pyflakes src scripts tests web
       - name: Compile every module
         run: |
-          for directory in src scripts tests; do
+          for directory in src scripts tests web; do
             test -d "$directory" || { echo "::error::$directory is missing"; exit 1; }
           done
-          python -m compileall -q -f src scripts tests
+          python -m compileall -q -f src scripts tests web
       - name: Run the full test suite
         env:
           PYTHONPATH: src
@@ -1795,11 +1795,11 @@ SUITE_STEP_HEADER = "      - name: Run the full test suite\n"
 JOB_ENV_BLOCK = '    env:\n      PYTHONSAFEPATH: "1"\n'
 JOB_SAFE_PATH_LINE = '      PYTHONSAFEPATH: "1"\n'
 STEP_SAFE_PATH_LINE = '          PYTHONSAFEPATH: "1"\n'
-LINT_LINE = "python -m pyflakes src scripts tests"
+LINT_LINE = "python -m pyflakes src scripts tests web"
 COVERAGE_REPORT_LINE = "python -m coverage report"
-COMPILE_LINE = "python -m compileall -q -f src scripts tests"
+COMPILE_LINE = "python -m compileall -q -f src scripts tests web"
 COMPILE_GUARD = (
-    "          for directory in src scripts tests; do\n"
+    "          for directory in src scripts tests web; do\n"
     '            test -d "$directory" || { echo "::error::$directory is missing"; exit 1; }\n'
     "          done\n"
 )
@@ -2078,7 +2078,7 @@ REPRODUCTIONS: dict[str, tuple[str, str]] = {
     ),
     "compileall without -f": (
         "the_compile_step_refuses_a_missing_directory",
-        mutate(COMPILE_LINE, "python -m compileall -q src scripts tests"),
+        mutate(COMPILE_LINE, "python -m compileall -q src scripts tests web"),
     ),
     "compileall without the directory guard": (
         "the_compile_step_refuses_a_missing_directory",
@@ -2196,6 +2196,18 @@ REPRODUCTIONS: dict[str, tuple[str, str]] = {
     "the lint line echoed instead of run": (
         "every_pinned_tool_line_is_spelled_and_reached",
         mutate(f"          {LINT_LINE}\n", f"          echo {LINT_LINE}\n"),
+    ),
+    # -- a gate narrowed back to the directories it read before web/ ---------
+    # Both gates read only src/scripts/tests until 2026-09-26, and web/ holds
+    # the site builders. The pin is whole-line, so dropping a directory is a
+    # different line and is refused.
+    "the lint line without web": (
+        "every_pinned_tool_line_is_spelled_and_reached",
+        mutate(LINT_LINE, "python -m pyflakes src scripts tests"),
+    ),
+    "the compile line without web": (
+        "every_pinned_tool_line_is_spelled_and_reached",
+        mutate(COMPILE_LINE, "python -m compileall -q -f src scripts tests"),
     ),
     "the lint step deleted": (
         "every_pinned_tool_line_is_spelled_and_reached",

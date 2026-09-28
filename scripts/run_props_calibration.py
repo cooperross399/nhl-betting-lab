@@ -85,6 +85,14 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Reusing {len(samples):,} cached samples from {samples_path}.")
         else:
             print(f"Not reusing the cached samples: {reason}")
+            # Removed before regenerating, not overwritten after. The file
+            # used to stay put until the rebuild replaced it, so a rebuild
+            # that never happened — no logs, or a crash — left the refused
+            # samples on disk looking exactly like fresh ones. Experiment
+            # Refresh runs this under `|| true` and then only asks whether
+            # the file is there, and the correction experiment went on to
+            # re-decide `by_toi` on the samples this had just refused.
+            samples_path.unlink()
     if samples is None:
         if logs.empty:
             print(
