@@ -176,17 +176,35 @@ HARD_GATED_MARKETS: dict[str, str] = {
 #: card is dark and places none, but a frozen opinion scored against the price
 #: it was frozen at is the same test" -- so NOTHING measurable is given up by
 #: declining to stake a market. What is given up is the recommendation.
+#:
+#: Each figure names the window it was measured in, because the backtest
+#: prices at two distances from face-off and they are two different
+#: questions. The card window (9.6 hours out) is
+#: `data/outputs/player_props_backtest_card.md`; the late window (4.1 hours
+#: out) is `player_props_backtest.md`, and `replication.md`'s per-season split
+#: and the evidence bundle's verdict are both cut from the late one (2,726 +
+#: 3,468 = its 6,194 bets). This text once ran the two together as one
+#: measurement; tests/test_the_points_stake_reason_names_the_window_of_every_figure.py
+#: reads the figures back out of those reports. The correction count is
+#: phrased as `stats.correction_family` phrases it: the card window's family
+#: is its 7 markets plus the overall figure, which the committed report still
+#: calls "8 markets tested".
 STAKE_EXCLUDED_MARKETS: dict[str, str] = {
     "points": (
         "`points` is the one market this lab has measured as a loss that "
-        "survives correction: -4.2% over 6,140 card-window wagers, 95% "
-        "interval -6.7% to -1.7%, -7.6% to -0.7% after correcting for the "
-        "eight markets tested, and -256.8 units realised. It holds within "
-        "2025-26 alone (-5.4% over 3,468). The evidence bundle's verdict is "
-        "that \"a loss that survives the correction still argues against "
-        "enabling this market, not for it\". The opinion is still recorded "
-        "and still settles into the forward ledger; only the stake is "
-        "withheld."
+        "survives correction, and it does so in both windows the backtest "
+        "prices. In the card window, 9.6 hours before face-off: -4.2% over "
+        "6,140 wagers, 95% interval -6.7% to -1.7%, -7.6% to -0.7% after "
+        "correcting for the 8 figures measured on the same data (7 markets "
+        "and the overall figure), and -256.8 units realised. "
+        "In the late window, 4.1 hours before face-off: -4.4% over 6,194 "
+        "wagers, 95% interval -6.9% to -2.0%, and it holds within that "
+        "window's 2025-26 season alone "
+        "(-5.4% over 3,468). On the late window the evidence bundle's "
+        "verdict is that \"a loss that survives the correction still argues "
+        "against enabling this market, not for it\". The opinion is still "
+        "recorded and still settles into the forward ledger; only the stake "
+        "is withheld."
     )
 }
 
