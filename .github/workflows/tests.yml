@@ -70,8 +70,14 @@ jobs:
         # undefined name that only fails on the code path no test happened
         # to walk. It ran locally all along; a check that runs only on one
         # machine is a check that runs only sometimes.
+        #
+        # Every top-level directory holding Python is named, `web/` included:
+        # it read only src/scripts/tests until 2026-09-26, and the site
+        # builders in web/ were linted and compiled by nothing.
+        # tests/test_a_python_directory_the_lint_never_reads.py fails when a
+        # new directory of Python is left off this line or the compile step.
         run: |
-          python -m pyflakes src scripts tests
+          python -m pyflakes src scripts tests web
 
       - name: Compile every module
         # A module can be syntactically invalid and still pass the suite if no
@@ -85,10 +91,10 @@ jobs:
         # compiled. tests/test_workflows.py runs this block under stubs with
         # the directories absent and demands a non-zero exit.
         run: |
-          for directory in src scripts tests; do
+          for directory in src scripts tests web; do
             test -d "$directory" || { echo "::error::$directory is missing"; exit 1; }
           done
-          python -m compileall -q -f src scripts tests
+          python -m compileall -q -f src scripts tests web
 
       - name: Run the full test suite
         # No credential is provided on purpose: every test must pass without

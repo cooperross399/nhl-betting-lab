@@ -225,7 +225,9 @@ def _clv(processed: Path, tmp_path: Path) -> tuple[str, dict]:
     _freeze(archive)
     runner = load_script("run_closing_line_value.py")
     code = runner.main(["--processed-dir", str(processed), "--archive-dir", str(archive),
-                        "--output-dir", str(tmp_path / "outputs")])
+                        "--output-dir", str(tmp_path / "outputs"),
+                        # After every game here: unplayed games are left out.
+                        "--now", "2027-06-01T00:00:00+00:00"])
     assert code == 0
     page = (tmp_path / "outputs" / cl.REPORT_FILENAME).read_text(encoding="utf-8")
     rows, _ = cl.clv_rows(runner._opinions(processed, archive), cl.load_captures(processed))

@@ -112,6 +112,17 @@ class MarketClaim:
         # six markets and its overall figure (8 for `hits`, from the card
         # window's seven): see `stats.correction_family`.
         family = correction_family(self.looks, self.family)
+        if self.bets < 30:
+            # `RoiInterval.survives_correction` is False below thirty bets
+            # whatever the interval, so "does not survive" there says nothing
+            # about zero. On 22 wins and 3 losses at even money, seven looks,
+            # the corrected interval ran +40% to +112% and this sentence said
+            # it did not exclude zero. Say what `RoiInterval.verdict()` says.
+            return (
+                f"{base} {self.bets} bet{'' if self.bets == 1 else 's'} is "
+                "far too few to measure anything. "
+                f"**{NO_DEMONSTRATED_EDGE.capitalize()}**."
+            )
         if not self.survives_correction:
             correction = (
                 f" Correcting for the {family}, it does not exclude zero."
@@ -559,8 +570,18 @@ def build_claims_report(
         "Calibration can rule a model out. It can never rule one in. A market "
         "with only a calibration number has no price-based evidence, and this "
         "document will not present one as though it did.",
-        "Prop prices are one-sided at most books, so every measured prop edge "
-        "here is understated rather than overstated.",
+        # This note used to say every prop edge here was "understated rather
+        # than overstated", on the strength of the one-sided vig. The vig
+        # point concerns only which bets clear the threshold; the return
+        # printed above is taken at the best of N books, which the backtest
+        # itself calls optimistically biased (the best price is the stale
+        # one disproportionately often).
+        "Every prop return above is taken at the best price across the books "
+        "quoting it, which is the most favourable price on the board and "
+        "disproportionately the stale one about to move. It therefore leans "
+        "optimistic, not conservative: the honest figure sits between it and "
+        "the every-quote average (see "
+        "`docs/where_the_remaining_error_lives.md`).",
         "The first genuinely out-of-sample evidence this project will ever "
         "have is the season being played, one game-day at a time. That is "
         "worth more than any further slicing of the seasons already in the "

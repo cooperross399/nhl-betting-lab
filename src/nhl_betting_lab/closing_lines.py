@@ -26,12 +26,18 @@ listed start. Never one captured after: a price observed at 19:05 for a 19:00
 puck drop is not a closing line, it is a live one, and comparing an opinion
 frozen at 09:30 against it would flatter or damn the model with information it
 could not have had.
+
+Nor one captured hours earlier. The close must also be within
+`CLOSE_MAX_LEAD` of the start: a 14:00Z price for a 23:00Z game is an
+intraday price, not the market's last word. A selection whose only
+pre-start price is older than that has no close near face-off, and is
+counted as such rather than scored or dropped.
 """
 
 from __future__ import annotations
 
 import math
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import pandas as pd
@@ -187,7 +193,9 @@ def append_captures(
 MOVEMENT_DIRNAME = "line_movement"
 
 
-def load_movement_captures(processed_dir: Path | None = None) -> pd.DataFrame:
+def load_movement_captures(
+    processed_dir: Path | None = None, *, unreadable: dict[str, str] | None = None
+) -> pd.DataFrame:
     """Closing-line captures, taken from the line-movement store.
 
     For the per-event markets and their alternate ladders, the dedicated
@@ -227,8 +235,24 @@ def load_movement_captures(processed_dir: Path | None = None) -> pd.DataFrame:
     which is exactly what `scripts/capture_line_movement.py` writes to the
     dedicated store from the same fetch. The two stores therefore hold the
     same rows, and a report does not depend on which one it read.
+
+    ## A day file that cannot be read is named, not skipped
+
+    `unreadable`, when given, receives every day file that could not be read,
+    by file name, with the reason. A file that did not parse, held zero
+    bytes, lacked a capture column, or parsed to fewer rows than its lines
+    used to be skipped with a bare `continue`. One ragged row took that
+    day's closing prices with it, and the report called the day's opinions
+    "no closing price found" and the run exited 0. The dedicated store raises
+    `UnreadableCaptureStore` for the same damage. This store is one file per
+    day, so raising would stop every good day being scored; instead the day
+    is left out and named, the same rule the runner follows for a damaged
+    priced snapshot. A header-only file still reads as empty: it holds no
+    row to lose. The capture only ever creates a file with rows in it, so
+    zero bytes is damage here, not an empty day.
     """
     empty = pd.DataFrame(columns=list(CAPTURE_COLUMNS))
+    damaged = unreadable if unreadable is not None else {}
     root = (
         Path(processed_dir) if processed_dir else PROCESSED_DIR
     ) / MOVEMENT_DIRNAME
@@ -238,13 +262,28 @@ def load_movement_captures(processed_dir: Path | None = None) -> pd.DataFrame:
     for path in sorted(root.glob("*.csv")):
         try:
             frame = pd.read_csv(path)
-        except (OSError, pd.errors.EmptyDataError, pd.errors.ParserError):
+        except (
+            OSError,
+            UnicodeDecodeError,
+            pd.errors.EmptyDataError,
+            pd.errors.ParserError,
+        ) as error:
+            damaged[path.name] = f"{type(error).__name__}: {error}".strip()
             continue
         missing = [c for c in CAPTURE_COLUMNS if c not in frame.columns]
         if missing:
-            # A day's file that predates a schema change is skipped rather
-            # than half-read: a capture missing `captured_at` cannot be
-            # ordered against face-off and would silently become "closing".
+            # Skipped rather than half-read: a capture missing `captured_at`
+            # cannot be ordered against face-off and would silently become
+            # "closing". Named, because its day then has no close at all.
+            damaged[path.name] = f"missing column(s): {', '.join(missing)}"
+            continue
+        # The floor comes from the file, as in `load_captures`: stray quotes
+        # parse short without an error.
+        rows_on_disk = existing_row_count(path)
+        if len(frame) < rows_on_disk:
+            damaged[path.name] = (
+                f"holds {rows_on_disk} row(s) and parses to only {len(frame)}"
+            )
             continue
         frames.append(frame)
     if not frames:
@@ -283,7 +322,9 @@ class UnreadableCaptureStore(CorruptStoreError):
         )
 
 
-def load_captures(processed_dir: Path | None = None) -> pd.DataFrame:
+def load_captures(
+    processed_dir: Path | None = None, *, unreadable: dict[str, str] | None = None
+) -> pd.DataFrame:
     """The dedicated capture store, falling back to the movement store.
 
     Both hold the same kind of row. The dedicated one wins when it has
@@ -327,7 +368,8 @@ def load_captures(processed_dir: Path | None = None) -> pd.DataFrame:
             )
         if not dedicated.empty:
             return dedicated
-    return load_movement_captures(processed_dir)
+    # `unreadable` receives each movement day file that could not be read.
+    return load_movement_captures(processed_dir, unreadable=unreadable)
 
 
 def _key_of(row) -> tuple:
@@ -344,11 +386,71 @@ def _key_of(row) -> tuple:
     )
 
 
-def closing_prices(captures: pd.DataFrame) -> dict[tuple, dict[str, object]]:
-    """The last price captured strictly before each game started.
+#: How far before face-off a capture may be and still count as the close.
+#:
+#: The close was the last capture strictly before puck drop however early it
+#: was: on a night the 21:00 round missed, a 23:00Z game closed at the 18:00
+#: price, five hours out, and with 18:00 missed too, at the 14:00 price, nine
+#: hours out. Scoring a price three or four hours old as the close is the
+#: defect itself, so the bound stays tight even where the schedule cannot
+#: meet it.
+#:
+#: What `.github/workflows/line-movement.yml` can meet: its in-season rounds
+#: run at 14:00, 18:00, 21:00, 23:00 and 01:00 UTC, stamped with the wall
+#: clock when they run (never early, often a few minutes late). A 19:00 EDT
+#: start is 23:00 UTC, and the 23:00 round lands at or after face-off, so it
+#: is never a close under the strictly-before rule; the 21:00 round, two
+#: hours out, is the best that game can get. 60-90 minutes would therefore
+#: put every 19:00 EDT game in the bucket on a night nothing went wrong.
+#: The evening rounds are two hours apart, so on every in-season day every
+#: common evening start (19:00, 19:30 and 22:00 ET, EDT and EST) has a
+#: round at most two hours before it when every round runs on time.
+#: 29-30 September are not in-season days; see below. The half hour above
+#: two hours
+#: is headroom, and it admits 12:30 EDT and 22:30 EST starts, whose nearest
+#: round is exactly 150 minutes out.
+#:
+#: Lateness can cost a close. A late round that still lands before face-off
+#: only shortens the lead, but one that slips past face-off is excluded,
+#: and the close falls to the previous round, which may be over the bound.
+#: So a round running more than about an hour late behaves as a missed one:
+#: 19:00 EST and 22:00 EDT starts lose their close past 60 minutes late,
+#: 19:30 EST past 90, 19:00 EDT and 22:00 EST past 120. Only 19:30 EDT keeps
+#: a close however late its nearest round runs (its fallback is the 21:00
+#: round, exactly 150 minutes out).
+#:
+#: What it cannot meet, on a normal night with every round on time,
+#: sweeping every half hour from 11:00 to 23:00 ET: starts from roughly
+#: 13:00-14:00 EDT (13:00, 13:30, 14:00) and 12:00-13:00 EST (12:00, 12:30,
+#: 13:00), plus 17:00 EDT, 16:00 EST and 23:00 EST, have NO round within
+#: the bound. Opening week is thinner still: on 29-30 September only the
+#: 18:00 and 23:00 UTC rounds run, so on both days every start from 11:00
+#: to 14:00 EDT and from 17:00 to 19:00 EDT has none, and on 29 September
+#: 22:00, 22:30 and 23:00 EDT have none either (the 23:00 round is 180-240
+#: minutes out). 30 September's late starts are covered by the 01:00 UTC
+#: round on 1 October. Those games have no close near face-off; their
+#: opinions are counted under `no_close_not_near_face_off`, never scored. An extra round around 15:30-16:00 UTC would close only the
+#: 12:00-14:00 ET starts; 17:00 EDT and 16:00 EST (both 21:00Z) and 23:00
+#: EST would still need rounds of their own. Every extra round spends
+#: credits, so it is Cooper's decision. The bound itself is a judgement,
+#: and Cooper may revise it.
+CLOSE_MAX_LEAD = timedelta(minutes=150)
+
+
+def closing_prices(
+    captures: pd.DataFrame, *, max_lead: timedelta | None = CLOSE_MAX_LEAD
+) -> dict[tuple, dict[str, object]]:
+    """The last price captured strictly before each game started, and no
+    more than `max_lead` before it.
 
     A capture at or after the listed start is discarded rather than used: it
-    is a live price, and the card's opinion was frozen hours earlier.
+    is a live price, and the card's opinion was frozen hours earlier. One
+    captured more than `max_lead` before the start is discarded too: it is
+    an intraday price, and scoring it as the close measures the day's drift
+    rather than the market's last word. `max_lead=None` lifts only that
+    bound, never the strictly-before rule; it answers "was this priced
+    before face-off at all", which is how a stale selection is told apart
+    from one never captured.
 
     At that latest moment the close is the BEST price, the same basis as
     `best_prices` and `collapse_to_best`. It used to be the first row seen
@@ -367,6 +469,10 @@ def closing_prices(captures: pd.DataFrame) -> dict[tuple, dict[str, object]]:
         # second is not a closing price, and an unparseable stamp is not an
         # ordering.
         if captured is None or commence is None or captured >= commence:
+            continue
+        # Near face-off, inclusive at the bound. An earlier price is not a
+        # close even when it is the only one.
+        if max_lead is not None and commence - captured > max_lead:
             continue
         key = _key_of(row)
         decimal = _decimal(getattr(row, "american_odds", None))
@@ -426,7 +532,13 @@ def uncaptured_markets(
     collapsed = collapse_to_best(opinions)
     if collapsed.empty:
         return {}
-    captured = {entry["market_in_game"] for entry in closing_prices(captures).values()}
+    # Unbounded in lead: a market priced for its game before face-off, only
+    # too early, WAS captured. Those opinions are counted as having no close
+    # near face-off instead, so the two explanations stay disjoint.
+    captured = {
+        entry["market_in_game"]
+        for entry in closing_prices(captures, max_lead=None).values()
+    }
     found: dict[str, int] = {}
     for row in collapsed.itertuples():
         where = _market_in_game(row)
@@ -472,8 +584,9 @@ def collapse_to_best(opinions: pd.DataFrame) -> pd.DataFrame:
     The snapshot freezes every staged price row, which is one row per book.
     Scoring all of them would measure the books; scoring whichever row
     happened to survive a de-duplication would measure luck. Worse, the
-    survivor decides whether the selection clears the staking bar at all, so
-    an arbitrary pick silently moves bets in and out of the "bets" table —
+    survivor decides whether the selection clears the measurement bar at
+    all, so an arbitrary pick silently moves bets in and out of the "bets"
+    table —
     and it removes them exactly where the price was worst, which is where
     the losses live.
 
@@ -505,18 +618,30 @@ def clv_rows(
     opinion that silently vanished from a CLV table would flatter the model
     exactly where the market moved away from us — a selection the books
     pulled is the one most likely to have been wrong.
+
+    `no_close_not_near_face_off` is the part of `no_close` whose selection
+    WAS priced before face-off, but never within `CLOSE_MAX_LEAD` of it.
+    It is a subset, not an extra bucket, so the reconciliation above holds.
     """
     opinions = collapse_to_best(opinions)
-    counts = {"opinions": int(len(opinions)), "matched": 0, "no_close": 0}
+    counts = {
+        "opinions": int(len(opinions)),
+        "matched": 0,
+        "no_close": 0,
+        "no_close_not_near_face_off": 0,
+    }
     if opinions.empty:
         return pd.DataFrame(), counts
     closing = closing_prices(captures)
+    priced_before_start = closing_prices(captures, max_lead=None)
     rows: list[dict[str, object]] = []
     for row in opinions.itertuples():
         key = _key_of(row)
         close = closing.get(key)
         if close is None:
             counts["no_close"] += 1
+            if key in priced_before_start:
+                counts["no_close_not_near_face_off"] += 1
             continue
         taken_decimal = _decimal(getattr(row, "american_odds", None))
         close_decimal = _decimal(close["american_odds"])
@@ -715,18 +840,144 @@ def _verdict(low: float, high: float, mean: float, quantity: str) -> str:
     )
 
 
+def _percent(value: float) -> str:
+    """0.06 -> "6%", 0.035 -> "3.5%": a bar as a reader writes it."""
+    return f"{value * 100:g}%"
+
+
+def measurement_bar_note() -> str:
+    """What a "bet" in the CLV and forward reports is, and what it is not.
+
+    Both reports count as a bet every opinion whose edge clears the
+    MEASUREMENT bar — `MIN_PROP_EDGE` for a prop, `MIN_EDGE` for a team
+    market, the bar the historical backtest measures at. That is not what
+    the card stakes, and both pages used to say it was — the forward page
+    called population B the card's would-be bets, and the CLV docstring
+    called Bets the staking bar and the bankroll's record (sweep 3, A1). The card stakes only best bets, above a higher bar; a
+    lean between the two is recorded and not staked; and past the juice
+    limit, past the longest price, in a stake-excluded market or in a
+    hard-gated one it stakes nothing whatever the edge. Nor is every gap
+    about the price: `run_gameday_card.py` freezes the snapshot from the
+    unfiltered prices before `build_card` runs, so the count also holds the
+    rungs one-stake-per-outcome demoted, markets eligibility kept off the
+    card (not allowlisted, or incomplete on a capped night), a blocked
+    card's opinions, and rows the puck-drop guard pulled.
+
+    The limits are strict: -160 and +600 are staked, -161 and +601 are not,
+    which is what "shorter than" and "longer than" say
+    (`is_heavy_juice` is `price < limit`; `build_candidates` refuses
+    `price > max_price`).
+
+    Built from the constants the card and the filters read, so the sentence
+    cannot drift from the gates it describes. Wording only: no count reads
+    it. Imported lazily because the card module is heavier than this one.
+    """
+    from nhl_betting_lab.config import (
+        MAX_DEFAULT_JUICE,
+        MAX_DEFAULT_PRICE,
+        MIN_EDGE,
+        MIN_PROP_EDGE,
+    )
+    from nhl_betting_lab.reports.gameday_card import (
+        BEST_BET_EDGE,
+        BEST_BET_PROP_EDGE,
+        HARD_GATED_MARKETS,
+        STAKE_EXCLUDED_MARKETS,
+    )
+
+    excluded = ", ".join(f"`{m}`" for m in sorted(STAKE_EXCLUDED_MARKETS))
+    gated = ", ".join(f"`{m}`" for m in sorted(HARD_GATED_MARKETS))
+    return (
+        "A bet here is an opinion whose edge clears the measurement bar "
+        f"({_percent(MIN_PROP_EDGE)} for a prop, {_percent(MIN_EDGE)} for a "
+        "team market — the bar the historical backtest measures at). These "
+        f"are {NOT_STAKED_PHRASE}, and they are not what a bankroll following "
+        "the card would have done. The card stakes only best bets, at an "
+        f"edge of {_percent(BEST_BET_PROP_EDGE)} for a prop or "
+        f"{_percent(BEST_BET_EDGE)} for a team market; an edge between the "
+        "two bars is a lean, recorded and not staked. It also stakes "
+        f"nothing priced shorter than {MAX_DEFAULT_JUICE} or longer than "
+        f"+{MAX_DEFAULT_PRICE}, nothing in a stake-excluded market "
+        f"({excluded}) and nothing in a hard-gated market ({gated}), "
+        "whatever the edge. Some reasons are not about the price at all: "
+        "the snapshot is frozen from the unfiltered prices before the card "
+        "is built, so this also counts every rung of a ladder after the one "
+        "that took the outcome's single stake (one stake per outcome), "
+        "markets the card could not use that day (not allowlisted, or "
+        "incomplete on a night the per-event fetch was capped), the "
+        "opinions of a day whose card was blocked, and rows whose stake the "
+        "puck-drop guard pulled. Every such opinion is still counted here."
+    )
+
+
+#: The words both pages use to say a measured "bet" is not a staked one.
+NOT_STAKED_PHRASE = "not the card's staked bets"
+
+
 REPORT_FILENAME = "closing_line_value.md"
 
 
+def split_not_yet_played(
+    opinions: pd.DataFrame, now: datetime | None
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """(played, not yet played): opinions whose game starts after `now`.
+
+    A closing price is the last capture strictly before face-off, so a game
+    that has not started cannot have one yet. Gameday Refresh freezes the
+    day's opinions and then builds this report in the same job, hours before
+    the first face-off, so every report was built with tonight's whole slate
+    frozen and unplayed. All of it was counted under "no closing price
+    found", and — with no pre-start price in the store for those games yet —
+    explained as "No book pulled these. The capture never priced that market
+    for that game". Sweep 3's replay (yesterday's opinion closed two hours
+    before face-off, tonight's frozen at 23:00Z, the report built at 13:30Z)
+    read matched 1, no_close 1, no_close_uncaptured 1, bets_no_close 1.
+
+    Only an opinion whose start PARSES and lies strictly after `now` is not
+    yet played. A game starting at `now` exactly has started. An opinion
+    whose start will not parse stays with the played ones, in the ordinary
+    counts: an unreadable stamp is never a reason for an opinion to leave
+    the page. With `now` None nothing is split, which is what every caller
+    that measures finished history wants.
+    """
+    if now is None or opinions.empty or "commence_time" not in opinions.columns:
+        return opinions, opinions.iloc[0:0]
+    if now.tzinfo is None:
+        raise ValueError("now must carry a timezone; commence times do.")
+    pending = []
+    for value in opinions["commence_time"]:
+        start = moment(value)
+        pending.append(start is not None and start > now)
+    mask = pd.Series(pending, index=opinions.index, dtype=bool)
+    return opinions[~mask], opinions[mask]
+
+
 def build_clv_report(
-    opinions: pd.DataFrame, captures: pd.DataFrame
+    opinions: pd.DataFrame,
+    captures: pd.DataFrame,
+    *,
+    now: datetime | None = None,
 ) -> dict:
     """Opinions and bets, kept separate, because they answer two questions.
 
     **Opinions** is every priced row: it measures the model. **Bets** is the
-    subset that cleared the staking bar: it measures what the bankroll would
-    actually have done. Pooling them would let a large, weak opinion set bury
-    a small, bad betting record — or the reverse.
+    subset whose edge clears the MEASUREMENT bar — `MIN_PROP_EDGE` for a
+    prop, `MIN_EDGE` for a team market, the backtest's shipped bar: it
+    measures the model's confident opinions. Pooling them would let a large,
+    weak opinion set bury a small, bad confident set — or the reverse.
+
+    Bets is not what the card staked, and not the bankroll's outcome. The
+    card stakes only best bets, above a higher bar, and withholds the stake
+    past the juice limit or the longest price and in stake-excluded and
+    hard-gated markets; `measurement_bar_note` says so on the page.
+    (Sweep 3, A1: this docstring used to call Bets the staking bar and the
+    bankroll's record, and five opinions the card staked none of were five
+    bets here.)
+
+    `now` is when the report is built. An opinion whose game starts after it
+    has no close YET, so it is counted as not yet played and in none of the
+    matched, no-close or uncaptured counts (`split_not_yet_played`). The
+    runner always passes it; None splits nothing.
     """
     from nhl_betting_lab.config import MIN_EDGE, MIN_PROP_EDGE
     from nhl_betting_lab.markets import MARKETS_BY_KEY
@@ -738,6 +989,19 @@ def build_clv_report(
             return float(edge) >= bar
         except (TypeError, ValueError):
             return False
+
+    # Split off first, so every count below is of games that have started.
+    # They are counted, on the page, not dropped: tomorrow's report scores
+    # them against their close like any other opinion.
+    opinions, pending = split_not_yet_played(opinions, now)
+    pending = collapse_to_best(pending)
+    pending_bets = int(
+        sum(
+            1
+            for row in pending.itertuples()
+            if _is_bet(getattr(row, "market", ""), getattr(row, "edge", 0.0))
+        )
+    )
 
     # Classified BEFORE the join, so the reconciliation can say how many
     # *bets* went unmatched. Counting only opinions would let a bet whose
@@ -756,9 +1020,16 @@ def build_clv_report(
 
     rows, counts = clv_rows(opinions, captures)
     counts["bets"] = staked_total
+    counts["not_yet_played"] = int(len(pending))
+    counts["bets_not_yet_played"] = pending_bets
     uncaptured = uncaptured_markets(opinions, captures)
     counts["no_close_uncaptured"] = sum(uncaptured.values())
     counts["store_has_closes"] = bool(closing_prices(captures))
+    # Gates the uncaptured split: a store whose only prices are too early to
+    # close anything still says which markets it priced for which game.
+    counts["store_has_pre_start_prices"] = bool(
+        closing_prices(captures, max_lead=None)
+    )
     report: dict = {"counts": counts, "markets": {}, "uncaptured": uncaptured}
     if rows.empty:
         counts["bets_matched"] = 0
@@ -870,6 +1141,27 @@ def _row(*cells: str) -> str:
     return "| " + " | ".join(cells) + " |"
 
 
+def _unreadable_movement_lines(report: dict) -> list[str]:
+    """One bullet per line-movement day file the loader could not read.
+
+    Each used to be skipped without a word, so its day's opinions were
+    counted as having no close while the closing prices sat on disk. Printed
+    beside the damaged-snapshot lines, above every count they qualify.
+    """
+    damaged = report.get("unreadable_movement_days") or []
+    if not damaged:
+        return []
+    lines = [
+        f"- **{len(damaged)}** line-movement capture file(s) could not be "
+        "read, so no closing price in them is used, and an opinion whose "
+        "close was only in them is counted below as having none. This run "
+        "is not clean:",
+    ]
+    for entry in damaged:
+        lines.append(f"  - `{entry.get('name')}` ({entry.get('reason')}).")
+    return lines
+
+
 def _unreadable_snapshot_lines(report: dict) -> list[str]:
     """One bullet per priced snapshot the runner could not read.
 
@@ -899,6 +1191,11 @@ def _unreadable_snapshot_lines(report: dict) -> list[str]:
     return lines
 
 
+def _lead_text(lead: timedelta) -> str:
+    """`CLOSE_MAX_LEAD` in words, e.g. "150 minutes"."""
+    return f"{int(lead.total_seconds() // 60)} minutes"
+
+
 def render_clv(report: dict, *, generated: str = "") -> str:
     counts = report.get("counts", {})
     lines = [
@@ -914,6 +1211,7 @@ def render_clv(report: dict, *, generated: str = "") -> str:
     if generated:
         lines += [f"- Generated: {generated}"]
     lines += _unreadable_snapshot_lines(report)
+    lines += _unreadable_movement_lines(report)
     unreadable = report.get("unreadable_store")
     if unreadable:
         # Never "Nothing to measure yet" and never "no closing price found":
@@ -948,6 +1246,14 @@ def render_clv(report: dict, *, generated: str = "") -> str:
         f"- Opinions considered: **{counts.get('opinions', 0)}**; "
         f"matched to a closing price: **{counts.get('matched', 0)}**; "
         f"no closing price found: **{counts.get('no_close', 0)}**.",
+        # Printed every time, zero included, so a game with no capture near
+        # face-off (a round missed, or none scheduled that close) cannot
+        # pass unseen.
+        "- Within that count, priced before face-off but no close near face-off: "
+        f"**{counts.get('no_close_not_near_face_off', 0)}** — no capture "
+        f"was taken within {_lead_text(CLOSE_MAX_LEAD)} of face-off (a round "
+        "missed, or none is scheduled that close). An older price is an "
+        "intraday price, not the market's last word, so they are not scored.",
     ]
     # Split, not added to: every opinion below is already in the count above.
     # All of them used to be explained by the paragraph after this, as
@@ -956,8 +1262,9 @@ def render_clv(report: dict, *, generated: str = "") -> str:
     # the "Nothing to measure yet" section: with no capture at all, every
     # opinion is trivially uncaptured and the split would say nothing new.
     uncaptured = 0
-    if counts.get("store_has_closes"):
+    if counts.get("store_has_pre_start_prices", counts.get("store_has_closes")):
         uncaptured = int(counts.get("no_close_uncaptured", 0) or 0)
+    stale = int(counts.get("no_close_not_near_face_off", 0) or 0)
     if uncaptured:
         named = ", ".join(
             f"`{market}` ({count})"
@@ -971,7 +1278,7 @@ def render_clv(report: dict, *, generated: str = "") -> str:
             "— so they are a gap in what is captured and say nothing about "
             "the model.",
         ]
-        others = int(counts.get("no_close", 0)) - uncaptured
+        others = int(counts.get("no_close", 0)) - uncaptured - stale
         if others:
             lines += [
                 f"- The other **{others}** are in a market that was captured "
@@ -979,10 +1286,26 @@ def render_clv(report: dict, *, generated: str = "") -> str:
                 "face-off: the books pulled or moved it, or the capture's "
                 "ladders did not carry that line.",
             ]
+    not_yet = int(counts.get("not_yet_played", 0) or 0)
+    if not_yet:
+        # Added to, not split: none of these is in the count above. Their
+        # games start after this report was built, so no close exists yet,
+        # and they used to be counted as having none — and, with nothing in
+        # the store for their game yet, blamed on the capture. Printed BELOW
+        # "Of those" and "The other", which split the no-close count: placed
+        # between that count and them, they read as splitting this line.
+        lines += [
+            f"- Not yet played: **{not_yet}** opinion(s), "
+            f"{int(counts.get('bets_not_yet_played', 0) or 0)} of them staked, "
+            "whose game starts after this report was built. None has a "
+            "closing price yet and none is counted above; each is scored "
+            "against its close once its game has started.",
+        ]
     lines += [
         "",
         "A closing price is the last price captured **strictly before** the",
-        "listed start. An opinion with none is counted here, never dropped:",
+        f"listed start, and no more than {_lead_text(CLOSE_MAX_LEAD)} before it.",
+        "An opinion with none is counted here, never dropped:",
         "a selection the books pulled before puck drop is exactly the one",
         "most likely to have been wrong, and silently excluding it would",
         "flatter the model precisely where it deserves scrutiny.",
@@ -1005,10 +1328,21 @@ def render_clv(report: dict, *, generated: str = "") -> str:
             # were moneylines, while the store held that day's prop closes.
             lines += [
                 "No opinion has been matched to a closing price. This is NOT",
-                "the empty state before a season: the store holds closing",
-                f"prices, and {uncaptured} of these opinions are in a market it",
-                "never priced for their game. That is a gap in what is",
-                "captured.",
+                "the empty state before a season: the store holds prices",
+                f"from before face-off, and {uncaptured} of these opinions are",
+                "in a market it never priced for their game. That is a gap in",
+                "what is captured.",
+                "",
+            ]
+        elif stale:
+            # Prices were captured, but none near enough face-off: a round
+            # missed, or the schedule has none that close to this start.
+            lines += [
+                "No opinion has been matched to a closing price. This is NOT",
+                "the empty state before a season: the store holds prices from",
+                f"before face-off, but for {stale} of these opinions no capture",
+                f"was taken within {_lead_text(CLOSE_MAX_LEAD)} of face-off (a",
+                "round missed, or none is scheduled that close).",
                 "",
             ]
         elif report.get("unreadable_snapshots"):
@@ -1018,6 +1352,14 @@ def render_clv(report: dict, *, generated: str = "") -> str:
                 "that is the state before a season, or on a day the capture",
                 "job has not run. This run is still not clean: the snapshot",
                 "file(s) named above could not be read.",
+                "",
+            ]
+        elif report.get("unreadable_movement_days"):
+            # "Not a fault" would sit under a list of damaged capture files.
+            lines += [
+                "No opinion has been matched to a closing price, and this run",
+                "is not clean: the line-movement file(s) named above could",
+                "not be read, and a closing price may be in them.",
                 "",
             ]
         else:
@@ -1123,6 +1465,7 @@ def render_clv(report: dict, *, generated: str = "") -> str:
         "  only where the opposite side also closed, and the regulation",
         "  three-way is excluded entirely because a three-outcome market",
         "  cannot be de-vigged as a pair.",
+        "- **Bets**: " + measurement_bar_note(),
         "- **Games** is the sample each interval counts. A thousand rows",
         "  from ten games are ten games of evidence, not a thousand.",
         "- Positive CLV with a losing record is variance against us; a",

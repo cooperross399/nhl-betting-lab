@@ -96,6 +96,8 @@ def _page(tmp_path: Path) -> str:
     assert script.main([
         "--processed-dir", str(tmp_path / "processed"),
         "--output-dir", str(tmp_path / "outputs"),
+        # After every game here: the report leaves unplayed games out.
+        "--now", "2027-06-01T00:00:00+00:00",
         "--archive-dir", str(tmp_path / "archive"),
     ]) == 0
     return (tmp_path / "outputs" / cl.REPORT_FILENAME).read_text(encoding="utf-8")

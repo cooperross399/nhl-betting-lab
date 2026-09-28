@@ -9,11 +9,14 @@ would make the dataset silently depend on when it was built, which is exactly
 the kind of dependency that turns an unreproducible number into an argument.
 
 The rule has one exception and it is explicit: a schedule day, or a boxscore
-for a game that is not final, is *incomplete evidence*. Those are cached too,
-but `is_final` is recorded alongside so a later run knows to fetch again. A
-cache that cannot tell "finished" from "in progress" would freeze a game at
-the second period forever. The player registry of a season that has not
-closed is incomplete evidence in the same way (`registry_is_settled`).
+for a game that is not final, is *incomplete evidence*. A schedule is cached
+but always refetched when asked to refresh; a boxscore that is not final is
+returned and never cached at all, so a later run fetches it again. A cache
+that cannot tell "finished" from "in progress" would freeze a game at the
+second period forever. The player registry of a season that has not
+closed is incomplete evidence in the same way (`registry_is_settled`), and
+a club schedule that lists no regular-season game yet is not cached at all
+(`schedule_lists_the_season`).
 
 Nothing here needs a credential, so nothing here can leak one.
 """
@@ -31,7 +34,11 @@ from typing import Any
 
 import requests
 
-from nhl_betting_lab.config import RAW_DIR, SEASON_ROLLOVER_MONTH
+from nhl_betting_lab.config import (
+    RAW_DIR,
+    REGULAR_SEASON_GAME_TYPE,
+    SEASON_ROLLOVER_MONTH,
+)
 
 
 API_BASE_URL = "https://api-web.nhle.com"
@@ -186,7 +193,19 @@ def fetch_boxscore(
         f"{API_BASE_URL}/v1/gamecenter/{identifier}/boxscore", requester=requester or _default_requester
     )
     complete = game_is_final(payload)
-    _write_cache(path, payload)
+    if complete:
+        _write_cache(path, payload)
+    else:
+        # Only a final boxscore is cached. A non-final one was written here
+        # too, and nothing ever read it back: the cache check above refetches
+        # it, and `build_datasets` skips it. What it did do was sit in
+        # `data/raw/nhl/boxscore` looking like a game, so the fetch filled
+        # the directory with a file per scheduled game and Gameday Refresh's
+        # thin-history count read those as history. One an older run left is
+        # removed; a final one on disk is never replaced by a non-final
+        # answer (a `refresh=True` mid-game must not unsettle a result).
+        if not game_is_final(_read_cache(path)):
+            path.unlink(missing_ok=True)
     return CacheEntry(path=path, payload=payload, from_cache=False, complete=complete)
 
 
@@ -225,6 +244,26 @@ def fetch_schedule_day(
     return CacheEntry(path=path, payload=payload, from_cache=False, complete=False)
 
 
+def schedule_lists_the_season(payload: Any) -> bool:
+    """Whether a club-schedule payload lists at least one regular-season game.
+
+    The API answers a season it has not published yet with an object whose
+    `games` list is empty (or, in late summer, holds exhibitions only). That
+    is a true answer about today and a false one about the season, so it is
+    never cached and a cached one is never served.
+    """
+    games = payload.get("games") if isinstance(payload, dict) else None
+    for game in games if isinstance(games, list) else []:
+        if not isinstance(game, dict):
+            continue
+        try:
+            if int(game.get("gameType", 0) or 0) == REGULAR_SEASON_GAME_TYPE:
+                return True
+        except (TypeError, ValueError):
+            continue
+    return False
+
+
 def fetch_club_season_schedule(
     team: str,
     season_id: int,
@@ -245,6 +284,22 @@ def fetch_club_season_schedule(
     one script that could not replace it. Now a cached non-object is a miss
     and is fetched again, and a fetched one is a failed request: nothing is
     cached, and `fetch_nhl_data` counts and names it as failed, not ok.
+
+    **An object listing no regular-season game is today's answer, not the
+    season's, and is never written** (`schedule_lists_the_season`). The API
+    answers a season it has not published with `{"games": []}`, which used
+    to be cached and then served on every later run, for the same reason a
+    non-object was: `fetch_nhl_data` never refreshes. A club asked too early
+    had no games all season, no boxscore of its was ever fetched, and the
+    card's partial-cache warning pointed at the one script that would serve
+    the empty file again. It is the club-schedule twin of the player
+    registry's empty answer (`fetch_player_registry`), handled the same way:
+
+    * a cached file listing no regular-season game is a cache miss, and is
+      asked again on every call until the season is published;
+    * a fetched one is returned (counted ok: the API did answer) and never
+      written, so it cannot replace a schedule already cached, even on a
+      refresh, and cannot become the file every later run is served.
     """
     abbrev = str(team).strip().upper()
     if not TEAM_PATTERN.fullmatch(abbrev):
@@ -256,7 +311,7 @@ def fetch_club_season_schedule(
 
     if not refresh:
         cached = _read_cache(path)
-        if isinstance(cached, dict):
+        if schedule_lists_the_season(cached):
             return CacheEntry(
                 path=path, payload=cached, from_cache=True, complete=False
             )
@@ -270,6 +325,9 @@ def fetch_club_season_schedule(
             f"The NHL API answered {abbrev}'s {season} schedule with "
             f"{json.dumps(payload)[:40]}, not a JSON object; nothing was cached."
         )
+    if not schedule_lists_the_season(payload):
+        # The answer, returned and never written: no season, not the season.
+        return CacheEntry(path=path, payload=payload, from_cache=False, complete=False)
     _write_cache(path, payload)
     return CacheEntry(path=path, payload=payload, from_cache=False, complete=False)
 
