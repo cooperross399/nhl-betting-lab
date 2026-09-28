@@ -99,8 +99,11 @@ concurrency:
 # recorded decision=post on a green step. The suite never saw this: rewriting
 # its 275 pipefail replays to `bash -e` left all 2504 tests passing. Every
 # pipeline in this file was audited for a left side that may exit non-zero
-# before this was added. The two `find | wc -l` counts carry `|| true` for
-# exactly that reason. tests/test_the_post_step_fails_closed_under_the_runners_shell.py
+# before this was added. The two boxscore counts (`grep … | wc -l`, final
+# boxscores only, in "Restore the previous state" and "Record what went
+# wrong") carry `|| true` for exactly that reason: grep exits non-zero on a
+# missing cache or one with no final game. (They were `find | wc -l` until
+# 2026-09-26.) tests/test_the_post_step_fails_closed_under_the_runners_shell.py
 # resolves each step's shell from this file the way GitHub does and pins it.
 defaults:
   run:
@@ -237,10 +240,12 @@ jobs:
             echo "Restored the previous card for the selections diff."
           fi
           # `|| true`: the shell is `bash -eo pipefail` (declared under
-          # `defaults:` above), and with nothing restored `find` fails on the
-          # missing directory. That would end the step here, before the
-          # ledger fallback below.
-          find data/raw/nhl/boxscore -name '*.json' 2>/dev/null | wc -l \
+          # `defaults:` above), and with nothing restored, or nothing final,
+          # `grep` fails. That would end the step here, before the ledger
+          # fallback below. FINAL boxscores only, as "Record what went wrong"
+          # counts them: a restored cache can hold a file per scheduled game
+          # from before fetch_boxscore stopped caching non-final answers.
+          grep -rliE --include='*.json' '"gameState":[[:space:]]*"(OFF|FINAL)"' data/raw/nhl/boxscore 2>/dev/null | wc -l \
             | xargs echo "Cached boxscores restored:" || true
           # If the chain broke, take the ledger from the card-feed branch
           # rather than starting the season's record over. Restoring a
@@ -300,7 +305,10 @@ jobs:
           # inside any sensible job timeout, and a run killed at the timeout
           # produces no card at all. A cold cache therefore fills over
           # consecutive days rather than in one heroic run; in steady season
-          # there are about a dozen new games a night and this is instant.
+          # there are about a dozen new games a night. A game the schedule
+          # says has not been played is not asked for at all: it used to be,
+          # every run, so a season's worth of future games was re-requested
+          # nightly and could take the cap's places from real finals.
           #
           # The fetch fails when the NHL API could not be reached, and that
           # failure is what "Record what went wrong" reads to call the run
@@ -380,10 +388,16 @@ jobs:
           : > run_degraded.txt
           : > run_quiet.txt
           # `|| true`: under bash -eo pipefail (declared under `defaults:`
-          # above), `find` on a missing cache fails the substitution. That
-          # ends this step before it writes `degraded` at all, so the coldest
-          # run would read as clean.
-          games=$(find data/raw/nhl/boxscore -name '*.json' 2>/dev/null | wc -l || true)
+          # above), `grep` on a missing cache, or one holding no final game,
+          # fails the substitution. That ends this step before it writes
+          # `degraded` at all, so the coldest run would read as clean.
+          #
+          # FINAL boxscores only, the same states as nhl_api.game_is_final.
+          # This counted every file, and until fetch_boxscore stopped caching
+          # non-final answers the fetch left one per scheduled game, so a
+          # thin history padded with a season of future games read as
+          # healthy. A restored cache can still hold those files.
+          games=$(grep -rliE --include='*.json' '"gameState":[[:space:]]*"(OFF|FINAL)"' data/raw/nhl/boxscore 2>/dev/null | wc -l || true)
           echo "Boxscores cached: $games"
           # 1000 is config.THIN_HISTORY_GAMES: the public board projects
           # nothing from a history below it either, and

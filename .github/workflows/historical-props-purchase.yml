@@ -152,9 +152,13 @@ jobs:
             echo "::error::The previous state could not be restored because GitHub could not be asked (gh's own words are above). It carries the bought prices and the raw team responses, so this run stops before it spends a credit or uploads anything. Dispatch it again once GitHub answers."
             exit 1
           }
-          # `|| true`: with nothing restored `find` fails on the missing
-          # directory, and under pipefail that would end the step here.
-          restored=$(find data/raw/nhl/boxscore -name '*.json' 2>/dev/null | wc -l || true)
+          # `|| true`: with nothing restored, or nothing final, `grep` fails,
+          # and under pipefail that would end the step here. FINAL boxscores
+          # only (nhl_api.game_is_final's states): a restored cache can hold a
+          # file per scheduled game from before fetch_boxscore stopped caching
+          # non-final answers, and counting those kept the "No boxscores were
+          # restored" warning below silent over a cache with no result in it.
+          restored=$(grep -rliE --include='*.json' '"gameState":[[:space:]]*"(OFF|FINAL)"' data/raw/nhl/boxscore 2>/dev/null | wc -l || true)
           echo "Cached boxscores restored: $restored"
 
           # The bought prices themselves. This artifact was uploaded by every
