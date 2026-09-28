@@ -73,6 +73,7 @@ from nhl_betting_lab.config import PROJECT_ROOT
 from nhl_betting_lab.providers import odds_api
 from nhl_betting_lab.providers.env_file import ProviderEnvLoadResult
 
+from test_no_test_reads_the_checkouts_data import point_default_data_dirs_at
 from test_scripts import load_script
 
 
@@ -237,7 +238,13 @@ class _Capture:
 
 def _drive(script: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
            per_event, *, cap: int) -> tuple[int, str, str, Transport, Path]:
-    """The real script with the workflow's own flags, over a stub transport."""
+    """The real script with the workflow's own flags, over a stub transport.
+
+    The default data directories point away from the checkout: the line
+    capture runs the preseason screen, which reads the club-schedule cache
+    and the team-name map, and a populated checkout's schedule would screen
+    these games out before a request was made."""
+    point_default_data_dirs_at(monkeypatch, tmp_path / "defaults")
     module: ModuleType = load_script(script)
     transport = Transport(per_event)
     real = odds_api.OddsApiProvider

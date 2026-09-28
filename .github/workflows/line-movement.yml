@@ -115,6 +115,26 @@ jobs:
               || echo "No $store file for $DAY yet; this run starts it."
           done
 
+      - name: Cache the club schedules
+        # For the preseason screen in the next step. The capture spends its
+        # cap front-to-back in face-off order, and from 2026-09-29 into early
+        # October the board holds exhibition games that face off first; the
+        # screen drops the games the regular-season schedule does not know
+        # before the cap is spent. This runner restores only its own
+        # captures, so without this step there is no schedule and the screen
+        # abstains. The club schedules also carry every club's name, which
+        # is how the screen resolves the board with no boxscore cache here.
+        #
+        # Free: the NHL API, as the deployment and line-combination steps
+        # below already use. It spends no provider credit. Never fatal: a
+        # failed or partial fetch leaves the cache incomplete, the screen
+        # abstains on that and says so, and the capture runs unscreened.
+        continue-on-error: true
+        env:
+          PYTHONPATH: src
+        run: |
+          python scripts/fetch_nhl_data.py --schedules-only --polite-seconds 0.25
+
       - name: Capture prices
         # The script reports on itself. It exits 0 on a round it captured,
         # and a per-event request that failed inside that round is named in

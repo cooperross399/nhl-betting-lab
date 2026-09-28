@@ -34,6 +34,7 @@ from nhl_betting_lab.config import PROCESSED_DIR
 from nhl_betting_lab.providers import odds_api
 from nhl_betting_lab.providers.env_file import load_provider_env
 from nhl_betting_lab.providers.odds_api import EmptySlateError
+from nhl_betting_lab.preseason_screen import preseason_screen
 from nhl_betting_lab.season import LEAGUE_TIMEZONE
 
 
@@ -122,9 +123,24 @@ def main(argv: list[str] | None = None) -> int:
     markets = list(odds_api.PER_EVENT_PROVIDER_MARKETS) + list(
         odds_api.ALTERNATE_PROVIDER_MARKETS
     )
+    # The card's preseason screen, before the cap is spent. At 38 credits an
+    # event the workflow's 600 buys fifteen, spent front-to-back in face-off
+    # order, and from 2026-09-29 into early October the board holds
+    # exhibition games that face off before the evening's regular-season
+    # ones. Unscreened, a window holding more than fifteen events skipped a
+    # regular-season game for the budget, and that round's movement and its
+    # closing price were lost: no source keeps an archive. The screen is the
+    # shadow run's (`nhl_betting_lab.preseason_screen`), with its
+    # abstentions: no club-schedule cache, a cache missing a club, or a
+    # team-name map that resolves nothing screens nothing and says so.
+    screen, screen_note = preseason_screen(
+        today.isoformat(), processed_dir=processed
+    )
+    print(screen_note)
     try:
         result = provider.fetch_player_props(
             markets=markets,
+            keep_event=screen,
             credit_cap=args.credit_cap,
             fetched_at=captured_at,
             league_days=league_days,
