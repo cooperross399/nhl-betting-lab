@@ -27,6 +27,9 @@ record
 teams[ABBR]      {name, short, color, fg}
 games[]
   id, startUtc, venue, city, tv
+  gameType       the NHL API's game type (1 preseason, 2 regular season, 3 playoffs). Anything but 2 is published as
+                 schedule only — no projection, no market figure, no pick — even on a "regular" night, and is never
+                 settled; the page renders 1 as "Exhibition · model abstains"
   priced         true when this build attached market prices to the game; false renders "Not priced", never a pass
   away | home    {abbr, record, projGoals, winProb, b2b, goalie:{name, status:"confirmed"|"projected"}}  — everything after abbr optional;
                  b2b is the schedule fact (played the previous league day) and is published under either
