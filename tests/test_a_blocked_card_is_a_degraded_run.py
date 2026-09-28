@@ -419,6 +419,17 @@ def _report(work: Path, degraded: str) -> int:
     block = _render(_step(name="Report the outcome")["run"], {
         "steps.final.outputs.degraded": degraded,
         "steps.prices.outputs.empty_slate": "false",
+        # The card-feed publish ran; its failure is its own test's business.
+        "steps.cardfeed.outcome": "success",
+        "steps.settle.outcome": "success",
+        "steps.rebuild.outcome": "success",
+        "steps.clv.outcome": "success",
+        # A scheduled run on the default branch, the ordinary production
+        # case; tests/test_a_branch_run_never_publishes_the_card.py covers
+        # a dispatch on a branch.
+        "github.event_name": "schedule",
+        "github.ref": "refs/heads/main",
+        "github.event.repository.default_branch": "main",
     })
     return _bash(block, work, dict(os.environ)).returncode
 
@@ -451,13 +462,18 @@ def _git_env(tmp_path: Path, day: str) -> dict:
     }
 
 
-def _publish(work: Path, tmp_path: Path, degraded: str, day: str) -> dict:
+def _publish(work: Path, tmp_path: Path, degraded: str, day: str,
+             *, ref: str = "refs/heads/main") -> dict:
+    """The publish step's block. It runs only on the default branch (its
+    `if:` says so; tests/test_a_branch_run_never_publishes_the_card.py
+    evaluates that), and records the ref that wrote the status line."""
     env = _git_env(tmp_path, day)
     subprocess.run(["git", "init", "-q"], cwd=work, env=env, check=True)
     block = _render(_step(name="Publish the card to the card-feed branch")["run"], {
         "github.repository": "o/r",
         "github.server_url": "https://github.com",
         "github.run_id": "1",
+        "github.ref": ref,
         "steps.post.outputs.decision || 'none'": "post",
         "steps.final.outputs.degraded || 'unknown'": degraded,
         "steps.prices.outputs.empty_slate || 'false'": "false",
@@ -482,6 +498,10 @@ def _precheck(tmp_path: Path, day: str) -> str:
     output.write_text("", encoding="utf-8")
     block = _render(_step(id_="feed")["run"], {
         "github.event_name": "schedule", "github.repository": "o/r",
+        # A schedule runs on the default branch. The precheck compares
+        # against its own ref and never reads github.event.repository, which
+        # _render would refuse here if it did.
+        "github.ref": "refs/heads/main",
     })
     result = _bash(block, checkout, {**env, "GITHUB_OUTPUT": str(output)})
     assert result.returncode == 0, result.stderr

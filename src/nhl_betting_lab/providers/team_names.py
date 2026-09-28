@@ -129,8 +129,10 @@ def build_team_name_map(
             # A boxscore that parses but is not an object (`null`, `[]`) used
             # to reach `payload.get` and raise AttributeError out of the whole
             # build, so one such file stopped the card, which builds this map
-            # with nothing around it. `fetch_boxscore` stores any HTTP 200
-            # body as-is, and `build_datasets` already counts this shape as
+            # with nothing around it. `fetch_boxscore` now caches only a
+            # final boxscore, but it used to store any HTTP 200 body as-is,
+            # and a cache restored from an older run may still hold one, so
+            # the guard stays. `build_datasets` already counts this shape as
             # malformed and skips it; it is skipped here the same way, like an
             # unreadable file. 0 of the 5,280 cached boxscores had this shape
             # on 2026-09-25, so no map changed.

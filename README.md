@@ -267,7 +267,7 @@ PYTHONPATH=src .venv/bin/python scripts/run_policy_pr_gate.py
 PYTHONPATH=src .venv/bin/python scripts/check_verdict_drift.py
 
 PYTHONPATH=src .venv/bin/python -m pytest -q
-PYTHONPATH=src .venv/bin/python -m compileall -q -f src scripts tests
+PYTHONPATH=src .venv/bin/python -m compileall -q -f src scripts tests web
 ```
 
 `pytest -q` over the whole suite is the only run there is. A subset run — a
@@ -320,7 +320,8 @@ be dispatched by hand to force a paid capture. Gameday Refresh reads that
 store and writes
 `data/outputs/closing_line_value.md`: beat-the-close rate, CLV%, and the
 de-vigged expected value at the closing line, for opinions and for bets
-separately, with every interval clustered by game (one game's sides, rungs
+separately (a "bet" there, as in the forward-evidence report, is an opinion
+clearing the 6% prop / 3.5% team measurement bar, not a bet the card staked), with every interval clustered by game (one game's sides, rungs
 and players are not independent trials). It is the earliest honest signal
 that the model is finding something — and it is not profit, which the
 report says out loud.
@@ -339,6 +340,10 @@ routines read the card and track the season without any GitHub API
 credential: a cloud session cloning this repository sees it over plain git.
 A day with no new `card-feed` commit means the workflow itself did not
 finish.
+Only runs on the default branch post to the operating home or publish to
+`card-feed`: a run dispatched on a feature branch builds and gates the card
+as a rehearsal and publishes nothing, and the status line names the ref that
+wrote it so the backup's precheck counts only a card `main` published.
 
 Each run starts from the previous run's state, restored by
 `scripts/restore_state.py` from the newest run on `main` that actually carries

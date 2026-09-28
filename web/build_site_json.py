@@ -33,7 +33,9 @@ Sources, in order of trust:
 
 Preseason (gameType 1) is published as schedule only. The models are fitted
 on regular-season games and the card excludes exhibitions, so no projection
-or pick is invented for them — the page says so instead.
+or pick is invented for them — the page says so instead. That holds per game,
+not per night: an exhibition on a night that also holds a regular-season game
+(2026-09-29) is published, frozen and settled as schedule only too.
 
 Nothing here fetches odds, spends a credit, or places a bet.
 """
@@ -42,6 +44,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import importlib.util
 import json
 import sys
 import urllib.request
@@ -52,6 +55,10 @@ from zoneinfo import ZoneInfo
 ET = ZoneInfo("America/New_York")
 NHL = "https://api-web.nhle.com/v1"
 SEASON_OPENS = date(2026, 9, 29)
+#: The NHL API's gameType for a regular-season game (1 is preseason, 3 the
+#: playoffs). The lab's own `config.REGULAR_SEASON_GAME_TYPE`, spelled out
+#: for the reason USER_AGENT gives.
+REGULAR_SEASON_GAME_TYPE = 2
 
 TEAMS = {
     "ANA": ("Anaheim Ducks", "Ducks", "#F47A38", "#000000"),
@@ -356,6 +363,17 @@ def load_model(processed: Path, outputs: Path):
     }
 
 
+def _site_history():
+    """`web/site_history.py`, loaded from beside this file. It owns the rule
+    for when a board may be frozen, and freezes the same file after this
+    script does: one copy of the rule, so the two freezes cannot disagree."""
+    path = Path(__file__).resolve().with_name("site_history.py")
+    spec = importlib.util.spec_from_file_location("_nhl_site_history", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def build_board(day: date, lab: Path, history_dir: Path) -> dict:
     now = datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
     games = schedule_for(day)
@@ -399,8 +417,22 @@ def build_board(day: date, lab: Path, history_dir: Path) -> dict:
             # (MTL @ TOR moneyline home +112, edge 0.110), and the history
             # froze 0 bets for the day. A game nobody priced is not a pass.
             "priced": False,
+            # Whether this game is anything but a regular-season game. The
+            # night used to be judged once, `preseason` above, and this loop
+            # never read the game's own gameType: on a mixed night (one
+            # regular-season game and one exhibition, 2026-09-29) the board
+            # read "regular", projected and priced BOTH, froze both, and
+            # settle() graded both the next morning. The models are fitted on
+            # regular-season games and the card never prices an exhibition,
+            # so an exhibition is published as schedule only, whatever else
+            # is on the night — no projection, no line, no pick — and with no
+            # projGoals, settle() and site_history's bet count pass it by.
+            # The game type is published so the page can say why the game
+            # carries nothing, which "Not priced" would misstate. A game with
+            # no type reads as preseason, as `preseason` above reads it.
+            "gameType": int(g.get("gameType", 1)),
         }
-        if not preseason and lab_model:
+        if not preseason and lab_model and row["gameType"] == REGULAR_SEASON_GAME_TYPE:
             home_key = lab_model["resolve"](f"{home.get('placeName', {}).get('default', '')} {home.get('commonName', {}).get('default', '')}".strip()) or h
             away_key = lab_model["resolve"](f"{away.get('placeName', {}).get('default', '')} {away.get('commonName', {}).get('default', '')}".strip()) or a
             hb, ab = lab_model["b2b"](home_key, day.isoformat()), lab_model["b2b"](away_key, day.isoformat())
@@ -451,13 +483,27 @@ def build_board(day: date, lab: Path, history_dir: Path) -> dict:
                     "home": round(reg["home"], 4), "draw": round(reg["draw"], 4), "away": round(reg["away"], 4),
                     "prices": {s: best_price(prices, provider_home, provider_away, "regulation_3_way", s) for s in ("home", "draw", "away")},
                 }
-                mine = [c for c in candidates if c.get("home_team") == provider_home and c.get("away_team") == provider_away and c.get("section") != "Passes / notable avoids"]
-                if mine:
-                    top = max(mine, key=lambda c: float(c.get("edge", 0)))
-                    row["pick"] = {
-                        "market": MARKET_LABEL[top["market"]], "label": pick_label(top, h, a),
-                        "price": int(float(top["american_odds"])), "edgePct": round(float(top["edge"]) * 100, 1),
-                    }
+                # A best bet first, and a lean only on a game with none; the
+                # pick says which it is. This took the highest edge among
+                # every row but the passes and set no `kind`, and the page
+                # reads a pick without one as a bet. So a lean was headed
+                # "Best bet", counted in the strip and in history/index.json's
+                # `bets`, and graded into the Results record. A lean's edge
+                # can be the game's largest precisely because what stopped it
+                # was not the edge (a stake-excluded market, a rung that
+                # one-stake-per-outcome demoted), so it also displaced the
+                # game's real best bet. Pinned by
+                # tests/test_a_lean_is_never_published_as_a_best_bet.py.
+                mine = [c for c in candidates if c.get("home_team") == provider_home and c.get("away_team") == provider_away]
+                for section, kind in (("Best bets", "bet"), ("Leans", "lean")):
+                    rows = [c for c in mine if c.get("section") == section]
+                    if rows:
+                        top = max(rows, key=lambda c: float(c.get("edge", 0)))
+                        row["pick"] = {
+                            "kind": kind, "market": MARKET_LABEL[top["market"]], "label": pick_label(top, h, a),
+                            "price": int(float(top["american_odds"])), "edgePct": round(float(top["edge"]) * 100, 1),
+                        }
+                        break
         out_games.append(row)
 
     record = load_record(lab / "data" / "outputs" / "forward_evidence.json")
@@ -506,10 +552,17 @@ def build_board(day: date, lab: Path, history_dir: Path) -> dict:
         "generatedAt": now, "season": "2026–27", "phase": "preseason" if preseason else "regular",
         "boardDate": day.isoformat(), "notice": notice, "record": record, "teams": teams, "games": out_games,
         "allowlistedMarkets": allowlisted,
+        # When the Gameday card this board was built from was generated; None
+        # when no card was restored. A board built on an earlier day's card is
+        # shown but not frozen (web/site_history.py::built_on_stale_state).
+        "cardGeneratedAt": card.get("generated_at") or None,
     }
     history_dir.mkdir(parents=True, exist_ok=True)
     frozen = history_dir / f"{day.isoformat()}.json"
-    if not frozen.exists():  # the day's first published opinion stands
+    if _site_history().built_on_stale_state(board):
+        print(f"history/{frozen.name}: not frozen; this board was built on a card generated "
+              f"{board['cardGeneratedAt'] or 'never'}, not today.")
+    elif not frozen.exists():  # the day's first published opinion stands
         frozen.write_text(json.dumps(board, indent=1), encoding="utf-8")
     return board
 
@@ -579,8 +632,8 @@ def load_record(path: Path) -> dict:
     The site used to read `overall.roi` / `roi_low` / `roi_high` / `clv`.
     None of those keys exist. `forward_evidence.build_forward_report` writes
     `generated_at`, `rows`, `markets`, `unsettleable` and `void`, and each
-    entry under `markets` carries its own `roi` / `low` / `high` — there is
-    no pooled figure anywhere, and inventing one here would have shown a
+    entry under `markets` carries its own `roi` / `low` / `high` — the site
+    reads no pooled figure, and inventing one here would have shown a
     permanently zeroed record instead.
 
     Publishing a pooled ROI is the thing this function deliberately will not
@@ -739,7 +792,12 @@ def settle(day: date, history_dir: Path) -> dict:
         pick = g.get("pick")
         if pick:
             outcome = grade_pick(pick, ha, aa, hs, as_, finish)
-            s["picks"]["w" if outcome == "win" else "l" if outcome == "loss" else "p"] += 1
+            # The record is the best bets'. A lean is judged on its own row
+            # and kept out of it: it was recorded, not staked. A pick frozen
+            # before `kind` existed reads as a bet, as site_history.py and
+            # the page read it.
+            if pick.get("kind", "bet") == "bet":
+                s["picks"]["w" if outcome == "win" else "l" if outcome == "loss" else "p"] += 1
             row["pick"] = {**pick, "result": outcome}
         else:
             # A game with no pick settles with no pick. This used to write

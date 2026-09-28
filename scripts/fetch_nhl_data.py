@@ -2,7 +2,8 @@
 """Fetch NHL schedules, boxscores and the player-name registry into the cache.
 
 Public API, no credential, no quota. Safe to run repeatedly: a game that is
-already final is never refetched, so a second run over the same window costs
+already final is never refetched, and a game the schedule says has not been
+played is not asked for at all, so a second run over the same window costs
 almost nothing and produces exactly the same dataset.
 
     PYTHONPATH=src .venv/bin/python scripts/fetch_nhl_data.py
@@ -28,6 +29,7 @@ from nhl_betting_lab.data.nhl_api import (
     fetch_club_season_schedule,
     fetch_player_registry,
     fetch_schedule_day,
+    schedule_lists_the_season,
 )
 
 
@@ -50,10 +52,72 @@ def _count(tally: Tally, source: str, outcome: str) -> None:
     tally.setdefault(source, {"ok": 0, "cached": 0, "failed": 0})[outcome] += 1
 
 
+#: Schedule states for a game that has not started. Believed only from a
+#: schedule fetched live this run (see `_not_yet_played`).
+NOT_STARTED_STATES = frozenset({"FUT", "PRE"})
+
+#: game id -> True while every schedule copy seen says it has not been played.
+Sightings = dict[int, bool]
+
+
+def _start_time(game: dict) -> datetime | None:
+    """The scheduled face-off, or None when it cannot be confirmed (missing,
+    unreadable, or carrying no timezone)."""
+    text = str(game.get("startTimeUTC") or "").strip()
+    if not text:
+        return None
+    try:
+        moment = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return moment if moment.tzinfo is not None else None
+
+
+def _not_yet_played(game: dict, *, now: datetime, state_is_live: bool) -> bool:
+    """Whether a schedule entry says, beyond doubt, that there is no result.
+
+    The whole season's ids are in scope, and a boxscore is served from cache
+    only once final, so every scheduled game used to be asked for on every
+    run: up to about six hundred requests a night for `FUT` answers, each one
+    spending the `--max-games` budget a real final needed. Now a game is
+    skipped when its start is after now, or when a schedule fetched live this
+    run says `FUT` or `PRE`.
+
+    A CACHED club schedule's state is not believed: `fetch_nhl_data` fetches
+    a club schedule once and serves it from cache after that, so its
+    `gameState` is whatever it was in August, and trusting it would skip
+    every game of the season. Its start time is believed, because a start
+    time moves rarely and only later (a postponement), which errs toward
+    fetching. Anything unclear is fetched: a wasted call costs a
+    quarter-second; a missed final costs a game of history.
+    """
+    start = _start_time(game)
+    if start is not None and start > now:
+        return True
+    state = str(game.get("gameState") or "").strip().upper()
+    return state_is_live and state in NOT_STARTED_STATES
+
+
+def _see(
+    sightings: Sightings, game: dict, *, now: datetime, state_is_live: bool
+) -> None:
+    game_id = game.get("id")
+    if not game_id:
+        return
+    unplayed = _not_yet_played(game, now=now, state_is_live=state_is_live)
+    # Every game is in two clubs' files; skipped only if every copy agrees.
+    key = int(game_id)
+    sightings[key] = sightings.get(key, True) and unplayed
+
+
 def _game_ids_for_season(
-    season_id: int, *, polite_seconds: float, tally: Tally
-) -> set[int]:
-    ids: set[int] = set()
+    season_id: int,
+    *,
+    polite_seconds: float,
+    tally: Tally,
+    sightings: Sightings,
+    now: datetime,
+) -> None:
     for team in TEAMS:
         try:
             entry = fetch_club_season_schedule(team, season_id)
@@ -65,22 +129,32 @@ def _game_ids_for_season(
         if not entry.from_cache:
             time.sleep(polite_seconds)
         payload = entry.payload
+        if not schedule_lists_the_season(payload):
+            # Not cached (`fetch_club_season_schedule`), so the next run asks
+            # again. This used to be written and served on every run after,
+            # and the club had no games all season.
+            print(
+                f"  {team}: the NHL API lists no regular-season game for "
+                f"{season_id} yet, so nothing was cached; the next run asks again."
+            )
         games = payload.get("games", []) if isinstance(payload, dict) else []
         for game in games:
             if not isinstance(game, dict):
                 continue
             if int(game.get("gameType", 0) or 0) != REGULAR_SEASON_GAME_TYPE:
                 continue
-            game_id = game.get("id")
-            if game_id:
-                ids.add(int(game_id))
-    return ids
+            _see(sightings, game, now=now, state_is_live=not entry.from_cache)
 
 
 def _game_ids_for_dates(
-    start: date, end: date, *, polite_seconds: float, tally: Tally
-) -> set[int]:
-    ids: set[int] = set()
+    start: date,
+    end: date,
+    *,
+    polite_seconds: float,
+    tally: Tally,
+    sightings: Sightings,
+    now: datetime,
+) -> None:
     cursor = start
     while cursor <= end:
         try:
@@ -102,12 +176,10 @@ def _game_ids_for_dates(
                     continue
                 if int(game.get("gameType", 0) or 0) != REGULAR_SEASON_GAME_TYPE:
                     continue
-                game_id = game.get("id")
-                if game_id:
-                    ids.add(int(game_id))
+                # Always fetched live (`refresh=True`), so its state is today's.
+                _see(sightings, game, now=now, state_is_live=True)
         # The endpoint answers with a whole week, so step a week at a time.
         cursor += timedelta(days=7)
-    return ids
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -157,7 +229,8 @@ def main(argv: list[str] | None = None) -> int:
     seasons = args.seasons if args.seasons else list(DEFAULT_SEASONS)
 
     tally: Tally = {}
-    ids: set[int] = set()
+    sightings: Sightings = {}
+    now = datetime.now(timezone.utc)
     if args.start or args.end:
         if not (args.start and args.end):
             parser.error("--from and --to must be given together.")
@@ -167,17 +240,24 @@ def main(argv: list[str] | None = None) -> int:
         except ValueError:
             parser.error("--from and --to must be ISO dates (YYYY-MM-DD).")
         print(f"Schedule window {start} .. {end}")
-        ids |= _game_ids_for_dates(
-            start, end, polite_seconds=args.polite_seconds, tally=tally
+        _game_ids_for_dates(
+            start, end, polite_seconds=args.polite_seconds, tally=tally,
+            sightings=sightings, now=now,
         )
     else:
         for season in seasons:
             print(f"Season {season}: reading club schedules")
-            ids |= _game_ids_for_season(
-                season, polite_seconds=args.polite_seconds, tally=tally
+            _game_ids_for_season(
+                season, polite_seconds=args.polite_seconds, tally=tally,
+                sightings=sightings, now=now,
             )
 
-    print(f"{len(ids)} regular-season game ids in scope.")
+    ids = {game_id for game_id, unplayed in sightings.items() if not unplayed}
+    not_played = len(sightings) - len(ids)
+    print(
+        f"{len(sightings)} regular-season game ids in scope, "
+        f"{not_played} not yet played (not asked for)."
+    )
 
     if not args.skip_rosters:
         # Refreshed every run, never served from cache: the card reads these

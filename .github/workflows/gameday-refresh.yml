@@ -99,8 +99,11 @@ concurrency:
 # recorded decision=post on a green step. The suite never saw this: rewriting
 # its 275 pipefail replays to `bash -e` left all 2504 tests passing. Every
 # pipeline in this file was audited for a left side that may exit non-zero
-# before this was added. The two `find | wc -l` counts carry `|| true` for
-# exactly that reason. tests/test_the_post_step_fails_closed_under_the_runners_shell.py
+# before this was added. The two boxscore counts (`grep … | wc -l`, final
+# boxscores only, in "Restore the previous state" and "Record what went
+# wrong") carry `|| true` for exactly that reason: grep exits non-zero on a
+# missing cache or one with no final game. (They were `find | wc -l` until
+# 2026-09-26.) tests/test_the_post_step_fails_closed_under_the_runners_shell.py
 # resolves each step's shell from this file the way GitHub does and pins it.
 defaults:
   run:
@@ -148,14 +151,34 @@ jobs:
           STATUS=$(git show refs/card-feed-tip:latest_status.json 2>/dev/null || echo '{}')
           FEED_DAY=$(printf '%s' "$STATUS" | jq -r '.date // ""')
           DEGRADED=$(printf '%s' "$STATUS" | jq -r '.degraded // "unknown"')
-          # Only a CLEAN card for today counts. A degraded run is exactly the
-          # case the backup trigger exists for, so it must not satisfy it.
-          if [ "$FEED_DAY" = "$DAY" ] && [ "$DEGRADED" = "false" ]; then
+          FEED_REF=$(printf '%s' "$STATUS" | jq -r '.ref // ""')
+          # A scheduled run only ever runs on the default branch, so its own
+          # ref IS the default branch. It is read from there rather than from
+          # `github.event.repository`, which this lab has never seen populated
+          # on a cron run. An empty ref cannot happen on a schedule; were it
+          # to, this says so and runs, because failing here would skip the
+          # refresh job and leave the day with no card at all.
+          RUN_REF="${{ github.ref }}"
+          if [ -z "$RUN_REF" ]; then
+            echo "already=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::This scheduled run could not read its own ref, so it cannot tell whether card-feed's status came from the default branch. Running rather than trusting it."
+            exit 0
+          fi
+          # Only a CLEAN card for today, published by the DEFAULT branch,
+          # counts. A degraded run is exactly the case the backup trigger
+          # exists for, so it must not satisfy it. Nor may a run dispatched on
+          # a feature branch: the publish step no longer runs there, but every
+          # branch cut before 2026-09-26 still carries the copy that did, and
+          # its status line names no ref. Such a line costs at most one
+          # duplicate run on the day this landed; trusting it would cost the
+          # day's card and its frozen opinions.
+          if [ "$FEED_DAY" = "$DAY" ] && [ "$DEGRADED" = "false" ] \
+             && [ "$FEED_REF" = "$RUN_REF" ]; then
             echo "already=true" >> "$GITHUB_OUTPUT"
             echo "Today's card ($DAY) is already published and clean. Skipping."
           else
             echo "already=false" >> "$GITHUB_OUTPUT"
-            echo "Feed day '$FEED_DAY' (degraded=$DEGRADED) is not a clean card for $DAY. Running."
+            echo "Feed day '$FEED_DAY' (degraded=$DEGRADED, ref='$FEED_REF') is not a clean card for $DAY from the default branch. Running."
           fi
 
   refresh:
@@ -237,10 +260,12 @@ jobs:
             echo "Restored the previous card for the selections diff."
           fi
           # `|| true`: the shell is `bash -eo pipefail` (declared under
-          # `defaults:` above), and with nothing restored `find` fails on the
-          # missing directory. That would end the step here, before the
-          # ledger fallback below.
-          find data/raw/nhl/boxscore -name '*.json' 2>/dev/null | wc -l \
+          # `defaults:` above), and with nothing restored, or nothing final,
+          # `grep` fails. That would end the step here, before the ledger
+          # fallback below. FINAL boxscores only, as "Record what went wrong"
+          # counts them: a restored cache can hold a file per scheduled game
+          # from before fetch_boxscore stopped caching non-final answers.
+          grep -rliE --include='*.json' '"gameState":[[:space:]]*"(OFF|FINAL)"' data/raw/nhl/boxscore 2>/dev/null | wc -l \
             | xargs echo "Cached boxscores restored:" || true
           # If the chain broke, take the ledger from the card-feed branch
           # rather than starting the season's record over. Restoring a
@@ -300,7 +325,10 @@ jobs:
           # inside any sensible job timeout, and a run killed at the timeout
           # produces no card at all. A cold cache therefore fills over
           # consecutive days rather than in one heroic run; in steady season
-          # there are about a dozen new games a night and this is instant.
+          # there are about a dozen new games a night. A game the schedule
+          # says has not been played is not asked for at all: it used to be,
+          # every run, so a season's worth of future games was re-requested
+          # nightly and could take the cap's places from real finals.
           #
           # The fetch fails when the NHL API could not be reached, and that
           # failure is what "Record what went wrong" reads to call the run
@@ -380,10 +408,16 @@ jobs:
           : > run_degraded.txt
           : > run_quiet.txt
           # `|| true`: under bash -eo pipefail (declared under `defaults:`
-          # above), `find` on a missing cache fails the substitution. That
-          # ends this step before it writes `degraded` at all, so the coldest
-          # run would read as clean.
-          games=$(find data/raw/nhl/boxscore -name '*.json' 2>/dev/null | wc -l || true)
+          # above), `grep` on a missing cache, or one holding no final game,
+          # fails the substitution. That ends this step before it writes
+          # `degraded` at all, so the coldest run would read as clean.
+          #
+          # FINAL boxscores only, the same states as nhl_api.game_is_final.
+          # This counted every file, and until fetch_boxscore stopped caching
+          # non-final answers the fetch left one per scheduled game, so a
+          # thin history padded with a season of future games read as
+          # healthy. A restored cache can still hold those files.
+          games=$(grep -rliE --include='*.json' '"gameState":[[:space:]]*"(OFF|FINAL)"' data/raw/nhl/boxscore 2>/dev/null | wc -l || true)
           echo "Boxscores cached: $games"
           # 1000 is config.THIN_HISTORY_GAMES: the public board projects
           # nothing from a history below it either, and
@@ -447,6 +481,14 @@ jobs:
         # public artifact every day, which would republish paid-for prices
         # daily for the season. So a store this runner does not hold leaves
         # the checkout's committed report standing, and the log says so.
+        #
+        # Soft, but not silent. With no id nothing could read this step's
+        # outcome, so a rebuild that failed left the committed reports, or an
+        # earlier run's, standing in this run's artifacts looking current,
+        # and the run said it was clean. "Report the outcome" reads it now,
+        # and fails the run without degrading it: a backup would rebuild with
+        # the same scripts and fail the same way, so it is not sent for.
+        id: rebuild
         continue-on-error: true
         env:
           PYTHONPATH: src
@@ -552,9 +594,23 @@ jobs:
         # After the card froze today's opinions and results were fetched
         # earlier in the run, every pending snapshot whose games are final
         # settles into the accumulating ledger. This is the only possible
-        # price evidence for hits and the regulation three-way, and the
-        # out-of-sample stream for everything else — losing it would mean the
-        # season taught nothing.
+        # price evidence for the regulation three-way, which has never been
+        # bought historically (it is per-event only and was never requested),
+        # and the out-of-sample stream for everything else — losing it would
+        # mean the season taught nothing.
+        #
+        # Soft so a settlement fault never costs the card. It exits non-zero
+        # on purpose when it could not settle (a ledger or snapshot it cannot
+        # read, a team map that resolves nothing, a ledger that would
+        # shrink), and with no id that exit reached no one: the run finished
+        # green and the ledger stopped growing. "Report the outcome" now
+        # fails the run on it, without degrading it. Every one of those
+        # faults is a property of the restored state and this step makes no
+        # network call, so the backup would restore the same files, fail the
+        # same way, and buy the prices again for nothing. Nothing that failed
+        # to settle is marked settled, so a later run settles it once the
+        # state is repaired.
+        id: settle
         if: always()
         continue-on-error: true
         env:
@@ -565,7 +621,11 @@ jobs:
       - name: Report closing-line value
         # Reads the capture store the Closing Lines workflow publishes and
         # scores every frozen opinion against the market's last word. Offline
-        # and read-only: it fetches no prices and spends nothing.
+        # and read-only: it fetches no prices and spends nothing. Exits 2 on
+        # a damaged snapshot or capture store, which "Report the outcome"
+        # reads and fails the run on, without degrading it: the backup would
+        # read the same damaged files, so it is not sent for.
+        id: clv
         if: always()
         continue-on-error: true
         env:
@@ -574,15 +634,72 @@ jobs:
         run: |
           set -u
           REMOTE="https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}"
+          STORE=data/processed/closing_line_captures.csv
           mkdir -p data/processed
-          if git fetch "$REMOTE" +refs/heads/closing-lines:refs/closing-tip 2>/dev/null \
-             && git cat-file -e refs/closing-tip:closing_line_captures.csv 2>/dev/null; then
-            git show refs/closing-tip:closing_line_captures.csv \
-              > data/processed/closing_line_captures.csv
-          else
+          # The restore of gameday-state put the previous run's store here,
+          # because that artifact carries data/processed whole. It goes first,
+          # so the report can only read what THIS run fetched. A fetch that
+          # failed used to fall through to "No capture store yet" and leave
+          # yesterday's store to be scored as today's, with nothing saying so.
+          rm -f "$STORE"
+          # "The branch does not exist" and "the branch could not be read"
+          # are told apart: the first is not a fault (Closing Lines is
+          # disabled by the owner, so it is the expected state), the second
+          # is, and degrades the run like every other fault.
+          if ! HEADS=$(git ls-remote --heads "$REMOTE" refs/heads/closing-lines 2>/dev/null); then
+            echo "The closing-lines branch could not be reached, so the closing-line value report scored no capture store today rather than an earlier run's." >> run_degraded.txt
+          elif [ -z "$HEADS" ]; then
             echo "No capture store yet; the report will say so rather than guess."
+          elif git fetch "$REMOTE" +refs/heads/closing-lines:refs/closing-tip 2>/dev/null \
+             && git show refs/closing-tip:closing_line_captures.csv > "$STORE" 2>/dev/null; then
+            echo "Read the capture store from the closing-lines branch."
+          else
+            rm -f "$STORE"
+            echo "The closing-lines branch exists but its capture store could not be fetched, so the closing-line value report scored no capture store today rather than an earlier run's." >> run_degraded.txt
           fi
           python scripts/run_closing_line_value.py
+
+      - name: Upload the state for the next run
+        # The boxscore cache and the previous card are the only link between
+        # one gameday and the next, which is why they outlive the reports. The
+        # card in particular: without it the "selections changed" marker cannot
+        # mean anything.
+        #
+        # Here, straight after the last step that writes state and before
+        # anyone is told how the run went. It used to run after the card-feed
+        # publish, and nothing read its outcome: an upload that failed left
+        # card-feed saying `degraded: false`, the 15:00 backup's precheck read
+        # a clean card and stood down, and the next day restored yesterday's
+        # state, with today's frozen snapshot missing from the chain for good.
+        # `continue-on-error` so the step below records the failure and the
+        # run degrades, rather than the upload ending the job's say in it.
+        id: state
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: gameday-state
+          path: |
+            data/raw/nhl/boxscore
+            data/raw/nhl/registry
+            data/processed
+            data/outputs/gameday_card.json
+            data/outputs/prop_calibration_samples.csv
+            data/outputs/team_market_samples.csv
+            data/archive/priced_snapshots
+            data/processed/forward_evidence.csv
+          if-no-files-found: warn
+          retention-days: 90
+
+      - name: Record whether the state was saved
+        # Anything but a clean upload is a degraded run, so the summary, the
+        # comment, card-feed's status and the run's exit all say so, and the
+        # backup runs and carries today's state forward instead.
+        if: always()
+        run: |
+          if [ "${{ steps.state.outcome }}" != "success" ]; then
+            echo "The state for the next run could not be uploaded, so tomorrow's run would restore an older state and today's frozen snapshot would not settle. The backup run carries it forward instead." >> run_degraded.txt
+          fi
 
       - name: Write the card to the run summary
         if: always()
@@ -605,8 +722,22 @@ jobs:
         # the reader to ignore them. But a degraded run always posts, because
         # silence is only safe to read as "nothing moved" if anything going
         # wrong breaks the silence.
+        # Only on the default branch. A run dispatched on a feature branch is
+        # code nobody has reviewed: it still fetches, prices, gates and renders
+        # the card (so a dispatch is a full rehearsal, and the card is in the
+        # run summary), but it must not email its card to the operating home
+        # as if it were today's. Until 2026-09-26 nothing here read the ref.
+        # The comparison is the one Closing Lines makes for its hand-off, with
+        # a schedule let through first: a scheduled run only ever runs on the
+        # default branch, and `github.event.repository` is not something this
+        # lab has seen populated on a cron run. Were it empty there, the ref
+        # test alone would read `refs/heads/` and every scheduled run would
+        # skip the post and the card-feed publish, silently, from opening
+        # night. A dispatch that cannot read the default branch skips both
+        # too, and "Report the outcome" fails that run by name.
+        # tests/test_a_branch_run_never_publishes_the_card.py evaluates it.
         id: post
-        if: always()
+        if: always() && (github.event_name == 'schedule' || github.ref == format('refs/heads/{0}', github.event.repository.default_branch))
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
@@ -714,7 +845,25 @@ jobs:
         # commit-tree build the two-file commit without touching it. Each
         # push parents on the current tip, so it is always a fast-forward —
         # never a force.
-        if: always()
+        #
+        # Soft, because the reports and the state still upload after it, and
+        # read by "Report the outcome": a push that failed left no status and
+        # no ledger backup for today while the run finished green. Its
+        # failure fails the run there. It is not written into the health,
+        # which is what this step publishes and was decided before it ran.
+        #
+        # Only on the default branch, for the reason the post step gives and
+        # one more. A branch run published today's date with degraded=false,
+        # so main's next scheduled precheck read today's card as already
+        # published and stood the whole run down; and main restores state only
+        # from main's runs, so the branch's frozen snapshot never reached the
+        # forward ledger. That day's opinions were lost for good. The status
+        # line also records the ref that wrote it, which the precheck reads.
+        # The condition is the post step's, character for character, and
+        # "Report the outcome" reads a skip as a failure exactly when this
+        # condition says the step should have run.
+        id: cardfeed
+        if: always() && (github.event_name == 'schedule' || github.ref == format('refs/heads/{0}', github.event.repository.default_branch))
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
@@ -736,8 +885,9 @@ jobs:
             --arg degraded "${{ steps.final.outputs.degraded || 'unknown' }}" \
             --arg empty_slate "${{ steps.prices.outputs.empty_slate || 'false' }}" \
             --arg run_url "$RUN_URL" \
+            --arg ref "${{ github.ref }}" \
             '{date: $date, decision: $decision, degraded: $degraded,
-              empty_slate: $empty_slate, run_url: $run_url}' > card_status.json
+              empty_slate: $empty_slate, run_url: $run_url, ref: $ref}' > card_status.json
           BLOB_MD=$(git hash-object -w card_comment.md)
           BLOB_JSON=$(git hash-object -w card_status.json)
           ENTRIES=$(printf '100644 blob %s\tlatest_card_comment.md\n100644 blob %s\tlatest_status.json' \
@@ -806,27 +956,6 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
-      - name: Upload the state for the next run
-        # The boxscore cache and the previous card are the only link between
-        # one gameday and the next, which is why they outlive the reports. The
-        # card in particular: without it the "selections changed" marker cannot
-        # mean anything.
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: gameday-state
-          path: |
-            data/raw/nhl/boxscore
-            data/raw/nhl/registry
-            data/processed
-            data/outputs/gameday_card.json
-            data/outputs/prop_calibration_samples.csv
-            data/outputs/team_market_samples.csv
-            data/archive/priced_snapshots
-            data/processed/forward_evidence.csv
-          if-no-files-found: warn
-          retention-days: 90
-
       - name: Report the outcome
         # Last, and the only step that can fail the job. Everything above is
         # allowed to degrade so the card still gets built, summarised and
@@ -842,8 +971,67 @@ jobs:
           # before this check, so a night with no games and a broken results
           # fetch finished green and silent. Half the season's nights are
           # dark; a fault that hides on them is a fault that hides.
+          #
+          # Every check below only records and prints; the step exits once,
+          # after all of them, so a degraded run that also failed a report
+          # or the card-feed publish names each failure rather than the first.
+          failed=0
           if [ "${{ steps.final.outputs.degraded }}" != "false" ]; then
             echo "::error::This run was degraded (or its health was never recorded). See the job summary."
+            failed=1
+          fi
+          # A card-feed publish that failed is a failed run, on a dark night
+          # too: the morning brief reads today's card there and nowhere else.
+          # It is reported as what it is, not as a degraded run. The health
+          # was decided before the publish and the status it tried to publish
+          # said so; a failed push published no status for today at all, so
+          # the next trigger's precheck finds no clean card and the backup
+          # runs.
+          #
+          # The settlement, the rebuild and the closing-line value report fail
+          # the run the same way, and for the same reason are kept out of the
+          # health: a backup would restore the same state, run the same
+          # scripts on the same files and fail identically, so a degraded
+          # status would only buy the prices again.
+          # Only a FAILED rebuild is read: the step has no `if: always()`, so
+          # it is skipped when an earlier step failed the job, which fails
+          # the run on its own and has not run the rebuild at all.
+          #
+          # A skipped publish is a failure only where the publish was meant
+          # to run: a schedule, or a run on the default branch -- the same
+          # condition the post and card-feed steps carry. A dispatch on a
+          # feature branch is a rehearsal that publishes nothing on purpose,
+          # and a skip there is the gate working. A dispatch that cannot read
+          # the default branch cannot tell which it is; both steps skipped,
+          # and that is named here rather than passing as a rehearsal.
+          PUBLISHES=false
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            PUBLISHES=true
+          elif [ -z "${{ github.event.repository.default_branch }}" ]; then
+            echo "::error::This run could not read the repository's default branch, so the post to the operating home and the card-feed publish were skipped as if it were a branch rehearsal. Nothing was delivered for today; dispatch again, or wait for the next scheduled run."
+            failed=1
+          elif [ "${{ github.ref }}" = "refs/heads/${{ github.event.repository.default_branch }}" ]; then
+            PUBLISHES=true
+          else
+            echo "::notice::Dispatched on ${{ github.ref }}, not the default branch: the card was built and gated as a rehearsal, and nothing was posted to the operating home or published to card-feed."
+          fi
+          if [ "$PUBLISHES" = true ] && [ "${{ steps.cardfeed.outcome }}" != "success" ]; then
+            echo "::error::Today's card and status could not be published to the card-feed branch, so the morning brief has nothing to read for today and the forward ledger has no copy there. The run's own health (degraded=${{ steps.final.outputs.degraded }}) is unchanged; see the publish step's log."
+            failed=1
+          fi
+          if [ "${{ steps.settle.outcome }}" = "failure" ]; then
+            echo "::error::Settle the forward ledger failed (its log says why: a ledger or snapshot that could not be read, a team map that resolves nothing, or a ledger that would have shrunk), so finished games did not reach the out-of-sample record. Nothing that failed to settle was marked settled; it settles once the state is repaired. It is not written into the run's health (degraded=${{ steps.final.outputs.degraded }}), so on its own it sends for no backup."
+            failed=1
+          fi
+          if [ "${{ steps.rebuild.outcome }}" = "failure" ]; then
+            echo "::error::Rebuild the measurement reports failed (its log names the script), so a report in this run's artifacts may be the committed copy or an earlier run's, looking current. The card does not depend on them. It is not written into the run's health (degraded=${{ steps.final.outputs.degraded }}), so on its own it sends for no backup."
+            failed=1
+          fi
+          if [ "${{ steps.clv.outcome }}" = "failure" ]; then
+            echo "::error::Report closing-line value failed (its log names the damaged snapshot or capture store), so today's closing-line value is incomplete or missing. It is not written into the run's health (degraded=${{ steps.final.outputs.degraded }}), so on its own it sends for no backup."
+            failed=1
+          fi
+          if [ "$failed" != 0 ]; then
             exit 1
           fi
           if [ "${{ steps.prices.outputs.empty_slate }}" = "true" ]; then

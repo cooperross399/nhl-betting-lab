@@ -37,9 +37,10 @@ from pathlib import Path
 
 import pandas as pd
 
-from nhl_betting_lab.backtest import policy_mismatch
+from nhl_betting_lab.backtest import policy_mismatch, unpriced_games
 from nhl_betting_lab.backtest.correction_timeline import build_timeline
 from nhl_betting_lab.config import MIN_PROP_EDGE, OUTPUTS_DIR, PROCESSED_DIR
+from nhl_betting_lab.data.build_datasets import load_player_logs
 from nhl_betting_lab.reports.player_props_backtest import run_backtest
 from nhl_betting_lab.providers.team_names import (
     UnresolvedTeamsError,
@@ -106,7 +107,14 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     samples = pd.read_csv(samples_path)
-    mismatch = _not_the_shipped_policy(samples, outputs)
+    # The reach as well as the policy, with the check the calibration uses
+    # before it reuses the same file. This checked the policy alone, so
+    # samples the calibration had just refused as outgrown — and then failed
+    # to rebuild — were decided on here as if they were current. Samples
+    # whose reach cannot be checked (no logs) are refused too.
+    mismatch = _not_the_shipped_policy(samples, outputs) or unpriced_games(
+        samples, load_player_logs(Path(args.processed_dir))
+    )
     if mismatch:
         print(
             f"::error::Not deciding on these samples: {mismatch} Regenerate "
