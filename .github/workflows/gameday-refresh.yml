@@ -151,14 +151,34 @@ jobs:
           STATUS=$(git show refs/card-feed-tip:latest_status.json 2>/dev/null || echo '{}')
           FEED_DAY=$(printf '%s' "$STATUS" | jq -r '.date // ""')
           DEGRADED=$(printf '%s' "$STATUS" | jq -r '.degraded // "unknown"')
-          # Only a CLEAN card for today counts. A degraded run is exactly the
-          # case the backup trigger exists for, so it must not satisfy it.
-          if [ "$FEED_DAY" = "$DAY" ] && [ "$DEGRADED" = "false" ]; then
+          FEED_REF=$(printf '%s' "$STATUS" | jq -r '.ref // ""')
+          # A scheduled run only ever runs on the default branch, so its own
+          # ref IS the default branch. It is read from there rather than from
+          # `github.event.repository`, which this lab has never seen populated
+          # on a cron run. An empty ref cannot happen on a schedule; were it
+          # to, this says so and runs, because failing here would skip the
+          # refresh job and leave the day with no card at all.
+          RUN_REF="${{ github.ref }}"
+          if [ -z "$RUN_REF" ]; then
+            echo "already=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::This scheduled run could not read its own ref, so it cannot tell whether card-feed's status came from the default branch. Running rather than trusting it."
+            exit 0
+          fi
+          # Only a CLEAN card for today, published by the DEFAULT branch,
+          # counts. A degraded run is exactly the case the backup trigger
+          # exists for, so it must not satisfy it. Nor may a run dispatched on
+          # a feature branch: the publish step no longer runs there, but every
+          # branch cut before 2026-09-26 still carries the copy that did, and
+          # its status line names no ref. Such a line costs at most one
+          # duplicate run on the day this landed; trusting it would cost the
+          # day's card and its frozen opinions.
+          if [ "$FEED_DAY" = "$DAY" ] && [ "$DEGRADED" = "false" ] \
+             && [ "$FEED_REF" = "$RUN_REF" ]; then
             echo "already=true" >> "$GITHUB_OUTPUT"
             echo "Today's card ($DAY) is already published and clean. Skipping."
           else
             echo "already=false" >> "$GITHUB_OUTPUT"
-            echo "Feed day '$FEED_DAY' (degraded=$DEGRADED) is not a clean card for $DAY. Running."
+            echo "Feed day '$FEED_DAY' (degraded=$DEGRADED, ref='$FEED_REF') is not a clean card for $DAY from the default branch. Running."
           fi
 
   refresh:
@@ -702,8 +722,22 @@ jobs:
         # the reader to ignore them. But a degraded run always posts, because
         # silence is only safe to read as "nothing moved" if anything going
         # wrong breaks the silence.
+        # Only on the default branch. A run dispatched on a feature branch is
+        # code nobody has reviewed: it still fetches, prices, gates and renders
+        # the card (so a dispatch is a full rehearsal, and the card is in the
+        # run summary), but it must not email its card to the operating home
+        # as if it were today's. Until 2026-09-26 nothing here read the ref.
+        # The comparison is the one Closing Lines makes for its hand-off, with
+        # a schedule let through first: a scheduled run only ever runs on the
+        # default branch, and `github.event.repository` is not something this
+        # lab has seen populated on a cron run. Were it empty there, the ref
+        # test alone would read `refs/heads/` and every scheduled run would
+        # skip the post and the card-feed publish, silently, from opening
+        # night. A dispatch that cannot read the default branch skips both
+        # too, and "Report the outcome" fails that run by name.
+        # tests/test_a_branch_run_never_publishes_the_card.py evaluates it.
         id: post
-        if: always()
+        if: always() && (github.event_name == 'schedule' || github.ref == format('refs/heads/{0}', github.event.repository.default_branch))
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
@@ -817,8 +851,19 @@ jobs:
         # no ledger backup for today while the run finished green. Its
         # failure fails the run there. It is not written into the health,
         # which is what this step publishes and was decided before it ran.
+        #
+        # Only on the default branch, for the reason the post step gives and
+        # one more. A branch run published today's date with degraded=false,
+        # so main's next scheduled precheck read today's card as already
+        # published and stood the whole run down; and main restores state only
+        # from main's runs, so the branch's frozen snapshot never reached the
+        # forward ledger. That day's opinions were lost for good. The status
+        # line also records the ref that wrote it, which the precheck reads.
+        # The condition is the post step's, character for character, and
+        # "Report the outcome" reads a skip as a failure exactly when this
+        # condition says the step should have run.
         id: cardfeed
-        if: always()
+        if: always() && (github.event_name == 'schedule' || github.ref == format('refs/heads/{0}', github.event.repository.default_branch))
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
@@ -840,8 +885,9 @@ jobs:
             --arg degraded "${{ steps.final.outputs.degraded || 'unknown' }}" \
             --arg empty_slate "${{ steps.prices.outputs.empty_slate || 'false' }}" \
             --arg run_url "$RUN_URL" \
+            --arg ref "${{ github.ref }}" \
             '{date: $date, decision: $decision, degraded: $degraded,
-              empty_slate: $empty_slate, run_url: $run_url}' > card_status.json
+              empty_slate: $empty_slate, run_url: $run_url, ref: $ref}' > card_status.json
           BLOB_MD=$(git hash-object -w card_comment.md)
           BLOB_JSON=$(git hash-object -w card_status.json)
           ENTRIES=$(printf '100644 blob %s\tlatest_card_comment.md\n100644 blob %s\tlatest_status.json' \
@@ -950,7 +996,26 @@ jobs:
           # Only a FAILED rebuild is read: the step has no `if: always()`, so
           # it is skipped when an earlier step failed the job, which fails
           # the run on its own and has not run the rebuild at all.
-          if [ "${{ steps.cardfeed.outcome }}" != "success" ]; then
+          #
+          # A skipped publish is a failure only where the publish was meant
+          # to run: a schedule, or a run on the default branch -- the same
+          # condition the post and card-feed steps carry. A dispatch on a
+          # feature branch is a rehearsal that publishes nothing on purpose,
+          # and a skip there is the gate working. A dispatch that cannot read
+          # the default branch cannot tell which it is; both steps skipped,
+          # and that is named here rather than passing as a rehearsal.
+          PUBLISHES=false
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            PUBLISHES=true
+          elif [ -z "${{ github.event.repository.default_branch }}" ]; then
+            echo "::error::This run could not read the repository's default branch, so the post to the operating home and the card-feed publish were skipped as if it were a branch rehearsal. Nothing was delivered for today; dispatch again, or wait for the next scheduled run."
+            failed=1
+          elif [ "${{ github.ref }}" = "refs/heads/${{ github.event.repository.default_branch }}" ]; then
+            PUBLISHES=true
+          else
+            echo "::notice::Dispatched on ${{ github.ref }}, not the default branch: the card was built and gated as a rehearsal, and nothing was posted to the operating home or published to card-feed."
+          fi
+          if [ "$PUBLISHES" = true ] && [ "${{ steps.cardfeed.outcome }}" != "success" ]; then
             echo "::error::Today's card and status could not be published to the card-feed branch, so the morning brief has nothing to read for today and the forward ledger has no copy there. The run's own health (degraded=${{ steps.final.outputs.degraded }}) is unchanged; see the publish step's log."
             failed=1
           fi

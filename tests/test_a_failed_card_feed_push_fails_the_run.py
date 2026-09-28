@@ -86,6 +86,12 @@ def _report(work: Path, *, degraded: str, published: str,
         "steps.settle.outcome": "success",
         "steps.rebuild.outcome": "success",
         "steps.clv.outcome": "success",
+        # A scheduled run on the default branch, the ordinary production
+        # case; tests/test_a_branch_run_never_publishes_the_card.py covers
+        # a dispatch on a branch.
+        "github.event_name": "schedule",
+        "github.ref": "refs/heads/main",
+        "github.event.repository.default_branch": "main",
     })
     return _bash(block, work, dict(os.environ))
 
@@ -114,6 +120,7 @@ def _try_publish(work: Path, tmp_path: Path, degraded: str) -> subprocess.Comple
         "github.repository": "o/r",
         "github.server_url": "https://github.com",
         "github.run_id": "1",
+        "github.ref": "refs/heads/main",
         "steps.post.outputs.decision || 'none'": "post",
         "steps.final.outputs.degraded || 'unknown'": degraded,
         "steps.prices.outputs.empty_slate || 'false'": "false",
@@ -128,7 +135,11 @@ def test_the_publish_stays_soft_and_after_the_health() -> None:
     step = _step(PUBLISH)
 
     assert step.get("continue-on-error") is True
-    assert step.get("if") == "always()"
+    # always(), so a degraded run still publishes; narrowed only to the
+    # default branch (tests/test_a_branch_run_never_publishes_the_card.py),
+    # by the same condition the post step carries.
+    assert str(step.get("if")).startswith("always() && ")
+    assert step.get("if") == _step("Post the card to the operating home").get("if")
     assert names.index("Record whether the card was delivered") < names.index(PUBLISH)
     assert names.index(PUBLISH) < names.index(REPORT)
     assert names[-1] == REPORT

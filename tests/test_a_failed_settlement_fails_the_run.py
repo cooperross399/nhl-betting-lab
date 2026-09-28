@@ -174,6 +174,12 @@ def _report(work: Path, degraded: str, outcomes: dict[str, str], *,
         "steps.final.outputs.degraded": degraded,
         "steps.prices.outputs.empty_slate": empty_slate,
         "steps.cardfeed.outcome": cardfeed,
+        # A scheduled run on the default branch, the ordinary production
+        # case; tests/test_a_branch_run_never_publishes_the_card.py covers
+        # a dispatch on a branch.
+        "github.event_name": "schedule",
+        "github.ref": "refs/heads/main",
+        "github.event.repository.default_branch": "main",
     }
     for name in WATCHED:
         values[f"steps.{_id(name)}.outcome"] = outcomes.get(name, "success")
