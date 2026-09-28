@@ -184,9 +184,19 @@ def dedupe_prices(frame: "pd.DataFrame") -> "pd.DataFrame":
     So within one identity and window the **latest snapshot** wins, whether
     its price is better or worse — the better of two moments is a price
     nobody held at one instant — and among rows at that same snapshot the
-    **better price** wins, because both were takeable. A row whose snapshot
-    does not parse is never treated as simultaneous with another; among
-    those, the last given is kept, as before.
+    **better price** wins, because both were takeable.
+
+    What "the same snapshot" means here, exactly. The survivor's instant is
+    this function's own parse of `snapshot` as ISO 8601: `Z`, `+00:00` and
+    `-04:00` offsets, a space for the `T`, fractional seconds, and a naive
+    stamp (read as UTC) are all one instant if they name one moment. A stamp
+    that does not parse is **undated**: it is never treated as simultaneous
+    with anything, it loses to any dated row it collides with, and among
+    undated rows alone the last given is kept. The WINDOW is not this parse
+    — it is `label_phases`, which lets pandas infer one format from the
+    first row, so a spelling that differs from the first row's can land in
+    `unknown` and then never collides with its twin in `card` or `late`.
+    The survivors come back in the order they were given.
     """
     if frame.empty:
         return frame
@@ -228,11 +238,16 @@ def dedupe_prices(frame: "pd.DataFrame") -> "pd.DataFrame":
     identity = windowed[[*PRICE_IDENTITY, "phase"]].map(_identity_value)
     # THE LATER MOMENT, THEN THE BETTER PRICE AT THAT MOMENT. Order every row
     # by (snapshot instant, payout) and keep the last of each identity. The
-    # instant is parsed, so two spellings of one moment are one moment. An
-    # undated row sorts first and carries a constant payout, so undated rows
-    # keep the order given rather than being ranked as if simultaneous; a
-    # dated row with no usable price ranks below every priced one.
-    moment = pd.to_datetime(work["snapshot"], errors="coerce", utc=True)
+    # instant is parsed as ISO 8601 explicitly: left to infer, pandas takes
+    # the format from the first row and makes every other spelling NaT, so
+    # which rows counted as dated depended on row order. An undated row sorts
+    # first, so any dated row beats it, and carries a constant payout, so
+    # undated rows keep the order given rather than being ranked as if
+    # simultaneous; a dated row with no usable price ranks below every
+    # priced one.
+    moment = pd.to_datetime(
+        work["snapshot"], errors="coerce", utc=True, format="ISO8601"
+    )
     dated = moment.notna().to_numpy()
     instant = moment.dt.tz_localize(None).to_numpy().view("int64")
     payout = _payout_per_unit(work["american_odds"]).to_numpy(dtype=float)
