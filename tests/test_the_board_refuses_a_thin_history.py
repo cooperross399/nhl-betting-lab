@@ -417,8 +417,10 @@ def test_gameday_calls_the_same_history_thin(tmp_path: Path, offset: int) -> Non
     (work / "data" / "processed" / "player_game_logs.csv").write_text("player_id\n1\n", encoding="utf-8")
     box = work / "data" / "raw" / "nhl" / "boxscore"
     box.mkdir(parents=True)
+    # Final boxscores: the step counts only those, since a scheduled game's
+    # file is not history (tests/test_a_future_game_is_not_fetched_every_run.py).
     for game in range(floor() + offset):
-        (box / f"{game}.json").write_text("{}", encoding="utf-8")
+        (box / f"{game}.json").write_text('{"gameState": "OFF"}', encoding="utf-8")
     output = tmp_path / "output"
     output.write_text("", encoding="utf-8")
 

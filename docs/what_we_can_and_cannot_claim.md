@@ -147,9 +147,13 @@ information deficit on every prop, and it is why the prop edge threshold in
 
 **Prop prices are one-sided.** Books quote the Over and the Yes; there is often
 no quoted Under to devig against. Implied probability from a single quoted side
-overstates the true probability, which **understates** measured model edges. The
-measurement is conservative in that one direction, and that is worth stating
-whenever a prop edge looks small.
+overstates the true probability, so the edge that decides whether a bet is
+placed is measured against a stricter bar than a devigged one. That concerns
+selection only, not the return. The backtest's return is taken at the best
+price across the books quoting each wager — best of N, and the best price is
+disproportionately the stale one — so the measured return leans
+**optimistic**, not conservative. The honest bracket runs from the every-quote
+average to perfect shopping (see `where_the_remaining_error_lives.md`).
 
 **Not every prop market can be measured historically.** The Odds API retains
 some markets per event and not others, and retention differs by market and by

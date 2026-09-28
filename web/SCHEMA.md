@@ -27,6 +27,9 @@ record
 teams[ABBR]      {name, short, color, fg}
 games[]
   id, startUtc, venue, city, tv
+  gameType       the NHL API's game type (1 preseason, 2 regular season, 3 playoffs). Anything but 2 is published as
+                 schedule only — no projection, no market figure, no pick — even on a "regular" night, and is never
+                 settled; the page renders 1 as "Exhibition · model abstains"
   priced         true when this build attached market prices to the game; false renders "Not priced", never a pass
   away | home    {abbr, record, projGoals, winProb, b2b, goalie:{name, status:"confirmed"|"projected"}}  — everything after abbr optional;
                  b2b is the schedule fact (played the previous league day) and is published under either
@@ -40,7 +43,9 @@ games[]
                  staged bulk (featured) totals, never an alternate-ladder rung; open is null, because every total a capture
                  holds is an alternate_totals rung and no row says which line is the featured one
   regulation     {away, draw, home, prices:{away,draw,home}}
-  pick           {market, label, price, edgePct} | null   ← one best market per game; null on a priced game means nothing cleared the edge bar, on an unpriced game it means nothing was assessed
+  pick           {kind:"bet"|"lean", market, label, price, edgePct} | null   ← one market per game: the card's highest-edge best bet, or
+                 its highest-edge lean only when the game holds no best bet; null on a priced game means nothing cleared the edge bar,
+                 on an unpriced game it means nothing was assessed. A pick without `kind` (frozen before it existed) reads as "bet"
 ```
 
 ## results.json
@@ -48,7 +53,7 @@ games[]
 ```
 generatedAt, season, phase, notice (shown when games is empty)
 resultsDate      "YYYY-MM-DD"
-summary          {straightUp:{w,l}, picks:{w,l,p}, totals:{w,l,p}}
+summary          {straightUp:{w,l}, picks:{w,l,p}, totals:{w,l,p}}   ← picks counts best bets only; a lean is graded on its row and not here
 teams[ABBR]      {name, short, color, fg}
 games[]
   id, startUtc
@@ -57,8 +62,8 @@ games[]
   projWinner     ABBR
   total          {line, proj, result:"over"|"under"|"push"}
   priced         the frozen board's `priced` for this game (a board frozen before that flag: whether it carried a moneyline)
-  pick           {market, label, price, edgePct, result:"win"|"loss"|"push"} | null  ← null when the board carried no pick for the game;
+  pick           {kind, market, label, price, edgePct, result:"win"|"loss"|"push"} | null  ← null when the board carried no pick for the game;
                  the page renders it "Not priced" unless priced is true, "No play" when it is, and grades neither and shows no price
 ```
 
-`web/build_site_json.py` is the reference writer. Source mapping in nhl-betting-lab: `projGoals`/`winProb`/`moneyline`/`puckLine`/`total`/`regulation` come from `models/team_model.TeamModel`, called directly rather than through `reports/card_pricing.price_team_markets`; the back-to-back adjustment reaches them only while `verdicts.ships("team_b2b")`, read from the lab's `data/outputs` as the card reads it, says it ships, so the board and the card price under one policy. `pick` comes from `reports/gameday_card.build_card` selections, `record.forward` from `forward_evidence.py` + `closing_lines.py`, finals from the boxscore cache via `build_datasets.load_team_games`.
+`web/build_site_json.py` is the reference writer. Source mapping in nhl-betting-lab: `projGoals`/`winProb`/`moneyline`/`puckLine`/`total`/`regulation` come from `models/team_model.TeamModel`, called directly rather than through `reports/card_pricing.price_team_markets`; the back-to-back adjustment reaches them only while `verdicts.ships("team_b2b")`, read from the lab's `data/outputs` as the card reads it, says it ships, so the board and the card price under one policy. `pick` is read from `data/outputs/gameday_card.json`, which `reports/gameday_card.save_card` writes from `build_card`'s card: the highest-edge team-market best bet or lean it holds for a game the staged prices matched. `record.forward` is `load_record` over `data/outputs/forward_evidence.json`, which `forward_evidence.save_forward_report` writes from `build_forward_report`'s report: the ledger's size (wagers, markets, first and last date, unsettleable), never its return. Results finals (`final`, `finish`) are fetched live by `settle()` through `schedule_for`, a GET of the NHL schedule endpoint `api-web.nhle.com/v1/schedule/<date>` keeping games whose `gameState` is `OFF` or `FINAL`. Without the network the build fails outright: `fetch_json` does not catch the error, `build_board` calls `schedule_for` first, and neither `board.json` nor `results.json` is written. The lab's game history (`build_datasets.load_team_games`) fits the model above, dates the published `b2b` chip (`rest.last_played_dates`) and decides the thin-history gate behind the schedule-only board; it is never read to settle a game.

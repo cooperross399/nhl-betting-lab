@@ -99,8 +99,11 @@ concurrency:
 # recorded decision=post on a green step. The suite never saw this: rewriting
 # its 275 pipefail replays to `bash -e` left all 2504 tests passing. Every
 # pipeline in this file was audited for a left side that may exit non-zero
-# before this was added. The two `find | wc -l` counts carry `|| true` for
-# exactly that reason. tests/test_the_post_step_fails_closed_under_the_runners_shell.py
+# before this was added. The two boxscore counts (`grep … | wc -l`, final
+# boxscores only, in "Restore the previous state" and "Record what went
+# wrong") carry `|| true` for exactly that reason: grep exits non-zero on a
+# missing cache or one with no final game. (They were `find | wc -l` until
+# 2026-09-26.) tests/test_the_post_step_fails_closed_under_the_runners_shell.py
 # resolves each step's shell from this file the way GitHub does and pins it.
 defaults:
   run:
@@ -237,10 +240,12 @@ jobs:
             echo "Restored the previous card for the selections diff."
           fi
           # `|| true`: the shell is `bash -eo pipefail` (declared under
-          # `defaults:` above), and with nothing restored `find` fails on the
-          # missing directory. That would end the step here, before the
-          # ledger fallback below.
-          find data/raw/nhl/boxscore -name '*.json' 2>/dev/null | wc -l \
+          # `defaults:` above), and with nothing restored, or nothing final,
+          # `grep` fails. That would end the step here, before the ledger
+          # fallback below. FINAL boxscores only, as "Record what went wrong"
+          # counts them: a restored cache can hold a file per scheduled game
+          # from before fetch_boxscore stopped caching non-final answers.
+          grep -rliE --include='*.json' '"gameState":[[:space:]]*"(OFF|FINAL)"' data/raw/nhl/boxscore 2>/dev/null | wc -l \
             | xargs echo "Cached boxscores restored:" || true
           # If the chain broke, take the ledger from the card-feed branch
           # rather than starting the season's record over. Restoring a
@@ -300,7 +305,10 @@ jobs:
           # inside any sensible job timeout, and a run killed at the timeout
           # produces no card at all. A cold cache therefore fills over
           # consecutive days rather than in one heroic run; in steady season
-          # there are about a dozen new games a night and this is instant.
+          # there are about a dozen new games a night. A game the schedule
+          # says has not been played is not asked for at all: it used to be,
+          # every run, so a season's worth of future games was re-requested
+          # nightly and could take the cap's places from real finals.
           #
           # The fetch fails when the NHL API could not be reached, and that
           # failure is what "Record what went wrong" reads to call the run
@@ -380,10 +388,16 @@ jobs:
           : > run_degraded.txt
           : > run_quiet.txt
           # `|| true`: under bash -eo pipefail (declared under `defaults:`
-          # above), `find` on a missing cache fails the substitution. That
-          # ends this step before it writes `degraded` at all, so the coldest
-          # run would read as clean.
-          games=$(find data/raw/nhl/boxscore -name '*.json' 2>/dev/null | wc -l || true)
+          # above), `grep` on a missing cache, or one holding no final game,
+          # fails the substitution. That ends this step before it writes
+          # `degraded` at all, so the coldest run would read as clean.
+          #
+          # FINAL boxscores only, the same states as nhl_api.game_is_final.
+          # This counted every file, and until fetch_boxscore stopped caching
+          # non-final answers the fetch left one per scheduled game, so a
+          # thin history padded with a season of future games read as
+          # healthy. A restored cache can still hold those files.
+          games=$(grep -rliE --include='*.json' '"gameState":[[:space:]]*"(OFF|FINAL)"' data/raw/nhl/boxscore 2>/dev/null | wc -l || true)
           echo "Boxscores cached: $games"
           # 1000 is config.THIN_HISTORY_GAMES: the public board projects
           # nothing from a history below it either, and
@@ -552,9 +566,10 @@ jobs:
         # After the card froze today's opinions and results were fetched
         # earlier in the run, every pending snapshot whose games are final
         # settles into the accumulating ledger. This is the only possible
-        # price evidence for hits and the regulation three-way, and the
-        # out-of-sample stream for everything else — losing it would mean the
-        # season taught nothing.
+        # price evidence for the regulation three-way, which has never been
+        # bought historically (it is per-event only and was never requested),
+        # and the out-of-sample stream for everything else — losing it would
+        # mean the season taught nothing.
         if: always()
         continue-on-error: true
         env:
@@ -574,15 +589,72 @@ jobs:
         run: |
           set -u
           REMOTE="https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}"
+          STORE=data/processed/closing_line_captures.csv
           mkdir -p data/processed
-          if git fetch "$REMOTE" +refs/heads/closing-lines:refs/closing-tip 2>/dev/null \
-             && git cat-file -e refs/closing-tip:closing_line_captures.csv 2>/dev/null; then
-            git show refs/closing-tip:closing_line_captures.csv \
-              > data/processed/closing_line_captures.csv
-          else
+          # The restore of gameday-state put the previous run's store here,
+          # because that artifact carries data/processed whole. It goes first,
+          # so the report can only read what THIS run fetched. A fetch that
+          # failed used to fall through to "No capture store yet" and leave
+          # yesterday's store to be scored as today's, with nothing saying so.
+          rm -f "$STORE"
+          # "The branch does not exist" and "the branch could not be read"
+          # are told apart: the first is not a fault (Closing Lines is
+          # disabled by the owner, so it is the expected state), the second
+          # is, and degrades the run like every other fault.
+          if ! HEADS=$(git ls-remote --heads "$REMOTE" refs/heads/closing-lines 2>/dev/null); then
+            echo "The closing-lines branch could not be reached, so the closing-line value report scored no capture store today rather than an earlier run's." >> run_degraded.txt
+          elif [ -z "$HEADS" ]; then
             echo "No capture store yet; the report will say so rather than guess."
+          elif git fetch "$REMOTE" +refs/heads/closing-lines:refs/closing-tip 2>/dev/null \
+             && git show refs/closing-tip:closing_line_captures.csv > "$STORE" 2>/dev/null; then
+            echo "Read the capture store from the closing-lines branch."
+          else
+            rm -f "$STORE"
+            echo "The closing-lines branch exists but its capture store could not be fetched, so the closing-line value report scored no capture store today rather than an earlier run's." >> run_degraded.txt
           fi
           python scripts/run_closing_line_value.py
+
+      - name: Upload the state for the next run
+        # The boxscore cache and the previous card are the only link between
+        # one gameday and the next, which is why they outlive the reports. The
+        # card in particular: without it the "selections changed" marker cannot
+        # mean anything.
+        #
+        # Here, straight after the last step that writes state and before
+        # anyone is told how the run went. It used to run after the card-feed
+        # publish, and nothing read its outcome: an upload that failed left
+        # card-feed saying `degraded: false`, the 15:00 backup's precheck read
+        # a clean card and stood down, and the next day restored yesterday's
+        # state, with today's frozen snapshot missing from the chain for good.
+        # `continue-on-error` so the step below records the failure and the
+        # run degrades, rather than the upload ending the job's say in it.
+        id: state
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: gameday-state
+          path: |
+            data/raw/nhl/boxscore
+            data/raw/nhl/registry
+            data/processed
+            data/outputs/gameday_card.json
+            data/outputs/prop_calibration_samples.csv
+            data/outputs/team_market_samples.csv
+            data/archive/priced_snapshots
+            data/processed/forward_evidence.csv
+          if-no-files-found: warn
+          retention-days: 90
+
+      - name: Record whether the state was saved
+        # Anything but a clean upload is a degraded run, so the summary, the
+        # comment, card-feed's status and the run's exit all say so, and the
+        # backup runs and carries today's state forward instead.
+        if: always()
+        run: |
+          if [ "${{ steps.state.outcome }}" != "success" ]; then
+            echo "The state for the next run could not be uploaded, so tomorrow's run would restore an older state and today's frozen snapshot would not settle. The backup run carries it forward instead." >> run_degraded.txt
+          fi
 
       - name: Write the card to the run summary
         if: always()
@@ -805,27 +877,6 @@ jobs:
             data/outputs/closing_line_value.md
           if-no-files-found: warn
           retention-days: 30
-
-      - name: Upload the state for the next run
-        # The boxscore cache and the previous card are the only link between
-        # one gameday and the next, which is why they outlive the reports. The
-        # card in particular: without it the "selections changed" marker cannot
-        # mean anything.
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: gameday-state
-          path: |
-            data/raw/nhl/boxscore
-            data/raw/nhl/registry
-            data/processed
-            data/outputs/gameday_card.json
-            data/outputs/prop_calibration_samples.csv
-            data/outputs/team_market_samples.csv
-            data/archive/priced_snapshots
-            data/processed/forward_evidence.csv
-          if-no-files-found: warn
-          retention-days: 90
 
       - name: Report the outcome
         # Last, and the only step that can fail the job. Everything above is

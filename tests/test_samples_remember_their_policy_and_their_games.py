@@ -486,7 +486,8 @@ def test_experiment_refresh_sends_restored_samples_through_the_check(tmp_path, r
     boxscores = tmp_path / "data" / "raw" / "nhl" / "boxscore"
     boxscores.mkdir(parents=True)
     for game in range(500):
-        (boxscores / f"{game}.json").write_text("{}", encoding="utf-8")
+        # Final: the restore counts final boxscores only.
+        (boxscores / f"{game}.json").write_text('{"gameState": "OFF"}', encoding="utf-8")
     (tmp_path / "data" / "processed").mkdir(parents=True)
     (tmp_path / "data" / "processed" / "historical_prop_prices.csv").write_text("x\n")
     if restored:
