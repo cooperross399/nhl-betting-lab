@@ -29,6 +29,7 @@ from nhl_betting_lab.data.nhl_api import (
     fetch_club_season_schedule,
     fetch_player_registry,
     fetch_schedule_day,
+    schedule_lists_the_season,
 )
 
 
@@ -128,6 +129,14 @@ def _game_ids_for_season(
         if not entry.from_cache:
             time.sleep(polite_seconds)
         payload = entry.payload
+        if not schedule_lists_the_season(payload):
+            # Not cached (`fetch_club_season_schedule`), so the next run asks
+            # again. This used to be written and served on every run after,
+            # and the club had no games all season.
+            print(
+                f"  {team}: the NHL API lists no regular-season game for "
+                f"{season_id} yet, so nothing was cached; the next run asks again."
+            )
         games = payload.get("games", []) if isinstance(payload, dict) else []
         for game in games:
             if not isinstance(game, dict):
