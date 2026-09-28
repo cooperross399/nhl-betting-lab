@@ -149,6 +149,18 @@ jobs:
           FEED_DAY=$(printf '%s' "$STATUS" | jq -r '.date // ""')
           DEGRADED=$(printf '%s' "$STATUS" | jq -r '.degraded // "unknown"')
           FEED_REF=$(printf '%s' "$STATUS" | jq -r '.ref // ""')
+          # A scheduled run only ever runs on the default branch, so its own
+          # ref IS the default branch. It is read from there rather than from
+          # `github.event.repository`, which this lab has never seen populated
+          # on a cron run. An empty ref cannot happen on a schedule; were it
+          # to, this says so and runs, because failing here would skip the
+          # refresh job and leave the day with no card at all.
+          RUN_REF="${{ github.ref }}"
+          if [ -z "$RUN_REF" ]; then
+            echo "already=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::This scheduled run could not read its own ref, so it cannot tell whether card-feed's status came from the default branch. Running rather than trusting it."
+            exit 0
+          fi
           # Only a CLEAN card for today, published by the DEFAULT branch,
           # counts. A degraded run is exactly the case the backup trigger
           # exists for, so it must not satisfy it. Nor may a run dispatched on
@@ -158,7 +170,7 @@ jobs:
           # duplicate run on the day this landed; trusting it would cost the
           # day's card and its frozen opinions.
           if [ "$FEED_DAY" = "$DAY" ] && [ "$DEGRADED" = "false" ] \
-             && [ "$FEED_REF" = "refs/heads/${{ github.event.repository.default_branch }}" ]; then
+             && [ "$FEED_REF" = "$RUN_REF" ]; then
             echo "already=true" >> "$GITHUB_OUTPUT"
             echo "Today's card ($DAY) is already published and clean. Skipping."
           else
@@ -455,6 +467,14 @@ jobs:
         # public artifact every day, which would republish paid-for prices
         # daily for the season. So a store this runner does not hold leaves
         # the checkout's committed report standing, and the log says so.
+        #
+        # Soft, but not silent. With no id nothing could read this step's
+        # outcome, so a rebuild that failed left the committed reports, or an
+        # earlier run's, standing in this run's artifacts looking current,
+        # and the run said it was clean. "Report the outcome" reads it now,
+        # and fails the run without degrading it: a backup would rebuild with
+        # the same scripts and fail the same way, so it is not sent for.
+        id: rebuild
         continue-on-error: true
         env:
           PYTHONPATH: src
@@ -563,6 +583,19 @@ jobs:
         # price evidence for hits and the regulation three-way, and the
         # out-of-sample stream for everything else — losing it would mean the
         # season taught nothing.
+        #
+        # Soft so a settlement fault never costs the card. It exits non-zero
+        # on purpose when it could not settle (a ledger or snapshot it cannot
+        # read, a team map that resolves nothing, a ledger that would
+        # shrink), and with no id that exit reached no one: the run finished
+        # green and the ledger stopped growing. "Report the outcome" now
+        # fails the run on it, without degrading it. Every one of those
+        # faults is a property of the restored state and this step makes no
+        # network call, so the backup would restore the same files, fail the
+        # same way, and buy the prices again for nothing. Nothing that failed
+        # to settle is marked settled, so a later run settles it once the
+        # state is repaired.
+        id: settle
         if: always()
         continue-on-error: true
         env:
@@ -573,7 +606,11 @@ jobs:
       - name: Report closing-line value
         # Reads the capture store the Closing Lines workflow publishes and
         # scores every frozen opinion against the market's last word. Offline
-        # and read-only: it fetches no prices and spends nothing.
+        # and read-only: it fetches no prices and spends nothing. Exits 2 on
+        # a damaged snapshot or capture store, which "Report the outcome"
+        # reads and fails the run on, without degrading it: the backup would
+        # read the same damaged files, so it is not sent for.
+        id: clv
         if: always()
         continue-on-error: true
         env:
@@ -618,10 +655,17 @@ jobs:
         # the card (so a dispatch is a full rehearsal, and the card is in the
         # run summary), but it must not email its card to the operating home
         # as if it were today's. Until 2026-09-26 nothing here read the ref.
-        # The comparison is the one Closing Lines makes for its hand-off.
+        # The comparison is the one Closing Lines makes for its hand-off, with
+        # a schedule let through first: a scheduled run only ever runs on the
+        # default branch, and `github.event.repository` is not something this
+        # lab has seen populated on a cron run. Were it empty there, the ref
+        # test alone would read `refs/heads/` and every scheduled run would
+        # skip the post and the card-feed publish, silently, from opening
+        # night. A dispatch that cannot read the default branch skips both
+        # too, and "Report the outcome" fails that run by name.
         # tests/test_a_branch_run_never_publishes_the_card.py evaluates it.
         id: post
-        if: always() && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        if: always() && (github.event_name == 'schedule' || github.ref == format('refs/heads/{0}', github.event.repository.default_branch))
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
@@ -730,6 +774,12 @@ jobs:
         # push parents on the current tip, so it is always a fast-forward —
         # never a force.
         #
+        # Soft, because the reports and the state still upload after it, and
+        # read by "Report the outcome": a push that failed left no status and
+        # no ledger backup for today while the run finished green. Its
+        # failure fails the run there. It is not written into the health,
+        # which is what this step publishes and was decided before it ran.
+        #
         # Only on the default branch, for the reason the post step gives and
         # one more. A branch run published today's date with degraded=false,
         # so main's next scheduled precheck read today's card as already
@@ -737,7 +787,11 @@ jobs:
         # from main's runs, so the branch's frozen snapshot never reached the
         # forward ledger. That day's opinions were lost for good. The status
         # line also records the ref that wrote it, which the precheck reads.
-        if: always() && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        # The condition is the post step's, character for character, and
+        # "Report the outcome" reads a skip as a failure exactly when this
+        # condition says the step should have run.
+        id: cardfeed
+        if: always() && (github.event_name == 'schedule' || github.ref == format('refs/heads/{0}', github.event.repository.default_branch))
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
@@ -866,8 +920,67 @@ jobs:
           # before this check, so a night with no games and a broken results
           # fetch finished green and silent. Half the season's nights are
           # dark; a fault that hides on them is a fault that hides.
+          #
+          # Every check below only records and prints; the step exits once,
+          # after all of them, so a degraded run that also failed a report
+          # or the card-feed publish names each failure rather than the first.
+          failed=0
           if [ "${{ steps.final.outputs.degraded }}" != "false" ]; then
             echo "::error::This run was degraded (or its health was never recorded). See the job summary."
+            failed=1
+          fi
+          # A card-feed publish that failed is a failed run, on a dark night
+          # too: the morning brief reads today's card there and nowhere else.
+          # It is reported as what it is, not as a degraded run. The health
+          # was decided before the publish and the status it tried to publish
+          # said so; a failed push published no status for today at all, so
+          # the next trigger's precheck finds no clean card and the backup
+          # runs.
+          #
+          # The settlement, the rebuild and the closing-line value report fail
+          # the run the same way, and for the same reason are kept out of the
+          # health: a backup would restore the same state, run the same
+          # scripts on the same files and fail identically, so a degraded
+          # status would only buy the prices again.
+          # Only a FAILED rebuild is read: the step has no `if: always()`, so
+          # it is skipped when an earlier step failed the job, which fails
+          # the run on its own and has not run the rebuild at all.
+          #
+          # A skipped publish is a failure only where the publish was meant
+          # to run: a schedule, or a run on the default branch -- the same
+          # condition the post and card-feed steps carry. A dispatch on a
+          # feature branch is a rehearsal that publishes nothing on purpose,
+          # and a skip there is the gate working. A dispatch that cannot read
+          # the default branch cannot tell which it is; both steps skipped,
+          # and that is named here rather than passing as a rehearsal.
+          PUBLISHES=false
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            PUBLISHES=true
+          elif [ -z "${{ github.event.repository.default_branch }}" ]; then
+            echo "::error::This run could not read the repository's default branch, so the post to the operating home and the card-feed publish were skipped as if it were a branch rehearsal. Nothing was delivered for today; dispatch again, or wait for the next scheduled run."
+            failed=1
+          elif [ "${{ github.ref }}" = "refs/heads/${{ github.event.repository.default_branch }}" ]; then
+            PUBLISHES=true
+          else
+            echo "::notice::Dispatched on ${{ github.ref }}, not the default branch: the card was built and gated as a rehearsal, and nothing was posted to the operating home or published to card-feed."
+          fi
+          if [ "$PUBLISHES" = true ] && [ "${{ steps.cardfeed.outcome }}" != "success" ]; then
+            echo "::error::Today's card and status could not be published to the card-feed branch, so the morning brief has nothing to read for today and the forward ledger has no copy there. The run's own health (degraded=${{ steps.final.outputs.degraded }}) is unchanged; see the publish step's log."
+            failed=1
+          fi
+          if [ "${{ steps.settle.outcome }}" = "failure" ]; then
+            echo "::error::Settle the forward ledger failed (its log says why: a ledger or snapshot that could not be read, a team map that resolves nothing, or a ledger that would have shrunk), so finished games did not reach the out-of-sample record. Nothing that failed to settle was marked settled; it settles once the state is repaired. It is not written into the run's health (degraded=${{ steps.final.outputs.degraded }}), so on its own it sends for no backup."
+            failed=1
+          fi
+          if [ "${{ steps.rebuild.outcome }}" = "failure" ]; then
+            echo "::error::Rebuild the measurement reports failed (its log names the script), so a report in this run's artifacts may be the committed copy or an earlier run's, looking current. The card does not depend on them. It is not written into the run's health (degraded=${{ steps.final.outputs.degraded }}), so on its own it sends for no backup."
+            failed=1
+          fi
+          if [ "${{ steps.clv.outcome }}" = "failure" ]; then
+            echo "::error::Report closing-line value failed (its log names the damaged snapshot or capture store), so today's closing-line value is incomplete or missing. It is not written into the run's health (degraded=${{ steps.final.outputs.degraded }}), so on its own it sends for no backup."
+            failed=1
+          fi
+          if [ "$failed" != 0 ]; then
             exit 1
           fi
           if [ "${{ steps.prices.outputs.empty_slate }}" = "true" ]; then
