@@ -60,7 +60,11 @@ from nhl_betting_lab.providers import historical_props as hist
 from nhl_betting_lab.providers.env_file import load_provider_env
 from nhl_betting_lab.providers.historical_props import list_historical_events
 from nhl_betting_lab.season import game_date
-from nhl_betting_lab.providers.odds_api import OddsApiProvider, ProviderError
+from nhl_betting_lab.providers.odds_api import (
+    NO_STAGING_WRITTEN,
+    OddsApiProvider,
+    ProviderError,
+)
 
 
 HISTORICAL_PRICES_FILENAME = "historical_prop_prices.csv"
@@ -76,7 +80,7 @@ def _events_in_window(
     raw_dir: Path,
     credit_cap: int,
     every_n_days: int = 1,
-) -> tuple[list[dict[str, str]], int, int]:
+) -> tuple[list[dict[str, str]], int, int, list[tuple[date, str]]]:
     """Event ids and per-event snapshots for a past window.
 
     This walks the **historical** events endpoint, one listing per day. The
@@ -111,14 +115,24 @@ def _events_in_window(
     does not fit is skipped rather than ending the walk, so a listing already
     on disk further on is still read for nothing. A listing that failed is
     held against the cap at the dearest charge seen, as a failed purchase is,
-    without being reported as spent. Returns the events, the credits the
-    listings were charged, and what they hold against the cap.
+    without being reported as spent.
+
+    **A day whose listing failed is returned, not dropped.** It used to print
+    one stderr line and vanish: the event count left it out, nothing else
+    named it, and the run exited 0 -- and when every listing failed the run
+    said "No events in scope.", which reads as "nothing to buy" when the
+    truth was "could not ask". The caller now names each failed day with its
+    cause and fails the run (#207 closed the same shape for the live fetch).
+
+    Returns the events, the credits the listings were charged, what they
+    hold against the cap, and each day whose listing failed with its cause.
     """
     events: list[dict[str, str]] = []
     listing_cost = 0
     held = 0
     largest_charge = hist.HISTORICAL_EVENTS_LIST_COST
     unlisted: list[date] = []
+    failed: list[tuple[date, str]] = []
     seen: set[str] = set()
     cursor = start
     step = timedelta(days=every_n_days)
@@ -136,7 +150,11 @@ def _events_in_window(
                 provider, snapshot=snapshot, raw_dir=raw_dir
             )
         except ProviderError as exc:
-            print(f"  {cursor}: {exc}", file=sys.stderr)
+            # Without the staging sentence: this script stages nothing, so
+            # "No staging file was written." says nothing true about it.
+            cause = " ".join(str(exc).replace(NO_STAGING_WRITTEN, "").split())
+            print(f"  {cursor}: {cause}", file=sys.stderr)
+            failed.append((cursor, cause))
             if not cached:
                 held += largest_charge
             cursor += step
@@ -181,7 +199,23 @@ def _events_in_window(
             "Nothing on those days is bought or probed.",
             file=sys.stderr,
         )
-    return events, listing_cost, held
+    return events, listing_cost, held, failed
+
+
+def _report_failed_listings(failed: list[tuple[date, str]]) -> None:
+    """Name every day whose listing failed, on stderr, where a failed step's
+    reader looks. Called once after the listing and again as the run's last
+    word, so the purchase summary cannot bury it."""
+    print(
+        f"{len(failed)} day(s) of the window could not be listed, so nothing "
+        "on them was bought or probed and this run fails. That is the "
+        "provider not answering, not an empty slate. Re-running the same "
+        "command asks again for these days only; every listing and event "
+        "already bought is cached.",
+        file=sys.stderr,
+    )
+    for day, cause in failed:
+        print(f"  {day}: {cause}", file=sys.stderr)
 
 
 def _write_retention_from_cache(
@@ -388,6 +422,9 @@ def main(argv: list[str] | None = None) -> int:
     # case for any that failed. Whatever is left is the budget for the
     # per-event requests, on the probe and the buy alike.
     listing_held = 0
+    # Days of the window whose listing the provider did not answer. Any at
+    # all fails the run with exit 2, the fault code, whatever else it did.
+    failed_listings: list[tuple[date, str]] = []
     if args.events_file:
         events = json.loads(Path(args.events_file).read_text(encoding="utf-8"))
     elif args.start and args.end:
@@ -399,7 +436,7 @@ def main(argv: list[str] | None = None) -> int:
             )
             return 0
         try:
-            events, listing_cost, listing_held = _events_in_window(
+            events, listing_cost, listing_held, failed_listings = _events_in_window(
                 provider,
                 date.fromisoformat(args.start),
                 date.fromisoformat(args.end),
@@ -414,9 +451,31 @@ def main(argv: list[str] | None = None) -> int:
         print(
             f"{len(events)} event(s) found in the window; the listings cost "
             f"{listing_cost} credit(s)."
+            + (
+                f" {len(failed_listings)} day(s) could not be listed and are "
+                "not in that count."
+                if failed_listings
+                else ""
+            )
         )
+        if failed_listings:
+            _report_failed_listings(failed_listings)
     elif not args.probe:
         parser.error("Give --from/--to, or --events-file, or --probe.")
+
+    if args.probe and failed_listings:
+        # A probe spreads its events across the window, so with a day missing
+        # it would answer for a window it did not see, and #202 already
+        # refuses a probe that answers fewer events than were asked. Refused
+        # before any per-event request, so nothing is spent on an answer
+        # that would not be written.
+        print(
+            f"Nothing was probed: the window is missing {len(failed_listings)} "
+            f"day(s). {Path(args.output_dir) / RETENTION_FILENAME} is left "
+            "as it was.",
+            file=sys.stderr,
+        )
+        return 2
 
     if args.probe:
         if not events:
@@ -438,6 +497,10 @@ def main(argv: list[str] | None = None) -> int:
             regions=provider.region_count,
         )
         if events
+        # Not "no events in scope" when days could not be listed: that reads
+        # as nothing to buy, where the truth is that the provider was not
+        # answering.
+        else "No events could be listed." if failed_listings
         else "No events in scope."
     )
     if not args.live:
@@ -447,6 +510,9 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0
     if not events:
+        if failed_listings:
+            _report_failed_listings(failed_listings)
+            return 2
         return 0
 
     outputs = Path(args.output_dir)
@@ -645,6 +711,13 @@ def main(argv: list[str] | None = None) -> int:
         "Bought prices only. No bet was placed, no policy was edited, and no "
         "market was allowlisted."
     )
+    if failed_listings:
+        # What the other days listed is bought and kept: a purchase is
+        # additive and cached, so holding it back would save nothing and a
+        # re-run would pay for none of it again. But the window is not
+        # whole, and the step goes red saying which days are missing.
+        _report_failed_listings(failed_listings)
+        return 2
     return 0
 
 
