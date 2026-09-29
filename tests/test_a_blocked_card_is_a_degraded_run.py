@@ -462,6 +462,19 @@ def _git_env(tmp_path: Path, day: str) -> dict:
     }
 
 
+def _card_on_disk(work: Path, day: str) -> None:
+    """The card a clean run leaves for the publish step, built at 09:40 ET on
+    `day`. The status is dated by this card's own league day, and the
+    precheck counts only a status that names a card built for today
+    (tests/test_the_card_feed_is_dated_by_the_card_it_publishes.py)."""
+    path = work / "data" / "outputs" / "gameday_card.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({
+        "generated_at": f"{day}T13:40:00+00:00",
+        "card_generated": True,
+    }), encoding="utf-8")
+
+
 def _publish(work: Path, tmp_path: Path, degraded: str, day: str,
              *, ref: str = "refs/heads/main") -> dict:
     """The publish step's block. It runs only on the default branch (its

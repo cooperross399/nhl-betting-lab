@@ -44,6 +44,7 @@ import yaml
 
 from nhl_betting_lab.config import PROJECT_ROOT
 from test_a_blocked_card_is_a_degraded_run import (
+    _card_on_disk,
     _bash,
     _final,
     _precheck,
@@ -191,6 +192,7 @@ def _workspace(tmp_path: Path) -> Path:
     (work / "data" / "outputs").mkdir(parents=True)
     (work / "run_degraded.txt").write_text("", encoding="utf-8")
     (work / "card_comment.md").write_text("Today's card.\n", encoding="utf-8")
+    _card_on_disk(work, DAY)
     return work
 
 

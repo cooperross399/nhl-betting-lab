@@ -812,7 +812,10 @@ class OddsApiProvider:
                 # is an ordinary off-day — the league plays most nights, not
                 # every night — and it reads exactly like the off-season to
                 # everything downstream, which is the correct handling: no
-                # card, no fault, no red run.
+                # card, no fault, no red run. The provider cannot tell that
+                # from a board missing today's games; the NHL schedule can, so
+                # `run_provider_shadow.py` checks it before calling a
+                # scheduled game day empty (sweep 4).
                 raise EmptySlateError(
                     f"The provider lists {len(events)} upcoming NHL game(s) "
                     f"but none is scheduled on {sorted(allowed_days)}, so "

@@ -63,7 +63,8 @@ club-schedule cache, so on a runner with no cache it cannot contradict
 anything, and a 422 to both stays exit 3, as before. It covers the "no NHL
 odds at all" verdict only. The ordinary off-day verdict (the provider lists
 upcoming games and none on today's date) rests on a board the provider did
-serve, and is unchanged.
+serve; the schedule check for it is held by
+tests/test_a_board_without_todays_scheduled_games_is_a_failed_fetch.py.
 """
 
 from __future__ import annotations
