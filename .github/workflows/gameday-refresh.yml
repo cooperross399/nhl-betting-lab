@@ -270,6 +270,15 @@ jobs:
             --workflow gameday-refresh.yml --workflow historical-props-purchase.yml \
             --attempts 3 --problem-file restore_problem.txt \
             || echo "::warning::The previous state could not be restored; this run starts without it."
+          # The state carries the previous run's staged prices, for Publish
+          # Site. They must not outlive the restore here: "Fetch prices into
+          # staging" replaces them only when it fetches, so a skipped or
+          # failed fetch would leave an earlier run's quotes on disk, and the
+          # upload below would hand them to the board as today's. The card
+          # refuses prices over the policy's age; the board reads no age.
+          # What this run stages is this run's fetch, or nothing, as before
+          # the state carried them.
+          rm -f data/staging/*.csv data/staging/staging_provenance.json
           # Nothing above exits early: the ledger fallback below must run
           # whenever the ledger did not come back, however the restore ended.
           if [ -f data/outputs/gameday_card.json ]; then
@@ -723,6 +732,15 @@ jobs:
         # state, with today's frozen snapshot missing from the chain for good.
         # `continue-on-error` so the step below records the failure and the
         # run degrades, rather than the upload ending the job's say in it.
+        #
+        # data/staging is today's slate as "Fetch prices into staging" quoted
+        # it (the restore step clears any earlier run's copy first), and it
+        # travels here because Publish Site builds the board from this
+        # artifact alone. Without it every regular-season game from opening
+        # night was published unpriced, with no line and no pick, while the
+        # card beside it held a best bet: the prices never left the runner.
+        # These are the live quotes of one run, a few hundred rows,
+        # overwritten every run, not the bought historical stores.
         id: state
         if: always()
         continue-on-error: true
@@ -738,6 +756,7 @@ jobs:
             data/outputs/team_market_samples.csv
             data/archive/priced_snapshots
             data/processed/forward_evidence.csv
+            data/staging
           if-no-files-found: warn
           retention-days: 90
 

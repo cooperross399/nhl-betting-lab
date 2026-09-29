@@ -318,6 +318,35 @@ def test_the_state_artifact_uploads_it() -> None:
     assert "data/processed\n" in upload
 
 
+def test_the_state_artifact_carries_the_staged_prices() -> None:
+    """Publish Site builds the board from gameday-state alone, and the board
+    reads its prices from data/staging. The upload carried everything but
+    that folder, so from opening night every regular-season game was
+    published unpriced, with no line and no pick, while the card held a best
+    bet: the prices never left the runner that fetched them."""
+    from nhl_betting_lab.config import PROJECT_ROOT
+
+    workflow = (PROJECT_ROOT / ".github/workflows/gameday-refresh.yml").read_text()
+    upload = workflow.split("name: gameday-state", 1)[1].split("retention-days", 1)[0]
+    assert "data/staging\n" in upload
+
+
+def test_a_restored_run_s_staged_prices_do_not_outlive_the_restore() -> None:
+    """Carrying data/staging in the state means Gameday Refresh restores the
+    previous run's prices before it fetches, and the fetch replaces them only
+    when it fetches. A skipped or failed fetch would leave them on disk and
+    the upload would hand them to the board as today's; the card refuses
+    them on age, the board reads no age. They are cleared straight after the
+    restore, before anything fetches."""
+    from nhl_betting_lab.config import PROJECT_ROOT
+
+    workflow = (PROJECT_ROOT / ".github/workflows/gameday-refresh.yml").read_text()
+    restore = workflow.index("restore_state.py --artifact gameday-state")
+    clear = workflow.index("rm -f data/staging/*.csv data/staging/staging_provenance.json")
+    fetch = workflow.index("name: Fetch prices into staging")
+    assert restore < clear < fetch
+
+
 
 def test_a_held_settlement_is_a_warning_on_the_run_page(
     tmp_path, monkeypatch, capsys
