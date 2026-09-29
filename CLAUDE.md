@@ -141,9 +141,12 @@ Re-derive rather than trust if the data has moved.
   the append on the real files reproduces the store on disk **to the row**
   (2,675,428) under the old key and keeps 3,802,164 under the new one. The key
   is now the quote **plus the window** `label_phases` derives, which is the
-  granularity every measurement here already slices on: over-collapsing inside
-  a window costs nothing the backtest can see, under-collapsing across windows
-  costs a window.
+  granularity every measurement here already slices on; under-collapsing
+  across windows costs a window. (This said over-collapsing inside a window
+  "costs nothing the backtest can see". That was wrong: the alternate ladders
+  and the anytime scorer fold onto the featured market, line and selection,
+  so one book at one instant can quote one identity twice, and keeping the
+  last row discarded a takeable better price. Fixed 2026-09-28, below.)
 - **It was recoverable, because the raw cache is the evidence and the CSV is
   not.** Every response was still in `data/raw/historical_props` — 5,688
   event-odds files, 2,723 events, both windows — so `rebuild_price_files.py`
@@ -513,7 +516,9 @@ Re-derive rather than trust if the data has moved.
   unchanged by exact duplication and the interval narrows by root two — the
   first clean run reported 144,060 bets and an interval half again too tight.
   `stores.dedupe_prices` keys on the quote (event, market, player, selection,
-  line, book) and never on when it was fetched.
+  line, book) and never on when it was fetched. The key is still time-free;
+  since 2026-09-28 time picks the survivor inside a window: the latest
+  snapshot, then the better price at that instant (#244).
 - **`what_we_can_claim` announced a replicated loss as good news.** Its
   headline predicate tested measured + survives-correction + replicated and
   never read the sign, so `points` at −6.6% triggered "at least one survived
@@ -1117,6 +1122,102 @@ Re-derive rather than trust if the data has moved.
   the count appears in the shadow run's log instead ("N posted event(s) are
   not on the cached regular-season schedule"). **It merged on 2026-09-28,
   before the first mixed night (2026-09-29), so no frozen opinion is re-cut.**
+- **2026-09-28 (#243): a branch run never publishes the card.** Gameday
+  Refresh read no ref. Dispatched on a feature branch, it commented its card,
+  built by unreviewed code, on the operating home and committed a clean
+  `latest_status.json` for today to card-feed; main's next scheduled
+  precheck then read today's card as already published and stood the run
+  down, and main restores only from main's runs, so that day's frozen
+  opinions never reached the forward ledger. The post and card-feed steps now
+  run only on a schedule or when `github.ref` is the default branch (the
+  schedule is let through first because `github.event.repository` has never
+  been seen on a cron run here). A branch dispatch still fetches, gates and
+  renders the card as a rehearsal, publishes nothing, and finishes green;
+  "Report the outcome" counts a skipped publish as a failure only where the
+  publish was meant to run. The status line records the ref that wrote it,
+  and the precheck counts only a clean card from its own ref. Still open, and
+  Cooper's call: the restore fallback takes `forward_evidence.csv` from
+  card-feed without checking the ref, and a branch dispatch still runs the
+  live price fetch (`skip_provider_fetch` rehearses for free). No card,
+  snapshot, ledger row, gate, cap or contract string changed.
+  `tests/test_a_branch_run_never_publishes_the_card.py`.
+- **2026-09-28 (#249), a defect fix recorded as `docs/when_this_ends.md`
+  requires: Line Movement screens exhibitions before its cap.**
+  `capture_line_movement.py` spent its 600-credit cap (15 events at 38) in
+  face-off order over an unscreened board, so from 2026-09-29 into early
+  October an exhibition facing off first could skip a regular-season game for
+  budget and lose that round's movement and closing price, which cannot be
+  collected later. It now runs the shadow run's preseason screen, moved to
+  `nhl_betting_lab.preseason_screen`, with the same abstentions. The screen
+  now also keeps, game by game, any game whose two clubs do not both resolve
+  (it had dropped them), and drops a game only when both clubs resolve and
+  the schedule holds the pairing in neither orientation; the card still
+  drops what it cannot resolve, so the screen can cost a place under a cap
+  but never a game the card would keep. Line Movement caches the season's
+  club schedules for free first (`fetch_nhl_data.py --schedules-only`,
+  bounded at 3 minutes). No card, snapshot, ledger row, cap or verdict
+  changed. Watch the first 2026-09-29 Line Movement log: "Preseason screen:"
+  means it is screening; "WARNING: the team-name map holds only the built-in
+  aliases" means it abstained.
+- **2026-09-28 (#248), a defect fix: the CLV report no longer counts
+  tonight's slate as unclosed.** Gameday Refresh builds
+  `closing_line_value.md` minutes after the card freezes the day's opinions,
+  so every report counted tonight's games under "no closing price found" and
+  explained them as "No book pulled these". `build_clv_report` now takes
+  `now` (the runner passes the clock, or `--now`); an opinion whose parsed
+  start is strictly after it is counted on its own line as not yet played and
+  in none of the matched, no-close, uncaptured or bet counts. An unparseable
+  start stays in the ordinary counts. The closing rule, the close-lead bound,
+  the snapshot and the forward ledger are unchanged. Latent while Closing
+  Lines is disabled.
+- **2026-09-28 (#246), wording only, not a defect in what is measured:
+  population B and the Bets streams are the measurement bar, not the
+  stake.** The forward report called population B "the opinions the card
+  would have bet", and the CLV report said its Bets view measured "what the
+  bankroll would actually have done". Both filters are the 6% prop / 3.5%
+  team measurement bar. The card stakes only best bets (12% / 9%), nothing
+  shorter than -160 or longer than +600, and nothing in `points` or
+  `goalie_saves`; and because the snapshot is frozen from the unfiltered
+  prices, B also holds rungs one-stake-per-outcome demoted, markets the card
+  could not use that day, a blocked card's opinions, and rows the puck-drop
+  guard pulled. The pages now say so, built from the card's own constants.
+  No number, population, bar or computation moved. Whether the 2027-04-25
+  decision should instead read a staked "population C" is Cooper's call.
+- **2026-09-28 (#245): the evidence documents give the true reason nothing
+  is supported.** The allowlist bundle's recommendation said every market
+  was unmeasured or spanned zero, above its own lines recording `points` (a
+  loss) and `blocked_shots` (one window, not confirmed) with corrected
+  intervals excluding zero; it now names each for what it is, and a market
+  under the 200-bet reading floor is "too thin to read". The claims document
+  said "does not exclude zero" for any market under 30 bets, where the
+  correction is refused rather than failed, and now says too few bets. No
+  verdict moves. The committed bundle and claims document keep the old
+  wording until regenerated, which is Cooper's call.
+- **2026-09-28 (#244), a defect fix: the rebuild deduplicates as the
+  purchase does, and `dedupe_prices` keeps the later moment, then the better
+  simultaneous price.** `rebuild_price_files.py` deduplicated on the whole
+  row, so two cached responses of one event inside one window kept every
+  quote twice; it now writes through `stores.dedupe_prices`. And
+  `dedupe_prices` kept whichever colliding row came last: anytime +250 beside
+  goals over 0.5 +210 kept +210, discarding a takeable better price. Within
+  one identity and window it now keeps the latest snapshot, better or worse,
+  and at that snapshot the better price, parsing `snapshot` as ISO 8601 so
+  two spellings of one instant are one instant (`label_phases`, which draws
+  the window, still infers the format from the first row; changing that
+  changes measurement and is Cooper's call). **This changes what every future
+  purchase append keeps.** The rebuilt `late` window's 1,259,312 rows against
+  1,259,309 quotes means a fixed rebuild writes at most 3,804,230 rows, not
+  3,804,233; the "identical on the quote identity" comparison is unaffected.
+  Every figure computed from the rebuilt store can move if it is rebuilt —
+  the backtests, the `props_b2b` and `by_toi` experiments, `replication.md`,
+  `what_we_can_claim.md`, the allowlist bundle and this file's per-quote
+  counts; only bet counts and per-wager best prices have a guaranteed
+  direction (they can only stay or fall). Nothing committed is regenerated.
+  Owner notes: a rebuilt TEAM store is not the purchased one (the rebuild
+  stamps the provider's returned time, minutes before a round-hour face-off,
+  so the 21,434 "at exactly the start" rows would pass the strictly-before
+  filter), and `label_phases` files post-start rows under `late`, so
+  keep-latest can replace a pre-start quote with one the measurement drops.
 - **2026-09-25, a defect fix recorded as `docs/when_this_ends.md` requires:
   the card refuses stale prices.** The policy's `max_provider_run_age_hours`
   (12, policy-wide and on `the_odds_api`) was parsed and never applied —
