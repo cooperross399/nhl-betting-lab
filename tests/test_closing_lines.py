@@ -424,13 +424,12 @@ def test_a_damaged_remote_store_is_refused_rather_than_read_as_empty(tmp_path):
         script._read(theirs)
 
 
-def test_the_exact_reproduction_a_ragged_remote_never_becomes_a_one_row_store(tmp_path):
+def test_the_exact_reproduction_a_ragged_remote_never_becomes_a_one_row_store(
+    tmp_path, capsys
+):
     """500 remote rows with one ragged line, one local row, and the old code
     wrote a one-row store over the top and exited 0. It must now refuse, and
     it must not have written the output at all."""
-    from nhl_betting_lab.stores import CorruptStoreError
-    import pytest
-
     script = _merge_script()
     theirs = tmp_path / "theirs.csv"
     mine = tmp_path / "mine.csv"
@@ -438,8 +437,15 @@ def test_the_exact_reproduction_a_ragged_remote_never_becomes_a_one_row_store(tm
     _ragged_store(theirs, rows=500)
     pd.DataFrame([_capture()]).to_csv(mine, index=False, lineterminator="\n")
 
-    with pytest.raises(CorruptStoreError):
-        script.main(["--mine", str(mine), "--theirs", str(theirs), "--out", str(out)])
+    # The refusal is a non-zero exit and an annotation, not a traceback: the
+    # publish step's `|| exit 1` stops the push on any non-zero exit.
+    code = script.main(
+        ["--mine", str(mine), "--theirs", str(theirs), "--out", str(out)]
+    )
+
+    assert code != 0
+    err = capsys.readouterr().err
+    assert "::error::" in err and "cannot be parsed" in err
 
     assert not out.exists(), "a refused merge must leave nothing behind to push"
 
