@@ -18,7 +18,8 @@ backtest.
 When prices exist and the walk-forward samples do not, or either file exists
 and cannot be read, it refuses: `::error::`, exit 1, and nothing written, so
 the previous report stays where it is rather than being replaced by one that
-says nothing was bought.
+says nothing was bought. So does a `--from`/`--to` window that matches none of
+the prices on disk.
 """
 
 from __future__ import annotations
@@ -188,6 +189,27 @@ def main(argv: list[str] | None = None) -> int:
             f"Window {args.start or 'start'} .. {args.end or 'end'}: "
             f"{len(prices):,} of {before:,} price rows."
         )
+        # A WINDOW THAT MATCHES NOTHING IS A REFUSAL, NOT "NOTHING BOUGHT".
+        # This fell through to the message below, "No historical prop prices
+        # are on disk", one line after printing how many were, exited 0, and
+        # `save_backtest` overwrote the contract report with `rows_read: 0`
+        # and "No snapshot window was filtered" although `--phase` was named.
+        # `run_replication.py` records the real case: `--from 2025-10-07 --to
+        # 2025-04-30` (end year mistyped) read 0 of 3,804,233 rows. The claims
+        # document reads `rows_read` 0 as a measurement handed no price, so
+        # every prop market left it. Refuse the way prices-without-samples
+        # does; an empty store is still reported below, because then
+        # "nothing has been bought" is true.
+        if prices.empty and before:
+            print(
+                f"::error::The window {args.start or 'start'} .. "
+                f"{args.end or 'end'} matched 0 of {before:,} historical price "
+                f"row(s) in {processed / HISTORICAL_PRICES_FILENAME}. Check the "
+                "dates (--from must not be after --to). Nothing was measured "
+                "and no report was written, so the previous one is untouched.",
+                file=sys.stderr,
+            )
+            return 1
 
     if prices.empty:
         print(
