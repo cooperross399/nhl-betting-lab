@@ -968,8 +968,8 @@ Re-derive rather than trust if the data has moved.
   leans and set no `kind`, so a lean was headed "Best bet", counted in the
   history index, graded into Results' Model picks, and could displace the
   game's real best bet. The pick now prefers a best bet, labels a lean as a
-  lean, and the picks record counts best bets only. This one is latent
-  today, because Publish Site stages no prices.
+  lean, and the picks record counts best bets only. This one was latent
+  until 2026-09-29, when #275 carried the staged prices to Publish Site.
 - **2026-09-26, NOT a defect fix: Cooper changed the staking rule before the
   decision date, which `docs/when_this_ends.md` lists under "may not".** The
   card no longer stakes `points`. This entry exists because the alternative
@@ -1470,8 +1470,9 @@ Re-derive rather than trust if the data has moved.
   `--now` against the stricter of the two limits; stale, blank or
   unreadable stamps block the card with the age and the limit named, reach
   no pricer and freeze nothing, and every priced run prints the age. Gameday
-  Refresh fetches in the same job and never restores `data/staging/`, so no
-  CI card, snapshot or ledger row changes.
+  Refresh fetches in the same job and (until 2026-09-29, #275) never restored
+  `data/staging/` — since then it restores the previous run's and clears it
+  before the fetch — so no CI card, snapshot or ledger row changes.
 - **2026-09-25: two credit caps did not hold.** `fetch_player_props` read
   `if credit_cap and ...`, so a cap of 0 (also its default) was no cap:
   on a 30-event board at 38 credits an event, cap 190 made 5 requests and
