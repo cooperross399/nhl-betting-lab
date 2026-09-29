@@ -136,16 +136,33 @@ def empty_cache(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(tn, name, directory)
 
 
-def _backtest(tmp_path: Path, label: str, window: tuple[str, ...]) -> Path:
+#: The same night a season earlier, with the two results swapped: a held-out
+#: window of the same phase. A re-run of one window is refused as the same
+#: measurement (see test_a_replication_needs_a_held_out_window_of_the_same_phase).
+EARLIER = ("--from", "2024-10-07", "--to", "2025-04-16")
+
+
+def _a_season_earlier(frame: pd.DataFrame) -> pd.DataFrame:
+    frame = frame.replace(regex={r"^2025-10-18": "2024-10-18"})
+    if "actual" in frame:
+        frame["actual"] = list(reversed(frame["actual"].tolist()))
+    return frame
+
+
+def _backtest(
+    tmp_path: Path, label: str, window: tuple[str, ...], *, earlier: bool = False
+) -> Path:
     """Run the real backtest runner on one window; return its labelled JSON."""
-    processed = tmp_path / "processed"
-    outputs = tmp_path / "backtest"
+    suffix = "-earlier" if earlier else ""
+    processed = tmp_path / f"processed{suffix}"
+    outputs = tmp_path / f"backtest{suffix}"
     if not processed.is_dir():
         processed.mkdir()
         outputs.mkdir()
+        shift = _a_season_earlier if earlier else (lambda frame: frame)
         tn.save_team_name_map(TEAM_MAP, processed_dir=processed)
-        _prices().to_csv(processed / "historical_prop_prices.csv", index=False)
-        _samples().to_csv(outputs / "prop_calibration_samples.csv", index=False)
+        shift(_prices()).to_csv(processed / "historical_prop_prices.csv", index=False)
+        shift(_samples()).to_csv(outputs / "prop_calibration_samples.csv", index=False)
     code = load_script("run_player_props_backtest.py").main(
         [
             "--phase", "late", *window, "--label", label,
@@ -232,7 +249,8 @@ def test_two_measured_windows_are_still_compared_however_thin(
     """The refusal is for a window with no bets, not for a window with few.
     Two bets that survive nothing are, truthfully, nothing surviving."""
     first = _backtest(tmp_path, "2025-26", MEANT)
-    second = _backtest(tmp_path, "2025-26-again", MEANT)
+    second = _backtest(tmp_path, "2024-25", EARLIER, earlier=True)
+    assert json.loads(second.read_text(encoding="utf-8"))["bets"] == 2
     records = _record_dir(tmp_path)
     capsys.readouterr()
 
@@ -263,6 +281,7 @@ UNMEASURED = {
 }
 
 MEASURED = {
+    "phase": "late",
     "bets": 2,
     "by_market": {
         "shots_on_goal": {"bets": 2, "roi": 0.0, "survives_correction": False},
@@ -302,6 +321,7 @@ def test_one_bet_on_one_market_is_a_measured_window(
     sparse.write_text(
         json.dumps(
             {
+                "phase": "late",
                 "bets": 1,
                 "by_market": {
                     "goals": {"bets": 0, "roi": None, "survives_correction": False},
@@ -417,13 +437,18 @@ def test_a_test_window_that_missed_one_market_is_not_called_empty() -> None:
     assert "Only 0 bet(s) in the test window" in shots.reason
 
 
-def test_a_thin_test_window_is_still_headlined_as_it_was() -> None:
-    """Only a test window with no bets at all changes the headline. A thin one
-    keeps its per-market "below the 100 needed" reason and its headline."""
+def test_a_thin_test_window_is_not_headlined_as_an_empty_one() -> None:
+    """Only a test window with no bets at all is headlined as measuring
+    nothing. A thin one keeps its per-market "below the 100 needed" reason,
+    and its headline says the survivor was not tested there (too few bets).
+    This test used to pin "did **not** replicate" here, which is the
+    over-reading the per-market reason forbids; see
+    test_a_survivor_too_thin_to_test_is_not_headlined_as_a_failure."""
     report = _compare(
         {"by_market": {"points": _result(9047, -0.044, True)}},
         {"by_market": {"points": _result(40, -0.02, False)}},
     )
 
-    assert "did **not** replicate" in report.headline()
+    assert "measured no bets" not in report.headline()
+    assert "not tested on **2024-25** (too few bets)" in report.headline()
     assert "below the" in report.markets[0].reason

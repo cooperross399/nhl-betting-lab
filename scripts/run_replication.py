@@ -11,7 +11,10 @@ question and launders a strong first window into a merged average that reads
 like confirmation.
 
 It refuses (exit 1, nothing written, the previous record untouched) when
-either window is missing, unreadable, or measured no bets.
+either window is missing, unreadable, or measured no bets, and when the test
+window is not held out: the same file or the same measurement as the
+discovery window, or a different snapshot `phase` (or none named). Both
+phases are recorded in `replication.md` and `replication.json`.
 """
 
 from __future__ import annotations
@@ -24,6 +27,7 @@ from nhl_betting_lab.reports.replication import (
     bets_measured,
     compare,
     load_backtest,
+    not_held_out,
     save_replication,
 )
 
@@ -82,6 +86,18 @@ def main(argv: list[str] | None = None) -> int:
             + ". A window that measured nothing is not a result that failed "
             "correction. Check that the backtest's --from/--to/--phase "
             "matched price rows. Nothing was written, so the previous "
+            "replication record is untouched."
+        )
+        return 1
+
+    # A WINDOW COMPARED WITH ITSELF, OR WITH ANOTHER PHASE, IS NOT A TEST.
+    # See `not_held_out`: one file as both windows was recorded with every
+    # survivor replicated, and so was a `late` window against a `card` one.
+    problem = not_held_out(discovery_path, discovery, test_path, test)
+    if problem:
+        print(
+            "Cannot compare: the test window is not a held-out window of the "
+            f"same question: {problem} Nothing was written, so the previous "
             "replication record is untouched."
         )
         return 1
