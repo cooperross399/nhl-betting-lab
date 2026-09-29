@@ -134,9 +134,17 @@ class ReplicationReport:
                 "tested. That is not a failure to replicate. The first result "
                 f"is not yet evidence of anything durable: {NO_DEMONSTRATED_EDGE}."
             )
+        sentences = []
+        # EVERY SURVIVOR IS NAMED, NOT ONLY THE ONES THAT HELD. This returned
+        # the replicated sentence alone whenever any market replicated, so
+        # with `points` replicated and `blocked_shots` contradicted on the
+        # test window at -3% the headline (replication.md, replication.json,
+        # the runner's log) read only "`points` held on **T** as well as
+        # **D**". A contradicted survivor, the shape this lab keeps
+        # retracting, was left to the table. The sentences below now follow.
         if self.replicated_markets:
             names = ", ".join(f"`{m}`" for m in self.replicated_markets)
-            return (
+            sentences.append(
                 f"{names} held on **{self.test_label}** as well as "
                 f"**{self.discovery_label}**. Two windows agreeing is worth "
                 "considerably more than one window measured precisely, and it "
@@ -151,7 +159,6 @@ class ReplicationReport:
         # headline read "`blocked_shots` survived on **D** and did **not**
         # replicate on **T**". "Did not replicate" is now kept for a survivor
         # that was tested and came back not confirmed or contradicted.
-        sentences = []
         failed = [
             item for item in discovered
             if item.state in (NOT_CONFIRMED, CONTRADICTED)
@@ -171,10 +178,12 @@ class ReplicationReport:
                 f"**{self.test_label}** (too few bets), which is not a "
                 "failure to replicate."
             )
-        sentences.append(
-            "The first result is not yet evidence of anything durable: "
-            f"{NO_DEMONSTRATED_EDGE}."
-        )
+        if failed or untested or not self.replicated_markets:
+            sentences.append(
+                "The first result is not yet evidence of anything durable"
+                + (" for those" if self.replicated_markets else "")
+                + f": {NO_DEMONSTRATED_EDGE}."
+            )
         return " ".join(sentences)
 
 
@@ -206,6 +215,48 @@ def payload_phase(payload: Mapping[str, Any]) -> str:
 def payload_phase_hours(payload: Mapping[str, Any]) -> float | None:
     hours = payload.get("phase_hours")
     return float(hours) if isinstance(hours, (int, float)) else None
+
+
+def window_mismatch(record: Mapping[str, Any], measured_phase: str) -> str:
+    """Why a saved replication record says nothing about a figure, or "".
+
+    `run_replication.py` compares two windows of one phase and records both
+    phases in `replication.json`. The bundle and the claims document read
+    that record beside a figure from another report, the contract props
+    backtest (the `late` window, as Gameday Refresh runs it) or a market it
+    read from the `card` window, and they keyed the verdict by market alone.
+    Two `card` seasons marked `replicated` were therefore read as held-out
+    confirmation of the `late` figure and the market was called supported:
+    the "wager priced at two distances from face-off is two different
+    questions" confusion #254 closed in the runner, reopened by its readers.
+
+    A verdict applies to a figure only when both windows the record compared
+    are the figure's own phase. A record that names no phase (written before
+    #254), or a figure that names none, cannot be matched, and is no
+    replication record for it. The answer is a clause, for the caller to
+    place in its own sentence.
+    """
+    measured = str(measured_phase or "").strip()
+    discovery = str(record.get("discovery_phase") or "").strip()
+    test = str(record.get("test_phase") or "").strip()
+    if not discovery or not test:
+        return (
+            "`replication.json` names no snapshot window for the windows it "
+            "compared (it was written before the phase was recorded), so it "
+            "cannot be matched to this figure"
+        )
+    if not measured:
+        return (
+            f"this figure names no snapshot window, so the replication of "
+            f"the `{discovery}` and `{test}` windows cannot be matched to it"
+        )
+    if discovery != measured or test != measured:
+        return (
+            f"`replication.json` compared the `{discovery}` window with the "
+            f"`{test}` window, and this figure measures the `{measured}` "
+            "window, which is a different question"
+        )
+    return ""
 
 
 #: Keys that differ between two runs of one measurement. A backtest payload

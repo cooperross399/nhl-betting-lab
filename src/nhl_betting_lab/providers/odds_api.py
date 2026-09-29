@@ -995,6 +995,13 @@ class OddsApiProvider:
         events = _screen_events(events, keep_event, result)
         events = sorted(events, key=_commence_key)
         selected = events[:max_events] if max_events else events
+        if max_events:
+            # The cap is the slate too. Provider Market Discovery runs
+            # `--max-events 20`, and on a thirty-game board this read
+            # "10 of 30 events" beside the bulk fetch's "10 of 20": ten
+            # games never in scope, read as a coverage gap. As
+            # `fetch_team_markets` counts it after its own truncation.
+            result.events_seen = len(selected)
 
         # The primary product, and the fallback target: the markets this lab
         # models and settles, without the alternate ladders that ride along.
