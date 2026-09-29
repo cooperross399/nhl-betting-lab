@@ -220,6 +220,44 @@ def scheduled_regular_season_starts(
     return starts
 
 
+def regular_season_games_still_to_play(
+    days, *, not_started_by: datetime | None = None, raw_dir=None
+) -> int:
+    """Regular-season games the cached NHL club schedules list on `days`.
+
+    Games the schedule calls off are not counted, and neither are
+    exhibitions, which books may never price. With no cache there is
+    nothing to count, and the answer is 0.
+
+    With `not_started_by`, a game whose scheduled face-off is at or before
+    that moment is not counted either: it is under way or over, and a board
+    that has moved on from it is not missing it. An unreadable face-off
+    counts, as it does for the card (`_under_way` in run_gameday_card.py):
+    ambiguity is a game still to play.
+
+    Moved here from `run_provider_shadow.py` (#257) so the two scripts that
+    read the provider's board on a game day judge an empty one by one rule:
+    the shadow run's team-market fetch and Line Movement's capture. A board
+    with none of today's games on a day this counts above zero is a board
+    missing them, not an off-day.
+    """
+    from nhl_betting_lab.puck_drop import parse_commence_time
+
+    wanted = {str(day) for day in days}
+    count = 0
+    for (day, _home, _away), start in scheduled_regular_season_starts(
+        raw_dir
+    ).items():
+        if day not in wanted:
+            continue
+        if not_started_by is not None:
+            begins = parse_commence_time(start)
+            if begins is not None and begins <= not_started_by:
+                continue
+        count += 1
+    return count
+
+
 #: The number of clubs a complete `club_schedule` cache holds. A cache with
 #: fewer has games it simply does not know about, and cannot be used to judge
 #: whether a game is preseason.

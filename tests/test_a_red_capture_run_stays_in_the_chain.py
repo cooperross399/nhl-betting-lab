@@ -265,6 +265,8 @@ class Chain:
             "FAKE_GH_LOG": str(self.tmp / "gh.log"),
             "FAKE_GH_DOWN": "1" if gh_down else "0",
             "FAKE_GH_BROKEN": ",".join(str(b) for b in broken),
+            # The workflow now tries each call three times; no test waits.
+            "RESTORE_STATE_RETRY_SECONDS": "0",
         }
         # `continue-on-error: true`: the job goes on whatever the step returns.
         restored = subprocess.run(
