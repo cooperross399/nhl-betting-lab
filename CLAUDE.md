@@ -1317,6 +1317,103 @@ Re-derive rather than trust if the data has moved.
   "staked"; the measurement-bar note says games the puck-drop guard withheld
   at the freeze are in neither population; the goalie void sentences are built
   from `GOALIE_START_SECONDS`.
+- **2026-09-29 (#261), a defect fix recorded as `docs/when_this_ends.md`
+  requires: the card's player resolver reads every alias of the provider's
+  spelling.** `PlayerPropsModel.resolve_player` looked up only the provider
+  name's plain normalisation, while the backtest and forward settlement join
+  on `player_name_aliases` on both sides, so a book's "A.J. Greer" against
+  registry "Anthony-John (AJ) Greer" (or "J.J. Peterka" against "JJ
+  Peterka") got no card opinion and no ledger row while the measurement bet
+  him. The resolver now unions the players every form reaches and resolves
+  only when that is exactly one (team narrows as before), settlement's own
+  candidate rule; "Elias Pettersson (2004)" still never binds the bare name.
+  A spelling whose forms reach two players now has no opinion. Merged at
+  06:10 UTC, before the first card, with zero ledger rows, so no frozen
+  opinion is re-cut. The model, edge bar, market list and staking rule are
+  unchanged.
+- **2026-09-29 (#262), two defect fixes.** (1) With one club's roster
+  refresh lost, `price_props` fell back to a mover's logged club even though
+  that club's fresh roster was held and left him off, pricing him against his
+  own club. A held logged-club roster that omits him now leaves him
+  unresolved and named, **but only while one of tonight's two clubs has no
+  roster held**: the roster endpoint leaves active regulars off (22 measured
+  on 2026-09-29, Bedard among them), so with both rosters held the logs still
+  decide his side, as before. (2) The selection fingerprint keyed on the
+  best-price book's raw spelling, so a best-book switch between "Lafrenière"
+  and "Lafreniere" posted "Selections changed"; it now keys on `player_key`,
+  and the previous card's fingerprint is recomputed from its saved
+  `best_bets` so the change of rule posts nothing spurious. The marker
+  string is unchanged.
+- **2026-09-29 (#263), a defect fix: a passed-over red run is asked for
+  again.** After #253 a red run whose download failed was only a warning
+  ("the next restore asks for it again"), but when the run that warned was
+  green the next restore took it alone and never asked, and the same run
+  settled the day from the backup's later opinion, which `_first_opinions`
+  can never replace once settled. The restore now writes such runs to
+  `data/processed/unlaid_runs.json` (inside gameday-state); every later
+  merging restore asks for them again, dropping one when laid, expired, or
+  after `UNLAID_TRIES` = 3 restores, each with a warning. While the file
+  lists a run, `settle_snapshots` settles no pending day and
+  `run_forward_evidence.py` prints a `::warning::`; the run stays green.
+  Inside an unbroken red streak a run can be listed afresh, so the hold can
+  recur, but the ledger settles at least every third restore. Owner calls:
+  the 3-restore bound, and holding every pending day rather than only the
+  days that run could have frozen. A hand run with a stale list holds until
+  the file is removed.
+- **2026-09-29 (#264), three defect fixes in Line Movement, none spending a
+  credit.** A board with nothing in the window while the cached schedule
+  lists regular-season games still to face off now exits 2 (#257's rule,
+  shared as `season.regular_season_games_still_to_play`, on the capture's
+  own clock). `capture_line_combinations.py` names every lost team in a
+  `::warning::` and exits 2 when fewer than half the pages were read (the
+  threshold is the fixer's choice). And "Restore today's captures" runs with
+  `--attempts 3 --limit 10 --problem-file` under a 5-minute step timeout,
+  with a final gate that turns the run red when the restore failed, timed
+  out, or could not reach a carrier; the timeout keeps a GitHub outage from
+  starving the paid capture of the 20-minute job. Thin runs still count
+  toward `--union 3`, so three in a row can still drop older carriers
+  (now red the same day); skipping them is an owner item.
+- **2026-09-29 (#265), three defect fixes in calibration.**
+  `run_props_calibration.py` refuses a named `--start-date/--end-date`
+  window that yields no sample from non-empty logs (exit 1, writes nothing),
+  and an empty fit never overwrites a `current_corrections.json` holding
+  curves (the card applies them only when `by_toi` ships, which it does
+  not). The calibration report's standing note is derived from the recorded
+  `by_toi` verdict and no longer says no historical prices have been bought.
+  `correction_experiment.json` records `phase`, `phase_hours` and
+  `phase_hours_by_window`, and its `.md` names the window. No workflow
+  passes date flags; the committed reports keep the old text until
+  regenerated.
+- **2026-09-29 (#266), a defect fix: a ledger that parses short is refused,
+  not written over.** One stray quote made pandas read 4 ledger rows as 3
+  without raising, and the shrink guard compared the total after the append
+  with the file, so the new day's rows hid the loss and a settled day
+  vanished while its marker stood. `_read_ledger` now refuses a parse shorter
+  than the file's rows (`CorruptStoreError`, exit 2), and the guard compares
+  the existing part at write time. Rows on disk are counted by
+  `_ledger_rows_on_disk`, which leaves out lines a quoted newline spans
+  (judged blank as bytes, as `existing_row_count` does) so a whole ledger
+  with multi-line fields is still appended to, but never a folded line that
+  begins with a snapshot date, which is a swallowed row. This also fixes such
+  a ledger being refused as a shrink. `closing_lines.append_captures`
+  refuses a short read the same way. `load_ledger`, read-only, stays
+  forgiving (an owner item).
+- **2026-09-29 (#267), four defect fixes.** Readers of `replication.json`
+  (the allowlist bundle and the claims document) apply a verdict only to a
+  figure of the same snapshot phase as both compared windows; a record naming
+  no phase (pre-#254) is no record, which can only remove support. The
+  replication headline names contradicted, unconfirmed and untested
+  survivors after replicated ones. `fetch_player_props` resets
+  `events_seen` after `max_events`. And `ladder_coherence._rungs_from`
+  resolved a same-instant duplicate rung by row order; it now keeps the
+  better-paying price per line and side, as `dedupe_prices` does. **This is
+  a detector defect fix recorded as the ladder registration permits, before
+  the first game and before any registered result exists.** No band, floor
+  or unit moved, but it is a choice: it can only raise the violation count
+  against a featured-market-only or per-provider-market rule (it cannot
+  invent a violation no single market offered, because de-vigging is
+  proportional). Keeping each provider market's rung apart instead is
+  Cooper's call.
 - **2026-09-25, a defect fix recorded as `docs/when_this_ends.md` requires:
   the card refuses stale prices.** The policy's `max_provider_run_age_hours`
   (12, policy-wide and on `the_odds_api`) was parsed and never applied —
