@@ -171,6 +171,32 @@ jobs:
           rm -f dist/*.py dist/README.md
           touch dist/.nojekyll
 
+      - name: Lay the season projection over its baseline
+        # Season Sim hands its season.json over as the `season-sim` artifact.
+        # The Season page ships with a committed baseline at
+        # web/data/season.json, already copied into dist above, so this is
+        # allowed to find nothing (before the first Season Sim run, or after
+        # its artifacts expire) and allowed to fail: a projection that did
+        # not build must never stop the board being published. The newest
+        # successful Season Sim run is taken whole (--no-merge); an older
+        # run's file is never laid underneath, because a season.json is one
+        # file and half of two builds is not a projection. A failure here is
+        # a warning on the run, never a red publish.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -u
+          if python scripts/restore_state.py --artifact season-sim --dest dist/data \
+               --workflow season-sim.yml --success-only --no-merge --attempts 2; then
+            python - <<'PY'
+          import json
+          d = json.load(open("dist/data/season.json", encoding="utf-8"))
+          print(f"Season page: {d['phase']}, built {d['generatedAt']}, {d['leagueGamesPlayed']} games played.")
+          PY
+          else
+            echo "::warning::The season projection could not be restored; the Season page keeps the committed baseline."
+          fi
+
       - name: Build today's board and yesterday's results
         env:
           PYTHONPATH: src
