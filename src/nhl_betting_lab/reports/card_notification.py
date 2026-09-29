@@ -58,7 +58,11 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from nhl_betting_lab.reports.gameday_card import GamedayCard, render_card
+from nhl_betting_lab.reports.gameday_card import (
+    GamedayCard,
+    render_card,
+    selection_fingerprint_of,
+)
 
 
 #: Contract: matched literally by Cooper's local scheduled tasks.
@@ -275,8 +279,19 @@ def render_comment(
 
 
 def previous_fingerprint_from(payload: Any) -> str | None:
-    """Read the previous card's fingerprint out of its saved JSON."""
+    """Read the previous card's fingerprint out of its saved JSON.
+
+    Recomputed from the saved card's own best bets where it has them, rather
+    than trusting the stored string: the stored string is whatever rule the
+    previous run's code used, and when that rule changes (it began keying the
+    player by `player_key` on 2026-09-29) the first run after the change
+    would otherwise post "Selections changed" about identical selections. The
+    stored string is the fallback for a payload without usable rows.
+    """
     if not isinstance(payload, dict):
         return None
+    rows = payload.get("best_bets")
+    if isinstance(rows, list) and all(isinstance(row, dict) for row in rows):
+        return selection_fingerprint_of(rows)
     value = payload.get("selection_fingerprint")
     return str(value) if isinstance(value, str) else None

@@ -432,7 +432,15 @@ def build_calibration_report(
     *,
     now: datetime | None = None,
     minimum_fit_samples: int = PlattCalibration.MINIMUM_SAMPLES,
+    by_toi_ships: bool | None = None,
 ) -> CalibrationReport:
+    """Measure calibration on walk-forward samples.
+
+    `by_toi_ships` is the recorded `by_toi` verdict
+    (`verdicts.ships("by_toi")`), read by the caller. It decides only what
+    the standing note says about the card; None means it was not read, and
+    the note then names where the decision lives rather than asserting one.
+    """
     moment = now or datetime.now(timezone.utc)
     if "model_probability" not in samples.columns and not samples.empty:
         samples = expand_to_lines(samples)
@@ -492,14 +500,44 @@ def build_calibration_report(
         "counts each game once, because every line of a player-game and every "
         "player in one game share that game's events. It is never narrower "
         "than a Wilson interval on the samples.",
-        "**Neither correction is in force on the card.** The card prices "
-        "props with the raw model. Calibration cannot rule a model in, so a "
-        "correction ships only when the price-based backtest in "
-        "`data/outputs/player_props_backtest.md` says it should — and that "
-        "report currently measures nothing, because no historical prices have "
-        "been bought.",
+        _in_force_note(by_toi_ships),
     ]
     return report
+
+
+def _in_force_note(by_toi_ships: bool | None) -> str:
+    """What the card does with these corrections, from the recorded verdict.
+
+    This was a fixed sentence ending "that report currently measures
+    nothing, because no historical prices have been bought", written into a
+    contract output on every Gameday Refresh while the props backtest
+    measured 25,911 late-window bets against bought prices. What is in force
+    is the recorded verdict's to say, not this report's; only `by_toi` is
+    ever applied by the card, and `pooled` never is.
+    """
+    rule = (
+        "Calibration cannot rule a model in, so a correction ships only when "
+        "the price-based correction experiment "
+        "(`data/outputs/correction_experiment.md`, against bought prices) "
+        "says it should."
+    )
+    if by_toi_ships is True:
+        return (
+            "**The by-ice-time correction is in force on the card**, because "
+            "the recorded verdict in `data/outputs/correction_experiment.json` "
+            "ships it; the pooled correction is not. " + rule
+        )
+    if by_toi_ships is False:
+        return (
+            "**Neither correction is in force on the card.** The card prices "
+            "props with the raw model: the recorded verdict in "
+            "`data/outputs/correction_experiment.json` ships neither. " + rule
+        )
+    return (
+        "Whether a correction is in force on the card is the recorded "
+        "verdict in `data/outputs/correction_experiment.json`, not this "
+        "report's call. " + rule
+    )
 
 
 def _fmt(value: float | None, spec: str = ".4f") -> str:
