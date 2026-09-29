@@ -14,6 +14,7 @@ The "strictly before face-off" rule is unchanged.
 
 from __future__ import annotations
 
+import importlib.util
 from datetime import datetime, timedelta, timezone
 
 import pandas as pd
@@ -127,9 +128,13 @@ def _in_season_rounds() -> list[int]:
     """Minutes past midnight UTC of every in-season Line Movement round, read
     from the workflow itself so a moved cron moves this test with it.
 
+    Each cron fires `ROUND_LEAD` before its round and the run waits for the
+    round (scripts/wait_for_round.py), so the round is the cron plus the lead.
+
     In-season means every day of the month (day-of-month `*`); the opening-
     week crons name days and are not the regular schedule.
     """
+    lead = int(_wait_for_round().ROUND_LEAD.total_seconds() // 60)
     document = yaml.safe_load(
         (WORKFLOWS / "line-movement.yml").read_text(encoding="utf-8")
     )
@@ -140,9 +145,26 @@ def _in_season_rounds() -> list[int]:
         minute, hour, day, _month, _weekday = str(entry["cron"]).split()
         if day != "*":
             continue
-        rounds.append(int(hour) * 60 + int(minute))
+        rounds.append((int(hour) * 60 + int(minute) + lead) % (24 * 60))
     assert rounds, "no in-season cron was read from line-movement.yml"
     return sorted(set(rounds))
+
+
+def _wait_for_round():
+    path = PROJECT_ROOT / "scripts" / "wait_for_round.py"
+    spec = importlib.util.spec_from_file_location("_wait_for_round_rounds", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_the_rounds_are_the_ones_the_bound_was_written_for() -> None:
+    """The workflow's crons, plus the wait, land on 14:00, 18:00, 21:00,
+    23:00 and 01:00 UTC: the rounds `CLOSE_MAX_LEAD`'s comment reasons from.
+    A cron left at its round would put every round eight hours late."""
+    assert _in_season_rounds() == sorted(
+        h * 60 for h in (14, 18, 21, 23, 1)
+    )
 
 
 def _leads(start_utc_minutes: int, rounds: list[int]) -> list[int]:
@@ -165,9 +187,8 @@ EVENING_STARTS = [
 def test_the_bound_is_what_the_capture_schedule_can_meet() -> None:
     """On every in-season day, every common evening start has a scheduled
     round within the bound, so on a normal night it closes. The opening-week
-    days (29-30 September), which have only the 18:00 and 23:00 UTC rounds,
-    are excluded here and do NOT all close: `CLOSE_MAX_LEAD`'s comment lists
-    the starts that miss, including 22:00 EDT on 29 September. A 19:00 EDT
+    days (29-30 September) name their days and are excluded here; they run
+    the same five rounds. A 19:00 EDT
     start is 23:00 UTC, whose
     own round lands at or after face-off; the 21:00 round, two hours out,
     must still close it, which is why 60-90 minutes was not chosen.

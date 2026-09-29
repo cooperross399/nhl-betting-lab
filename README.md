@@ -379,7 +379,7 @@ bought the window again and uploaded a thin copy as the newest carrier.
 | Provider Market Discovery | on demand; once on 15 October, which asks the three bulk markets only (props, ladders and candidates need a dispatch) | yes, capped |
 | Historical Props Purchase | on demand only, never scheduled | yes, capped, required cap |
 | Venue Probe | on demand only, never scheduled | yes, capped, required cap |
-| Line Movement Capture | several times daily in season | yes, capped |
+| Line Movement Capture | five rounds daily in season (14:00, 18:00, 21:00, 23:00, 01:00 UTC): each cron fires eight hours early and `scripts/wait_for_round.py` holds the run until its round, because GitHub starts scheduled runs hours late; by hand, now or at a set `at` time | yes, capped |
 | Experiment Refresh | weekly | no |
 | Publish Site | daily, and after each Gameday Refresh | no |
 
