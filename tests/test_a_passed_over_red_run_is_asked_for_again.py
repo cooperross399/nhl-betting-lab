@@ -318,6 +318,44 @@ def test_the_state_artifact_uploads_it() -> None:
     assert "data/processed\n" in upload
 
 
+def test_the_state_artifact_carries_the_staged_prices() -> None:
+    """Publish Site builds the board from gameday-state alone, and the board
+    reads its prices from data/staging. The upload carried everything but
+    that folder, so from opening night every regular-season game was
+    published unpriced, with no line and no pick, while the card held a best
+    bet: the prices never left the runner that fetched them.
+
+    The whole line, indentation included: `"data/staging\\n" in upload` was
+    also true of a commented-out `# data/staging` and of the step comment
+    that names the folder, so the line could go and the test stay green."""
+    from nhl_betting_lab.config import PROJECT_ROOT
+
+    workflow = (PROJECT_ROOT / ".github/workflows/gameday-refresh.yml").read_text()
+    upload = workflow.split("name: gameday-state", 1)[1].split("retention-days", 1)[0]
+    assert "\n            data/staging\n" in upload
+
+
+def test_a_restored_run_s_staged_prices_do_not_outlive_the_restore() -> None:
+    """Carrying data/staging in the state means Gameday Refresh restores the
+    previous run's prices before it fetches, and the fetch replaces them only
+    when it fetches. A skipped or failed fetch would leave them on disk and
+    the upload would hand them to the board as today's; the card refuses
+    them on age, the board reads no age. They are cleared straight after the
+    restore, before anything fetches.
+
+    The whole line, indentation included, so a commented-out `# rm -f ...`
+    at the same place does not pass for the command."""
+    from nhl_betting_lab.config import PROJECT_ROOT
+
+    workflow = (PROJECT_ROOT / ".github/workflows/gameday-refresh.yml").read_text()
+    restore = workflow.index("restore_state.py --artifact gameday-state")
+    clear = workflow.index(
+        "\n          rm -f data/staging/*.csv data/staging/staging_provenance.json\n"
+    )
+    fetch = workflow.index("name: Fetch prices into staging")
+    assert restore < clear < fetch
+
+
 
 def test_a_held_settlement_is_a_warning_on_the_run_page(
     tmp_path, monkeypatch, capsys

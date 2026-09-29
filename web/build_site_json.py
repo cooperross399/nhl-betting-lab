@@ -17,10 +17,12 @@ Sources, in order of trust:
     game's market at the first capture that held it, used as the open. The
     capture holds no bulk market, so every open total is missing (its totals
     are ladder rungs) and so is every open moneyline (it asks for no h2h).
-    Publish Site restores NEITHER — its two artifacts carry no data/staging
-    and no line_movement — so there every regular-season game is published
-    unpriced (`priced: false`, no line, no pick) and every open is missing.
-    The board says so rather than reading as a pass, and so does the next
+    Publish Site restores the staged prices: the gameday-state artifact
+    carries the data/staging of the Gameday Refresh run it came from. Until
+    2026-09-29 it did not, and every regular-season game was published
+    unpriced (`priced: false`, no line, no pick). It still restores no
+    line_movement, so there every open is missing. A game this build holds
+    no price for says so rather than reading as a pass, and so does the next
     morning's Results page, which grades no game that carried no pick.
   * data/processed/team_games.csv + TeamModel: expected goals per side,
     with the back-to-back adjustment only while the recorded `team_b2b`
