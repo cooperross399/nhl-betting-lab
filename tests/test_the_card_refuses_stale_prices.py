@@ -15,9 +15,13 @@ Found by the failure-shape audit (3 of 3 refuters). Reproduced on the real
 Monday's price, froze it as the day's first opinion, and nothing on the card
 or in the log said how old the price was — while `run_is_fresh` on the same
 stamp answered "50.0 hours old, past the 12-hour limit". Gameday Refresh
-fetches in the same job and never restores `data/staging/`, so no CI card was
-affected; the documented operator path (`run_gameday_card.py` over an
-existing staging directory) was.
+fetches in the same job, and until 2026-09-29 never restored `data/staging/`,
+so no CI card was affected; the documented operator path
+(`run_gameday_card.py` over an existing staging directory) was. Since PR
+#275 the state it restores carries the previous run's staging, cleared
+before the fetch (the rm in the restore step, pinned in
+tests/test_a_passed_over_red_run_is_asked_for_again.py), so on a skipped or
+failed fetch this gate stands behind that clear.
 
 What these tests hold, through the real `main()` with the models stubbed to
 price whatever rows the card hands them:

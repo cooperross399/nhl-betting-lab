@@ -344,7 +344,10 @@ def test_a_restored_run_s_staged_prices_do_not_outlive_the_restore() -> None:
     restore, before anything fetches.
 
     The whole line, indentation included, so a commented-out `# rm -f ...`
-    at the same place does not pass for the command."""
+    at the same place does not pass for the command. Kept beside the YAML
+    pin below: this one's ten-space indentation rejects an rm nested inside
+    a shell block, which the YAML pin does not read; that one rejects an rm
+    in another step, which this one does not."""
     from nhl_betting_lab.config import PROJECT_ROOT
 
     workflow = (PROJECT_ROOT / ".github/workflows/gameday-refresh.yml").read_text()
@@ -354,6 +357,36 @@ def test_a_restored_run_s_staged_prices_do_not_outlive_the_restore() -> None:
     )
     fetch = workflow.index("name: Fetch prices into staging")
     assert restore < clear < fetch
+
+
+def test_the_clear_is_a_command_of_the_restore_step_itself() -> None:
+    """Character order across the file is not placement. The rm sat between
+    the restore and the fetch just as well inside "Check the provider
+    credential", which runs under the fetch's own `if:` — so on a
+    `skip_provider_fetch` dispatch, the case the rm exists for, it would be
+    skipped with the fetch and the restored quotes uploaded as today's. The
+    step is read as YAML: the rm is a command line (not a comment) of the
+    `id: restore` step's run block, after its restore command, and that
+    step has no condition."""
+    import yaml
+    from nhl_betting_lab.config import PROJECT_ROOT
+
+    workflow = yaml.safe_load(
+        (PROJECT_ROOT / ".github/workflows/gameday-refresh.yml").read_text(encoding="utf-8")
+    )
+    steps = workflow["jobs"]["refresh"]["steps"]
+    restore = next(step for step in steps if step.get("id") == "restore")
+    assert "if" not in restore, restore.get("if")
+    lines = [line.strip() for line in restore["run"].splitlines()]
+    clear = lines.index("rm -f data/staging/*.csv data/staging/staging_provenance.json")
+    command = next(
+        index for index, line in enumerate(lines)
+        if line.startswith("python scripts/restore_state.py --artifact gameday-state")
+    )
+    assert command < clear
+    fetch = next(index for index, step in enumerate(steps)
+                 if step.get("name") == "Fetch prices into staging")
+    assert steps.index(restore) < fetch
 
 
 

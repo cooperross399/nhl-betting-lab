@@ -829,8 +829,11 @@ jobs:
         # artifact alone. Without it every regular-season game from opening
         # night was published unpriced, with no line and no pick, while the
         # card beside it held a best bet: the prices never left the runner.
-        # These are the live quotes of one run, a few hundred rows,
-        # overwritten every run, not the bought historical stores.
+        # These are the live quotes of one run, overwritten every run: on
+        # opening night, 486 team rows and 11,348 prop rows for five games,
+        # per book, in a public artifact for 90 days like the rest of this
+        # state. Not the bought historical stores, which this runner never
+        # holds (see "Rebuild the measurement reports").
         id: state
         if: always()
         continue-on-error: true

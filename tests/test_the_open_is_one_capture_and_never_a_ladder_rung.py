@@ -32,10 +32,11 @@ fetch, `alternate_totals` staged as `total_goals`, beside the bulk file:
 with both on disk the board published `total.current = 4.5` (over -350,
 under +295) against a bulk main line of 6.0.
 
-Latent today: Publish Site restores neither `data/staging` nor
-`line_movement`, so every public open and line is null. It goes live under
-the owner's options of carrying prices to Publish Site and restoring line
-movement, and on any local build (`run_provider_shadow.py --props`, then
+Half live since 2026-09-29: Publish Site restores `data/staging` (PR
+#275), so the current line is on the public board and the rung guard is
+exercised on every publish; it still restores no `line_movement`, so every
+public open is null until that is carried too. Both halves run on any local
+build (`run_provider_shadow.py --props`, then
 `capture_line_movement.py`, then `web/build_site_json.py`).
 
 These tests write captures where and how `capture_line_movement.main`
