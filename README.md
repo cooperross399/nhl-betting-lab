@@ -329,8 +329,12 @@ report says out loud.
 **Closing Lines is disabled as of 2026-09-25**, pending a decision about
 publishing captured odds on this public repository's `closing-lines` branch.
 Line Movement still captures every per-event price, so nothing more is lost
-while it is held; until it is re-enabled, the closing-line report says it has
-no capture store.
+while it is held. Since 2026-09-29 Gameday Refresh's closing-line report reads
+those captures directly: with no `closing-lines` branch it restores the
+`line-movement` artifact chain for that step only and removes it afterwards, so
+per-event opinions are scored against their close without any permanent odds
+file. The bulk moneyline, puck line and total are captured nowhere, so those
+opinions still have no close.
 
 Every run — including a "skip" run — also publishes the rendered comment, a
 one-object status file, and the forward-evidence report to the **`card-feed`

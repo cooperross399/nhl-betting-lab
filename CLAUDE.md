@@ -717,9 +717,12 @@ Re-derive rather than trust if the data has moved.
   strict subset of Line Movement's own captures (`line_movement/<day>.csv`;
   the bulk team markets are captured nowhere — see above), which keep flowing
   through the `line-movement` artifact chain, so the store can be rebuilt from
-  them. The cost is that the CLV report in Gameday Refresh reads nothing and
-  says "No capture store yet". Re-enabling is one click (Actions → Closing
-  Lines → Enable workflow) once Cooper decides where that file may live.
+  them. Since 2026-09-29 the CLV step in Gameday Refresh restores that chain
+  into data/processed when no branch exists, scores against it through
+  `load_captures`' movement fallback, and removes only the folders it created
+  (so gameday-state does not carry them): the per-event CLV works with no
+  branch. Cooper delegated the call that day; the answer was this, not
+  re-enabling. `tests/test_clv_reads_the_movement_chain.py` pins it.
 - **This lab has an end date, decided before the data existed: 2027-04-25.**
   Everything measurable on bought history has been measured and comes back
   null. The single open question is whether the model beats prices on data
