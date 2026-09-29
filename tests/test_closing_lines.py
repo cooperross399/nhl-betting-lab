@@ -510,6 +510,11 @@ def test_the_shrink_guard_takes_its_floor_from_the_file(tmp_path, monkeypatch) -
     monkeypatch.setattr(
         cl, "read_store", lambda *a, **k: real(*a, **k).head(1)
     )
-    with pytest.raises(ValueError, match="Refusing to write"):
+    # Refused at the read now, before anything is concatenated: the floor
+    # is compared with the rows read, not with those plus the new ones,
+    # which hid the loss whenever the append was as long as it (sweep 5).
+    from nhl_betting_lab.stores import CorruptStoreError
+
+    with pytest.raises(CorruptStoreError, match="parses to only 1 of its 10"):
         cl.append_captures(frame, processed_dir=tmp_path)
     assert path.read_bytes() == before

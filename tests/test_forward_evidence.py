@@ -401,7 +401,11 @@ def test_the_ledger_floor_is_not_taken_from_the_read_it_protects(
         fe, "read_store", lambda *args, **kwargs: real.head(3).copy()
     )
 
-    with pytest.raises(ValueError, match="append-only"):
+    # Refused at the read now (`_read_ledger`), before any day is settled:
+    # the same floor, checked where the short frame enters (sweep 5).
+    from nhl_betting_lab.stores import CorruptStoreError
+
+    with pytest.raises(CorruptStoreError, match="parses to only 3 of its 40"):
         _settle(tmp_path, _logs(shots=5.0), _games())
 
     assert existing_row_count(ledger) == 40, (

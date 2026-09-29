@@ -203,7 +203,9 @@ def test_a_refused_shrink_marks_no_day_and_the_day_is_retried(
         fe, "read_store", lambda *a, **k: real_read(*a, **k).head(0)
     )
 
-    with pytest.raises(ValueError, match="append-only"):
+    # Refused at the read (`_read_ledger`) since sweep 5, not at the write;
+    # what this pins is that the refusal, wherever it lands, marks nothing.
+    with pytest.raises(CorruptStoreError, match="parses to only 0 of its 3"):
         _settle(tmp_path, _games("2026-10-06", "2026-10-08"))
 
     assert _markers(tmp_path) == ["2026-10-06"], (
