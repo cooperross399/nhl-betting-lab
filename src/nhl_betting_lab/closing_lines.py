@@ -860,8 +860,16 @@ def measurement_bar_note() -> str:
     about the price: `run_gameday_card.py` freezes the snapshot from the
     unfiltered prices before `build_card` runs, so the count also holds the
     rungs one-stake-per-outcome demoted, markets eligibility kept off the
-    card (not allowlisted, or incomplete on a capped night), a blocked
-    card's opinions, and rows the puck-drop guard pulled.
+    card (not allowlisted, or incomplete on a capped night) and a blocked
+    card's opinions.
+
+    Rows the puck-drop guard pulled are the exception, and run the other
+    way. This note used to list them as counted, but `write_snapshot`
+    applies the same rule (`puck_drop.check_commence_time`) at the same
+    moment `build_card`'s guard does, and withholds every row whose game has
+    started or whose start cannot be confirmed. So such a game is in no
+    count at all: not in the snapshot, the ledger, either population or the
+    CLV opinions (sweep 4).
 
     The limits are strict: -160 and +600 are staked, -161 and +601 are not,
     which is what "shorter than" and "longer than" say
@@ -904,9 +912,13 @@ def measurement_bar_note() -> str:
         "is built, so this also counts every rung of a ladder after the one "
         "that took the outcome's single stake (one stake per outcome), "
         "markets the card could not use that day (not allowlisted, or "
-        "incomplete on a night the per-event fetch was capped), the "
-        "opinions of a day whose card was blocked, and rows whose stake the "
-        "puck-drop guard pulled. Every such opinion is still counted here."
+        "incomplete on a night the per-event fetch was capped), and the "
+        "opinions of a day whose card was blocked. Every such opinion is "
+        "still counted here. A game that had already started, or whose start "
+        "cannot be confirmed, when the snapshot was frozen is the other way "
+        "round: it is withheld from the snapshot by the same puck-drop rule "
+        "the card's guard applies, so it appears in neither population — "
+        "not among the opinions and not among these bets."
     )
 
 
@@ -1295,8 +1307,13 @@ def render_clv(report: dict, *, generated: str = "") -> str:
         # "Of those" and "The other", which split the no-close count: placed
         # between that count and them, they read as splitting this line.
         lines += [
+            # "Staked" was wrong here (sweep 4): the count is `_is_bet`, the
+            # measurement bar, which holds leans, stake-excluded markets and
+            # prices past the limits the card never stakes. Worded as the
+            # Bets note above words it (sweep 3, A1).
             f"- Not yet played: **{not_yet}** opinion(s), "
-            f"{int(counts.get('bets_not_yet_played', 0) or 0)} of them staked, "
+            f"{int(counts.get('bets_not_yet_played', 0) or 0)} of them "
+            f"clearing the measurement bar ({NOT_STAKED_PHRASE}), "
             "whose game starts after this report was built. None has a "
             "closing price yet and none is counted above; each is scored "
             "against its close once its game has started.",
