@@ -116,6 +116,19 @@ jobs:
         # written to restore_problem.txt, which the last gate reads after
         # every upload and turns into a red run. One thin run is then seen
         # the day it happens, not after the third. Free: GitHub's API only.
+        #
+        # BOUNDED, BECAUSE THE PAID FETCH COMES AFTER IT. Three attempts
+        # pause 10 s + 20 s after each failed call, and the restore walks the
+        # listed runs, so an artifact outage across a --limit 30 walk sleeps
+        # about 15 minutes of the job's 20 before "Capture prices": the job
+        # could be cancelled during or after the fetch, credits spent and
+        # nothing written. --limit 10 still spans the union's three carriers
+        # and the cancelled runs between them, and the step is cut at five
+        # minutes. continue-on-error keeps the capture running either way;
+        # a timed-out restore writes nothing to the problem file, so the gate
+        # at the end reads this step's outcome (`id: restore`) too.
+        id: restore
+        timeout-minutes: 5
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
@@ -125,7 +138,7 @@ jobs:
           mkdir -p data/processed
           : > restore_problem.txt
           python scripts/restore_state.py --artifact line-movement --dest data/processed \
-            --workflow line-movement.yml --union 3 \
+            --workflow line-movement.yml --union 3 --limit 10 \
             --attempts 3 --problem-file restore_problem.txt \
             || {
               echo "::warning::The previous captures could not be restored; this run starts the day's files afresh."
@@ -420,9 +433,14 @@ jobs:
         # the third: gh run download <run-id> -n line-movement from the last
         # run that restored normally, and union it (scripts/restore_state.py
         # union_csv). tests/test_a_line_movement_restore_that_could_not_ask_is_red.py
-        # runs it.
+        # runs it. A restore cut off by its timeout (or failing outright)
+        # left no sentence in the file, so its outcome is read as well.
         if: always()
         run: |
+          if [ "${{ steps.restore.outcome }}" = "failure" ]; then
+            echo "::error::Restore today's captures did not finish (it failed or hit its 5-minute limit), so this run may have started its day files afresh and uploaded a carrier missing earlier rounds. Three such runs in a row drop every earlier capture from the chain."
+            exit 1
+          fi
           if [ -s restore_problem.txt ]; then
             echo "::error::The previous captures were not fully restored this run, so it uploaded a carrier missing earlier rounds. Three such runs in a row drop every earlier capture from the chain. What could not be reached: $(tr '\n' ' ' < restore_problem.txt)"
             exit 1

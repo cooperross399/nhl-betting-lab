@@ -30,6 +30,7 @@ from pathlib import Path
 import pytest
 
 import test_line_movement_never_spends_its_cap_on_exhibitions as lm
+from conftest import FakeResponse, RecordingRequester
 from nhl_betting_lab.season import regular_season_games_still_to_play
 
 #: A board that has moved past tonight: one game, three weeks away.
@@ -64,6 +65,41 @@ def test_a_board_of_only_exhibitions_on_a_game_day_is_red(
     assert code == 2, out
     assert "2 regular-season game(s)" in out
     assert _per_event_requests(requester) == []
+
+
+def test_tonights_games_on_the_board_with_no_book_quoting_stay_green(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The board is not missing tonight's games: they were asked about and
+    no book quoted them. That is an absence, as it always was, not a lost
+    round, so the schedule is not consulted."""
+    board = [item for item in lm._board() if item["id"].startswith("reg")]
+
+    def unquoted(board_items):
+        by_id = {item["id"]: item for item in board_items}
+
+        def per_event(url: str, **_kwargs):
+            event_id = url.split("/events/", 1)[1].split("/", 1)[0]
+            return FakeResponse({**by_id[event_id], "bookmakers": []})
+
+        return RecordingRequester(
+            {"/events/": per_event, "/events": FakeResponse(board_items)}
+        )
+
+    monkeypatch.setattr(lm, "_requester", unquoted)
+    code, out, requester = lm._capture(tmp_path, monkeypatch, board=board)
+
+    assert code == 0, out
+    assert "::error::" not in out
+    assert "No rows returned; nothing written." in out
+    assert sorted(_per_event_requests_ids(requester)) == lm.REGULAR_IDS
+
+
+def _per_event_requests_ids(requester) -> list[str]:
+    return [
+        url.split("/events/", 1)[1].split("/", 1)[0]
+        for url in _per_event_requests(requester)
+    ]
 
 
 def test_after_every_scheduled_game_has_started_it_is_a_quiet_night(
@@ -149,3 +185,23 @@ def test_the_helper_counts_only_games_still_to_play(tmp_path: Path) -> None:
     assert regular_season_games_still_to_play(
         tonight, raw_dir=tmp_path / "nothing-cached"
     ) == 0
+
+
+def test_the_fetch_and_the_schedule_check_read_one_clock(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The started-game filter inside the fetch runs on the capture instant,
+    the same one the schedule check reads, so a game facing off between two
+    readings of the clock is never dropped by one and counted by the other."""
+    seen: list[object] = []
+    real = lm.odds_api.OddsApiProvider.fetch_player_props
+
+    def spy(self, **kwargs):
+        seen.append(kwargs.get("now"))
+        return real(self, **kwargs)
+
+    monkeypatch.setattr(lm.odds_api.OddsApiProvider, "fetch_player_props", spy)
+    code, out, _ = lm._capture(tmp_path, monkeypatch, board=LATER_ONLY)
+
+    assert code == 2, out
+    assert seen == [lm.NOW]

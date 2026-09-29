@@ -51,9 +51,17 @@ def _step(name: str) -> dict:
     return matches[0]
 
 
-def _gate(work: Path) -> subprocess.CompletedProcess:
+OUTCOME = "${{ steps.restore.outcome }}"
+
+
+def _gate(work: Path, restore: str = "success") -> subprocess.CompletedProcess:
+    """The gate's run block as GitHub renders it, with the restore step's
+    outcome substituted."""
+    script = _step(GATE)["run"]
+    assert OUTCOME in script
     return subprocess.run(
-        ["bash", "--noprofile", "--norc", "-eo", "pipefail", "-c", _step(GATE)["run"]],
+        ["bash", "--noprofile", "--norc", "-eo", "pipefail", "-c",
+         script.replace(OUTCOME, restore)],
         cwd=work, env=dict(os.environ), capture_output=True, text=True, timeout=60,
     )
 
@@ -131,3 +139,35 @@ def test_the_gate_runs_after_every_upload_whatever_failed_before_it() -> None:
     assert str(step.get("if", "")).startswith("always()")
     assert "continue-on-error" not in step
     assert PROBLEM_FILE in step["run"]
+
+
+def test_a_restore_that_timed_out_is_red_though_it_wrote_no_problem(
+    tmp_path: Path,
+) -> None:
+    """A step killed at its time limit writes nothing to the problem file;
+    its outcome is what says it did not finish."""
+    work = tmp_path / "run"
+    work.mkdir()
+    (work / PROBLEM_FILE).write_text("", encoding="utf-8")
+
+    gate = _gate(work, restore="failure")
+    assert gate.returncode != 0
+    assert "::error::Restore today's captures did not finish" in gate.stdout
+    assert _gate(work, restore="success").returncode == 0
+
+
+def test_the_restore_is_bounded_and_never_stops_the_capture() -> None:
+    """Three attempts pause 10 s + 20 s after each failed call. Unbounded,
+    an artifact outage across a long walk sleeps most of the job's 20
+    minutes before the paid fetch, and the job is cancelled after spending
+    credits and writing nothing."""
+    step = _step(RESTORE_STEP)
+    assert step.get("id") == "restore"
+    assert 0 < int(step.get("timeout-minutes", 0)) <= 5
+    assert step.get("continue-on-error") is True
+    assert "--limit 10" in " ".join(step["run"].split())
+    names = [s.get("name") for s in _steps()]
+    assert names.index(RESTORE_STEP) < names.index("Capture prices")
+    assert "steps.restore.outcome == 'failure'" not in str(
+        _step("Capture prices").get("if", "")
+    )

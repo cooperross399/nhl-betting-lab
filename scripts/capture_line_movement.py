@@ -157,6 +157,10 @@ def main(argv: list[str] | None = None) -> int:
             credit_cap=args.credit_cap,
             fetched_at=captured_at,
             league_days=league_days,
+            # One clock for the started-game filter and the schedule check
+            # below, so a game facing off between two readings of the clock
+            # cannot be dropped by one and counted by the other.
+            now=datetime.fromisoformat(captured_at),
         )
     except EmptySlateError as exc:
         # Not a fault, and not a red run: the league does not play every

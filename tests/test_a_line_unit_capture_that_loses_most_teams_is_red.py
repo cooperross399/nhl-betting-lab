@@ -39,6 +39,7 @@ def _run(
     capsys: pytest.CaptureFixture[str],
     *,
     answering: set[str],
+    unreadable: frozenset[str] = frozenset(),
 ) -> tuple[int, str, pd.DataFrame | None]:
     """The real script over 32 team pages, of which only `answering` load;
     every other page raises a 429."""
@@ -50,6 +51,10 @@ def _run(
         slug = url.split("/teams/", 1)[1].split("/", 1)[0]
         if slug not in answering:
             raise requests.HTTPError("429 Client Error: Too Many Requests")
+        if slug in unreadable:
+            # Arrived, but not a page the parser can read (a redesign, or
+            # an error page served with 200).
+            return "<html><body>Something went wrong</body></html>"
         return _page(players=[_player(1, "A B", "f1", "ev")], teams=teams)
 
     monkeypatch.setattr(module, "_fetch", fetch)
@@ -116,3 +121,29 @@ def test_every_page_read_says_nothing_extra(
     assert code == 0, out
     assert frame is not None and len(frame) == 32
     assert "::warning::" not in out and "::error::" not in out
+
+
+def test_a_page_that_arrived_but_could_not_be_read_is_a_lost_team(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    code, out, frame = _run(
+        tmp_path, monkeypatch, capsys, answering=set(SLUGS),
+        unreadable=frozenset({"team-03"}),
+    )
+
+    assert code == 0, out
+    assert frame is not None and len(frame) == 31
+    assert "::warning::The line units were NOT captured for 1 of 32 team(s)" in out
+    assert "(team-03)" in out
+
+
+def test_unreadable_pages_count_toward_the_half(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    code, out, _ = _run(
+        tmp_path, monkeypatch, capsys, answering=set(SLUGS),
+        unreadable=frozenset(SLUGS[1:18]),
+    )
+
+    assert code == 2, out
+    assert "::error::Only 15 of 32 team page(s) were read" in out
