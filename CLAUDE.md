@@ -1414,6 +1414,31 @@ Re-derive rather than trust if the data has moved.
   invent a violation no single market offered, because de-vigging is
   proportional). Keeping each provider market's rung apart instead is
   Cooper's call.
+- **2026-09-29 (#269), two defect fixes.** A Daily Faceoff team page served
+  200 without a `combinations` payload (a Next.js soft-error page) returned
+  no rows without raising, so it never counted as lost and #264's
+  half-the-teams rule could not fire; it now counts as lost, named in the
+  `::warning::`. A real team page with an empty `players` list (no lines
+  posted yet) is read, not lost, and is listed on a plain line, so a quiet
+  round stays green (whether it should warn is Cooper's call). And the
+  forward report defined an unsettleable row only as a game with no final
+  result; it now also names rows that cannot be settled against a found,
+  final game (a name matching two players, unrecorded goalie ice time, a
+  missing line or stat, an unknown selection, a level final), from one
+  helper for both branches. No number moved.
+- **2026-09-29 (#270), a defect fix: Gameday Refresh's soft Fetch results
+  step is bounded.** It had no step timeout inside the 45-minute job, so an
+  NHL API outage (four attempts with backoff and a 30-second client timeout
+  per request, some 160 live requests before any boxscore) could use up the
+  job and leave the day with no card and no snapshot, though the step is
+  documented as soft. The fetch now runs under `timeout 18m` (the datasets
+  are still rebuilt on the restored cache, and a `::warning::` says so), the
+  step has `timeout-minutes: 20` as a backstop, and "Record what went wrong"
+  treats a `cancelled` outcome like `failure`, so the run is degraded and the
+  15:00 backup runs. The heaviest healthy run on today's command took 6.3
+  minutes (600 new boxscores, 2026-08-28). Owner items: a circuit breaker in
+  `fetch_nhl_data.py`, and carrying `data/raw/nhl/club_schedule` in
+  gameday-state (about 128 live requests a run).
 - **2026-09-25, a defect fix recorded as `docs/when_this_ends.md` requires:
   the card refuses stale prices.** The policy's `max_provider_run_age_hours`
   (12, policy-wide and on `the_odds_api`) was parsed and never applied —
