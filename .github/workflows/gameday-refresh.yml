@@ -172,13 +172,25 @@ jobs:
           # its status line names no ref. Such a line costs at most one
           # duplicate run on the day this landed; trusting it would cost the
           # day's card and its frozen opinions.
-          if [ "$FEED_DAY" = "$DAY" ] && [ "$DEGRADED" = "false" ] \
+          #
+          # And only a card BUILT for today. The status was dated by the clock
+          # when it was published, which is the last thing a run does: a main
+          # dispatch that built a clean card at 23:56 ET and published at
+          # 00:03 stamped the next day, and that day's 13:30 and 15:00 runs
+          # both stood down, green, with no card and no frozen snapshot. The
+          # publish step now records the league day the card was built for
+          # as `card_day`. A status with none (no card on disk, or written
+          # before 2026-09-29) never counts; like the ref check, that costs at
+          # most one duplicate run on the day this lands.
+          FEED_CARD_DAY=$(printf '%s' "$STATUS" | jq -r '.card_day // ""')
+          if [ "$FEED_DAY" = "$DAY" ] && [ "$FEED_CARD_DAY" = "$DAY" ] \
+             && [ "$DEGRADED" = "false" ] \
              && [ "$FEED_REF" = "$RUN_REF" ]; then
             echo "already=true" >> "$GITHUB_OUTPUT"
             echo "Today's card ($DAY) is already published and clean. Skipping."
           else
             echo "already=false" >> "$GITHUB_OUTPUT"
-            echo "Feed day '$FEED_DAY' (degraded=$DEGRADED, ref='$FEED_REF') is not a clean card for $DAY from the default branch. Running."
+            echo "Feed day '$FEED_DAY' (card built for '$FEED_CARD_DAY', degraded=$DEGRADED, ref='$FEED_REF') is not a clean card for $DAY from the default branch. Running."
           fi
 
   refresh:
@@ -193,6 +205,13 @@ jobs:
         uses: actions/checkout@v4
         with:
           persist-credentials: false
+
+      - name: Note the league day this run is for
+        # Once, at the start. The card-feed status is dated by the card's own
+        # league day, and this is what it falls back to when there is no
+        # card on disk to read it from; never the clock at publish, which on
+        # a late dispatch is already the next day.
+        run: TZ=America/New_York date +%F > run_league_day.txt
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -873,7 +892,27 @@ jobs:
           # authenticates its two git calls itself. The token is the run's
           # own, masked in logs, and dies with the runner.
           REMOTE="https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}"
-          DAY=$(TZ=America/New_York date +%F)
+          # Dated by the league day the card was built for: its generated_at
+          # in America/New_York. This step runs last, after the state upload
+          # and the post, and the clock here was the date until 2026-09-29:
+          # a card built at 23:56 ET and published at 00:03 was stamped the
+          # next day, and stood that day's runs down (see the precheck). With
+          # no card on disk, the day this run started on; the clock now only
+          # if even that is missing. `card_day` stays empty without a card,
+          # and the precheck never counts a status whose card_day is not
+          # today.
+          CARD_DAY=""
+          GENERATED=$(jq -r '.generated_at // ""' data/outputs/gameday_card.json 2>/dev/null || true)
+          if [ -n "$GENERATED" ]; then
+            CARD_DAY=$(TZ=America/New_York date -d "$GENERATED" +%F 2>/dev/null || true)
+          fi
+          DAY="$CARD_DAY"
+          if [ -z "$DAY" ] && [ -s run_league_day.txt ]; then
+            DAY=$(head -n 1 run_league_day.txt)
+          fi
+          if [ -z "$DAY" ]; then
+            DAY=$(TZ=America/New_York date +%F)
+          fi
           RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           DECISION="${{ steps.post.outputs.decision || 'none' }}"
           if [ ! -f card_comment.md ]; then
@@ -881,13 +920,15 @@ jobs:
           fi
           jq -n \
             --arg date "$DAY" \
+            --arg card_day "$CARD_DAY" \
             --arg decision "$DECISION" \
             --arg degraded "${{ steps.final.outputs.degraded || 'unknown' }}" \
             --arg empty_slate "${{ steps.prices.outputs.empty_slate || 'false' }}" \
             --arg run_url "$RUN_URL" \
             --arg ref "${{ github.ref }}" \
-            '{date: $date, decision: $decision, degraded: $degraded,
-              empty_slate: $empty_slate, run_url: $run_url, ref: $ref}' > card_status.json
+            '{date: $date, card_day: $card_day, decision: $decision,
+              degraded: $degraded, empty_slate: $empty_slate,
+              run_url: $run_url, ref: $ref}' > card_status.json
           BLOB_MD=$(git hash-object -w card_comment.md)
           BLOB_JSON=$(git hash-object -w card_status.json)
           ENTRIES=$(printf '100644 blob %s\tlatest_card_comment.md\n100644 blob %s\tlatest_status.json' \

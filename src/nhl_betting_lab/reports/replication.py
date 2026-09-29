@@ -42,6 +42,7 @@ from pathlib import Path
 from typing import Any
 
 from nhl_betting_lab.config import OUTPUTS_DIR
+from nhl_betting_lab.reports.player_props_backtest import window_phrase
 from nhl_betting_lab.stats import NO_DEMONSTRATED_EDGE, bets_needed_to_detect
 
 
@@ -85,6 +86,13 @@ class ReplicationReport:
     test_label: str
     markets: list[MarketReplication] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
+    # Which snapshot window each payload measured, as the backtest wrote it.
+    # Every report states the window it describes; this one used to name only
+    # the two file stems.
+    discovery_phase: str = ""
+    discovery_phase_hours: float | None = None
+    test_phase: str = ""
+    test_phase_hours: float | None = None
 
     @property
     def replicated_markets(self) -> tuple[str, ...]:
@@ -134,12 +142,40 @@ class ReplicationReport:
                 "considerably more than one window measured precisely, and it "
                 "is still two windows."
             )
-        names = ", ".join(f"`{item.market}`" for item in discovered)
-        return (
-            f"{names} survived on **{self.discovery_label}** and did **not** "
-            f"replicate on **{self.test_label}**. The first result is not yet "
-            f"evidence of anything durable: {NO_DEMONSTRATED_EDGE}."
+        # A SURVIVOR THE TEST WINDOW WAS TOO THIN FOR WAS NOT TESTED. Every
+        # survivor that did not replicate used to be headlined "did **not**
+        # replicate", including one with fewer than MINIMUM_TEST_BETS test
+        # bets, whose own reason says calling it a failure is the same
+        # over-reading in the other direction. With blocked_shots on 2,700
+        # discovery bets and 12 test bets beside points on 3,400 in both, the
+        # headline read "`blocked_shots` survived on **D** and did **not**
+        # replicate on **T**". "Did not replicate" is now kept for a survivor
+        # that was tested and came back not confirmed or contradicted.
+        sentences = []
+        failed = [
+            item for item in discovered
+            if item.state in (NOT_CONFIRMED, CONTRADICTED)
+        ]
+        untested = [item for item in discovered if item.state == UNTESTABLE]
+        if failed:
+            names = ", ".join(f"`{item.market}`" for item in failed)
+            sentences.append(
+                f"{names} survived on **{self.discovery_label}** and did "
+                f"**not** replicate on **{self.test_label}**."
+            )
+        if untested:
+            names = ", ".join(f"`{item.market}`" for item in untested)
+            sentences.append(
+                f"{names} survived on **{self.discovery_label}** and "
+                f"{'was' if len(untested) == 1 else 'were'} not tested on "
+                f"**{self.test_label}** (too few bets), which is not a "
+                "failure to replicate."
+            )
+        sentences.append(
+            "The first result is not yet evidence of anything durable: "
+            f"{NO_DEMONSTRATED_EDGE}."
         )
+        return " ".join(sentences)
 
 
 def _interval(entry: Any) -> dict[str, Any]:
@@ -161,6 +197,88 @@ def bets_measured(payload: Mapping[str, Any]) -> int:
     )
 
 
+def payload_phase(payload: Mapping[str, Any]) -> str:
+    """The snapshot window a backtest payload measured (`late`, `card`...),
+    or "" when it names none."""
+    return str(payload.get("phase") or "").strip()
+
+
+def payload_phase_hours(payload: Mapping[str, Any]) -> float | None:
+    hours = payload.get("phase_hours")
+    return float(hours) if isinstance(hours, (int, float)) else None
+
+
+#: Keys that differ between two runs of one measurement. A backtest payload
+#: carries no label, so a re-run of one window under another `--label`
+#: differs from the first only here.
+RUN_ONLY_KEYS = frozenset({"generated_at"})
+
+
+def not_held_out(
+    discovery_path: Path,
+    discovery: Mapping[str, Any],
+    test_path: Path,
+    test: Mapping[str, Any],
+) -> str:
+    """Why the test window is not a held-out window of the same question,
+    or "" when it is.
+
+    A WINDOW COMPARED WITH ITSELF REPLICATES EVERYTHING AND TESTS NOTHING.
+    Nothing here used to compare the two windows at all, and `compare` reads
+    only `by_market`. One file passed as both --discovery and --test was
+    recorded with every survivor `replicated` ("`points` held on
+    **player_props_backtest_2025-26** as well as
+    **player_props_backtest_2025-26**"). A `late` payload (4.0 hours before
+    face-off) against a `card` one (9.5 hours) was also recorded
+    `replicated`, and the record named neither window. The lab treats a
+    wager priced at two distances from face-off as two different questions,
+    and `allowlist_evidence` reads `replicated` as "a held-out window
+    confirmed it". So a replication now needs two different files, two
+    different measurements, and one named phase shared by both.
+    """
+    try:
+        same_file = discovery_path.resolve() == test_path.resolve()
+    except OSError:
+        same_file = False
+    if same_file:
+        return (
+            f"{discovery_path} and {test_path} are the same file. A window "
+            "compared with itself agrees with itself; nothing was held out."
+        )
+
+    def measurement(payload: Mapping[str, Any]) -> dict[str, Any]:
+        return {k: v for k, v in payload.items() if k not in RUN_ONLY_KEYS}
+
+    if measurement(discovery) == measurement(test):
+        return (
+            f"{discovery_path} and {test_path} hold the same measurement "
+            "(they differ at most in when they were generated), so they are "
+            "one window under two names; nothing was held out."
+        )
+    unnamed = [
+        str(path)
+        for path, payload in ((discovery_path, discovery), (test_path, test))
+        if not payload_phase(payload)
+    ]
+    if unnamed:
+        return (
+            "these windows name no snapshot window (`phase`), so there is no "
+            "telling whether both measured the same question: "
+            + ", ".join(unnamed)
+            + ". Re-run the backtest with an explicit --phase."
+        )
+    first, second = payload_phase(discovery), payload_phase(test)
+    if first != second:
+        return (
+            f"the discovery window measured the `{first}` phase "
+            f"({discovery_path}) and the test window the `{second}` phase "
+            f"({test_path}). A wager priced at two distances from face-off is "
+            "two different questions; re-run one backtest with the other's "
+            "--phase."
+        )
+    return ""
+
+
 def compare(
     discovery: Mapping[str, Any],
     test: Mapping[str, Any],
@@ -176,6 +294,10 @@ def compare(
         ),
         discovery_label=discovery_label,
         test_label=test_label,
+        discovery_phase=payload_phase(discovery),
+        discovery_phase_hours=payload_phase_hours(discovery),
+        test_phase=payload_phase(test),
+        test_phase_hours=payload_phase_hours(test),
     )
     discovery_markets = discovery.get("by_market") or {}
     test_markets = test.get("by_market") or {}
@@ -295,6 +417,11 @@ def _roi(value: float | None) -> str:
     return f"{value:+.1%}" if isinstance(value, float) else "-"
 
 
+def _window_suffix(phase: str, hours: float | None) -> str:
+    phrase = window_phrase({"phase": phase, "phase_hours": hours})
+    return f" ({phrase})" if phrase else " (snapshot window not recorded)"
+
+
 def render_replication(report: ReplicationReport) -> str:
     lines = [
         "# Replication",
@@ -307,8 +434,10 @@ def render_replication(report: ReplicationReport) -> str:
         ),
         "",
         f"- Generated: {report.generated_at}",
-        f"- Discovery window: **{report.discovery_label}**",
-        f"- Test window: **{report.test_label}**",
+        f"- Discovery window: **{report.discovery_label}**"
+        + _window_suffix(report.discovery_phase, report.discovery_phase_hours),
+        f"- Test window: **{report.test_label}**"
+        + _window_suffix(report.test_phase, report.test_phase_hours),
         "",
         report.headline(),
         "",
@@ -381,7 +510,11 @@ def save_replication(
             {
                 "generated_at": report.generated_at,
                 "discovery_label": report.discovery_label,
+                "discovery_phase": report.discovery_phase,
+                "discovery_phase_hours": report.discovery_phase_hours,
                 "test_label": report.test_label,
+                "test_phase": report.test_phase,
+                "test_phase_hours": report.test_phase_hours,
                 "headline": report.headline(),
                 "replicated_markets": list(report.replicated_markets),
                 "markets": [item.__dict__ for item in report.markets],

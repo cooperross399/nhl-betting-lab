@@ -45,6 +45,7 @@ import yaml
 
 from nhl_betting_lab.config import PROJECT_ROOT
 from test_a_blocked_card_is_a_degraded_run import (
+    _card_on_disk,
     _bash,
     _git_env,
     _outputs,
@@ -330,6 +331,7 @@ def _branch_run_then_main_precheck(tmp_path: Path) -> str:
     (work / "data" / "processed").mkdir(parents=True)
     (work / "data" / "outputs").mkdir(parents=True)
     (work / "card_comment.md").write_text("a card built by unreviewed code\n")
+    _card_on_disk(work, DAY)
     (work / "data" / "processed" / "forward_evidence.csv").write_text("branch,rows\n")
     step = _writers()[PUBLISH]
     if evaluate(_condition(step), _context(BRANCH)):
@@ -347,6 +349,7 @@ def test_a_clean_card_published_by_main_still_stands_the_backup_down(
     work = tmp_path / "work"
     (work / "data" / "outputs").mkdir(parents=True)
     (work / "card_comment.md").write_text("card\n")
+    _card_on_disk(work, DAY)
     status = _publish(work, tmp_path, "false", DAY, ref=MAIN)
     assert status["ref"] == MAIN
     assert _precheck(tmp_path, DAY) == "true"
@@ -401,7 +404,8 @@ def _precheck_as(tmp_path: Path, run_ref: str) -> tuple[str, str]:
     # no `ref` at all.
     '{"date": "%s", "degraded": "false", "decision": "post"}' % DAY,
     # A status that names a ref, but not the default branch.
-    '{"date": "%s", "degraded": "false", "ref": "%s"}' % (DAY, BRANCH),
+    '{"date": "%s", "card_day": "%s", "degraded": "false", "ref": "%s"}'
+    % (DAY, DAY, BRANCH),
 ])
 def test_the_precheck_counts_only_a_card_the_default_branch_published(
     tmp_path: Path, status: str
@@ -413,14 +417,14 @@ def test_the_precheck_counts_only_a_card_the_default_branch_published(
 def test_the_precheck_reads_the_status_line_it_is_given(tmp_path: Path) -> None:
     """The control for the test above: the same hand-written status with the
     default branch's ref does stand the backup down."""
-    _push_status(tmp_path, '{"date": "%s", "degraded": "false", "ref": "%s"}' % (DAY, MAIN))
+    _push_status(tmp_path, '{"date": "%s", "card_day": "%s", "degraded": "false", "ref": "%s"}' % (DAY, DAY, MAIN))
     assert _precheck(tmp_path, DAY) == "true"
 
 
 def test_the_precheck_compares_against_its_own_ref(tmp_path: Path) -> None:
     """A schedule runs on the default branch, whatever it is called; the
     comparison is against that ref, not a hard-coded `main`."""
-    _push_status(tmp_path, '{"date": "%s", "degraded": "false", "ref": "%s"}' % (DAY, MAIN))
+    _push_status(tmp_path, '{"date": "%s", "card_day": "%s", "degraded": "false", "ref": "%s"}' % (DAY, DAY, MAIN))
     assert _precheck_as(tmp_path, "refs/heads/trunk")[0] == "false"
     assert _precheck_as(tmp_path, MAIN)[0] == "true"
 

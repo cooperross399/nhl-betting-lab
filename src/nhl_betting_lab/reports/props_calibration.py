@@ -111,10 +111,15 @@ class MarketCalibration:
     corrected_table: list[Any] = field(default_factory=list)
     volume_rows: list[dict[str, Any]] = field(default_factory=list)
     verdict: str = ""
-    #: The ice-time-conditional variant, measured the same way. See
-    #: `docs/why_ice_time_gets_its_own_correction.md` for the mechanism.
+    #: The ice-time-conditional variant, measured the same way and indexed
+    #: on EXPECTED ice time. See `docs/why_ice_time_gets_its_own_correction.md`
+    #: for the mechanism. None, with no rows, when the samples carry no
+    #: expected ice time: the variant is then not measured at all.
     grouped_brier: float | None = None
     grouped_volume_rows: list[dict[str, Any]] = field(default_factory=list)
+    #: The column the grouped correction was bucketed on, or None when it
+    #: was not measured. Never `toi_seconds`.
+    grouped_index: str | None = None
     #: Distinct (game, player) among the scored samples. `samples` counts
     #: line samples, two to five per player-game; this counts predictions.
     player_games: int = 0
@@ -318,11 +323,31 @@ def measure_market(
         )
     ordered = subset.sort_values(["date", "game_id", "player_id", "line"])
     is_goalie = market == "goalie_saves"
+    # The grouped correction's bucket index is EXPECTED ice time or nothing,
+    # exactly as in `correction_timeline`: "conditioned on what, known when?"
+    # Actual ice time is partly an outcome (overtime, blowouts, injuries, a
+    # pulled goalie), and indexed on it the by-TOI correction "won" +162.8u
+    # that it lost once indexed on what a card can know
+    # (docs/why_the_toi_correction_does_not_ship.md). This bucketed on
+    # `toi_seconds` even when `expected_toi_seconds` was present, and the
+    # report printed "the ice-time-conditional correction beats the pooled
+    # curve" for every market on the strength of that hindsight.
+    grouped_index = (
+        "expected_toi_seconds" if "expected_toi_seconds" in ordered.columns else None
+    )
+    expected_toi = (
+        ordered[grouped_index].astype(float).tolist()
+        if grouped_index
+        else [None] * len(ordered)
+    )
+    # (game, player, actual ice time, expected ice time) per sample. The
+    # actual feeds only the diagnostic table; the expected, the correction.
     keys = list(
         zip(
             ordered["game_id"].tolist(),
             ordered["player_id"].tolist(),
             ordered["toi_seconds"].tolist(),
+            expected_toi,
         )
     )
     rows = [
@@ -330,21 +355,26 @@ def measure_market(
             str(row.date),
             float(row.model_probability),
             bool(row.outcome),
-            _bucket_for(float(row.toi_seconds), is_goalie),
+            _bucket_for(expected, is_goalie) if expected is not None else "",
         )
-        for row in ordered.itertuples()
+        for row, expected in zip(ordered.itertuples(), expected_toi)
     ]
     result: WalkForwardResult = walk_forward_calibrate(
         rows, minimum_fit_samples=minimum_fit_samples, refit_every=refit_every
     )
-    # The same samples, corrected per ice-time bucket instead of pooled. Both
-    # are reported: a variant that is only ever shown when it wins is not a
-    # measurement, it is a selection.
-    grouped: WalkForwardResult = walk_forward_calibrate(
-        rows,
-        minimum_fit_samples=minimum_fit_samples,
-        refit_every=refit_every,
-        grouped=True,
+    # The same samples, corrected per expected-ice-time bucket instead of
+    # pooled. Both are reported: a variant that is only ever shown when it
+    # wins is not a measurement, it is a selection. Without expected ice time
+    # the variant is not measured, rather than measured on hindsight.
+    grouped: WalkForwardResult | None = (
+        walk_forward_calibrate(
+            rows,
+            minimum_fit_samples=minimum_fit_samples,
+            refit_every=refit_every,
+            grouped=True,
+        )
+        if grouped_index
+        else None
     )
     # The correction reported is the last one fitted, i.e. the one a card
     # generated today would use. Reporting an average of corrections would
@@ -358,7 +388,7 @@ def measure_market(
     # was dropped from the front of the date-sorted series, so the tail
     # matches — recomputed and checked by `scored_keys`, not assumed.
     pooled_keys = scored_keys(rows, result, keys)
-    grouped_keys = scored_keys(rows, grouped, keys)
+    grouped_keys = scored_keys(rows, grouped, keys) if grouped else []
     return MarketCalibration(
         market=market,
         samples=len(result.scored),
@@ -370,21 +400,30 @@ def measure_market(
         correction=correction,
         raw_table=reliability_table(result.raw),
         corrected_table=reliability_table(result.corrected),
+        # A diagnostic on ACTUAL ice time: where the defect lives, in
+        # hindsight. No correction is indexed on it and no verdict read off it.
         volume_rows=_volume_rows(
             result.scored,
-            [seconds for _, _, seconds in pooled_keys],
+            [actual for _, _, actual, _ in pooled_keys],
             is_goalie=is_goalie,
-            player_games=[(game, player) for game, player, _ in pooled_keys],
+            player_games=[(game, player) for game, player, _, _ in pooled_keys],
         ),
         verdict=calibration_verdict(result),
-        grouped_brier=brier_score(grouped.corrected),
-        grouped_volume_rows=_volume_rows(
-            grouped.scored,
-            [seconds for _, _, seconds in grouped_keys],
-            is_goalie=is_goalie,
-            player_games=[(game, player) for game, player, _ in grouped_keys],
+        grouped_brier=brier_score(grouped.corrected) if grouped else None,
+        grouped_volume_rows=(
+            _volume_rows(
+                grouped.scored,
+                [expected for _, _, _, expected in grouped_keys],
+                is_goalie=is_goalie,
+                player_games=[
+                    (game, player) for game, player, _, _ in grouped_keys
+                ],
+            )
+            if grouped
+            else []
         ),
-        player_games=len({(game, player) for game, player, _ in pooled_keys}),
+        grouped_index=grouped_index,
+        player_games=len({(game, player) for game, player, _, _ in pooled_keys}),
     )
 
 
@@ -441,6 +480,11 @@ def build_calibration_report(
         "Both a pooled correction and an ice-time-conditional one are shown "
         "for every market, whether or not the conditional one wins. A variant "
         "reported only when it wins is a selection, not a measurement.",
+        "The ice-time-conditional correction is bucketed on EXPECTED ice "
+        "time, the only ice time a card can know. The table by actual ice "
+        "time is hindsight — actual minutes are partly an outcome — and is "
+        "shown as a diagnostic of where the defect lives, never as evidence "
+        "for a correction (`docs/why_the_toi_correction_does_not_ship.md`).",
         "A sample is one line of one player-game: every player-game is priced "
         "at each line of a fixed grid, two to five of them, and they settle "
         "on one stat line. Player-games are printed beside the samples, the "
@@ -501,11 +545,12 @@ def render_calibration(report: CalibrationReport) -> str:
             "",
             (
                 "| Market | Samples | Player-games | Warm-up dropped | Brier raw "
-                "| Brier pooled | Brier by ice time | Correction |"
+                "| Brier pooled | Brier by ice time (expected) | Correction |"
             ),
             (
                 "|:-------|--------:|-------------:|----------------:|"
-                "----------:|-------------:|------------------:|:-----------|"
+                "----------:|-------------:|-----------------------------:|"
+                ":-----------|"
             ),
         ]
     )
@@ -562,7 +607,15 @@ def render_calibration(report: CalibrationReport) -> str:
         if item.volume_rows:
             lines.extend(
                 [
-                    "### By ice time — where a count model's defects actually live",
+                    "### By ice time — actual ice time (hindsight), a diagnostic",
+                    "",
+                    (
+                        "Bucketed on the minutes each player actually played, "
+                        "which a card cannot know: actual ice time is partly an "
+                        "outcome. This shows where a count model's defects "
+                        "live. It is not evidence for any correction, and none "
+                        "is indexed on it."
+                    ),
                     "",
                     (
                         "| Ice time | Samples | Player-games | Predicted (raw) "
@@ -595,7 +648,21 @@ def render_calibration(report: CalibrationReport) -> str:
                 ]
             )
 
-        if item.grouped_volume_rows:
+        if item.grouped_index is None:
+            lines.extend(
+                [
+                    "### The ice-time-conditional correction — not measured",
+                    "",
+                    (
+                        "These samples carry no `expected_toi_seconds`, so a "
+                        "per-ice-time correction cannot be indexed on "
+                        "information a card has. It is not measured rather "
+                        "than measured on actual ice time, which is hindsight."
+                    ),
+                    "",
+                ]
+            )
+        elif item.grouped_volume_rows:
             verdict = (
                 "beats the pooled curve"
                 if item.grouped_beats_pooled
@@ -603,20 +670,20 @@ def render_calibration(report: CalibrationReport) -> str:
             )
             lines.extend(
                 [
-                    "### The same buckets, corrected per ice-time bucket",
+                    "### Corrected per expected ice-time bucket",
                     "",
                     (
                         f"Brier {_fmt(item.grouped_brier)} against "
                         f"{_fmt(item.corrected_brier)} pooled, so the "
-                        f"ice-time-conditional correction {verdict} here. "
-                        "The mechanism is in "
+                        "correction fitted per expected-ice-time bucket "
+                        f"{verdict} here. The mechanism is in "
                         "`docs/why_ice_time_gets_its_own_correction.md`; the "
                         "decision to use it belongs to the price-based "
                         "backtest, not to this table."
                     ),
                     "",
-                    "| Ice time | Samples | Player-games | Predicted | Observed |",
-                    "|:---------|--------:|-------------:|----------:|---------:|",
+                    "| Expected ice time | Samples | Player-games | Predicted | Observed |",
+                    "|:------------------|--------:|-------------:|----------:|---------:|",
                 ]
             )
             for row in item.grouped_volume_rows:
@@ -664,6 +731,7 @@ def save_calibration_report(
                 "improved": item.improved,
                 "grouped_brier": item.grouped_brier,
                 "grouped_beats_pooled": item.grouped_beats_pooled,
+                "grouped_index": item.grouped_index,
                 "grouped_volume_rows": item.grouped_volume_rows,
                 "verdict": item.verdict,
                 "volume_rows": item.volume_rows,
