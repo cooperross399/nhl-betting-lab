@@ -224,6 +224,16 @@ def main(argv: list[str] | None = None) -> int:
         default=0,
         help="Stop after this many new boxscore fetches. 0 means no limit.",
     )
+    parser.add_argument(
+        "--schedules-only",
+        action="store_true",
+        help=(
+            "Cache the club schedules and nothing else: no boxscores, no "
+            "rosters, no registry. Without --seasons, only the season being "
+            "played. Line Movement runs this so its preseason screen has a "
+            "schedule to read."
+        ),
+    )
     args = parser.parse_args(argv)
 
     seasons = args.seasons if args.seasons else list(DEFAULT_SEASONS)
@@ -231,6 +241,30 @@ def main(argv: list[str] | None = None) -> int:
     tally: Tally = {}
     sightings: Sightings = {}
     now = datetime.now(timezone.utc)
+    if args.schedules_only:
+        # Thirty-two free requests on a cold runner. Line Movement's runner
+        # restores only its own captures, so without this the preseason
+        # screen (`nhl_betting_lab.preseason_screen`) finds no schedule and
+        # abstains, and an exhibition game can take a place under the
+        # capture's credit cap that a regular-season game needed. A club
+        # whose request fails leaves the cache incomplete, and the screen
+        # abstains on that too.
+        if args.start or args.end:
+            parser.error("--schedules-only reads seasons, not a date window.")
+        wanted = args.seasons if args.seasons else [max(DEFAULT_SEASONS)]
+        for season in wanted:
+            print(f"Season {season}: caching club schedules")
+            _game_ids_for_season(
+                season, polite_seconds=args.polite_seconds, tally=tally,
+                sightings=sightings, now=now,
+            )
+        print(f"{len(sightings)} regular-season game ids scheduled.")
+        print(
+            "Fetched schedules only. No odds were requested, no credit was "
+            "spent, and no bet was placed."
+        )
+        return _verdict(tally)
+
     if args.start or args.end:
         if not (args.start and args.end):
             parser.error("--from and --to must be given together.")

@@ -54,20 +54,8 @@ from nhl_betting_lab.markets import market_for_provider_key
 from nhl_betting_lab.providers import odds_api
 from nhl_betting_lab.providers.odds_api import EmptySlateError
 from nhl_betting_lab.providers.env_file import load_provider_env
-from nhl_betting_lab.providers.team_names import (
-    build_team_name_map,
-    resolve_team,
-    saved_team_name_map,
-)
-from nhl_betting_lab.season import (
-    EXPECTED_CLUBS,
-    LEAGUE_TIMEZONE,
-    game_date,
-    known_regular_season_games,
-    schedule_cache_is_complete,
-    scheduled_regular_season_starts,
-    season_id,
-)
+from nhl_betting_lab.preseason_screen import preseason_screen
+from nhl_betting_lab.season import LEAGUE_TIMEZONE, scheduled_regular_season_starts
 from nhl_betting_lab.reports.provider_shadow import (
     build_shadow_summary,
     save_shadow_reports,
@@ -110,73 +98,6 @@ def _scheduled_regular_season_games(days: Iterable[str]) -> int:
     return sum(
         1 for day, _home, _away in scheduled_regular_season_starts()
         if day in wanted
-    )
-
-
-def _preseason_screen(today: str) -> tuple[odds_api.EventScreen | None, str]:
-    """The card's preseason screen, as a filter over posted events, and a
-    line saying what it will do. None when it must abstain.
-
-    `run_gameday_card.py` drops every price row for a game the cached
-    regular-season schedule does not know, but only after this script has
-    spent the per-event cap front-to-back in face-off order. On a mixed night
-    (2026-09-29 has both, and books post exhibition lines) an early
-    exhibition game took one of the eight places 320 credits buy, the card
-    dropped it, and every per-event market for the regular-season game it
-    displaced read "priced for k of N": INCOMPLETE, excluded, and absent
-    from the frozen snapshot, in a run that stayed clean. So the same rule
-    runs here, before either fetch sorts and caps.
-
-    It is the card's rule exactly, so the two cannot disagree about a game:
-    the same readers (`known_regular_season_games`, the same team-name map
-    built the same way), the same (league date, HOME, AWAY) key, and the
-    same failure direction. With a cache that does not hold every club's own
-    file for this season it abstains, because a hole and an exhibition game
-    look identical to it; with no cache it abstains; and past the last date
-    the cache knows it keeps the game. A leaked exhibition costs one place
-    under the cap, and the card still drops it; a dropped real game would be
-    a game the card never sees. `known_regular_season_games` is used, and
-    not `scheduled_regular_season_starts`, because it is the function the
-    card's screen reads. Whatever it decides about a game (a called-off one
-    included), the two screens read one function and so decide alike. A
-    game screened here and kept by the card would leave its bulk rows in
-    the card's slate with no per-event rows beside them.
-    """
-    schedule = known_regular_season_games()
-    if not schedule:
-        return None, (
-            "No regular-season schedule is cached, so nothing was screened "
-            "for preseason: the per-event cap is spent in plain face-off "
-            "order, and an exhibition game on the board can take a place a "
-            "regular-season game needed."
-        )
-    complete, clubs = schedule_cache_is_complete(season=season_id(today))
-    if not complete:
-        return None, (
-            f"WARNING: the club-schedule cache holds this season's own "
-            f"schedule for only {clubs} of {EXPECTED_CLUBS} clubs, so "
-            "nothing was screened for preseason — a hole in the cache and "
-            "an exhibition game look identical, and the card abstains on "
-            "the same cache. The per-event cap is spent in plain face-off "
-            "order."
-        )
-    team_names = {**saved_team_name_map(), **build_team_name_map()}
-    known_until = max(day for day, _, _ in schedule)
-
-    def keep(event) -> bool:
-        day = game_date(event.get("commence_time"))
-        if day > known_until:
-            return True  # abstain: the cache cannot judge this date
-        return (
-            day,
-            resolve_team(event.get("home_team", ""), team_names) or "",
-            resolve_team(event.get("away_team", ""), team_names) or "",
-        ) in schedule
-
-    return keep, (
-        "Preseason screen: posted events the cached regular-season schedule "
-        f"does not know (through {known_until}) are dropped before either "
-        "fetch applies a cap, by the card's own rule."
     )
 
 
@@ -382,7 +303,9 @@ def main(argv: list[str] | None = None) -> int:
         # card screens the staged rows again, so on its own slate the count
         # "priced for k of N" is the same with this screen as without it;
         # what changes is which games the per-event cap is spent on.
-        screen, screen_note = _preseason_screen(
+        # The card's rule, from the one module every cap-spending script
+        # reads (`nhl_betting_lab.preseason_screen`).
+        screen, screen_note = preseason_screen(
             datetime.now(LEAGUE_TIMEZONE).date().isoformat()
         )
         print(screen_note)

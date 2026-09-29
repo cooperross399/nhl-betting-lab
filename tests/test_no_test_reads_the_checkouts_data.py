@@ -211,6 +211,20 @@ CHECKOUT_SENSITIVE_TESTS: tuple[str, ...] = (
     "tests/test_a_failed_per_event_fetch_is_a_degraded_run.py::test_the_run_health_follows_the_per_event_fetch",
     "tests/test_an_unasked_market_never_reads_as_unquoted.py::test_the_scheduled_bulk_only_run_says_it_never_asked_for_per_event_markets",
     "tests/test_an_unasked_market_never_reads_as_unquoted.py::test_a_market_the_run_asked_for_and_nobody_quoted_still_reads_as_absent",
+    # The club-schedule cache and the team-name map, through the line
+    # capture's preseason screen: with a real season cached, every fake game
+    # here would be screened out before a request was made.
+    "tests/test_line_movement_never_spends_its_cap_on_exhibitions.py::test_on_a_mixed_night_the_cap_buys_the_regular_season_games",
+    "tests/test_line_movement_never_spends_its_cap_on_exhibitions.py::test_an_incomplete_schedule_cache_screens_nothing",
+    "tests/test_line_movement_never_spends_its_cap_on_exhibitions.py::test_a_map_of_aliases_alone_screens_nothing_rather_than_everything",
+    "tests/test_line_movement_never_spends_its_cap_on_exhibitions.py::test_the_schedule_s_own_club_names_resolve_the_board",
+    "tests/test_line_movement_never_spends_its_cap_on_exhibitions.py::test_past_the_last_date_the_cache_knows_the_screen_abstains",
+    "tests/test_line_movement_never_spends_its_cap_on_exhibitions.py::test_one_foreign_opponent_s_names_do_not_let_the_screen_drop_the_board",
+    "tests/test_line_movement_never_spends_its_cap_on_exhibitions.py::test_a_screen_that_cannot_be_built_costs_the_capture_nothing",
+    "tests/test_a_failed_price_request_is_not_an_unquoted_game.py::test_one_failed_request_is_named_and_the_games_that_answered_are_kept",
+    "tests/test_a_failed_price_request_is_not_an_unquoted_game.py::test_a_round_in_which_every_request_failed_is_a_failed_capture",
+    "tests/test_a_failed_price_request_is_not_an_unquoted_game.py::test_an_absence_is_not_a_failure",
+    "tests/test_a_failed_price_request_is_not_an_unquoted_game.py::test_the_price_step_is_red_only_when_failed_requests_left_nothing",
 )
 
 #: Every club, so the stand-in's club-schedule cache is complete for 2026-27.
