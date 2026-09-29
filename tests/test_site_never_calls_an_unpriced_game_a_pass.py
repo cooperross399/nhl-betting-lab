@@ -3,9 +3,8 @@
 `web/build_site_json.py::build_board` attaches market lines and the card's
 pick to a game only by joining through `data/staging/*.csv`. Publish Site
 restores the `gameday-state` and `gameday-reports` artifacts and nothing
-else, and neither carries `data/staging` (on purpose: the staged file is the
-provider's raw odds, in a public repository). So from opening night on
-2026-09-29 every regular-season game on the public board would have been
+else, and until 2026-09-29 (PR #275) neither carried `data/staging`. So from
+opening night every regular-season game on the public board would have been
 published with `pick: null`, no moneyline, no puck line, no total, and no
 regulation prices, and `web/lib/sports.js` renders a null pick as "No market
 clears the edge bar" whenever markets are allowlisted (twelve are). That is a
@@ -33,10 +32,12 @@ The same shape reached four other places, and these tests hold all of them:
   unpriced board — no game carries a total — the Results page threw and
   rendered nothing.
 
-Carrying prices to Publish Site so the lines and picks actually appear is a
-decision about publishing provider odds on a public page, and is left to the
-owner. What is fixed here is that the page never says something false while
-they are missing.
+Carrying prices to Publish Site was decided on 2026-09-29 (PR #275:
+`gameday-state` carries `data/staging`), and
+tests/test_the_board_prices_only_todays_games.py holds that only the board's
+own league day's rows count. What is held here is that the page never says
+something false while a price is missing — which a build on an earlier day's
+state, a failed fetch, or an unmatched team name can still leave it.
 
 The builder is driven through its own `main()`, loaded by path as the
 workflow runs it, with only the NHL schedule stubbed (it needs the network).
@@ -265,7 +266,7 @@ def _write_csv(path: Path, rows: list[dict]) -> None:
 def make_lab(tmp_path: Path, monkeypatch, *, staged: bool, model: bool = True,
              opens: bool = False) -> Path:
     """What the runner holds: gameday-state + gameday-reports, and optionally
-    the staged prices Publish Site never restores."""
+    the staged prices (carried in gameday-state since 2026-09-29, PR #275)."""
     lab = tmp_path / "lab"
     raw = tmp_path / "raw"
     (raw / "nhl" / "boxscore").mkdir(parents=True)

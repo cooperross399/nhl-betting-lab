@@ -3,9 +3,10 @@
 `web/build_site_json.py::settle` turns yesterday's frozen board into
 results.json. Every game without a pick got a pick anyway:
 `{"market": "—", "label": "No play", "price": 0, "result": "push"}`. It
-never read the frozen board's `priced` flag. Publish Site restores no staged
-prices (ledger item [33], left to the owner), so from opening night every
-regular-season game is frozen `priced: false` with no pick. The board says
+never read the frozen board's `priced` flag. Until 2026-09-29 (PR #275)
+Publish Site restored no staged prices, so from opening night every
+regular-season game would have been frozen `priced: false` with no pick —
+as any game still is that a build holds no price for. The board says
 "Not priced" for those games (fixed in #154). The next morning, though,
 `web/lib/sports.js::resultPick` rendered the placeholder under the "Model
 pick" heading as "No play", "— · −0", "Push". So a game no price ever
