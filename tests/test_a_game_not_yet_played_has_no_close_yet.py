@@ -99,7 +99,7 @@ def test_the_page_says_not_yet_played_and_blames_nobody() -> None:
     assert "no closing price found: **0**" in page
     assert "No book pulled these" not in page
     assert "Not yet played: **1** opinion(s)" in page
-    assert "1 of them staked" in page
+    assert "1 of them clearing the measurement bar" in page
     assert "0 bet(s) had no closing price" in page
 
 
@@ -162,7 +162,10 @@ def test_not_yet_played_counts_selections_not_book_rows() -> None:
 
     assert report["counts"]["not_yet_played"] == 1
     assert report["counts"]["bets_not_yet_played"] == 1
-    assert "Not yet played: **1** opinion(s), 1 of them staked" in page
+    assert (
+        "Not yet played: **1** opinion(s), 1 of them clearing the "
+        "measurement bar"
+    ) in page
 
 
 def test_of_those_still_follows_the_count_it_splits() -> None:

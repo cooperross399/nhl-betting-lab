@@ -72,7 +72,10 @@ def _row(market: str, index: int, outcome: str, *, p: float = ABOVE,
     won = outcome == "won"
     return {
         "snapshot_date": "2026-12-01", "commence_time": "2026-12-02T00:10:00Z",
-        "home_team": "Toronto Maple Leafs", "away_team": "Boston Bruins",
+        # Its own game too: the report's intervals are clustered on the
+        # game (sweep 4), and these tests measure independent wagers, which
+        # is exactly the row interval when every game holds one.
+        "home_team": f"Home club {market} {index}", "away_team": "Boston Bruins",
         "market": market, "player": f"Player {market} {index}",
         "selection": "over", "line": 0.5, "american_odds": odds,
         "book": book, "model_probability": p,
