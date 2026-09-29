@@ -196,6 +196,31 @@ def test_a_ledger_whose_fields_hold_quoted_newlines_is_still_appended_to(
     assert set(after["verdicts_in_force"]) == {"team=off,\nprops=in force"}
 
 
+@pytest.mark.parametrize(
+    "verdicts",
+    [
+        # A field that ends in a newline: its last line holds only the
+        # closing quote, and is still a physical line.
+        "team=off,props=in force\n",
+        # An inner line of Unicode whitespace alone: blank to `str.strip`,
+        # not to the byte count `existing_row_count` takes.
+        "team=off,\n\u00a0\nprops=in force",
+    ],
+)
+def test_every_line_a_legitimate_field_spans_is_counted_as_the_file_counts_it(
+    tmp_path, verdicts
+):
+    archive, processed, logs, ledger = _first_day_settled(
+        tmp_path, verdicts=verdicts, day_2_players=1
+    )
+    assert len(pd.read_csv(ledger)) == 4
+
+    result = _settle(archive, processed, logs, "2026-10-11")
+
+    assert result.snapshots_settled == 1
+    assert len(pd.read_csv(ledger)) == 5
+
+
 def test_a_quoted_newline_does_not_excuse_a_swallowed_row(tmp_path):
     """The allowance for quoted newlines is not a hole: a stray quote in a
     ledger that already holds them is refused all the same."""

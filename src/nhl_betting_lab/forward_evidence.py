@@ -539,7 +539,7 @@ def _ledger_rows_on_disk(path: Path, frame: pd.DataFrame) -> int:
             for index, line in enumerate(lines):
                 if _LEDGER_ROW_START.match(line):
                     continue
-                if line.strip() or index == len(lines) - 1:
+                if line.encode("utf-8").strip() or index == len(lines) - 1:
                     folded += 1
     return existing_row_count(path) - folded
 
