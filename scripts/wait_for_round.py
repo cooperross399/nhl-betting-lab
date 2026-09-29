@@ -70,13 +70,26 @@ def round_for(schedule: str, now: datetime) -> datetime:
 
 def parse_at(value: str, now: datetime) -> datetime:
     """A UTC time to wait for: ISO (`2026-09-29T21:30Z`) or `HH:MM`, taken as
-    the next time the clock reads that."""
+    the time the clock reads that nearest to now, within twelve hours either
+    side.
+
+    Not the NEXT time the clock reads it. The wait runs in two jobs and each
+    recomputes the target from the same `--at`. When the first job's wait
+    ended at the target, the second started a few seconds after it, read
+    "19:45" as tomorrow's 19:45, found that more than `MAX_AT_AHEAD` away and
+    exited 2: the capture still ran on time, but the run went red (run
+    36582803431, 2026-09-29). A time a few seconds or hours past is a target
+    already reached, and the run captures now."""
     text = value.strip()
     if len(text) == 5 and text[2] == ":":
         target = now.replace(
             hour=int(text[:2]), minute=int(text[3:]), second=0, microsecond=0
         )
-        return target if target > now else target + timedelta(days=1)
+        if target - now > timedelta(hours=12):
+            target -= timedelta(days=1)
+        elif now - target >= timedelta(hours=12):
+            target += timedelta(days=1)
+        return target
     target = datetime.fromisoformat(text.replace("Z", "+00:00"))
     if target.tzinfo is None:
         raise ValueError(f"--at needs a UTC offset or a trailing Z: {value!r}")
