@@ -144,6 +144,7 @@ def main(argv: list[str] | None = None) -> int:
     rows: list[dict] = []
     failed: list[str] = []
     lost: list[str] = []
+    quiet: list[str] = []
     for index, slug in enumerate(slugs):
         html = seed if slug == SEED_SLUG else None
         if html is None:
@@ -155,10 +156,17 @@ def main(argv: list[str] | None = None) -> int:
                 lost.append(slug)
                 continue
         try:
-            rows.extend(rows_from_page(html, retrieved_at=retrieved_at))
+            page_rows = rows_from_page(html, retrieved_at=retrieved_at)
         except ValueError as exc:
+            # Includes a 200 page with no `combinations` payload (a Next.js
+            # soft error), which `rows_from_page` refuses since sweep 6.
             failed.append(f"{slug}: {exc}")
             lost.append(slug)
+            continue
+        if not page_rows:
+            # A real team page with no lines posted yet: read, not lost.
+            quiet.append(slug)
+        rows.extend(page_rows)
 
     if failed:
         print(f"{len(failed)} team page(s) could not be read:", file=sys.stderr)
@@ -190,6 +198,10 @@ def main(argv: list[str] | None = None) -> int:
         # Provenance, not decoration: a projection and a confirmed
         # morning-skate line are different evidence and must not be pooled.
         print(f"  source(s): {', '.join(sources[:4])}")
+    if quiet:
+        # Named, but not a warning: a team that has posted no lines yet (a
+        # quiet preseason page) is a fact about the team, not a lost read.
+        print(f"  no lines posted yet: {', '.join(quiet)}")
     print(
         "This capture spent no provider credits, touched no card, and froze "
         "no opinion."

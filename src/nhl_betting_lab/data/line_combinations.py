@@ -113,11 +113,28 @@ def rows_from_page(html: str, *, retrieved_at: str) -> list[dict[str, Any]]:
     the event this collector exists to catch.
     """
     payload = parse_next_data(html)
-    combos = (payload.get("props", {}).get("pageProps", {}) or {}).get(
-        "combinations"
-    )
+    page_props = (payload.get("props", {}) or {}).get("pageProps", {}) or {}
+    combos = page_props.get("combinations") if isinstance(page_props, dict) else None
     if not isinstance(combos, dict):
-        return []
+        # A page that parsed but carries no `combinations` payload is not a
+        # team page: it is the shape of a Next.js soft error (`/_error`, or a
+        # fallback shell) served with HTTP 200. Until sweep 6 (line-
+        # combinations-empty-team-pages-not-counted-lost) this returned []
+        # quietly, so the capture never counted the team lost, and the seed
+        # page loading with the other 31 answering such pages wrote one
+        # team's rows and exited 0. Raising here puts the team in the
+        # script's `lost` list, named in its warning and counted toward the
+        # half-the-teams rule. A real combinations page whose `players` list
+        # is empty (no lines posted yet) is NOT this: it has the dict and
+        # falls through to zero rows below, which is a quiet team, not a
+        # lost one.
+        where = payload.get("page") or "?"
+        status = page_props.get("statusCode") if isinstance(page_props, dict) else None
+        raise ValueError(
+            "__NEXT_DATA__ carries no line combinations (page "
+            f"{where!s}, statusCode {status!s}): an error or placeholder page "
+            "served as a team page, not a team with no lines posted."
+        )
 
     shared = {
         "team_slug": str(combos.get("teamSlug", "") or ""),
