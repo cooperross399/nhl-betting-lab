@@ -22,6 +22,7 @@ export const SPORTS = {
   cbb: { key: "cbb", name: "CBB", longName: "CBB Projections", host: "https://cbb.maverickhightower.com/", sample: "./data/sample/board.json", sampleResults: "./data/sample/results.json", scoreWord: "points", timeWord: "Tip", staleAfterHours: 30 },
 };
 export const ORDER = ["nhl", "epl", "cbb"];
+export const SITE = { name: "Maverick Hightower", handle: "@mavhightower", hub: "https://maverickhightower.com/", about: "https://maverickhightower.com/about.html", image: "https://maverickhightower.com/share.png" };
 
 // Which sport this deployment is: site.json on the same host, else the subdomain, else the fallback.
 export async function detectSport(fallback) {
@@ -46,7 +47,7 @@ export const HOW_TO_READ = [
 ];
 
 const pickView = (p, unit, opts = {}) => {
-  if (!p) return { kind: "none", heading: "Model pick", label: opts.noneLabel || "No market clears the edge bar", sub: "", extra: "" };
+  if (!p || p.kind === "pass") return { kind: "none", heading: "Model pick", label: opts.noneLabel || "No play", sub: "", extra: "" };
   const price = opts.priceFmt ? opts.priceFmt(p.price) : odds(p.price);
   const edge = typeof p.edgePct === "number" ? `${F.fmtSigned(p.edgePct)}%` : dash;
   const kind = p.kind || "bet";
@@ -54,7 +55,7 @@ const pickView = (p, unit, opts = {}) => {
     kind, heading: kind === "bet" ? "Best bet" : kind === "lean" ? "Lean" : kind === "pass" ? "Model pick" : "Model pick",
     label: p.label, price, edge,
     sub: `${p.market} · ${price}${p.book ? ` at ${p.book}` : ""}${typeof p.modelProb === "number" ? ` · model ${pct(p.modelProb)}` : ""} · edge ${edge}`,
-    extra: kind === "bet" ? [p.tier ? `Tier ${p.tier}` : null, typeof p.units === "number" ? `${p.units} units · $${(p.units * unit).toFixed(2)}` : null].filter(Boolean).join(" · ") : kind === "lean" ? "Lean · recorded, not staked" : "",
+    extra: kind === "bet" ? [p.tier ? `Tier ${p.tier}` : null, typeof p.units === "number" ? `${p.units} unit${p.units === 1 ? "" : "s"}` : null].filter(Boolean).join(" · ") : kind === "lean" ? "Recorded, not staked" : "",
   };
 };
 
@@ -123,9 +124,11 @@ function nhlBoard(data) {
       //
       // Neither gate applies to a game the board holds no price for
       // (`priced: false`): nothing was assessed, so naming the bar or the
-      // allowlist reports a judgement nobody made. Publish Site restores no
-      // staged prices, so without this arm every regular-season game read
-      // "No market clears the edge bar" while the card held a best bet.
+      // allowlist reports a judgement nobody made. Until 2026-09-29 (PR
+      // #275) Publish Site restored no staged prices, so without this arm
+      // every regular-season game read "No market clears the edge bar"
+      // while the card held a best bet; a run whose prices do not arrive
+      // still lands here.
       // Pinned by tests/test_site_never_calls_an_unpriced_game_a_pass.py.
       //
       // Nor does either apply to a game that is not a regular-season game,
@@ -183,16 +186,18 @@ function nhlBoard(data) {
       fine: "" },
   ];
   return { ...common(data, sport), kicker: `${data.season} NHL · ${data.boardDate ? F.fmtDateOnly(data.boardDate) : ""}`, title: ["Tonight's", "Board."],
-    blurb: "Model-projected scores, win probabilities and market context for every game on tonight's slate.", strip, groups: [...byDay.values()].map((d) => ({ ...d, countLabel: `${d.games.length} game${d.games.length === 1 ? "" : "s"}` })),
-    summary: `Showing ${(data.games || []).length} games · ${bets} best bets · ${leans} leans · a unit is $${unit}`, unit };
+    blurb: "Projected scores, win probabilities and market prices for tonight's slate.", strip, groups: [...byDay.values()].map((d) => ({ ...d, countLabel: `${d.games.length} game${d.games.length === 1 ? "" : "s"}` })),
+    summary: `Showing ${(data.games || []).length} games · ${bets} best bets · ${leans} leans`, unit };
 }
 
 // A settled game whose board carried no pick. The builder used to hand such
 // a game the pick {market: "—", label: "No play", price: 0, result: "push"},
 // and resultPick rendered it under "Model pick" as "No play · — · −0 ·
-// Push". Publish Site restores no staged prices, so every game on an
-// unpriced board became a model pass graded as a push, at a price of −0
-// that nobody quoted. That was 5 of 5 on the real 2026-09-29 slate. The
+// Push". Until 2026-09-29 (PR #275) Publish Site restored no staged
+// prices, so every game on an unpriced board became a model pass graded as
+// a push, at a price of −0 that nobody quoted: 5 of 5 on the real
+// 2026-09-29 slate, and still the fate of any run whose prices do not
+// arrive. The
 // row now carries `priced`. A pass is read only off `priced: true`; any
 // other row is not a judgement the model made. Neither kind is graded,
 // and neither shows a price. Pinned by
@@ -251,7 +256,7 @@ function eplBoard(data) {
       sides: [{ ...sideBase(T, g.home, "Home"), proj: num(g.home.projGoals) }, { ...sideBase(T, g.away, "Away"), proj: num(g.away.projGoals) }],
       bar: [{ width: w(g.home.winProb), color: T[g.home.abbr] ? T[g.home.abbr].color : "#14151a" }, { width: w(g.drawProb), color: "#c9c7c0" }], barTail: T[g.away.abbr] ? T[g.away.abbr].color : "#6b6e7a", barNote: typeof g.drawProb === "number" ? `Draw ${pct(g.drawProb)}` : "",
       cells: [
-        cell("Match result · fair", [["Home", odds(fair.home)], ["Draw", odds(fair.draw)], ["Away", odds(fair.away)]], null, "not on the card"),
+        cell("Match result · fair", [["Home", odds(fair.home)], ["Draw", odds(fair.draw)], ["Away", odds(fair.away)]], null, "reference only"),
         cell("Total 2.5", [["Over", odds(tot.over)], ["Under", odds(tot.under)], ["Model over", pct(tot.overProb), true]], h.total_over),
         cell("Both teams to score", [["Yes", odds(bt.yes)], ["No", odds(bt.no)], ["Model yes", pct(bt.yesProb), true]], h.btts_yes),
         cell("Draw no bet", [["Home", odds(dnb.home)], ["Away", odds(dnb.away)], ["Model home", pct(dnb.homeProb), true]], h.dnb_home),
@@ -264,12 +269,12 @@ function eplBoard(data) {
     { label: "Settled selections", value: String(r.settled ?? 0), sub: `${r.won ?? 0} won · ${r.pending ?? 0} pending · ${r.void ?? 0} void`, fine: "" },
     { label: "Profit on turnover", value: typeof r.roiPct === "number" ? `${F.fmtSigned(r.roiPct)}%` : dash, sub: `${typeof r.profitUnits === "number" ? F.fmtSigned(r.profitUnits, 2) : dash} units on ${typeof r.stakedUnits === "number" ? r.stakedUnits.toFixed(2) : dash} staked`, fine: "no demonstrated edge" },
     { label: "Awaiting results feed", value: String(r.awaitingResults ?? 0), sub: "played, not yet settled", fine: "" },
-    { label: "Time to an answer", value: `~${(r.betsToAnswer ?? 1500).toLocaleString()}`, sub: "settled bets to separate a real 5% edge from zero", fine: "" },
+    { label: "Time to an answer", value: `~${(r.betsToAnswer ?? 1500).toLocaleString()}`, sub: "settled bets needed", fine: "" },
   ];
   return { ...common(data, sport), kicker: `${data.season} Premier League · ${data.windowLabel || ""}`, title: ["This week's", "Board."],
-    blurb: "Model-projected goals, outcome probabilities and market context for every fixture in this card's window. Match result is not on the card; its fair price is shown for reference only.",
+    blurb: "Projected goals, outcome probabilities and market prices for this card's fixtures.",
     strip, groups: [...byDay.values()].map((d) => ({ ...d, countLabel: `${d.games.length} fixture${d.games.length === 1 ? "" : "s"}` })),
-    summary: `Showing ${(data.games || []).length} fixtures · ${bets} best bets · ${leans} leans · a unit is $${unit}`, unit };
+    summary: `Showing ${(data.games || []).length} fixtures · ${bets} best bets · ${leans} leans`, unit };
 }
 function eplResults(data) {
   const sport = SPORTS.epl, T = data.teams || {}, s = data.summary || {};
@@ -316,11 +321,11 @@ function cbbBoard(data) {
   const r = data.record || {}, ms = r.markets || [];
   const strip = ms.slice(0, 3).map((m) => ({ label: `${m.label} · ROI`, value: `${F.fmtSigned(m.roiPct)}%`, sub: `${m.bets} bets · 95% ${F.fmtSigned(m.ciLowPct)}% to ${F.fmtSigned(m.ciHighPct)}%`, fine: m.verdict || "no demonstrated edge" }));
   while (strip.length < 3) strip.push({ label: "ROI", value: dash, sub: "No settled opinions yet", fine: "" });
-  strip.push({ label: "Time to an answer", value: (r.opinionsSoFar ?? 0).toLocaleString(), sub: `of ${(r.opinionsNeeded ?? 10000).toLocaleString()} settled opinions before the stopping rule speaks`, fine: typeof r.clvPoints === "number" ? `CLV ${F.fmtSigned(r.clvPoints, 2)} pts` : "" });
+  strip.push({ label: "Time to an answer", value: (r.opinionsSoFar ?? 0).toLocaleString(), sub: `of ${(r.opinionsNeeded ?? 10000).toLocaleString()} settled opinions needed`, fine: typeof r.clvPoints === "number" ? `CLV ${F.fmtSigned(r.clvPoints, 2)} pts` : "" });
   return { ...common(data, sport), kicker: `${data.season} Men's College Basketball · ${data.slateDate ? F.fmtDateOnly(data.slateDate) : ""}${data.cardSlot ? ` · ${data.cardSlot} card` : ""}`, title: ["Tonight's", "Board."],
-    blurb: "Model-projected scores, win probabilities and market context for every carded game on tonight's slate.",
+    blurb: "Projected scores, win probabilities and market prices for tonight's carded games.",
     strip, groups: order.filter((k) => bySlot.has(k)).map((k) => bySlot.get(k)).map((d) => ({ ...d, countLabel: `${d.games.length} game${d.games.length === 1 ? "" : "s"}` })),
-    summary: `Showing ${(data.games || []).length} games · ${bets} best bets · ${leans} leans · a unit is $${unit}`, unit };
+    summary: `Showing ${(data.games || []).length} games · ${bets} best bets · ${leans} leans`, unit };
 }
 function cbbResults(data) {
   const sport = SPORTS.cbb, T = data.teams || {}, s = data.summary || {};
@@ -356,7 +361,7 @@ export function hubLine(sport, board, results) {
   const bets = vm.groups.reduce((n, g) => n + g.games.filter((x) => x.pick.kind === "bet" && !x.started).length, 0);
   const when = sport === "epl" ? "this window" : "tonight";
   let headline = games ? `${games} ${sport === "epl" ? "fixtures" : "games"} ${when} · ${bets ? `${bets} best bet${bets === 1 ? "" : "s"}` : "no best bets"}` : `No ${sport === "epl" ? "fixtures" : "games"} ${when}`;
-  if (board.phase === "preseason") headline = `${games} exhibition games · model abstains`;
+  if (board.phase === "preseason") headline = `${games} exhibition games · no projections`;
   let detail = "";
   if (results && results.games && results.games.length) {
     const p = (results.summary || {}).picks;

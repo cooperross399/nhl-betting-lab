@@ -124,7 +124,10 @@ def test_the_page_heads_a_lean_as_a_lean_and_counts_one_best_bet(tmp_path: Path,
     assert by_home["NYI"]["heading"] == "Lean", by_home["NYI"]
     assert "not staked" in by_home["NYI"]["extra"], by_home["NYI"]
     summary = rendered["board"]["summary"]
-    assert "· 1 best bets ·" in summary and "· 1 leans ·" in summary, summary
+    # The summary used to end "· a unit is $N"; drop 5 shows stakes in units
+    # only, so the lean count is now the last field and carries no trailing
+    # separator. One anchored phrase, so "11 leans" cannot pass for one.
+    assert "· 1 best bets · 1 leans" in summary, summary
     graphic = {row["pickLabel"]: row for row in rendered["graphic"]["rows"]}
     assert graphic["TOR +112"]["pickBg"] != graphic[by_home["NYI"]["label"]]["pickBg"], (
         "the Graphic page drew the lean in the best bet's colours"

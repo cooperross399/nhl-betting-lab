@@ -22,7 +22,7 @@
 </helmet>
 <div data-screen-label="Graphic" style="min-height:100vh;background:#e6e3dc;padding:24px;display:flex;flex-direction:column;align-items:flex-start;gap:16px;overflow-x:auto;">
   <nav style="width:1080px;flex:none;display:flex;justify-content:space-between;font-size:12px;letter-spacing:.1em;text-transform:uppercase;font-weight:500;">
-    <a href="Board.dc.html">← Back to board</a>
+    <a href="Board.dc.html" style="display:inline-flex;align-items:center;min-height:44px;">← Back to board</a>
     <span style="display:flex;gap:22px;"><sc-for list="{{ otherSports }}" as="s" hint-placeholder-count="2"><a href="{{ s.href }}">{{ s.name }} board</a></sc-for><span style="color:#6b6e7a;">1080 × 1350 share card</span></span>
   </nav>
   <div id="share-card" style="width:1080px;height:1350px;flex:none;background:#f4f2ee;color:#14151a;padding:56px 60px;display:flex;flex-direction:column;border-top:10px solid #14151a;">
@@ -72,7 +72,7 @@
     </div>
 
     <div style="display:flex;justify-content:space-between;padding-top:18px;font-family:'IBM Plex Mono',monospace;font-size:13px;color:#6b6e7a;">
-      <span>Scores are model projections · Times {{ tz }} · {{ hostLabel }}</span>
+      <span>Model projections · Times {{ tz }} · {{ hostLabel }} · @mavhightower</span>
       <span>Updated {{ updated }}</span>
     </div>
   </div>
