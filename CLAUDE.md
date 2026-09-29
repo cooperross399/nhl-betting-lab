@@ -76,9 +76,20 @@ Re-derive rather than trust if the data has moved.
   while the code and its test both asserted the cap "cannot be breached".
   The estimate stays at the documented 10x, because a guess dressed as a
   bound is worse than a guess; the cap is now enforced against the
-  **measured running total** read from `x-requests-last`, which is the gate
-  that cannot be mis-specified. The test that asserted the false promise was
-  replaced rather than satisfied.
+  **measured running total** read from `x-requests-last`, which is far harder
+  to mis-specify than an estimate, though not impossible (below). The test
+  that asserted the false promise was replaced rather than satisfied.
+  **2026-09-26 (#234): that measured gate could still overshoot by one
+  event.** It asked whether spend had already *reached* the cap
+  (`credits_spent >= cap`), not whether the next event would pass it (stub:
+  107 charged against 70 estimated, cap 200, spent 214 with no error). It now
+  projects one event ahead at the dearest charge seen, seeded with the
+  estimate, as the team buy and the retention probe do, and a refusal is a
+  counted budget skip rather than a stop. The bound is the rise in the
+  charge: a run can pass the cap by at most how much the next charge exceeds
+  the dearest seen, and not at all while charges do not rise. Any overspend
+  is named in the buy's errors and fails `buy_historical_props.py` with
+  exit 2.
 - **The lab measured one thing and shipped another, by five and a half hours;
   it now holds both.** The first purchase bought every historical price at a
   median **4.0 hours** before face-off (p10 4.0, p90 4.0), while the
@@ -287,6 +298,23 @@ Re-derive rather than trust if the data has moved.
   the moment. No threshold, band, floor or date moved, and no report from
   this scan had ever been published.
   `tests/test_ladder_depth_counts_deviggable_rungs.py`.
+  **2026-09-26 (#240): a damaged day is named, not skipped.**
+  `run_ladder_coherence.py` skipped a damaged line-movement day without a
+  word, and the Line Movement step's `|| true` hid an undecodable byte. The
+  scanner now names each unreadable day, in the report and in the JSON's
+  `unreadable_captures`, and leaves it out of the depth. **The run is red
+  only for the day it wrote.** The step passes `--fail-on-day` with the
+  league day the capture appended to; damage in that file is an `::error::`
+  and exits 2, which the step keeps under `continue-on-error` until a final
+  gate after every upload (`steps.ladder.outcome == 'failure'`) turns the
+  run red. A damaged *earlier* day is a standing `::warning::` and a summary
+  line on every later run, and exits 0: the artifact carries every day and
+  each run restores the newest copy, so otherwise one bad October day would
+  red every run of the season and bury the line-unit and scratch-list gates.
+  Run by hand with no day named, any damage exits 2. No step repairs a
+  damaged file in the artifact chain; earlier runs' `line-movement`
+  artifacts keep earlier copies (`gh run download <run-id> -n
+  line-movement`), and whether to add a repair procedure is Cooper's call.
 - **The oracle ceiling was an outcome filter, not a line-label result.**
   Abstaining above a 2-minute realised rise gives +3.11% [+1.39%, +4.80%] and
   a random-removal placebo reaches only −0.30% (z=8.3), so the cell is
@@ -806,6 +834,20 @@ Re-derive rather than trust if the data has moved.
   23:00 EST. Adding one is Cooper's credit decision; no cron changed. CLV is a report, not the 2027-04-25
   measurement, so no opinion, ledger row or decision figure moves.
   `tests/test_a_close_is_a_price_near_face_off.py`.
+- **2026-09-26 (#235): a damaged line-movement day is named in the CLV
+  report, not skipped.** `load_movement_captures` skipped a damaged
+  `line_movement/<day>.csv` (does not parse, zero bytes, missing a capture
+  column, or parses short of its line count) silently, so that day's
+  opinions read as "no closing price found" and the CLV run exited 0. It is
+  now named in `closing_line_value.md` and in an `::error::`, every other
+  day is still scored, and `run_closing_line_value.py` exits 2 — the same
+  rule as a damaged priced snapshot. It is not raised, as the dedicated
+  store is, because the movement store is per-day and raising would stop the
+  good days being scored. The run is red for *any* damaged movement day,
+  including one that predates a schema change and lacks a capture column
+  (the old code skipped those on purpose), until the file is restored or
+  removed. Not live today: the only workflow that runs the CLV report,
+  Gameday Refresh, restores no movement store.
 - **2026-09-26: seven passages of wording said something the numbers did
   not.** No
   number, verdict, gate, stake or ledger row moved in any of them, and a
@@ -899,6 +941,20 @@ Re-derive rather than trust if the data has moved.
   without reading `priced`, so the Archive listed a board with no priced
   game as "0 best bets", an excluded state shown as a no-value call; it is
   now `bets: null`, shown as "not priced".
+- **2026-09-26: two public-board defects, site only.** The card, the forward
+  ledger, the model, the edge bar, the market list and the staking rule are
+  untouched by either. (#233) The board judged preseason per night, not per
+  game: on a night mixing a regular-season game with an exhibition, both
+  were projected, priced and picked, frozen into the site's history, and
+  graded on the next morning's Results page. Every game that is not
+  `gameType` 2 is now published as schedule only and never settled; the card
+  already screened exhibitions per game. (#236) The board published a lean
+  as a best bet: `build_board` picked the highest edge among best bets and
+  leans and set no `kind`, so a lean was headed "Best bet", counted in the
+  history index, graded into Results' Model picks, and could displace the
+  game's real best bet. The pick now prefers a best bet, labels a lean as a
+  lean, and the picks record counts best bets only. This one is latent
+  today, because Publish Site stages no prices.
 - **2026-09-26, NOT a defect fix: Cooper changed the staking rule before the
   decision date, which `docs/when_this_ends.md` lists under "may not".** The
   card no longer stakes `points`. This entry exists because the alternative
@@ -1013,6 +1069,54 @@ Re-derive rather than trust if the data has moved.
   the edge bar, the market list, the staking rule and the ledger's schema
   are unchanged, and the ledger held zero rows when this landed.
   `tests/test_a_goalie_who_did_not_start_voids_his_saves.py`.
+- **2026-09-26 (#239), a defect fix recorded as `docs/when_this_ends.md`
+  requires: a postponed game is not tonight's regular-season game.**
+  `season.known_regular_season_games`, which the card's preseason screen
+  matches every price row against, ignored `gameScheduleState`, while
+  `scheduled_regular_season_starts`, which builds the eligibility slate,
+  drops any stated state other than `OK`. A game postponed on the day
+  (`PPD`) stays in the cache under its original date, and a provider still
+  listing it has a future commence time, so it passed the screen and the
+  puck-drop guard: it was priced, could be staked, and was frozen into the
+  night's snapshot. `settle_snapshots` then held the whole night for the
+  14-day patience window and wrote that game's rows off as `unsettleable`.
+  Both readers now share one rule (`season._is_scheduled`), so the screen
+  drops a called-off game before pricing and no opinion is frozen for it.
+  What the forward ledger records changes in exactly one way: a game the
+  cached club schedules mark called off, with no copy marking it `OK`,
+  contributes no rows, where it used to contribute `unsettleable` ones. A
+  club-schedule cache fetched before the postponement (a local run, or a
+  restore from the purchase artifact) still lets the game through, and where
+  the two clubs' copies disagree a stale `OK` outvotes a fresh `PPD`; which
+  of the two rules should win is Cooper's call. A game postponed *after* the
+  card freezes (or frozen while the cache is partial, where the screen
+  deliberately abstains) still holds its night for 14 days and settles as
+  `unsettleable`; that is unchanged and is also Cooper's call. The model,
+  the edge bar, the market list, the staking rule and the ledger's schema
+  are unchanged. It lands before opening night, with zero ledger rows.
+  `tests/test_a_postponed_game_is_not_a_regular_season_game_tonight.py`.
+- **2026-09-26 (#242), a defect fix recorded as `docs/when_this_ends.md`
+  requires: exhibition games no longer spend the per-event cap.**
+  `run_provider_shadow.py` spent the 320-credit cap in face-off order before
+  the card's preseason screen ran. On a mixed night (2026-09-29 onward) an
+  early exhibition took one of the 8 places, and every per-event market for
+  the regular-season game it displaced read "priced for k of N": INCOMPLETE,
+  excluded, and missing from the frozen snapshot. Both fetches now drop
+  posted events the cached regular-season schedule does not know, before the
+  cap, by the card's own rule (`known_regular_season_games`, same key, same
+  team map, abstaining past the cached range), and only when
+  `schedule_cache_is_complete` holds; an incomplete cache screens nothing.
+  The model, the edge bar, the market list and the staking rule are
+  unchanged. It changes which regular-season games get per-event prices on
+  a mixed night, restoring games the cap was meant to buy. The screen runs
+  in every `run_provider_shadow.py` run, so exhibitions no longer take
+  Provider Market Discovery probe slots either (the whole posted board,
+  `--max-events 20`). With a complete cache, exhibitions no longer reach
+  staging, so the card's "N price row(s) are for games the regular-season
+  schedule does not know ... excluded" line normally no longer prints, and
+  the count appears in the shadow run's log instead ("N posted event(s) are
+  not on the cached regular-season schedule"). **It merged on 2026-09-28,
+  before the first mixed night (2026-09-29), so no frozen opinion is re-cut.**
 - **2026-09-25, a defect fix recorded as `docs/when_this_ends.md` requires:
   the card refuses stale prices.** The policy's `max_provider_run_age_hours`
   (12, policy-wide and on `the_odds_api`) was parsed and never applied —
@@ -1152,7 +1256,14 @@ Re-derive rather than trust if the data has moved.
   sampled date. Before that a cache from the withdrawn policy passed (194,707
   of 749,115 fitted means differ) and a cache the logs had outgrown was
   reused forever. The correction experiment refuses samples from the other
-  policy, and Experiment Refresh sends restored samples through the check.
+  policy and samples the logs have outgrown (the same reach check). The
+  calibration removes a cache it refuses before regenerating, so a rebuild
+  that fails leaves no samples and Experiment Refresh fails rather than
+  re-deciding on the refused file (2026-09-26, #241). A game the sample
+  generator itself cannot price (a skipped refit window, or no priced
+  player) now makes the experiment refuse freshly built samples too,
+  failing Experiment Refresh until someone looks, which is the intended
+  direction.
 - **The measured historical rate is ten credits per market returned per
   event, per region.** One provider account funds every lab, and its quota
   is **3,635,739 remaining of 5,000,000** as of 2026-09-02 (1,364,261 used
@@ -1225,6 +1336,18 @@ Re-derive rather than trust if the data has moved.
   so such a run published itself as clean and stood the backup down
   (`tests/test_a_blocked_card_is_a_degraded_run.py`). The card's
   `nothing_to_card` says which kind of block it is.
+  **Since 2026-09-26 (#238) a failed settlement, measurement rebuild,
+  closing-line value report or card-feed publish fails the run red, and none
+  of them degrades it.** The four steps were `continue-on-error` with no id,
+  so `run_forward_evidence.py` exiting 2 on a torn ledger, or
+  `run_closing_line_value.py` on a damaged store, finished green. "Report
+  the outcome" now names each failure and exits non-zero, including on an
+  empty slate. None of them is written into `run_degraded.txt`: the backup
+  would restore the same state, run the same scripts and fail identically,
+  buying the prices again for nothing. A failed card-feed push publishes no
+  status, so the backup runs anyway
+  (`tests/test_a_failed_settlement_fails_the_run.py`,
+  `tests/test_a_failed_card_feed_push_fails_the_run.py`).
   Props return no rows this far from the season — an absence, not a fault.
   The alternate ladders and all per-event markets ride the per-event fetch;
   asking the bulk endpoint for them 422s the whole request.
@@ -1297,8 +1420,25 @@ Re-derive rather than trust if the data has moved.
   eight events at two regions, short of the largest nights (the quota bullet
   above has the measurement); an asked-for market nobody quotes costs
   nothing.
+- **2026-09-26 (#237): a future game is not fetched every run, nor cached.**
+  `fetch_nhl_data` put the whole season in scope and `fetch_boxscore` served
+  only finals from cache, so every scheduled game was requested on every run
+  (up to about 600 requests a night in season), spent the `--max-games`
+  budget, and had its `FUT` answer written to `data/raw/nhl/boxscore`.
+  Gameday Refresh's thin-history check, Experiment Refresh's 500-boxscore
+  floor and Historical Props Purchase's "No boxscores were restored" warning
+  all counted those files. Now a game whose start is after now, or that a
+  live schedule calls `FUT`/`PRE`, is not requested; a cached club
+  schedule's state is not believed, and an unconfirmed start is fetched. A
+  game rescheduled *earlier* than its cached start is skipped until that
+  cached start passes, then fetched: its result arrives late, not lost.
+  Only final boxscores are cached, and every workflow count counts only
+  those. No dataset row changes: `build_datasets` already skipped non-final
+  boxscores.
 - **Data**: three seasons cached — 3,936 games, 157,419 player-game rows,
-  121 unresolved names (0.08%). A completed boxscore is never refetched.
+  121 unresolved names (0.08%). A completed boxscore is never refetched, and
+  (since 2026-09-26, #237) a game known not to have been played is not
+  fetched.
 - **Calibration** (can rule out, never in): 2.5M walk-forward prop samples,
   every skater market bent by ice time
   (`docs/why_ice_time_gets_its_own_correction.md`); team model overconfident
@@ -1347,9 +1487,29 @@ literally.
 - **Before concluding a prop line "isn't offered", check per-bookmaker coverage
   including alternate lines.** In the EPL lab `total_2_5` was wrongly excluded
   for exactly this mistake: the complete line was absent from the bulk `totals`
-  market and present all along in `alternate_totals`. Use
-  `scripts/run_provider_market_discovery.py --line-coverage` before writing off
-  a market.
+  market and present all along in `alternate_totals`. Before writing off a
+  market, read `data/outputs/provider_market_discovery.md`: per book, per line,
+  alternate ladders included (`reports/market_discovery.discover_coverage`),
+  written by `scripts/run_provider_shadow.py`. **Read the free copy first.**
+  Every Gameday Refresh run that fetches a slate uploads it in the
+  `gameday-reports` artifact (kept 30 days): that day's slate, props and
+  ladders asked, no credit beyond the run's own budgeted fetch. That fetch's
+  cap buys 8 events, so on a bigger night a market can read incomplete
+  because the budget stopped, not because no book quotes it. Offline,
+  `scripts/run_provider_shadow.py` with no flags re-assesses whatever is
+  already staged and spends nothing. For the whole posted board, the
+  Provider Market Discovery workflow's "Fetch and report coverage" step runs
+  `scripts/run_provider_shadow.py --live --overwrite-staging --horizon-days 0 --max-events 20 --props --credit-cap 380`
+  (the step's line as run by a dispatch with `include_props` ticked and
+  `credit_cap` left at its default). **That run spends up to its per-event
+  cap, 380 credits by default (about 10 events at 38 credits an event), plus
+  a few for the bulk markets, and like every live fetch outside the Gameday
+  Refresh budget it is asked of Cooper first.** Without `--props` no prop or ladder is asked and the
+  report says "not asked", which is not "not offered"; without
+  `--credit-cap` the script falls back to 190 (5 events); without
+  `--overwrite-staging` it stops at the first staged file it would replace.
+  (Until 2026-09-26 this rule named `run_provider_market_discovery.py
+  --line-coverage`, a script and a flag that have never existed.)
 - **Never print, write, compare, or commit an API key.** `tests/test_no_secrets_committed.py`
   enforces this; do not weaken it. The production credential is the GitHub
   secret `NHL_ODDS_API_KEY`; `.env` is local-only. The guard scans every
