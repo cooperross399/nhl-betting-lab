@@ -1218,6 +1218,105 @@ Re-derive rather than trust if the data has moved.
   so the 21,434 "at exactly the start" rows would pass the strictly-before
   filter), and `label_phases` files post-start rows under `late`, so
   keep-latest can replace a pre-start quote with one the measurement drops.
+- **2026-09-29 (#252), a defect fix: the calibration report's ice-time
+  correction is indexed on expected ice time.** `props_calibration.measure_market`
+  bucketed its grouped correction, and the "beats the pooled curve" verdict,
+  on actual TOI even when `expected_toi_seconds` was present — the hindsight
+  index `docs/why_the_toi_correction_does_not_ship.md` retired. It now fits,
+  scores and tables on expected TOI only, and with no expected column the
+  grouped correction is not measured (no fallback). The actual-TOI table stays
+  as a labelled hindsight diagnostic with no verdict, and the JSON names
+  `grouped_index`. No shipped verdict moves (`by_toi` reads
+  `correction_experiment.json`, `ships: []`). The committed
+  `props_calibration.md` still says the correction beats the pooled curve for
+  all 7 markets until it is regenerated, which is Cooper's call.
+- **2026-09-29 (#254), a defect fix: a replication needs a held-out window of
+  the same phase.** `run_replication.py` accepted one file as both windows, a
+  re-run of one window under a second label, and a `late` payload against a
+  `card` one, and recorded every survivor `replicated`, which
+  `allowlist_evidence` reads as a held-out confirmation. It now refuses
+  (exit 1, nothing written) the same file, the same measurement apart from
+  `generated_at`, a missing phase and differing phases, and the report names
+  both windows. A survivor too thin to test is headlined "not tested (too few
+  bets)", never "did not replicate". Overlapping `--from/--to` windows are
+  still not detected, and `--phase all` payloads cannot be replicated. The
+  committed `replication.md` is not regenerated.
+- **2026-09-29 (#256), two defect fixes.** `what_we_can_claim.md`'s pooled
+  prop line copied the naive interval's `includes_zero`, so it could say "the
+  interval excludes zero" where the backtest's own corrected verdict was no
+  demonstrated edge; it now reads the corrected interval, with the market
+  lines' branches. And `run_player_props_backtest.py` given a `--from/--to`
+  window matching none of N>0 rows reported "No historical prop prices are on
+  disk" and overwrote the contract `player_props_backtest.json`/`.md` with a
+  zero-row measurement; it now errors, exits 1 and writes nothing. No workflow
+  passes those flags.
+- **2026-09-29 (#257), two defect fixes in Gameday Refresh.** card-feed's
+  `latest_status.json` was dated by the publish step's wall clock, so a clean
+  card for day D published after midnight stood day D+1's scheduled runs down.
+  It is now dated by the card's own league day (`generated_at` in
+  America/New_York; with no card, `run_league_day.txt`, the day the run
+  started) and carries `card_day`; the precheck stands a run down only for a
+  clean, default-branch status whose `card_day` is today, so a pre-fix status
+  never counts (at most one duplicate backup the day it landed). And a 200
+  board listing none of the window's games is an empty slate (exit 3) only
+  when the cached schedule lists no regular-season game there still to face
+  off; otherwise it is a failed fetch (exit 2, degraded, and the 15:00 backup
+  runs its budgeted ~326-credit fetch, the existing response to any failed
+  fetch). No cap, gate or contract string changed.
+- **2026-09-29 (#253), a defect fix: a red run's frozen snapshot is laid
+  back.** `restore_state._fill_from_last_success` laid only the newest success
+  under a red restored run, so when the 15:00 backup could not download a red
+  13:30 primary that had frozen and posted day D's snapshot, the backup froze
+  its own later opinion as D, and no later restore ever read the primary
+  again: the posted first opinion never reached the forward ledger. The fill
+  now lays every carrier down to and including the newest success, newest
+  first, `overwrite=False`, keeping the longer ledger; where an older carrier
+  froze a *different* snapshot for a day, the older (first-frozen) copy
+  replaces the restored one, unless that day has settled (a `.settled` marker
+  or its rows in the ledger, as `settle_snapshots` reads it; an unreadable
+  ledger replaces nothing). A passed-over red run that will not download is a
+  `::warning::` and is asked for again next restore, not a red run (which
+  would fire the ~326-credit backup daily until the artifact expired); under
+  `--refuse-unreachable` (Historical Props Purchase) it still refuses before
+  spending. Owner notes: the laid-back 13:30 opinion replaces a 15:00 one the
+  backup may have posted; a long red streak costs one download per red
+  carrier (worst case ~29, ~1 GB); a run re-run by hand keeps its place in the
+  listing and can be misread as the earlier freeze.
+- **2026-09-29 (#255), three defect fixes.** (1) A Line Movement re-run
+  deleted attempt 1's round: its restore could not see its own in-progress run
+  and "Keep the captures" uploads `line-movement` with `overwrite: true`,
+  which in upload-artifact v4 is per run, not per attempt. A re-run now folds
+  the run's own artifact in first (`restore_state.py --fold-run
+  $GITHUB_RUN_ID`, the restore's `union_csv`). If that download fails, or a
+  CSV cannot be merged, nothing is overwritten: this attempt is uploaded as
+  `line-movement-attempt-N` and the run goes red. Nothing restores that name,
+  so the two must be unioned by hand, and a later green attempt does not
+  bring it back into the chain. (2) Provider Market Discovery now caches the
+  club schedules (free, never fatal, 3 minutes) before its probe, so the #242
+  preseason screen runs there too; it restores nothing and had always
+  abstained. (3) `fetch_player_props`' `events_seen` counts the windowed,
+  unstarted, screened slate, as the team fetch does; it read "2 of 13" on a
+  two-game night. It feeds only a log line. No cap, gate or verdict changed.
+- **2026-09-29 (#258), a defect fix recorded as `docs/when_this_ends.md`
+  requires: the forward report's intervals count the game, not the wager.**
+  Populations A and B and each market's Bets interval were `stats.roi_interval`
+  over the collapsed wagers, and the page called each wager "an independent
+  draw", but every rung, both sides of a line and every player in a game settle
+  on one boxscore. In a null through the real `build_forward_report` (90 games
+  x 8 players x a 5-rung ladder at fair prices, 3,600 wagers), population B's
+  corrected interval read "excludes zero" in 18.0% of runs, 51.7% with a shared
+  game-pace shock. They are now `stats.clustered_mean_interval` on (home, away,
+  league game date) with the same `len(markets)` looks: 5.3% and 7.0%. It is
+  the old interval exactly when every game holds one wager and never narrower,
+  so a market can stop surviving correction but never start; the point
+  estimate, populations, bars and ledger schema are unchanged, and the ledger
+  held no settled rows. A market whose bets all come from one game reads
+  `-inf% .. +inf%` until a second settles. The props backtest and team
+  measurement still use the unclustered interval (an owner item). Three
+  wording fixes rode along: the CLV "not yet played" line no longer says
+  "staked"; the measurement-bar note says games the puck-drop guard withheld
+  at the freeze are in neither population; the goalie void sentences are built
+  from `GOALIE_START_SECONDS`.
 - **2026-09-25, a defect fix recorded as `docs/when_this_ends.md` requires:
   the card refuses stale prices.** The policy's `max_provider_run_age_hours`
   (12, policy-wide and on `the_odds_api`) was parsed and never applied —
