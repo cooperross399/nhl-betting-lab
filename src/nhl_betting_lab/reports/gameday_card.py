@@ -106,6 +106,7 @@ from nhl_betting_lab.config import (
 )
 from nhl_betting_lab.market_eligibility import EligibilityReport
 from nhl_betting_lab.markets import MARKETS_BY_KEY
+from nhl_betting_lab.models.player_props import player_key
 from nhl_betting_lab.reports.card_pricing import selection_key
 from nhl_betting_lab.season import clean_text
 from nhl_betting_lab.models.value import (
@@ -209,6 +210,32 @@ STAKE_EXCLUDED_MARKETS: dict[str, str] = {
 }
 
 
+def selection_fingerprint_of(best_bets: Sequence[Mapping[str, Any]]) -> str:
+    """The selections fingerprint of a list of best-bet rows.
+
+    The player is keyed as a bet is written (`player_key`), not as the
+    best-price book spells him. Books spell players differently — "Alexis
+    Lafrenière" at most, "Alexis Lafreniere" at one — and the card already
+    groups both as one selection, showing whichever book holds the best
+    price. Keyed on that display name, a best price moving from one book to
+    the other changed the fingerprint and posted "Selections changed" when
+    nothing had: exactly the price-driven email the fingerprint exists to
+    prevent.
+
+    A module function rather than only a method so that a card saved to JSON
+    can be re-fingerprinted from its own rows: the next run compares against
+    it, and a stored string written under an older rule would otherwise read
+    as a change the first time the rule moved.
+    """
+    keys = sorted(
+        f"{row.get('market')}|{player_key(row.get('player') or '')}|"
+        f"{row.get('home_team')}|{row.get('away_team')}|"
+        f"{row.get('selection')}|{row.get('line')}|{row.get('date')}"
+        for row in best_bets
+    )
+    return "\n".join(keys)
+
+
 @dataclass
 class Candidate:
     """One priced selection with a model opinion behind it."""
@@ -288,13 +315,7 @@ class GamedayCard:
         selections, and treating it as changed would send an email a day until
         nobody read them.
         """
-        keys = sorted(
-            f"{row.get('market')}|{row.get('player') or ''}|"
-            f"{row.get('home_team')}|{row.get('away_team')}|"
-            f"{row.get('selection')}|{row.get('line')}|{row.get('date')}"
-            for row in self.best_bets
-        )
-        return "\n".join(keys)
+        return selection_fingerprint_of(self.best_bets)
 
     def summary_line(self) -> str:
         if not self.card_generated:
