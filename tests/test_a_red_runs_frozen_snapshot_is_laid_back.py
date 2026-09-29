@@ -191,20 +191,71 @@ def test_an_older_success_snapshot_wins_over_a_red_runs_later_freeze(
     assert (dest / SNAP / "2026-10-07.csv").read_text(encoding="utf-8") == "first\n"
 
 
-def test_a_passed_over_red_run_that_cannot_be_downloaded_is_recorded(
-    tmp_path, monkeypatch,
-) -> None:
-    """Recorded, so this run is red and the next restore asks for it again."""
+def _a_passed_over_red_run_that_502s() -> FakeGh:
     artifacts = {1: {_snap("2026-10-08"): "r1\n"}, 2: {_snap("2026-10-07"): "r2\n"},
                  3: {_snap("2026-10-06"): "s3\n"}}
-    dest = tmp_path / "dest"
-    report = _restore(monkeypatch, dest,
-                      FakeGh([_run(1, "failure"), _run(2, "failure"),
-                              _run(3, "success")], artifacts, broken={2}))
+    return FakeGh([_run(1, "failure"), _run(2, "failure"), _run(3, "success")],
+                  artifacts, broken={2})
 
-    assert any("run 2" in sentence for sentence in report["unreached"]), report
+
+def test_a_passed_over_red_run_that_cannot_be_downloaded_is_a_warning_not_red(
+    tmp_path, monkeypatch, capsys,
+) -> None:
+    """Named, but not recorded as unreached: recorded, the run went red, the
+    15:00 backup fired, and one artifact that never downloads again would
+    have made every primary red and fired every backup (a few hundred credits
+    a run) until it expired 90 days later. It is asked for again anyway: the
+    next restore walks the same listing."""
+    dest = tmp_path / "dest"
+    report = _restore(monkeypatch, dest, _a_passed_over_red_run_that_502s())
+
+    assert report["unreached"] == [], report
+    said = capsys.readouterr().out
+    assert "::warning::" in said and "run 2 (failure)" in said, said
     assert report["filled_from"] == 3, "the success underneath was not laid"
     assert (dest / SNAP / "2026-10-06.csv").is_file()
+
+
+def test_the_success_underneath_that_cannot_be_downloaded_is_still_red(
+    tmp_path, monkeypatch,
+) -> None:
+    artifacts = {1: {_snap("2026-10-08"): "r1\n"}, 3: {_snap("2026-10-06"): "s3\n"}}
+    report = _restore(monkeypatch, tmp_path / "dest",
+                      FakeGh([_run(1, "failure"), _run(3, "success")], artifacts,
+                             broken={3}))
+
+    assert any("run 3" in sentence for sentence in report["unreached"]), report
+
+
+def test_the_refusing_restore_still_refuses_a_passed_over_red_run(
+    tmp_path, monkeypatch,
+) -> None:
+    """Historical Props Purchase restores with --refuse-unreachable, before
+    it spends: it refuses rather than go on without that run's state."""
+    monkeypatch.setattr(rs, "_gh", _a_passed_over_red_run_that_502s())
+    with pytest.raises(rs.Unreachable, match="run 2"):
+        rs.restore(artifact="gameday-state", dest=tmp_path / "dest",
+                   workflows=[REFRESH], attempts=3, refuse_unreachable=True)
+
+
+def test_a_day_in_the_restored_ledger_keeps_the_snapshot_it_settled(
+    tmp_path, monkeypatch,
+) -> None:
+    """`settle_snapshots` counts a day as settled when the ledger holds it,
+    marker or not (a crash between the ledger write and the marker leaves
+    exactly that). Replacing its snapshot would leave the ledger's rows
+    settled from one opinion and the archive holding another."""
+    artifacts = _the_backup_missed_the_primary(tmp_path, monkeypatch)
+    ledger = "snapshot_date,outcome\n2026-10-06,won\n2026-10-07,lost\n"
+    artifacts[1][LEDGER.as_posix()] = ledger
+    nextday = tmp_path / "nextday"
+    _restore(monkeypatch, nextday,
+             FakeGh([_run(1, "failure"), _run(2, "failure"), _run(3, "success")],
+                    artifacts))
+
+    assert (nextday / SNAP / "2026-10-07.csv").read_text(encoding="utf-8") == (
+        "backup 15:00\n")
+    assert (nextday / LEDGER).read_text(encoding="utf-8") == ledger
 
 
 def test_the_fill_stops_at_the_newest_success(tmp_path, monkeypatch) -> None:
@@ -215,3 +266,21 @@ def test_the_fill_stops_at_the_newest_success(tmp_path, monkeypatch) -> None:
     _restore(monkeypatch, tmp_path / "dest", gh)
 
     assert gh.downloads == [1, 2, 3]
+
+
+def test_a_ledger_that_cannot_be_read_replaces_no_snapshot(
+    tmp_path, monkeypatch,
+) -> None:
+    """Which days it settled is unknown, so none is assumed unsettled."""
+    artifacts = _the_backup_missed_the_primary(tmp_path, monkeypatch)
+    for run in (1, 2, 3):
+        artifacts[run].pop(LEDGER.as_posix(), None)
+    nextday = tmp_path / "nextday"
+    (nextday / LEDGER).parent.mkdir(parents=True)
+    (nextday / LEDGER).write_bytes(b"snapshot_date\n\xff\xfe2026-10-07\n")
+    _restore(monkeypatch, nextday,
+             FakeGh([_run(1, "failure"), _run(2, "failure"), _run(3, "success")],
+                    artifacts))
+
+    assert (nextday / SNAP / "2026-10-07.csv").read_text(encoding="utf-8") == (
+        "backup 15:00\n")

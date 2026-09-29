@@ -586,7 +586,16 @@ def _fill_from_last_success(
     backup runs only after a red primary, so the run it misses is always red.
     Every carrier between the restored run and the newest success is now
     downloaded (usually none: a red day is followed by one red run, then the
-    success), and a download that fails is recorded like the success's.
+    success). A red one that cannot be downloaded is a warning, not a
+    record: recorded, it made this run red, the red primary fired the 15:00
+    backup, and one artifact that never downloads again would have done the
+    same to every primary (a few hundred credits a backup) until it expired
+    90 days later. The next restore walks the same listing and asks for it
+    again anyway. Under `refuse` it still refuses, as every failure does.
+
+    One hole this cannot see: a run re-run by hand ("Re-run failed jobs")
+    keeps its databaseId, and so its place in the listing, but can freeze
+    after newer runs did; its snapshot is then treated as the earlier one.
     """
     for run in older:
         success = run.get("conclusion") == "success"
@@ -594,7 +603,16 @@ def _fill_from_last_success(
             base = Path(scratch)
             why = _fetch(run["databaseId"], artifact, base, attempts)
             if why is not None:
-                if why != ABSENT:
+                if why != ABSENT and not success and not refuse:
+                    print(
+                        f"::warning::Could not download {artifact} from "
+                        f"{workflow} run {run['databaseId']} "
+                        f"({run.get('conclusion')}) to lay underneath the "
+                        f"restored run, after {attempts} attempt(s) (gh said: "
+                        f"{why}); a snapshot that run froze first may be "
+                        "missing here, and the next restore asks for it again."
+                    )
+                elif why != ABSENT:
                     _unreached(
                         report,
                         f"Could not download {artifact} from {workflow} run "
@@ -605,7 +623,17 @@ def _fill_from_last_success(
                         refuse=refuse,
                     )
                 continue
+            ours, theirs = _rows(dest / LEDGER), _rows(base / LEDGER)
             written = _copy(base, dest, overwrite=False)
+            if theirs > ours:
+                shutil.copy2(base / LEDGER, dest / LEDGER)
+                report["ledger_from"] = run["databaseId"]
+                print(
+                    f"The forward ledger from run {run['databaseId']} holds "
+                    f"{theirs} row(s) against {ours}; it only ever grows, so "
+                    "the longer one is kept."
+                )
+            # After the ledger is settled on: a day it holds keeps its snapshot.
             written += _first_opinions(base, dest, run["databaseId"])
             report["filled"] += written
             if success:
@@ -617,15 +645,6 @@ def _fill_from_last_success(
                 f"({run.get('conclusion')}) underneath: {written} file(s) the "
                 "newer state did not have, or froze later."
             )
-            ours, theirs = _rows(dest / LEDGER), _rows(base / LEDGER)
-            if theirs > ours:
-                shutil.copy2(base / LEDGER, dest / LEDGER)
-                report["ledger_from"] = run["databaseId"]
-                print(
-                    f"The forward ledger from run {run['databaseId']} holds "
-                    f"{theirs} row(s) against {ours}; it only ever grows, so "
-                    "the longer one is kept."
-                )
         if success:
             return
 
@@ -641,18 +660,30 @@ def _first_opinions(older: Path, dest: Path, run_id: object) -> int:
     file. The newer copy is a later run's opinion frozen only because its
     restore missed the first — the 15:00 backup's, above. Laid with
     `overwrite=False` like the rest, the later copy won. A day already
-    settled here (its `.settled` marker is in `dest`) keeps its snapshot, so
-    the archive and the ledger rows it settled into never disagree.
+    settled here keeps its snapshot, so the archive and the ledger rows it
+    settled into never disagree — settled as `settle_snapshots` reads it: a
+    `.settled` marker in `dest`, or the day's rows in `dest`'s ledger (a
+    crash between the ledger write and the marker leaves only the rows). A
+    ledger that cannot be read replaces nothing: which days it holds is
+    unknown.
     """
     source = older / SNAPSHOTS
     if not source.is_dir():
+        return 0
+    settled = _ledger_days(dest / LEDGER)
+    if settled is None:
+        print(
+            f"::warning::{LEDGER} could not be read, so no snapshot from run "
+            f"{run_id} replaces a later one: which days it settled is unknown."
+        )
         return 0
     replaced = 0
     for path in sorted(source.glob("*.csv")):
         target = dest / SNAPSHOTS / path.name
         if not target.is_file() or target.read_bytes() == path.read_bytes():
             continue
-        if (target.parent / f"{path.stem}.settled").exists():
+        if (path.stem in settled
+                or (target.parent / f"{path.stem}.settled").exists()):
             print(
                 f"::warning::Run {run_id} froze a different {path.name} before "
                 "the restored run's, but that day has already settled from the "
@@ -667,6 +698,18 @@ def _first_opinions(older: Path, dest: Path, run_id: object) -> int:
             "the day stands."
         )
     return replaced
+
+
+def _ledger_days(path: Path) -> set[str] | None:
+    """The snapshot days the forward ledger at `path` holds rows for: empty
+    when there is no ledger, None when there is one and it cannot be read."""
+    if not path.is_file():
+        return set()
+    try:
+        with path.open(newline="", encoding="utf-8") as handle:
+            return {row.get("snapshot_date") or "" for row in csv.DictReader(handle)}
+    except (OSError, UnicodeDecodeError, csv.Error):
+        return None
 
 
 def _records(path: Path) -> tuple[list[str], list[list[str]]] | None:
