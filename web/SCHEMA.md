@@ -5,6 +5,10 @@ The page reads two files that `Gameday Refresh` should write and commit alongsid
 - `data/board.json` — tonight's slate (board + graphic view)
 - `data/results.json` — yesterday's settled slate (results page)
 
+and the Season page reads a third, written by `Season Sim` and laid over the committed baseline by Publish Site:
+
+- `data/season.json` — the season simulation (season page)
+
 All times are UTC ISO-8601; the page renders them in the viewer's local zone. American odds are integers (`-150`, `135`). Probabilities are 0–1. `teams` is a lookup keyed by abbreviation so team colors and names ship with the data.
 
 ## board.json
@@ -70,3 +74,33 @@ games[]
 ```
 
 `web/build_site_json.py` is the reference writer. Source mapping in nhl-betting-lab: `projGoals`/`winProb`/`moneyline`/`puckLine`/`total`/`regulation` come from `models/team_model.TeamModel`, called directly rather than through `reports/card_pricing.price_team_markets`; the back-to-back adjustment reaches them only while `verdicts.ships("team_b2b")`, read from the lab's `data/outputs` as the card reads it, says it ships, so the board and the card price under one policy. `pick` is read from `data/outputs/gameday_card.json`, which `reports/gameday_card.save_card` writes from `build_card`'s card: the highest-edge team-market best bet or lean it holds for a game the staged prices matched. `record.forward` is `load_record` over `data/outputs/forward_evidence.json`, which `forward_evidence.save_forward_report` writes from `build_forward_report`'s report: the ledger's size (wagers, markets, first and last date, unsettleable), never its return. Results finals (`final`, `finish`) are fetched live by `settle()` through `schedule_for`, a GET of the NHL schedule endpoint `api-web.nhle.com/v1/schedule/<date>` keeping games whose `gameState` is `OFF` or `FINAL`. Without the network the build fails outright: `fetch_json` does not catch the error, `build_board` calls `schedule_for` first, and neither `board.json` nor `results.json` is written. The lab's game history (`build_datasets.load_team_games`) fits the model above, dates the published `b2b` chip (`rest.last_played_dates`) and decides the thin-history gate behind the schedule-only board; it is never read to settle a game.
+
+## season.json
+
+Written by `web/build_season_json.py` (model under `web/season_sim/`). Every figure is a projection over `sims` simulated seasons; nothing in it is a price or a pick.
+
+```
+generatedAt        ISO instant the simulation ran
+season             "2026–27"
+games              games per team in this season's schedule (84 from 2026-27)
+sims               simulated seasons
+asOf               league date the standings were read at
+phase              "preseason" | "regular"  — preseason: nothing played, the whole schedule simulated
+leagueGamesPlayed  games final league-wide; remainingGames = games simulated; pctPlayed = share of the season played
+notice             optional sentence shown under the headline
+teams[]            sorted by projected points
+  abbr, name, short, color, fg, conf ("E"|"W"), div
+  now              {gp, w, l, otl, pts, gf, ga, rw, row}   — the standings to date (all zero in preseason)
+  proj             {pts, p10, p90, sd, w, l, otl, gf, ga}  — full-season mean and 10th/90th percentiles
+  odds             {playoff, div, conf1, pres, last, bottom5, divRankDist[8], avgDivRank}  — shares of simulated seasons
+  lastSeason       {pts, gp, gf, ga} | null  — the previous season's final line, for the "vs last" column
+  rating           {off, ga, diff, tdOff, buOff, onIceXgf, tdXga, onIceXga, goalieGsax}  — goals per game, the model's components
+  scorers[]        top five by projected points: {name, pos, age, gp, g, a, p, now:{gp,g,a,p}, last:{gp,g,a,p}|null}
+  goalies[]        {name, team, age, share, starts, wins, p10, p90, p30, p35, p40, gsax60, sv3, now:{gs,w,sv}, last:{gs,w,sv}|null}
+leaders            {points[30], goals[20], wins[20]}  — the same player and goalie shapes, each with `team`
+notes              {asOf, returning[], out[], unknown[]}  — the availability list as read from data/season_sim/roster_notes.json,
+                   and any name in it the stats API did not know (published so a typo is visible, never silently dropped)
+method             {sigma, hfa, tieRate, leagueAvgPts}  — the engine's calibration, printed on the page
+```
+
+Standings to date come from the NHL standings endpoint (`api-web.nhle.com/v1/standings/<date>`) and finals from each club's season schedule (`club-schedule-season`); the previous season's line is read at the last standings day the API states for it. The page never recomputes a record: in season, `now` is the league's own table and `proj` adds the simulated remainder to it.

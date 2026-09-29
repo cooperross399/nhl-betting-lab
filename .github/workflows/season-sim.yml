@@ -1,0 +1,86 @@
+name: Season Sim
+
+# Plays the rest of the NHL season ten thousand times and hands the result to
+# the public site.
+#
+# Runs every morning, after the previous night's games are final and before
+# Publish Site's 14:45 UTC build. It reads public endpoints only — the NHL
+# API for standings, rosters, schedules and season-to-date stats, MoneyPuck
+# for expected goals — and the hand-kept availability list under
+# data/season_sim/roster_notes.json. It fetches no odds, spends no credit,
+# pushes no branch, edits no policy, and places no bet.
+#
+# The output is one file, season.json, uploaded as the `season-sim` artifact.
+# Publish Site lays it over the committed baseline at web/data/season.json;
+# when no run has produced one, or the newest cannot be downloaded, the site
+# keeps the baseline and says how old it is. A red run here never blocks a
+# publish: the board must not go dark because a projection did not build.
+on:
+  schedule:
+    - cron: "5 13 * * *"   # 09:05 New York; finals are in, the site builds at 10:45
+  workflow_dispatch:
+    inputs:
+      sims:
+        description: Simulated seasons (default 10,000).
+        type: number
+        default: 10000
+
+permissions:
+  contents: read
+
+concurrency:
+  group: season-sim
+  cancel-in-progress: false
+
+jobs:
+  simulate:
+    name: Season Sim
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install project
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install -e .
+
+      - name: Build the season projection
+        # Every input is fetched here, into a cache under data/raw that no
+        # workflow restores: a projection built on last week's rosters is
+        # worse than none, and the fetch is about ninety small requests.
+        env:
+          PYTHONPATH: src
+          SIMS: ${{ inputs.sims || 10000 }}
+        run: |
+          set -u
+          # Written under dist/data, the path Publish Site restores it to,
+          # so the artifact's root and the restore's directory agree.
+          python web/build_season_json.py --out dist/data --cache data/raw/season_sim --sims "$SIMS"
+          test -s dist/data/season.json
+
+      - name: Hand the projection to Publish Site
+        uses: actions/upload-artifact@v4
+        with:
+          name: season-sim
+          path: dist/data/season.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Report the outcome
+        if: always()
+        run: |
+          echo "This job projected the season from public NHL and MoneyPuck data."
+          echo "It fetched no odds, spent no credit, pushed no branch, edited no policy,"
+          echo "and placed no bet."

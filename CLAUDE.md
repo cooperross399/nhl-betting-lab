@@ -674,6 +674,16 @@ Re-derive rather than trust if the data has moved.
   *after* the work, so fresh files read as stale; (6) green, and correct.
   **Five of the six failed in the direction of reporting that nothing had
   changed.** Every one would have first appeared on a Monday in season.
+  **After 2026-11-29 it re-decides nothing, on purpose.** The bought prices
+  exist in CI only in Historical Props Purchase's artifacts, and on
+  2026-09-25 the owner decided to let them expire (public repo; the
+  provider's terms forbid redistributing them as files). When every listing
+  answers and none of the three price-carrying pairs restores a run, the
+  restore step emits a `::notice::` and `prices=expired`, the experiments,
+  the drift check and the evidence upload are skipped, and the run is green;
+  the committed verdicts stand. A failed listing or download, or a carrier
+  that restores without prices, stays red. Re-decide locally (README,
+  Experiment Refresh).
 - **On the current data, all three recorded verdicts still hold**: `by_toi`
   off, `props_b2b` in force, `team_b2b` in force — re-decided rather than
   assumed, and now measured in the window the card actually runs in.

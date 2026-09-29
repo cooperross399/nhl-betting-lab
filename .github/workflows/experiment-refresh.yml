@@ -81,10 +81,16 @@ jobs:
           # restores of the same prices do. A listing that answers and holds
           # no carrier still exits 0, and the checks below decide on what
           # arrived, as before.
+          #
+          # --record-run writes the run each pair restored from, or nothing
+          # when the listing answered and no run carries it. The price check
+          # below reads these to tell an expiry from a breakage.
+          carriers=$(mktemp -d)
           for wf in gameday-refresh.yml historical-props-purchase.yml; do
             for name in gameday-state historical-props; do
               python scripts/restore_state.py --artifact "$name" --dest data \
-                --workflow "$wf" --no-merge --refuse-unreachable --attempts 3 || {
+                --workflow "$wf" --no-merge --refuse-unreachable --attempts 3 \
+                --record-run "$carriers/$wf.$name" || {
                 echo "::error::GitHub could not be reached to restore $name from $wf (gh's own words are above). Re-deciding without it would decide on older or missing inputs and report the result as this week's verdicts, so this run stops. Dispatch it again once GitHub answers."
                 exit 1
               }
@@ -115,11 +121,45 @@ jobs:
           # depending on another workflow having left them in an artifact is
           # what made the first firing re-decide nothing. A refresh that can
           # build its own inputs does not need anyone else to have run.
+          #
+          # EXCEPT WHEN THEY EXPIRED, WHICH WAS DECIDED. The bought prices
+          # live in CI only in the artifacts of Historical Props Purchase
+          # (newest carrier run 33450963332, both artifacts expiring
+          # 2026-11-29). On 2026-09-25 the owner decided to let them expire
+          # rather than give them another home: this repository is public and
+          # the provider's terms forbid redistributing bought prices as
+          # downloadable files. After that date every run of this job would
+          # fail here, every week, for a known reason, which is noise, not
+          # news. So one case is told apart from a breakage: every restore
+          # above exited 0 (so every listing answered and no carrier's
+          # download failed), no price file arrived, AND none of the three
+          # pairs that carry bought prices restored anything - the listing
+          # answered and no run carries them. Then the price-dependent steps
+          # (all three experiments, and the drift check that compares
+          # their output) are skipped with a notice, the rest still runs,
+          # and the run is green. Anything else stays red: a carrier that
+          # restored and brought no prices, or a pair whose record is missing
+          # (so nothing established that no run carries it).
           if [ ! -s data/processed/historical_prop_prices.csv ]; then
-            echo "::error::The bought prices did not restore. They cannot be regenerated, so this run could re-decide nothing. That is a broken refresh, not a clean one."
-            exit 1
+            held=""
+            for pair in gameday-refresh.yml.historical-props \
+                        historical-props-purchase.yml.historical-props \
+                        historical-props-purchase.yml.gameday-state; do
+              if [ ! -f "$carriers/$pair" ]; then
+                held="$held $pair (no record of what its restore found)"
+              elif [ -s "$carriers/$pair" ]; then
+                held="$held $pair (run $(tr -d '\n' < "$carriers/$pair"))"
+              fi
+            done
+            if [ -n "$held" ]; then
+              echo "::error::The bought prices did not restore, although no run was established to hold none:$held. They cannot be regenerated, so this run could re-decide nothing. That is a broken refresh, not a clean one."
+              exit 1
+            fi
+            echo "::notice::The bought prices have expired from CI, as decided on 2026-09-25: GitHub answered and no run of historical-props-purchase.yml (or gameday-refresh.yml) on main still carries historical-props or the purchase's gameday-state. So the three experiments and the verdict drift check were not run, and the committed data/outputs/*_experiment.json and *_experiment.md stand, measured when they were committed; verdicts.ships() reads them unchanged. To re-decide, run the experiments locally against a checkout whose data/processed holds the bought prices (see README, Experiment Refresh). Everything else in this run still ran."
+            echo "prices=expired" >> "$GITHUB_OUTPUT"
+          else
+            echo "restored $(wc -l < data/processed/historical_prop_prices.csv) lines of bought prices"
           fi
-          echo "restored $(wc -l < data/processed/historical_prop_prices.csv) lines of bought prices"
           if [ ! -s data/outputs/prop_calibration_samples.csv ]; then
             echo "::warning::The walk-forward samples did not restore; building them. This is slower but self-sufficient."
           fi
@@ -154,6 +194,10 @@ jobs:
         run: echo "at=$(date +%s)" >> "$GITHUB_OUTPUT"
 
       - name: Re-run every experiment
+        # Every experiment reads the bought prices, so none runs once they
+        # have expired (see the restore). Written as "not expired" so that a
+        # restore that never set the output runs them, and fails, as before.
+        if: steps.restore.outputs.prices != 'expired'
         env:
           PYTHONPATH: src
         run: |
@@ -166,7 +210,10 @@ jobs:
           done
 
       - name: Has anything changed its mind?
+        # Nothing was re-decided when the prices have expired, and run here
+        # it would read every committed verdict as "not re-decided" (exit 2).
         id: drift
+        if: steps.restore.outputs.prices != 'expired'
         env:
           PYTHONPATH: src
         run: |
@@ -204,7 +251,10 @@ jobs:
             --body-file data/outputs/verdict_drift.md
 
       - name: Keep the evidence
-        if: always()
+        # Not when the prices have expired: the files here would be the
+        # committed copies, not this run's evidence, under a name that says
+        # they are.
+        if: always() && steps.restore.outputs.prices != 'expired'
         uses: actions/upload-artifact@v4
         with:
           name: experiment-refresh
@@ -217,8 +267,15 @@ jobs:
 
       - name: Say what this run did not do
         if: always()
+        env:
+          PRICES: ${{ steps.restore.outputs.prices }}
         run: |
-          echo "This job re-decided every experiment on the data known today."
+          if [ "$PRICES" = expired ]; then
+            echo "This job re-decided nothing: the bought prices have expired from CI,"
+            echo "so the committed verdicts stand as they were committed."
+          else
+            echo "This job re-decided every experiment on the data known today."
+          fi
           echo "It placed no bet, edited no live policy, allowlisted nothing,"
           echo "and changed the card not at all. A moved verdict is a pull"
           echo "request for a human, never an automatic edit."

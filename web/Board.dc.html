@@ -53,6 +53,7 @@
         <a href="{{ links.results }}" style="display:inline-flex;align-items:center;min-height:44px;">Results</a>
         <a href="{{ links.archive }}" style="display:inline-flex;align-items:center;min-height:44px;">Archive</a>
         <a href="https://maverickhightower.com/about.html" style="display:inline-flex;align-items:center;min-height:44px;">About</a>
+        <a href="{{ links.season }}" style="display:inline-flex;align-items:center;min-height:44px;">Season</a>
         <sc-for list="{{ otherSports }}" as="s" hint-placeholder-count="2">
           <a href="{{ s.href }}" style="{{ s.style }}">{{ s.name }}</a>
         </sc-for>
@@ -247,7 +248,7 @@ class Component extends DCLogic {
   componentDidUpdate() { this.load(); }
   renderVals() {
     const vm = this.state.vm;
-    const links = { board: "Board.dc.html", results: "Results.dc.html", archive: "Archive.dc.html", graphic: "Graphic.dc.html" };
+    const links = { board: "Board.dc.html", results: "Results.dc.html", archive: "Archive.dc.html", graphic: "Graphic.dc.html", season: "Season.dc.html" };
     if (!vm) return { links, groups: [], strip: [], otherSports: [], title1: "Tonight's", title2: "Board." };
     const groups = vm.groups.map((d) => ({ ...d, games: d.games.map((g) => ({ ...g, hasBar: g.bar.length > 0,
       ariaLabel: `${g.sides[0].name} at ${g.sides[1].name}, ${g.time}`,
