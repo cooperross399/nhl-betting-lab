@@ -22,10 +22,12 @@ Every workflow here used to pick its restore source with
 
 So the source is chosen by the artifact, not the conclusion: the newest
 COMPLETED run that can actually be downloaded from, any conclusion. If that
-run is not a success, the newest successful run that carries the artifact is
-laid underneath it without overwriting anything — a red run that itself
-started cold must not replace a full cache with a thin one — and the forward
-ledger, which only ever grows, is taken from whichever copy holds more rows.
+run is not a success, every older carrier down to the newest successful one
+is laid underneath it without overwriting anything — a red run that itself
+started cold must not replace a full cache with a thin one — except a day's
+snapshot an older carrier froze first, which replaces a later one (the first
+opinion of the day stands); and the forward ledger, which only ever grows, is
+taken from whichever copy holds more rows.
 Workflows are tried in the order given; a later one is used only when no run
 of an earlier one carries the artifact.
 
@@ -116,8 +118,10 @@ restoring the run before it. So now:
 * and whatever could not be reached is said in plain sentences, appended to
   `--problem-file` when one is named. Gameday Refresh names one and its health
   step makes the run degraded from it: a red run is not a clean restore
-  source, so the next run lays the last successful state underneath it and
-  the snapshot that was missed comes back and settles. The step still never
+  source, so the next run lays every older carrier down to the last
+  successful one underneath it and the snapshot that was missed comes back
+  and settles — even when the run that froze it was red too, which is the
+  only kind the 15:00 backup ever misses. The step still never
   fails on it.
 
 A restore that could not be asked still starts without the state, so that
@@ -209,6 +213,9 @@ from pathlib import Path
 
 #: Relative to the artifact root. Append-only; the longer copy is the truth.
 LEDGER = Path("processed") / "forward_evidence.csv"
+
+#: Relative to the artifact root. The first snapshot frozen for a day stands.
+SNAPSHOTS = Path("archive") / "priced_snapshots"
 
 #: The only branch whose runs are restored from unless `--branch` says
 #: otherwise: the protected one, where code arrives only through review.
@@ -420,8 +427,8 @@ def restore(
     snapshot archive, in place of Gameday Refresh's.
     """
     report: dict = {"run": None, "conclusion": None, "filled_from": None,
-                    "filled": 0, "ledger_from": None, "unioned_from": [],
-                    "rows_recovered": 0, "not_merged": [], "also": {},
+                    "filled": 0, "laid_from": [], "ledger_from": None,
+                    "unioned_from": [], "rows_recovered": 0, "not_merged": [], "also": {},
                     "unreached": []}
     dest.mkdir(parents=True, exist_ok=True)
     for position, workflow in enumerate(workflows):
@@ -559,18 +566,30 @@ def _fill_from_last_success(
     older: list[dict], artifact: str, dest: Path, workflow: str, report: dict,
     *, attempts: int = 1, refuse: bool = False,
 ) -> None:
-    """Lay the newest successful carrier in `older` under `dest`.
+    """Lay every carrier in `older` under `dest`, newest first, down to and
+    including the newest successful one.
 
-    Its download is retried like the chosen run's. It used to be one
-    attempt, and a failure of any kind moved silently to the success before
-    it — so a red run restored the day after a missed snapshot could lay the
-    wrong success underneath and lose that snapshot anyway. A failure that is
-    not an absence is recorded, so the run is degraded and the next restore,
-    whose newest carrier is then this red run, tries the same success again.
+    Its downloads are retried like the chosen run's. The success used to be
+    one attempt, and a failure of any kind moved silently to the success
+    before it — so a red run restored the day after a missed snapshot could
+    lay the wrong success underneath and lose that snapshot anyway. A failure
+    that is not an absence is recorded, so the run is degraded and the next
+    restore, whose newest carrier is then this red run, asks again.
+
+    **The red runs in between are laid too** (sweep 4). Only the success was,
+    so a red run one restore could not download was never read again: the
+    13:30 primary went red and froze and posted the day's snapshot, the 15:00
+    backup's three downloads of it got HTTP 502, the backup restored the
+    success before it and froze its own later opinion under the same name,
+    and the next day's fill skipped the red primary and laid that success
+    underneath. The posted opinion never reached the forward ledger. The
+    backup runs only after a red primary, so the run it misses is always red.
+    Every carrier between the restored run and the newest success is now
+    downloaded (usually none: a red day is followed by one red run, then the
+    success), and a download that fails is recorded like the success's.
     """
     for run in older:
-        if run.get("conclusion") != "success":
-            continue
+        success = run.get("conclusion") == "success"
         with tempfile.TemporaryDirectory() as scratch:
             base = Path(scratch)
             why = _fetch(run["databaseId"], artifact, base, attempts)
@@ -579,18 +598,24 @@ def _fill_from_last_success(
                     _unreached(
                         report,
                         f"Could not download {artifact} from {workflow} run "
-                        f"{run['databaseId']} (success) to lay underneath the "
-                        f"restored run, after {attempts} attempt(s) (gh said: "
-                        f"{why}); whatever it carried that the restored run "
-                        "lacks is missing from this run's state.",
+                        f"{run['databaseId']} ({run.get('conclusion')}) to lay "
+                        f"underneath the restored run, after {attempts} "
+                        f"attempt(s) (gh said: {why}); whatever it carried that "
+                        "the restored run lacks is missing from this run's state.",
                         refuse=refuse,
                     )
                 continue
-            report["filled_from"] = run["databaseId"]
-            report["filled"] = _copy(base, dest, overwrite=False)
+            written = _copy(base, dest, overwrite=False)
+            written += _first_opinions(base, dest, run["databaseId"])
+            report["filled"] += written
+            if success:
+                report["filled_from"] = run["databaseId"]
+            else:
+                report["laid_from"].append(run["databaseId"])
             print(
-                f"Laid {workflow} run {run['databaseId']} (success) underneath: "
-                f"{report['filled']} file(s) the newer state did not have."
+                f"Laid {workflow} run {run['databaseId']} "
+                f"({run.get('conclusion')}) underneath: {written} file(s) the "
+                "newer state did not have, or froze later."
             )
             ours, theirs = _rows(dest / LEDGER), _rows(base / LEDGER)
             if theirs > ours:
@@ -601,7 +626,47 @@ def _fill_from_last_success(
                     f"{theirs} row(s) against {ours}; it only ever grows, so "
                     "the longer one is kept."
                 )
-        return
+        if success:
+            return
+
+
+def _first_opinions(older: Path, dest: Path, run_id: object) -> int:
+    """Put back each snapshot `older` froze before `dest`'s copy of that day;
+    count them.
+
+    The first opinion of the day stands (`forward_evidence.write_snapshot`
+    never overwrites one), and runs are serialised, so when an older carrier
+    and the restored state hold different snapshots for one day, the older
+    one was frozen first: a run that had restored it would hold the same
+    file. The newer copy is a later run's opinion frozen only because its
+    restore missed the first — the 15:00 backup's, above. Laid with
+    `overwrite=False` like the rest, the later copy won. A day already
+    settled here (its `.settled` marker is in `dest`) keeps its snapshot, so
+    the archive and the ledger rows it settled into never disagree.
+    """
+    source = older / SNAPSHOTS
+    if not source.is_dir():
+        return 0
+    replaced = 0
+    for path in sorted(source.glob("*.csv")):
+        target = dest / SNAPSHOTS / path.name
+        if not target.is_file() or target.read_bytes() == path.read_bytes():
+            continue
+        if (target.parent / f"{path.stem}.settled").exists():
+            print(
+                f"::warning::Run {run_id} froze a different {path.name} before "
+                "the restored run's, but that day has already settled from the "
+                "later one here, so it stays."
+            )
+            continue
+        shutil.copy2(path, target)
+        replaced += 1
+        print(
+            f"Run {run_id} froze {path.name} first; its opinion replaces the "
+            "later one the restored run froze, because the first opinion of "
+            "the day stands."
+        )
+    return replaced
 
 
 def _records(path: Path) -> tuple[list[str], list[list[str]]] | None:
