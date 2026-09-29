@@ -1439,6 +1439,16 @@ Re-derive rather than trust if the data has moved.
   minutes (600 new boxscores, 2026-08-28). Owner items: a circuit breaker in
   `fetch_nhl_data.py`, and carrying `data/raw/nhl/club_schedule` in
   gameday-state (about 128 live requests a run).
+- **2026-09-29 (#273), two defect fixes.** `merge_capture_store.py`, which
+  Closing Lines uses to publish its store, compared the merged total with the
+  remote's rows, so a remote that parsed short (a stray quote) was hidden by
+  the local rows and a shorter store was written; each side's parse is now
+  checked against its own file's row count, as #266 does for the ledger, and
+  a refusal is an `::error::`, exit 1, nothing written (Closing Lines is
+  disabled, so no run changes). And the ladder report's printed rate divided
+  one-per-wager violations by every rung pair; it now prints violations over
+  comparable wagers (`comparable_wagers`, display only) beside the pair count.
+  No registered count, band, floor or JSON field moved.
 - **2026-09-25, a defect fix recorded as `docs/when_this_ends.md` requires:
   the card refuses stale prices.** The policy's `max_provider_run_age_hours`
   (12, policy-wide and on `the_odds_api`) was parsed and never applied —
