@@ -66,6 +66,11 @@ USER_AGENT = (
 #: than hard-coding a list that would rot silently.
 SEED_SLUG = "toronto-maple-leafs"
 
+#: Nothing was captured, or fewer than half the team pages were read (see
+#: `main`). The workflow's line-units gate reads this step's outcome, so it
+#: turns the run red after every upload.
+EXIT_LOST = 2
+
 
 def capture_path(day: str, *, processed_dir: Path | None = None) -> Path:
     """One file per league game date, appended to through the day."""
@@ -138,6 +143,7 @@ def main(argv: list[str] | None = None) -> int:
 
     rows: list[dict] = []
     failed: list[str] = []
+    lost: list[str] = []
     for index, slug in enumerate(slugs):
         html = seed if slug == SEED_SLUG else None
         if html is None:
@@ -146,11 +152,13 @@ def main(argv: list[str] | None = None) -> int:
                 html = _fetch(TEAM_PAGE.format(slug=slug))
             except Exception as exc:
                 failed.append(f"{slug}: {exc}")
+                lost.append(slug)
                 continue
         try:
             rows.extend(rows_from_page(html, retrieved_at=retrieved_at))
         except ValueError as exc:
             failed.append(f"{slug}: {exc}")
+            lost.append(slug)
 
     if failed:
         print(f"{len(failed)} team page(s) could not be read:", file=sys.stderr)
@@ -186,6 +194,32 @@ def main(argv: list[str] | None = None) -> int:
         "This capture spent no provider credits, touched no card, and froze "
         "no opinion."
     )
+    # A partial capture, after the write, so the teams that arrived are kept
+    # either way. Until sweep 5 (line-combinations-partial-capture-reads-
+    # green) the lost pages went to stderr alone and the script exited 0:
+    # the seed page loading and the other 31 answering 429 (the usual shape
+    # of a cloud IP throttled after its first request) wrote one team's rows
+    # and left a green step, a green run and nothing on the run page, and
+    # the source keeps no archive. Now every lost team is named in a
+    # `::warning::`, as `capture_deployment.py` names the games it lost; one
+    # page failing is not a red run. Fewer than half the teams read is a
+    # round lost rather than a round with holes, so it exits 2 and the
+    # workflow's line-units gate turns the run red.
+    if lost:
+        read = len(slugs) - len(lost)
+        print(
+            f"::warning::The line units were NOT captured for {len(lost)} of "
+            f"{len(slugs)} team(s) this run ({', '.join(lost)}); the "
+            f"{read} that were read were kept. The source keeps no archive, "
+            "so these teams' lines this run cannot be collected later."
+        )
+        if read * 2 < len(slugs):
+            print(
+                f"::error::Only {read} of {len(slugs)} team page(s) were read "
+                "this run, fewer than half, so this round's line units are "
+                "lost, not partial."
+            )
+            return EXIT_LOST
     return 0
 
 

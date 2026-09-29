@@ -35,7 +35,10 @@ from nhl_betting_lab.providers import odds_api
 from nhl_betting_lab.providers.env_file import load_provider_env
 from nhl_betting_lab.providers.odds_api import EmptySlateError
 from nhl_betting_lab.preseason_screen import preseason_screen
-from nhl_betting_lab.season import LEAGUE_TIMEZONE
+from nhl_betting_lab.season import (
+    LEAGUE_TIMEZONE,
+    regular_season_games_still_to_play,
+)
 
 
 MOVEMENT_DIRNAME = "line_movement"
@@ -193,6 +196,35 @@ def main(argv: list[str] | None = None) -> int:
         if failures:
             report_failed_requests(failures, captured_nothing=True)
             return EXIT_NOTHING_CAPTURED
+        # No failure, and no game in the window left to ask: an off-day, or
+        # a board missing today's games. Sweep 4 (#257) taught the shadow
+        # run to tell the two apart by the cached club schedule, which the
+        # workflow's "Cache the club schedules" step fetches before this one
+        # for free. This script read the same board and never asked, so a
+        # provider or region glitch that dropped tonight's games from
+        # /events was a red run in Gameday Refresh and a green one here,
+        # "No rows returned; nothing written." with exit 0, and that round's
+        # movement and closing price were gone: no source keeps an archive
+        # (sweep 5, line-movement-capture-offday-board-green). Same rule,
+        # same helper: games the schedule lists in the window that have not
+        # faced off by the capture instant make it a failed round (exit 2,
+        # Capture prices goes red). A red exit buys nothing more; no step
+        # of the workflow retries the fetch on it. A board that had games to
+        # ask and no book priced them is an absence, as it was, and so is a
+        # day the schedule lists nothing still to play.
+        if result.events_seen == 0:
+            scheduled = regular_season_games_still_to_play(
+                league_days, not_started_by=datetime.fromisoformat(captured_at)
+            )
+            if scheduled:
+                print(
+                    "::error::The provider's board lists none of the games "
+                    f"on {', '.join(league_days)}, while the cached NHL "
+                    f"schedule lists {scheduled} regular-season game(s) "
+                    "there still to face off. The board is missing them, so "
+                    "this round is lost, not an off-day."
+                )
+                return EXIT_NOTHING_CAPTURED
         return 0
 
     frame = pd.DataFrame(result.rows)

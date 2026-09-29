@@ -100,6 +100,22 @@ jobs:
         # in, row by row, what the two carriers before the newest hold that it
         # lacks, so a run whose own restore found nothing cannot become the
         # base the season is lost from. See scripts/restore_state.py.
+        #
+        # A RESTORE THAT COULD NOT ASK GITHUB IS A RED RUN. This made one
+        # attempt at each call, named no --problem-file, and turned any
+        # failure into a ::warning::, so a failed `gh run list` started every
+        # day file afresh, uploaded a carrier holding this round alone, and
+        # finished green. The union reads the newest carrier and the two
+        # before it, so three such runs in a row (three 502s, or seven hours
+        # of listing failures at five runs a day) and the next run unioned
+        # three thin carriers and never read an older one: every earlier
+        # capture, yesterday's and the season's, left the chain for good
+        # with every run green (sweep 5, line-movement-three-thin-carriers-
+        # drop-the-season). Now each call is tried three times, as Gameday
+        # Refresh's restore is, and whatever still could not be reached is
+        # written to restore_problem.txt, which the last gate reads after
+        # every upload and turns into a red run. One thin run is then seen
+        # the day it happens, not after the third. Free: GitHub's API only.
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
@@ -107,9 +123,14 @@ jobs:
           set -u
           DAY=$(TZ=America/New_York date +%F)
           mkdir -p data/processed
+          : > restore_problem.txt
           python scripts/restore_state.py --artifact line-movement --dest data/processed \
             --workflow line-movement.yml --union 3 \
-            || echo "::warning::The previous captures could not be restored; this run starts the day's files afresh."
+            --attempts 3 --problem-file restore_problem.txt \
+            || {
+              echo "::warning::The previous captures could not be restored; this run starts the day's files afresh."
+              echo "restore_state.py exited non-zero, so the previous captures were not restored." >> restore_problem.txt
+            }
           for store in line_movement deployment line_combinations; do
             ls -la "data/processed/$store/$DAY.csv" 2>/dev/null \
               || echo "No $store file for $DAY yet; this run starts it."
@@ -388,6 +409,26 @@ jobs:
           echo "::error::This run's line-movement artifact from an earlier attempt could not be downloaded or merged (see Fold in this run's earlier attempts), so it was not overwritten. This attempt's captures are in line-movement-attempt-${{ github.run_attempt }}; the next run restores only line-movement, so union the two (scripts/restore_state.py union_csv) or this attempt's round is missing from the chain."
           exit 1
 
+      - name: Fail the run when the previous captures were not restored
+        # After every upload: this run's round is kept either way, and the
+        # red X is the report, not the damage. It names what the restore
+        # could not ask GitHub (restore_problem.txt, written by "Restore
+        # today's captures"), because a run that started its day files
+        # afresh uploaded a carrier holding its own round alone, and three
+        # of those in a row leave every earlier capture outside the union's
+        # window. Seen after one, the chain can be repaired by hand before
+        # the third: gh run download <run-id> -n line-movement from the last
+        # run that restored normally, and union it (scripts/restore_state.py
+        # union_csv). tests/test_a_line_movement_restore_that_could_not_ask_is_red.py
+        # runs it.
+        if: always()
+        run: |
+          if [ -s restore_problem.txt ]; then
+            echo "::error::The previous captures were not fully restored this run, so it uploaded a carrier missing earlier rounds. Three such runs in a row drop every earlier capture from the chain. What could not be reached: $(tr '\n' ' ' < restore_problem.txt)"
+            exit 1
+          fi
+          echo "The previous captures were restored."
+
       - name: Fail the run when the line units were not captured
         # The capture above stays continue-on-error so a line-source failure
         # can never cost the prices, but that also made a lost night look like
@@ -395,10 +436,12 @@ jobs:
         # units were not captured is gone for good. This runs after every
         # upload above, so the captures are already kept: the red X is the
         # report, not the damage. The capture script exits 0 on a night with
-        # no games and 2 only when nothing was captured.
+        # no games or when at least half the team pages were read (a partial
+        # capture names every team it lost in a ::warning::), and 2 when
+        # nothing was captured or fewer than half the teams were.
         if: always() && steps.lines.outcome == 'failure'
         run: |
-          echo "::error::The Daily Faceoff line units were NOT captured this run (the price capture reports on itself). That source keeps no archive, so this night's line units cannot be collected later."
+          echo "::error::The Daily Faceoff line units were NOT captured this run, or fewer than half the teams were (see Capture line combinations; the price capture reports on itself). That source keeps no archive, so this night's line units cannot be collected later."
           exit 1
 
       - name: Fail the run when the scratch list was not captured

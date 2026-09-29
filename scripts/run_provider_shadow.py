@@ -55,11 +55,10 @@ from nhl_betting_lab.providers import odds_api
 from nhl_betting_lab.providers.odds_api import EmptySlateError
 from nhl_betting_lab.providers.env_file import load_provider_env
 from nhl_betting_lab.preseason_screen import preseason_screen
-from nhl_betting_lab.puck_drop import parse_commence_time
 from nhl_betting_lab.season import (
     LEAGUE_TIMEZONE,
+    regular_season_games_still_to_play,
     schedule_cache_is_complete,
-    scheduled_regular_season_starts,
     season_id,
 )
 from nhl_betting_lab.reports.provider_shadow import (
@@ -91,34 +90,6 @@ def _staged_prices(staging_dir: Path) -> pd.DataFrame:
     if not frames:
         return pd.DataFrame(columns=list(odds_api.PRICE_COLUMNS))
     return pd.concat(frames, ignore_index=True)
-
-
-def _scheduled_regular_season_games(
-    days: Iterable[str], *, not_started_by: datetime | None = None
-) -> int:
-    """Regular-season games the cached NHL club schedules list on `days`.
-
-    Games the schedule calls off are not counted, and neither are
-    exhibitions, which books may never price. With no cache there is
-    nothing to count, and the answer is 0.
-
-    With `not_started_by`, a game whose scheduled face-off is at or before
-    that moment is not counted either: it is under way or over, and a board
-    that has moved on from it is not missing it. An unreadable face-off
-    counts, as it does for the card (`_under_way` in run_gameday_card.py):
-    ambiguity is a game still to play.
-    """
-    wanted = set(days)
-    count = 0
-    for (day, _home, _away), start in scheduled_regular_season_starts().items():
-        if day not in wanted:
-            continue
-        if not_started_by is not None:
-            begins = parse_commence_time(start)
-            if begins is not None and begins <= not_started_by:
-                continue
-        count += 1
-    return count
 
 
 def _project_markets(provider_keys: Iterable[str]) -> set[str]:
@@ -352,7 +323,7 @@ def main(argv: list[str] | None = None) -> int:
             # (failure-shape audit, c3x0-odds-api-600).
             if isinstance(exc, odds_api.NoOddsServedError):
                 days = league_days or [datetime.now(LEAGUE_TIMEZONE).date().isoformat()]
-                scheduled = _scheduled_regular_season_games(days)
+                scheduled = regular_season_games_still_to_play(days)
                 if scheduled:
                     print(
                         "Team-market fetch failed: the provider refused the "
@@ -380,7 +351,7 @@ def main(argv: list[str] | None = None) -> int:
                 # no fault. Exit 2 degrades the run, so the 15:00 backup runs
                 # its own budgeted fetch, as for any failed fetch.
                 days = league_days or [datetime.now(LEAGUE_TIMEZONE).date().isoformat()]
-                scheduled = _scheduled_regular_season_games(
+                scheduled = regular_season_games_still_to_play(
                     days, not_started_by=fetched
                 )
                 if scheduled:
