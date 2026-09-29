@@ -144,3 +144,45 @@ def test_every_cron_names_a_single_hour_the_wait_can_read() -> None:
         wfr.round_for(entry["cron"], now)  # raises on "6,10" or "*/2"
         minute, hour = entry["cron"].split()[:2]
         assert minute.isdigit() and hour.isdigit(), entry["cron"]
+
+
+GAMEDAY = PROJECT_ROOT / ".github" / "workflows" / "gameday-refresh.yml"
+
+
+def test_the_card_crons_land_on_the_slots_the_routines_read() -> None:
+    """13:30 UTC card and 15:00 backup; the routines that read card-feed
+    (NHL LAB BRIEF 19:30 UTC, relays 19:45 and 21:45) are timed off these."""
+    document = yaml.safe_load(GAMEDAY.read_text(encoding="utf-8"))
+    triggers = document.get("on", document.get(True))
+    lead = int(wfr.ROUND_LEAD.total_seconds() // 60)
+    slots = set()
+    for entry in triggers["schedule"]:
+        minute, hour = entry["cron"].split()[:2]
+        assert minute.isdigit() and hour.isdigit(), entry["cron"]
+        slots.add((int(hour) * 60 + int(minute) + lead) % (24 * 60))
+    assert slots == {13 * 60 + 30, 15 * 60}
+
+
+def test_the_card_waits_before_it_asks_whether_it_is_already_published() -> None:
+    document = yaml.safe_load(GAMEDAY.read_text(encoding="utf-8"))
+    jobs = document["jobs"]
+    assert jobs["wait-more"]["needs"] == "wait"
+    assert jobs["precheck"]["needs"] == "wait-more"
+    assert jobs["refresh"]["needs"] == "precheck"
+    for name in ("wait-more", "precheck", "refresh"):
+        assert "!cancelled()" in str(jobs[name]["if"]), name
+    # The refresh still runs only after a precheck that succeeded and said
+    # the card is not out yet; a failed wait must not add a condition.
+    condition = str(jobs["refresh"]["if"])
+    assert "needs.precheck.result == 'success'" in condition
+    assert "needs.precheck.outputs.already != 'true'" in condition
+    for name in ("wait", "wait-more"):
+        (step,) = [s for s in jobs[name]["steps"] if "wait_for_round.py" in str(s.get("run", ""))]
+        assert step["env"]["SCHEDULE"] == "${{ github.event.schedule }}"
+        assert '--schedule "$SCHEDULE"' in step["run"]
+        budget = float(step["run"].split("--budget-minutes")[1].split()[0])
+        assert budget < int(jobs[name]["timeout-minutes"])
+    assert "concurrency" not in document
+    assert jobs["refresh"]["concurrency"] == {
+        "group": "gameday-refresh", "cancel-in-progress": False,
+    }

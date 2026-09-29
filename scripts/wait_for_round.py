@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Hold a Line Movement run until the round it was scheduled for.
+"""Hold a scheduled run until the round it was scheduled for.
+
+Used by Line Movement Capture (rounds 14:00, 18:00, 21:00, 23:00, 01:00 UTC)
+and Gameday Refresh (the 13:30 card and the 15:00 backup).
 
     python scripts/wait_for_round.py --schedule "0 15 * 1-4,10-12 *"
     python scripts/wait_for_round.py --at 2026-09-29T21:30Z
@@ -13,8 +16,11 @@ past midnight in New York, so it captures tomorrow's slate and restores
 nothing of today's. Lateness is not stable enough to aim a cron at: it moves
 by hours between days, and the close window is 150 minutes wide.
 
+Gameday Refresh has the same problem: its 13:30 card landed about 19:30,
+after the routines that read it and at the first 17:00 ET face-off.
+
 So every cron fires `ROUND_LEAD` before its round, and the run waits here,
-before the capture, until the round. Lateness up to `ROUND_LEAD` then costs
+before the capture or the card, until the round. Lateness up to `ROUND_LEAD` then costs
 nothing; beyond it, the run captures as soon as it starts, which is what
 every run did before. A run is never held past its round and never captures
 early because it started early.
