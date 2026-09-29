@@ -40,6 +40,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from nhl_betting_lab.closing_lines import team_market_rows
 from nhl_betting_lab.config import OUTPUTS_DIR, PROCESSED_DIR
 from nhl_betting_lab.ladder_coherence import (
     DETECTION_FLOOR,
@@ -155,6 +156,21 @@ def load_captures(
             # names it: the capture never writes a header it cannot fill.
             damaged[path.name] = f"missing column(s): {', '.join(missing)}"
             continue
+        # THE BULK REQUEST'S ROWS ARE NOT A LADDER'S. Since the capture
+        # added the bulk moneyline, puck line and total to each round, a
+        # day file holds a featured `total_goals` line per book beside that
+        # book's `alternate_totals` rungs, under the same `captured_at` and
+        # spelled the same way. They came from a different request, seconds
+        # or a minute from the per-event one, and the registration compares
+        # "one book, one moment, two rungs" and never two moments; left in,
+        # a main line that moved between the two requests would read as the
+        # book contradicting its own ladder, and the featured rung would add
+        # to the depth the 2026-10-15 checkpoint reads, which was registered
+        # on the ladders alone. So they are dropped here, by the request they
+        # came from (`team_market_rows`), and the scan reads what it read
+        # before they existed. (The bulk moneyline has no line and the puck
+        # line no over/under, so neither was ever a rung either way.)
+        frame = frame[~team_market_rows(frame)]
         if frame.empty:
             continue
         frames.append(frame)

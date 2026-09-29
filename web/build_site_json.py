@@ -15,8 +15,10 @@ Sources, in order of trust:
   * data/staging/*.csv: current prices, the total's line read from the bulk
     file's featured rows alone; data/processed/line_movement/<day>.csv: each
     game's market at the first capture that held it, used as the open. The
-    capture holds no bulk market, so every open total is missing (its totals
-    are ladder rungs) and so is every open moneyline (it asks for no h2h).
+    capture's rounds hold the bulk moneyline beside the per-event markets, so
+    a moneyline opens at the first round that priced it; every open total and
+    puck line is missing, because those rows mix the featured line with the
+    ladder's rungs (LADDER_ONLY_IN_CAPTURE).
     Publish Site restores the staged prices: the gameday-state artifact
     carries the data/staging of the Gameday Refresh run it came from. Until
     2026-09-29 it did not, and every regular-season game was published
@@ -211,11 +213,15 @@ FEATURED_PRICES_FILENAME = "odds_api_prices_staging.csv"
 #: one file, each row stamped with its `captured_at`.
 MOVEMENT_DIRNAME = "line_movement"
 
-#: Markets whose every row in a line-movement capture is an alternate rung.
-#: The capture asks for the per-event markets and their ladders and never the
-#: bulk `spreads` or `totals`, so its puck_line rows are `alternate_spreads`
-#: and its total_goals rows are `alternate_totals`; and a normalized row does
-#: not say which rung, if any, is the featured line.
+#: Markets whose line-movement rows hold alternate rungs, so none is read as
+#: an open. A capture's puck_line rows include `alternate_spreads` and its
+#: total_goals rows `alternate_totals`, and since the bulk `spreads` and
+#: `totals` joined each round they sit beside the featured line under the
+#: same market, captured_at and spelling. The row does not say which is the
+#: featured line (only its `fetched_at` tells the two requests apart, see
+#: `closing_lines.team_market_rows`), and this page does not read it: the
+#: mode over rungs published 4.5 as the open total against a line of 6.0.
+#: The moneyline has no ladder, and its open is read.
 LADDER_ONLY_IN_CAPTURE = frozenset({"puck_line", "total_goals"})
 
 
@@ -268,8 +274,10 @@ def earliest_capture(processed: Path, day: date) -> list[dict]:
     current line of 6.0. Until a capture records which of its rows is the
     featured line, it has no open total to give.
 
-    The capture asks for no bulk `h2h` today (a spending decision left to the
-    owner), so every moneyline open is missing and the page prints a dash.
+    The moneyline open is the bulk `h2h` the capture has asked for in every
+    round since it added the team markets; a day captured before that, or a
+    game whose first rounds' bulk request failed, opens at the first round
+    that holds it, or prints a dash when none does.
     """
     path = processed / MOVEMENT_DIRNAME / f"{day.isoformat()}.csv"
     if not path.is_file():

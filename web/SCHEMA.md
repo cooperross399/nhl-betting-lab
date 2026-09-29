@@ -39,12 +39,12 @@ games[]
                  verdict; projGoals, winProb and the market figures below include the back-to-back
                  adjustment only while the recorded team_b2b verdict ships it
   moneyline      {open:{away,home} | null, current:{away,home}, fair:{away,home}}  — open is the game's moneyline at the first capture in
-                 line_movement/<day>.csv that held it (one capture, never the day pooled); null when none was captured, which
-                 today is every game: the capture asks for no bulk h2h
+                 line_movement/<day>.csv that held it (one capture, never the day pooled); null when none was captured (a day
+                 captured before the capture asked the bulk h2h, or a build with no line_movement restored)
   puckLine       {favorite, line, price, coverProb}
   total          {open | null, current, overPrice, underPrice, proj, overProb}  — current is the most common line among the
-                 staged bulk (featured) totals, never an alternate-ladder rung; open is null, because every total a capture
-                 holds is an alternate_totals rung and no row says which line is the featured one
+                 staged bulk (featured) totals, never an alternate-ladder rung; open is null, because a capture's totals mix
+                 alternate_totals rungs with the featured line and the board does not tell them apart
   regulation     {away, draw, home, prices:{away,draw,home}}
   pick           {kind:"bet"|"lean", market, label, price, edgePct} | null   ← one market per game: the card's highest-edge best bet, or
                  its highest-edge lean only when the game holds no best bet; null on a priced game means nothing cleared the edge bar,

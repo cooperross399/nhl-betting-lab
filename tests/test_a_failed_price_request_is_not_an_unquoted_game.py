@@ -131,7 +131,8 @@ def _listing() -> list[dict]:
 
 
 def _bulk() -> list[dict]:
-    """The bulk team fetch the dispatch capture makes first; always answers."""
+    """The bulk team fetch: the dispatch capture makes it first, the line-movement
+    capture after its per-event round. Always answers."""
     return [
         _event(event_id, home, away, commence,
                [_book("DraftKings", _team_markets(home, away))])
@@ -280,14 +281,25 @@ def _movement_file(processed: Path) -> Path:
 
 
 def _movement_events(processed: Path) -> set[str]:
+    """The games the PER-EVENT round holds. The bulk request answers every
+    game with a moneyline (`_bulk`), which says nothing about these."""
     frame = pd.read_csv(_movement_file(processed), dtype=str, keep_default_na=False)
-    return set(frame["provider_event_id"])
+    return set(frame.loc[frame["market"] != "moneyline", "provider_event_id"])
 
 
-def _closing_homes(processed: Path, *, market: str | None = None) -> set[str]:
+def _movement_team_events(processed: Path) -> set[str]:
+    """The games the bulk team-market request put in the day file."""
+    frame = pd.read_csv(_movement_file(processed), dtype=str, keep_default_na=False)
+    return set(frame.loc[frame["market"] == "moneyline", "provider_event_id"])
+
+
+def _closing_homes(processed: Path, *, market: str | None = None,
+                   per_event: bool = False) -> set[str]:
     frame = pd.read_csv(captures_path(processed), dtype=str, keep_default_na=False)
     if market is not None:
         frame = frame[frame["market"] == market]
+    if per_event:
+        frame = frame[frame["market"] != "moneyline"]
     return set(frame["home_team"])
 
 
@@ -308,7 +320,11 @@ def test_one_failed_request_is_named_and_the_games_that_answered_are_kept(
     assert transport.per_event_requests() >= 3, "every game was asked"
     # Kept: the round's other games reach both stores, exactly as before.
     assert _movement_events(processed) == {"ev0", "ev2"}
-    assert _closing_homes(processed) == {HOME["ev0"], HOME["ev2"]}
+    assert _closing_homes(processed, per_event=True) == {HOME["ev0"], HOME["ev2"]}
+    # And the bulk request's moneyline for every game, ev1's included: a
+    # failed per-event request costs that game its props, not its moneyline.
+    assert _movement_team_events(processed) == EVERY
+    assert _closing_homes(processed, market="moneyline") == set(HOME.values())
     # Named: on the run page, and with its reason in the log.
     warnings = _annotations(out, "warning")
     assert len(warnings) == 1, f"a lost game must warn on the run page:\n{out}"
@@ -332,13 +348,19 @@ def test_a_round_in_which_every_request_failed_is_a_failed_capture(
 
     assert transport.per_event_requests() >= 3
     assert code == 2, f"exit {code}: nothing captured, because requests failed\n{out}{err}"
-    assert not _movement_file(processed).exists(), "a capture of nothing writes nothing"
-    assert not captures_path(processed).exists()
+    # The per-event round wrote nothing. The bulk request answered, and its
+    # rows are kept in both stores: they never make this run green (above),
+    # and a lost per-event round never costs them.
+    assert _movement_events(processed) == set(), "a lost per-event round writes no per-event row"
+    assert _movement_team_events(processed) == EVERY
+    assert _closing_homes(processed, per_event=True) == set()
+    assert _closing_homes(processed, market="moneyline") == set(HOME.values())
     assert "3 per-event request(s) failed" in err, err
     assert all(event_id in err for event_id in EVERY), err
     assert cause in err
     errors = _annotations(out, "error")
     assert len(errors) == 1 and all(event_id in errors[0] for event_id in EVERY), out
+    assert "team-market row(s)" in errors[0] and "kept" in errors[0], errors[0]
 
 
 @pytest.mark.parametrize(
@@ -365,9 +387,12 @@ def test_an_absence_is_not_a_failure(
     assert _annotations(out, "warning") == [], out
     assert _annotations(out, "error") == [], out
     assert "request(s) failed" not in err, err
+    # The bulk request answered for every game, whatever the per-event
+    # round held.
+    assert _movement_team_events(processed) == EVERY
     if events is None:
-        assert "No rows returned; nothing written." in out
-        assert not _movement_file(processed).exists()
+        assert "No per-event rows returned." in out
+        assert _movement_events(processed) == set()
     else:
         assert _movement_events(processed) == events
     if cap == ASKED:

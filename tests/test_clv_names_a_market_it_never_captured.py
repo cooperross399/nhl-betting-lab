@@ -17,15 +17,18 @@ moneyline rows, and both moneyline opinions landed in "no closing price
 found". Its smaller replay counted {'opinions': 2, 'matched': 1, 'no_close': 1}
 with the by-market keys ['shots_on_goal'] alone.
 
-Capturing the team markets is a spending decision (the bulk call costs
-3 markets x 2 regions = 6 credits a run), so it is not made here. What is fixed
-here is the page: an unmatched opinion in a market the store holds no
-pre-start price for, in its game, is named as a gap in the capture and not
-blamed on the books.
+Capturing the team markets was a spending decision (the bulk call costs
+3 markets x 2 regions = 6 credits a run), so it was not made here; Cooper made
+it on 2026-09-29, and every Line Movement round now asks the bulk markets too
+(`tests/test_line_movement_captures_the_team_markets.py`). What is fixed here
+is the page: an unmatched opinion in a market the store holds no pre-start
+price for, in its game, is named as a gap in the capture and not blamed on
+the books. That still happens: a day captured before the bulk request was
+added, or a round whose bulk request failed.
 
 These tests freeze opinions with the real `forward_evidence.write_snapshot`,
-write captures where and how `capture_line_movement.main` writes them (the
-per-event markets only, because that is what it asks for), and run the real
+write captures where and how `capture_line_movement.main` wrote them before
+it asked the bulk markets (the per-event markets only), and run the real
 `scripts/run_closing_line_value.py`.
 """
 

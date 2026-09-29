@@ -21,7 +21,9 @@ name: Line Movement Capture
 # COST: 19 per-event markets across a night's games, several times a day —
 # roughly a thousand credits on a busy day, against a monthly allowance in the
 # millions. The cap is still hard, because an unbounded fetch is how a quota
-# becomes a bill.
+# becomes a bill. Each round also asks the bulk moneyline, puck line and total
+# once for the whole slate (3 markets x 2 regions, about 6 credits, outside
+# the per-event cap), so those opinions get a closing price too.
 on:
   schedule:
     # Through the day and across every time zone's puck drop, so a line has
@@ -244,7 +246,9 @@ jobs:
         # and a per-event request that failed inside that round is named in
         # a ::warning:: (the games that answered are kept). It exits 2 when
         # nothing was captured because the events list or the per-event
-        # requests failed, which makes this step red. That is the report, not
+        # requests failed, which makes this step red. The bulk team-market
+        # request beside them never moves the exit: its rows are written
+        # either way, and its failure is a ::warning:: of its own. That is the report, not
         # the damage: every step below is `if: always()`, so the uploads and
         # the closing-price hand-off still run.
         # tests/test_a_failed_price_request_is_not_an_unquoted_game.py holds

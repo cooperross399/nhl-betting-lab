@@ -716,22 +716,35 @@ Re-derive rather than trust if the data has moved.
   Movement asks only for the per-event markets and their ladders, so no
   moneyline opinion can ever meet a close, and a featured puck line or total
   only when an alternate ladder repeats its line. The CLV report now names
-  those opinions as uncaptured rather than as selections the books pulled;
-  capturing them (3 markets x 2 regions = 6 credits a run) is Cooper's call.
+  those opinions as uncaptured rather than as selections the books pulled.
+  **Cooper decided to capture them (2026-09-29):** each Line Movement round
+  now also calls `fetch_team_markets` (3 markets x 2 regions = about 6
+  credits, outside the per-event cap) on the same `captured_at`, `now`,
+  window and preseason screen, and writes its rows into the same day file
+  and the closing-line store (`capture_line_movement.capture_team_markets`).
+  It runs after the per-event fetch and never moves the exit: an
+  EmptySlateError is an absence, any other failure a `::warning::`, and a
+  lost per-event round still exits 2 with the team rows kept. A bulk row's
+  `fetched_at` is its own request's instant (microseconds) where a per-event
+  row's is the round's `captured_at`; `closing_lines.team_market_rows` reads
+  that, and `run_ladder_coherence.py` drops those rows so the registered
+  ladder depth still counts one book's one response. The site reads the
+  moneyline open from them and still no open total or puck line.
 - **Closing Lines is DISABLED as of 2026-09-25, pending Cooper's decision —
   do not re-enable it as a fix.** This repository is public, so the
   `closing-lines` branch would be a permanent, downloadable file of captured
   odds (book, price, line, capture time), and The Odds API's terms forbid
   redistributing their data as downloadable files that serve as raw data.
   Nothing more is lost while it is held: the per-event closing prices are a
-  strict subset of Line Movement's own captures (`line_movement/<day>.csv`;
-  the bulk team markets are captured nowhere — see above), which keep flowing
+  strict subset of Line Movement's own captures (`line_movement/<day>.csv`,
+  the bulk team markets included since 2026-09-29 — see above), which keep flowing
   through the `line-movement` artifact chain, so the store can be rebuilt from
   them. Since 2026-09-29 the CLV step in Gameday Refresh restores that chain
   into data/processed when no branch exists, scores against it through
   `load_captures`' movement fallback, and removes only the folders it created
   (so gameday-state does not carry them): the per-event CLV works with no
-  branch. Cooper delegated the call that day; the answer was this, not
+  branch, and the moneyline, puck line and total CLV too for every round
+  that asked the bulk request. Cooper delegated the call that day; the answer was this, not
   re-enabling. `tests/test_clv_reads_the_movement_chain.py` pins it.
 - **This lab has an end date, decided before the data existed: 2027-04-25.**
   Everything measurable on bought history has been measured and comes back

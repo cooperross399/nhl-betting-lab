@@ -313,10 +313,12 @@ contains the phrase `Selections changed`.
 on every selection in its own **`closing-lines` branch**. It buys nothing on
 its own schedule: Line Movement Capture's fetch already carries the per-event
 prices, so Closing Lines runs each time Line Movement completes and publishes
-what that run handed over. It does not carry the bulk moneyline, puck line and
-total, so no moneyline opinion meets a closing price; the report names those
-opinions as uncaptured rather than as prices the books pulled. It can still
-be dispatched by hand to force a paid capture. Gameday Refresh reads that
+what that run handed over, the bulk moneyline, puck line and total included
+(each Line Movement round asks for them beside the per-event markets). An
+opinion in a market no round priced before face-off, such as a day captured
+before the bulk request was added or a round whose bulk request failed, is
+named as uncaptured rather than as a price the books pulled. It can still be
+dispatched by hand to force a paid capture. Gameday Refresh reads that
 store and writes
 `data/outputs/closing_line_value.md`: beat-the-close rate, CLV%, and the
 de-vigged expected value at the closing line, for opinions and for bets
@@ -333,8 +335,8 @@ while it is held. Since 2026-09-29 Gameday Refresh's closing-line report reads
 those captures directly: with no `closing-lines` branch it restores the
 `line-movement` artifact chain for that step only and removes it afterwards, so
 per-event opinions are scored against their close without any permanent odds
-file. The bulk moneyline, puck line and total are captured nowhere, so those
-opinions still have no close.
+file. The same chain carries the bulk moneyline, puck line and total, which
+Line Movement asks for in every round, so those opinions are scored too.
 
 Every run — including a "skip" run — also publishes the rendered comment, a
 one-object status file, and the forward-evidence report to the **`card-feed`
