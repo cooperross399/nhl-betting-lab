@@ -385,7 +385,7 @@ jobs:
         # and neither is in the next run's restore until the two are unioned.
         if: always() && steps.earlier.outcome == 'failure'
         run: |
-          echo "::error::This run's line-movement artifact from an earlier attempt could not be downloaded (see Fold in this run's earlier attempts), so it was not overwritten. This attempt's captures are in line-movement-attempt-${{ github.run_attempt }}; the next run restores only line-movement, so union the two (scripts/restore_state.py union_csv) or this attempt's round is missing from the chain."
+          echo "::error::This run's line-movement artifact from an earlier attempt could not be downloaded or merged (see Fold in this run's earlier attempts), so it was not overwritten. This attempt's captures are in line-movement-attempt-${{ github.run_attempt }}; the next run restores only line-movement, so union the two (scripts/restore_state.py union_csv) or this attempt's round is missing from the chain."
           exit 1
 
       - name: Fail the run when the line units were not captured

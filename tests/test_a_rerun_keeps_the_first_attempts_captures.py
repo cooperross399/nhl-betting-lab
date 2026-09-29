@@ -110,7 +110,9 @@ def _paths(step: dict) -> list[str]:
     return [line.strip() for line in str(step["with"]["path"]).splitlines() if line.strip()]
 
 
-def _run_fold(tmp_path: Path, mode: str) -> tuple[subprocess.CompletedProcess, Path, Path]:
+def _run_fold(
+    tmp_path: Path, mode: str, earlier_day: str = BASE + ROUND_1,
+) -> tuple[subprocess.CompletedProcess, Path, Path]:
     """Attempt 2's data/processed, the fold step run over it, and gh's log."""
     work = tmp_path / "work"
     (work / "scripts").mkdir(parents=True)
@@ -123,7 +125,7 @@ def _run_fold(tmp_path: Path, mode: str) -> tuple[subprocess.CompletedProcess, P
     # roots it: the restored base, its own round, and a scratch list.
     earlier = tmp_path / "attempt1"
     (earlier / "line_movement").mkdir(parents=True)
-    (earlier / "line_movement" / f"{DAY}.csv").write_text(BASE + ROUND_1, encoding="utf-8")
+    (earlier / "line_movement" / f"{DAY}.csv").write_text(earlier_day, encoding="utf-8")
     (earlier / "deployment").mkdir()
     (earlier / "deployment" / f"{DAY}.csv").write_text(DEPLOYMENT, encoding="utf-8")
 
@@ -191,6 +193,18 @@ def test_an_earlier_attempt_that_cannot_be_downloaded_fails_the_step(tmp_path: P
     assert day_file == BASE + ROUND_2
 
 
+def test_an_earlier_copy_that_cannot_be_merged_fails_the_step(tmp_path: Path) -> None:
+    """A CSV the union cannot read safely is not overwritten either: the
+    upload with `overwrite: true` would delete the only copy of its rows."""
+    unreadable = "captured_at,market\n" + ROUND_1
+    result, processed, _ = _run_fold(tmp_path, "present", earlier_day=unreadable)
+    out = result.stdout + result.stderr
+    assert result.returncode != 0, out
+    assert f"line_movement/{DAY}.csv" in out
+    day_file = (processed / "line_movement" / f"{DAY}.csv").read_text(encoding="utf-8")
+    assert day_file == BASE + ROUND_2
+
+
 def test_folding_a_run_reads_no_other_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """`--fold-run` lists nothing and downloads only the run it names."""
     module = load_script("restore_state.py")
@@ -241,6 +255,9 @@ def test_a_failed_fold_never_overwrites_the_earlier_attempt() -> None:
     beside = [step for _, step in _uploads("run_attempt") if step is not keep]
     assert len(beside) == 1
     assert failed in str(beside[0].get("if", ""))
+    # Even when an earlier step failed too: without always() both would be
+    # skipped and this attempt's captures uploaded nowhere.
+    assert "always()" in str(beside[0].get("if", ""))
     assert not beside[0]["with"].get("overwrite")
     assert _paths(beside[0]) == _paths(keep)
     # And the run goes red, saying so.
@@ -249,4 +266,5 @@ def test_a_failed_fold_never_overwrites_the_earlier_attempt() -> None:
         if failed in str(step.get("if", "")) and "exit 1" in str(step.get("run", ""))
     ]
     assert len(gates) == 1
+    assert "always()" in str(gates[0].get("if", ""))
     assert "::error::" in gates[0]["run"]

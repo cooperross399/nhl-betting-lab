@@ -190,7 +190,8 @@ only copy of that round; attempt 2's restore never had it either, because
 GitHub lists the run as in progress while it re-runs and only completed runs
 are sources. Before a re-run uploads, `--fold-run $GITHUB_RUN_ID` unions the
 run's own artifact into `--dest` with `union_csv`, listing nothing. A run
-holding none recovers nothing; a download that fails otherwise exits 1, and
+holding none recovers nothing; a download that fails otherwise, or a CSV the
+union cannot merge, exits 1, and
 the workflow then keeps this attempt's captures under another name rather
 than overwrite what it could not read. See `fold_run`.
 
@@ -726,8 +727,8 @@ def fold_run(run_id: object, artifact: str, dest: Path, *, attempts: int = 1) ->
 
     A run that holds no such artifact (attempt 1 uploaded nothing) is an
     answer and recovers nothing. Any other failure, after `attempts` tries,
-    raises `Unreachable`: the caller must then not overwrite what it could
-    not read.
+    raises `Unreachable`, and so does a CSV `union_csv` cannot merge: the
+    caller must then not overwrite what it could not read.
     """
     report: dict = {"run": run_id, "rows_recovered": 0, "not_merged": [],
                     "absent": False}
@@ -748,6 +749,14 @@ def fold_run(run_id: object, artifact: str, dest: Path, *, attempts: int = 1) ->
                 "that attempt's captures, the only copy there is."
             )
         report["rows_recovered"] = _fold(base, dest, f"run {run_id}", report)
+    if report["not_merged"]:
+        # The copy the warning says remains is the one the upload with
+        # `overwrite: true` is about to delete, so refuse it as unreadable.
+        raise Unreachable(
+            f"Could not merge {', '.join(report['not_merged'])} from this "
+            f"run's {artifact} ({run_id}) with this attempt's copy. Uploading "
+            "over it would delete that attempt's rows, the only copy there is."
+        )
     print(
         f"Folded in {artifact} from an earlier attempt of run {run_id}: "
         f"{report['rows_recovered']} row(s) this attempt did not have."
