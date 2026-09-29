@@ -155,6 +155,7 @@ def _context(ref: str, *, event: str = "workflow_dispatch",
         "github.event.repository.default_branch": default_branch,
         "github.event_name": event,
         "inputs.skip_provider_fetch": False,
+        "needs.precheck.result": "success",
         "needs.precheck.outputs.already": "false",
     }
 
