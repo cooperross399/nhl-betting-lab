@@ -183,6 +183,17 @@ carrier, so a calling step can name its source without parsing this log.
 FILE is emptied before anything is asked, so a refused restore never leaves
 an id behind.
 
+**`--fold-run RUN_ID`, for a re-run of Line Movement.** Its upload uses
+`overwrite: true`, and an upload-artifact v4 artifact belongs to the run, not
+the attempt, so a re-run's upload deleted attempt 1's `line-movement`, the
+only copy of that round; attempt 2's restore never had it either, because
+GitHub lists the run as in progress while it re-runs and only completed runs
+are sources. Before a re-run uploads, `--fold-run $GITHUB_RUN_ID` unions the
+run's own artifact into `--dest` with `union_csv`, listing nothing. A run
+holding none recovers nothing; a download that fails otherwise exits 1, and
+the workflow then keeps this attempt's captures under another name rather
+than overwrite what it could not read. See `fold_run`.
+
 **`--also NAME=DIR`** takes a second artifact from the same chosen run
 (Publish Site: the run's reports, beside its state). It goes through an
 empty temporary directory like the first and is then copied over DIR, the
@@ -664,6 +675,86 @@ def union_csv(older: Path, newer: Path) -> int | None:
     return recovered
 
 
+def _fold(base: Path, dest: Path, source: str, report: dict) -> int:
+    """Union every file under `base` into `dest`; returns the rows recovered.
+
+    A file `dest` lacks is copied whole; a CSV both hold is unioned row by
+    row (`union_csv`), `base` read as the older copy. `source` names where
+    `base` came from, for the warning when a CSV cannot be merged safely.
+    """
+    recovered = 0
+    for path in sorted(base.rglob("*")):
+        if not path.is_file():
+            continue
+        relative = path.relative_to(base)
+        target = dest / relative
+        if not target.exists():
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(path, target)
+            recovered += _rows(target) if target.suffix == ".csv" else 0
+            continue
+        if target.suffix != ".csv":
+            continue
+        added = union_csv(path, target)
+        if added is None:
+            report["not_merged"].append(str(relative))
+            print(
+                f"::warning::{relative} in {source} could not be merged with "
+                "the newer copy (different header, or a parse that disagrees "
+                "with its line count). The newer copy is kept; the older rows "
+                "remain in that run's artifact."
+            )
+            continue
+        recovered += added
+    return recovered
+
+
+def fold_run(run_id: object, artifact: str, dest: Path, *, attempts: int = 1) -> dict:
+    """Union one named run's own `artifact` into `dest`, which it has not
+    been restored from. For a re-run of that same run (`--fold-run`).
+
+    Line Movement's "Keep the captures" uploads `line-movement` with
+    `overwrite: true`, and an upload-artifact v4 artifact belongs to the run,
+    not the attempt: a re-run's upload deleted attempt 1's artifact, the only
+    copy of its round (prices, scratch list, line units, none of which the
+    sources archive). Its restore could not have brought that round back
+    either, because while attempt 2 runs GitHub lists its own run as in
+    progress and `completed_runs` passes over it. So before a re-run uploads,
+    the run's own artifact is folded in here, row by row, with the same
+    `union_csv` the restore uses; the artifact then uploaded holds both
+    attempts' rows.
+
+    A run that holds no such artifact (attempt 1 uploaded nothing) is an
+    answer and recovers nothing. Any other failure, after `attempts` tries,
+    raises `Unreachable`: the caller must then not overwrite what it could
+    not read.
+    """
+    report: dict = {"run": run_id, "rows_recovered": 0, "not_merged": [],
+                    "absent": False}
+    dest.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory() as scratch:
+        base = Path(scratch)
+        why = _fetch(run_id, artifact, base, attempts)
+        if why == ABSENT:
+            report["absent"] = True
+            print(f"Run {run_id} holds no {artifact} from an earlier attempt; "
+                  "nothing to fold in.")
+            return report
+        if why is not None:
+            raise Unreachable(
+                f"Could not download {artifact} from this run ({run_id}), "
+                f"which an earlier attempt uploaded, after {attempts} "
+                f"attempt(s) (gh said: {why}). Uploading over it would delete "
+                "that attempt's captures, the only copy there is."
+            )
+        report["rows_recovered"] = _fold(base, dest, f"run {run_id}", report)
+    print(
+        f"Folded in {artifact} from an earlier attempt of run {run_id}: "
+        f"{report['rows_recovered']} row(s) this attempt did not have."
+    )
+    return report
+
+
 def _union_older(
     older: list[dict], artifact: str, dest: Path, workflow: str, report: dict,
     *, carriers: int, attempts: int = 1, refuse: bool = False,
@@ -688,31 +779,7 @@ def _union_older(
                         refuse=refuse,
                     )
                 continue
-            recovered = 0
-            for path in sorted(base.rglob("*")):
-                if not path.is_file():
-                    continue
-                relative = path.relative_to(base)
-                target = dest / relative
-                if not target.exists():
-                    target.parent.mkdir(parents=True, exist_ok=True)
-                    shutil.copy2(path, target)
-                    recovered += _rows(target) if target.suffix == ".csv" else 0
-                    continue
-                if target.suffix != ".csv":
-                    continue
-                added = union_csv(path, target)
-                if added is None:
-                    report["not_merged"].append(str(relative))
-                    print(
-                        f"::warning::{relative} in {workflow} run "
-                        f"{run['databaseId']} could not be merged with the "
-                        "newer copy (different header, or a parse that "
-                        "disagrees with its line count). The newer copy is "
-                        "kept; the older rows remain in that run's artifact."
-                    )
-                    continue
-                recovered += added
+            recovered = _fold(base, dest, f"{workflow} run {run['databaseId']}", report)
         report["unioned_from"].append(run["databaseId"])
         report["rows_recovered"] += recovered
         print(
@@ -727,8 +794,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--artifact", required=True)
     parser.add_argument("--dest", required=True)
     parser.add_argument(
-        "--workflow", action="append", required=True,
-        help="In priority order; repeat for a fallback.",
+        "--workflow", action="append", default=[],
+        help="In priority order; repeat for a fallback. Required unless --fold-run.",
+    )
+    parser.add_argument(
+        "--fold-run", metavar="RUN_ID",
+        help=(
+            "Instead of choosing a run: union RUN_ID's own artifact into "
+            "--dest, row by row, and list nothing. For a re-run, whose "
+            "upload would otherwise replace the earlier attempt's artifact. "
+            "A run holding none recovers nothing; any other failure exits 1."
+        ),
     )
     parser.add_argument("--limit", type=int, default=30)
     parser.add_argument(
@@ -826,6 +902,16 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.attempts < 1:
         parser.error("--attempts must be at least 1")
+    if args.fold_run:
+        try:
+            fold_run(args.fold_run, args.artifact, Path(args.dest),
+                     attempts=args.attempts)
+        except Unreachable as exc:
+            print(f"::error::{exc}")
+            return 1
+        return 0
+    if not args.workflow:
+        parser.error("--workflow is required unless --fold-run is given")
     if args.listing_attempts is not None and args.listing_attempts < 1:
         parser.error("--listing-attempts must be at least 1")
     also = []

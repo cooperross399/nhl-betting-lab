@@ -113,6 +113,32 @@ jobs:
           python scripts/discover_nhl_markets.py --live \
             --credit-cap "${{ inputs.credit_cap || '60' }}"
 
+      - name: Cache the club schedules
+        # For the preseason screen `run_provider_shadow.py` runs before
+        # either fetch caps the board. This runner restores no state, and
+        # data/raw is gitignored, so without this step there is no schedule
+        # and the screen abstains ("No regular-season schedule is cached"):
+        # a late-September or early-October props dispatch then spent its
+        # per-event slots in face-off order, exhibitions first, and the
+        # coverage table read "k of 20 — incomplete" for regular-season
+        # games the cap never reached. The same step Line Movement takes
+        # (#249); the club schedules also carry every club's name, which is
+        # how the screen resolves the board with no boxscore cache here.
+        #
+        # Free: the NHL API only, no provider credit, and no key in its env.
+        # Never fatal: a failed or partial fetch leaves the cache incomplete,
+        # the screen abstains on that and says so, and the probe runs
+        # unscreened. Never slow enough to cost the probe: a hanging API
+        # retries 4 x 30 s for each of 32 clubs, far past the job's 20
+        # minutes. Three minutes is ten times a healthy fetch, and
+        # continue-on-error covers the timeout too.
+        timeout-minutes: 3
+        continue-on-error: true
+        env:
+          PYTHONPATH: src
+        run: |
+          python scripts/fetch_nhl_data.py --schedules-only --polite-seconds 0.25
+
       - name: Fetch and report coverage
         env:
           NHL_ODDS_API_KEY: ${{ secrets.NHL_ODDS_API_KEY }}
