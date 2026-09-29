@@ -8,9 +8,11 @@ BOS, and priced him as BOS's away skater against his own club: wrong
 opponent factor, wrong venue, frozen into the forward ledger as an ordinary
 opinion. BOS's fresh roster was on disk the whole time and did not list him.
 
-The logs are a fallback only for a club whose roster the card does not hold.
-A club whose roster it holds and which leaves him off is evidence he has
-left, and he is unresolved and named — the same safe failure as a roster
+The logs are a fallback only for a club whose roster the card does not hold,
+or when both of tonight's clubs' rosters are held (the endpoint leaves active
+regulars off, so there a missing entry proves nothing). A held club that
+leaves him off, on a night the other club's roster is missing, is evidence he
+has left, and he is unresolved and named — the same safe failure as a roster
 naming a club not in the game.
 """
 
@@ -138,3 +140,23 @@ def test_a_roster_that_lists_him_still_wins_over_the_logs(tmp_path: Path) -> Non
 
     assert unresolved == [] and probabilities
     assert model.asked == [("BOS", "home")]
+
+
+def test_a_regular_both_rosters_leave_off_is_still_priced_on_his_logs(
+    tmp_path: Path,
+) -> None:
+    # Both of tonight's clubs' rosters are held and neither lists him, which
+    # the roster endpoint does to active regulars (measured 2026-09-29: 22 of
+    # them, Bedard among them). He cannot be a mover into a club whose
+    # roster is missing, so his logs still decide his side.
+    raw = _cache(tmp_path, {"TOR": [1, 2], "BOS": [3]})
+    model = _StubModel(logged_team="BOS")
+
+    probabilities, unresolved = price_props(
+        _prop_row(home="TOR", away="BOS"),
+        model,
+        rosters=current_rosters(raw_dir=raw),
+    )
+
+    assert unresolved == [] and probabilities
+    assert model.asked == [("TOR", "away")]

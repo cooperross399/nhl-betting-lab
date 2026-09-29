@@ -172,12 +172,20 @@ def price_props(
         # the ledger — though BOS's fresh roster was held and left him off.
         # So a logged club with a held roster that does not list him leaves
         # him unresolved and named, like a roster naming a club not in the
-        # game; a logged club with no roster held still falls back, because a
-        # missing roster must never unresolve a player who would price.
+        # game — but only while one of tonight's two clubs has no roster
+        # held, the one case a mover can hide in. The roster endpoint leaves
+        # active players off (22 regulars measured on 2026-09-29, Bedard
+        # among them), so with both clubs' rosters held a player on neither
+        # cannot have moved to either, and his logs are still the best
+        # evidence of his side. A missing roster must never unresolve a
+        # player who would price.
         rates = model.skaters.get(player_id) or model.goalies.get(player_id)
         team = str(rosters.get(player_id, "") or "").strip().upper()
         if not team and rates:
-            held = str(rates.team or "").strip().upper() in rostered_clubs
+            held = (
+                str(rates.team or "").strip().upper() in rostered_clubs
+                and not {home, away} <= rostered_clubs
+            )
             team = "" if held else rates.team
         if team and team == home:
             opponent, venue = away, "home"
