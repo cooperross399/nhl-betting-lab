@@ -344,7 +344,10 @@ def test_a_restored_run_s_staged_prices_do_not_outlive_the_restore() -> None:
     restore, before anything fetches.
 
     The whole line, indentation included, so a commented-out `# rm -f ...`
-    at the same place does not pass for the command."""
+    at the same place does not pass for the command. Kept beside the YAML
+    pin below: this one's ten-space indentation rejects an rm nested inside
+    a shell block, which the YAML pin does not read; that one rejects an rm
+    in another step, which this one does not."""
     from nhl_betting_lab.config import PROJECT_ROOT
 
     workflow = (PROJECT_ROOT / ".github/workflows/gameday-refresh.yml").read_text()

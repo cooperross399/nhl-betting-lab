@@ -26,7 +26,10 @@ Sources, in order of trust:
     restores no line_movement, so there every open is missing. A game this
     build holds no price for says so rather than reading as a pass, and so
     does the next morning's Results page, which grades no game that carried
-    no pick.
+    no pick. (web/lib/sports.js still says, twice, that Publish Site
+    restores none: that file is byte-identical across four repos and is
+    revised only in a coordinated drop, so the statement is stale there
+    until the next one.)
   * data/processed/team_games.csv + TeamModel: expected goals per side,
     with the back-to-back adjustment only while the recorded `team_b2b`
     verdict ships it — the same verdict, read the same way, as the card.
@@ -149,10 +152,11 @@ def league_day(commence_time: object) -> str:
     """The NHL game date of a provider timestamp, as `YYYY-MM-DD`, or "".
 
     The league's calendar runs on Eastern time whatever the venue's: a 22:00
-    Pacific face-off is the previous day's game. The staged rows' `date`
-    column is the UTC date of `commence_time` and is NOT this — on opening
-    night 286 of the 486 team rows carried the next day's date — so the day
-    a row belongs to is read from `commence_time` itself. A value with no
+    Eastern face-off (19:00 Pacific) is 02:00 UTC the next day and still
+    that day's game. The staged rows' `date` column is the UTC date of
+    `commence_time` and is NOT this — on opening night 286 of the 486 team
+    rows carried the next day's date — so the day a row belongs to is read
+    from `commence_time` itself. A value with no
     timezone, or none at all, belongs to no day: the row is dropped rather
     than guessed at, because a wrong day here prices a game the row is not
     about.
@@ -599,10 +603,14 @@ def build_board(day: date, lab: Path, history_dir: Path) -> dict:
     elif out_games and not any(g["priced"] for g in out_games):
         # Said nothing before, while the page printed "No market clears the
         # edge bar" under every game. Cause-neutral on purpose: the prices
-        # may be absent (Publish Site restores none) or present and
-        # unmatched (a team-name map that resolves nothing). Either way this
-        # build priced no game, and that is all it can truthfully say.
-        notice = ("No market price reached this build, so no game on the board shows a line or a pick. "
+        # may be absent (a failed fetch; until 2026-09-29 Publish Site
+        # restored none), present and unmatched (a team-name map that
+        # resolves nothing), or present and another league day's
+        # (todays_rows). Either way this build priced no game for this day,
+        # and that is all it can truthfully say — "reached this build" alone
+        # was untrue on the build todays_rows was written for, where
+        # hundreds of yesterday's rows had.
+        notice = ("No market price for this league day reached this build, so no game on the board shows a line or a pick. "
                   "A game here without a pick was not priced, which is not the same as the model passing on it.")
     board = {
         "generatedAt": now, "season": "2026–27", "phase": "preseason" if preseason else "regular",
@@ -858,9 +866,9 @@ def settle(day: date, history_dir: Path) -> dict:
         else:
             # A game with no pick settles with no pick. This used to write
             # {"market": "—", "label": "No play", "price": 0, "result":
-            # "push"} for every such game, without reading `priced`. Publish
-            # Site restores no staged prices, so from opening night that
-            # was every regular-season game: 2 of 2 in
+            # "push"} for every such game, without reading `priced`. Until
+            # 2026-09-29 Publish Site restored no staged prices, so from
+            # opening night that would have been every regular-season game: 2 of 2 in
             # tests/test_results_never_grade_an_unpriced_game.py, and 5 of 5
             # on the real 2026-09-29 slate. The Results page showed each one
             # under "Model pick" as "No play · — · −0 · Push". That called a

@@ -44,6 +44,7 @@ from test_site_never_calls_an_unpriced_game_a_pass import (
     BOARD_DAY,
     CLUBS,
     SLATE,
+    _price_rows,
     _write_csv,
     build,
     make_lab,
@@ -85,6 +86,15 @@ def _rows(pairings, *, commence: str, fetched: str, offset: int = 0) -> list[dic
 
 def _pairings():
     return [(away, home) for away, home, _ in SLATE]
+
+
+def test_the_rows_here_are_the_siblings_rows_on_its_own_day() -> None:
+    """`_rows` is a copy of the sibling's `_price_rows` with the moment
+    parameterised; this holds the copy to the original, so a market or a
+    price the sibling changes cannot leave these tests staging a different
+    shape while every assertion stays green."""
+    assert _rows(_pairings(), commence=f"{BOARD_DAY.isoformat()}T23:00:00Z",
+                 fetched=f"{BOARD_DAY.isoformat()}T13:00:00Z") == _price_rows()
 
 
 def _assert_unpriced(board: dict, tmp_path: Path) -> None:
@@ -181,7 +191,8 @@ def test_todays_rows_are_read_past_yesterdays_in_the_same_file(tmp_path: Path, m
 # -- the copy agrees with the lab ------------------------------------------
 
 #: Timestamps the two readers must agree on: UTC and offset spellings, the
-#: 04:00 UTC edge where the league day turns, and both daylight-saving
+#: edge where the league day turns (04:00 UTC in Eastern daylight time,
+#: 05:00 UTC in Eastern standard time), and both daylight-saving
 #: transitions (2026-11-01 back, 2027-03-14 forward).
 AGREED = [
     "2026-10-08T23:00:00Z",
@@ -212,8 +223,9 @@ def test_league_day_is_the_labs_game_date(stamp) -> None:
     assert module.league_day(stamp) == game_date(stamp)
 
 
-def test_the_readers_turn_the_day_at_four_utc_in_winter_and_summer() -> None:
-    """Not a tautology between two copies: the value both must produce."""
+def test_the_readers_turn_the_day_at_midnight_eastern_in_winter_and_summer() -> None:
+    """Not a tautology between two copies: the value both must produce —
+    05:00 UTC in winter (EST), 04:00 UTC in summer (EDT)."""
     module = site_module()
     assert module.league_day("2026-11-02T04:59:59Z") == "2026-11-01"  # EST
     assert module.league_day("2026-11-02T05:00:00Z") == "2026-11-02"

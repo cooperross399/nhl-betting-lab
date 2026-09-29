@@ -266,7 +266,7 @@ def _write_csv(path: Path, rows: list[dict]) -> None:
 def make_lab(tmp_path: Path, monkeypatch, *, staged: bool, model: bool = True,
              opens: bool = False) -> Path:
     """What the runner holds: gameday-state + gameday-reports, and optionally
-    the staged prices Publish Site never restores."""
+    the staged prices (carried in gameday-state since 2026-09-29, PR #275)."""
     lab = tmp_path / "lab"
     raw = tmp_path / "raw"
     (raw / "nhl" / "boxscore").mkdir(parents=True)
