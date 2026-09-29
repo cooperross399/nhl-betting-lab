@@ -204,8 +204,9 @@ def test_a_passed_over_red_run_that_cannot_be_downloaded_is_a_warning_not_red(
     """Named, but not recorded as unreached: recorded, the run went red, the
     15:00 backup fired, and one artifact that never downloads again would
     have made every primary red and fired every backup (a few hundred credits
-    a run) until it expired 90 days later. It is asked for again anyway: the
-    next restore walks the same listing."""
+    a run) until it expired 90 days later. It is written into the state for
+    the next restores to ask for again, and the ledger waits for it
+    (tests/test_a_passed_over_red_run_is_asked_for_again.py)."""
     dest = tmp_path / "dest"
     report = _restore(monkeypatch, dest, _a_passed_over_red_run_that_502s())
 

@@ -77,6 +77,10 @@ from nhl_betting_lab.season import clean_text, row_game_date
 
 SNAPSHOT_DIRNAME = "priced_snapshots"
 LEDGER_FILENAME = "forward_evidence.csv"
+#: Beside the ledger: the red runs a restore could not download to lay
+#: underneath (scripts/restore_state.py `UNLAID`, the same name). While it
+#: lists one, no pending day settles; see `_unlaid_runs`.
+UNLAID_RUNS_FILENAME = "unlaid_runs.json"
 REPORT_MARKDOWN_FILENAME = "forward_evidence.md"
 REPORT_JSON_FILENAME = "forward_evidence.json"
 
@@ -503,6 +507,10 @@ class SettlementResult:
     snapshots_seen: int = 0
     snapshots_settled: int = 0
     snapshots_waiting: int = 0
+    #: Pending snapshots not settled this pass because `UNLAID_RUNS_FILENAME`
+    #: lists a run whose state has not been laid yet, and which runs.
+    snapshots_held: int = 0
+    held_for: list[str] = field(default_factory=list)
     rows_settled: int = 0
     rows_void: int = 0
     rows_unsettleable: int = 0
@@ -527,6 +535,13 @@ class SettlementResult:
             "map could not resolve. "
             f"{len(self.unreadable_snapshots)} pending snapshot file(s) could "
             "not be read and were left unsettled."
+            + (
+                f" {self.snapshots_held} pending snapshot(s) held back: "
+                f"{', '.join(self.held_for)} could not be laid underneath yet "
+                "and may have frozen one of those days first."
+                if self.snapshots_held
+                else ""
+            )
         )
 
 
@@ -711,6 +726,26 @@ def _settle_team_row(row, game) -> tuple[str, float | None, float]:
     return "lost", actual, -1.0
 
 
+def _unlaid_runs(processed_dir: Path) -> list[str]:
+    """The runs `UNLAID_RUNS_FILENAME` in `processed_dir` lists, named for
+    the log; [] when there is none.
+
+    A restore wrote it after passing over a red run whose download failed
+    (scripts/restore_state.py `_fill_from_last_success`): that run may have
+    frozen a pending day's snapshot first, the later opinion here only
+    standing in for it. A list that cannot be read holds too, since which
+    run it names is unknown; the next restore rewrites or removes it.
+    """
+    path = Path(processed_dir) / UNLAID_RUNS_FILENAME
+    if not path.is_file():
+        return []
+    try:
+        entries = json.loads(path.read_text(encoding="utf-8"))["runs"]
+        return [f"run {entry['run']}" for entry in entries]
+    except (OSError, UnicodeDecodeError, ValueError, KeyError, TypeError):
+        return [f"the runs {UNLAID_RUNS_FILENAME} names (it could not be read)"]
+
+
 def settle_snapshots(
     logs: pd.DataFrame,
     games: pd.DataFrame,
@@ -788,6 +823,16 @@ def settle_snapshots(
             result.unreadable_snapshots[path.name] = problem
             continue
         pending.append((path.stem, snapshot))
+    held = _unlaid_runs(ledger_path.parent)
+    if held and pending:
+        # Settled from the later opinion this state holds, a day the unlaid
+        # run froze first could never take its snapshot back: the restore
+        # keeps a settled day's snapshot. Which day it froze is unknown until
+        # it is laid, so none settles; the restore asks for it a bounded
+        # number of times, then drops it and the days settle here.
+        result.snapshots_held = len(pending)
+        result.held_for = held
+        return result
     names: set[str] = set()
     refused: list[tuple[str, int]] = []
     for day, snapshot in pending:
