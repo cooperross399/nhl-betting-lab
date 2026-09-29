@@ -79,7 +79,12 @@ def _plant(
         json.dumps({"stored_rows": 10, "markets": []}), encoding="utf-8"
     )
     (directory / "replication.json").write_text(
-        json.dumps({"markets": replication}), encoding="utf-8"
+        # Both windows the record compared are the `late` window the
+        # backtest above measures, or the record is not about its figures.
+        json.dumps(
+            {"discovery_phase": "late", "test_phase": "late", "markets": replication}
+        ),
+        encoding="utf-8",
     )
     return ev.build_bundle(
         provider_name="the_odds_api", output_dir=directory, repository_root=directory

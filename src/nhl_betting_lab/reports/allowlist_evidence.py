@@ -35,7 +35,11 @@ from typing import Any
 from nhl_betting_lab.config import OUTPUTS_DIR, PROJECT_ROOT
 from nhl_betting_lab.markets import ALL_MARKETS
 from nhl_betting_lab.reports.player_props_backtest import by_market_with_other_windows
-from nhl_betting_lab.reports.replication import MINIMUM_TEST_BETS, UNTESTABLE
+from nhl_betting_lab.reports.replication import (
+    MINIMUM_TEST_BETS,
+    UNTESTABLE,
+    window_mismatch,
+)
 from nhl_betting_lab.reports.what_we_can_claim import unread_reason
 from nhl_betting_lab.staging_provider_policy import file_sha256
 from nhl_betting_lab.stats import (
@@ -386,9 +390,10 @@ def assess_markets(*, output_dir: Path) -> list[MarketVerdict]:
     # this record has no replication result at all, which is not the same as
     # passing one -- `.get` therefore yields None and the market cannot be
     # supported.
+    replication_payload = _read_json(output_dir / "replication.json")
     replication_records = {
         str(item.get("market")): item
-        for item in (_read_json(output_dir / "replication.json").get("markets") or [])
+        for item in (replication_payload.get("markets") or [])
         if isinstance(item, dict)
     }
     replication = {
@@ -495,6 +500,22 @@ def assess_markets(*, output_dir: Path) -> list[MarketVerdict]:
         # market it did not confirm cannot be reported as supported however
         # well it did the first time.
         replication_state = replication.get(market.key)
+        # The verdict is about the windows it compared. A replication of two
+        # `card` seasons says nothing about the `late` contract figure, and
+        # was read here as its held-out confirmation: the market was called
+        # supported. A record of another window, or one naming no window, is
+        # no replication record for this figure, and the line says why. This
+        # can only take support away; it never supplies any.
+        other_window = ""
+        if replication_state is not None and not replication_unread:
+            measured_phase = (
+                str(entry.get("_phase") or props.get("phase") or "")
+                if market.is_prop
+                else str(team.get("phase") or "")
+            )
+            other_window = window_mismatch(replication_payload, measured_phase)
+            if other_window:
+                replication_state = None
         replicated = replication_state == REPLICATED
         # "No replication record" is true only of a record that was read and
         # does not list this market. Gameday Refresh never builds
@@ -504,6 +525,9 @@ def assess_markets(*, output_dir: Path) -> list[MarketVerdict]:
         held_out = (
             f"The held-out verdict could not be read ({replication_unread})"
             if replication_unread
+            else "There is no replication record for this window: "
+            + other_window
+            if other_window
             else _untestable_sentence(replication_records.get(market.key) or {})
             if replication_state == UNTESTABLE
             else "The held-out window did not confirm it "

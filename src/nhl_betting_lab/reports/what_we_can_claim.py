@@ -40,6 +40,7 @@ from nhl_betting_lab.reports.player_props_backtest import (
 from nhl_betting_lab.reports.team_markets_measurement import (
     MEASUREMENT_JSON_FILENAME,
 )
+from nhl_betting_lab.reports.replication import window_mismatch
 from nhl_betting_lab.stats import (
     NO_DEMONSTRATED_EDGE,
     correction_family,
@@ -83,6 +84,9 @@ class MarketClaim:
     #: Set only when the figure comes from a window other than the one the
     #: rest of its report describes.
     window: str = ""
+    #: Why the replication record on file is not about this figure's window
+    #: (see `replication.window_mismatch`), when it lists the market.
+    replication_elsewhere: str = ""
 
     def sentence(self) -> str:
         if not self.measured:
@@ -107,6 +111,13 @@ class MarketClaim:
         )
         if self.replication:
             return f"{base} {self.replication}"
+        if self.replication_elsewhere:
+            # The single-window sentence below still governs; this says why
+            # the record on file did not replace it.
+            base += (
+                " There is no replication record for this window: "
+                f"{self.replication_elsewhere}."
+            )
         # The family as the measuring report counted it. This printed
         # "the 7 markets measured on the same data" for the props backtest's
         # six markets and its overall figure (8 for `hits`, from the card
@@ -513,6 +524,21 @@ def build_claims_report(
     for market in ALL_MARKETS:
         entry = by_market.get(market.key) if isinstance(by_market, dict) else None
         if isinstance(entry, dict) and int(entry.get("bets", 0) or 0) > 0:
+            # A replication verdict is about the windows it compared. Two
+            # `card` seasons marked replicated were printed as "**Replicated**"
+            # beside the `late` contract figure. A record of another window,
+            # or one naming none, is not attached to this figure.
+            replication_line = replication_states.get(market.key, "")
+            elsewhere = ""
+            if replication_line:
+                measured_phase = str(
+                    entry.get("_phase")
+                    or (backtest if market.is_prop else team).get("phase")
+                    or ""
+                )
+                elsewhere = window_mismatch(replication, measured_phase)
+                if elsewhere:
+                    replication_line = ""
             report.claims.append(
                 MarketClaim(
                     market=market.key,
@@ -527,7 +553,8 @@ def build_claims_report(
                     ),
                     looks=int(entry.get("looks", 1) or 1),
                     family=str(entry.get("family", "") or ""),
-                    replication=replication_states.get(market.key, ""),
+                    replication=replication_line,
+                    replication_elsewhere=elsewhere,
                     calibration_samples=calibration_samples.get(market.key, 0),
                     allowlisted=market.key in allowlisted_markets,
                     window=str(entry.get("_window", "") or ""),

@@ -1304,5 +1304,11 @@ def by_market_with_other_windows(
             current = merged.get(str(market))
             if current and int(current.get("bets", 0) or 0) > 0:
                 continue
-            merged[str(market)] = {**entry, "_window": phrase}
+            # `_phase` is the bare window name, for a reader that must match
+            # this figure to a record of the same window (a replication).
+            merged[str(market)] = {
+                **entry,
+                "_window": phrase,
+                "_phase": str(other.get("phase") or phase).strip(),
+            }
     return merged

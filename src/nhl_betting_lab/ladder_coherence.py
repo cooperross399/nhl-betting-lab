@@ -202,6 +202,20 @@ def class_for(edge: float) -> str | None:
     return None
 
 
+def _payout_rank(odds: float) -> float:
+    """Higher for a better-paying price; an unusable one ranks below all.
+
+    Ranked on the vig-inclusive implied probability, lower paying more, so
+    +150 ranks above -110 above -200 as in `stores._payout_per_unit`. A NaN,
+    an infinity or a price between -100 and +100 is refused by
+    `american_to_implied`, and ranks last.
+    """
+    try:
+        return -american_to_implied(odds)
+    except (OddsError, TypeError, ValueError):
+        return float("-inf")
+
+
 def _rungs_from(frame: pd.DataFrame) -> tuple[list[Rung], int]:
     """One `Rung` per distinct line, plus the count of rows that collapsed.
 
@@ -235,6 +249,16 @@ def _rungs_from(frame: pd.DataFrame) -> tuple[list[Rung], int]:
         slot = rungs.setdefault(line, {})
         if side in slot:
             collapsed += 1
+            # THE BETTER PRICE, NOT THE FIRST ROW. The normaliser folds a
+            # market's alternate ladder, and the anytime scorer, onto the
+            # featured market's line and side, so one rung can carry two
+            # takeable prices at one instant (anytime +250 beside goals over
+            # 0.5 at +210). This kept whichever the provider listed first, so
+            # the same capture read 0 violations in one row order and 1 in
+            # the other. `stores.dedupe_prices` resolves the same collision to
+            # the better-paying price (#244); so does this, per line and side.
+            if _payout_rank(odds) > _payout_rank(slot[side]):
+                slot[side] = odds
             continue
         slot[side] = odds
     built = [
