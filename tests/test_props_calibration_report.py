@@ -30,6 +30,9 @@ def _samples(count: int = 900, market: str = "shots_on_goal") -> pd.DataFrame:
                 "outcome": happened,
                 "actual": 3.0 if happened else 1.0,
                 "toi_seconds": 600 if low_minutes else 1400,
+                # The workload split is one a card knows in advance: the
+                # grouped correction is indexed on expected ice time only.
+                "expected_toi_seconds": 600.0 if low_minutes else 1400.0,
             }
         )
     return pd.DataFrame(rows)

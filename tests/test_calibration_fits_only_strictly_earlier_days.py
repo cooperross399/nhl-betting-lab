@@ -397,6 +397,9 @@ def _props_frame() -> pd.DataFrame:
                 "outcome": won,
                 "actual": 3.0 if won else 1.0,
                 "toi_seconds": seconds,
+                # Expected equals actual here, so the grouped correction —
+                # indexed on expected ice time only — sees the same buckets.
+                "expected_toi_seconds": float(seconds),
             }
         )
 
