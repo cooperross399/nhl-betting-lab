@@ -972,6 +972,11 @@ class OddsApiProvider:
                     "about. Their markets are absent, not empty; the run on "
                     "their own game day fetches them."
                 )
+            # The slate, not the board: "X of Y events" counted every game
+            # posted this week, so two games tonight read "2 of 13" beside
+            # the bulk fetch's "2 of 2" — unless the screen dropped one, when
+            # it read the slate. As `fetch_team_markets` counts it.
+            result.events_seen = len(in_window)
             events = in_window
         # A started game is dropped here, before the sort and the cap, so it
         # can never take a place in the budget from a game still to be
@@ -979,6 +984,7 @@ class OddsApiProvider:
         events, started = _drop_started(events, moment)
         if started:
             result.events_already_started = started
+            result.events_seen = len(events)
             result.warnings.append(_started_warning(started, moment))
         # Ordered by start time, so "the first N events" means the same N
         # events here and in the bulk fetch. Truncating two differently

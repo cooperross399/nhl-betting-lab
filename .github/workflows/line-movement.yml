@@ -272,6 +272,33 @@ jobs:
           fi
           exit "$SCAN_EXIT"
 
+      - name: Fold in this run's earlier attempts
+        # A RE-RUN MUST NOT DELETE THE ROUND IT WAS RUN TO RESCUE. The gates
+        # at the end say a lost night "cannot be collected later", which
+        # invites a Re-run. An artifact belongs to the run, not the attempt,
+        # so the upload below (`overwrite: true`) deleted attempt 1's
+        # `line-movement`, the only copy of its prices, scratch list and line
+        # units; and "Restore today's captures" could not have brought that
+        # round back, because GitHub lists this run as in progress while it
+        # re-runs and only completed runs are restore sources. So on every
+        # attempt after the first, this run's own artifact is unioned row by
+        # row into data/processed (the restore's own `union_csv`) before it
+        # is uploaded again. A run whose earlier attempt uploaded nothing
+        # recovers nothing. Free: GitHub's API only, no provider credit.
+        # A download that fails otherwise makes this step's outcome a
+        # failure: the upload below then does not run, this attempt's
+        # captures are kept beside the earlier ones under their own name,
+        # and the gate at the end makes the run red.
+        # tests/test_a_rerun_keeps_the_first_attempts_captures.py runs it.
+        id: earlier
+        if: always() && github.run_attempt != '1'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python scripts/restore_state.py --fold-run "$GITHUB_RUN_ID" \
+            --artifact line-movement --dest data/processed --attempts 3
+
       - name: Keep the captures
         # ONE ROOT. upload-artifact roots an artifact at the common ancestor
         # of its paths, and "Restore today's captures" unpacks it into
@@ -283,7 +310,10 @@ jobs:
         # history then lives only in per-run artifacts that expire in 90 days.
         # tests/test_the_capture_chain_restores_where_it_uploads.py derives
         # this from the file rather than trusting this comment.
-        if: always()
+        #
+        # Not after a failed fold (above): overwriting an earlier attempt's
+        # artifact that could not be read would delete its captures.
+        if: always() && steps.earlier.outcome != 'failure'
         uses: actions/upload-artifact@v4
         with:
           name: line-movement
@@ -294,6 +324,22 @@ jobs:
           if-no-files-found: warn
           retention-days: 90
           overwrite: true
+
+      - name: Keep this attempt's captures beside the earlier ones
+        # Only when this run's earlier artifact could not be read. Nothing
+        # restores this name, so the round lives here until someone unions
+        # it by hand; that is the red gate's report, not a silent loss of
+        # either attempt.
+        if: always() && steps.earlier.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: line-movement-attempt-${{ github.run_attempt }}
+          path: |
+            data/processed/line_movement
+            data/processed/deployment
+            data/processed/line_combinations
+          if-no-files-found: warn
+          retention-days: 90
 
       - name: Keep the ladder scan
         # Its own artifact, for the reason above: it lives under data/outputs.
@@ -332,6 +378,15 @@ jobs:
           echo "This job captured prices for later analysis."
           echo "It wrote no staging file, froze no opinion, edited no policy,"
           echo "allowlisted no provider, and placed no bet."
+
+      - name: Fail the run when an earlier attempt could not be folded in
+        # After every upload: this attempt's captures are kept under
+        # line-movement-attempt-N, the earlier attempt's under line-movement,
+        # and neither is in the next run's restore until the two are unioned.
+        if: always() && steps.earlier.outcome == 'failure'
+        run: |
+          echo "::error::This run's line-movement artifact from an earlier attempt could not be downloaded or merged (see Fold in this run's earlier attempts), so it was not overwritten. This attempt's captures are in line-movement-attempt-${{ github.run_attempt }}; the next run restores only line-movement, so union the two (scripts/restore_state.py union_csv) or this attempt's round is missing from the chain."
+          exit 1
 
       - name: Fail the run when the line units were not captured
         # The capture above stays continue-on-error so a line-source failure
