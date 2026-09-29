@@ -125,14 +125,15 @@ def _names_the_difference(text: str) -> None:
     # The reasons that are not about the price. The snapshot is frozen from
     # the unfiltered prices before the card is built, so B holds every rung
     # of a ladder (only one takes the outcome's stake), markets the card
-    # could not use that day, the opinions of a blocked card, and rows whose
-    # stake the puck-drop guard pulled.
+    # could not use that day and the opinions of a blocked card. NOT the
+    # rows the puck-drop guard pulled: `write_snapshot` withholds those by
+    # the same rule at the same moment, so they are in neither population
+    # (sweep 4; tests/test_a_game_the_guard_withheld_is_in_neither_population.py).
     for reason in (
         "one stake per outcome",
         "not allowlisted",
         "incomplete",
         "blocked",
-        "puck-drop guard",
         "frozen from the unfiltered prices before the card is built",
     ):
         assert reason in text, f"{reason!r} is not named"
@@ -254,3 +255,64 @@ def test_a_written_off_page_points_at_no_bets_column() -> None:
     assert "| Bets |" not in rendered
     assert "Bets column above" not in rendered
     assert "## Registered decision statistic" in rendered
+
+
+def _calls_a_count_staked(rendered: str) -> list[str]:
+    """Every "staked" on the page that is not negated: the page may say what
+    the card does NOT stake, never that a measurement-bar count was staked.
+    """
+    import re
+
+    bad = []
+    for line in rendered.splitlines():
+        cleaned = line.replace(NOT_STAKED, "").replace("not staked", "")
+        if re.search(r"\bstaked\b", cleaned):
+            bad.append(line)
+    return bad
+
+
+def test_the_clv_not_yet_played_line_never_calls_a_count_staked() -> None:
+    """#248's "Not yet played" line printed "{n} of them staked" for a count
+    taken with the measurement-bar filter (`_is_bet`). A lean at a 7% prop
+    edge — above the 6% measurement bar, below the 12% best-bet bar — is in
+    that count and the card never stakes it (sweep 4)."""
+    opinions = pd.DataFrame([{
+        "snapshot_date": "2026-10-10", "commence_time": "2026-10-10T23:00:00Z",
+        "home_team": "Toronto Maple Leafs", "away_team": "Montreal Canadiens",
+        "market": "shots_on_goal", "player": "Auston Matthews",
+        "selection": "over", "line": 3.5, "american_odds": 110.0,
+        "book": "fanduel", "model_probability": 0.55, "edge": 0.07,
+    }])
+    assert MIN_PROP_EDGE <= 0.07 < BEST_BET_PROP_EDGE, "the fixture is a lean"
+    captures = pd.DataFrame(columns=[
+        "captured_at", "commence_time", "home_team", "away_team", "market",
+        "player", "selection", "line", "american_odds", "book",
+    ])
+    now = datetime(2026, 10, 10, 13, 30, tzinfo=timezone.utc)
+    report = cl.build_clv_report(opinions, captures, now=now)
+    assert report["counts"]["bets_not_yet_played"] == 1
+    rendered = cl.render_clv(report, generated=now.isoformat())
+    (line,) = [l for l in rendered.splitlines() if "Not yet played" in l]
+    assert "1 of them clearing the measurement bar" in line
+    assert NOT_STAKED in line
+    assert not _calls_a_count_staked(rendered), _calls_a_count_staked(rendered)
+
+
+def test_no_page_calls_a_measurement_bar_count_staked() -> None:
+    """The same check over the forward page and the CLV page's settled
+    view: the only "staked" either prints is a negated one."""
+    _, forward = _page()
+    assert not _calls_a_count_staked(forward), _calls_a_count_staked(forward)
+    opinions = pd.DataFrame([{
+        "snapshot_date": "2026-10-08", "commence_time": "2026-10-08T23:00:00Z",
+        "home_team": "Home", "away_team": "Away", "market": "shots_on_goal",
+        "player": "Auston Matthews", "selection": "over", "line": 3.5,
+        "american_odds": 110.0, "book": "Best", "edge": 0.08,
+    }])
+    captures = pd.DataFrame([
+        {**opinions.iloc[0].to_dict(), "captured_at": "2026-10-08T22:30:00+00:00",
+         "american_odds": price, "selection": side, "book": "Close"}
+        for side, price in (("over", 100.0), ("under", -120.0))
+    ])
+    clv = cl.render_clv(cl.build_clv_report(opinions, captures), generated="t")
+    assert not _calls_a_count_staked(clv), _calls_a_count_staked(clv)

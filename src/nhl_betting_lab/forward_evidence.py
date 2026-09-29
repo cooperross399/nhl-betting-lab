@@ -991,6 +991,57 @@ def clears_edge_bar(rows: pd.DataFrame) -> pd.DataFrame:
     return rows[rows["edge"].astype(float) >= bars]
 
 
+def _game_of(rows: pd.DataFrame) -> list[tuple[str, str, str]]:
+    """(home, away, league game date) for every row: the game it settles on.
+
+    The date is `row_game_date`, the one settlement finds the game by, so
+    two meetings of the same clubs on different nights are two games.
+    """
+    return [
+        (
+            clean_text(getattr(row, "home_team", "")),
+            clean_text(getattr(row, "away_team", "")),
+            row_game_date(row),
+        )
+        for row in rows.itertuples()
+    ]
+
+
+def _interval_on_the_game(rows: pd.DataFrame, *, looks: int):
+    """The return on `rows` (settled wagers) and its interval, clustered on
+    the game, corrected (Bonferroni) for `looks` markets.
+
+    ## Every wager in one game is one draw, not many
+
+    This was `stats.roi_interval` over the wagers, and the page said "each
+    wager an independent draw". The best-price collapse keys on the
+    selection, line included, so every rung of a player's alternate ladder
+    is its own wager, and so are both sides of every line and every player
+    in the game — all settled on one boxscore. Sweep 4 ran a null through
+    the real `build_forward_report`: 90 games x 8 players x a 5-rung shots
+    ladder at exactly fair prices, 3,600 wagers, floor met. Population B's
+    corrected interval read "excludes zero" in 18% of runs with independent
+    players and 59% with a modest shared game-pace shock, where an honest
+    95% interval says it about 5% of the time. The CLV report measured the
+    same failure (a design effect of 17-23) and moved to the game; this is
+    the same move, on the report docs/when_this_ends.md decides the lab on.
+
+    `stats.clustered_mean_interval` is the old interval exactly when every
+    game holds one wager, is never narrower than it (an error below the row
+    error, as the over and the under of one line give, is held at the row
+    error), and cannot be bounded from one game. So this can only widen an
+    interval, never narrow one, and the point estimate does not move.
+    `wins` and `pushes` are not carried: nothing in this report reads them.
+    """
+    from nhl_betting_lab.stats import clustered_mean_interval
+
+    return clustered_mean_interval(
+        rows["profit_units"].astype(float).tolist(),
+        _game_of(rows),
+        looks=looks,
+    )
+
+
 def _population_statistic(
     rows: pd.DataFrame, markets: list[str], definition: str
 ) -> dict:
@@ -1003,10 +1054,9 @@ def _population_statistic(
     `corrected_interval` describes that interval — below the floor,
     spanning zero, or excluding it on one side — and nothing more: which
     registered outcome it would be depends on a population nobody has yet
-    chosen.
+    chosen. The interval counts the game, not the wager: see
+    `_interval_on_the_game`.
     """
-    from nhl_betting_lab.stats import roi_interval
-
     count = int(len(rows))
     stat: dict = {
         "definition": definition,
@@ -1016,12 +1066,7 @@ def _population_statistic(
         "corrected_interval": "below_floor",
     }
     if count:
-        interval = roi_interval(
-            rows["profit_units"].astype(float).tolist(),
-            wins=int((rows["outcome"] == "won").sum()),
-            pushes=int((rows["outcome"] == "push").sum()),
-            looks=len(markets),
-        )
+        interval = _interval_on_the_game(rows, looks=len(markets))
         stat["profit_units"] = interval.profit
         stat["roi"] = interval.roi
         stat["low"] = interval.low
@@ -1136,7 +1181,6 @@ def build_forward_report(
     count and `wagers` is what it collapses to, so the factor is visible.
     """
     from nhl_betting_lab.closing_lines import collapse_to_best
-    from nhl_betting_lab.stats import roi_interval
 
     moment = now or datetime.now(timezone.utc)
     payload: dict = {
@@ -1172,12 +1216,9 @@ def build_forward_report(
             "last_date": str(subset["snapshot_date"].max()),
         }
         if len(bets):
-            interval = roi_interval(
-                bets["profit_units"].astype(float).tolist(),
-                wins=int((bets["outcome"] == "won").sum()),
-                pushes=int((bets["outcome"] == "push").sum()),
-                looks=len(markets),
-            )
+            # Clustered on the game, as the registered statistic is: the
+            # rungs, sides and players of one game share one boxscore.
+            interval = _interval_on_the_game(bets, looks=len(markets))
             entry["bets"] = interval.bets
             entry["profit_units"] = interval.profit
             entry["roi"] = interval.roi
@@ -1295,9 +1336,12 @@ def _registered_section(stat: dict | None) -> list[str]:
             f"{_not_staked()}; the note under the table says "
             "how the two differ. Both are computed below the same way: "
             "one per wager after the best-price collapse, pooled across "
-            "markets, the 95% interval widened (Bonferroni) for the markets "
-            "measured, each wager an independent draw, and each counted "
-            "against the floor in its own settled opinions."
+            "markets, the 95% interval clustered on the game (every rung, "
+            "side and player of one game settles on one boxscore, so a game "
+            "is one draw, and the interval is never narrower than one "
+            "counting each wager on its own) and widened (Bonferroni) for "
+            "the markets measured, and each counted against the floor in "
+            "its own settled opinions."
         ),
         "",
         (
@@ -1329,6 +1373,24 @@ def _registered_section(stat: dict | None) -> list[str]:
     lines.append("")
     lines += [_bets_note("population B"), ""]
     return lines
+
+
+def _goalie_void_clause() -> str:
+    """The second kind of void, which the page used to leave out.
+
+    Since #208 `_settle_prop_row` voids a `goalie_saves` row whenever the
+    goalie's time on ice is under `GOALIE_START_SECONDS`, the backtest's
+    start rule. That voids a starter pulled early, a bet a book grades as
+    action, and both void sentences used to say every void was a player who
+    never entered, "as books do" (sweep 4). Built from the constant so the
+    sentence cannot drift from the rule.
+    """
+    minutes = f"{GOALIE_START_SECONDS / 60:g}"
+    return (
+        f"or a goalie with under {minutes} minutes of ice time — the "
+        "backtest's start rule, not a book's: it also voids a starter pulled "
+        "early, whom a book would grade"
+    )
 
 
 def render_forward_report(payload: dict) -> str:
@@ -1415,7 +1477,8 @@ def render_forward_report(payload: dict) -> str:
             ),
             "",
             (
-                "A void is a player who never entered a game that was found. "
+                "A void is a player who never entered a game that was found, "
+                f"{_goalie_void_clause()}. "
                 "An unsettleable row is a game that produced no final result "
                 "inside the patience window, or a row that could not be "
                 "settled against its game. Unsettleable rows with nothing "
@@ -1494,7 +1557,10 @@ def render_forward_report(payload: dict) -> str:
                 "excludes zero, no when it spans zero, and too few below "
                 f"{TOO_FEW_TO_SURVIVE} bets, where nothing survives whatever "
                 "the interval says. The uncorrected interval is shown beside "
-                "it for reference only."
+                "it for reference only. Both are clustered on the game: the "
+                "rungs, sides and players of one game settle on one "
+                "boxscore, so they count as one draw, never as independent "
+                "bets."
             ),
             "",
         ]
@@ -1524,8 +1590,8 @@ def render_forward_report(payload: dict) -> str:
         ),
         (
             "- A void is a player who never entered (stake returned, as "
-            "books do). An unsettleable row is a game that never produced a "
-            "final result inside the patience window — counted, never "
+            f"books do), {_goalie_void_clause()}. An unsettleable row is a "
+            "game that never produced a final result inside the patience window — counted, never "
             "guessed."
         ),
         (
