@@ -186,3 +186,35 @@ def test_the_card_waits_before_it_asks_whether_it_is_already_published() -> None
     assert jobs["refresh"]["concurrency"] == {
         "group": "gameday-refresh", "cancel-in-progress": False,
     }
+
+
+def test_the_second_wait_leg_captures_once_the_time_is_reached(monkeypatch, capsys) -> None:
+    """Run 36582803431: the first leg's wait ended at 19:45:01, the second
+    started at 19:45:06 and read "19:45" as tomorrow, 24 h away, and exited
+    2. A time just passed is a target reached."""
+    now = _utc("2026-09-29T19:45:06")
+    assert wfr.target_for("", "19:45", now) == _utc("2026-09-29T19:45:00")
+    slept = []
+    monkeypatch.setattr(wfr.time, "sleep", slept.append)
+
+    class Clock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return now
+
+    monkeypatch.setattr(wfr, "datetime", Clock)
+    assert wfr.main(["--at", "19:45", "--budget-minutes", "340"]) == 0
+    assert slept == []
+    assert "captures now" in capsys.readouterr().out
+
+
+def test_an_hh_mm_time_is_the_nearest_one_either_side() -> None:
+    now = _utc("2026-09-29T14:27:00")
+    # Ahead today, and ahead across midnight.
+    assert wfr.target_for("", "19:45", now) == _utc("2026-09-29T19:45:00")
+    assert wfr.target_for("", "00:45", now) == _utc("2026-09-30T00:45:00")
+    # Passed this morning, more than twelve hours ago: tonight's is meant.
+    assert wfr.target_for("", "01:00", now) == _utc("2026-09-30T01:00:00")
+    # A second leg late at night for a target set before midnight.
+    late = _utc("2026-09-30T00:10:00")
+    assert wfr.target_for("", "23:50", late) == _utc("2026-09-29T23:50:00")
