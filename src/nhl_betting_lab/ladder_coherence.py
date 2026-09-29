@@ -336,6 +336,11 @@ class LadderScan:
     ladders_with_two_lines: int = 0
     ladders_with_two_rungs: int = 0
     comparable_pairs: int = 0
+    #: Priced low rungs with at least one de-viggable rung above them: the
+    #: wagers a violation could have been found on, in the unit `violations`
+    #: is counted in. A display denominator for `summary_line` only; it is
+    #: not a registered count and is not written to `ladder_coherence.json`.
+    comparable_wagers: int = 0
     duplicate_rows_collapsed: int = 0
     violations: int = 0
 
@@ -345,20 +350,29 @@ class LadderScan:
                 "No ladder was scanned. That is an absence, not a coherent "
                 "market: nothing has been shown about anything."
             )
-        rate = (
-            100.0 * self.violations / self.comparable_pairs
-            if self.comparable_pairs
-            else 0.0
-        )
-        # Pairs are looked for in every ladder of two or more lines, so that
-        # is the denominator named here — never the registered depth, which
-        # the report prints on its own line.
+        # SAME UNIT ABOVE AND BELOW THE LINE. `violations` is one per wager
+        # (the over at the lower line, deduped on the ladder key plus
+        # `low_line`), so its rate is taken over comparable wagers. It was
+        # taken over `comparable_pairs`, every low x high pair, so one
+        # mispriced rung under three higher ones read as 1 in 3 — a number
+        # that measured neither wagers nor pairs. The pair count is still
+        # printed, as a count. Pairs are looked for in every ladder of two
+        # or more lines, so that is the ladder count named here — never the
+        # registered depth, which the report prints on its own line.
+        if self.comparable_wagers:
+            rate = (
+                f"{self.violations} of {self.comparable_wagers} comparable "
+                f"wager(s), "
+                f"{100.0 * self.violations / self.comparable_wagers:.3f}%"
+            )
+        else:
+            rate = "no comparable wager, so no rate"
         return (
             f"{self.violations} violation(s) at or above "
-            f"{DETECTION_FLOOR * 100:.0f} points, across {self.comparable_pairs} "
-            f"comparable rung pair(s) in the {self.ladders_with_two_lines} of "
-            f"{self.ladders} ladder(s) that carry two or more lines — "
-            f"{rate:.3f}%. "
+            f"{DETECTION_FLOOR * 100:.0f} points: {rate}. Looked for across "
+            f"{self.comparable_pairs} comparable rung pair(s) in the "
+            f"{self.ladders_with_two_lines} of {self.ladders} ladder(s) that "
+            "carry two or more lines. "
             f"{self.duplicate_rows_collapsed} duplicate row(s) collapsed."
         )
 
@@ -429,6 +443,13 @@ def find_violations(
             for low in priced
             for high in deviggable
             if high.line > low.line
+        )
+        # The same pairs, counted once per low rung: the wager unit that
+        # `violations` is deduped to below.
+        scan.comparable_wagers += sum(
+            1
+            for low in priced
+            if any(high.line > low.line for high in deviggable)
         )
         identity = dict(zip(columns, group_key if isinstance(group_key, tuple)
                             else (group_key,)))
