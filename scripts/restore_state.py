@@ -229,6 +229,24 @@ LEDGER = Path("processed") / "forward_evidence.csv"
 #: Relative to the artifact root. The first snapshot frozen for a day stands.
 SNAPSHOTS = Path("archive") / "priced_snapshots"
 
+#: Relative to the artifact root, so inside `data/processed`, which the
+#: gameday-state artifact uploads: the red runs a fill passed over because
+#: their download failed, which every later restore asks for again. While it
+#: lists a run the forward ledger settles no pending day
+#: (`forward_evidence.UNLAID_RUNS_FILENAME`, the same name). See
+#: `_ask_again`.
+UNLAID = Path("processed") / "unlaid_runs.json"
+
+#: How many restores ask for a passed-over run, the fill's own included,
+#: before it leaves `UNLAID` and the ledger settles without it. Gameday
+#: Refresh restores once a day, twice after a red primary, so the ledger
+#: waits a day or two, never the 90 days an artifact that never downloads
+#: again would otherwise hold it. Inside an unbroken streak of red restores a
+#: dropped run that still will not download is passed over again and listed
+#: afresh, so the hold can recur; the ledger still settles at least every
+#: third restore, and the streak ends at the first green one.
+UNLAID_TRIES = 3
+
 #: The only branch whose runs are restored from unless `--branch` says
 #: otherwise: the protected one, where code arrives only through review.
 #: A literal, so no caller has to pass it: a workflow expression that came
@@ -441,7 +459,7 @@ def restore(
     report: dict = {"run": None, "conclusion": None, "filled_from": None,
                     "filled": 0, "laid_from": [], "ledger_from": None,
                     "unioned_from": [], "rows_recovered": 0, "not_merged": [], "also": {},
-                    "unreached": []}
+                    "unreached": [], "unlaid": []}
     dest.mkdir(parents=True, exist_ok=True)
     for position, workflow in enumerate(workflows):
         later = workflows[position + 1:]
@@ -501,11 +519,18 @@ def restore(
                     carriers=union - 1, attempts=attempts,
                     refuse=refuse_unreachable,
                 )
-            elif merge and run.get("conclusion") != "success":
-                _fill_from_last_success(
-                    runs[index + 1:], artifact, dest, workflow, report,
-                    attempts=attempts, refuse=refuse_unreachable,
-                )
+            elif merge:
+                # The restored run's list only: read before the fill, whose
+                # older carriers could otherwise lay an older list here.
+                listed = _read_unlaid(dest)
+                passed_over, asked = [], set()
+                if run.get("conclusion") != "success":
+                    passed_over, asked = _fill_from_last_success(
+                        runs[index + 1:], artifact, dest, workflow, report,
+                        attempts=attempts, refuse=refuse_unreachable,
+                    )
+                _ask_again(listed, passed_over, asked, artifact, dest, report,
+                           attempts=attempts, refuse=refuse_unreachable)
             return report
         if report["unreached"]:
             # A run of this workflow carries the artifact and could not be
@@ -577,9 +602,11 @@ def _restore_also(run_id: object, name: str, directory: Path) -> int | None:
 def _fill_from_last_success(
     older: list[dict], artifact: str, dest: Path, workflow: str, report: dict,
     *, attempts: int = 1, refuse: bool = False,
-) -> None:
+) -> tuple[list[dict], set]:
     """Lay every carrier in `older` under `dest`, newest first, down to and
-    including the newest successful one.
+    including the newest successful one. Returns the red runs it passed over
+    because their download failed, as `UNLAID` entries, and the ids of every
+    run it asked for.
 
     Its downloads are retried like the chosen run's. The success used to be
     one attempt, and a failure of any kind moved silently to the success
@@ -602,15 +629,26 @@ def _fill_from_last_success(
     record: recorded, it made this run red, the red primary fired the 15:00
     backup, and one artifact that never downloads again would have done the
     same to every primary (a few hundred credits a backup) until it expired
-    90 days later. The next restore walks the same listing and asks for it
-    again anyway. Under `refuse` it still refuses, as every failure does.
+    90 days later. Under `refuse` it still refuses, as every failure does.
+
+    **It is written down, not left to the listing** (sweep 5). This said
+    "the next restore walks the same listing and asks for it again", which
+    held only when this run went red: a green run is the next restore's
+    source alone, no fill runs under it, and it had already settled the day
+    from the later opinion, which `_first_opinions` never replaces. So the
+    run passed over goes into `UNLAID`, the next restores ask for it again
+    whatever they restore (`_ask_again`), and the ledger settles no pending
+    day while it is listed.
 
     One hole this cannot see: a run re-run by hand ("Re-run failed jobs")
     keeps its databaseId, and so its place in the listing, but can freeze
     after newer runs did; its snapshot is then treated as the earlier one.
     """
+    passed_over: list[dict] = []
+    asked: set = set()
     for run in older:
         success = run.get("conclusion") == "success"
+        asked.add(run["databaseId"])
         with tempfile.TemporaryDirectory() as scratch:
             base = Path(scratch)
             why = _fetch(run["databaseId"], artifact, base, attempts)
@@ -622,8 +660,13 @@ def _fill_from_last_success(
                         f"({run.get('conclusion')}) to lay underneath the "
                         f"restored run, after {attempts} attempt(s) (gh said: "
                         f"{why}); a snapshot that run froze first may be "
-                        "missing here, and the next restore asks for it again."
+                        f"missing here. It is written into {UNLAID}: the next "
+                        f"restores ask for it again, up to {UNLAID_TRIES} in "
+                        "all counting this one, and until it is laid the "
+                        "forward ledger settles no pending day."
                     )
+                    passed_over.append({"run": run["databaseId"],
+                                        "workflow": workflow, "tries": 1})
                 elif why != ABSENT:
                     _unreached(
                         report,
@@ -635,30 +678,136 @@ def _fill_from_last_success(
                         refuse=refuse,
                     )
                 continue
-            ours, theirs = _rows(dest / LEDGER), _rows(base / LEDGER)
-            written = _copy(base, dest, overwrite=False)
-            if theirs > ours:
-                shutil.copy2(base / LEDGER, dest / LEDGER)
-                report["ledger_from"] = run["databaseId"]
-                print(
-                    f"The forward ledger from run {run['databaseId']} holds "
-                    f"{theirs} row(s) against {ours}; it only ever grows, so "
-                    "the longer one is kept."
-                )
-            # After the ledger is settled on: a day it holds keeps its snapshot.
-            written += _first_opinions(base, dest, run["databaseId"])
-            report["filled"] += written
-            if success:
-                report["filled_from"] = run["databaseId"]
-            else:
-                report["laid_from"].append(run["databaseId"])
-            print(
-                f"Laid {workflow} run {run['databaseId']} "
-                f"({run.get('conclusion')}) underneath: {written} file(s) the "
-                "newer state did not have, or froze later."
-            )
+            _lay(base, dest, run, workflow, report)
         if success:
-            return
+            break
+    return passed_over, asked
+
+
+def _lay(base: Path, dest: Path, run: dict, workflow: str, report: dict) -> None:
+    """Lay one older carrier, downloaded to `base`, underneath `dest`."""
+    ours, theirs = _rows(dest / LEDGER), _rows(base / LEDGER)
+    written = _copy(base, dest, overwrite=False)
+    if theirs > ours:
+        shutil.copy2(base / LEDGER, dest / LEDGER)
+        report["ledger_from"] = run["databaseId"]
+        print(
+            f"The forward ledger from run {run['databaseId']} holds "
+            f"{theirs} row(s) against {ours}; it only ever grows, so "
+            "the longer one is kept."
+        )
+    # After the ledger is settled on: a day it holds keeps its snapshot.
+    written += _first_opinions(base, dest, run["databaseId"])
+    report["filled"] += written
+    if run.get("conclusion") == "success":
+        report["filled_from"] = run["databaseId"]
+    else:
+        report["laid_from"].append(run["databaseId"])
+    print(
+        f"Laid {workflow} run {run['databaseId']} "
+        f"({run.get('conclusion')}) underneath: {written} file(s) the "
+        "newer state did not have, or froze later."
+    )
+
+
+def _read_unlaid(dest: Path) -> list[dict]:
+    """The `UNLAID` entries the restored run carried; [] when none. A list
+    that cannot be read is dropped with a warning: which runs it named is
+    unknown, and holding the ledger on it would hold it for good."""
+    path = dest / UNLAID
+    if not path.is_file():
+        return []
+    try:
+        entries = json.loads(path.read_text(encoding="utf-8"))["runs"]
+        return [{"run": int(entry["run"]), "workflow": str(entry["workflow"]),
+                 "tries": int(entry["tries"])} for entry in entries]
+    except (OSError, UnicodeDecodeError, ValueError, KeyError, TypeError) as exc:
+        print(f"::warning::{UNLAID} could not be read ({exc!r}), so no run "
+              "it named is asked for again.")
+        return []
+
+
+def _ask_again(
+    listed: list[dict], passed_over: list[dict], asked: set, artifact: str,
+    dest: Path, report: dict, *, attempts: int = 1, refuse: bool = False,
+) -> None:
+    """Ask again for each run the restored run listed in `UNLAID`, lay those
+    that download, and write `UNLAID` anew with what is still missing
+    (`passed_over`, this restore's fill, among it).
+
+    Laid after the fill, newest first: every listed run is older than the
+    run that passed it over, so older than anything the fill laid unless the
+    fill asked for it too (`asked`), which counts as this restore's try. A
+    run leaves the list once laid, once gh says it holds no such artifact
+    (expired), or after `UNLAID_TRIES` restores; each is said. Never recorded
+    in `report["unreached"]`: the list is what keeps this a warning.
+
+    Under `refuse` (Historical Props Purchase) nothing is asked and the list
+    is carried as it came: that restore settles nothing, and a snapshot is
+    no reason to refuse a purchase.
+    """
+    if refuse:
+        report["unlaid"] = [entry["run"] for entry in listed]
+        return
+    tries = {entry["run"]: entry["tries"] for entry in listed}
+    still: list[dict] = []
+    for entry in passed_over:
+        entry = {**entry, "tries": tries.get(entry["run"], 0) + 1}
+        if entry["tries"] >= UNLAID_TRIES:
+            print(
+                f"::warning::Run {entry['run']} could not be downloaded on "
+                f"{entry['tries']} restores, so it is no longer asked for: a "
+                "snapshot it froze first is lost, and the day settles from "
+                "the later opinion this state holds."
+            )
+        else:
+            still.append(entry)
+    for entry in sorted(listed, key=lambda e: e["run"], reverse=True):
+        if entry["run"] in asked:
+            continue
+        run = {"databaseId": entry["run"], "conclusion": "failure"}
+        with tempfile.TemporaryDirectory() as scratch:
+            base = Path(scratch)
+            why = _fetch(entry["run"], artifact, base, attempts)
+            if why is None:
+                print(f"Run {entry['run']}, passed over by an earlier restore, "
+                      "downloaded this time.")
+                _lay(base, dest, run, entry["workflow"], report)
+                continue
+        if why == ABSENT:
+            print(
+                f"::warning::Run {entry['run']}, passed over by an earlier "
+                f"restore, no longer holds {artifact} (gh: no such artifact; "
+                "expired), so it is no longer asked for: a snapshot it froze "
+                "first is lost, and the day settles from the later opinion "
+                "this state holds."
+            )
+            continue
+        entry = {**entry, "tries": entry["tries"] + 1}
+        if entry["tries"] >= UNLAID_TRIES:
+            print(
+                f"::warning::Could not download {artifact} from run "
+                f"{entry['run']} on {entry['tries']} restores (gh said: {why}), "
+                "so it is no longer asked for: a snapshot it froze first is "
+                "lost, and the day settles from the later opinion this state "
+                "holds."
+            )
+            continue
+        print(
+            f"::warning::Could not download {artifact} from run {entry['run']}, "
+            f"passed over by an earlier restore, again (gh said: {why}); it "
+            f"stays in {UNLAID} ({entry['tries']} of {UNLAID_TRIES} restores), "
+            "and the forward ledger settles no pending day until it is laid."
+        )
+        still.append(entry)
+    report["unlaid"] = [entry["run"] for entry in still]
+    path = dest / UNLAID
+    if still:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"runs": still}, indent=1) + "\n",
+                        encoding="utf-8")
+    elif path.exists():
+        path.unlink()
 
 
 def _first_opinions(older: Path, dest: Path, run_id: object) -> int:

@@ -132,6 +132,17 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     else:
         print(result.summary_line())
+        if result.snapshots_held:
+            # A hold is not a fault (the run stays green), but it should be
+            # seen: the restore that listed the run(s) retries them, and a
+            # local run holding a stale unlaid_runs.json never will.
+            print(
+                f"::warning::Settlement held back {result.snapshots_held} "
+                f"pending snapshot(s) while {', '.join(result.held_for)} "
+                "waits to be laid underneath (data/processed/unlaid_runs.json). "
+                "The next restore asks for it again; a hand run with a stale "
+                "list settles once that file is removed."
+            )
         refused = False
         unreadable = result.unreadable_snapshots
 
