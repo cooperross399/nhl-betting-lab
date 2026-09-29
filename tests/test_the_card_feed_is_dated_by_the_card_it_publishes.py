@@ -22,6 +22,11 @@ What these tests hold:
   `card_day`;
 * with no card on disk, the date is the league day the run started on
   (written once, right after the checkout), never the clock at publish;
+* both of those are league days in America/New_York, under a clock that
+  honours the time zone it is asked in: a run that starts at 23:50 ET, when
+  the UTC date has already rolled over, notes the ET day, and with no card
+  the status carries that day and not the publish clock's; with a card, the
+  card's day wins over the run's;
 * the precheck stands a run down only for a status whose `card_day` is
   today, so a status published after midnight for the previous slate, a
   status with no card, and a status written before this fix (no
@@ -261,3 +266,113 @@ def test_the_ref_gate_still_holds_for_a_card_built_today(tmp_path: Path) -> None
                             "degraded": "false",
                             "ref": "refs/heads/fix/some-unreviewed-change"})
     assert _precheck(tmp_path, NEXT_DAY)[0] == "false"
+
+
+# --------------------------------------------------------------------------
+# The same, under a clock that honours TZ. The stub above answers one date
+# whatever time zone it is asked in, so it cannot tell the league day from
+# the UTC date, nor the run-day file from the publish clock when both would
+# be read in the same zone.
+# --------------------------------------------------------------------------
+
+#: 23:50 ET on D, 03:50 UTC on D+1: a late dispatch starts.
+RUN_STARTS = "2026-10-15T03:50:00Z"
+#: 00:05 ET on D+1: the same run publishes.
+RUN_PUBLISHES = "2026-10-15T04:05:00Z"
+
+
+def _clock_env(tmp_path: Path, instant: str) -> dict:
+    """`_git_env`, with a `date` whose "now" is `instant`, rendered by the
+    real `date` in whatever TZ the caller sets. Asked to convert an instant
+    (`-d`), it is the real `date` as it stands."""
+    assert REAL_DATE, "the steps read the clock with date"
+    epoch = subprocess.run(
+        [REAL_DATE, "-u", "-d", instant, "+%s"],
+        capture_output=True, text=True, check=True,
+    ).stdout.strip()
+    env = _git_env(tmp_path, "unused")
+    stub = Path(env["PATH"].split(":", 1)[0]) / "date"
+    stub.write_text(
+        "#!/bin/sh\n"
+        'for arg in "$@"; do\n'
+        '  case "$arg" in -d|--date|--date=*) exec ' + REAL_DATE + ' "$@";; esac\n'
+        "done\n"
+        f'exec {REAL_DATE} -d @{epoch} "$@"\n',
+        encoding="utf-8",
+    )
+    stub.chmod(stub.stat().st_mode | stat.S_IEXEC)
+    return env
+
+
+def _publish_at(work: Path, tmp_path: Path, instant: str, degraded: str) -> dict:
+    env = _clock_env(tmp_path, instant)
+    subprocess.run(["git", "init", "-q"], cwd=work, env=env, check=True)
+    block = _render(_step(name="Publish the card to the card-feed branch")["run"], {
+        "github.repository": "o/r",
+        "github.server_url": "https://github.com",
+        "github.run_id": "1",
+        "github.ref": MAIN,
+        "steps.post.outputs.decision || 'none'": "skip",
+        "steps.final.outputs.degraded || 'unknown'": degraded,
+        "steps.prices.outputs.empty_slate || 'false'": "false",
+    })
+    result = _bash(block, work, env)
+    assert result.returncode == 0, result.stderr
+    shown = subprocess.run(
+        ["git", "--git-dir", str(tmp_path / "remote.git"), "show",
+         "card-feed:latest_status.json"],
+        env=env, capture_output=True, text=True, check=True,
+    )
+    return json.loads(shown.stdout)
+
+
+def _note_run_day(work: Path, tmp_path: Path, instant: str) -> str:
+    result = _bash(_run_day_step()["run"], work, _clock_env(tmp_path, instant))
+    assert result.returncode == 0, result.stderr
+    return (work / "run_league_day.txt").read_text(encoding="utf-8").strip()
+
+
+def test_the_clock_stub_honours_the_time_zone(tmp_path: Path) -> None:
+    """The control for the tests below: the same instant is D in New York
+    and D+1 in UTC."""
+    env = _clock_env(tmp_path, RUN_STARTS)
+    new_york = _bash("TZ=America/New_York date +%F", tmp_path, env)
+    utc = _bash("TZ=UTC date +%F", tmp_path, env)
+    assert (new_york.stdout.strip(), utc.stdout.strip()) == (CARD_DAY, NEXT_DAY)
+
+
+def test_a_run_starting_at_2350_et_notes_the_league_day_not_the_utc_date(
+    tmp_path: Path,
+) -> None:
+    work = tmp_path / "work"
+    work.mkdir()
+
+    assert _note_run_day(work, tmp_path, RUN_STARTS) == CARD_DAY
+
+
+def test_with_no_card_a_run_that_started_before_midnight_keeps_its_start_day(
+    tmp_path: Path,
+) -> None:
+    """The card step crashed on a run that started at 23:50 ET on D and
+    publishes at 00:05 ET on D+1. The run's own day is D; the clock at
+    publish says D+1, and a status dated D+1 would read as that day's."""
+    work = _workspace(tmp_path, None)
+    assert _note_run_day(work, tmp_path, RUN_STARTS) == CARD_DAY
+
+    status = _publish_at(work, tmp_path, RUN_PUBLISHES, degraded="true")
+
+    assert status["date"] == CARD_DAY, status
+    assert status["card_day"] == "", status
+
+
+def test_a_card_on_disk_outranks_the_day_the_run_started(tmp_path: Path) -> None:
+    """The run started at 23:50 ET on D and its card was built at 00:02 ET
+    on D+1, for D+1's slate. The status is the card's: the run-day file is
+    the fallback for no card, never a rival to one."""
+    work = _workspace(tmp_path, "2026-10-15T04:02:00+00:00")
+    assert _note_run_day(work, tmp_path, RUN_STARTS) == CARD_DAY
+
+    status = _publish_at(work, tmp_path, RUN_PUBLISHES, degraded="false")
+
+    assert status["date"] == NEXT_DAY, status
+    assert status["card_day"] == NEXT_DAY, status
