@@ -165,7 +165,6 @@ def append_captures(
     path = captures_path(processed_dir)
     path.parent.mkdir(parents=True, exist_ok=True)
     combined = frame
-    existing_rows = 0
     if path.is_file():
         existing = read_store(path, columns=CAPTURE_COLUMNS, for_append=True)
         # THE FLOOR COMES FROM THE FILE, NOT FROM THE READ IT GUARDS. It was
@@ -174,13 +173,23 @@ def append_captures(
         # with two stray quotes parses 6 of its 10 rows without an error, and
         # the append then rewrote it at 7. The line count is the floor every
         # other shrink guard here uses.
-        existing_rows = max(len(existing), existing_row_count(path))
+        #
+        # AND THE FLOOR IS THE EXISTING PART, NOT THE TOTAL. The line count
+        # was compared with `combined`, so the new rows made up for the ones
+        # a short read lost: 2 read of 4, plus 4 new, was rewritten at 6 and
+        # the first round was gone (sweep 5). A short read is refused here
+        # the way `load_captures` refuses it, before anything is written.
+        existing_rows = existing_row_count(path)
+        if len(existing) < existing_rows:
+            raise CorruptStoreError(
+                f"{path} holds {existing_rows} row(s) and parses to only "
+                f"{len(existing)} of its {existing_rows}, without an error "
+                "(a stray quote folds rows into one field). Refusing to "
+                "append, because writing now would replace it with the rows "
+                "that parsed. Restore it from the branch that carries it, "
+                "then re-run."
+            )
         combined = pd.concat([existing, frame], ignore_index=True)
-    if len(combined) < existing_rows:
-        raise ValueError(
-            f"Refusing to write {len(combined)} capture rows over "
-            f"{existing_rows}. The store is append-only."
-        )
     combined.to_csv(path, index=False, lineterminator="\n")
     return len(frame)
 

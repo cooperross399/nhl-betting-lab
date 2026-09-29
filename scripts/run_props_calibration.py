@@ -13,6 +13,7 @@ prices, spends no credits, and produces no picks.
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 
 from nhl_betting_lab.backtest import samples_are_current
@@ -111,10 +112,40 @@ def main(argv: list[str] | None = None) -> int:
             use_rest=use_rest,
         )
         print(walk.summary_line())
+        # A NAMED WINDOW THAT YIELDS NO SAMPLE WRITES NOTHING. It used to go
+        # on to write a header-only samples cache, overwrite the contract
+        # output props_calibration.md/.json with "not measured", replace the
+        # committed current_corrections.json with empty curves, and exit 0 —
+        # for a mistyped year, or an end date before the first refit had its
+        # history. The logs are not empty (refused above), so the window is
+        # what matched nothing, and it is named beside the range the logs do
+        # cover. The props backtest runner refuses the same way.
+        if samples.empty and (args.start_date or args.end_date):
+            dates = logs["date"].astype(str) if "date" in logs.columns else None
+            covered = (
+                f"{dates.min()} to {dates.max()}"
+                if dates is not None and not dates.empty
+                else "an unreadable range"
+            )
+            print(
+                "::error::The window --start-date "
+                f"{args.start_date or '(none)'} --end-date "
+                f"{args.end_date or '(none)'} yielded no calibration sample "
+                f"from player logs covering {covered} (a window needs "
+                f"{args.minimum_history_games} games of history before it). "
+                "Nothing was written: not the samples cache, not the report, "
+                "not the live corrections.",
+                file=sys.stderr,
+            )
+            return 1
         outputs.mkdir(parents=True, exist_ok=True)
         samples.to_csv(samples_path, index=False, lineterminator="\n")
 
-    report = build_calibration_report(samples)
+    # What the card applies is the recorded verdict's call, read from this
+    # run's --output-dir as the card reads it; the report says which.
+    report = build_calibration_report(
+        samples, by_toi_ships=ships("by_toi", output_dir=outputs)
+    )
     paths = save_calibration_report(report, output_dir=outputs)
 
     # Refresh the live by-TOI correction curves, fitted on everything to
@@ -125,6 +156,7 @@ def main(argv: list[str] | None = None) -> int:
 
     from nhl_betting_lab.models.toi_corrections import (
         fit_current_corrections,
+        load_current_corrections,
         save_current_corrections,
     )
     from nhl_betting_lab.reports.props_calibration import expand_to_lines
@@ -138,10 +170,25 @@ def main(argv: list[str] | None = None) -> int:
         grid,
         fitted_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
     )
-    corrections_path = save_current_corrections(
-        current, processed_dir=Path(args.processed_dir)
-    )
-    print(f"Live corrections refreshed: {current.describe()} -> {corrections_path}")
+    # AN EMPTY FIT NEVER REPLACES CURVES ON FILE. current_corrections.json is
+    # committed and read by the card whenever `by_toi` ships; a run with no
+    # sample to fit on has learned nothing that would justify blanking it.
+    on_file = load_current_corrections(processed_dir=processed)
+    if not current.pooled and not current.bucketed and (
+        on_file.pooled or on_file.bucketed
+    ):
+        print(
+            "Live corrections kept: this run fitted no curve, so the "
+            f"{on_file.describe()} on file stands."
+        )
+    else:
+        corrections_path = save_current_corrections(
+            current, processed_dir=processed
+        )
+        print(
+            f"Live corrections refreshed: {current.describe()} -> "
+            f"{corrections_path}"
+        )
     print(report.summary_line())
     for item in report.markets:
         print(f"  {item.market}: {item.verdict}")

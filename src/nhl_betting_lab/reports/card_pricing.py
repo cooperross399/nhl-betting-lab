@@ -102,6 +102,12 @@ def price_props(
     unresolved: set[str] = set()
     lookup = dict(team_names or {})
     rosters = dict(rosters or {})
+    # The clubs whose roster the card holds. The logs are a fallback only for
+    # a player whose logged club is *not* among them: a club whose roster is
+    # on disk and leaves him off is evidence he has left it, not a gap.
+    rostered_clubs = {
+        str(team or "").strip().upper() for team in rosters.values()
+    } - {""}
     # Rest flags for props, from the completed-games table — the same rule
     # and the same reason as the team markets: the adjustment ships only in
     # the shape it was measured, and without history every side prices as
@@ -156,10 +162,31 @@ def price_props(
         # has him, and the logs are the fallback. His rates are untouched
         # either way — shooting travels with the player; only the opponent
         # comes from tonight's sheet.
+        #
+        # The fallback trusts the logs only where no roster contradicts them.
+        # One club's refresh failing is a partial failure the run carries on
+        # from, and a player who moved BOS -> TOR, on a night TOR hosts BOS
+        # with TOR's roster the one lost, has no roster entry. Falling back to
+        # BOS then priced him as BOS's away skater against his own club —
+        # wrong opponent, wrong venue, an ordinary-looking opinion frozen into
+        # the ledger — though BOS's fresh roster was held and left him off.
+        # So a logged club with a held roster that does not list him leaves
+        # him unresolved and named, like a roster naming a club not in the
+        # game — but only while one of tonight's two clubs has no roster
+        # held, the one case a mover can hide in. The roster endpoint leaves
+        # active players off (22 regulars measured on 2026-09-29, Bedard
+        # among them), so with both clubs' rosters held a player on neither
+        # cannot have moved to either, and his logs are still the best
+        # evidence of his side. A missing roster must never unresolve a
+        # player who would price.
         rates = model.skaters.get(player_id) or model.goalies.get(player_id)
-        team = str(rosters.get(player_id, "") or "").strip().upper() or (
-            rates.team if rates else ""
-        )
+        team = str(rosters.get(player_id, "") or "").strip().upper()
+        if not team and rates:
+            held = (
+                str(rates.team or "").strip().upper() in rostered_clubs
+                and not {home, away} <= rostered_clubs
+            )
+            team = "" if held else rates.team
         if team and team == home:
             opponent, venue = away, "home"
         elif team and team == away:

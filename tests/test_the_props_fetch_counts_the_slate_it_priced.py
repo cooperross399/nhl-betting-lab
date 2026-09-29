@@ -111,3 +111,31 @@ def test_the_window_alone_narrows_the_count() -> None:
     )
     assert result.events_already_started == 0
     assert result.events_seen == 3, result.summary_line()
+
+
+def test_the_event_cap_is_the_slate_as_the_bulk_fetch_counts_it() -> None:
+    """`--max-events` narrows Y as it does in `fetch_team_markets`.
+
+    Provider Market Discovery runs `--horizon-days 0 --max-events 20`. With no
+    window and a clock before every face-off, a cap of 2 on this 13-game
+    board read "from 2 of 13 events" beside the bulk fetch's "2 of 2": eleven
+    games never in scope, read as a coverage gap.
+    """
+    provider = odds_api.OddsApiProvider(
+        environment={"NHL_ODDS_API_KEY": "stub-credential-never-sent"},
+        requester=_requester,
+    )
+    result = provider.fetch_player_props(
+        markets=[MARKET], credit_cap=1000, max_events=2,
+        now=datetime(2026, 10, 7, 12, 0, tzinfo=timezone.utc),
+    )
+    assert result.events_already_started == 0
+    assert result.events_priced == 2
+    assert result.events_seen == 2, result.summary_line()
+    assert "from 2 of 2 events" in result.summary_line()
+
+
+def test_a_cap_above_the_slate_leaves_the_count_alone() -> None:
+    """A cap the slate never reaches truncates nothing and counts nothing new."""
+    result = _fetch(league_days=[TONIGHT], max_events=20)
+    assert result.events_seen == 2, result.summary_line()

@@ -22,6 +22,13 @@ from nhl_betting_lab.reports import allowlist_evidence as ev
 
 def _write(directory: Path, name: str, payload: dict) -> None:
     directory.mkdir(parents=True, exist_ok=True)
+    # A replication verdict applies only to a figure of the windows it
+    # compared (`replication.window_mismatch`). These fixtures are about
+    # other things, so both name the `late` window unless a test says not.
+    if name == "player_props_backtest.json":
+        payload = {"phase": "late", **payload}
+    elif name == "replication.json":
+        payload = {"discovery_phase": "late", "test_phase": "late", **payload}
     (directory / name).write_text(json.dumps(payload), encoding="utf-8")
 
 

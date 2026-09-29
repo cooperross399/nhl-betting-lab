@@ -310,8 +310,11 @@ class PlayerPropsModel:
         #: Names two priced players share, which resolve to neither on their
         #: own. Some are recoverable with a team; see `_index_names`.
         self.ambiguous_names: tuple[str, ...] = ()
-        self._by_name: dict[str, int] = {}
-        self._by_name_team: dict[tuple[str, str], int] = {}
+        #: Every player id that claims an indexed form, and the same by
+        #: (form, team). Kept whole rather than deduplicated, because the
+        #: resolver unions them across all of a provider name's forms.
+        self._claims: dict[str, frozenset[int]] = {}
+        self._claims_team: dict[tuple[str, str], frozenset[int]] = {}
 
     # -- fitting ---------------------------------------------------------
 
@@ -374,7 +377,8 @@ class PlayerPropsModel:
     def _index_names(self) -> None:
         """Index every priced player under every legitimate spelling.
 
-        A key two different players share is **dropped**, not assigned to one
+        A key two different players share keeps **both** owners, and a name
+        that reaches both resolves to neither — it is never assigned to one
         of them. Resolving it to whichever was indexed first would produce a
         confident price for the wrong man on a row that looks correct.
 
@@ -387,10 +391,8 @@ class PlayerPropsModel:
         and nothing in a prop row separates them, and that is the correct
         outcome rather than a coin flip.
         """
-        claimed: dict[str, int] = {}
-        ambiguous: set[str] = set()
-        by_team: dict[tuple[str, str], int] = {}
-        team_ambiguous: set[tuple[str, str]] = set()
+        claims: dict[str, set[int]] = {}
+        claims_team: dict[tuple[str, str], set[int]] = {}
 
         for source in (self.skaters, self.goalies):
             for player_id, rates in source.items():
@@ -398,30 +400,18 @@ class PlayerPropsModel:
                     continue
                 team = str(rates.team).strip().upper()
                 for alias in player_name_aliases(rates.player):
-                    owner = claimed.get(alias)
-                    if owner is not None and owner != player_id:
-                        ambiguous.add(alias)
-                    else:
-                        claimed[alias] = player_id
-                    if not team:
-                        continue
-                    key = (alias, team)
-                    team_owner = by_team.get(key)
-                    if team_owner is not None and team_owner != player_id:
-                        team_ambiguous.add(key)
-                    else:
-                        by_team[key] = player_id
+                    claims.setdefault(alias, set()).add(player_id)
+                    if team:
+                        claims_team.setdefault((alias, team), set()).add(player_id)
 
-        self.ambiguous_names = tuple(sorted(ambiguous))
-        self._by_name = {
-            alias: player_id
-            for alias, player_id in claimed.items()
-            if alias not in ambiguous
+        self.ambiguous_names = tuple(
+            sorted(alias for alias, owners in claims.items() if len(owners) > 1)
+        )
+        self._claims = {
+            alias: frozenset(owners) for alias, owners in claims.items()
         }
-        self._by_name_team = {
-            key: player_id
-            for key, player_id in by_team.items()
-            if key not in team_ambiguous
+        self._claims_team = {
+            key: frozenset(owners) for key, owners in claims_team.items()
         }
 
     def _fit_b2b_factors(self, frame: pd.DataFrame) -> None:
@@ -664,23 +654,40 @@ class PlayerPropsModel:
         """Map a provider's player name to a fitted player id, or None.
 
         Exact after normalisation — accents, punctuation and casing are
-        representation and are removed; nothing else is. Fuzzy matching a prop
-        to the wrong player produces a confident price for a bet nobody
-        placed, and the failure is invisible: the row looks exactly like a
-        correct one. Unmatched names are reported by the caller instead.
+        representation and are removed — over the forms `player_name_aliases`
+        states (initials collapsed, a parenthesised nickname), which are the
+        forms the backtest and settlement join on. Nothing else is. Fuzzy
+        matching a prop to the wrong player produces a confident price for a
+        bet nobody placed, and the failure is invisible: the row looks exactly
+        like a correct one. Unmatched names are reported by the caller instead.
 
         `team` is consulted only when the name alone is ambiguous, and it
         narrows rather than loosens: it is another field that must agree, not
         a tolerance.
         """
-        alias = normalize_player_name(name)
-        found = self._by_name.get(alias)
-        if found is not None:
-            return found
+        # Every form the alias layer states for the provider's spelling, not
+        # just its plain normalisation: a book's "A.J. Greer" normalises to
+        # "a j greer", which the registry's "Anthony-John (AJ) Greer" never
+        # produces, but both state "aj greer". The backtest and forward
+        # settlement join on these forms on both sides; resolving on one form
+        # here left the card with no opinion (and the ledger with no row) on
+        # players the measurement bets.
+        #
+        # A match is the union of every player any form reaches, and it
+        # resolves only when that union is one player — the same candidate
+        # set settlement builds. Stopping at the first form that hits would
+        # let an unambiguous form outvote an ambiguous one.
+        forms = player_name_aliases(name)
+        owners = set().union(*(self._claims.get(form, ()) for form in forms))
+        if len(owners) == 1:
+            return next(iter(owners))
         if team:
-            return self._by_name_team.get(
-                (alias, str(team).strip().upper())
+            label = str(team).strip().upper()
+            owners = set().union(
+                *(self._claims_team.get((form, label), ()) for form in forms)
             )
+            if len(owners) == 1:
+                return next(iter(owners))
         return None
 
     def resolve_player_in_game(

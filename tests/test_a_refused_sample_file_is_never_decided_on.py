@@ -183,7 +183,7 @@ def test_a_current_cache_is_still_reused_untouched(tmp_path, monkeypatch, capsys
     monkeypatch.setattr(module, "generate_prop_samples", never)
     # Stop once the reuse is decided: the report is not what this is about.
     monkeypatch.setattr(module, "build_calibration_report",
-                        lambda s: (_ for _ in ()).throw(StopIteration("reused")))
+                        lambda s, **_: (_ for _ in ()).throw(StopIteration("reused")))
     with pytest.raises(StopIteration):
         module.main(["--reuse-samples", "--processed-dir", str(processed),
                      "--output-dir", str(outputs)])

@@ -48,6 +48,7 @@ from nhl_betting_lab.providers.team_names import (
 )
 from nhl_betting_lab.reports.props_calibration import expand_to_lines
 from nhl_betting_lab.season import game_date
+from nhl_betting_lab.stores import label_phases
 from nhl_betting_lab.verdicts import ships
 
 
@@ -155,6 +156,14 @@ def main(argv: list[str] | None = None) -> int:
 
     dates = prices["commence_time"].map(game_date)
     results: dict[str, dict[str, dict]] = {}
+    # The window each season was priced in, from the backtest that priced it.
+    # The verdict used to record none, so a `--phase card` run and a
+    # `--phase late` run wrote files that could not be told apart, and a
+    # `by_toi` verdict re-decided on another window read in the drift report
+    # as new evidence. Every variant of a season sees the same prices, so the
+    # raw variant's reading stands for the season.
+    phase_hours_by_window: dict[str, float | None] = {}
+    measured_phase = args.phase
     for label, start, end in WINDOWS:
         window_prices = prices[(dates >= start) & (dates <= end)]
         results[label] = {}
@@ -178,6 +187,9 @@ def main(argv: list[str] | None = None) -> int:
             except UnresolvedTeamsError as error:
                 print(f"::error::{error}", file=sys.stderr)
                 return 2
+            if name == "raw":
+                measured_phase = getattr(report, "phase", "") or measured_phase
+                phase_hours_by_window[label] = getattr(report, "phase_hours", None)
             overall = report.overall
             results[label][name] = {
                 "bets": overall.bets if overall else 0,
@@ -257,6 +269,30 @@ def main(argv: list[str] | None = None) -> int:
                 "this."
             )
 
+    # One median across both seasons, as the rest experiments record it,
+    # taken on the rows `run_backtest` kept: both seasons' prices, labelled
+    # the same way and filtered to the named window. The per-season medians
+    # are kept beside it.
+    in_seasons = pd.Series(False, index=prices.index)
+    for _, start, end in WINDOWS:
+        in_seasons |= (dates >= start) & (dates <= end)
+    labelled = label_phases(prices[in_seasons])
+    in_window = labelled[labelled["phase"] == measured_phase]
+    phase_hours = (
+        float(in_window["hours_before"].median()) if not in_window.empty else None
+    )
+    window_line = (
+        f"Priced in the `{measured_phase}` window, median "
+        f"{phase_hours:.1f} hours before face-off ("
+        + ", ".join(
+            f"{label}: {hours:.1f}h" if hours is not None else f"{label}: -"
+            for label, hours in phase_hours_by_window.items()
+        )
+        + ")."
+        if phase_hours is not None
+        else f"Priced in the `{measured_phase}` window."
+    )
+
     lines = [
         "# Correction experiment: does better calibration make better bets?",
         "",
@@ -265,6 +301,8 @@ def main(argv: list[str] | None = None) -> int:
             "backtest decides. Both corrections straighten every reliability "
             "bucket; this is the question that actually governs."
         ),
+        "",
+        window_line,
         "",
         "| Window | Variant | Bets | Profit | ROI | 95% interval |",
         "|:-------|:--------|-----:|-------:|----:|:-------------|",
@@ -293,7 +331,16 @@ def main(argv: list[str] | None = None) -> int:
     (outputs / EXPERIMENT_MARKDOWN).write_text("\n".join(lines), encoding="utf-8")
     (outputs / EXPERIMENT_JSON).write_text(
         json.dumps(
-            {"results": results, "ships": ships, "verdicts": verdicts},
+            {
+                "results": results,
+                "ships": ships,
+                "verdicts": verdicts,
+                # Additive: `verdicts.ships` and check_verdict_drift.py read
+                # `ships` alone.
+                "phase": measured_phase,
+                "phase_hours": phase_hours,
+                "phase_hours_by_window": phase_hours_by_window,
+            },
             indent=2,
             sort_keys=True,
         )
