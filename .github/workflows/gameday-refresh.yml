@@ -328,12 +328,29 @@ jobs:
         # Soft: if this fails and the restored cache is present, the run
         # continues on slightly older results and says so. Fitting on results
         # a day old is a far better outcome than no card.
+        #
+        # Bounded in time, like Line Movement's schedule fetch. The client
+        # makes four attempts at every request (a 30-second timeout each,
+        # 2+4+8 seconds of backoff between them) and this fetch asks about
+        # 160 schedules, rosters and registries live on every run, so an NHL
+        # outage cost about 38 minutes on fast 503s and hours on a hanging
+        # API. The job's 45 minutes ran out inside this step, before prices
+        # or the card, and the day got no card and no snapshot. The fetch
+        # itself is cut at 18 minutes by `timeout` below, so the datasets are
+        # still rebuilt on whatever the cache holds; the step's own 20
+        # minutes is a backstop if that ever fails to stop it. A healthy run
+        # needs far less: the heavy first-of-season runs (600 new boxscores
+        # plus every schedule, roster and registry) took 6 to 11 minutes on
+        # 2026-08-25..28, and a steady-season run fetches about a dozen games.
+        # Either way the step fails, and "Record what went wrong" calls a
+        # failed or cancelled fetch degraded, so the 15:00 backup runs.
         id: results
+        timeout-minutes: 20
         continue-on-error: true
         env:
           PYTHONPATH: src
         run: |
-          # Two bounds, and both matter.
+          # Three bounds, and all matter.
           #
           # 0.25 seconds rather than 0.05: a cold cache is about four thousand
           # requests and the first run at 0.05 was rate-limited into near-total
@@ -355,8 +372,16 @@ jobs:
           # degraded. The datasets are rebuilt either way — whatever did
           # arrive is still worth fitting on — and the step then exits with
           # the fetch's code so the failure is not swallowed.
+          #
+          # 18 minutes, see above: TERM first, KILL 30 seconds later. Every
+          # boxscore is cached as it arrives, so what came before the cut is
+          # kept and fitted on. A cut exits 124 (137 if it had to KILL).
           code=0
-          python scripts/fetch_nhl_data.py --polite-seconds 0.25 --max-games 600 || code=$?
+          timeout --kill-after=30s 18m \
+            python scripts/fetch_nhl_data.py --polite-seconds 0.25 --max-games 600 || code=$?
+          if [ "$code" -eq 124 ] || [ "$code" -eq 137 ]; then
+            echo "::warning::The NHL fetch was still running after 18 minutes and was stopped; the NHL API is probably down. The datasets are rebuilt on the cached results."
+          fi
           python scripts/build_datasets.py
           exit "$code"
 
@@ -447,11 +472,15 @@ jobs:
             echo "No player logs: no prop can be priced, so no card can be built. The NHL API could not be reached and no previous cache was restored." >> run_degraded.txt
           elif [ "$games" -lt 1000 ]; then
             echo "Only $games games are cached, so the models are fitted on a thin history. The fetch is capped per run and the cache fills over consecutive days; this resolves itself." >> run_degraded.txt
-          elif [ "${{ steps.results.outcome }}" = "failure" ]; then
+          elif [ "${{ steps.results.outcome }}" = "failure" ] \
+               || [ "${{ steps.results.outcome }}" = "cancelled" ]; then
             # fetch_nhl_data.py fails on results, rosters, or (since the live
             # season's name registry is asked again every run) the registry,
             # so this names all three and points at the log that says which.
-            echo "Results, rosters or player names could not be refreshed (the NHL fetch step's log says which); the models were fitted on the previously cached games, and a player new since the last registry refresh has no name to be priced under." >> run_degraded.txt
+            # `cancelled` too: a step stopped at its timeout-minutes is not
+            # guaranteed to read `failure`, and a fetch that never finished
+            # refreshed nothing it had not reached.
+            echo "Results, rosters or player names could not be refreshed (the NHL fetch step's log says which, or that it was stopped for running too long); the models were fitted on the previously cached games, and a player new since the last registry refresh has no name to be priced under." >> run_degraded.txt
           fi
           # What the restore could not ask GitHub (restore_state.py
           # --problem-file). Nothing read it, so a restore that fell back to
