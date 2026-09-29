@@ -317,3 +317,30 @@ def test_the_state_artifact_uploads_it() -> None:
     upload = workflow.split("name: gameday-state", 1)[1].split("retention-days", 1)[0]
     assert "data/processed\n" in upload
 
+
+
+def test_a_held_settlement_is_a_warning_on_the_run_page(
+    tmp_path, monkeypatch, capsys
+) -> None:
+    """A hold keeps the run green, so it is said where a reader looks."""
+    from test_scripts import load_script
+
+    runner = load_script("run_forward_evidence.py")
+    held = fe.SettlementResult(snapshots_held=2, held_for=["run 2"])
+    monkeypatch.setattr(runner, "settle_snapshots", lambda *a, **k: held)
+    monkeypatch.setattr(runner, "load_player_logs", lambda *a, **k: pd.DataFrame())
+    monkeypatch.setattr(runner, "load_team_games", lambda *a, **k: pd.DataFrame())
+    monkeypatch.setattr(runner, "load_team_name_map", lambda *a, **k: {})
+
+    try:
+        runner.main([
+            "--processed-dir", str(tmp_path / "processed"),
+            "--output-dir", str(tmp_path / "out"),
+            "--archive-dir", str(tmp_path / "archive"),
+        ])
+    except Exception:
+        pass  # only what it said before restating the ledger is under test
+
+    out = capsys.readouterr().out
+    assert "::warning::Settlement held back 2 pending snapshot(s)" in out
+    assert "run 2" in out and "unlaid_runs.json" in out

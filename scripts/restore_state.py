@@ -241,7 +241,10 @@ UNLAID = Path("processed") / "unlaid_runs.json"
 #: before it leaves `UNLAID` and the ledger settles without it. Gameday
 #: Refresh restores once a day, twice after a red primary, so the ledger
 #: waits a day or two, never the 90 days an artifact that never downloads
-#: again would otherwise hold it.
+#: again would otherwise hold it. Inside an unbroken streak of red restores a
+#: dropped run that still will not download is passed over again and listed
+#: afresh, so the hold can recur; the ledger still settles at least every
+#: third restore, and the streak ends at the first green one.
 UNLAID_TRIES = 3
 
 #: The only branch whose runs are restored from unless `--branch` says
