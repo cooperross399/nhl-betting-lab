@@ -406,7 +406,10 @@ def _key_of(row) -> tuple:
 #:
 #: What `.github/workflows/line-movement.yml` can meet: its in-season rounds
 #: run at 14:00, 18:00, 21:00, 23:00 and 01:00 UTC, stamped with the wall
-#: clock when they run (never early, often a few minutes late). A 19:00 EDT
+#: clock when they run (never early, often a few minutes late). Each cron
+#: fires eight hours before its round and the run waits for it
+#: (scripts/wait_for_round.py), because GitHub starts scheduled runs hours
+#: late. A 19:00 EDT
 #: start is 23:00 UTC, and the 23:00 round lands at or after face-off, so it
 #: is never a close under the strictly-before rule; the 21:00 round, two
 #: hours out, is the best that game can get. 60-90 minutes would therefore
@@ -419,7 +422,10 @@ def _key_of(row) -> tuple:
 #: is headroom, and it admits 12:30 EDT and 22:30 EST starts, whose nearest
 #: round is exactly 150 minutes out.
 #:
-#: Lateness can cost a close. A late round that still lands before face-off
+#: Lateness can cost a close, but only lateness past the eight-hour wait:
+#: before 2026-09-29 each cron was written at its round, GitHub started it
+#: 3.5-6 hours late, and every evening round slipped past face-off. A late
+#: round that still lands before face-off
 #: only shortens the lead, but one that slips past face-off is excluded,
 #: and the close falls to the previous round, which may be over the bound.
 #: So a round running more than about an hour late behaves as a missed one:
@@ -432,12 +438,10 @@ def _key_of(row) -> tuple:
 #: sweeping every half hour from 11:00 to 23:00 ET: starts from roughly
 #: 13:00-14:00 EDT (13:00, 13:30, 14:00) and 12:00-13:00 EST (12:00, 12:30,
 #: 13:00), plus 17:00 EDT, 16:00 EST and 23:00 EST, have NO round within
-#: the bound. Opening week is thinner still: on 29-30 September only the
-#: 18:00 and 23:00 UTC rounds run, so on both days every start from 11:00
-#: to 14:00 EDT and from 17:00 to 19:00 EDT has none, and on 29 September
-#: 22:00, 22:30 and 23:00 EDT have none either (the 23:00 round is 180-240
-#: minutes out). 30 September's late starts are covered by the 01:00 UTC
-#: round on 1 October. Those games have no close near face-off; their
+#: the bound. Opening week (29-30 September) runs the same five rounds
+#: from 2026-09-29, the 01:00 UTC round on 1 October closing 30
+#: September's late starts; before that it ran only 18:00 and 23:00 UTC.
+#: Those games have no close near face-off; their
 #: opinions are counted under `no_close_not_near_face_off`, never scored. An extra round around 15:30-16:00 UTC would close only the
 #: 12:00-14:00 ET starts; 17:00 EDT and 16:00 EST (both 21:00Z) and 23:00
 #: EST would still need rounds of their own. Every extra round spends

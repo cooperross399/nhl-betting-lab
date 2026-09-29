@@ -26,14 +26,30 @@ on:
   schedule:
     # Through the day and across every time zone's puck drop, so a line has
     # somewhere to move between observations. In season only.
-    - cron: "0 14 * 1-4,10-12 *"
-    - cron: "0 18 * 1-4,10-12 *"
-    - cron: "0 21 * 1-4,10-12 *"
-    - cron: "0 23 * 1-4,10-12 *"
-    - cron: "0 1 * 1-4,10-12 *"
-    # Opening week does not wait for October.
-    - cron: "0 18 29-30 9 *"
-    - cron: "0 23 29-30 9 *"
+    #
+    # EACH CRON FIRES EIGHT HOURS BEFORE ITS ROUND, and the run waits for the
+    # round (the `wait` jobs below; scripts/wait_for_round.py). The rounds
+    # are 14:00, 18:00, 21:00, 23:00 and 01:00 UTC. GitHub starts this
+    # repository's scheduled runs hours late (3.5-4.2 h on 2026-09-24,
+    # 5.5-6.0 h on 2026-09-28), and a cron written at its round landed at or
+    # after 7pm ET face-off, so no evening game could close; the 23:00 round
+    # landed past midnight in New York and captured the wrong day. Lateness
+    # up to eight hours now costs nothing. Moving a round means moving its
+    # cron to eight hours before it.
+    - cron: "0 6 * 1-4,10-12 *"
+    - cron: "0 10 * 1-4,10-12 *"
+    - cron: "0 13 * 1-4,10-12 *"
+    - cron: "0 15 * 1-4,10-12 *"
+    - cron: "0 17 * 1-4,10-12 *"
+    # Opening week does not wait for October, and it gets every round: the
+    # 17:00 cron on 30 September is the 01:00 round on 1 October, which
+    # closes 30 September's late starts. One cron per round: the wait reads
+    # a single hour from the cron that fired.
+    - cron: "0 6 29-30 9 *"
+    - cron: "0 10 29-30 9 *"
+    - cron: "0 13 29-30 9 *"
+    - cron: "0 15 29-30 9 *"
+    - cron: "0 17 29-30 9 *"
   workflow_dispatch:
     inputs:
       credit_cap:
@@ -41,6 +57,13 @@ on:
         type: string
         required: false
         default: "600"
+      at:
+        description: >-
+          UTC time to capture at, as HH:MM or 2026-09-29T21:30Z (at most 11
+          hours ahead). Blank captures now.
+        type: string
+        required: false
+        default: ""
       rehearse_lines:
         description: >-
           Fetch line combinations even with no games today. Proves a GitHub
@@ -53,15 +76,56 @@ permissions:
   contents: read
   actions: read
 
-concurrency:
-  group: line-movement
-  cancel-in-progress: false
-
 jobs:
+  # Hold the run until its round. Two jobs, because one may run for at most
+  # six hours and a round can be eight away; each waits at most 340 minutes
+  # and the second recomputes the round from the same cron. They check out
+  # the repository for the script and nothing else: no install, no secret,
+  # no credit.
+  wait:
+    name: Wait for the round
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Wait for the round
+        env:
+          SCHEDULE: ${{ github.event.schedule }}
+          AT: ${{ inputs.at }}
+        run: python3 scripts/wait_for_round.py --schedule "$SCHEDULE" --at "$AT" --budget-minutes 340
+
+  wait-more:
+    name: Wait for the round (continued)
+    needs: wait
+    # A wait that failed must not cost the round: capture late rather than not at all.
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Wait for the round
+        env:
+          SCHEDULE: ${{ github.event.schedule }}
+          AT: ${{ inputs.at }}
+        run: python3 scripts/wait_for_round.py --schedule "$SCHEDULE" --at "$AT" --budget-minutes 340
+
   capture:
     name: Capture
+    needs: wait-more
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # On the job, not the workflow: runs wait for hours and overlap, and a
+    # workflow-level group would keep only one of them pending, cancelling the
+    # rounds between. Captures still never run two at once, so a restore
+    # always reads the previous round's upload.
+    concurrency:
+      group: line-movement
+      cancel-in-progress: false
 
     steps:
       - uses: actions/checkout@v4
