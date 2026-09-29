@@ -20,10 +20,13 @@ Sources, in order of trust:
     Publish Site restores the staged prices: the gameday-state artifact
     carries the data/staging of the Gameday Refresh run it came from. Until
     2026-09-29 it did not, and every regular-season game was published
-    unpriced (`priced: false`, no line, no pick). It still restores no
-    line_movement, so there every open is missing. A game this build holds
-    no price for says so rather than reading as a pass, and so does the next
-    morning's Results page, which grades no game that carried no pick.
+    unpriced (`priced: false`, no line, no pick). Only the rows for the
+    board's own league day are read (todays_rows): the state restored can
+    be an earlier day's, and its rows must not price today's games. It still
+    restores no line_movement, so there every open is missing. A game this
+    build holds no price for says so rather than reading as a pass, and so
+    does the next morning's Results page, which grades no game that carried
+    no pick.
   * data/processed/team_games.csv + TeamModel: expected goals per side,
     with the back-to-back adjustment only while the recorded `team_b2b`
     verdict ships it — the same verdict, read the same way, as the card.
@@ -140,6 +143,55 @@ def implied(american: float) -> float:
 def to_american(p: float) -> int:
     p = min(max(p, 1e-4), 1 - 1e-4)
     return round(-100 * p / (1 - p)) if p >= 0.5 else round(100 * (1 - p) / p)
+
+
+def league_day(commence_time: object) -> str:
+    """The NHL game date of a provider timestamp, as `YYYY-MM-DD`, or "".
+
+    The league's calendar runs on Eastern time whatever the venue's: a 22:00
+    Pacific face-off is the previous day's game. The staged rows' `date`
+    column is the UTC date of `commence_time` and is NOT this — on opening
+    night 286 of the 486 team rows carried the next day's date — so the day
+    a row belongs to is read from `commence_time` itself. A value with no
+    timezone, or none at all, belongs to no day: the row is dropped rather
+    than guessed at, because a wrong day here prices a game the row is not
+    about.
+
+    A copy of `nhl_betting_lab.season.game_date`, for the reason USER_AGENT
+    gives, differing only in that the lab answers a naive or unreadable
+    value with its first ten characters (a best guess, for grading) and this
+    answers "". tests/test_the_board_prices_only_todays_games.py holds the
+    two to each other on every value they read alike.
+    """
+    text = str(commence_time or "").strip()
+    if not text:
+        return ""
+    try:
+        moment = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return ""
+    if moment.tzinfo is None:
+        return ""
+    return moment.astimezone(ET).date().isoformat()
+
+
+def todays_rows(rows: list[dict], day: date) -> list[dict]:
+    """The staged rows for `day`'s games and no other day's.
+
+    Until 2026-09-29 Publish Site restored no staged prices; since then it
+    does, and that opened this shape (found in review, reproduced through
+    main(), never seen live): its 14:45 UTC cron fires before a late
+    Gameday run has finished and restores the previous run's state — the
+    previous day's card AND the previous day's staging. Joined by team alone
+    (build_board looks up the home and the away side independently),
+    yesterday's rows priced today's games: a repeat pairing published
+    yesterday's moneyline and total as today's, and a team in the same role
+    two nights running read `priced: true` with no line and "No market
+    clears the edge bar", a model judgement nobody made. The freeze was
+    guarded (site_history.built_on_stale_state); the live page was not.
+    """
+    wanted = day.isoformat()
+    return [r for r in rows if league_day(r.get("commence_time")) == wanted]
 
 
 #: The staged file holding the bulk endpoint's featured lines and nothing
@@ -388,8 +440,8 @@ def build_board(day: date, lab: Path, history_dir: Path) -> dict:
     if card_path.is_file():
         card = json.loads(card_path.read_text(encoding="utf-8"))
     candidates = [r for r in card.get("best_bets", []) + card.get("leans", []) + card.get("passes", []) if r.get("market") in MARKET_LABEL]
-    prices = read_prices(lab / "data" / "staging") if not preseason else []
-    featured = read_prices(lab / "data" / "staging", featured_only=True) if not preseason else []
+    prices = todays_rows(read_prices(lab / "data" / "staging"), day) if not preseason else []
+    featured = todays_rows(read_prices(lab / "data" / "staging", featured_only=True), day) if not preseason else []
     opens = earliest_capture(lab / "data" / "processed", day) if not preseason else []
     lab_model, thin = None, False
     if not preseason:
@@ -413,11 +465,13 @@ def build_board(day: date, lab: Path, history_dir: Path) -> dict:
             # Whether this build attached market prices to the game. A null
             # pick used to be the whole story, and the page read every null
             # as "No market clears the edge bar" — including games this build
-            # held no price for. Publish Site restores no staged prices, so
-            # from opening night that was every regular-season game: 5 of 5
-            # published as edge-bar passes while the card held a best bet
-            # (MTL @ TOR moneyline home +112, edge 0.110), and the history
-            # froze 0 bets for the day. A game nobody priced is not a pass.
+            # held no price for. Until 2026-09-29 Publish Site restored no
+            # staged prices, so from opening night that would have been every
+            # regular-season game: 5 of 5 published as edge-bar passes while
+            # the card held a best bet (MTL @ TOR moneyline home +112, edge
+            # 0.110), and the history froze 0 bets for the day. A game nobody
+            # priced is not a pass — and a build holding another day's rows
+            # (todays_rows) has priced nobody either.
             "priced": False,
             # Whether this game is anything but a regular-season game. The
             # night used to be judged once, `preseason` above, and this loop
