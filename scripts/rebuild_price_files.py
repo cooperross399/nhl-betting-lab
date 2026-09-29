@@ -34,7 +34,7 @@ import pandas as pd
 
 from nhl_betting_lab.config import PROCESSED_DIR, RAW_DIR
 from nhl_betting_lab.providers.odds_api import normalize_event
-from nhl_betting_lab.stores import existing_row_count
+from nhl_betting_lab.stores import dedupe_prices, existing_row_count
 
 
 def _rows_from_cache(directory: Path) -> list[dict]:
@@ -87,7 +87,20 @@ def main(argv: list[str] | None = None) -> int:
         ("historical_team_prices", "historical_team_prices.csv", "team"),
     ):
         rows = _rows_from_cache(raw / cache_name)
-        frame = pd.DataFrame(rows).drop_duplicates() if rows else pd.DataFrame()
+        # ONE ROW PER QUOTE PER WINDOW, BY THE PURCHASE'S OWN RULE. This used
+        # to be a whole-row `drop_duplicates()`, which keeps two copies of a
+        # quote whenever two cached responses of one event fall inside one
+        # window: their `snapshot` and `fetched_at` differ, so the rows do.
+        # The rebuilt store then disagreed with the one the purchase wrote,
+        # every quote count was inflated, and the best-price collapse could
+        # take the better of two moments inside a window. `dedupe_prices` is
+        # what both buy scripts write through, keyed on the quote plus the
+        # window `label_phases` derives, so a second window is never merged
+        # into the first. Inside a window it keeps the latest snapshot, and
+        # at one snapshot the better of two prices on one identity (an
+        # anytime scorer beside goals over 0.5), so the result does not
+        # depend on the order the cache files are read in.
+        frame = dedupe_prices(pd.DataFrame(rows)) if rows else pd.DataFrame()
         if keep == "prop" and not frame.empty:
             from nhl_betting_lab.markets import PROP_MARKETS
 

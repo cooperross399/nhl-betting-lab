@@ -102,6 +102,10 @@ def existing_row_count(path: Path | str) -> int:
 #: moment that was asked for and `fetched_at` the moment it was written, and
 #: two labels of the same moment are one quote, not two.
 #:
+#: One identity can still carry two prices at one moment: the alternate
+#: ladders and the anytime scorer fold onto the featured market, line and
+#: selection. `dedupe_prices` keeps the better of those, never an arbitrary one.
+#:
 #: It is not the whole key. Across windows the window itself is part of the
 #: identity — see `dedupe_prices` — because a quote at four hours and a quote
 #: at nine and a half are two different prices on two different boards.
@@ -157,11 +161,42 @@ def dedupe_prices(frame: "pd.DataFrame") -> "pd.DataFrame":
 
     So the key is `PRICE_IDENTITY` **plus the window** `label_phases` derives.
     That is the granularity every measurement in this repository already
-    slices on, which is what makes it the right one: two quotes it treats as
-    one window are two quotes the backtest would collapse to one bet anyway,
-    and two quotes it treats as different windows are exactly the pair that
-    must never be merged. Over-collapsing inside a window costs the
-    measurement nothing; under-collapsing across windows costs it a window.
+    slices on: two quotes it treats as one window are two quotes the backtest
+    would collapse to one bet anyway, and two quotes it treats as different
+    windows are exactly the pair that must never be merged.
+
+    **Which row survives a collision is not free, and "last in the frame" was
+    the wrong answer (fixed 2026-09-28).** This used to say over-collapsing
+    inside a window "costs the measurement nothing", and kept whichever row
+    came last. Two things made that false:
+
+    * One identity can carry two prices at ONE instant. `ALTERNATE_PROVIDER_KEYS`
+      folds every alternate ladder and the anytime scorer onto the featured
+      market, line and selection, so anytime scorer at +250 and goals over
+      0.5 at +210, at one book in one response, are one identity. Keep-last
+      kept whichever the payload listed second and threw away a price that
+      was on the board at the same moment — which `best_price_per_wager`
+      would otherwise have taken.
+    * "Last in the frame" is not "latest in time". An append of an earlier
+      fetch, or a cache read out of order, handed the collision to the older
+      moment.
+
+    So within one identity and window the **latest snapshot** wins, whether
+    its price is better or worse — the better of two moments is a price
+    nobody held at one instant — and among rows at that same snapshot the
+    **better price** wins, because both were takeable.
+
+    What "the same snapshot" means here, exactly. The survivor's instant is
+    this function's own parse of `snapshot` as ISO 8601: `Z`, `+00:00` and
+    `-04:00` offsets, a space for the `T`, fractional seconds, and a naive
+    stamp (read as UTC) are all one instant if they name one moment. A stamp
+    that does not parse is **undated**: it is never treated as simultaneous
+    with anything, it loses to any dated row it collides with, and among
+    undated rows alone the last given is kept. The WINDOW is not this parse
+    — it is `label_phases`, which lets pandas infer one format from the
+    first row, so a spelling that differs from the first row's can land in
+    `unknown` and then never collides with its twin in `card` or `late`.
+    The survivors come back in the order they were given.
     """
     if frame.empty:
         return frame
@@ -183,6 +218,16 @@ def dedupe_prices(frame: "pd.DataFrame") -> "pd.DataFrame":
             "is how 1,126,739 of 1,259,312 four-hour rows were lost. Read "
             f"the store with usecols covering {list(PRICE_WINDOW_INPUTS)}."
         )
+    if "american_odds" not in frame.columns:
+        # Which row of a collision survives depends on its price, so a frame
+        # without prices cannot be deduplicated honestly — only arbitrarily.
+        raise ValueError(
+            "dedupe_prices needs `american_odds`: two quotes on one identity "
+            "at one instant are resolved to the better price, and without "
+            "prices the survivor would be whichever row came last."
+        )
+    import numpy as np
+
     work = frame.reset_index(drop=True)
     windowed = label_phases(work)
     # COMPARE NORMALISED VALUES, NEVER WHAT PANDAS RECONSTRUCTED. A team row
@@ -191,8 +236,38 @@ def dedupe_prices(frame: "pd.DataFrame") -> "pd.DataFrame":
     # a window doubled it: 12 rows, then 24. Only the comparison is
     # normalised; the rows kept are the rows as given.
     identity = windowed[[*PRICE_IDENTITY, "phase"]].map(_identity_value)
-    keep = ~identity.duplicated(keep="last")
-    return work.loc[keep.to_numpy()].reset_index(drop=True)
+    # THE LATER MOMENT, THEN THE BETTER PRICE AT THAT MOMENT. Order every row
+    # by (snapshot instant, payout) and keep the last of each identity. The
+    # instant is parsed as ISO 8601 explicitly: left to infer, pandas takes
+    # the format from the first row and makes every other spelling NaT, so
+    # which rows counted as dated depended on row order. An undated row sorts
+    # first, so any dated row beats it, and carries a constant payout, so
+    # undated rows keep the order given rather than being ranked as if
+    # simultaneous; a dated row with no usable price ranks below every
+    # priced one.
+    moment = pd.to_datetime(
+        work["snapshot"], errors="coerce", utc=True, format="ISO8601"
+    )
+    dated = moment.notna().to_numpy()
+    instant = moment.dt.tz_localize(None).to_numpy().view("int64")
+    payout = _payout_per_unit(work["american_odds"]).to_numpy(dtype=float)
+    payout = np.where(dated, np.nan_to_num(payout, nan=-np.inf), 0.0)
+    order = np.lexsort((payout, instant))
+    survives = ~identity.iloc[order].duplicated(keep="last").to_numpy()
+    kept = np.sort(order[survives])
+    return work.iloc[kept].reset_index(drop=True)
+
+
+def _payout_per_unit(american_odds: "pd.Series") -> "pd.Series":
+    """Profit per unit staked, so +150 ranks above -110 above -200.
+
+    American odds cannot be compared by magnitude; this is the ordering
+    `best_price_per_wager` and `dedupe_prices` both rank on. Unparseable
+    odds come back as NaN.
+    """
+    odds = pd.to_numeric(american_odds, errors="coerce")
+    payout = odds.where(odds < 0, odds / 100.0)
+    return payout.where(odds > 0, -100.0 / odds)
 
 
 def _identity_value(value: object) -> str:
@@ -242,8 +317,6 @@ def best_price_per_wager(frame, key):
     by payout rather than by magnitude, because +150 pays more than -110,
     which pays more than -200.
     """
-    import pandas as pd
-
     if frame.empty:
         return frame
     # REFUSE, NEVER RETURN THE INPUT. This used to hand back the frame
@@ -257,9 +330,7 @@ def best_price_per_wager(frame, key):
             "defect that published -1.6% over 73,918 as a demonstrated loss."
         )
     columns = list(key)
-    odds = pd.to_numeric(frame["american_odds"], errors="coerce")
-    payout = odds.where(odds < 0, odds / 100.0)
-    payout = payout.where(odds > 0, -100.0 / odds)
+    payout = _payout_per_unit(frame["american_odds"])
     ordered = frame.assign(_payout=payout).sort_values(
         "_payout", ascending=False, kind="mergesort"
     )
