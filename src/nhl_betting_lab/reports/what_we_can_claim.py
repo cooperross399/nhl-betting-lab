@@ -150,6 +150,15 @@ class ClaimsReport:
     overall_bets: int = 0
     overall_roi: float | None = None
     overall_includes_zero: bool = True
+    #: The correction the backtest applied to the pooled figure — one look in
+    #: a family of its markets plus that figure — and the one that governs,
+    #: as it does for every market line. Absent in the payload means not
+    #: shown to survive.
+    overall_survives_correction: bool = False
+    overall_looks: int = 1
+    overall_family: str = ""
+    overall_adjusted_low: float | None = None
+    overall_adjusted_high: float | None = None
     policy_status: str = ""
     allowlisted_markets: tuple[str, ...] = ()
     notes: list[str] = field(default_factory=list)
@@ -547,6 +556,15 @@ def build_claims_report(
         report.overall_bets = int(overall["bets"])
         report.overall_roi = float(overall.get("roi", 0.0))
         report.overall_includes_zero = bool(overall.get("includes_zero", True))
+        report.overall_survives_correction = bool(
+            overall.get("survives_correction", False)
+        )
+        report.overall_looks = int(overall.get("looks", 1) or 1)
+        report.overall_family = str(overall.get("family", "") or "")
+        for name in ("adjusted_low", "adjusted_high"):
+            value = overall.get(name)
+            if isinstance(value, (int, float)):
+                setattr(report, f"overall_{name}", float(value))
         report.overall_window = window_phrase(backtest)
         # The pooled figure is the contract window's alone; a prop market
         # measured only in another window is listed below and is not in it.
@@ -594,6 +612,60 @@ def build_claims_report(
         "two and failing the third is the ordinary outcome, not a surprise.",
     ]
     return report
+
+
+def _pooled_verdict(report: ClaimsReport) -> str:
+    """What the pooled prop figure shows, read the way the backtest reads it.
+
+    This printed "The interval excludes zero on this sample." from the naive
+    95% interval alone. The backtest corrects its overall figure as one look
+    among its markets and that figure, and its verdict reads the corrected
+    interval: -2.5% over 10,000 bets at seven looks is about -4.4% to -0.7%
+    naive and -5.1% to +0.0% corrected, which the backtest calls **no
+    demonstrated edge** and this headline called excluding zero, above a
+    market line that said the opposite of the same interval. The branches
+    are `MarketClaim.sentence`'s, including the one below thirty bets.
+    """
+    bets = report.overall_bets
+    edge = NO_DEMONSTRATED_EDGE
+    if bets < 30:
+        # `survives_correction` is False below thirty bets whatever the
+        # interval, so say what `RoiInterval.verdict()` says instead.
+        return (
+            f"{bets} bet{'' if bets == 1 else 's'} is far too few to measure "
+            f"anything. **{edge.capitalize()}**."
+        )
+    if report.overall_includes_zero:
+        # Word for word as it always was: the committed document reads it.
+        return f"The interval includes zero: **{edge}**."
+    family = correction_family(report.overall_looks, report.overall_family)
+    low, high = report.overall_adjusted_low, report.overall_adjusted_high
+    bounds = (
+        f", at {low:+.1%} to {high:+.1%}"
+        if low is not None and high is not None
+        else ""
+    )
+    if not report.overall_survives_correction:
+        if bounds:
+            return (
+                f"The 95% interval excludes zero, but correcting for the "
+                f"{family} widens it to {low:+.1%} to {high:+.1%}, which "
+                f"includes zero. **{edge.capitalize()}**."
+            )
+        # A payload with no corrected interval in it: not shown to survive
+        # is not shown to survive, never an edge.
+        return (
+            "The uncorrected 95% interval excludes zero; this figure is not "
+            f"shown to survive correcting for the {family}. "
+            f"**{edge.capitalize()}**."
+        )
+    outcome = "an edge" if (report.overall_roi or 0.0) > 0 else "a loss"
+    return (
+        f"The interval excludes zero even after correcting for the "
+        f"{family}{bounds} — which is not the same as {outcome} that will "
+        "persist, and means nothing until it replicates on a window it was "
+        "not found on."
+    )
 
 
 def render_claims(report: ClaimsReport) -> str:
@@ -665,11 +737,7 @@ def render_claims(report: ClaimsReport) -> str:
                         if report.overall_window
                         else "bets. "
                     )
-                    + (
-                        f"The interval includes zero: **{NO_DEMONSTRATED_EDGE}**."
-                        if report.overall_includes_zero
-                        else "The interval excludes zero on this sample."
-                    )
+                    + _pooled_verdict(report)
                     + left_out
                 ),
                 "",

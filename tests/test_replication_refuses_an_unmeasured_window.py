@@ -11,9 +11,10 @@ on the first window". The run exited 0 and wrote `replication.md` and
 `replication.json`, and `allowlist_evidence` reads the latter. Found by the
 failure-shape audit (finding 46; 2 of 3 refuters).
 
-The input is easy to produce. `run_player_props_backtest.py` exits 0 and
-writes a labelled window with `bets: 0, by_market: {}` whenever its window
-matches nothing. Reproduced on the real bought store (read-only, outputs to
+The input was easy to produce. `run_player_props_backtest.py` exited 0 and
+wrote a labelled window with `bets: 0, by_market: {}` whenever its window
+matched nothing (it now refuses that; a window that matches rows and clears
+no bet still writes the same shape). Reproduced on the real bought store (read-only, outputs to
 scratch): `--phase late --from 2025-10-07 --to 2025-04-30 --label 2025-26`,
 with the end year mistyped, printed "0 of 3,804,233 price rows" and exited 0.
 Passed as `--discovery` against the home checkout's 2024-25 window, that file
@@ -78,11 +79,16 @@ TEAM_MAP = {"toronto maple leafs": "TOR", "ottawa senators": "OTT"}
 COMMENCE = "2025-10-18T23:10:00Z"  # 7:10pm ET, league date 2025-10-18
 LATE = "2025-10-18T19:10:00Z"  # 4.0 hours before face-off
 
-#: The 2025-26 window as meant, and as typed with the end year one short.
-#: The second matches no price row, which is how the real store produced a
-#: zero-bet labelled window.
+#: The 2025-26 window as meant.
 MEANT = ("--from", "2025-10-07", "--to", "2026-04-16")
-MISTYPED = ("--from", "2025-10-07", "--to", "2025-04-30")
+#: The same window with an edge threshold no wager clears: a well-formed
+#: labelled window with `bets: 0, by_market: {}`. The real store produced one
+#: from a mistyped end year (`--to 2025-04-30`, 0 of 3,804,233 rows), which
+#: the runner now refuses outright
+#: (`tests/test_a_date_window_that_matches_no_price_refuses.py`); a window
+#: that matches rows and bets on none of them still writes this shape, and so
+#: does every file written before that refusal.
+UNBET = (*MEANT, "--edge-threshold", "0.99")
 
 
 def _quote(player: str, odds: int, book: str) -> dict:
@@ -196,7 +202,7 @@ def test_a_window_the_backtest_measured_nothing_is_refused_not_compared(
     role: str,
 ) -> None:
     measured = _backtest(tmp_path, "2025-26", MEANT)
-    unmeasured = _backtest(tmp_path, "2025-26-mistyped", MISTYPED)
+    unmeasured = _backtest(tmp_path, "2025-26-unbet", UNBET)
     produced = json.loads(unmeasured.read_text(encoding="utf-8"))
     assert produced["bets"] == 0 and produced["by_market"] == {}, (
         "the premise: the runner writes a window that measured nothing"
