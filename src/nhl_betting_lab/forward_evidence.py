@@ -25,8 +25,9 @@ the boxscore — via the same identity join and the same settlement rules the
 historical backtest uses, because a second copy of either is how every join
 bug in this repository started. Settled rows append to the forward ledger; a
 player who never dressed voids (stake returned), and a row whose game never
-produced a result within the patience window is recorded as unsettleable,
-counted, never guessed. The ledger is rewritten whole or not at all, and a
+produced a result within the patience window — or that was found but cannot
+be graded against it (an ambiguous name, a missing line or stat, a level
+final) — is recorded as unsettleable, counted, never guessed. The ledger is rewritten whole or not at all, and a
 ledger that cannot be read is refused by name rather than written over.
 
 **Report.** `data/outputs/forward_evidence.md`: per-market accumulating
@@ -1502,6 +1503,30 @@ def _goalie_void_clause() -> str:
     )
 
 
+def _unsettleable_clause() -> str:
+    """What an unsettleable row is, said once for both branches of the page.
+
+    `settle_snapshots` marks a row unsettleable when its game never produced
+    a final result inside the patience window, and ALSO when the game was
+    found and is final but the row cannot be joined or graded against it:
+    `_settle_prop_row` for a name that reaches two players (the two
+    Sebastian Ahos), a goalie whose ice time was not recorded, a missing
+    stat, line or known selection; `_settle_team_row` for a level final or a
+    missing line. The "What this stream is and is not" bullet used to name
+    only the first cause while the no-result branch named both, so one count
+    read two ways and a join problem was sent to the results fetch (sweep 6,
+    forward-unsettleable-definition-omits-found-games). Both sentences now
+    come from here.
+    """
+    return (
+        "An unsettleable row is a game that produced no final result inside "
+        f"the {PATIENCE_DAYS}-day patience window, or a row that could not be "
+        "settled against a game that was found and final (a name matching "
+        "two players, a goalie's ice time not recorded, a missing line or "
+        "stat, an unknown selection, a level final)"
+    )
+
+
 def render_forward_report(payload: dict) -> str:
     from nhl_betting_lab.stats import (
         NO_DEMONSTRATED_EDGE,
@@ -1588,9 +1613,7 @@ def render_forward_report(payload: dict) -> str:
             (
                 "A void is a player who never entered a game that was found, "
                 f"{_goalie_void_clause()}. "
-                "An unsettleable row is a game that produced no final result "
-                "inside the patience window, or a row that could not be "
-                "settled against its game. Unsettleable rows with nothing "
+                f"{_unsettleable_clause()}. Unsettleable rows with nothing "
                 "settled beside them usually mean results never reached "
                 "settlement: read the settlement summary Gameday Refresh "
                 "prints when it settles the forward ledger, then check the "
@@ -1699,9 +1722,8 @@ def render_forward_report(payload: dict) -> str:
         ),
         (
             "- A void is a player who never entered (stake returned, as "
-            f"books do), {_goalie_void_clause()}. An unsettleable row is a "
-            "game that never produced a final result inside the patience window — counted, never "
-            "guessed."
+            f"books do), {_goalie_void_clause()}. "
+            f"{_unsettleable_clause()} — counted, never guessed."
         ),
         (
             "- Recommendations were never placed as bets. This ledger prices "
