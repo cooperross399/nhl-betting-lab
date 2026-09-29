@@ -42,6 +42,7 @@ from __future__ import annotations
 import json
 import math
 import os
+import re
 import secrets
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
@@ -482,7 +483,65 @@ def _read_ledger(path: Path) -> pd.DataFrame:
         raise CorruptStoreError(
             _unreadable_ledger(path, f"missing column(s) {', '.join(missing)}")
         )
+    # ## A ledger that parses SHORT, without an error, was written over
+    #
+    # Everything above refuses a read that raises. One stray quote need not
+    # raise: pandas folded 4 rows into 3 garbled ones and said nothing, the
+    # shrink guard below compared the total after the append with the
+    # file's lines, so the next day's rows hid the swallowed ones, and the
+    # garbled frame replaced the ledger. The earlier day was gone for good,
+    # its `.settled` marker still standing, and the runner exited 0 (sweep
+    # 5). The floor comes from the file, as in `closing_lines.load_captures`.
+    rows_on_disk = _ledger_rows_on_disk(path, frame)
+    if len(frame) < rows_on_disk:
+        raise CorruptStoreError(
+            _unreadable_ledger(
+                path,
+                f"it parses to only {len(frame)} of its {rows_on_disk} "
+                "row(s), without an error: a stray quote folds whole rows "
+                "into one field",
+            )
+        )
     return frame
+
+
+#: How every row the ledger's writer writes begins: its snapshot date, bare.
+#: A physical line that starts this way is a row, wherever pandas put it.
+_LEDGER_ROW_START = re.compile(r"\d{4}-\d{2}-\d{2}(?:,|$)")
+
+
+def _ledger_rows_on_disk(path: Path, frame: pd.DataFrame) -> int:
+    """The rows the ledger at `path` holds, counted off its lines as pandas
+    counts them — and never off `frame` alone, which is the parse it checks.
+
+    `existing_row_count` counts non-blank physical lines, which is pandas'
+    count for every ledger but one whose fields hold a quoted newline. The
+    writer quotes such a field and pandas reads it as one row over several
+    lines, so a whole ledger of 4 such rows is 8 lines, and an honest append
+    to it was refused as a shrink. Each line a field of `frame` spans is
+    therefore taken off the count — except a line that starts the way every
+    ledger row does. That is what a stray quote swallows: whole rows, each
+    beginning with its snapshot date, folded into one field. Counting those
+    as quoted newlines would excuse exactly the loss this guards.
+
+    A field's last line is always a physical line (its closing quote is on
+    it); a line inside it is one only when it is not blank, the rule
+    `existing_row_count` counts by.
+    """
+    folded = 0
+    for column in frame.columns:
+        if pd.api.types.is_numeric_dtype(frame[column]):
+            continue
+        for value in frame[column]:
+            if not isinstance(value, str) or "\n" not in value:
+                continue
+            lines = value.split("\n")[1:]
+            for index, line in enumerate(lines):
+                if _LEDGER_ROW_START.match(line):
+                    continue
+                if line.encode("utf-8").strip() or index == len(lines) - 1:
+                    folded += 1
+    return existing_row_count(path) - folded
 
 
 def _unreadable_ledger(path: Path, reason: str) -> str:
@@ -906,30 +965,35 @@ def settle_snapshots(
             # five-hundred-row store that way and exited 0, because its floor
             # was the zero a failed read had just returned.
             #
-            # `read_store(for_append=True)` already raises on a damaged file,
-            # which closes the loud version of that. This closes the quiet
-            # one: `stat` failing, or any future path that returns a short
-            # frame without raising. The two observations fail for unrelated
-            # reasons, so the maximum of them is only wrong if both are, and
-            # `existing_row_count` says in its own docstring that every
-            # shrink guard here needs it. This one did not use it.
-            existing_rows = max(
-                len(existing), existing_row_count(ledger_path)
-            )
-            frame = pd.concat([existing, frame], ignore_index=True)
+            # `_read_ledger` already refuses a damaged file, loud or quiet.
+            # This is counted again at the write because the file can move
+            # between the two (another writer appending), and because any
+            # future path could hand this a short frame without raising.
+            #
+            # THE FLOOR IS THE EXISTING PART, NOT THE TOTAL. This compared
+            # the frame after the append with the file, so the new day's
+            # rows made up for the ones a short read lost: 3 read of 4, plus
+            # 4 new, "held" 7 >= 4, and the ledger lost a settled day for
+            # good (sweep 5). What is kept of the file is `existing`, and it
+            # is `existing` that must hold every row the file does. The
+            # count is `_ledger_rows_on_disk`, which is `existing_row_count`
+            # less the lines a quoted newline spans.
+            existing_rows = _ledger_rows_on_disk(ledger_path, existing)
         # The ledger only ever grows: it is an append-only record of opinions
         # that have already settled, and a season of it cannot be
         # reconstructed from anywhere else — the prices it settled against
         # are gone. A write that would shrink it means the file being
         # concatenated is not the file that was read, and the safe move is to
         # refuse rather than to publish a shorter history as the whole truth.
-        if len(frame) < existing_rows:
+        if len(existing) < existing_rows:
             raise ValueError(
-                f"Refusing to write a forward ledger of {len(frame)} rows "
-                f"over one holding {existing_rows}. The ledger is "
-                "append-only and cannot be rebuilt; something upstream lost "
-                "rows."
+                f"Refusing to write a forward ledger that keeps "
+                f"{len(existing)} of the {existing_rows} rows the file "
+                "holds. The ledger is append-only and cannot be rebuilt; "
+                "something upstream lost rows."
             )
+        if len(existing):
+            frame = pd.concat([existing, frame], ignore_index=True)
         # Whole or not at all. This was `frame.to_csv(ledger_path)`, written
         # in place: a cut-short rewrite left a torn ledger standing, which
         # lost the tail of the pass, or days settled and marked long before
