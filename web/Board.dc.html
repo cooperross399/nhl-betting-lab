@@ -36,6 +36,7 @@
         <a href="{{ links.results }}">Results</a>
         <a href="{{ links.archive }}">Archive</a>
         <a href="{{ links.graphic }}">Graphic</a>
+        <a href="{{ links.season }}">Season</a>
         <sc-for list="{{ otherSports }}" as="s" hint-placeholder-count="2">
           <a href="{{ s.href }}" style="{{ s.style }}">{{ s.name }}</a>
         </sc-for>
@@ -243,7 +244,7 @@ class Component extends DCLogic {
   componentDidUpdate() { this.load(); }
   renderVals() {
     const vm = this.state.vm;
-    const links = { board: "Board.dc.html", results: "Results.dc.html", archive: "Archive.dc.html", graphic: "Graphic.dc.html" };
+    const links = { board: "Board.dc.html", results: "Results.dc.html", archive: "Archive.dc.html", graphic: "Graphic.dc.html", season: "Season.dc.html" };
     if (!vm) return { links, groups: [], strip: [], howToRead: [], otherSports: [], title1: "Tonight's", title2: "Board." };
     const groups = vm.groups.map((d) => ({ ...d, games: d.games.map((g) => ({ ...g, hasBar: g.bar.length > 0,
       cells: g.cells.map((c) => ({ ...c, rows: c.rows.map((r) => ({ ...r, weight: r.bold ? 600 : 400 })) })),
