@@ -1479,7 +1479,7 @@ Re-derive rather than trust if the data has moved.
   one-per-wager violations by every rung pair; it now prints violations over
   comparable wagers (`comparable_wagers`, display only) beside the pair count.
   No registered count, band, floor or JSON field moved.
-- **2026-09-30 (#TBD), a documentation fix: the close is judged on the
+- **2026-09-30 (#285), a documentation fix: the close is judged on the
   provider's clock.** `CLOSE_MAX_LEAD`'s comment, and the CLV paragraph
   above, said the 23:00 round "is never a close" for a 19:00 EDT start
   because it lands at face-off. Face-off for the close is the provider's
