@@ -15,7 +15,10 @@ BEFORE the cap is applied (`fetch_player_props(keep_event=...)`):
 * `capture_line_movement.py`: an exhibition took one of the fifteen places
   Line Movement's 600 credits buy, and a regular-season game skipped for the
   budget lost that round's movement and its closing price, which no source
-  keeps an archive of.
+  keeps an archive of. Its bulk team-market request reads the same screen
+  (`fetch_team_markets(keep_event=...)`); that request costs the same
+  whatever it holds, so there the screen keeps one round to one set of
+  games rather than saving a credit.
 
 One screen, in one place, so the two cannot drift apart from each other or
 from the card. It is the card's rule: the same reader

@@ -6,12 +6,16 @@ first file it found. `scripts/capture_line_movement.py` writes ONE file per
 league day, `capture_path(day)` = `line_movement/<day>.csv`, and appends
 every capture of the day to it, each row stamped with its `captured_at`. So
 "the earliest capture" was every capture at once, and a later capture moved
-the open. The capture also asks the provider for the per-event markets and
+the open. The capture then asked the provider for the per-event markets and
 their alternate ladders only (`PER_EVENT_PROVIDER_MARKETS +
 ALTERNATE_PROVIDER_MARKETS`), never the bulk `h2h`, `spreads` or `totals`:
-it holds no moneyline at all, and every `total_goals` row in it is an
+it held no moneyline at all, and every `total_goals` row in it was an
 `alternate_totals` rung. `headline_line` took the most common line over
 those rows, which is whichever rung the ladder repeats most, not the line.
+Since 2026-09-29 every round also asks the bulk markets
+(`capture_line_movement.capture_team_markets`), so a day file holds the
+moneyline, and its totals are the featured line beside the rungs, spelled
+alike. The moneyline opens from it; the total still does not.
 
 Found by the failure-shape audit (3 of 3 refuters). Reproduced with the real
 `capture_path` and the capture's own append: a 14:00 capture (main line
@@ -74,8 +78,8 @@ DAY = BOARD_DAY.isoformat()
 FIRST, LATER = f"{DAY}T14:00:00+00:00", f"{DAY}T18:00:00+00:00"
 STAGED_AT = f"{DAY}T13:00:00+00:00"
 
-#: Everything the capture asks the provider for, so everything a capture
-#: written today can hold.
+#: Everything the capture's per-event request asks the provider for. Its
+#: bulk request asks `BULK_PROVIDER_MARKETS` beside it.
 CAPTURED_KEYS = frozenset(odds_api.PER_EVENT_PROVIDER_MARKETS) | frozenset(
     odds_api.ALTERNATE_PROVIDER_MARKETS
 )
@@ -186,26 +190,37 @@ def total_cell(board: dict, home: str, tmp_path: Path) -> dict:
 def test_a_capture_as_the_script_writes_it_publishes_no_open_total(
     tmp_path: Path, monkeypatch
 ) -> None:
+    """Each round holds the per-event ladders AND the bulk featured lines, as
+    the script writes them since it asks both. The moneyline opens at the
+    first round; the total never opens at a rung, or at a line the board
+    cannot tell from one."""
     lab = make_lab(tmp_path, monkeypatch, staged=False)
     stage(lab)
     processed = lab / "data" / "processed"
-    for at in (FIRST, LATER):
-        path = capture(processed, [ladder_event(away, home) for away, home, _ in SLATE], at)
+    for at, home_price in ((FIRST, 110), (LATER, 135)):
+        path = capture(
+            processed,
+            [ladder_event(away, home) for away, home, _ in SLATE]
+            + [bulk_event(away, home, home_price=home_price) for away, home, _ in SLATE],
+            at,
+        )
     with path.open(newline="", encoding="utf-8") as fh:
-        held = {row["market"] for row in csv.DictReader(fh)}
+        rows = list(csv.DictReader(fh))
+    held = {row["market"] for row in rows}
     # Not vacuous: the day file holds total rows the old reader read a line
-    # from, and no moneyline, because the capture asks for none.
-    assert {"total_goals", "puck_line", "regulation_3_way"} <= held and "moneyline" not in held, held
+    # from (rungs and the featured line alike), and the moneyline.
+    assert {"total_goals", "puck_line", "regulation_3_way", "moneyline"} <= held, held
+    assert {float(row["line"]) for row in rows if row["market"] == "total_goals"} >= {MAIN, *RUNGS}
 
     board, _ = build(lab, tmp_path / "out", monkeypatch)
 
     tor = game(board, "TOR")
     assert tor["total"]["current"] == MAIN, tor["total"]
     assert tor["total"]["open"] is None, (
-        f"the board published {tor['total']['open']} as the open total; every total row a "
-        "capture holds is a rung of alternate_totals, and a rung is not the line"
+        f"the board published {tor['total']['open']} as the open total; a capture's total "
+        "rows mix alternate_totals rungs with the featured line, and a rung is not the line"
     )
-    assert tor["moneyline"]["open"] is None, tor["moneyline"]
+    assert tor["moneyline"]["open"] == {"home": 110.0, "away": -130.0}, tor["moneyline"]
     assert total_cell(board, "TOR", tmp_path)["rows"][0]["value"] == "— / 6.0"
 
 
@@ -230,9 +245,9 @@ def test_the_open_is_one_capture_not_the_day_pooled(tmp_path: Path) -> None:
 def test_a_later_capture_does_not_move_a_captured_moneyline_open(
     tmp_path: Path, monkeypatch
 ) -> None:
-    """The capture buys no moneyline today. If it also bought the bulk `h2h`
-    (the owner's option of capturing the team markets), the open is the
-    first capture's price, and a later capture does not rewrite it."""
+    """The capture buys the bulk `h2h` in every round (since 2026-09-29), and
+    the open is the first capture's price; a later capture does not rewrite
+    it."""
     lab = make_lab(tmp_path, monkeypatch, staged=False)
     stage(lab)
     processed = lab / "data" / "processed"

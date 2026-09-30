@@ -195,11 +195,39 @@ def append_captures(
 
 
 #: Where the line-movement capture writes. It runs five times a day in
-#: season and records every field a closing price needs — for the markets it
-#: asks for, which are the per-event markets and their alternate ladders only.
-#: It never asks for the bulk moneyline, puck line or total, so those have no
-#: closing price here (see `uncaptured_markets`).
+#: season and records every field a closing price needs, for the per-event
+#: markets and their alternate ladders and, in the same round, the bulk
+#: moneyline, puck line and total. Rounds written before those were added
+#: (the first captures of 2026-09-29/30 among them) hold no bulk market, and
+#: a round whose bulk request failed holds none either; `uncaptured_markets`
+#: names the opinions that left without a close.
 MOVEMENT_DIRNAME = "line_movement"
+
+#: The markets the capture's bulk request asks for, in this lab's names: the
+#: same keys the card's team opinions carry, so the join needs no mapping.
+TEAM_MARKET_KEYS = frozenset({"moneyline", "puck_line", "total_goals"})
+
+
+def team_market_rows(frame: pd.DataFrame) -> pd.Series:
+    """Which rows of a line-movement day file came from the bulk request.
+
+    Both fetches write the same columns, and a bulk `puck_line` or
+    `total_goals` row is spelled exactly like an alternate-ladder rung. They
+    differ in `fetched_at`: a per-event row carries the round's
+    `captured_at`, to the second; a bulk row carries the instant its own
+    request went out, to the microsecond (`capture_line_movement.
+    capture_team_markets`). Nothing reading prices needs this: a quote at a
+    line is the same bet in either market. The ladder scan does, because it
+    compares one book's one response and never two requests.
+
+    A frame missing either column has no bulk row in it: every round written
+    before the bulk request was added.
+    """
+    if frame.empty or not {"fetched_at", "captured_at", "market"} <= set(frame.columns):
+        return pd.Series(False, index=frame.index)
+    fetched = frame["fetched_at"].astype(str).str.strip()
+    captured = frame["captured_at"].astype(str).str.strip()
+    return frame["market"].isin(TEAM_MARKET_KEYS) & (fetched != captured)
 
 
 def load_movement_captures(
@@ -207,14 +235,16 @@ def load_movement_captures(
 ) -> pd.DataFrame:
     """Closing-line captures, taken from the line-movement store.
 
-    For the per-event markets and their alternate ladders, the dedicated
-    closing-line capture and this one ask the provider the same question. NOT
-    for the bulk team markets: the dedicated capture also bought `h2h`,
-    `spreads` and `totals`, and the movement capture never asks for them, so
-    no moneyline — and no featured puck line or total unless an alternate
-    ladder happens to repeat it — ever reaches this store. The report names
-    those opinions rather than blaming the books for them. The movement
-    capture already runs five times a day through the
+    The dedicated closing-line capture and this one ask the provider the
+    same question: the per-event markets and their alternate ladders, and
+    the bulk `h2h`, `spreads` and `totals`. The movement capture asked only
+    the first half until the bulk request was added to every round, so no
+    moneyline, and no featured puck line or total unless an alternate ladder
+    repeated it, reached this store from its earlier rounds (and none from a
+    round whose bulk request failed). The report names those opinions as
+    uncaptured rather than blaming the books for them. A bulk row and a
+    ladder rung at the same line are one selection here, at the better
+    price. The movement capture already runs five times a day through the
     evening — including a snapshot at face-off for a 19:00 ET start — and
     writes `captured_at` beside every price, which is the only column the
     closing rule needs. Scheduling a second job to fetch the same board again
@@ -534,13 +564,19 @@ def uncaptured_markets(
     Every one of them is also counted under "no closing price found", and
     the page used to explain all of those the same way: "a selection the
     books pulled before puck drop". For these it is false. Line Movement,
-    which feeds the store, fetches only the per-event markets and their
-    alternate ladders, so a moneyline opinion — frozen every game day from
+    which feeds the store, fetched only the per-event markets and their
+    alternate ladders until the bulk moneyline, puck line and total were
+    added to its round, so a moneyline opinion — frozen every game day from
     the bulk fetch — could never meet a close; the failure-shape audit
     replayed a card and two captures and found both moneyline opinions under
     "no closing price found", moneyline absent from the by-market table, and
     a moneyline-only day reading "Nothing to measure yet ... not a fault".
     No book pulled anything there. The capture never priced that market.
+
+    It still happens, for a narrower reason: a day captured before the bulk
+    request was added, a round whose bulk request failed (the capture warns
+    on the run page), or no round at all before face-off. Measured the same
+    way, so it stays true whichever it was.
     """
     collapsed = collapse_to_best(opinions)
     if collapsed.empty:
@@ -1283,7 +1319,8 @@ def render_clv(report: dict, *, generated: str = "") -> str:
     # Split, not added to: every opinion below is already in the count above.
     # All of them used to be explained by the paragraph after this, as
     # selections the books pulled — including every moneyline opinion, in a
-    # market the capture has never once asked for. An empty store is left to
+    # market the capture did not ask for until the bulk request joined its
+    # round (and misses whenever that request fails). An empty store is left to
     # the "Nothing to measure yet" section: with no capture at all, every
     # opinion is trivially uncaptured and the split would say nothing new.
     uncaptured = 0
@@ -1299,9 +1336,11 @@ def render_clv(report: dict, *, generated: str = "") -> str:
             f"- Of those, **{uncaptured}** are in a market the store holds no "
             f"price for, in their game, from before face-off: {named}. No "
             "book pulled these. The capture never priced that market for that "
-            "game — it does not ask for it, or no capture ran before face-off "
-            "— so they are a gap in what is captured and say nothing about "
-            "the model.",
+            "game — its request for that market failed or was not yet made "
+            "(the bulk moneyline, puck line and total joined the capture "
+            "after its first rounds), or no capture ran before face-off — so "
+            "they are a gap in what is captured and say nothing about the "
+            "model.",
         ]
         others = int(counts.get("no_close", 0)) - uncaptured - stale
         if others:
