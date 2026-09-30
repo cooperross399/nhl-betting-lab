@@ -18,6 +18,7 @@ import importlib.util
 from datetime import datetime, timedelta, timezone
 
 import pandas as pd
+import pytest
 import yaml
 
 from nhl_betting_lab import closing_lines as cl
@@ -184,28 +185,36 @@ EVENING_STARTS = [
 ]
 
 
-def test_the_bound_is_what_the_capture_schedule_can_meet() -> None:
+#: Minutes after the NHL's start at which the provider lists `commence_time`,
+#: the face-off the close is judged against: the NHL time for 65% of 2,459
+#: bought 2024-26 events, ten minutes later for 35% (58% in 2025-26).
+PROVIDER_LISTINGS = (0, 10)
+
+
+@pytest.mark.parametrize("listed_late_by", PROVIDER_LISTINGS)
+def test_the_bound_is_what_the_capture_schedule_can_meet(listed_late_by) -> None:
     """On every in-season day, every common evening start has a scheduled
     round within the bound, so on a normal night it closes. The opening-week
     days (29-30 September) name their days and are excluded here; they run
-    the same five rounds. A 19:00 EDT
-    start is 23:00 UTC, whose
-    own round lands at or after face-off; the 21:00 round, two hours out,
-    must still close it, which is why 60-90 minutes was not chosen.
+    the same five rounds. A 19:00 EDT start the provider lists at 23:00 UTC
+    has its own round land at face-off; the 21:00 round, two hours out,
+    must still close it, which is why 60-90 minutes was not chosen. Listed
+    ten minutes late, the 23:00 round closes it, and every evening start
+    must still close under that listing too.
 
-    This holds for rounds on time. A round that runs more than about an
-    hour late slips past face-off and behaves as a missed one, handing the
-    close to a previous round that may be over the bound; only 19:30 EDT
-    keeps a close however late its nearest round runs. That, and the
-    afternoon starts the schedule cannot close at all, are recorded in
+    This holds for rounds on time. A round that runs late slips past
+    face-off and behaves as a missed one, handing the close to a previous
+    round that may be over the bound. That, and the afternoon starts the
+    schedule cannot close at all under each listing, are recorded in
     `CLOSE_MAX_LEAD`'s comment, not asserted here.
     """
     rounds = _in_season_rounds()
     for label, start in EVENING_STARTS:
-        nearest = _leads(start, rounds)[0]
+        nearest = _leads(start + listed_late_by, rounds)[0]
         assert timedelta(minutes=nearest) <= cl.CLOSE_MAX_LEAD, (
-            f"a {label} start's nearest round is {nearest} minutes out, "
-            "beyond the bound, so it could never close"
+            f"a {label} start listed {listed_late_by} minutes late has its "
+            f"nearest round {nearest} minutes out, beyond the bound, so it "
+            "could never close"
         )
 
 

@@ -695,9 +695,13 @@ Re-derive rather than trust if the data has moved.
   obvious question got asked: the line-movement capture already runs **five
   times a day** in season and writes every column a closing price needs. Its
   rounds (14:00, 18:00, 21:00, 23:00 and 01:00 UTC) close a 19:00 ET start
-  with the 23:00 round in EST, an hour out; in EDT that round lands at or
-  after a 19:00 face-off and the strictly-before rule excludes it, so the
-  close is the 21:00 round, two hours out. A second job
+  with the 23:00 round in EST, an hour out. In EDT it depends on the
+  provider's `commence_time`, the face-off the close is judged against: for
+  a game listed at the NHL's 19:00, the 23:00 round lands at face-off, the
+  strictly-before rule excludes it, and the close is the 21:00 round, two
+  hours out; for a game listed at 19:10, the 23:00 round closes it ten
+  minutes out. The provider listed 58% of 2025-26 games ten minutes late
+  (see the 2026-09-30 entry). A second job
   would have re-bought the same board and added another scheduled surface to
   fire and fix. `closing_lines.load_captures` now falls back to the movement
   store, the dedicated store still wins when it holds anything, and the
@@ -1475,6 +1479,22 @@ Re-derive rather than trust if the data has moved.
   one-per-wager violations by every rung pair; it now prints violations over
   comparable wagers (`comparable_wagers`, display only) beside the pair count.
   No registered count, band, floor or JSON field moved.
+- **2026-09-30 (#TBD), a documentation fix: the close is judged on the
+  provider's clock.** `CLOSE_MAX_LEAD`'s comment, and the CLV paragraph
+  above, said the 23:00 round "is never a close" for a 19:00 EDT start
+  because it lands at face-off. Face-off for the close is the provider's
+  `commence_time`, and it is often not the NHL's time. Across 2,459 events
+  of the bought team prices, it was the NHL time for 65% and about ten
+  minutes later for 35%: 12% in 2024-25, 58% in 2025-26, and 6 of the 7
+  games of 29-30 September. A late-listed game closes on the round at its
+  NHL start, ten minutes out. The comment now gives the close lead, the
+  lateness tolerance and the no-close starts under both listings, generated
+  by a half-hour sweep. `test_the_bound_is_what_the_capture_schedule_can_meet`
+  now checks every common evening start under both listings. Moving the
+  evening rounds to a quarter to the hour was measured on the 2026-27
+  schedule and not adopted: about 1,284 games closed against 1,283 for
+  today's rounds at 58% listed late, and 1,292 for today's at 6 in 7.
+  No cron, bound, rule, report figure or verdict changed.
 - **2026-09-25, a defect fix recorded as `docs/when_this_ends.md` requires:
   the card refuses stale prices.** The policy's `max_provider_run_age_hours`
   (12, policy-wide and on `the_odds_api`) was parsed and never applied —

@@ -435,48 +435,74 @@ def _key_of(row) -> tuple:
 #: meet it.
 #:
 #: What `.github/workflows/line-movement.yml` can meet: its in-season rounds
-#: run at 14:00, 18:00, 21:00, 23:00 and 01:00 UTC, stamped with the wall
-#: clock when they run (never early, often a few minutes late). Each cron
-#: fires eight hours before its round and the run waits for it
+#: run at 14:00, 18:00, 21:00, 23:00 and 01:00 UTC. Each cron fires eight
+#: hours before its round and the run waits for it
 #: (scripts/wait_for_round.py), because GitHub starts scheduled runs hours
-#: late. A 19:00 EDT
-#: start is 23:00 UTC, and the 23:00 round lands at or after face-off, so it
-#: is never a close under the strictly-before rule; the 21:00 round, two
-#: hours out, is the best that game can get. 60-90 minutes would therefore
-#: put every 19:00 EDT game in the bucket on a night nothing went wrong.
-#: The evening rounds are two hours apart, so on every in-season day every
-#: common evening start (19:00, 19:30 and 22:00 ET, EDT and EST) has a
-#: round at most two hours before it when every round runs on time.
-#: 29-30 September are not in-season days; see below. The half hour above
-#: two hours
-#: is headroom, and it admits 12:30 EDT and 22:30 EST starts, whose nearest
-#: round is exactly 150 minutes out.
+#: late; on 2026-09-29/30 every round's prices were stamped 43-50 seconds
+#: after it.
+#:
+#: FACE-OFF HERE IS THE PROVIDER'S `commence_time`, NOT THE NHL'S START, and
+#: the two differ. Over 2,459 events of the bought 2024-25 and 2025-26 team
+#: prices (each event's last pre-game snapshot, matched to `team_games.csv`),
+#: the provider listed 65% at the NHL time and 35% about ten minutes later
+#: (847 of those 861 exactly ten). The split is even across home clubs but
+#: not across seasons: 12% in 2024-25, 58% in 2025-26, and 6 of the 7 games
+#: of 29-30 September 2026 (the card showed a 19:00 ET game as "7:10 PM").
+#: So a 19:00 EDT game listed at 23:00Z has its own round land AT face-off,
+#: which is never a close under the strictly-before rule, and closes on the
+#: 21:00 round, two hours out. Listed at 23:10Z, the 23:00 round closes it
+#: ten minutes out. A 60-90 minute bound would therefore put every 19:00
+#: EDT game listed at the NHL time in the bucket on a night nothing went
+#: wrong. The evening rounds are two hours apart, so on every in-season day
+#: every common evening start (19:00, 19:30 and 22:00 ET, EDT and EST) has a
+#: round at most 130 minutes before it under either listing when every
+#: round runs on time. 29-30 September are not in-season days; see below.
+#: The half hour above two hours is headroom. It admits 12:30 EDT and 22:30
+#: EST starts listed at the NHL time, whose nearest round is 150 minutes out
+#: (149 once the stamp's seconds are counted), and loses them when they are
+#: listed ten minutes late.
 #:
 #: Lateness can cost a close, but only lateness past the eight-hour wait:
 #: before 2026-09-29 each cron was written at its round, GitHub started it
 #: 3.5-6 hours late, and every evening round slipped past face-off. A late
-#: round that still lands before face-off
-#: only shortens the lead, but one that slips past face-off is excluded,
-#: and the close falls to the previous round, which may be over the bound.
-#: So a round running more than about an hour late behaves as a missed one:
-#: 19:00 EST and 22:00 EDT starts lose their close past 60 minutes late,
-#: 19:30 EST past 90, 19:00 EDT and 22:00 EST past 120. Only 19:30 EDT keeps
-#: a close however late its nearest round runs (its fallback is the 21:00
-#: round, exactly 150 minutes out).
+#: round that still lands before face-off only shortens the lead, but one
+#: that slips past face-off is excluded, and the close falls to the
+#: previous round, which may be over the bound. How late a round can run
+#: before its common evening start loses its close, listed at the NHL time /
+#: listed ten minutes late: 19:00 EDT 120 / never; 19:30 EDT never / 40;
+#: 22:00 EDT 60 / 70; 19:00 EST 60 / 70; 19:30 EST 90 / 100; 22:00 EST
+#: 120 / 130 minutes. "Never" means the round before is still within the
+#: bound.
 #:
 #: What it cannot meet, on a normal night with every round on time,
-#: sweeping every half hour from 11:00 to 23:00 ET: starts from roughly
-#: 13:00-14:00 EDT (13:00, 13:30, 14:00) and 12:00-13:00 EST (12:00, 12:30,
-#: 13:00), plus 17:00 EDT, 16:00 EST and 23:00 EST, have NO round within
-#: the bound. Opening week (29-30 September) runs the same five rounds
-#: from 2026-09-29, the 01:00 UTC round on 1 October closing 30
-#: September's late starts; before that it ran only 18:00 and 23:00 UTC.
-#: Those games have no close near face-off; their
-#: opinions are counted under `no_close_not_near_face_off`, never scored. An extra round around 15:30-16:00 UTC would close only the
-#: 12:00-14:00 ET starts; 17:00 EDT and 16:00 EST (both 21:00Z) and 23:00
-#: EST would still need rounds of their own. Every extra round spends
-#: credits, so it is Cooper's decision. The bound itself is a judgement,
-#: and Cooper may revise it.
+#: sweeping every half hour from 11:00 to 23:00 ET. Listed at the NHL time,
+#: 13:00, 13:30, 14:00 and 17:00 EDT and 12:00, 12:30, 13:00, 16:00 and
+#: 23:00 EST have NO round within the bound. Listed ten minutes late, the
+#: set is 12:30, 13:00, 13:30 and 16:30 EDT and 11:30, 12:00, 12:30, 15:30,
+#: 22:30 and 23:00 EST. So 14:00 and 17:00 EDT and 13:00 and 16:00 EST close
+#: (ten minutes out) only when listed late, and 12:30 and 16:30 EDT and
+#: 11:30, 15:30 and 22:30 EST only when listed on time.
+#:
+#: On the whole 2026-27 schedule (1,344 games, api-web.nhle.com), 1,263 have
+#: a close if every game is listed at the NHL time: mean lead 84 minutes.
+#: At 2025-26's 58% listed late it is about 1,283 (mean 69); at opening
+#: week's 6 in 7, about 1,292 (mean 62.5). Moving the evening rounds to a
+#: quarter to the hour (18:45, 21:45, 23:45, 01:45) was measured on
+#: 2026-09-30 and not adopted. It closes about 1,284 games under any
+#: listing, fresher (mean 52 against 69 minutes at 58%), but no more of
+#: them, and fewer than today's rounds once most games are listed late.
+#:
+#: Opening week (29-30 September) runs the same five rounds from
+#: 2026-09-29, the 01:00 UTC round on 1 October closing 30 September's late
+#: starts; before that it ran only 18:00 and 23:00 UTC. Games with no close
+#: near face-off have their opinions counted under
+#: `no_close_not_near_face_off`, never scored. An extra round around
+#: 15:30-16:00 UTC would close the late-morning and early-afternoon starts
+#: above. It would still leave 17:00 EDT and 16:00 EST listed at the NHL
+#: time, 16:30 EDT, 15:30 EST and 22:30 EST listed late, and 23:00 EST
+#: either way, each needing a round of its own. Every extra round spends credits, so it is
+#: Cooper's decision. The bound itself is a judgement, and Cooper may
+#: revise it.
 CLOSE_MAX_LEAD = timedelta(minutes=150)
 
 
