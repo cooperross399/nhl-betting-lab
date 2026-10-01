@@ -8,23 +8,30 @@ a release, a Pages site, an artifact. Closing Lines was disabled on
 is never published publicly, and CLV still works. The store now lives in the
 private repository cooperross399/nhl-closing-lines.
 
-Every route by which a captured price could reach this repository is held
-here, by what it does rather than by what a comment says:
+What this module holds, by what the code does rather than what a comment says:
 
 * **A push.** Closing Lines holds no write grant on this repository and runs
   no `git push` of its own; its only writer is
   `scripts/private_closing_store.py push`, which refuses this repository by
-  name and refuses any target the GitHub API does not call private. The one
-  workflow that pushes here (the card-feed publish) commits a fixed list of
-  files, none of them a capture store.
+  name and refuses any target the GitHub API does not call private. The
+  workflows that do push here (the card-feed publish, and Experiment
+  Refresh's verdict branches) commit no capture store, and the card-feed
+  publish commits a fixed list of five files.
 * **An artifact.** No upload names the capture store or the old hand-off
-  artifact. Gameday Refresh uploads `data/processed` whole as
-  `gameday-state`, so its CLV step is replayed here against a real private
-  store holding a sentinel price, and the workspace is searched for it
-  afterwards.
+  artifact, and the set of uploads that can carry captured prices at all is
+  pinned to the known carriers, so a new one fails here. Gameday Refresh
+  uploads `data/processed` whole as `gameday-state`, so its CLV step is
+  replayed against a real private store holding a sentinel price, and the
+  workspace is searched for it afterwards.
 * **The published report.** The CLV report goes to card-feed and to the
   `gameday-reports` artifact, so it is built from captures carrying sentinel
   prices and books, and must print none of them.
+
+**What it does not hold, and says so:** Line Movement's `line-movement`
+artifact (and its `line-movement-attempt-N` twin) is public and carries every
+captured price, a superset of the private store. Those uploads are on the
+pinned list below as known carriers, not as safe ones. Moving that chain is
+Cooper's open decision (CLAUDE.md).
 """
 
 from __future__ import annotations
@@ -155,6 +162,70 @@ def test_line_movement_keeps_subfolders_never_the_capture_store() -> None:
             continue
         for entry in str(step["with"].get("path", "")).split():
             assert entry.rstrip("/") not in {"data", "data/processed", "."}, entry
+
+
+#: Every upload that can carry captured or bought prices, and why it is on
+#: the list. A new carrier fails `test_the_uploads_that_carry_prices_are_the_known_ones`.
+#: These are KNOWN, not safe: the two line-movement uploads carry every
+#: closing price (Cooper's open decision, CLAUDE.md), and the rest carry
+#: bought history or a run's staging quotes, which predate #286.
+KNOWN_PRICE_CARRIERS = {
+    ("gameday-refresh.yml", "gameday-state"),
+    ("historical-props-purchase.yml", "gameday-state"),
+    ("historical-props-purchase.yml", "historical-props"),
+    ("line-movement.yml", "line-movement"),
+    ("line-movement.yml", "line-movement-attempt-${{ github.run_attempt }}"),
+    ("venue-probe.yml", "venue-probe"),
+}
+PRICE_PATHS = (
+    "data/processed/line_movement",
+    "data/staging",
+    "data/raw/historical_props",
+    "data/raw/historical_team_prices",
+    "data/processed/historical_",
+)
+
+
+def _can_carry_prices(entry: str) -> bool:
+    """A whole data directory, a glob outside the report folders, or a path
+    under one of the known price locations."""
+    entry = entry.rstrip("/")
+    if entry in {".", "data", "data/processed", "data/raw"}:
+        return True
+    if "*" in entry and not entry.startswith(("data/outputs/", "dist/")):
+        return True
+    return entry.startswith(PRICE_PATHS)
+
+
+def test_the_uploads_that_carry_prices_are_the_known_ones() -> None:
+    carriers = set()
+    for path in _all_workflows():
+        for step in _steps(_load(path.name)):
+            if not str(step.get("uses", "")).startswith("actions/upload-artifact"):
+                continue
+            entries = str(step.get("with", {}).get("path", "")).split()
+            if any(_can_carry_prices(e) for e in entries):
+                carriers.add((path.name, str(step["with"].get("name"))))
+    assert carriers == KNOWN_PRICE_CARRIERS
+
+
+def test_the_carrier_test_sees_a_whole_directory_or_a_glob() -> None:
+    for entry in ("data/processed", "data/processed/", "data", ".",
+                  "data/processed/*.csv", "data/processed/line_movement",
+                  "data/staging"):
+        assert _can_carry_prices(entry), entry
+    for entry in ("data/outputs/closing_line_value.md", "data/processed/deployment",
+                  "dist/data/history"):
+        assert not _can_carry_prices(entry), entry
+
+
+def test_no_other_workflow_that_uploads_data_processed_writes_the_store() -> None:
+    """historical-props-purchase also uploads data/processed whole; nothing
+    in it may write or read the closing-line store."""
+    text = (WORKFLOWS / "historical-props-purchase.yml").read_text(encoding="utf-8")
+    assert "closing_line_captures" not in text
+    assert "private_closing_store" not in text
+    assert "NHL_CLOSING_LINES_TOKEN" not in text
 
 
 # --- The CLV step, replayed against a real private store ----------------
@@ -347,20 +418,15 @@ def asked(monkeypatch) -> list[str]:
 
 
 def test_the_public_lab_is_refused_by_name_before_anything_is_asked(tmp_path, asked, capsys) -> None:
-    assert store.main(_args(tmp_path, repo=PUBLIC)) == store.EXIT_FAILED
+    assert store.main(_args(tmp_path, repo=PUBLIC)) == store.EXIT_REFUSED
     assert asked == []
     assert "public lab" in capsys.readouterr().out
 
 
 def test_the_repository_the_run_is_in_is_refused(tmp_path, asked, monkeypatch) -> None:
     monkeypatch.setenv("GITHUB_REPOSITORY", "someone/fork-of-the-lab")
-    assert store.main(_args(tmp_path, repo="someone/fork-of-the-lab")) == store.EXIT_FAILED
+    assert store.main(_args(tmp_path, repo="someone/fork-of-the-lab")) == store.EXIT_REFUSED
     assert asked == []
-
-
-def test_a_remote_naming_the_public_lab_is_refused(tmp_path, asked) -> None:
-    remote = f"https://x-access-token:t@github.com/{PUBLIC}.git"
-    assert store.main(_args(tmp_path, remote=remote)) == store.EXIT_FAILED
 
 
 def _seeded_bare(tmp_path: Path, monkeypatch, files: dict[str, str] | None = None) -> Path:
@@ -381,41 +447,107 @@ def _tip(bare: Path) -> str:
                           capture_output=True, text=True, check=True).stdout
 
 
+def _redirect(monkeypatch, url: str, bare: Path) -> None:
+    """Send `url` to a working local store, so only a refusal can stop a push."""
+    monkeypatch.setenv("GIT_CONFIG_COUNT", "1")
+    monkeypatch.setenv("GIT_CONFIG_KEY_0", f"url.file://{bare}.insteadOf")
+    monkeypatch.setenv("GIT_CONFIG_VALUE_0", url)
+
+
+def test_a_push_to_a_working_store_succeeds(tmp_path, asked, monkeypatch) -> None:
+    """The control for every refusal below: the same push, unrefused, lands."""
+    bare = _seeded_bare(tmp_path, monkeypatch)
+    before = _tip(bare)
+    assert store.main(_args(tmp_path, remote=f"file://{bare}")) == store.EXIT_OK
+    assert _tip(bare) != before
+
+
+def test_a_local_remote_naming_the_public_lab_is_refused(tmp_path, asked, monkeypatch) -> None:
+    """A working store at a path ending in the public lab's name: only the
+    name check can refuse it."""
+    for key, value in {"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com",
+                       "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.com",
+                       "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}.items():
+        monkeypatch.setenv(key, value)
+    bare = tmp_path / "cooperross399" / "nhl-betting-lab.git"
+    bare.parent.mkdir()
+    subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(bare)], check=True)
+    _seed_private(bare, tmp_path, dict(os.environ), {})
+    before = _tip(bare)
+
+    assert store.main(_args(tmp_path, remote=f"file://{bare}")) == store.EXIT_REFUSED
+    assert _tip(bare) == before
+
+
+@pytest.mark.parametrize("other", [
+    "cooperross399/some-public-repo",
+    "cooperross399/nhl-closing-lines-public",  # a name the checked one prefixes
+    "cooperross399/nhl-betting-lab",
+])
 def test_a_github_remote_other_than_the_checked_repository_is_refused(
-    tmp_path, asked, monkeypatch
+    tmp_path, asked, monkeypatch, other
 ) -> None:
     """The privacy check is made of --repo, so the push may not go elsewhere.
     The other repository's URL is redirected to a working store, so only the
     refusal can stop the push."""
     bare = _seeded_bare(tmp_path, monkeypatch)
-    remote = "https://x-access-token:t@github.com/cooperross399/some-public-repo.git"
-    monkeypatch.setenv("GIT_CONFIG_COUNT", "1")
-    monkeypatch.setenv("GIT_CONFIG_KEY_0", f"url.file://{bare}.insteadOf")
-    monkeypatch.setenv("GIT_CONFIG_VALUE_0", remote)
+    remote = f"https://x-access-token:t@github.com/{other}.git"
+    _redirect(monkeypatch, remote, bare)
     before = _tip(bare)
 
-    assert store.main(_args(tmp_path, remote=remote)) == store.EXIT_FAILED
+    assert store.main(_args(tmp_path, remote=remote)) == store.EXIT_REFUSED
     assert _tip(bare) == before
 
 
+@pytest.mark.parametrize("form", [
+    "https://x-access-token:t@github.com/cooperross399/nhl-closing-lines.git",
+    "https://github.com/cooperross399/nhl-closing-lines",
+    "git@github.com:cooperross399/nhl-closing-lines.git",
+    "ssh://git@github.com/cooperross399/NHL-Closing-Lines.git",
+])
+def test_every_form_of_the_checked_repository_is_accepted(form) -> None:
+    assert store.github_repo_of(form) == PRIVATE
+    store.refuse_public_target(PRIVATE, form)
+
+
 def test_a_store_that_is_not_private_is_never_written(tmp_path, asked, monkeypatch, capsys) -> None:
-    bare = tmp_path / "store.git"
-    subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(bare)], check=True)
+    bare = _seeded_bare(tmp_path, monkeypatch)
+    before = _tip(bare)
     monkeypatch.setattr(store, "repo_is_private", lambda repo, token: False)
 
-    assert store.main(_args(tmp_path, remote=f"file://{bare}")) == store.EXIT_FAILED
+    assert store.main(_args(tmp_path, remote=f"file://{bare}")) == store.EXIT_REFUSED
     assert "is not private" in capsys.readouterr().out
-    refs = subprocess.run(["git", "--git-dir", str(bare), "for-each-ref"],
-                          capture_output=True, text=True, check=True).stdout
-    assert refs == ""
+    assert _tip(bare) == before
 
 
-def test_an_unanswered_privacy_check_is_a_refusal(tmp_path, asked, monkeypatch) -> None:
-    def unreachable(repo: str, token: str) -> bool:
-        raise urllib.error.URLError("no route")
+@pytest.mark.parametrize(
+    ("raised", "code"),
+    [
+        pytest.param(store.Unreachable("no route"), "EXIT_FAILED", id="unreachable"),
+        pytest.param(store.Refused("GitHub answered 404"), "EXIT_REFUSED", id="token-turned-away"),
+    ],
+)
+def test_an_unanswered_privacy_check_writes_nothing(tmp_path, asked, monkeypatch, raised, code) -> None:
+    bare = _seeded_bare(tmp_path, monkeypatch)
+    before = _tip(bare)
 
-    monkeypatch.setattr(store, "repo_is_private", unreachable)
-    assert store.main(_args(tmp_path, remote="file:///nowhere")) == store.EXIT_FAILED
+    def unanswered(repo: str, token: str) -> bool:
+        raise raised
+
+    monkeypatch.setattr(store, "repo_is_private", unanswered)
+    assert store.main(_args(tmp_path, remote=f"file://{bare}")) == getattr(store, code)
+    assert _tip(bare) == before
+
+
+@pytest.mark.parametrize(("status", "expected"), [(401, "Refused"), (403, "Refused"),
+                                                 (404, "Refused"), (502, "Unreachable")])
+def test_the_privacy_check_tells_a_rejected_token_from_an_outage(monkeypatch, status, expected) -> None:
+    def answer(request, timeout):
+        raise urllib.error.HTTPError(request.full_url, status, "x", {}, None)
+
+    monkeypatch.setattr(store.urllib.request, "urlopen", answer)
+    with pytest.raises(getattr(store, expected)):
+        store.repo_is_private(PRIVATE, "t")
 
 
 def test_no_token_publishes_nothing(tmp_path, monkeypatch) -> None:
@@ -431,7 +563,7 @@ def test_a_pull_into_the_workspace_is_refused(tmp_path, monkeypatch) -> None:
     workspace = tmp_path / "workspace"
     monkeypatch.setenv("GITHUB_WORKSPACE", str(workspace))
     out = workspace / "data" / "processed" / cl.CAPTURES_FILENAME
-    assert store.main(["pull", "--out", str(out), "--remote", f"file://{bare}"]) == store.EXIT_FAILED
+    assert store.main(["pull", "--out", str(out), "--remote", f"file://{bare}"]) == store.EXIT_REFUSED
     assert not out.exists()
     # The same pull outside the workspace reads it.
     outside = tmp_path / "runner_temp" / cl.CAPTURES_FILENAME

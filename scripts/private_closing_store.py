@@ -18,10 +18,23 @@ publicly, and CLV still works. So the store lives in
 repository may hold it on a branch, a release, a Pages site or an artifact.
 `tests/test_closing_prices_never_reach_the_public_repo.py` holds that.
 
-## The two refusals before every push
+## What this does not cover
 
-1. The target is never this repository. `--repo` naming the public lab, or a
-   `--remote` URL naming it, is refused before anything is read.
+Line Movement's own `line-movement` artifact, uploaded from this public
+repository on every round with 90-day retention, carries every book's every
+rung, the face-off round included. Every row this script pushes is derived
+from it (`push` reads nothing else on a hand-off), so closing prices remain
+downloadable from this repository until that chain moves too. That is an
+open decision for Cooper, recorded in CLAUDE.md, and
+`tests/test_closing_prices_never_reach_the_public_repo.py` pins the known
+carriers so a new one fails rather than joining them silently.
+
+## The refusals before every push
+
+1. The target is never this repository. `--repo` naming the public lab (or
+   the repository the run is in), or a `--remote` naming it, is refused
+   before anything is read. A GitHub `--remote` must name exactly the
+   repository the privacy check is made of.
 2. The target is private, asked of the GitHub API with the same token on
    every push. A store whose repository was made public is not written to
    again, whatever the code around it says. A push needs `"private": true`,
@@ -34,26 +47,30 @@ in one file would pass GitHub's 100 MB file limit by midwinter (five rounds a
 day, one best-price row per selection per round), and every push would
 rewrite all of it. Each day file goes through `merge_capture_store.merge`,
 the merge the closing-lines branch used: every row either side holds, once,
-and never fewer than the remote had.
+and never fewer than the remote had. An exact duplicate row already in a day
+file is not information and is dropped; a day file that parses to fewer rows
+than its lines is damage, and that day is left alone and named.
 
 ## push
 
 Takes this run's closing prices from `--processed-dir`:
 
-* `line_movement/<day>.csv`, Line Movement's day files, as its `line-movement`
-  artifact carries them. They go through `closing_lines.load_movement_captures`,
-  which is the dedicated store's rows by construction: one `best_prices` row
-  per selection per round. Only the last `--recent-days` league days are read.
-  The artifact carries the whole season, an earlier day cannot gain a capture
-  after its games have started, and three days lets a round whose push failed
-  heal on the next one.
+* `line_movement/<day>.csv`, every day file Line Movement's `line-movement`
+  artifact carries, one at a time. Each goes through
+  `closing_lines.load_movement_captures`, which is the dedicated store's rows
+  by construction: one `best_prices` row per selection per round. Reading
+  every day, not just the latest, means a round whose push failed (or a week
+  with no token) heals on the next push for as long as the chain carries it.
+  Three preseason days took 0.76 s.
 * `closing_line_captures.csv`, which a dispatched `capture_closing_lines.py`
   writes, taken whole.
 
-Exit 0 when pushed or when there was nothing new, 1 when the store could not
-be reached or written, 2 when a movement day file or the remote store is
-damaged (the good days are still pushed), and 3 when `NHL_CLOSING_LINES_TOKEN`
-is not set.
+Exit 0 when pushed or when there was nothing new; 1 when GitHub could not be
+reached (transient); 2 when a movement day file, the dispatched file, or a
+remote day file is damaged (every other day is still pushed, and each damaged
+one is named); 3 when `NHL_CLOSING_LINES_TOKEN` is not set; 5 when the push
+is refused and a retry would be refused again: a public target, a store the
+API does not call private, a token GitHub rejects, or a store with no `main`.
 
 ## pull
 
@@ -61,10 +78,12 @@ Joins every day file into one capture store at `--out`, which must sit
 outside the workspace. Gameday Refresh uploads `data/processed` whole as the
 public `gameday-state` artifact, so the store is never written there.
 
-Exit 0 with rows written, 3 when `NHL_CLOSING_LINES_TOKEN` is not set (no
-store configured, not a fault), 4 when the store is reachable and holds no
-rows yet (not a fault), 1 when it could not be reached, and 2 when a day file
-is damaged. Nothing is written to `--out` unless the exit is 0.
+Exit 0 with rows written; 3 when `NHL_CLOSING_LINES_TOKEN` is not set (no
+store configured, not a fault); 4 when the store is reachable and holds no
+rows yet, or has no `main` (not a fault); 1 when GitHub could not be reached
+(transient); 2 when a day file is damaged; 5 when the token is rejected or
+`--out` is inside the workspace. Nothing is written to `--out` unless the
+exit is 0.
 """
 
 from __future__ import annotations
@@ -79,7 +98,7 @@ import sys
 import tempfile
 import urllib.error
 import urllib.request
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pandas as pd
@@ -116,10 +135,36 @@ EXIT_FAILED = 1
 EXIT_DAMAGED = 2
 EXIT_NO_TOKEN = 3
 EXIT_EMPTY = 4
+EXIT_REFUSED = 5
+
+#: What git prints when GitHub turned the token away, as opposed to a network
+#: failure. A retry, or a backup run, would be turned away again.
+AUTH_FAILURES = (
+    "authentication failed",
+    "could not read username",
+    "repository not found",
+    "returned error: 401",
+    "returned error: 403",
+    "permission to",
+    "denied to",
+)
+GITHUB_REMOTE = re.compile(
+    r"^(?:https?://(?:[^@/]+@)?github\.com/|ssh://git@github\.com/|git@github\.com:)"
+    r"([^/\s]+/[^/\s]+?)(?:\.git)?/?$",
+    re.IGNORECASE,
+)
 
 
 class Refused(Exception):
-    """A push or pull that must not happen, and why."""
+    """A push or pull that must not happen, and why. A retry would be refused too."""
+
+
+class Unreachable(OSError):
+    """GitHub could not be reached. Possibly transient."""
+
+
+class NoBranch(Exception):
+    """The store's repository answered and has no `main`."""
 
 
 def _say(message: str) -> None:
@@ -131,7 +176,7 @@ def _error(message: str) -> None:
 
 
 def utc_now() -> datetime:
-    """The clock the recent-days window is read against. Tests replace it."""
+    """The clock a commit message is stamped with. Tests replace it."""
     return datetime.now(timezone.utc)
 
 
@@ -143,37 +188,66 @@ def remote_url(repo: str, token: str) -> str:
     return f"https://x-access-token:{token}@github.com/{repo}.git"
 
 
-def refuse_public_target(repo: str, remote: str) -> None:
-    """Refuse the public lab as a target, by name, before anything is read."""
-    public = {PUBLIC_REPO.lower()}
+def github_repo_of(remote: str) -> str | None:
+    """`owner/name` of a GitHub remote, lower-cased, or None for any other URL."""
+    match = GITHUB_REMOTE.match(remote.strip())
+    return match.group(1).lower() if match else None
+
+
+def _public_names() -> set[str]:
+    names = {PUBLIC_REPO.lower()}
     running_in = os.environ.get("GITHUB_REPOSITORY", "").strip().lower()
     if running_in:
-        public.add(running_in)
-    if repo.strip().lower() in public:
+        names.add(running_in)
+    return names
+
+
+def refuse_public_target(repo: str, remote: str) -> None:
+    """Refuse the public lab as a target, by exact name, before anything is read."""
+    public = _public_names()
+    wanted = repo.strip().lower()
+    if wanted in public:
         raise Refused(
             f"Refusing to use {repo} as the closing-line store: it is the "
-            "public lab, and closing-line data is never published publicly."
+            "public lab, and closing-line data is never published from it."
         )
-    lowered = remote.lower()
-    if "github.com" in lowered and f"/{repo.strip().lower()}" not in lowered:
+    named = github_repo_of(remote)
+    if named is not None:
+        if named in public:
+            raise Refused(
+                f"Refusing to push the closing-line store to {named}, the public lab."
+            )
+        if named != wanted:
+            raise Refused(
+                f"Refusing a GitHub remote naming {named} when the privacy check "
+                f"is made of {repo}: the push must go to the repository checked."
+            )
+        return
+    if "github.com" in remote.lower():
         raise Refused(
-            f"Refusing a GitHub remote that does not name {repo}: the privacy "
-            "check is made of that repository, so the push must go to it."
+            "Refusing a GitHub remote in a form this script does not parse; "
+            "it cannot tell which repository it names."
         )
-    for name in public:
-        if f"/{name}" in lowered or f":{name}" in lowered:
+    # Any other remote (a local path, file://) is refused when its last two
+    # path components are a public lab's name.
+    parts = [p for p in re.split(r"[/:]", remote.rstrip("/")) if p]
+    if len(parts) >= 2:
+        tail = f"{parts[-2]}/{re.sub(r'[.]git$', '', parts[-1])}".lower()
+        if tail in public:
             raise Refused(
                 f"Refusing to push the closing-line store to a remote that "
-                f"names {name}, the public lab."
+                f"names {tail}, the public lab."
             )
 
 
 def repo_is_private(repo: str, token: str) -> bool:
     """True only when the GitHub API says `"private": true` for `repo`.
 
-    Any failure to ask raises: a push is never made on an unanswered
-    question. The request carries urllib's default User-Agent, which
-    api.github.com accepts.
+    Raises `Refused` when GitHub turns the token away (401, 403, 404: a 404 is
+    also what a token without access to a private repository gets) and
+    `Unreachable` when it cannot be asked. A push is never made on an
+    unanswered question. The request carries urllib's default User-Agent,
+    which api.github.com accepts.
     """
     request = urllib.request.Request(
         f"https://api.github.com/repos/{repo}",
@@ -183,19 +257,26 @@ def repo_is_private(repo: str, token: str) -> bool:
             "X-GitHub-Api-Version": "2022-11-28",
         },
     )
-    with urllib.request.urlopen(request, timeout=30) as response:
-        body = json.load(response)
-    return body.get("private") is True
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            body = json.load(response)
+    except urllib.error.HTTPError as exc:
+        if exc.code in (401, 403, 404):
+            raise Refused(
+                f"GitHub answered {exc.code} for {repo}: the token is missing, "
+                "expired, or not granted that repository."
+            ) from exc
+        raise Unreachable(f"GitHub answered {exc.code} for {repo}") from exc
+    except (urllib.error.URLError, TimeoutError, OSError) as exc:
+        raise Unreachable(f"could not ask GitHub about {repo}: {exc}") from exc
+    return isinstance(body, dict) and body.get("private") is True
 
 
 def require_private(repo: str, token: str) -> None:
     try:
         private = repo_is_private(repo, token)
-    except (urllib.error.URLError, OSError, ValueError) as exc:
-        raise Refused(
-            f"Could not confirm that {repo} is private ({exc}); refusing to "
-            "write closing-line data to it."
-        ) from exc
+    except ValueError as exc:
+        raise Unreachable(f"GitHub's answer about {repo} was not JSON: {exc}") from exc
     if not private:
         raise Refused(
             f"{repo} is not private. Refusing to write closing-line data to "
@@ -222,6 +303,16 @@ def _scrub(text: str, token: str) -> str:
     return text.replace(token, "***") if token else text
 
 
+def _remote_failure(stderr: str, token: str, what: str) -> Exception:
+    text = _scrub(stderr.strip(), token)
+    if any(marker in text.lower() for marker in AUTH_FAILURES):
+        return Refused(
+            f"GitHub turned the token away while trying to {what} the "
+            f"closing-line store: {text}"
+        )
+    return Unreachable(f"could not {what} the closing-line store: {text}")
+
+
 def fetch_tip(work: Path, remote: str, token: str) -> str:
     """Fetch the store's branch into `work` and check it out. Its commit."""
     if not (work / ".git").exists():
@@ -231,12 +322,14 @@ def fetch_tip(work: Path, remote: str, token: str) -> str:
     # A retry reuses the directory: drop the rejected attempt's commit and files.
     _git(["reset", "-q", "--hard"], work)
     _git(["clean", "-q", "-fdx"], work)
+    listed = _git(["ls-remote", "--heads", remote, f"refs/heads/{BRANCH}"], work)
+    if listed.returncode:
+        raise _remote_failure(listed.stderr, token, "list")
+    if not listed.stdout.strip():
+        raise NoBranch(f"the closing-line store has no {BRANCH} branch")
     done = _git(["fetch", "-q", "--depth", "1", remote, f"+refs/heads/{BRANCH}:refs/store-tip"], work)
     if done.returncode:
-        raise OSError(
-            f"could not fetch {BRANCH} of the closing-line store: "
-            f"{_scrub(done.stderr.strip(), token)}"
-        )
+        raise _remote_failure(done.stderr, token, "fetch")
     done = _git(["checkout", "-q", "-f", "--detach", "refs/store-tip"], work)
     if done.returncode:
         raise OSError(done.stderr.strip())
@@ -250,79 +343,100 @@ def _write_csv(frame: pd.DataFrame, path: Path) -> None:
     temp.replace(path)
 
 
-def _day_of(frame: pd.DataFrame) -> pd.Series:
-    stamps = pd.to_datetime(frame["captured_at"], utc=True, errors="coerce", format="mixed")
-    if stamps.isna().any():
-        bad = frame.loc[stamps.isna(), "captured_at"].astype(str).head(3).tolist()
+def _read_dispatched(path: Path) -> pd.DataFrame:
+    rows_on_disk = existing_row_count(path)
+    frame = read_store(path, columns=CAPTURE_COLUMNS, for_append=True)
+    if len(frame) < rows_on_disk:
         raise CorruptStoreError(
-            f"{int(stamps.isna().sum())} capture row(s) carry a captured_at "
-            f"that is not an instant (e.g. {bad}); a row that cannot be "
-            "ordered against face-off is never stored."
+            f"{path.name} holds {rows_on_disk} row(s) and parses to only {len(frame)}."
         )
-    return stamps.dt.strftime("%Y-%m-%d")
+    return frame
 
 
-def incoming_rows(
-    processed_dir: Path, *, recent_days: int, today: datetime, damaged: dict[str, str]
-) -> pd.DataFrame:
-    """This run's closing prices, in the dedicated store's columns."""
-    frames = []
+def incoming(processed_dir: Path, damaged: dict[str, str]):
+    """This run's closing prices, one source file at a time, in the
+    dedicated store's columns. Each damaged source is named in `damaged`."""
     movement = processed_dir / MOVEMENT_DIRNAME
     if movement.is_dir():
-        floor = (today - timedelta(days=recent_days)).strftime("%Y-%m-%d")
-        recent = sorted(
-            path for path in movement.glob("*.csv")
-            if DAY_FILE.match(path.name) and path.stem >= floor
-        )
-        if recent:
+        for path in sorted(movement.glob("*.csv")):
+            if not DAY_FILE.match(path.name):
+                continue
             with tempfile.TemporaryDirectory() as scratch:
                 copy = Path(scratch) / MOVEMENT_DIRNAME
                 copy.mkdir()
-                for path in recent:
-                    shutil.copy2(path, copy / path.name)
-                frames.append(load_movement_captures(Path(scratch), unreadable=damaged))
+                shutil.copy2(path, copy / path.name)
+                frame = load_movement_captures(Path(scratch), unreadable=damaged)
+            if not frame.empty:
+                yield path.name, frame[list(CAPTURE_COLUMNS)]
     dispatched = processed_dir / CAPTURES_FILENAME
     if dispatched.is_file():
-        rows_on_disk = existing_row_count(dispatched)
-        frame = read_store(dispatched, columns=CAPTURE_COLUMNS, for_append=True)
-        if len(frame) < rows_on_disk:
-            raise CorruptStoreError(
-                f"{dispatched} holds {rows_on_disk} row(s) and parses to only {len(frame)}."
-            )
-        frames.append(frame)
-    frames = [frame for frame in frames if not frame.empty]
-    if not frames:
-        return pd.DataFrame(columns=list(CAPTURE_COLUMNS))
-    return pd.concat(frames, ignore_index=True)[list(CAPTURE_COLUMNS)]
+        try:
+            frame = _read_dispatched(dispatched)
+        except CorruptStoreError as exc:
+            damaged[dispatched.name] = str(exc)
+            return
+        if not frame.empty:
+            yield dispatched.name, frame[list(CAPTURE_COLUMNS)]
 
 
-def merge_into(work: Path, rows: pd.DataFrame) -> list[str]:
-    """Merge `rows` into the checked-out store. The day files that changed."""
+def merge_into(work: Path, rows: pd.DataFrame, damaged: dict[str, str]) -> list[str]:
+    """Merge `rows` into the checked-out store. The day files that changed.
+
+    A day whose remote file is damaged, or whose rows carry a captured_at
+    that is not an instant, is left alone and named in `damaged`; every
+    other day is still merged.
+    """
     if rows.empty:
         return []
     changed = []
-    days = _day_of(rows)
-    for day, mine in rows.groupby(days, sort=True):
+    stamps = pd.to_datetime(rows["captured_at"], utc=True, errors="coerce", format="mixed")
+    if stamps.isna().any():
+        bad = rows.loc[stamps.isna(), "captured_at"].astype(str).head(3).tolist()
+        damaged["captured_at"] = (
+            f"{int(stamps.isna().sum())} capture row(s) carry a captured_at that "
+            f"is not an instant (e.g. {bad}); a row that cannot be ordered "
+            "against face-off is never stored"
+        )
+        rows, stamps = rows[stamps.notna()], stamps[stamps.notna()]
+    for day, mine in rows.groupby(stamps.dt.strftime("%Y-%m-%d"), sort=True):
         target = work / CAPTURES_DIR / f"{day}.csv"
-        with tempfile.TemporaryDirectory() as scratch:
-            # Through a file, so both sides are parsed by the same reader and
-            # a float that went to disk compares equal to its own read-back.
-            mine_path = Path(scratch) / "mine.csv"
-            _write_csv(mine, mine_path)
-            mine_read = read_store(mine_path, columns=CAPTURE_COLUMNS, for_append=True)
-            remote_rows = existing_row_count(target)
-            theirs = read_store(target, columns=CAPTURE_COLUMNS, for_append=True)
-            merged = merge(
-                mine_read,
-                theirs,
-                remote_rows=remote_rows,
-                local_rows=existing_row_count(mine_path),
-            )
-        if len(merged) == len(theirs) and target.is_file():
+        try:
+            with tempfile.TemporaryDirectory() as scratch:
+                # Through a file, so both sides are parsed by the same reader
+                # and a float that went to disk compares equal to its read-back.
+                mine_path = Path(scratch) / "mine.csv"
+                _write_csv(mine, mine_path)
+                mine_read = read_store(mine_path, columns=CAPTURE_COLUMNS, for_append=True)
+                remote_rows = existing_row_count(target)
+                theirs = read_store(target, columns=CAPTURE_COLUMNS, for_append=True)
+                if len(theirs) < remote_rows:
+                    raise CorruptStoreError(
+                        f"holds {remote_rows} row(s) and parses to only {len(theirs)} "
+                        "without an error (a stray quote folds rows into one field)"
+                    )
+                unique = theirs.drop_duplicates()
+                merged = merge(
+                    mine_read,
+                    unique,
+                    local_rows=existing_row_count(mine_path),
+                )
+        except (CorruptStoreError, ValueError) as exc:
+            damaged[f"{CAPTURES_DIR}/{target.name}"] = str(exc)
+            continue
+        if target.is_file() and len(merged) == len(unique):
             continue
         _write_csv(merged, target)
-        changed.append(target.name)
+        if target.name not in changed:
+            changed.append(target.name)
     return changed
+
+
+def _name_damage(damaged: dict[str, str]) -> None:
+    for name, reason in sorted(damaged.items()):
+        _error(
+            f"{name} could not be used ({reason}); its closing prices were not "
+            "pushed. Every other day was."
+        )
 
 
 def push(args: argparse.Namespace) -> int:
@@ -339,59 +453,58 @@ def push(args: argparse.Namespace) -> int:
         require_private(args.repo, token)
     except Refused as exc:
         _error(str(exc))
+        return EXIT_REFUSED
+    except Unreachable as exc:
+        _error(f"Refusing to push without confirming the store is private: {exc}")
         return EXIT_FAILED
 
-    damaged: dict[str, str] = {}
-    today = utc_now()
-    try:
-        rows = incoming_rows(
-            Path(args.processed_dir), recent_days=args.recent_days, today=today, damaged=damaged
-        )
-    except CorruptStoreError as exc:
-        _error(f"Refusing to push: {exc}")
-        return EXIT_DAMAGED
-    for name, reason in sorted(damaged.items()):
-        _error(
-            f"Line-movement day file {name} could not be read ({reason}); its "
-            "closing prices were not pushed. Every other day was."
-        )
-    _say(f"{len(rows)} closing-price row(s) to merge into {args.repo}.")
-    if rows.empty:
-        _say("Nothing to publish.")
-        return EXIT_DAMAGED if damaged else EXIT_OK
-
+    processed = Path(args.processed_dir)
+    stamp = utc_now().strftime("%Y-%m-%dT%H:%M:%SZ")
     with tempfile.TemporaryDirectory() as scratch:
         work = Path(scratch)
         for attempt in range(1, PUSH_ATTEMPTS + 1):
+            damaged: dict[str, str] = {}
+            rows = 0
+            changed: list[str] = []
             try:
                 fetch_tip(work, remote, token)
-                changed = merge_into(work, rows)
+                for _source, frame in incoming(processed, damaged):
+                    rows += len(frame)
+                    for name in merge_into(work, frame, damaged):
+                        if name not in changed:
+                            changed.append(name)
+            except Refused as exc:
+                _error(str(exc))
+                return EXIT_REFUSED
+            except NoBranch as exc:
+                _error(f"Refusing to push: {exc}; seed it with a README first.")
+                return EXIT_REFUSED
             except OSError as exc:
                 _error(f"The private closing-line store could not be reached: {exc}")
                 return EXIT_FAILED
-            except (CorruptStoreError, ValueError) as exc:
-                _error(f"Refusing to push: {exc}")
-                return EXIT_DAMAGED
+            if attempt == 1:
+                _say(f"{rows} closing-price row(s) to merge into {args.repo}.")
+            outcome = EXIT_DAMAGED if damaged else EXIT_OK
             if not changed:
+                _name_damage(damaged)
                 _say("The private store already holds every row. Nothing pushed.")
-                return EXIT_DAMAGED if damaged else EXIT_OK
+                return outcome
             _git(["add", "--", CAPTURES_DIR], work)
-            stamp = today.strftime("%Y-%m-%dT%H:%M:%SZ")
-            done = _git(["commit", "-q", "-m", f"captures {stamp} ({', '.join(changed)})"], work)
+            message = f"captures {stamp} ({len(changed)} day file(s): {', '.join(sorted(changed)[:5])}{', ...' if len(changed) > 5 else ''})"
+            done = _git(["commit", "-q", "-m", message], work)
             if done.returncode:
                 _error(f"Could not commit the merged store: {done.stderr.strip()}")
                 return EXIT_FAILED
             done = _git(["push", "-q", remote, f"HEAD:refs/heads/{BRANCH}"], work)
             if done.returncode == 0:
-                _say(
-                    f"Pushed {', '.join(changed)} to {args.repo} "
-                    f"(attempt {attempt})."
-                )
-                return EXIT_DAMAGED if damaged else EXIT_OK
-            _say(
-                "Push rejected; refetching the tip and re-merging. "
-                f"{_scrub(done.stderr.strip(), token)}"
-            )
+                _name_damage(damaged)
+                _say(f"Pushed {', '.join(sorted(changed))} to {args.repo} (attempt {attempt}).")
+                return outcome
+            failure = _remote_failure(done.stderr, token, "push to")
+            if isinstance(failure, Refused):
+                _error(str(failure))
+                return EXIT_REFUSED
+            _say(f"Push rejected; refetching the tip and re-merging. {failure}")
     _error(f"Could not publish the private store after {PUSH_ATTEMPTS} attempts.")
     return EXIT_FAILED
 
@@ -442,12 +555,18 @@ def pull(args: argparse.Namespace) -> int:
         refuse_an_out_inside_the_workspace(out)
     except Refused as exc:
         _error(str(exc))
-        return EXIT_FAILED
+        return EXIT_REFUSED
     with tempfile.TemporaryDirectory() as scratch:
         work = Path(scratch)
         try:
             fetch_tip(work, remote, token)
             rows = read_day_files(work)
+        except NoBranch:
+            _say("The private closing-line store has no main branch yet, so it holds no captures.")
+            return EXIT_EMPTY
+        except Refused as exc:
+            _error(str(exc))
+            return EXIT_REFUSED
         except OSError as exc:
             _error(f"The private closing-line store could not be read: {exc}")
             return EXIT_FAILED
@@ -474,7 +593,6 @@ def main(argv: list[str] | None = None) -> int:
             help="Git URL to use in place of the repo's GitHub URL (tests).",
         )
     sub.choices["push"].add_argument("--processed-dir", default="data/processed")
-    sub.choices["push"].add_argument("--recent-days", type=int, default=3)
     sub.choices["pull"].add_argument("--out", required=True)
     args = parser.parse_args(argv)
     return push(args) if args.command == "push" else pull(args)

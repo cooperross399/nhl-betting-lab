@@ -292,33 +292,118 @@ def test_a_second_identical_push_commits_nothing(tmp_path, bare):
                           capture_output=True, text=True, check=True).stdout == tip
 
 
-def test_only_recent_day_files_are_read(tmp_path, bare):
+def test_every_day_the_artifact_carries_is_pushed_so_a_gap_heals(tmp_path, bare):
+    """A league day weeks old that the store never received (a failed push,
+    a week with no token) lands on the next push, for as long as the chain
+    carries it."""
     processed = tmp_path / "run"
-    _day_file(processed, [_round(14, 120.0)], day="2026-09-01")
+    old = _round(14, 120.0)
+    old["captured_at"] = "2026-09-01T14:00:00Z"
+    _day_file(processed, [old], day="2026-09-01")
+    _day_file(processed, [_round(14, 120.0)])
+
     assert _push(processed, bare) == store.EXIT_OK
-    files = subprocess.run(["git", "--git-dir", str(bare), "ls-tree", "-r", "--name-only", "main"],
-                           capture_output=True, text=True, check=True).stdout
-    assert "captures/" not in files
+
+    assert _stored(bare, "2026-09-01.csv"), "the old day was skipped"
+    assert _stored(bare, "2026-10-08.csv")
 
 
-def test_a_damaged_remote_day_file_is_refused_not_overwritten(tmp_path, bare):
+def _clone_and_edit(tmp_path: Path, bare: Path, name: str, edit) -> str:
+    clone = tmp_path / f"clone-{len(list(tmp_path.glob('clone-*')))}"
+    subprocess.run(["git", "clone", "-q", str(bare), str(clone)], check=True)
+    target = clone / name
+    target.write_text(edit(target.read_text()))
+    subprocess.run(["git", "commit", "-qam", "edit"], cwd=clone, check=True)
+    subprocess.run(["git", "push", "-q", "origin", "HEAD:main"], cwd=clone, check=True)
+    return _tip(bare)
+
+
+def _tip(bare: Path) -> str:
+    return subprocess.run(["git", "--git-dir", str(bare), "rev-parse", "main"],
+                          capture_output=True, text=True, check=True).stdout
+
+
+def test_a_damaged_remote_day_is_left_alone_and_every_other_day_is_pushed(tmp_path, bare, capsys):
     processed = tmp_path / "run"
     _day_file(processed, [_round(14, 120.0)])
     assert _push(processed, bare) == store.EXIT_OK
-    # Damage the stored file on the remote.
-    clone = tmp_path / "clone"
-    subprocess.run(["git", "clone", "-q", str(bare), str(clone)], check=True)
-    target = clone / "captures" / "2026-10-08.csv"
-    target.write_text(target.read_text() + 'x,"unterminated\n' + "y,z\n")
-    subprocess.run(["git", "commit", "-qam", "damage"], cwd=clone, check=True)
-    subprocess.run(["git", "push", "-q", "origin", "HEAD:main"], cwd=clone, check=True)
-    tip = subprocess.run(["git", "--git-dir", str(bare), "rev-parse", "main"],
-                         capture_output=True, text=True, check=True).stdout
+    _clone_and_edit(tmp_path, bare, "captures/2026-10-08.csv",
+                    lambda text: text + 'x,"unterminated\n' + "y,z\n")
+    damaged_before = _stored(bare)
+
+    other = _round(14, 110.0)
+    other["captured_at"] = "2026-10-09T14:00:00Z"
+    _day_file(processed, [_round(14, 120.0), _round(21, 105.0), other])
+    assert _push(processed, bare) == store.EXIT_DAMAGED
+
+    assert _stored(bare) == damaged_before, "the damaged day was overwritten"
+    assert _stored(bare, "2026-10-09.csv"), "the good day was not pushed"
+    assert "captures/2026-10-08.csv" in capsys.readouterr().out
+
+
+def test_a_remote_day_that_parses_short_without_an_error_is_damage(tmp_path, bare):
+    """A stray quote folds rows without pandas raising; the count off the
+    file is what refuses the merge, so no remote row is lost."""
+    processed = tmp_path / "run"
+    _day_file(processed, [_round(14, 120.0), _round(21, 105.0, "FanDuel")])
+    assert _push(processed, bare) == store.EXIT_OK
+
+    def fold(text: str) -> str:
+        lines = text.splitlines()
+        lines[1] = lines[1].replace("Toronto Maple Leafs", '"Toronto Maple Leafs')
+        lines[2] = lines[2].replace("Toronto Maple Leafs", 'Toronto Maple Leafs"')
+        return "\n".join(lines) + "\n"
+
+    tip = _clone_and_edit(tmp_path, bare, "captures/2026-10-08.csv", fold)
+    folded = pd.read_csv(pd.io.common.StringIO(_stored(bare)))
+    assert len(folded) < 2, "the fixture must fold without an error"
+
+    _day_file(processed, [_round(14, 120.0), _round(21, 105.0, "FanDuel"), _round(23, 150.0)])
+    assert _push(processed, bare) == store.EXIT_DAMAGED
+    assert _tip(bare) == tip
+
+
+def test_a_duplicated_remote_row_does_not_swallow_a_new_capture(tmp_path, bare):
+    processed = tmp_path / "run"
+    _day_file(processed, [_round(14, 120.0)])
+    assert _push(processed, bare) == store.EXIT_OK
+    _clone_and_edit(tmp_path, bare, "captures/2026-10-08.csv",
+                    lambda text: text + text.splitlines()[1] + "\n")
 
     _day_file(processed, [_round(14, 120.0), _round(21, 105.0)])
-    assert _push(processed, bare) == store.EXIT_DAMAGED
-    assert subprocess.run(["git", "--git-dir", str(bare), "rev-parse", "main"],
-                          capture_output=True, text=True, check=True).stdout == tip
+    assert _push(processed, bare) == store.EXIT_OK
+
+    stored = pd.read_csv(pd.io.common.StringIO(_stored(bare)))
+    assert sorted(stored["captured_at"]) == ["2026-10-08T14:00:00Z", "2026-10-08T21:00:00Z"]
+
+
+def test_a_dispatched_capture_is_pushed_whole(tmp_path, bare):
+    """The dispatch path: capture_closing_lines.py writes the dedicated
+    store's file, and the push takes it as it is."""
+    processed = tmp_path / "run"
+    processed.mkdir()
+    rows = cl.best_prices(_round(22, 130.0, "Caesars"), captured_at="2026-10-08T22:00:00Z")
+    rows.to_csv(processed / cl.CAPTURES_FILENAME, index=False)
+
+    assert _push(processed, bare) == store.EXIT_OK
+
+    stored = pd.read_csv(pd.io.common.StringIO(_stored(bare)))
+    assert stored[["captured_at", "american_odds", "book"]].values.tolist() == [
+        ["2026-10-08T22:00:00Z", 130.0, "Caesars"]
+    ]
+
+
+def test_a_store_without_main_is_refused_on_push_and_empty_on_pull(tmp_path, bare):
+    empty = tmp_path / "empty.git"
+    subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(empty)], check=True)
+    processed = tmp_path / "run"
+    _day_file(processed, [_round(14, 120.0)])
+
+    assert store.main(["push", "--processed-dir", str(processed),
+                       "--remote", f"file://{empty}"]) == store.EXIT_REFUSED
+    out = tmp_path / "out" / cl.CAPTURES_FILENAME
+    assert store.main(["pull", "--out", str(out), "--remote", f"file://{empty}"]) == store.EXIT_EMPTY
+    assert not out.exists()
 
 
 def test_a_damaged_movement_day_is_named_and_the_good_days_still_pushed(tmp_path, bare, capsys):

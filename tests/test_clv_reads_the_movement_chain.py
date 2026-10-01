@@ -7,8 +7,9 @@ report scored no closing price at all. The step restores the `line-movement`
 chain, which `load_captures` already falls back to, for the report only, and
 removes it afterwards so gameday-state does not upload a second copy of every
 price. Since 2026-10-01 the store is private (cooperross399/nhl-closing-lines),
-and this fallback is what the step does when the pull finds no store: no
-NHL_CLOSING_LINES_TOKEN (exit 3), as here.
+and the step restores the chain on every run and scores it beside the store;
+here the pull finds no store (no NHL_CLOSING_LINES_TOKEN, exit 3), so the
+chain is the only source.
 `test_closing_prices_never_reach_the_public_repo.py` covers the store read.
 
 These run the workflow's own step block under `bash -eo pipefail` with a stub
@@ -57,6 +58,7 @@ def _stubs(tmp_path: Path, *, restore: str, clv_exit: int) -> dict:
         "  */private_closing_store.py) exit 3 ;;\n"
         f"  */restore_state.py) {restore_case} ;;\n"
         "  */run_closing_line_value.py)\n"
+        '    shift; echo "$*" > clv_args.txt\n'
         f'    if [ -f data/processed/line_movement/{DAY_FILE} ]; then echo saw > clv_saw.txt; else echo none > clv_saw.txt; fi\n'
         f"    exit {clv_exit} ;;\n"
         "esac\nexit 0\n",
@@ -88,6 +90,9 @@ def test_the_report_reads_the_movement_captures(tmp_path: Path) -> None:
     result, work = _run(tmp_path, restore="chain")
     assert result.returncode == 0, result.stdout + result.stderr
     assert (work / "clv_saw.txt").read_text().strip() == "saw"
+    # Pointed at the folder the chain was restored into, and nothing else:
+    # with no private store there is no second source.
+    assert (work / "clv_args.txt").read_text().split() == ["--captures-dir", "data/processed"]
     assert "line-movement day file(s) for the closing prices" in result.stdout
     assert (work / "run_degraded.txt").read_text() == ""
 

@@ -19,12 +19,19 @@ name: Closing Lines
 # WHERE IT WRITES: the PRIVATE repository cooperross399/nhl-closing-lines, and
 # nowhere else. This repository is public, and a store here (a branch, a
 # release, a Pages site or an artifact) would be a permanent, downloadable
-# file of captured odds, which The Odds API's terms forbid. That is why this
-# workflow was disabled from 2026-09-25 (#126) until the private store
-# existed. `scripts/private_closing_store.py` refuses this repository as a
-# target by name and asks the GitHub API that the store is private before
-# every push. This workflow holds no write grant on this repository at all.
+# file of captured odds, which The Odds API's terms forbid.
+# `scripts/private_closing_store.py` refuses this repository as a target by
+# name and asks the GitHub API that the store is private before every push.
+# This workflow holds no write grant on this repository at all.
 # `tests/test_closing_prices_never_reach_the_public_repo.py` holds all of it.
+#
+# WHAT THAT DOES NOT COVER: the rows it pushes are derived from Line
+# Movement's `line-movement` artifact, which is public (90-day retention) and
+# carries every price this workflow stores, and more. Moving that chain is an
+# open decision recorded in CLAUDE.md.
+#
+# DISABLED since 2026-09-25 (#126), and it stays disabled until the secret
+# below exists and a push has landed in the private repository.
 #
 # THE SECRET: `NHL_CLOSING_LINES_TOKEN`, a fine-grained token limited to
 # cooperross399/nhl-closing-lines with Contents read and write. Without it

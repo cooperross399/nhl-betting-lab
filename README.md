@@ -168,8 +168,9 @@ PYTHONPATH=src .venv/bin/python scripts/merge_capture_store.py \
 # Push this run's closing prices to the PRIVATE store
 # (cooperross399/nhl-closing-lines), or pull the whole store into a file
 # outside the workspace for the CLV report. Needs NHL_CLOSING_LINES_TOKEN.
-# Refuses this public repository as a target, and any target the GitHub API
-# does not call private. Closing Lines and Gameday Refresh run it.
+# A push refuses this public repository as a target, and any target the
+# GitHub API does not call private; a pull refuses to write inside the
+# workspace. Closing Lines and Gameday Refresh run it.
 PYTHONPATH=src .venv/bin/python scripts/private_closing_store.py push \
     --processed-dir data/processed
 PYTHONPATH=src .venv/bin/python scripts/private_closing_store.py pull \
@@ -321,35 +322,39 @@ contains the phrase `Selections changed`.
 
 **Closing Lines** (`.github/workflows/closing-lines.yml`) keeps the best price
 on every selection in a **private repository, `cooperross399/nhl-closing-lines`**,
-one file per day. This repository is public, and captured odds published here
-(a branch, a release, a Pages site or an artifact) would be a downloadable odds
-file, which the provider's terms forbid; so closing-line data is never
-published from here, and `tests/test_closing_prices_never_reach_the_public_repo.py`
-holds that. Closing Lines buys nothing on its own schedule: Line Movement
-Capture's fetch already carries the prices, so Closing Lines runs each time
-Line Movement completes, reads the `line-movement` artifact that run kept,
-derives the best price per selection per round from it, and pushes those rows
-to the private store, the bulk moneyline, puck line and total included (each
-Line Movement round asks for them beside the per-event markets). An opinion in
-a market no round priced before face-off, such as a day captured before the
-bulk request was added or a round whose bulk request failed, is named as
-uncaptured rather than as a price the books pulled. It can still be dispatched
-by hand to force a paid capture. Both the push and Gameday Refresh's read use
-the Actions secret **`NHL_CLOSING_LINES_TOKEN`**: a fine-grained token limited
-to `cooperross399/nhl-closing-lines` with Contents read and write.
+one file per UTC day. This repository is public, and a store here (a branch, a
+release, a Pages site or an artifact) would be a downloadable odds file, which
+the provider's terms forbid. Closing Lines buys nothing on its own schedule:
+Line Movement Capture's fetch already carries the prices, so Closing Lines runs
+each time Line Movement completes, reads the `line-movement` artifact that run
+kept, derives the best price per selection per round from every day it
+carries, and pushes those rows to the private store, the bulk moneyline, puck
+line and total included (each Line Movement round asks for them beside the
+per-event markets). An opinion in a market no round priced before face-off,
+such as a day captured before the bulk request was added or a round whose bulk
+request failed, is named as uncaptured rather than as a price the books pulled.
+It can still be dispatched by hand to force a paid capture. The push and
+Gameday Refresh's read both use the Actions secret
+**`NHL_CLOSING_LINES_TOKEN`**: a fine-grained token limited to
+`cooperross399/nhl-closing-lines` with Contents read and write. Closing Lines
+stays disabled until that secret exists.
 
-Gameday Refresh pulls that store into the runner's temp directory (never into
-`data/processed`, which it uploads publicly as `gameday-state`), and writes
-`data/outputs/closing_line_value.md`: beat-the-close rate, CLV%, and the
+**Not yet private:** the `line-movement` artifact the store is derived from is
+itself a public artifact (90-day retention) holding every captured price, so
+closing prices remain downloadable from this repository until that chain
+moves too. CLAUDE.md records it as an open decision.
+
+Gameday Refresh pulls the private store into the runner's temp directory
+(never into `data/processed`, which it uploads publicly as `gameday-state`),
+restores the `line-movement` chain beside it, and scores the union of the two
+into `data/outputs/closing_line_value.md`: beat-the-close rate, CLV%, and the
 de-vigged expected value at the closing line, for opinions and for bets
 separately (a "bet" there, as in the forward-evidence report, is an opinion
 clearing the 6% prop / 3.5% team measurement bar, not a bet the card staked), with every interval clustered by game (one game's sides, rungs
 and players are not independent trials). The report is aggregate: counts,
 rates and intervals, never a price, a line or a book. It is the earliest honest
 signal that the model is finding something — and it is not profit, which the
-report says out loud. With no store (no token yet, or no captures yet) the
-step restores the `line-movement` artifact chain for that step only, scores
-against it, and removes it afterwards.
+report says out loud.
 
 Every run — including a "skip" run — also publishes the rendered comment, a
 one-object status file, and the forward-evidence report to the **`card-feed`

@@ -417,10 +417,16 @@ jobs:
         # artifact that could not be read would delete its captures.
         #
         # data/processed/closing_line_captures.csv, which the capture also
-        # writes, is NOT kept, here or anywhere: closing-line data is never
-        # published from this public repository. Closing Lines derives the
-        # same rows from this artifact's line_movement day files and pushes
-        # them to the private store (scripts/private_closing_store.py).
+        # writes, is not kept here. But this artifact is public, and its
+        # line_movement day files carry every book's every rung, the
+        # face-off round included: a superset of the closing-line store.
+        # Closing Lines derives the store's rows from exactly these files
+        # and pushes them to the private repository
+        # (scripts/private_closing_store.py). Until this chain moves too,
+        # closing prices remain downloadable from this repository; that is
+        # an open decision recorded in CLAUDE.md, and
+        # tests/test_closing_prices_never_reach_the_public_repo.py pins this
+        # upload as a known carrier.
         if: always() && steps.earlier.outcome != 'failure'
         uses: actions/upload-artifact@v4
         with:

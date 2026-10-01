@@ -56,7 +56,7 @@ def _refuse_a_short_read(frame: pd.DataFrame, rows_on_disk: int | None, which: s
             f"and parses to only {len(frame)} of its {rows_on_disk}, without "
             "an error (a stray quote folds rows into one field). Writing now "
             "would publish the rows that parsed in place of the ones it holds. "
-            "Restore it from the closing-lines branch, then re-run."
+            "Restore it from the store's own history (the private repository, or a branch that carried it), then re-run."
         )
 
 

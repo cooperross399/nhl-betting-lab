@@ -24,6 +24,7 @@ from pathlib import Path
 import pandas as pd
 
 from nhl_betting_lab.closing_lines import (
+    CAPTURE_COLUMNS,
     UnreadableCaptureStore,
     build_clv_report,
     load_captures,
@@ -156,6 +157,28 @@ def _say_unreadable_movement(damaged: list[dict[str, str]]) -> None:
     )
 
 
+def union_of_captures(frames: list[pd.DataFrame]) -> pd.DataFrame:
+    """Every capture any source holds, once.
+
+    The private store and the movement chain hold the same kind of row, and
+    mostly the same rows: the store is derived from the chain. A row read
+    back from a CSV has NaN where the same row built in memory has "" (an
+    empty player) or None (no line), so the duplicate test reads both the
+    same way. A duplicate left in would not move a close (the close is the
+    best price at the latest moment), only the count printed below.
+    """
+    frames = [frame for frame in frames if not frame.empty]
+    if not frames:
+        return pd.DataFrame(columns=list(CAPTURE_COLUMNS))
+    if len(frames) == 1:
+        return frames[0]
+    combined = pd.concat(frames, ignore_index=True)
+    key = combined[list(CAPTURE_COLUMNS)].astype(object).where(
+        combined[list(CAPTURE_COLUMNS)].notna(), ""
+    ).astype(str)
+    return combined[~key.duplicated()].reset_index(drop=True)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--processed-dir", default=str(PROCESSED_DIR))
@@ -163,14 +186,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--archive-dir", default="")
     parser.add_argument(
         "--captures-dir",
-        default="",
+        action="append",
+        default=[],
         help=(
-            "Directory holding the capture store (closing_line_captures.csv) "
-            "or Line Movement's day files (line_movement/). Defaults to "
-            "--processed-dir. Gameday Refresh points it at the private store "
-            "it pulled into the runner's temp directory, outside the "
-            "workspace, because data/processed is uploaded as a public "
-            "artifact and closing-line data is never published."
+            "Directory holding a capture store (closing_line_captures.csv) "
+            "or Line Movement's day files (line_movement/). Repeatable: the "
+            "report scores the union of every directory given. Defaults to "
+            "--processed-dir. Gameday Refresh passes the private store it "
+            "pulled into the runner's temp directory (outside the workspace, "
+            "because data/processed is uploaded as a public artifact) and the "
+            "restored movement chain, so a round the store has not received "
+            "yet is still scored."
         ),
     )
     parser.add_argument(
@@ -200,7 +226,7 @@ def main(argv: list[str] | None = None) -> int:
 
     processed = Path(args.processed_dir)
     archive = Path(args.archive_dir) if args.archive_dir else None
-    captures_dir = Path(args.captures_dir) if args.captures_dir else processed
+    captures_dirs = [Path(d) for d in args.captures_dir] or [processed]
 
     unreadable: dict[str, str] = {}
     opinions = _opinions(processed, archive, unreadable=unreadable)
@@ -212,7 +238,9 @@ def main(argv: list[str] | None = None) -> int:
     # scored. It used to be skipped without a word and exit 0.
     movement_unreadable: dict[str, str] = {}
     try:
-        captures = load_captures(captures_dir, unreadable=movement_unreadable)
+        captures = union_of_captures(
+            [load_captures(d, unreadable=movement_unreadable) for d in captures_dirs]
+        )
     except UnreadableCaptureStore as exc:
         # A damaged store was read as an empty one, and the report said
         # "Nothing to measure yet ... the correct state and not a fault".

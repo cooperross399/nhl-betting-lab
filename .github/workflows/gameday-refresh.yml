@@ -727,14 +727,22 @@ jobs:
           python scripts/run_forward_evidence.py
 
       - name: Report closing-line value
-        # Reads the PRIVATE closing-line store that Closing Lines writes
-        # (cooperross399/nhl-closing-lines), or, with no store, Line
-        # Movement's own captures (see below), and scores every frozen
-        # opinion against the market's last word. Offline and read-only: it
-        # fetches no prices and spends nothing. Exits 2 on a damaged snapshot
-        # or capture store, which "Report the outcome" reads and fails the
-        # run on, without degrading it: the backup would read the same
-        # damaged files, so it is not sent for.
+        # Scores every frozen opinion against the market's last word, from
+        # the union of two sources: the PRIVATE closing-line store that
+        # Closing Lines writes (cooperross399/nhl-closing-lines), which keeps
+        # the season for good, and Line Movement's own `line-movement`
+        # artifact chain, from which that store is derived, so a round the
+        # store has not received yet (a failed push, a missing token) is
+        # still scored. Offline and read-only: it fetches no prices and
+        # spends nothing.
+        #
+        # FAILURES. A damaged snapshot, capture store or movement day exits
+        # 2, which "Report the outcome" reads and fails the run on, without
+        # degrading it: the backup would read the same damaged files, so it
+        # is not sent for. A private store that is damaged (pull exit 2), or
+        # that turns the token away (exit 5), is the same kind of fault and
+        # is treated the same way. Only a store GitHub could not be reached
+        # for (exit 1) degrades the run, as an unreachable branch always did.
         #
         # WHAT LEAVES THIS STEP IS AGGREGATE. The report prints counts, rates
         # and intervals, never a price, a line or a book, and it is the only
@@ -742,7 +750,8 @@ jobs:
         # The store itself is pulled into $RUNNER_TEMP, OUTSIDE the
         # workspace, because "Upload the state for the next run" uploads
         # data/processed whole as the public gameday-state artifact, and it
-        # is deleted when the report is done.
+        # is deleted when the report is done. The movement chain is restored
+        # into data/processed for this step only and removed after it.
         # tests/test_closing_prices_never_reach_the_public_repo.py replays
         # this block and checks that no captured price is left anywhere in
         # the workspace.
@@ -762,64 +771,63 @@ jobs:
           # from before 2026-10-01. It goes first, so the report can only
           # read what THIS run fetched, and so it is not uploaded again.
           rm -f data/processed/closing_line_captures.csv
-          # Four outcomes, told apart. No token and an empty store are not
-          # faults: the first is the state until Cooper adds the secret, the
-          # second the state before the first capture lands. A store that
-          # could not be read, or is damaged, degrades the run like every
-          # other fault, and the report falls back to the movement chain
-          # rather than score nothing.
           PULL=0
+          STORE_FAULT=""
           python scripts/private_closing_store.py pull \
             --out "$STORE_DIR/closing_line_captures.csv" || PULL=$?
           case "$PULL" in
             0) if [ -s "$STORE_DIR/closing_line_captures.csv" ]; then
                  echo "Read the capture store from the private repository."
                else
-                 echo "The private closing-line store read exited 0 and wrote no store, so the closing-line value report scored the line-movement captures today in its place." >> run_degraded.txt
+                 STORE_FAULT="The private closing-line store read exited 0 and wrote no store."
                fi ;;
-            3) echo "No private capture store is configured; reading the line-movement captures instead." ;;
-            4) echo "The private capture store holds nothing yet; reading the line-movement captures instead." ;;
-            *) rm -f "$STORE_DIR/closing_line_captures.csv"
-               echo "The private closing-line store could not be read (exit $PULL), so the closing-line value report scored the line-movement captures today in its place." >> run_degraded.txt ;;
+            3) echo "No private capture store is configured; scoring the line-movement captures alone." ;;
+            4) echo "The private capture store holds nothing yet; scoring the line-movement captures alone." ;;
+            1) echo "The private closing-line store could not be reached, so the closing-line value report scored the line-movement captures alone today." >> run_degraded.txt ;;
+            *) STORE_FAULT="The private closing-line store could not be used (exit $PULL: 2 is a damaged day file, 5 a token GitHub turned away); the closing-line value report scored the line-movement captures alone." ;;
           esac
-          # THE MOVEMENT CHAIN, WHEN THERE IS NO STORE. Every closing price
-          # the store holds is also in Line Movement's own `line-movement`
-          # artifact, whose restore chain carries the season's day files, and
-          # `load_captures` reads them when the dedicated store is empty.
-          # They are restored for this step only and removed after it, so
-          # gameday-state (which uploads data/processed) does not carry a
-          # second copy of every price. Unpacked where line-movement.yml
-          # roots the artifact (data/processed), and only the folders this
-          # step created are removed afterwards.
-          CREATED=""
-          CAPTURES_DIR="$STORE_DIR"
           if [ ! -s "$STORE_DIR/closing_line_captures.csv" ]; then
-            CAPTURES_DIR=data/processed
-            for dir in line_movement deployment line_combinations; do
-              [ -e "data/processed/$dir" ] || CREATED="$CREATED data/processed/$dir"
-            done
-            : > clv_restore_problem.txt
-            if python scripts/restore_state.py --artifact line-movement --dest data/processed \
-                 --workflow line-movement.yml --union 3 --limit 10 \
-                 --attempts 3 --problem-file clv_restore_problem.txt; then
-              if [ -d data/processed/line_movement ]; then
-                echo "Read $(ls data/processed/line_movement | wc -l | tr -d ' ') line-movement day file(s) for the closing prices."
-              else
-                echo "No line-movement captures yet; the report will say so rather than guess."
-              fi
+            rm -f "$STORE_DIR/closing_line_captures.csv"
+          fi
+          # THE MOVEMENT CHAIN, ALWAYS. Line Movement's `line-movement`
+          # artifact carries the season's day files, and `load_captures`
+          # reads them as the same rows the store holds. Unpacked where
+          # line-movement.yml roots the artifact (data/processed), and only
+          # the folders this step created are removed afterwards, so
+          # gameday-state does not carry a second copy of every price.
+          CREATED=""
+          for dir in line_movement deployment line_combinations; do
+            [ -e "data/processed/$dir" ] || CREATED="$CREATED data/processed/$dir"
+          done
+          : > clv_restore_problem.txt
+          if python scripts/restore_state.py --artifact line-movement --dest data/processed \
+               --workflow line-movement.yml --union 3 --limit 10 \
+               --attempts 3 --problem-file clv_restore_problem.txt; then
+            if [ -d data/processed/line_movement ]; then
+              echo "Read $(ls data/processed/line_movement | wc -l | tr -d ' ') line-movement day file(s) for the closing prices."
             else
-              echo "The line-movement captures could not be restored, so the closing-line value report scored no closing price today." >> run_degraded.txt
+              echo "No line-movement captures yet; the report will say so rather than guess."
             fi
-            if [ -s clv_restore_problem.txt ]; then
-              cat clv_restore_problem.txt >> run_degraded.txt
-            fi
+          else
+            echo "The line-movement captures could not be restored, so the closing-line value report scored no movement capture today." >> run_degraded.txt
+          fi
+          if [ -s clv_restore_problem.txt ]; then
+            cat clv_restore_problem.txt >> run_degraded.txt
+          fi
+          SOURCES="--captures-dir data/processed"
+          if [ -s "$STORE_DIR/closing_line_captures.csv" ]; then
+            SOURCES="--captures-dir $STORE_DIR $SOURCES"
           fi
           # Under `bash -e` a bare failing command would end the step here and
           # skip the clean-up below; the status is kept and returned instead.
           CLV_STATUS=0
-          python scripts/run_closing_line_value.py --captures-dir "$CAPTURES_DIR" || CLV_STATUS=$?
+          python scripts/run_closing_line_value.py $SOURCES || CLV_STATUS=$?
           for dir in $CREATED; do rm -rf "$dir"; done
           rm -rf "$STORE_DIR"
+          if [ -n "$STORE_FAULT" ]; then
+            echo "::error::$STORE_FAULT"
+            if [ "$CLV_STATUS" -eq 0 ]; then CLV_STATUS=2; fi
+          fi
           exit $CLV_STATUS
 
       - name: Upload the state for the next run
