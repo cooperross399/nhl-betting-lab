@@ -33,20 +33,24 @@ import shutil
 
 import pytest
 
+import test_closing_prices_never_reach_the_public_repo as guard
 from nhl_betting_lab.closing_lines import CAPTURES_FILENAME
-from test_closing_prices_never_reach_the_public_repo import (  # noqa: F401
+from test_closing_prices_never_reach_the_public_repo import (
     _capture_row,
     _day_file,
     _seed_private,
-    clv_rig,
     run_clv_step,
 )
+
+#: The guard module's rig, made a fixture of this module too. Assigned rather
+#: than imported by name, which pyflakes would read as an unused import.
+clv_rig = guard.clv_rig
 
 NOT_READ = "<no store>\n"
 
 
 @pytest.fixture
-def rig(clv_rig):  # noqa: F811
+def rig(clv_rig):
     """With an earlier run's store restored into data/processed."""
     stale = clv_rig["work"] / "data" / "processed" / CAPTURES_FILENAME
     stale.write_text(_day_file([_capture_row(book="Yesterday")]), encoding="utf-8")
