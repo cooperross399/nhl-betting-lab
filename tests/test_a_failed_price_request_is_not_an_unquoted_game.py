@@ -508,7 +508,8 @@ def _run_step(block: str, tmp_path: Path, code: int) -> tuple[str, dict[str, str
 def test_a_red_price_capture_costs_the_line_movement_run_nothing() -> None:
     """Exit 2 turns Capture prices red. That is the report and must stay one,
     so the step is not forgiven; and every step after it still runs, so the
-    captures, the ladder scan and the closing-price hand-off are all kept."""
+    captures (which Closing Lines derives the closing prices from) and the
+    ladder scan are all kept."""
     index, capture = _named(LINE_MOVEMENT, "Capture prices")
     assert "capture_line_movement.py" in capture["run"]
     assert capture.get("continue-on-error") in (None, False), (
@@ -516,8 +517,7 @@ def test_a_red_price_capture_costs_the_line_movement_run_nothing() -> None:
     )
     assert "if" not in capture, "the price capture runs on every trigger"
     later = _steps(LINE_MOVEMENT)[index + 1:]
-    assert any(step.get("name") == "Hand the closing prices to Closing Lines"
-               for step in later)
+    assert any(step.get("name") == "Keep the captures" for step in later)
     for step in later:
         assert str(step.get("if", "")).startswith("always()"), (
             f"{step.get('name')!r} would be skipped after a red price capture"

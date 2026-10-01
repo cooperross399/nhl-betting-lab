@@ -162,6 +162,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--output-dir", default=str(OUTPUTS_DIR))
     parser.add_argument("--archive-dir", default="")
     parser.add_argument(
+        "--captures-dir",
+        default="",
+        help=(
+            "Directory holding the capture store (closing_line_captures.csv) "
+            "or Line Movement's day files (line_movement/). Defaults to "
+            "--processed-dir. Gameday Refresh points it at the private store "
+            "it pulled into the runner's temp directory, outside the "
+            "workspace, because data/processed is uploaded as a public "
+            "artifact and closing-line data is never published."
+        ),
+    )
+    parser.add_argument(
         "--now",
         default="",
         help=(
@@ -188,6 +200,7 @@ def main(argv: list[str] | None = None) -> int:
 
     processed = Path(args.processed_dir)
     archive = Path(args.archive_dir) if args.archive_dir else None
+    captures_dir = Path(args.captures_dir) if args.captures_dir else processed
 
     unreadable: dict[str, str] = {}
     opinions = _opinions(processed, archive, unreadable=unreadable)
@@ -199,7 +212,7 @@ def main(argv: list[str] | None = None) -> int:
     # scored. It used to be skipped without a word and exit 0.
     movement_unreadable: dict[str, str] = {}
     try:
-        captures = load_captures(processed, unreadable=movement_unreadable)
+        captures = load_captures(captures_dir, unreadable=movement_unreadable)
     except UnreadableCaptureStore as exc:
         # A damaged store was read as an empty one, and the report said
         # "Nothing to measure yet ... the correct state and not a fault".

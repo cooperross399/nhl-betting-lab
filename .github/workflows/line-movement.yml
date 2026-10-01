@@ -249,8 +249,8 @@ jobs:
         # requests failed, which makes this step red. The bulk team-market
         # request beside them never moves the exit: its rows are written
         # either way, and its failure is a ::warning:: of its own. That is the report, not
-        # the damage: every step below is `if: always()`, so the uploads and
-        # the closing-price hand-off still run.
+        # the damage: every step below is `if: always()`, so the uploads
+        # still run.
         # tests/test_a_failed_price_request_is_not_an_unquoted_game.py holds
         # both rules.
         env:
@@ -415,6 +415,12 @@ jobs:
         #
         # Not after a failed fold (above): overwriting an earlier attempt's
         # artifact that could not be read would delete its captures.
+        #
+        # data/processed/closing_line_captures.csv, which the capture also
+        # writes, is NOT kept, here or anywhere: closing-line data is never
+        # published from this public repository. Closing Lines derives the
+        # same rows from this artifact's line_movement day files and pushes
+        # them to the private store (scripts/private_closing_store.py).
         if: always() && steps.earlier.outcome != 'failure'
         uses: actions/upload-artifact@v4
         with:
@@ -454,24 +460,6 @@ jobs:
             data/outputs/ladder_coherence.md
           if-no-files-found: warn
           retention-days: 90
-          overwrite: true
-
-      - name: Hand the closing prices to Closing Lines
-        # The capture above also wrote this run's best price per selection to
-        # data/processed/closing_line_captures.csv, and until 2026-09-24
-        # nothing kept it: this job cannot write to a branch, and the
-        # closing-lines branch Gameday Refresh reads CLV from had no writer
-        # once Closing Lines lost its schedule on 2026-08-29. Closing Lines
-        # now runs when this workflow completes, takes this artifact, and
-        # merges it into that branch. This run's rows only; the branch is the
-        # store. A night with no games writes no file and hands over nothing.
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: closing-line-captures
-          path: data/processed/closing_line_captures.csv
-          if-no-files-found: ignore
-          retention-days: 7
           overwrite: true
 
       - name: Say what this run did not do

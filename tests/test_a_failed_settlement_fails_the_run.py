@@ -71,7 +71,7 @@ SCRIPT = {
     REBUILD: "run_allowlist_evidence.py",
 }
 
-NO_STORE = "No capture store yet"
+NO_STORE = "No private capture store is configured"
 
 
 @pytest.fixture(autouse=True)
@@ -114,9 +114,10 @@ def _id(name: str) -> str:
 
 def _stubs(tmp_path: Path, exits: dict[str, int]) -> dict:
     """A `python` that exits as `exits` says for the script it is given (0
-    otherwise), and a `git` that reaches no network: `ls-remote` finds no
-    closing-lines branch and a fetch fails, which is what a repository with
-    no capture store yet answers."""
+    otherwise), and a `git` that reaches no network. The private store's
+    pull exits 3 unless told otherwise: no NHL_CLOSING_LINES_TOKEN, which is
+    what a repository with no private store configured answers."""
+    exits = {"private_closing_store.py": 3, **exits}
     bin_dir = tmp_path / "stubs"  # not "bin": card-feed puts its `date` there
     bin_dir.mkdir(exist_ok=True)
     cases = "".join(
@@ -145,6 +146,7 @@ def _stubs(tmp_path: Path, exits: dict[str, int]) -> dict:
         "PATH": f"{bin_dir}{os.pathsep}{os.environ.get('PATH', '')}",
         "GH_TOKEN": "x",
         "PYTHONPATH": "src",
+        "RUNNER_TEMP": str(tmp_path / "runner_temp"),
     }
 
 
@@ -333,9 +335,9 @@ def test_a_clean_run_stays_clean(tmp_path: Path) -> None:
 
 
 def test_no_capture_store_yet_is_not_a_fault(tmp_path: Path) -> None:
-    """Closing Lines is disabled by the owner, so there is no capture store
-    on the branch it would publish, and the report exits 0 saying so. That
-    is the expected state: not degraded, and not red."""
+    """No private store is configured until Cooper adds its secret, and the
+    report exits 0 saying so. That is an expected state: not degraded, and
+    not red."""
     work, outcomes, logs = _the_run(tmp_path, {})
 
     assert NO_STORE in logs[CLV], logs[CLV]

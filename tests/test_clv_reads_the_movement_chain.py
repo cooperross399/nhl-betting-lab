@@ -1,15 +1,18 @@
-"""With no closing-lines branch, the CLV report reads Line Movement's captures.
+"""With no private closing-line store, the CLV report reads Line Movement's captures.
 
-Closing Lines has been disabled since 2026-09-25 (its branch would be a
+Closing Lines was disabled from 2026-09-25 (its branch would have been a
 permanent, downloadable odds file on a public repository), and Gameday Refresh
 never had Line Movement's captures on its runner, so the closing-line value
-report scored no closing price at all. The step now restores the
-`line-movement` chain, which `load_captures` already falls back to, for the
-report only, and removes it afterwards so gameday-state does not upload a
-second copy of every price.
+report scored no closing price at all. The step restores the `line-movement`
+chain, which `load_captures` already falls back to, for the report only, and
+removes it afterwards so gameday-state does not upload a second copy of every
+price. Since 2026-10-01 the store is private (cooperross399/nhl-closing-lines),
+and this fallback is what the step does when the pull finds no store: no
+NHL_CLOSING_LINES_TOKEN (exit 3), as here.
+`test_closing_prices_never_reach_the_public_repo.py` covers the store read.
 
 These run the workflow's own step block under `bash -eo pipefail` with a stub
-`python` and a `git` that finds no branch, as
+`python` and a `git` that reaches no network, as
 `test_a_failed_settlement_fails_the_run.py` does.
 """
 
@@ -51,6 +54,7 @@ def _stubs(tmp_path: Path, *, restore: str, clv_exit: int) -> dict:
     python.write_text(
         "#!/bin/bash\n"
         'case "$1" in\n'
+        "  */private_closing_store.py) exit 3 ;;\n"
         f"  */restore_state.py) {restore_case} ;;\n"
         "  */run_closing_line_value.py)\n"
         f'    if [ -f data/processed/line_movement/{DAY_FILE} ]; then echo saw > clv_saw.txt; else echo none > clv_saw.txt; fi\n'
@@ -66,7 +70,8 @@ def _stubs(tmp_path: Path, *, restore: str, clv_exit: int) -> dict:
     for path in (python, git):
         path.chmod(path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
     return {**os.environ, "PATH": f"{bin_dir}{os.pathsep}{os.environ.get('PATH', '')}",
-            "GH_TOKEN": "x", "PYTHONPATH": "src"}
+            "GH_TOKEN": "x", "PYTHONPATH": "src",
+            "RUNNER_TEMP": str(tmp_path / "runner_temp")}
 
 
 def _run(tmp_path: Path, *, restore: str, clv_exit: int = 0
