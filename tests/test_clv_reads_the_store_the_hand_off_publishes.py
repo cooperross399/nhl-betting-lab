@@ -264,3 +264,35 @@ def test_the_private_store_is_exactly_what_line_movement_wrote_for_closing(
     loaded = cl.load_captures(pulled)
     assert len(loaded) == 2 * len(RUNS), "one best-price row per side per run"
     pd.testing.assert_frame_equal(ordered(loaded), ordered(written))
+
+
+def test_the_report_scores_the_union_when_the_store_lags_the_chain(rig, tmp_path, monkeypatch) -> None:
+    """The store received only the 14:00 round; the chain carries all three.
+    Pointed at both, as Gameday Refresh points it, the report closes every
+    opinion at the 21:00 round. Pointed at the store alone, it cannot."""
+    pulled, line_movement = _publish(rig, monkeypatch, runs=RUNS[:1])
+    capture = load_script("capture_line_movement.py")
+    for captured_at, board in RUNS[1:]:
+        rows = odds_api.normalize_event(_event(board), fetched_at=captured_at)
+        capture.write_round(rows, captured_at=captured_at, day=DAY, processed=line_movement)
+    archive = tmp_path / "archive"
+    _freeze(archive)
+    runner = load_script("run_closing_line_value.py")
+    processed = tmp_path / "gameday" / "data" / "processed"
+    processed.mkdir(parents=True)
+
+    def closes(*dirs: Path) -> dict:
+        frames = [cl.load_captures(d) for d in dirs]
+        rows, _ = cl.clv_rows(runner._opinions(processed, archive), runner.union_of_captures(frames))
+        return {r.selection: (r.closing_odds, r.closing_book, r.closed_at) for r in rows.itertuples()}
+
+    assert closes(pulled, line_movement) == CLOSES
+    assert closes(pulled) != CLOSES
+
+    out = tmp_path / "outputs"
+    code = runner.main(["--processed-dir", str(processed), "--archive-dir", str(archive),
+                        "--captures-dir", str(pulled), "--captures-dir", str(line_movement),
+                        "--output-dir", str(out), "--now", "2027-06-01T00:00:00+00:00"])
+    assert code == 0
+    page = (out / cl.REPORT_FILENAME).read_text(encoding="utf-8")
+    assert "matched to a closing price: **2**; no closing price found: **0**" in page

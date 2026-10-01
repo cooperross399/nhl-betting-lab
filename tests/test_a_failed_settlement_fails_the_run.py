@@ -172,8 +172,8 @@ def _outcome(result: subprocess.CompletedProcess) -> str:
 
 
 def _report(work: Path, degraded: str, outcomes: dict[str, str], *,
-            empty_slate: str = "false", cardfeed: str = "success"
-            ) -> subprocess.CompletedProcess:
+            empty_slate: str = "false", cardfeed: str = "success",
+            store_fault: str = "") -> subprocess.CompletedProcess:
     values = {
         "steps.final.outputs.degraded": degraded,
         "steps.prices.outputs.empty_slate": empty_slate,
@@ -187,6 +187,7 @@ def _report(work: Path, degraded: str, outcomes: dict[str, str], *,
     }
     for name in WATCHED:
         values[f"steps.{_id(name)}.outcome"] = outcomes.get(name, "success")
+    values["steps.clv.outputs.store_fault"] = store_fault
     return _bash(_render(_step(REPORT)["run"], values), work, dict(os.environ))
 
 
@@ -392,3 +393,22 @@ def test_no_failure_a_backup_would_repeat_sends_for_it(
         "the backup ran on a failure it would only repeat, buying the "
         "prices again for nothing"
     )
+
+
+def test_a_rejected_store_token_is_reported_as_one(tmp_path: Path) -> None:
+    """The CLV step fails red when the private store turns the token away.
+    "Report the outcome" must say to replace the secret, not send the reader
+    looking for a damaged file that does not exist."""
+    work = _workspace(tmp_path)
+    report = _report(work, "false", {CLV: "failure"}, store_fault="rejected-token")
+    assert report.returncode != 0
+    (line,) = [e for e in _errors(report) if "closing-line value" in e]
+    assert "NHL_CLOSING_LINES_TOKEN" in line and "Replace the secret" in line
+    assert "damaged" not in line
+
+
+def test_any_other_clv_failure_names_every_cause(tmp_path: Path) -> None:
+    work = _workspace(tmp_path)
+    report = _report(work, "false", {CLV: "failure"}, store_fault="damaged-store")
+    (line,) = [e for e in _errors(report) if "closing-line value" in e]
+    assert "damaged snapshot, movement day or capture store" in line

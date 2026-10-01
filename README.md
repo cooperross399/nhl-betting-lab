@@ -399,7 +399,7 @@ bought the window again and uploaded a thin copy as the newest carrier.
 | Tests | every PR and push to main | no |
 | Provider Policy PR Gate | PRs touching policy or receipts | no |
 | Gameday Refresh | daily in season at 13:30 UTC, backup 15:00 (each cron fires eight hours early and `scripts/wait_for_round.py` holds the run until its slot); on demand, at once | yes, capped |
-| Closing Lines | after every Line Movement run; by hand | only when dispatched by hand, capped |
+| Closing Lines | disabled until `NHL_CLOSING_LINES_TOKEN` exists; then after every Line Movement run, and by hand | only when dispatched by hand, capped |
 | Provider Market Discovery | on demand; once on 15 October, which asks the three bulk markets only (props, ladders and candidates need a dispatch) | yes, capped |
 | Historical Props Purchase | on demand only, never scheduled | yes, capped, required cap |
 | Venue Probe | on demand only, never scheduled | yes, capped, required cap |

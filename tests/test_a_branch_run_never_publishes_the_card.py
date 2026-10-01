@@ -262,6 +262,7 @@ def _report(context: dict[str, object], cardfeed: str, tmp_path: Path
         "steps.settle.outcome": "success",
         "steps.rebuild.outcome": "success",
         "steps.clv.outcome": "success",
+        "steps.clv.outputs.store_fault": "",
         "github.event_name": str(context["github.event_name"]),
         "github.ref": str(context["github.ref"]),
         "github.event.repository.default_branch":

@@ -146,5 +146,5 @@ def test_a_fault_a_backup_would_repeat_fails_red_without_degrading(rig, fault) -
     assert done.returncode == 2, done.stdout + done.stderr
     assert read == NOT_READ, "the report scored a store this run did not fetch"
     assert degraded == ""
-    assert "::error::The private closing-line store could not be used" in done.stdout
+    assert "::error::The private closing-line store" in done.stdout
     assert not rig["stale"].exists()

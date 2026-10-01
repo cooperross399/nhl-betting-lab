@@ -9,10 +9,11 @@ two schedules were paying twice. That retired the store's only writer. From
 repository, which the provider's terms forbid; Closing Lines was disabled on
 2026-09-25 (#126) before it ever published.
 
-Since 2026-10-01 Closing Lines runs when Line Movement completes, reads the
-`line-movement` artifact Line Movement already keeps for its own restore
-chain, derives the closing prices from it, and pushes them to the private
-repository cooperross399/nhl-closing-lines. That path fetches nothing from
+Since 2026-10-01, once it is re-enabled (it stays disabled until
+NHL_CLOSING_LINES_TOKEN exists), Closing Lines runs when Line Movement
+completes, reads the `line-movement` artifact Line Movement already keeps for
+its own restore chain, derives the closing prices from it, and pushes them to
+the private repository cooperross399/nhl-closing-lines. That path fetches nothing from
 the provider and spends no credit.
 
 The structural half reads the YAML. The executed half runs the hand-off
@@ -297,15 +298,17 @@ def test_every_day_the_artifact_carries_is_pushed_so_a_gap_heals(tmp_path, bare)
     a week with no token) lands on the next push, for as long as the chain
     carries it."""
     processed = tmp_path / "run"
-    old = _round(14, 120.0)
-    old["captured_at"] = "2026-09-01T14:00:00Z"
-    _day_file(processed, [old], day="2026-09-01")
+    days = ["2026-09-01", "2026-09-15", "2026-10-01", "2026-10-05", "2026-10-07"]
+    for day in days:
+        old = _round(14, 120.0)
+        old["captured_at"] = f"{day}T14:00:00Z"
+        _day_file(processed, [old], day=day)
     _day_file(processed, [_round(14, 120.0)])
 
     assert _push(processed, bare) == store.EXIT_OK
 
-    assert _stored(bare, "2026-09-01.csv"), "the old day was skipped"
-    assert _stored(bare, "2026-10-08.csv")
+    for day in [*days, "2026-10-08"]:
+        assert _stored(bare, f"{day}.csv"), f"{day} was skipped"
 
 
 def _clone_and_edit(tmp_path: Path, bare: Path, name: str, edit) -> str:
@@ -341,7 +344,7 @@ def test_a_damaged_remote_day_is_left_alone_and_every_other_day_is_pushed(tmp_pa
     assert "captures/2026-10-08.csv" in capsys.readouterr().out
 
 
-def test_a_remote_day_that_parses_short_without_an_error_is_damage(tmp_path, bare):
+def test_a_remote_day_that_parses_short_without_an_error_is_damage(tmp_path, bare, capsys):
     """A stray quote folds rows without pandas raising; the count off the
     file is what refuses the merge, so no remote row is lost."""
     processed = tmp_path / "run"
@@ -361,6 +364,8 @@ def test_a_remote_day_that_parses_short_without_an_error_is_damage(tmp_path, bar
     _day_file(processed, [_round(14, 120.0), _round(21, 105.0, "FanDuel"), _round(23, 150.0)])
     assert _push(processed, bare) == store.EXIT_DAMAGED
     assert _tip(bare) == tip
+    # This damage carries no path of its own; the day is named by the key.
+    assert "captures/2026-10-08.csv could not be used" in capsys.readouterr().out
 
 
 def test_a_duplicated_remote_row_does_not_swallow_a_new_capture(tmp_path, bare):
@@ -379,18 +384,39 @@ def test_a_duplicated_remote_row_does_not_swallow_a_new_capture(tmp_path, bare):
 
 def test_a_dispatched_capture_is_pushed_whole(tmp_path, bare):
     """The dispatch path: capture_closing_lines.py writes the dedicated
-    store's file, and the push takes it as it is."""
+    store's file through append_captures, and the push takes all of it."""
     processed = tmp_path / "run"
     processed.mkdir()
-    rows = cl.best_prices(_round(22, 130.0, "Caesars"), captured_at="2026-10-08T22:00:00Z")
-    rows.to_csv(processed / cl.CAPTURES_FILENAME, index=False)
+    cl.append_captures(cl.best_prices(_round(22, 130.0, "Caesars"),
+                                      captured_at="2026-10-08T22:00:00Z"), processed_dir=processed)
+    cl.append_captures(cl.best_prices(_round(22, 125.0, "Bet365"),
+                                      captured_at="2026-10-09T01:00:00Z"), processed_dir=processed)
 
     assert _push(processed, bare) == store.EXIT_OK
 
-    stored = pd.read_csv(pd.io.common.StringIO(_stored(bare)))
-    assert stored[["captured_at", "american_odds", "book"]].values.tolist() == [
-        ["2026-10-08T22:00:00Z", 130.0, "Caesars"]
-    ]
+    first = pd.read_csv(pd.io.common.StringIO(_stored(bare, "2026-10-08.csv")))
+    second = pd.read_csv(pd.io.common.StringIO(_stored(bare, "2026-10-09.csv")))
+    assert first[["american_odds", "book"]].values.tolist() == [[130.0, "Caesars"]]
+    assert second[["american_odds", "book"]].values.tolist() == [[125.0, "Bet365"]]
+
+
+def test_a_damaged_dispatched_capture_is_named_and_pushes_nothing(tmp_path, bare, capsys):
+    """A paid capture that parses short is damage, never a quiet no-op."""
+    processed = tmp_path / "run"
+    processed.mkdir()
+    for hour, odds in ((21, 130.0), (22, 125.0)):
+        cl.append_captures(cl.best_prices(_round(hour, odds), captured_at=f"2026-10-08T{hour}:00:00Z"),
+                           processed_dir=processed)
+    path = processed / cl.CAPTURES_FILENAME
+    lines = path.read_text().splitlines()
+    lines[1] = lines[1].replace("Toronto Maple Leafs", '"Toronto Maple Leafs')
+    lines[2] = lines[2].replace("Toronto Maple Leafs", 'Toronto Maple Leafs"')
+    path.write_text("\n".join(lines) + "\n")
+    before = _tip(bare)
+
+    assert _push(processed, bare) == store.EXIT_DAMAGED
+    assert cl.CAPTURES_FILENAME in capsys.readouterr().out
+    assert _tip(bare) == before
 
 
 def test_a_store_without_main_is_refused_on_push_and_empty_on_pull(tmp_path, bare):

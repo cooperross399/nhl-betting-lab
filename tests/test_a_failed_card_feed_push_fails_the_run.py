@@ -86,6 +86,7 @@ def _report(work: Path, *, degraded: str, published: str,
         "steps.settle.outcome": "success",
         "steps.rebuild.outcome": "success",
         "steps.clv.outcome": "success",
+        "steps.clv.outputs.store_fault": "",
         # A scheduled run on the default branch, the ordinary production
         # case; tests/test_a_branch_run_never_publishes_the_card.py covers
         # a dispatch on a branch.

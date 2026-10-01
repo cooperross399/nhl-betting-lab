@@ -772,19 +772,29 @@ jobs:
           # read what THIS run fetched, and so it is not uploaded again.
           rm -f data/processed/closing_line_captures.csv
           PULL=0
+          STORE_UNREACHABLE=""
           STORE_FAULT=""
+          STORE_TAG=""
           python scripts/private_closing_store.py pull \
             --out "$STORE_DIR/closing_line_captures.csv" || PULL=$?
+          # The store's state only. What was scored is said after the
+          # movement restore below, once it is known.
           case "$PULL" in
             0) if [ -s "$STORE_DIR/closing_line_captures.csv" ]; then
                  echo "Read the capture store from the private repository."
                else
-                 STORE_FAULT="The private closing-line store read exited 0 and wrote no store."
+                 STORE_FAULT="The private closing-line store read exited 0 and wrote no store"
+                 STORE_TAG="empty-read"
                fi ;;
-            3) echo "No private capture store is configured; scoring the line-movement captures alone." ;;
-            4) echo "The private capture store holds nothing yet; scoring the line-movement captures alone." ;;
-            1) echo "The private closing-line store could not be reached, so the closing-line value report scored the line-movement captures alone today." >> run_degraded.txt ;;
-            *) STORE_FAULT="The private closing-line store could not be used (exit $PULL: 2 is a damaged day file, 5 a token GitHub turned away); the closing-line value report scored the line-movement captures alone." ;;
+            2) STORE_FAULT="The private closing-line store has damaged day file(s), named above; its good days, if any, were still scored"
+               STORE_TAG="damaged-store" ;;
+            3) echo "No private capture store is configured." ;;
+            4) echo "The private capture store holds nothing yet." ;;
+            1) STORE_UNREACHABLE="The private closing-line store could not be reached" ;;
+            5) STORE_FAULT="The private closing-line store turned NHL_CLOSING_LINES_TOKEN away (expired, revoked, or not granted cooperross399/nhl-closing-lines); replace the secret"
+               STORE_TAG="rejected-token" ;;
+            *) STORE_FAULT="The private closing-line store read exited $PULL, which this step does not know"
+               STORE_TAG="unexpected-exit-$PULL" ;;
           esac
           if [ ! -s "$STORE_DIR/closing_line_captures.csv" ]; then
             rm -f "$STORE_DIR/closing_line_captures.csv"
@@ -814,18 +824,36 @@ jobs:
           if [ -s clv_restore_problem.txt ]; then
             cat clv_restore_problem.txt >> run_degraded.txt
           fi
-          SOURCES="--captures-dir data/processed"
+          # What the report will score, now that both sources are known.
+          if [ -n "$(ls -A data/processed/line_movement 2>/dev/null)" ]; then
+            CHAIN="the line-movement captures"
+          else
+            CHAIN=""
+          fi
           if [ -s "$STORE_DIR/closing_line_captures.csv" ]; then
-            SOURCES="--captures-dir $STORE_DIR $SOURCES"
+            SCORED="the closing-line value report scored the store's good days${CHAIN:+ and $CHAIN}"
+          elif [ -n "$CHAIN" ]; then
+            SCORED="the closing-line value report scored $CHAIN alone"
+          else
+            SCORED="the closing-line value report scored no closing price"
+          fi
+          if [ -n "$STORE_UNREACHABLE" ]; then
+            echo "$STORE_UNREACHABLE, so $SCORED today." >> run_degraded.txt
+          fi
+          # An array, so a store path with a space in it stays one argument.
+          SOURCES=(--captures-dir data/processed)
+          if [ -s "$STORE_DIR/closing_line_captures.csv" ]; then
+            SOURCES=(--captures-dir "$STORE_DIR" "${SOURCES[@]}")
           fi
           # Under `bash -e` a bare failing command would end the step here and
           # skip the clean-up below; the status is kept and returned instead.
           CLV_STATUS=0
-          python scripts/run_closing_line_value.py $SOURCES || CLV_STATUS=$?
+          python scripts/run_closing_line_value.py "${SOURCES[@]}" || CLV_STATUS=$?
           for dir in $CREATED; do rm -rf "$dir"; done
           rm -rf "$STORE_DIR"
           if [ -n "$STORE_FAULT" ]; then
-            echo "::error::$STORE_FAULT"
+            echo "::error::$STORE_FAULT; $SCORED."
+            echo "store_fault=$STORE_TAG" >> "${GITHUB_OUTPUT:-/dev/null}"
             if [ "$CLV_STATUS" -eq 0 ]; then CLV_STATUS=2; fi
           fi
           exit $CLV_STATUS
@@ -1233,8 +1261,11 @@ jobs:
             echo "::error::Rebuild the measurement reports failed (its log names the script), so a report in this run's artifacts may be the committed copy or an earlier run's, looking current. The card does not depend on them. It is not written into the run's health (degraded=${{ steps.final.outputs.degraded }}), so on its own it sends for no backup."
             failed=1
           fi
-          if [ "${{ steps.clv.outcome }}" = "failure" ]; then
-            echo "::error::Report closing-line value failed (its log names the damaged snapshot or capture store), so today's closing-line value is incomplete or missing. It is not written into the run's health (degraded=${{ steps.final.outputs.degraded }}), so on its own it sends for no backup."
+          if [ "${{ steps.clv.outcome }}" = "failure" ] && [ "${{ steps.clv.outputs.store_fault }}" = "rejected-token" ]; then
+            echo "::error::Report closing-line value failed because the private closing-line store turned NHL_CLOSING_LINES_TOKEN away (expired, revoked, or not granted cooperross399/nhl-closing-lines). Replace the secret. Today's closing-line value scored the line-movement captures without the store. It is not written into the run's health (degraded=${{ steps.final.outputs.degraded }}), so on its own it sends for no backup."
+            failed=1
+          elif [ "${{ steps.clv.outcome }}" = "failure" ]; then
+            echo "::error::Report closing-line value failed (its log names the cause: a damaged snapshot, movement day or capture store, or a private store that could not be used), so today's closing-line value is incomplete or missing. It is not written into the run's health (degraded=${{ steps.final.outputs.degraded }}), so on its own it sends for no backup."
             failed=1
           fi
           if [ "$failed" != 0 ]; then

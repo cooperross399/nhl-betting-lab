@@ -32,9 +32,12 @@ carriers so a new one fails rather than joining them silently.
 ## The refusals before every push
 
 1. The target is never this repository. `--repo` naming the public lab (or
-   the repository the run is in), or a `--remote` naming it, is refused
-   before anything is read. A GitHub `--remote` must name exactly the
-   repository the privacy check is made of.
+   the repository the run is in) is refused before anything is read.
+   `--remote` exists for tests and is accepted only as a local path
+   (`file://` or absolute) whose last two components are not a public lab's
+   name, or as a canonical github.com URL (https, ssh or scp form, no `%`,
+   `?` or `#`) naming exactly the repository the privacy check is made of.
+   Anything else is refused.
 2. The target is private, asked of the GitHub API with the same token on
    every push. A store whose repository was made public is not written to
    again, whatever the code around it says. A push needs `"private": true`,
@@ -47,9 +50,11 @@ in one file would pass GitHub's 100 MB file limit by midwinter (five rounds a
 day, one best-price row per selection per round), and every push would
 rewrite all of it. Each day file goes through `merge_capture_store.merge`,
 the merge the closing-lines branch used: every row either side holds, once,
-and never fewer than the remote had. An exact duplicate row already in a day
-file is not information and is dropped; a day file that parses to fewer rows
-than its lines is damage, and that day is left alone and named.
+and no row a day file held is ever dropped, except an exact duplicate of
+another row in the same file, which carries no information. A day file that
+parses to fewer rows than its lines is damage: that day is left alone and
+named, with how to repair it (restore `captures/<day>.csv` from the private
+repository's history).
 
 ## push
 
@@ -70,7 +75,10 @@ reached (transient); 2 when a movement day file, the dispatched file, or a
 remote day file is damaged (every other day is still pushed, and each damaged
 one is named); 3 when `NHL_CLOSING_LINES_TOKEN` is not set; 5 when the push
 is refused and a retry would be refused again: a public target, a store the
-API does not call private, a token GitHub rejects, or a store with no `main`.
+API does not call private, a token GitHub rejects, a push a repository rule
+declines, or a store with no `main`. A damaged movement day stays in Line
+Movement's chain until someone repairs it, so it keeps this red on every run,
+as it keeps the CLV report red (#235): the rule is the same in both places.
 
 ## pull
 
@@ -78,12 +86,13 @@ Joins every day file into one capture store at `--out`, which must sit
 outside the workspace. Gameday Refresh uploads `data/processed` whole as the
 public `gameday-state` artifact, so the store is never written there.
 
-Exit 0 with rows written; 3 when `NHL_CLOSING_LINES_TOKEN` is not set (no
-store configured, not a fault); 4 when the store is reachable and holds no
-rows yet, or has no `main` (not a fault); 1 when GitHub could not be reached
-(transient); 2 when a day file is damaged; 5 when the token is rejected or
-`--out` is inside the workspace. Nothing is written to `--out` unless the
-exit is 0.
+Exit 0 with rows written; 2 when a day file is damaged (each one is named,
+and the good days are still written to `--out`, so they are still scored);
+3 when `NHL_CLOSING_LINES_TOKEN` is not set (no store configured, not a
+fault); 4 when the store is reachable and holds no rows yet, or has no
+`main` (not a fault); 1 when GitHub could not be reached (transient); 5 when
+the token is rejected or `--out` is inside the workspace. `--out` is written
+only when the exit is 0, or 2 with at least one good day.
 """
 
 from __future__ import annotations
@@ -147,6 +156,13 @@ AUTH_FAILURES = (
     "returned error: 403",
     "permission to",
     "denied to",
+    "permission denied (publickey)",
+    # A repository rule or branch protection that declines the push: GitHub
+    # prints GH013 and GH006, and a retry is declined the same way.
+    "gh013",
+    "gh006",
+    "protected branch",
+    "rule violations",
 )
 GITHUB_REMOTE = re.compile(
     r"^(?:https?://(?:[^@/]+@)?github\.com/|ssh://git@github\.com/|git@github\.com:)"
@@ -209,9 +225,9 @@ def refuse_public_target(repo: str, remote: str) -> None:
     if wanted in public:
         raise Refused(
             f"Refusing to use {repo} as the closing-line store: it is the "
-            "public lab, and closing-line data is never published from it."
+            "public lab, and the store never lives there."
         )
-    named = github_repo_of(remote)
+    named = github_repo_of(remote) if not re.search(r"[%?#]", remote) else None
     if named is not None:
         if named in public:
             raise Refused(
@@ -223,16 +239,20 @@ def refuse_public_target(repo: str, remote: str) -> None:
                 f"is made of {repo}: the push must go to the repository checked."
             )
         return
-    if "github.com" in remote.lower():
+    local = remote[len("file://"):] if remote.lower().startswith("file://") else remote
+    if not os.path.isabs(local) or re.search(r"[%?#]", remote):
         raise Refused(
-            "Refusing a GitHub remote in a form this script does not parse; "
-            "it cannot tell which repository it names."
+            "Refusing a remote that is neither a canonical github.com URL "
+            "naming the checked repository nor a local path: this script "
+            "cannot tell which repository it names."
         )
-    # Any other remote (a local path, file://) is refused when its last two
-    # path components are a public lab's name.
-    parts = [p for p in re.split(r"[/:]", remote.rstrip("/")) if p]
+    # A local store is refused when its last two path components are a
+    # public lab's name, however the path is spelled.
+    parts = [p for p in os.path.normpath(local).split(os.sep) if p]
+    if parts and parts[-1].lower() == ".git":
+        parts = parts[:-1]
     if len(parts) >= 2:
-        tail = f"{parts[-2]}/{re.sub(r'[.]git$', '', parts[-1])}".lower()
+        tail = f"{parts[-2]}/{re.sub(r'(?i)[.]git$', '', parts[-1])}".lower()
         if tail in public:
             raise Refused(
                 f"Refusing to push the closing-line store to a remote that "
@@ -300,12 +320,17 @@ def _git(args: list[str], cwd: Path, **kw) -> subprocess.CompletedProcess:
 
 
 def _scrub(text: str, token: str) -> str:
-    return text.replace(token, "***") if token else text
+    """The text with the token masked. A token too short to be a real one is
+    left alone (masking "t" would mask every t)."""
+    return text.replace(token, "***") if len(token) >= 8 else text
 
 
 def _remote_failure(stderr: str, token: str, what: str) -> Exception:
-    text = _scrub(stderr.strip(), token)
-    if any(marker in text.lower() for marker in AUTH_FAILURES):
+    # Classified on git's own words, scrubbed only for display: scrubbing
+    # first let a token that happens to occur inside a marker hide it.
+    raw = stderr.strip()
+    text = _scrub(raw, token)
+    if any(marker in raw.lower() for marker in AUTH_FAILURES):
         return Refused(
             f"GitHub turned the token away while trying to {what} the "
             f"closing-line store: {text}"
@@ -379,7 +404,18 @@ def incoming(processed_dir: Path, damaged: dict[str, str]):
             yield dispatched.name, frame[list(CAPTURE_COLUMNS)]
 
 
-def merge_into(work: Path, rows: pd.DataFrame, damaged: dict[str, str]) -> list[str]:
+REPAIR = f"restore it from the history of {PRIVATE_REPO}"
+
+
+def _short(reason: object, work: Path) -> str:
+    """A damage reason without the scratch path or the branch-era hint."""
+    text = str(reason).replace(f"{work}/", "").replace(str(work), "")
+    return re.sub(r"\s*Restore it from the raw cache or the branch that carries it, then re-run\.?", "", text).strip()
+
+
+def merge_into(
+    work: Path, rows: pd.DataFrame, damaged: dict[str, str], *, source: str = "rows"
+) -> list[str]:
     """Merge `rows` into the checked-out store. The day files that changed.
 
     A day whose remote file is damaged, or whose rows carry a captured_at
@@ -392,7 +428,7 @@ def merge_into(work: Path, rows: pd.DataFrame, damaged: dict[str, str]) -> list[
     stamps = pd.to_datetime(rows["captured_at"], utc=True, errors="coerce", format="mixed")
     if stamps.isna().any():
         bad = rows.loc[stamps.isna(), "captured_at"].astype(str).head(3).tolist()
-        damaged["captured_at"] = (
+        damaged[f"{source} (captured_at)"] = (
             f"{int(stamps.isna().sum())} capture row(s) carry a captured_at that "
             f"is not an instant (e.g. {bad}); a row that cannot be ordered "
             "against face-off is never stored"
@@ -421,7 +457,7 @@ def merge_into(work: Path, rows: pd.DataFrame, damaged: dict[str, str]) -> list[
                     local_rows=existing_row_count(mine_path),
                 )
         except (CorruptStoreError, ValueError) as exc:
-            damaged[f"{CAPTURES_DIR}/{target.name}"] = str(exc)
+            damaged[f"{CAPTURES_DIR}/{target.name}"] = f"{_short(exc, work)}; {REPAIR}"
             continue
         if target.is_file() and len(merged) == len(unique):
             continue
@@ -433,10 +469,7 @@ def merge_into(work: Path, rows: pd.DataFrame, damaged: dict[str, str]) -> list[
 
 def _name_damage(damaged: dict[str, str]) -> None:
     for name, reason in sorted(damaged.items()):
-        _error(
-            f"{name} could not be used ({reason}); its closing prices were not "
-            "pushed. Every other day was."
-        )
+        _error(f"{name} could not be used ({reason}); its rows were not pushed.")
 
 
 def push(args: argparse.Namespace) -> int:
@@ -468,18 +501,21 @@ def push(args: argparse.Namespace) -> int:
             changed: list[str] = []
             try:
                 fetch_tip(work, remote, token)
-                for _source, frame in incoming(processed, damaged):
+                for source, frame in incoming(processed, damaged):
                     rows += len(frame)
-                    for name in merge_into(work, frame, damaged):
+                    for name in merge_into(work, frame, damaged, source=source):
                         if name not in changed:
                             changed.append(name)
             except Refused as exc:
+                _name_damage(damaged)
                 _error(str(exc))
                 return EXIT_REFUSED
             except NoBranch as exc:
+                _name_damage(damaged)
                 _error(f"Refusing to push: {exc}; seed it with a README first.")
                 return EXIT_REFUSED
             except OSError as exc:
+                _name_damage(damaged)
                 _error(f"The private closing-line store could not be reached: {exc}")
                 return EXIT_FAILED
             if attempt == 1:
@@ -487,12 +523,16 @@ def push(args: argparse.Namespace) -> int:
             outcome = EXIT_DAMAGED if damaged else EXIT_OK
             if not changed:
                 _name_damage(damaged)
-                _say("The private store already holds every row. Nothing pushed.")
+                _say(
+                    "Nothing pushed: the private store already holds every row "
+                    "that could be read."
+                )
                 return outcome
             _git(["add", "--", CAPTURES_DIR], work)
             message = f"captures {stamp} ({len(changed)} day file(s): {', '.join(sorted(changed)[:5])}{', ...' if len(changed) > 5 else ''})"
             done = _git(["commit", "-q", "-m", message], work)
             if done.returncode:
+                _name_damage(damaged)
                 _error(f"Could not commit the merged store: {done.stderr.strip()}")
                 return EXIT_FAILED
             done = _git(["push", "-q", remote, f"HEAD:refs/heads/{BRANCH}"], work)
@@ -502,27 +542,36 @@ def push(args: argparse.Namespace) -> int:
                 return outcome
             failure = _remote_failure(done.stderr, token, "push to")
             if isinstance(failure, Refused):
+                _name_damage(damaged)
                 _error(str(failure))
                 return EXIT_REFUSED
             _say(f"Push rejected; refetching the tip and re-merging. {failure}")
+    _name_damage(damaged)
     _error(f"Could not publish the private store after {PUSH_ATTEMPTS} attempts.")
     return EXIT_FAILED
 
 
-def read_day_files(work: Path) -> pd.DataFrame:
+def read_day_files(work: Path, damaged: dict[str, str]) -> pd.DataFrame:
+    """Every good day file joined; each damaged one named in `damaged` and
+    left out, as a damaged movement day is (#235)."""
     frames = []
     for path in sorted((work / CAPTURES_DIR).glob("*.csv")):
         if not DAY_FILE.match(path.name):
             continue
-        rows_on_disk = existing_row_count(path)
-        frame = read_store(path, columns=CAPTURE_COLUMNS, for_append=True)
-        if len(frame) < rows_on_disk:
-            raise CorruptStoreError(
-                f"{path.name} holds {rows_on_disk} row(s) and parses to only {len(frame)}."
-            )
-        missing = [c for c in CAPTURE_COLUMNS if c not in frame.columns]
-        if missing and not frame.empty:
-            raise CorruptStoreError(f"{path.name} lacks column(s): {', '.join(missing)}.")
+        name = f"{CAPTURES_DIR}/{path.name}"
+        try:
+            rows_on_disk = existing_row_count(path)
+            frame = read_store(path, columns=CAPTURE_COLUMNS, for_append=True)
+            if len(frame) < rows_on_disk:
+                raise CorruptStoreError(
+                    f"holds {rows_on_disk} row(s) and parses to only {len(frame)}"
+                )
+            missing = [c for c in CAPTURE_COLUMNS if c not in frame.columns]
+            if missing and not frame.empty:
+                raise CorruptStoreError(f"lacks column(s): {', '.join(missing)}")
+        except (CorruptStoreError, ValueError) as exc:
+            damaged[name] = f"{_short(exc, work)}; {REPAIR}"
+            continue
         if not frame.empty:
             frames.append(frame[list(CAPTURE_COLUMNS)])
     if not frames:
@@ -556,11 +605,12 @@ def pull(args: argparse.Namespace) -> int:
     except Refused as exc:
         _error(str(exc))
         return EXIT_REFUSED
+    damaged: dict[str, str] = {}
     with tempfile.TemporaryDirectory() as scratch:
         work = Path(scratch)
         try:
             fetch_tip(work, remote, token)
-            rows = read_day_files(work)
+            rows = read_day_files(work, damaged)
         except NoBranch:
             _say("The private closing-line store has no main branch yet, so it holds no captures.")
             return EXIT_EMPTY
@@ -570,15 +620,19 @@ def pull(args: argparse.Namespace) -> int:
         except OSError as exc:
             _error(f"The private closing-line store could not be read: {exc}")
             return EXIT_FAILED
-        except CorruptStoreError as exc:
-            _error(f"The private closing-line store is damaged: {exc}")
-            return EXIT_DAMAGED
+    for name, reason in sorted(damaged.items()):
+        _error(
+            f"The private closing-line store's {name} is damaged ({reason}). "
+            "Its rows are not scored; every other day is."
+        )
     if rows.empty:
+        if damaged:
+            return EXIT_DAMAGED
         _say("The private closing-line store holds no captures yet.")
         return EXIT_EMPTY
     _write_csv(rows, out)
     _say(f"Read {len(rows)} capture row(s) from the private closing-line store.")
-    return EXIT_OK
+    return EXIT_DAMAGED if damaged else EXIT_OK
 
 
 def main(argv: list[str] | None = None) -> int:

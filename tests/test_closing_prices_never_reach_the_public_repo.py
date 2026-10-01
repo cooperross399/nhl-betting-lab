@@ -1,4 +1,4 @@
-"""Closing-line data is never written to this repository, which is public.
+"""The closing-line store is never written to this repository, which is public.
 
 The Odds API's terms forbid redistributing their data as downloadable files
 that serve as raw data, and anything on a public repository is one: a branch,
@@ -39,6 +39,7 @@ from __future__ import annotations
 import os
 import re
 import shutil
+import socket
 import stat
 import subprocess
 import sys
@@ -77,7 +78,7 @@ def _steps(workflow: dict) -> list[dict]:
 
 
 def _all_workflows() -> list[Path]:
-    found = sorted(WORKFLOWS.glob("*.yml"))
+    found = sorted([*WORKFLOWS.glob("*.yml"), *WORKFLOWS.glob("*.yaml")])
     assert found
     return found
 
@@ -153,15 +154,22 @@ def test_no_artifact_carries_a_capture_store(path: Path) -> None:
             assert "RUNNER_TEMP" not in entry, (path.name, entry)
 
 
-def test_line_movement_keeps_subfolders_never_the_capture_store() -> None:
+def test_line_movement_keeps_exactly_its_three_folders() -> None:
     """The capture also writes data/processed/closing_line_captures.csv on
-    its runner. Only named subfolders of data/processed are kept, so it
-    cannot ride along."""
-    for step in _steps(_load("line-movement.yml")):
-        if not str(step.get("uses", "")).startswith("actions/upload-artifact"):
-            continue
-        for entry in str(step["with"].get("path", "")).split():
-            assert entry.rstrip("/") not in {"data", "data/processed", "."}, entry
+    its runner. Both of Line Movement's chain uploads keep exactly three
+    named folders, with no glob, so that file is not among them. (The
+    line_movement folder itself carries every price: see the module
+    docstring.)"""
+    lists = [
+        str(step["with"].get("path", "")).split()
+        for step in _steps(_load("line-movement.yml"))
+        if str(step.get("uses", "")).startswith("actions/upload-artifact")
+        and str(step["with"].get("name", "")).startswith("line-movement")
+    ]
+    assert len(lists) == 2
+    for entries in lists:
+        assert entries == ["data/processed/line_movement", "data/processed/deployment",
+                           "data/processed/line_combinations"]
 
 
 #: Every upload that can carry captured or bought prices, and why it is on
@@ -179,20 +187,34 @@ KNOWN_PRICE_CARRIERS = {
 }
 PRICE_PATHS = (
     "data/processed/line_movement",
+    "data/processed/closing_line_captures",
+    "data/processed/forward_evidence",
+    "data/archive",
     "data/staging",
     "data/raw/historical_props",
     "data/raw/historical_team_prices",
     "data/processed/historical_",
 )
+WORKSPACE_PREFIXES = ("${{ github.workspace }}/", "$GITHUB_WORKSPACE/", "${GITHUB_WORKSPACE}/")
+
+
+def _normalise(entry: str) -> str:
+    """One spelling per path: no workspace prefix, no ./, no /. or //."""
+    entry = entry.strip()
+    for prefix in WORKSPACE_PREFIXES:
+        if entry.startswith(prefix):
+            entry = entry[len(prefix):]
+    normal = os.path.normpath(entry) if entry else entry
+    return "." if normal in ("", ".") else normal
 
 
 def _can_carry_prices(entry: str) -> bool:
     """A whole data directory, a glob outside the report folders, or a path
-    under one of the known price locations."""
-    entry = entry.rstrip("/")
+    under one of the known price locations, however it is spelled."""
+    entry = _normalise(entry)
     if entry in {".", "data", "data/processed", "data/raw"}:
         return True
-    if "*" in entry and not entry.startswith(("data/outputs/", "dist/")):
+    if any(c in entry for c in "*?[") and not entry.startswith(("data/outputs/", "dist/")):
         return True
     return entry.startswith(PRICE_PATHS)
 
@@ -201,22 +223,89 @@ def test_the_uploads_that_carry_prices_are_the_known_ones() -> None:
     carriers = set()
     for path in _all_workflows():
         for step in _steps(_load(path.name)):
-            if not str(step.get("uses", "")).startswith("actions/upload-artifact"):
+            # upload-pages-artifact too: the Pages site is public.
+            if not str(step.get("uses", "")).startswith(
+                ("actions/upload-artifact", "actions/upload-pages-artifact")
+            ):
                 continue
             entries = str(step.get("with", {}).get("path", "")).split()
             if any(_can_carry_prices(e) for e in entries):
-                carriers.add((path.name, str(step["with"].get("name"))))
+                carriers.add((path.name, str(step["with"].get("name", "github-pages"))))
     assert carriers == KNOWN_PRICE_CARRIERS
 
 
 def test_the_carrier_test_sees_a_whole_directory_or_a_glob() -> None:
-    for entry in ("data/processed", "data/processed/", "data", ".",
-                  "data/processed/*.csv", "data/processed/line_movement",
+    for entry in ("data/processed", "data/processed/", "data", ".", "./",
+                  "./data/processed", "data/processed/.", "data//processed",
+                  "${{ github.workspace }}/data/processed/line_movement",
+                  "$GITHUB_WORKSPACE/data/processed",
+                  "data/processed/*.csv", "data/processed/closing_line_capture?.csv",
+                  "data/processed/[cl]*", "data/**/x.csv",
+                  "data/processed/line_movement", "./data/processed/line_movement",
+                  "data/processed/closing_line_captures.csv",
+                  "data/archive/priced_snapshots", "data/processed/forward_evidence.csv",
                   "data/staging"):
         assert _can_carry_prices(entry), entry
     for entry in ("data/outputs/closing_line_value.md", "data/processed/deployment",
                   "dist/data/history"):
         assert not _can_carry_prices(entry), entry
+
+
+def _git_add_arguments(text: str) -> list[list[str]]:
+    """The arguments of every `git add`, backslash-continued lines joined."""
+    joined = re.sub(r"\\\n\s*", " ", text)
+    found = []
+    for line in joined.splitlines():
+        match = re.search(r"\bgit add\b(.*)", line)
+        if match:
+            words = [w for w in match.group(1).split() if not w.startswith(("2>", "||", "&&", "true"))]
+            found.append(words)
+    return found
+
+
+@pytest.mark.parametrize("path", _all_workflows(), ids=lambda p: p.name)
+def test_no_workflow_stages_a_capture_store_for_a_push(path: Path) -> None:
+    for words in _git_add_arguments(path.read_text(encoding="utf-8")):
+        for word in words:
+            assert word not in {"-f", "--force", "-A", "--all", ".", "-u"}, (path.name, words)
+            assert not _can_carry_prices(word), (path.name, word)
+            assert "closing" not in word and "capture" not in word, (path.name, word)
+    if path.name == "experiment-refresh.yml":
+        assert _git_add_arguments(path.read_text(encoding="utf-8")) == [[
+            "data/outputs/*_experiment.json", "data/outputs/*_experiment.md",
+            "data/outputs/verdict_drift.md",
+        ]]
+
+
+def test_the_git_add_reader_sees_a_continued_line() -> None:
+    text = "git add a \\\n        b 2>/dev/null || true\ngit add -A\n"
+    assert _git_add_arguments(text) == [["a", "b"], ["-A"]]
+
+
+def test_the_site_never_reads_the_store() -> None:
+    """The Pages site (publish-site.yml, web/) is a public route this module
+    does not otherwise guard: it builds from gameday-state and the movement
+    chain's opening prices. It must never read the closing-line store."""
+    texts = [(WORKFLOWS / "publish-site.yml").read_text(encoding="utf-8")]
+    texts += [p.read_text(encoding="utf-8") for p in (PROJECT_ROOT / "web").rglob("*.py")]
+    for text in texts:
+        assert "closing_line_captures" not in text
+        assert "private_closing_store" not in text
+        assert "NHL_CLOSING_LINES_TOKEN" not in text
+
+
+def test_the_docs_say_the_movement_chain_is_still_public() -> None:
+    """The honest half of the record. CLAUDE.md and the README must keep
+    saying that Line Movement's public artifact carries every closing
+    price until the chain moves, not that closing prices are never published."""
+    claude = (PROJECT_ROOT / "CLAUDE.md").read_text(encoding="utf-8")
+    readme = (PROJECT_ROOT / "README.md").read_text(encoding="utf-8")
+    assert "NOT DONE, and Cooper's call: the `line-movement` artifact itself." in claude
+    assert "**not yet met**" in claude
+    assert "**Not yet private:**" in readme
+    for text in (claude, readme):
+        assert "closing-line data is never published from here" not in text
+        assert "Closing-line data is never published from this repository" not in text
 
 
 def test_no_other_workflow_that_uploads_data_processed_writes_the_store() -> None:
@@ -292,9 +381,14 @@ def clv_rig(tmp_path: Path) -> dict:
         "#!/bin/bash\n"
         'case "$1" in\n'
         f'  scripts/private_closing_store.py) exec "{sys.executable}" "$@" ;;\n'
-        "  scripts/restore_state.py) exit 0 ;;\n"
+        "  scripts/restore_state.py)\n"
+        '    if [ -n "${RESTORE_DAY:-}" ]; then mkdir -p data/processed/line_movement;'
+        ' echo x > "data/processed/line_movement/$RESTORE_DAY"; fi\n'
+        '    exit "${RESTORE_EXIT:-0}" ;;\n'
         "  scripts/run_closing_line_value.py)\n"
-        '    dir="$3"\n'
+        '    shift; printf "%s\\n" "$@" > clv_args.txt\n'
+        '    if [ -n "$(ls -A data/processed/line_movement 2>/dev/null)" ]; then echo chain > clv_chain.txt; fi\n'
+        '    dir="$2"\n'
         '    if [ -f "$dir/closing_line_captures.csv" ]; then cat "$dir/closing_line_captures.csv" > report_read.txt;\n'
         "    else echo '<no store>' > report_read.txt; fi\n"
         "    mkdir -p data/outputs; echo '# aggregate only' > data/outputs/closing_line_value.md\n"
@@ -316,6 +410,7 @@ def clv_rig(tmp_path: Path) -> dict:
         "NHL_CLOSING_LINES_TOKEN": token,
         "RUNNER_TEMP": str(temp),
         "GITHUB_WORKSPACE": str(work),
+        "GITHUB_OUTPUT": str(work / "github_output.txt"),
         "PYTHONPATH": str(PROJECT_ROOT / "src"),
         "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com",
         "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.com",
@@ -384,6 +479,106 @@ def test_a_restored_store_from_an_older_state_is_removed_not_scored(clv_rig) -> 
     assert not stale.exists()
     assert "Fresh" in read and SENTINEL_BOOK not in read
     assert _leaks(clv_rig["work"]) == []
+
+
+def _args_given(rig: dict) -> list[str]:
+    path = rig["work"] / "clv_args.txt"
+    return path.read_text(encoding="utf-8").splitlines() if path.is_file() else []
+
+
+def test_with_a_store_the_report_scores_the_store_and_the_chain(clv_rig) -> None:
+    """Both sources, in that order: a round the store has not received yet is
+    still scored from the chain."""
+    _seed_private(clv_rig["bare"], clv_rig["root"], clv_rig["env"],
+                  {"captures/2026-10-08.csv": _day_file([_capture_row()])})
+    clv_rig["env"]["RESTORE_DAY"] = "2026-10-08.csv"
+
+    run_clv_step(clv_rig)
+
+    # The chain was restored and on disk when the report ran, store or not.
+    assert (clv_rig["work"] / "clv_chain.txt").is_file()
+    assert _args_given(clv_rig) == [
+        "--captures-dir", str(clv_rig["temp"] / "private-closing-store"),
+        "--captures-dir", "data/processed",
+    ]
+
+
+def test_a_store_path_with_a_space_stays_one_argument(clv_rig) -> None:
+    spaced = clv_rig["root"] / "runner temp"
+    spaced.mkdir()
+    clv_rig["env"]["RUNNER_TEMP"] = str(spaced)
+    clv_rig["temp"] = spaced
+    _seed_private(clv_rig["bare"], clv_rig["root"], clv_rig["env"],
+                  {"captures/2026-10-08.csv": _day_file([_capture_row()])})
+
+    done, read, _degraded = run_clv_step(clv_rig)
+
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert _args_given(clv_rig)[1] == str(spaced / "private-closing-store")
+    assert SENTINEL_BOOK in read
+
+
+@pytest.mark.parametrize(
+    ("restore", "chain_scored"),
+    [
+        pytest.param({"RESTORE_DAY": "2026-10-08.csv"}, True, id="chain-restored"),
+        pytest.param({"RESTORE_EXIT": "1"}, False, id="restore-failed"),
+        pytest.param({}, False, id="no-chain-yet"),
+    ],
+)
+def test_an_unreachable_store_says_what_was_actually_scored(clv_rig, restore, chain_scored) -> None:
+    """The sentence about what was scored is written after the restore, from
+    what the restore actually laid down."""
+    clv_rig["env"].update(restore)
+    shutil.rmtree(clv_rig["bare"])  # GitHub cannot be reached
+
+    done, _read, degraded = run_clv_step(clv_rig)
+
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert "The private closing-line store could not be reached" in degraded
+    if chain_scored:
+        assert "scored the line-movement captures alone today" in degraded
+    else:
+        assert "scored the line-movement captures" not in degraded + done.stdout
+        assert "scored no closing price today" in degraded
+
+
+def test_a_damaged_day_costs_only_that_day(clv_rig) -> None:
+    """Pull names the damaged day and still hands over the good ones, which
+    the report scores; the step is red and degrades nothing."""
+    good = _day_file([_capture_row(book="Goodday")])
+    _seed_private(clv_rig["bare"], clv_rig["root"], clv_rig["env"], {
+        "captures/2026-10-08.csv": good,
+        "captures/2026-10-09.csv": good + 'x,"unterminated\n',
+    })
+
+    done, read, degraded = run_clv_step(clv_rig)
+
+    assert done.returncode == 2, done.stdout + done.stderr
+    assert "Goodday" in read
+    assert degraded == ""
+    assert "captures/2026-10-09.csv" in done.stdout
+    assert "store_fault=damaged-store" in (clv_rig["work"] / "github_output.txt").read_text()
+
+
+def test_a_rejected_token_is_named_as_one(clv_rig) -> None:
+    _seed_private(clv_rig["bare"], clv_rig["root"], clv_rig["env"],
+                  {"captures/2026-10-08.csv": _day_file([_capture_row()])})
+    real = shutil.which("git", path=os.environ["PATH"])
+    wrapper = clv_rig["root"] / "bin" / "git"
+    wrapper.write_text(
+        "#!/bin/sh\n"
+        'case "$1" in ls-remote|fetch) echo "fatal: Authentication failed for x" >&2; exit 128;; esac\n'
+        f'exec "{real}" "$@"\n'
+    )
+    wrapper.chmod(0o755)
+
+    done, _read, degraded = run_clv_step(clv_rig)
+
+    assert done.returncode == 2, done.stdout + done.stderr
+    assert degraded == ""
+    assert "turned NHL_CLOSING_LINES_TOKEN away" in done.stdout
+    assert "store_fault=rejected-token" in (clv_rig["work"] / "github_output.txt").read_text()
 
 
 # --- The script's refusals -----------------------------------------------
@@ -548,6 +743,138 @@ def test_the_privacy_check_tells_a_rejected_token_from_an_outage(monkeypatch, st
     monkeypatch.setattr(store.urllib.request, "urlopen", answer)
     with pytest.raises(getattr(store, expected)):
         store.repo_is_private(PRIVATE, "t")
+
+
+def test_the_public_lab_is_refused_by_its_own_check_against_a_working_store(
+    tmp_path, asked, monkeypatch, capsys
+) -> None:
+    """--repo naming the public lab, with a --remote that would otherwise
+    take the push: only the --repo check can refuse it, and it does so
+    before the privacy question is asked."""
+    bare = _seeded_bare(tmp_path, monkeypatch)
+    before = _tip(bare)
+
+    assert store.main(_args(tmp_path, repo=PUBLIC, remote=f"file://{bare}")) == store.EXIT_REFUSED
+    assert asked == []
+    assert _tip(bare) == before
+    assert "as the closing-line store" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("remote", [
+    "https://x-access-token:t@www.github.com/cooperross399/nhl-closing-lines.git",
+    "https://x-access-token:t@github.com:443/cooperross399/nhl-closing-lines.git",
+    "https://x-access-token:t@github%2ecom/cooperross399/nhl-closing-lines.git",
+    "https://github.com/someone/x/cooperross399/nhl-closing-lines.git",
+    "https://github.com/cooperross399/nhl-closing-lines.git?x=cooperross399/other",
+    "https://github.com/cooperross399/other.git#cooperross399/nhl-closing-lines",
+    "https://gitlab.com/cooperross399/nhl-closing-lines.git",
+    "relative/path/store.git",
+])
+def test_a_remote_that_is_not_canonical_or_local_is_refused(tmp_path, asked, monkeypatch, remote) -> None:
+    """Each is redirected to a working store, so only the refusal stops it."""
+    bare = _seeded_bare(tmp_path, monkeypatch)
+    _redirect(monkeypatch, remote, bare)
+    before = _tip(bare)
+
+    assert store.main(_args(tmp_path, remote=remote)) == store.EXIT_REFUSED
+    assert _tip(bare) == before
+
+
+@pytest.mark.parametrize("suffix", ["nhl-betting-lab/.git", "nhl-betting-lab/.", "NHL-Betting-Lab.GIT",
+                                    "nhl-betting-lab.git/", "x/../nhl-betting-lab.git"])
+def test_every_spelling_of_a_local_public_lab_path_is_refused(suffix) -> None:
+    with pytest.raises(store.Refused):
+        store.refuse_public_target(PRIVATE, f"file:///tmp/cooperross399/{suffix}")
+
+
+def _push_against(tmp_path, monkeypatch, urlopen) -> tuple[int, Path, str]:
+    """A push whose privacy question goes through the real repo_is_private,
+    with only urlopen replaced, against a store the push would land in."""
+    bare = _seeded_bare(tmp_path, monkeypatch)
+    before = _tip(bare)
+    monkeypatch.setenv(store.TOKEN_ENV, "t")
+    monkeypatch.delenv("GITHUB_REPOSITORY", raising=False)
+    monkeypatch.setattr(store.urllib.request, "urlopen", urlopen)
+    return store.main(_args(tmp_path, remote=f"file://{bare}")), bare, before
+
+
+class _Body:
+    def __init__(self, body: bytes) -> None:
+        self.body = body
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def read(self, *a):
+        return self.body
+
+
+def _raises(error):
+    def urlopen(request, timeout):
+        raise error
+    return urlopen
+
+
+@pytest.mark.parametrize(
+    ("urlopen", "code"),
+    [
+        pytest.param(_raises(urllib.error.URLError(socket.timeout("timed out"))), "EXIT_FAILED", id="url-timeout"),
+        pytest.param(_raises(TimeoutError()), "EXIT_FAILED", id="timeout"),
+        pytest.param(_raises(ConnectionRefusedError()), "EXIT_FAILED", id="refused-connection"),
+        pytest.param(lambda request, timeout: _Body(b"<html>busy</html>"), "EXIT_FAILED", id="html-page"),
+        pytest.param(lambda request, timeout: _Body(b'{"private": false}'), "EXIT_REFUSED", id="public"),
+        pytest.param(lambda request, timeout: _Body(b'["private", true]'), "EXIT_REFUSED", id="not-an-object"),
+        pytest.param(_raises(urllib.error.HTTPError("u", 404, "x", {}, None)), "EXIT_REFUSED", id="404"),
+        pytest.param(_raises(urllib.error.HTTPError("u", 503, "x", {}, None)), "EXIT_FAILED", id="503"),
+    ],
+)
+def test_every_answer_but_private_true_writes_nothing(tmp_path, monkeypatch, urlopen, code) -> None:
+    result, bare, before = _push_against(tmp_path, monkeypatch, urlopen)
+    assert result == getattr(store, code)
+    assert _tip(bare) == before
+
+
+def test_private_true_through_the_real_check_lands(tmp_path, monkeypatch) -> None:
+    """The control for the table above."""
+    result, bare, before = _push_against(
+        tmp_path, monkeypatch, lambda request, timeout: _Body(b'{"private": true}'))
+    assert result == store.EXIT_OK
+    assert _tip(bare) != before
+
+
+@pytest.mark.parametrize(
+    ("stderr", "code"),
+    [
+        pytest.param("fatal: Authentication failed for 'https://github.com/x/y.git/'", "EXIT_REFUSED", id="auth"),
+        pytest.param("remote: Repository not found.", "EXIT_REFUSED", id="not-found"),
+        pytest.param("fatal: unable to access: The requested URL returned error: 403", "EXIT_REFUSED", id="403"),
+        pytest.param("git@github.com: Permission denied (publickey).", "EXIT_REFUSED", id="ssh-key"),
+        pytest.param("fatal: unable to access: Could not resolve host: github.com", "EXIT_FAILED", id="dns"),
+        pytest.param("fatal: unable to access: The requested URL returned error: 502", "EXIT_FAILED", id="502"),
+    ],
+)
+def test_the_pull_tells_a_rejected_token_from_an_outage(tmp_path, monkeypatch, stderr, code) -> None:
+    """Gameday Refresh's pull never asks the API, so git's own words are all
+    it has: exit 5 (red, no backup) for a token, exit 1 (degraded) for an outage."""
+    real = shutil.which("git")
+    stub = tmp_path / "bin"
+    stub.mkdir()
+    (stub / "git").write_text(
+        "#!/bin/sh\n"
+        f'case "$1" in ls-remote|fetch) echo "{stderr}" >&2; exit 128;; esac\n'
+        f'exec "{real}" "$@"\n'
+    )
+    (stub / "git").chmod(0o755)
+    monkeypatch.setenv("PATH", f"{stub}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setenv(store.TOKEN_ENV, "t")
+    monkeypatch.delenv("GITHUB_WORKSPACE", raising=False)
+    out = tmp_path / "out" / cl.CAPTURES_FILENAME
+
+    assert store.main(["pull", "--out", str(out), "--remote", "file:///anywhere"]) == getattr(store, code)
+    assert not out.exists()
 
 
 def test_no_token_publishes_nothing(tmp_path, monkeypatch) -> None:

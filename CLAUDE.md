@@ -752,20 +752,24 @@ Re-derive rather than trust if the data has moved.
     (`closing_lines.load_movement_captures`, the dedicated store's rows by
     construction), and pushes them with `scripts/private_closing_store.py
     push` to `captures/<UTC day>.csv` in the private repository, merging
-    through `merge_capture_store.merge` (never fewer rows than a day file
-    held). Reading every day means a failed push, or a week without the
+    through `merge_capture_store.merge` (no row a day file held is dropped,
+    except an exact duplicate of another row in it). Reading every day means a failed push, or a week without the
     token, heals on the next push for as long as the chain carries the days.
     It holds **no write grant** on this repository. Line Movement no longer
     uploads the `closing-line-captures` artifact (the 11 already uploaded
     expire seven days after their runs, by 2026-10-08).
   - **The script refuses** this repository (and the repository a run is in)
-    by exact name, refuses a GitHub remote naming any repository other than
-    the one it checked, and asks the GitHub API that the target is private
-    (`"private": true`, not merely not false) before every push. Exit codes:
+    by exact name, accepts a `--remote` (tests only) only as a local path
+    not named for a public lab or a canonical github.com URL naming exactly
+    the checked repository, and asks the GitHub API that the target is
+    private (`"private": true`, not merely not false) before every push. Exit codes:
     0 pushed or nothing new; 1 GitHub unreachable; 2 a damaged movement day,
-    dispatched file or remote day file (every other day is still pushed);
-    3 no token; 5 refused (public target, not private, token turned away,
-    store without `main`).
+    dispatched file or remote day file (every other day is still pushed; a
+    damaged movement day keeps it red until repaired, as it keeps the CLV
+    report red); 3 no token; 5 refused (public target, not private, token
+    turned away, a repository rule declining the push, store without
+    `main`). A damaged store day file is repaired by restoring
+    `captures/<day>.csv` from the private repository's history.
   - **Gameday Refresh** pulls the store with `private_closing_store.py pull`
     into `$RUNNER_TEMP`, outside the workspace, because "Upload the state for
     the next run" uploads `data/processed` whole as the public `gameday-state`
@@ -774,8 +778,10 @@ Re-derive rather than trust if the data has moved.
     both (`--captures-dir` is repeatable), so a round the store has not
     received yet is still scored. Pull exit 3 (no token) and 4 (empty) are
     clean runs on the chain alone; exit 1 (unreachable) degrades the run;
-    exit 2 (damaged) and 5 (token turned away) fail the step red without
-    degrading it, because a backup would hit the same fault. The published
+    exit 2 (a damaged day file: the good days are still scored) and 5
+    (token turned away; "Report the outcome" says to replace the secret)
+    fail the step red without degrading it, because a backup would hit the
+    same fault. The published
     report (`latest_closing_line_value.md` on card-feed, and `gameday-reports`)
     is aggregate only: counts, rates and intervals, never a price, a line or
     a book.
@@ -809,8 +815,9 @@ Re-derive rather than trust if the data has moved.
     still carries that run's staging quotes, as before.
   - `tests/test_closing_prices_never_reach_the_public_repo.py` holds the
     routes it can: no push here carries a capture store, no artifact names
-    one, the set of uploads that can carry captured prices is pinned to the
-    known three (so a new carrier fails), the CLV step replayed against a
+    one, the set of uploads that can carry captured or bought prices is
+    pinned to the known six, however a path is spelled (so a new carrier
+    fails), the CLV step replayed against a
     real private store leaves no captured price in the workspace, the
     script's refusals, and a report built from sentinel prices prints none
     of them.
