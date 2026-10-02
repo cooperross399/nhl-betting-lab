@@ -284,8 +284,10 @@ def test_the_git_add_reader_sees_a_continued_line() -> None:
 
 def test_the_site_never_reads_the_store() -> None:
     """The Pages site (publish-site.yml, web/) is a public route this module
-    does not otherwise guard: it builds from gameday-state and the movement
-    chain's opening prices. It must never read the closing-line store."""
+    does not otherwise guard: it builds from gameday-state, and would read a
+    line_movement day file for a moneyline open if gameday-state ever carried
+    one (measured 2026-10-02: none does, and no frozen board has an open). It
+    must never read the closing-line store or hold its token."""
     texts = [(WORKFLOWS / "publish-site.yml").read_text(encoding="utf-8")]
     texts += [p.read_text(encoding="utf-8") for p in (PROJECT_ROOT / "web").rglob("*.py")]
     for text in texts:
@@ -300,12 +302,40 @@ def test_the_docs_say_the_movement_chain_is_still_public() -> None:
     price until the chain moves, not that closing prices are never published."""
     claude = (PROJECT_ROOT / "CLAUDE.md").read_text(encoding="utf-8")
     readme = (PROJECT_ROOT / "README.md").read_text(encoding="utf-8")
-    assert "NOT DONE, and Cooper's call: the `line-movement` artifact itself." in claude
-    assert "**not yet met**" in claude
-    assert "**Not yet private:**" in readme
+    assert "**IN PROGRESS, in two stages" in claude
+    assert "**not yet met** until stage two" in claude
+    assert "**Not yet private, moving in two stages:**" in readme
     for text in (claude, readme):
         assert "closing-line data is never published from here" not in text
         assert "Closing-line data is never published from this repository" not in text
+
+
+#: Every step, in every workflow, that may read NHL_CLOSING_LINES_TOKEN.
+TOKEN_HOLDERS = {
+    ("closing-lines.yml", "Publish to the private store"),
+    ("gameday-refresh.yml", "Report closing-line value"),
+    ("line-movement.yml", "Fold in the private chain"),
+    ("line-movement.yml", "Keep the captures privately"),
+    ("line-movement.yml", "Check the private chain holds this round"),
+}
+
+
+def test_the_store_token_reaches_only_the_steps_that_need_it() -> None:
+    """A read of the secret, at any level. A message that names the secret
+    (Report the outcome says to replace it) reads nothing."""
+    read = "secrets.NHL_CLOSING_LINES_TOKEN"
+    holders = set()
+    for path in _all_workflows():
+        document = _load(path.name)
+        if read in yaml.safe_dump({k: v for k, v in document.items() if k != "jobs"}):
+            holders.add((path.name, "<workflow level>"))
+        for job in document["jobs"].values():
+            if read in yaml.safe_dump({k: v for k, v in job.items() if k != "steps"}):
+                holders.add((path.name, "<job level>"))
+            for step in job.get("steps", []):
+                if read in yaml.safe_dump(step):
+                    holders.add((path.name, step.get("name")))
+    assert holders == TOKEN_HOLDERS
 
 
 def test_no_other_workflow_that_uploads_data_processed_writes_the_store() -> None:
