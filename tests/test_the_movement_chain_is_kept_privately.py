@@ -134,12 +134,19 @@ def test_a_second_push_of_the_same_files_commits_nothing(bare, run) -> None:
     assert _tip(bare) == tip
 
 
-def test_a_round_touches_only_the_files_it_appended_to(bare, run) -> None:
+def test_a_round_touches_only_the_files_it_appended_to(bare, run, monkeypatch) -> None:
+    """Only the changed file is read from the tip or written: by April the
+    chain is about 3.7 GB, and reading every day file each round would not
+    fit the job."""
     assert _run("push", bare, run) == chain.EXIT_OK
     _write(run, LM, HEADER + _row(1) + _row(2) + _row(3))
+    read = []
+    real = chain.blob_to
+    monkeypatch.setattr(chain, "blob_to", lambda work, sha, target: (read.append(sha), real(work, sha, target)))
     assert _run("push", bare, run) == chain.EXIT_OK
     assert _changed(bare) == [LM]
     assert _show(bare, LM) == HEADER + _row(1) + _row(2) + _row(3)
+    assert len(read) == 1, f"read {len(read)} tip file(s) for one changed file"
 
 
 def test_a_thin_run_never_drops_a_row_the_tip_holds(bare, run, tmp_path) -> None:
@@ -210,9 +217,12 @@ def test_a_rejected_push_refetches_and_keeps_both_rounds(bare, run, tmp_path, mo
         return tip
 
     monkeypatch.setattr(chain, "fetch_chain", racing)
+    waited = []
+    monkeypatch.setattr(chain, "sleep", waited.append)
     _write(run, LM, HEADER + _row(1) + _row(2) + _row(3))
     assert _run("push", bare, run) == chain.EXIT_OK
     assert calls["n"] == 2
+    assert waited == [2], "a rejected push waits before it tries again"
     assert sorted(_show(bare, LM).splitlines()[1:]) == sorted(
         (_row(1) + _row(2) + _row(9) + _row(3)).splitlines())
 
