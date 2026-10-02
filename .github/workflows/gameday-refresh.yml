@@ -727,85 +727,135 @@ jobs:
           python scripts/run_forward_evidence.py
 
       - name: Report closing-line value
-        # Reads the capture store the Closing Lines workflow publishes, or,
-        # with no such branch, Line Movement's own captures (see below), and
-        # scores every frozen opinion against the market's last word. Offline
-        # and read-only: it fetches no prices and spends nothing. Exits 2 on
-        # a damaged snapshot or capture store, which "Report the outcome"
-        # reads and fails the run on, without degrading it: the backup would
-        # read the same damaged files, so it is not sent for.
+        # Scores every frozen opinion against the market's last word, from
+        # the union of two sources: the PRIVATE closing-line store that
+        # Closing Lines writes (cooperross399/nhl-closing-lines), which keeps
+        # the season for good, and Line Movement's own `line-movement`
+        # artifact chain, from which that store is derived, so a round the
+        # store has not received yet (a failed push, a missing token) is
+        # still scored. Offline and read-only: it fetches no prices and
+        # spends nothing.
+        #
+        # FAILURES. A damaged snapshot, capture store or movement day exits
+        # 2, which "Report the outcome" reads and fails the run on, without
+        # degrading it: the backup would read the same damaged files, so it
+        # is not sent for. A private store that is damaged (pull exit 2), or
+        # that turns the token away (exit 5), is the same kind of fault and
+        # is treated the same way. Only a store GitHub could not be reached
+        # for (exit 1) degrades the run, as an unreachable branch always did.
+        #
+        # WHAT LEAVES THIS STEP IS AGGREGATE. The report prints counts, rates
+        # and intervals, never a price, a line or a book, and it is the only
+        # thing this step writes that is published (card-feed, gameday-reports).
+        # The store itself is pulled into $RUNNER_TEMP, OUTSIDE the
+        # workspace, because "Upload the state for the next run" uploads
+        # data/processed whole as the public gameday-state artifact, and it
+        # is deleted when the report is done. The movement chain is restored
+        # into data/processed for this step only and removed after it.
+        # tests/test_closing_prices_never_reach_the_public_repo.py replays
+        # this block and checks that no captured price is left anywhere in
+        # the workspace.
         id: clv
         if: always()
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
+          NHL_CLOSING_LINES_TOKEN: ${{ secrets.NHL_CLOSING_LINES_TOKEN }}
           PYTHONPATH: src
         run: |
           set -u
-          REMOTE="https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}"
-          STORE=data/processed/closing_line_captures.csv
-          mkdir -p data/processed
-          # The restore of gameday-state put the previous run's store here,
-          # because that artifact carries data/processed whole. It goes first,
-          # so the report can only read what THIS run fetched. A fetch that
-          # failed used to fall through to "No capture store yet" and leave
-          # yesterday's store to be scored as today's, with nothing saying so.
-          rm -f "$STORE"
-          # "The branch does not exist" and "the branch could not be read"
-          # are told apart: the first is not a fault (Closing Lines is
-          # disabled by the owner, so it is the expected state), the second
-          # is, and degrades the run like every other fault.
-          if ! HEADS=$(git ls-remote --heads "$REMOTE" refs/heads/closing-lines 2>/dev/null); then
-            echo "The closing-lines branch could not be reached, so the closing-line value report scored no capture store today rather than an earlier run's." >> run_degraded.txt
-          elif [ -z "$HEADS" ]; then
-            echo "No capture store yet; reading the line-movement captures instead."
-          elif git fetch "$REMOTE" +refs/heads/closing-lines:refs/closing-tip 2>/dev/null \
-             && git show refs/closing-tip:closing_line_captures.csv > "$STORE" 2>/dev/null; then
-            echo "Read the capture store from the closing-lines branch."
-          else
-            rm -f "$STORE"
-            echo "The closing-lines branch exists but its capture store could not be fetched, so the closing-line value report scored no capture store today rather than an earlier run's." >> run_degraded.txt
+          STORE_DIR="${RUNNER_TEMP:?}/private-closing-store"
+          rm -rf "$STORE_DIR"
+          mkdir -p "$STORE_DIR" data/processed
+          # A restore of an older gameday-state may carry a capture store
+          # from before 2026-10-01. It goes first, so the report can only
+          # read what THIS run fetched, and so it is not uploaded again.
+          rm -f data/processed/closing_line_captures.csv
+          PULL=0
+          STORE_UNREACHABLE=""
+          STORE_FAULT=""
+          STORE_TAG=""
+          python scripts/private_closing_store.py pull \
+            --out "$STORE_DIR/closing_line_captures.csv" || PULL=$?
+          # The store's state only. What was scored is said after the
+          # movement restore below, once it is known.
+          case "$PULL" in
+            0) if [ -s "$STORE_DIR/closing_line_captures.csv" ]; then
+                 echo "Read the capture store from the private repository."
+               else
+                 STORE_FAULT="The private closing-line store read exited 0 and wrote no store"
+                 STORE_TAG="empty-read"
+               fi ;;
+            2) STORE_FAULT="The private closing-line store has damaged day file(s), named above; its good days, if any, were still scored"
+               STORE_TAG="damaged-store" ;;
+            3) echo "No private capture store is configured." ;;
+            4) echo "The private capture store holds nothing yet." ;;
+            1) STORE_UNREACHABLE="The private closing-line store could not be reached" ;;
+            5) STORE_FAULT="The private closing-line store turned NHL_CLOSING_LINES_TOKEN away (expired, revoked, or not granted cooperross399/nhl-closing-lines); replace the secret"
+               STORE_TAG="rejected-token" ;;
+            *) STORE_FAULT="The private closing-line store read exited $PULL, which this step does not know"
+               STORE_TAG="unexpected-exit-$PULL" ;;
+          esac
+          if [ ! -s "$STORE_DIR/closing_line_captures.csv" ]; then
+            rm -f "$STORE_DIR/closing_line_captures.csv"
           fi
-          # THE MOVEMENT CHAIN, WHEN THERE IS NO BRANCH. Closing Lines has been
-          # disabled since 2026-09-25: its branch would be a permanent,
-          # downloadable odds file on a public repository, which the
-          # provider's terms forbid. Every closing price it would have held is
-          # already in Line Movement's own `line-movement` artifact, whose
-          # restore chain carries the season's day files, and
-          # `load_captures` falls back to them when the dedicated store is
-          # empty. This runner never had them, so the report scored nothing.
-          # They are restored for this step only and removed after it, so
-          # gameday-state (which uploads data/processed) does not carry a
-          # second copy of every price.
-          # Unpacked where line-movement.yml roots the artifact
-          # (data/processed), and only the folders this step created are
-          # removed afterwards.
+          # THE MOVEMENT CHAIN, ALWAYS. Line Movement's `line-movement`
+          # artifact carries the season's day files, and `load_captures`
+          # reads them as the same rows the store holds. Unpacked where
+          # line-movement.yml roots the artifact (data/processed), and only
+          # the folders this step created are removed afterwards, so
+          # gameday-state does not carry a second copy of every price.
           CREATED=""
-          if [ ! -s "$STORE" ]; then
-            for dir in line_movement deployment line_combinations; do
-              [ -e "data/processed/$dir" ] || CREATED="$CREATED data/processed/$dir"
-            done
-            : > clv_restore_problem.txt
-            if python scripts/restore_state.py --artifact line-movement --dest data/processed \
-                 --workflow line-movement.yml --union 3 --limit 10 \
-                 --attempts 3 --problem-file clv_restore_problem.txt; then
-              if [ -d data/processed/line_movement ]; then
-                echo "Read $(ls data/processed/line_movement | wc -l | tr -d ' ') line-movement day file(s) for the closing prices."
-              else
-                echo "No line-movement captures yet; the report will say so rather than guess."
-              fi
+          for dir in line_movement deployment line_combinations; do
+            [ -e "data/processed/$dir" ] || CREATED="$CREATED data/processed/$dir"
+          done
+          : > clv_restore_problem.txt
+          if python scripts/restore_state.py --artifact line-movement --dest data/processed \
+               --workflow line-movement.yml --union 3 --limit 10 \
+               --attempts 3 --problem-file clv_restore_problem.txt; then
+            if [ -d data/processed/line_movement ]; then
+              echo "Read $(ls data/processed/line_movement | wc -l | tr -d ' ') line-movement day file(s) for the closing prices."
             else
-              echo "The line-movement captures could not be restored, so the closing-line value report scored no closing price today." >> run_degraded.txt
+              echo "No line-movement captures yet; the report will say so rather than guess."
             fi
-            if [ -s clv_restore_problem.txt ]; then
-              cat clv_restore_problem.txt >> run_degraded.txt
-            fi
+          else
+            echo "The line-movement captures could not be restored, so the closing-line value report scored no movement capture today." >> run_degraded.txt
+          fi
+          if [ -s clv_restore_problem.txt ]; then
+            cat clv_restore_problem.txt >> run_degraded.txt
+          fi
+          # What the report will score, now that both sources are known.
+          if [ -n "$(ls -A data/processed/line_movement 2>/dev/null)" ]; then
+            CHAIN="the line-movement captures"
+          else
+            CHAIN=""
+          fi
+          if [ -s "$STORE_DIR/closing_line_captures.csv" ]; then
+            SCORED="the closing-line value report scored the store's good days${CHAIN:+ and $CHAIN}"
+          elif [ -n "$CHAIN" ]; then
+            SCORED="the closing-line value report scored $CHAIN alone"
+          else
+            SCORED="the closing-line value report scored no closing price"
+          fi
+          if [ -n "$STORE_UNREACHABLE" ]; then
+            echo "$STORE_UNREACHABLE, so $SCORED today." >> run_degraded.txt
+          fi
+          # An array, so a store path with a space in it stays one argument.
+          SOURCES=(--captures-dir data/processed)
+          if [ -s "$STORE_DIR/closing_line_captures.csv" ]; then
+            SOURCES=(--captures-dir "$STORE_DIR" "${SOURCES[@]}")
           fi
           # Under `bash -e` a bare failing command would end the step here and
           # skip the clean-up below; the status is kept and returned instead.
           CLV_STATUS=0
-          python scripts/run_closing_line_value.py || CLV_STATUS=$?
+          python scripts/run_closing_line_value.py "${SOURCES[@]}" || CLV_STATUS=$?
           for dir in $CREATED; do rm -rf "$dir"; done
+          rm -rf "$STORE_DIR"
+          if [ -n "$STORE_FAULT" ]; then
+            echo "::error::$STORE_FAULT; $SCORED."
+            echo "store_fault=$STORE_TAG" >> "${GITHUB_OUTPUT:-/dev/null}"
+            if [ "$CLV_STATUS" -eq 0 ]; then CLV_STATUS=2; fi
+          fi
           exit $CLV_STATUS
 
       - name: Upload the state for the next run
@@ -1211,8 +1261,11 @@ jobs:
             echo "::error::Rebuild the measurement reports failed (its log names the script), so a report in this run's artifacts may be the committed copy or an earlier run's, looking current. The card does not depend on them. It is not written into the run's health (degraded=${{ steps.final.outputs.degraded }}), so on its own it sends for no backup."
             failed=1
           fi
-          if [ "${{ steps.clv.outcome }}" = "failure" ]; then
-            echo "::error::Report closing-line value failed (its log names the damaged snapshot or capture store), so today's closing-line value is incomplete or missing. It is not written into the run's health (degraded=${{ steps.final.outputs.degraded }}), so on its own it sends for no backup."
+          if [ "${{ steps.clv.outcome }}" = "failure" ] && [ "${{ steps.clv.outputs.store_fault }}" = "rejected-token" ]; then
+            echo "::error::Report closing-line value failed because the private closing-line store turned NHL_CLOSING_LINES_TOKEN away (expired, revoked, or not granted cooperross399/nhl-closing-lines). Replace the secret. Today's closing-line value scored the line-movement captures without the store. It is not written into the run's health (degraded=${{ steps.final.outputs.degraded }}), so on its own it sends for no backup."
+            failed=1
+          elif [ "${{ steps.clv.outcome }}" = "failure" ]; then
+            echo "::error::Report closing-line value failed (its log names the cause: a damaged snapshot, movement day or capture store, or a private store that could not be used), so today's closing-line value is incomplete or missing. It is not written into the run's health (degraded=${{ steps.final.outputs.degraded }}), so on its own it sends for no backup."
             failed=1
           fi
           if [ "$failed" != 0 ]; then

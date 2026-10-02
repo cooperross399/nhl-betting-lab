@@ -1,201 +1,150 @@
 """CLV scored yesterday's capture store when today's fetch failed.
 
 Gameday Refresh restores the `gameday-state` artifact before it does anything
-else, and that artifact uploads `data/processed` whole. So the capture store
-the previous run fetched from the `closing-lines` branch,
-`data/processed/closing_line_captures.csv`, is already on disk when "Report
-closing-line value" starts. That step fetched the branch and, when the fetch
-did not succeed, printed "No capture store yet" and ran the report anyway.
-A fetch that FAILED (the network, the token, GitHub itself) took the same
-branch as a branch that does not exist, and the report then scored the
-restored store as if it were today's, with nothing in the run saying so.
-Confirmed on main d0cc593.
+else, and that artifact uploads `data/processed` whole. So a capture store an
+earlier run left at `data/processed/closing_line_captures.csv` is already on
+disk when "Report closing-line value" starts. That step used to fetch the
+`closing-lines` branch and, when the fetch did not succeed, print "No capture
+store yet" and run the report anyway: a fetch that FAILED took the same path
+as a branch that did not exist, and the report scored the restored store as
+if it were today's. Confirmed on main d0cc593.
 
-The step now removes any restored store before it looks at the branch, so
-the report reads only what this run fetched, and it tells three states
-apart:
+Since 2026-10-01 the store is the private repository
+cooperross399/nhl-closing-lines, pulled into the runner's temp directory
+(never into `data/processed`, which is uploaded publicly). The step still
+removes any restored store before it reads, so the report reads only what
+this run fetched, and it still tells the states apart:
 
-* the branch does not exist: nothing to read, and not a fault. Closing Lines
-  is disabled by the owner as of 2026-09-25, so this is the expected state
-  and must stay a clean run;
-* the branch could not be reached, or exists and could not be read: a fault,
-  written to `run_degraded.txt` like every other fault the run records, so
-  the run is degraded and the comment says what went wrong;
-* the branch was read: the report scores exactly the branch's store.
+* no NHL_CLOSING_LINES_TOKEN, or a store with no captures yet: nothing to
+  read, and not a fault. The report scores the movement chain alone;
+* the store could not be reached: a fault that may pass, written to
+  `run_degraded.txt` like every other such fault, so the backup is sent for;
+* the store is damaged, or GitHub turns the token away: a fault the backup
+  would hit again, so the step fails red (exit 2) WITHOUT degrading the run,
+  as a damaged snapshot does;
+* the store was read: the report scores the store's rows (and the chain's).
 
-These tests run the step's own `run:` block from the workflow under
-`bash -eo pipefail`, with real git against a local bare repository standing
-in for GitHub, and a `python` stub that records what store the report would
-have read.
+These run the step's own `run:` block under `bash -eo pipefail`, with real git
+and the real pull script against a local bare repository standing in for the
+private store (the rig in `test_closing_prices_never_reach_the_public_repo.py`).
 """
 
 from __future__ import annotations
 
 import os
 import shutil
-import stat
-import subprocess
-from pathlib import Path
 
 import pytest
-import yaml
 
+import test_closing_prices_never_reach_the_public_repo as guard
 from nhl_betting_lab.closing_lines import CAPTURES_FILENAME
-from nhl_betting_lab.config import PROJECT_ROOT
+from test_closing_prices_never_reach_the_public_repo import (
+    _capture_row,
+    _day_file,
+    _seed_private,
+    run_clv_step,
+)
 
+#: The guard module's rig, made a fixture of this module too. Assigned rather
+#: than imported by name, which pyflakes would read as an unused import.
+clv_rig = guard.clv_rig
 
-WORKFLOW = PROJECT_ROOT / ".github" / "workflows" / "gameday-refresh.yml"
-STEP = "Report closing-line value"
-REPO = "o/r"
-REMOTE = f"https://x-access-token:x@github.com/{REPO}"
-
-STALE = "captured_at\nyesterday's store, restored from gameday-state\n"
-TODAY = "captured_at\ntoday's store, on the closing-lines branch\n"
-NOT_READ = "<no store on disk>"
-
-
-def _block() -> str:
-    jobs = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))["jobs"]
-    (step,) = [
-        step for job in jobs.values() for step in job.get("steps", [])
-        if step.get("name") == STEP
-    ]
-    block = step["run"].replace("${{ github.repository }}", REPO)
-    assert "${{" not in block, "the step reads an expression this test does not supply"
-    return block
-
-
-def _git(args: list[str], cwd: Path, env: dict, **kw) -> subprocess.CompletedProcess:
-    return subprocess.run(["git", *args], cwd=cwd, env=env, check=True,
-                          capture_output=True, **kw)
+NOT_READ = "<no store>\n"
 
 
 @pytest.fixture
-def rig(tmp_path: Path) -> dict:
-    if not (shutil.which("git") and shutil.which("bash")):
-        pytest.fail("this test needs git and bash, which every runner here has")
-    bare, bin_dir, home, work = (
-        tmp_path / d for d in ("remote.git", "bin", "home", "work")
-    )
-    for d in (bin_dir, home, work / "data" / "processed"):
-        d.mkdir(parents=True)
-    # The report itself is the stub: it records the store it would read.
-    python = bin_dir / "python"
-    python.write_text(
-        "#!/bin/sh\n"
-        f'if [ -f data/processed/{CAPTURES_FILENAME} ]; then\n'
-        f'  cat data/processed/{CAPTURES_FILENAME} > report_read.txt\n'
-        f'else echo "{NOT_READ}" > report_read.txt; fi\n'
-    )
-    python.chmod(python.stat().st_mode | stat.S_IEXEC)
-    env = {
-        **os.environ,
-        "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
-        "HOME": str(home),
-        "GIT_CONFIG_GLOBAL": os.devnull,
-        "GIT_CONFIG_NOSYSTEM": "1",
-        "GIT_CONFIG_COUNT": "1",
-        "GIT_CONFIG_KEY_0": f"url.file://{bare}.insteadOf",
-        "GIT_CONFIG_VALUE_0": REMOTE,
-        "GH_TOKEN": "x",
-        "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com",
-        "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.com",
-    }
-    _git(["init", "-q", "--bare", str(bare)], tmp_path, env)
-    _git(["init", "-q"], work, env)
-    # What the restore of gameday-state left: the previous run's store.
-    (work / "data" / "processed" / CAPTURES_FILENAME).write_text(STALE, encoding="utf-8")
-    (work / "run_degraded.txt").write_text("", encoding="utf-8")
-    return {"root": tmp_path, "bare": bare, "bin": bin_dir, "work": work, "env": env}
+def rig(clv_rig):
+    """With an earlier run's store restored into data/processed."""
+    stale = clv_rig["work"] / "data" / "processed" / CAPTURES_FILENAME
+    stale.write_text(_day_file([_capture_row(book="Yesterday")]), encoding="utf-8")
+    clv_rig["stale"] = stale
+    return clv_rig
 
 
-def _publish_branch(rig: dict, files: dict[str, str]) -> None:
-    """A closing-lines branch holding `files`, pushed the way Closing Lines
-    pushes it: a plumbing commit on a tree of its own."""
-    seed = rig["root"] / "seed"
-    seed.mkdir()
-    env = rig["env"]
-    _git(["init", "-q"], seed, env)
-    lines = []
-    for name, body in files.items():
-        blob = _git(["hash-object", "-w", "--stdin"], seed, env,
-                    input=body.encode()).stdout.decode().strip()
-        lines.append(f"100644 blob {blob}\t{name}\n")
-    tree = _git(["mktree"], seed, env, input="".join(lines).encode()).stdout.decode().strip()
-    commit = _git(["commit-tree", tree, "-m", "captures"], seed, env).stdout.decode().strip()
-    _git(["push", "-q", str(rig["bare"]), f"{commit}:refs/heads/closing-lines"], seed, env)
+def test_no_token_is_a_clean_run_that_reads_no_store(rig) -> None:
+    del rig["env"]["NHL_CLOSING_LINES_TOKEN"]
+
+    done, read, degraded = run_clv_step(rig)
+
+    assert done.returncode == 0, done.stderr
+    assert read == NOT_READ
+    assert degraded == ""
+    assert "No private capture store is configured" in done.stdout
+    assert not rig["stale"].exists()
 
 
-def _unreachable(rig: dict) -> None:
-    """GitHub cannot be reached: every remote operation fails."""
+def test_a_store_with_no_captures_yet_is_a_clean_run(rig) -> None:
+    _seed_private(rig["bare"], rig["root"], rig["env"], {"captures/.gitkeep": ""})
+
+    done, read, degraded = run_clv_step(rig)
+
+    assert done.returncode == 0, done.stderr
+    assert read == NOT_READ
+    assert degraded == ""
+    assert "holds nothing yet" in done.stdout
+
+
+def test_the_store_is_read_in_place_of_the_restored_one(rig) -> None:
+    _seed_private(rig["bare"], rig["root"], rig["env"],
+                  {"captures/2026-10-08.csv": _day_file([_capture_row(book="Today")])})
+
+    done, read, degraded = run_clv_step(rig)
+
+    assert done.returncode == 0, done.stderr
+    assert "Today" in read and "Yesterday" not in read
+    assert degraded == ""
+
+
+def test_an_unreachable_store_degrades_the_run_and_scores_no_store(rig) -> None:
+    """The finding: a read that fails is not "no store yet". The report must
+    not score the restored store, and the run says what went wrong."""
     shutil.rmtree(rig["bare"])
 
+    done, read, degraded = run_clv_step(rig)
 
-def _fetch_fails(rig: dict) -> None:
-    """The branch is listed, and then the fetch of it fails."""
+    assert done.returncode == 0, done.stderr
+    assert read == NOT_READ, "the report scored a store this run did not fetch"
+    assert "private closing-line store could not be reached" in degraded
+    assert len(degraded.splitlines()) == 1, degraded
+    assert not rig["stale"].exists()
+
+
+def _damaged(rig) -> None:
+    good = _day_file([_capture_row(book="Today")])
+    _seed_private(rig["bare"], rig["root"], rig["env"],
+                  {"captures/2026-10-08.csv": good + 'x,"unterminated\n'})
+
+
+def _token_turned_away(rig) -> None:
+    """GitHub answers, and refuses the token."""
+    _seed_private(rig["bare"], rig["root"], rig["env"],
+                  {"captures/2026-10-08.csv": _day_file([_capture_row(book="Today")])})
     real = shutil.which("git", path=os.environ["PATH"])
-    wrapper = rig["bin"] / "git"
+    wrapper = rig["root"] / "bin" / "git"
     wrapper.write_text(
         "#!/bin/sh\n"
-        'if [ "$1" = fetch ]; then echo "fatal: the remote hung up" >&2; exit 128; fi\n'
+        'case "$1" in ls-remote|fetch) echo "remote: Repository not found." >&2;'
+        ' echo "fatal: Authentication failed" >&2; exit 128;; esac\n'
         f'exec "{real}" "$@"\n'
     )
-    wrapper.chmod(wrapper.stat().st_mode | stat.S_IEXEC)
-
-
-def _step(rig: dict) -> tuple[subprocess.CompletedProcess, str, str]:
-    work = rig["work"]
-    done = subprocess.run(
-        ["bash", "--noprofile", "--norc", "-eo", "pipefail", "-c", _block()],
-        cwd=work, env=rig["env"], capture_output=True, text=True,
-    )
-    read = (work / "report_read.txt").read_text(encoding="utf-8") \
-        if (work / "report_read.txt").is_file() else "<the report never ran>"
-    degraded = (work / "run_degraded.txt").read_text(encoding="utf-8")
-    return done, read, degraded
-
-
-def test_no_branch_is_a_clean_run_that_reads_no_store(rig) -> None:
-    """Closing Lines is disabled, so the branch is absent: the expected
-    state. The report reads nothing, not the restored store, and the run
-    is not degraded."""
-    done, read, degraded = _step(rig)
-
-    assert done.returncode == 0, done.stderr
-    assert read == f"{NOT_READ}\n"
-    assert degraded == ""
-    assert "No capture store yet" in done.stdout
-
-
-def test_the_branch_is_read_in_place_of_the_restored_store(rig) -> None:
-    _publish_branch(rig, {CAPTURES_FILENAME: TODAY})
-
-    done, read, degraded = _step(rig)
-
-    assert done.returncode == 0, done.stderr
-    assert read == TODAY
-    assert degraded == ""
+    wrapper.chmod(0o755)
 
 
 @pytest.mark.parametrize(
     "fault",
-    [
-        pytest.param(_unreachable, id="github-unreachable"),
-        pytest.param(_fetch_fails, id="branch-listed-then-fetch-fails"),
-        pytest.param(lambda rig: _publish_branch(rig, {"other.csv": "x\n"}),
-                     id="branch-without-a-store"),
-    ],
+    [pytest.param(_damaged, id="store-damaged"),
+     pytest.param(_token_turned_away, id="token-turned-away")],
 )
-def test_a_failed_fetch_is_a_degraded_run_that_reads_no_store(rig, fault) -> None:
-    """The finding: a fetch that fails is not "no store yet". The report
-    must not score yesterday's store, and the run says what went wrong."""
-    if fault is _fetch_fails:
-        _publish_branch(rig, {CAPTURES_FILENAME: TODAY})
+def test_a_fault_a_backup_would_repeat_fails_red_without_degrading(rig, fault) -> None:
+    """A degraded run sends for the backup, which buys prices again and would
+    meet the same damaged file or the same rejected token. So the step exits
+    2, which "Report the outcome" fails the run on, and degrades nothing."""
     fault(rig)
 
-    done, read, degraded = _step(rig)
+    done, read, degraded = run_clv_step(rig)
 
-    assert done.returncode == 0, done.stderr
-    assert read == f"{NOT_READ}\n", "the report scored a store this run did not fetch"
-    assert "closing-lines" in degraded and len(degraded.splitlines()) == 1, degraded
-    assert "No capture store yet" not in done.stdout
+    assert done.returncode == 2, done.stdout + done.stderr
+    assert read == NOT_READ, "the report scored a store this run did not fetch"
+    assert degraded == ""
+    assert "::error::The private closing-line store" in done.stdout
+    assert not rig["stale"].exists()

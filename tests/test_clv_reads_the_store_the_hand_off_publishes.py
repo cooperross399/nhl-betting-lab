@@ -1,52 +1,37 @@
 """A test promised that CLV reads the handed-over store, and it never read it.
 
 In tests/test_the_closing_prices_reach_the_clv_store.py,
-`test_the_store_format_is_the_one_clv_reads` says "The hand-off carries what
+`test_the_store_format_is_the_one_clv_reads` said "The hand-off carries what
 `best_prices` writes, which `load_captures` reads." It never called
-`load_captures`. It checked that `best_prices` returns the columns in
-`CAPTURE_COLUMNS`, and `best_prices` projects onto exactly that constant. It
-also ran a regex on the file name. The failure-shape audit found this (finding
-87, confirmed by two of three refuters). One refuter drove the real chain and
-broke it four ways:
+`load_captures`. The failure-shape audit found this (finding 87): `load_captures`
+raising, ignoring the store, `CAPTURE_COLUMNS` losing `captured_at`, and
+`best_prices` writing decimal odds each took CLV from 1 of 1 matched to 0 of 1,
+and that test passed under all four. A later round found the same hole one
+writer further on: a merge that renamed `captured_at` matched 0 of 1 and the
+whole suite stayed green, because the hand-off tests counted lines.
 
-* `load_captures` raised whenever it was called;
-* `load_captures` ignored the handed-over store;
-* `CAPTURE_COLUMNS` lost `captured_at`;
-* `best_prices` wrote decimal odds into `american_odds`.
+So these tests run the chain the way production does. Since 2026-10-01 the
+store is the private repository cooperross399/nhl-closing-lines, and the
+chain is:
 
-Each one took CLV from 1 of 1 opinions matched to 0 of 1, or a crash. That
-test passed under all four.
-
-Re-derived on d418e57. Since the audit, #156 added tests that run the real
-producer (`best_prices`, then `append_captures`) into the real reader
-(`run_closing_line_value.main`, which calls `load_captures` and
-`closing_prices`). Those tests kill nine producer and reader mutants,
-including the four above. But they skip the writer of the file CLV actually
-reads. On every hand-off after the first, Gameday Refresh restores a file
-written by `scripts/merge_capture_store.py`, which Closing Lines' "Publish the
-store" step runs. `append_captures` did not write that file. A merge that
-wrote `captured_at` under another name made the real chain match 0 of 1
-opinions, and the whole suite still passed, 2197 of 2197. The executed hand-off
-tests count the lines of the branch file, and a renamed column keeps every
-line.
-
-So these tests run the chain the way production does:
-
-1. Line Movement's own writes (`capture_line_movement.py:110-111` and
-   `:132-133`), on rows from the real `normalize_event`. Each run hands over
-   only its own rows.
-2. The hand-off and publish `run:` blocks from closing-lines.yml, run as
-   written under the shell GitHub uses. `gh` is a stub, and the branch is a
-   local bare repository.
-3. The branch file restored the way Gameday Refresh restores it: `git show`
-   of the tip's blob.
-4. The real `run_closing_line_value.main`, scoring opinions frozen by the real
-   `write_snapshot`.
+1. Line Movement's own writes (`capture_line_movement.write_round`), on rows
+   from the real `normalize_event`, into the day file its `line-movement`
+   artifact carries. Each run restores the day so far and appends its round.
+2. Closing Lines' hand-off `run:` block as written, under the shell GitHub
+   uses, with `gh` a stub that unpacks that artifact.
+3. Closing Lines' publish: `scripts/private_closing_store.py push` with the
+   workflow's exact arguments, against a local bare repository reached
+   through the real URL the script builds. Only the GitHub API's privacy
+   answer is replaced.
+4. Gameday Refresh's read: `private_closing_store.py pull` into a temp
+   directory, then the real `run_closing_line_value.main` pointed at it,
+   scoring opinions frozen by the real `write_snapshot`.
 """
 
 from __future__ import annotations
 
 import os
+import shlex
 import shutil
 import subprocess
 import sys
@@ -66,21 +51,21 @@ from nhl_betting_lab.reports.card_pricing import selection_key
 
 from test_scripts import load_script
 
+sys.path.insert(0, str(PROJECT_ROOT / "scripts"))
+import private_closing_store as store  # noqa: E402
 
 CLOSING_LINES = PROJECT_ROOT / ".github" / "workflows" / "closing-lines.yml"
-HANDOFF = "Take the closing prices Line Movement handed over"
-PUBLISH = "Publish the store"
+HANDOFF = "Take the captures Line Movement kept"
+PUBLISH = "Publish to the private store"
 REPO = "owner/lab"
 TOKEN = "rehearsal-token"
-BRANCH_FILE = f"refs/heads/closing-lines:{cl.CAPTURES_FILENAME}"
 
 DAY = "2026-10-15"
 START = f"{DAY}T23:00:00Z"  # 19:00 ET
 CARD_AT = datetime(2026, 10, 15, 13, 30, tzinfo=timezone.utc)  # 09:30 ET
 PLAYER = "Auston Matthews"
 
-# Shots on goal 2.5, (over, under) by book. The opinion is a prop because Line
-# Movement asks for the per-event markets only: a moneyline never closes here.
+# Shots on goal 2.5, (over, under) by book.
 CARD_BOARD = {"DraftKings": (-110, -110), "FanDuel": (-115, -105)}
 # One Line Movement run per round. The last is the face-off snapshot, which is
 # a live price and never the close.
@@ -114,19 +99,6 @@ def _event(board: dict[str, tuple[int, int]]) -> dict:
     }
 
 
-def _line_movement_run(runner: Path, captured_at: str, board) -> Path:
-    """What one Line Movement run writes to the file it hands over.
-
-    `capture_line_movement.py:110-111` and `:132-133` on the real functions.
-    The script itself needs --live, which no test may pass. The runner starts
-    with no dedicated store: the artifact is "this run's rows only".
-    """
-    frame = pd.DataFrame(odds_api.normalize_event(_event(board), fetched_at=captured_at))
-    frame["captured_at"] = captured_at
-    cl.append_captures(cl.best_prices(frame, captured_at=captured_at), processed_dir=runner)
-    return cl.captures_path(runner)
-
-
 def _block(name: str) -> str:
     (job,) = yaml.safe_load(CLOSING_LINES.read_text(encoding="utf-8"))["jobs"].values()
     (step,) = [step for step in job["steps"] if step.get("name") == name]
@@ -136,73 +108,86 @@ def _block(name: str) -> str:
 
 
 @pytest.fixture
-def rig(tmp_path):
+def rig(tmp_path, monkeypatch):
     if not (shutil.which("git") and shutil.which("bash")):
         pytest.fail("this test needs git and bash, which every runner here has")
-    home, bare, stub = (tmp_path / d for d in ("home", "remote.git", "bin"))
-    home.mkdir()
-    stub.mkdir()
-    env = {
-        **os.environ,
+    home, bare, stub, seed = (tmp_path / d for d in ("home", "private.git", "bin", "seed"))
+    for d in (home, stub, seed):
+        d.mkdir()
+    redirect = {
         "HOME": str(home),
+        "GIT_CONFIG_GLOBAL": os.devnull,
         "GIT_CONFIG_NOSYSTEM": "1",
-        "GH_TOKEN": TOKEN,
-        "PATH": f"{stub}{os.pathsep}{os.environ['PATH']}",
+        "GIT_CONFIG_COUNT": "1",
+        "GIT_CONFIG_KEY_0": f"url.file://{bare}.insteadOf",
+        "GIT_CONFIG_VALUE_0": store.remote_url(store.PRIVATE_REPO, TOKEN),
+        "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com",
+        "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.com",
     }
-    for command in (
-        ["git", "init", "-q", "--bare", str(bare)],
-        ["git", "config", "--global", f"url.file://{bare}.insteadOf",
-         f"https://x-access-token:{TOKEN}@github.com/{REPO}"],
-    ):
-        subprocess.run(command, cwd=tmp_path, env=env, check=True)
-    (stub / "python").write_text(f'#!/bin/bash\nexec "{sys.executable}" "$@"\n')
-    # The artifact holds the one file Line Movement uploaded; `gh run
-    # download` puts it in --dir under its own name.
+    for key, value in redirect.items():
+        monkeypatch.setenv(key, value)
+    monkeypatch.setenv(store.TOKEN_ENV, TOKEN)
+    monkeypatch.delenv("GITHUB_REPOSITORY", raising=False)
+    monkeypatch.delenv("GITHUB_WORKSPACE", raising=False)
+    monkeypatch.setattr(store, "repo_is_private", lambda repo, token: repo == store.PRIVATE_REPO)
+    monkeypatch.setattr(store, "utc_now", lambda: datetime(2026, 10, 16, 2, tzinfo=timezone.utc))
+    env = {**os.environ, "GH_TOKEN": "x", "PATH": f"{stub}{os.pathsep}{os.environ['PATH']}"}
+    # The private repository as it was seeded: a README and an empty folder.
+    subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(bare)], check=True, env=env)
+    subprocess.run(["git", "init", "-q", "-b", "main"], cwd=seed, check=True, env=env)
+    (seed / "README.md").write_text("private\n", encoding="utf-8")
+    subprocess.run(["git", "add", "-A"], cwd=seed, check=True, env=env)
+    subprocess.run(["git", "commit", "-q", "-m", "seed"], cwd=seed, check=True, env=env)
+    subprocess.run(["git", "push", "-q", str(bare), "HEAD:refs/heads/main"], cwd=seed, check=True, env=env)
+    # `gh run download --name line-movement --dir D` unpacks the artifact
+    # into D, rooted where line-movement.yml roots it.
     (stub / "gh").write_text(
         "#!/bin/bash\n"
         'if [ "$1" = api ]; then echo 1; exit 0; fi\n'
         'if [ "$1" = run ] && [ "$2" = download ]; then\n'
         '  while [ $# -gt 0 ]; do [ "$1" = --dir ] && dir="$2"; shift; done\n'
-        f'  mkdir -p "$dir" && cp "$HANDED_FILE" "$dir/{cl.CAPTURES_FILENAME}"; exit $?\n'
+        '  mkdir -p "$dir" && cp -R "$KEPT_DIR/." "$dir/"; exit $?\n'
         "fi\nexit 2\n"
     )
-    for tool in ("python", "gh"):
-        (stub / tool).chmod(0o755)
+    (stub / "gh").chmod(0o755)
     return {"root": tmp_path, "bare": bare, "env": env}
 
 
-def _closing_lines_run(rig, handed: Path, run_id: int) -> None:
+def _closing_lines_run(rig, kept: Path, run_id: int, monkeypatch) -> None:
     """One Closing Lines run on a fresh checkout: hand-off, then publish."""
     work = rig["root"] / f"closing-lines-{run_id}"
     work.mkdir()
-    shutil.copytree(PROJECT_ROOT / "scripts", work / "scripts")
-    (work / "src").symlink_to(PROJECT_ROOT / "src")
     output = rig["root"] / f"github-output-{run_id}.txt"
     env = {**rig["env"], "RUN_ID": str(run_id), "GITHUB_OUTPUT": str(output),
-           "HANDED_FILE": str(handed)}
-    subprocess.run(["git", "init", "-q"], cwd=work, env=env, check=True)
-    for name in (HANDOFF, PUBLISH):
-        done = subprocess.run(
-            ["bash", "--noprofile", "--norc", "-eo", "pipefail", "-c", _block(name)],
-            cwd=work, env=env, capture_output=True, text=True,
-        )
-        assert done.returncode == 0, f"{name}: {done.stdout}{done.stderr}"
-        # Publish runs only when the hand-off carried rows (its `if:`).
-        assert "empty=true" not in (output.read_text() if output.is_file() else "")
+           "KEPT_DIR": str(kept)}
+    done = subprocess.run(
+        ["bash", "--noprofile", "--norc", "-eo", "pipefail", "-c", _block(HANDOFF)],
+        cwd=work, env=env, capture_output=True, text=True,
+    )
+    assert done.returncode == 0, f"{HANDOFF}: {done.stdout}{done.stderr}"
+    # Publish runs only when the hand-off carried rows (its `if:`).
+    assert "empty=true" not in (output.read_text() if output.is_file() else "")
+    argv = shlex.split(_block(PUBLISH))
+    assert argv[:2] == ["python", "scripts/private_closing_store.py"]
+    monkeypatch.chdir(work)
+    assert store.main(argv[2:]) == store.EXIT_OK
 
 
-def _publish(rig, runs=RUNS) -> Path:
-    """Each run handed over and published, then restored as Gameday Refresh does."""
+def _publish(rig, monkeypatch, runs=RUNS) -> tuple[Path, Path]:
+    """Each Line Movement round kept and published, then pulled as Gameday
+    Refresh pulls it. The pulled store's folder, and Line Movement's runner."""
+    capture = load_script("capture_line_movement.py")
+    line_movement = rig["root"] / "line-movement" / "data" / "processed"
     for run_id, (captured_at, board) in enumerate(runs, start=1):
-        handed = _line_movement_run(rig["root"] / f"line-movement-{run_id}",
-                                    captured_at, board)
-        _closing_lines_run(rig, handed, run_id)
-    processed = rig["root"] / "gameday" / "data" / "processed"
-    processed.mkdir(parents=True)
-    shown = subprocess.run(["git", "--git-dir", str(rig["bare"]), "show", BRANCH_FILE],
-                           capture_output=True, check=True)
-    cl.captures_path(processed).write_bytes(shown.stdout)
-    return processed
+        rows = odds_api.normalize_event(_event(board), fetched_at=captured_at)
+        capture.write_round(rows, captured_at=captured_at, day=DAY, processed=line_movement)
+        # The artifact this run keeps: its line_movement folder, as uploaded.
+        kept = rig["root"] / f"kept-{run_id}"
+        shutil.copytree(line_movement / cl.MOVEMENT_DIRNAME, kept / cl.MOVEMENT_DIRNAME)
+        _closing_lines_run(rig, kept, run_id, monkeypatch)
+    pulled = rig["root"] / "runner_temp" / "private-closing-store"
+    assert store.main(["pull", "--out", str(pulled / cl.CAPTURES_FILENAME)]) == store.EXIT_OK
+    return pulled, line_movement
 
 
 def _freeze(archive: Path) -> None:
@@ -219,18 +204,21 @@ def _freeze(archive: Path) -> None:
     ) is not None
 
 
-def _clv(processed: Path, tmp_path: Path) -> tuple[str, dict]:
-    """Gameday Refresh's CLV step on the restored store, and the closes it used."""
+def _clv(pulled: Path, tmp_path: Path) -> tuple[str, dict]:
+    """Gameday Refresh's CLV step on the pulled store, and the closes it used."""
     archive = tmp_path / "archive"
+    processed = tmp_path / "gameday" / "data" / "processed"
+    processed.mkdir(parents=True)
     _freeze(archive)
     runner = load_script("run_closing_line_value.py")
     code = runner.main(["--processed-dir", str(processed), "--archive-dir", str(archive),
+                        "--captures-dir", str(pulled),
                         "--output-dir", str(tmp_path / "outputs"),
                         # After every game here: unplayed games are left out.
                         "--now", "2027-06-01T00:00:00+00:00"])
     assert code == 0
     page = (tmp_path / "outputs" / cl.REPORT_FILENAME).read_text(encoding="utf-8")
-    rows, _ = cl.clv_rows(runner._opinions(processed, archive), cl.load_captures(processed))
+    rows, _ = cl.clv_rows(runner._opinions(processed, archive), cl.load_captures(pulled))
     closes = {
         row.selection: (row.closing_odds, row.closing_book, row.closed_at)
         for row in rows.itertuples()
@@ -238,46 +226,73 @@ def _clv(processed: Path, tmp_path: Path) -> tuple[str, dict]:
     return page, closes
 
 
-def test_clv_closes_every_opinion_from_the_store_the_hand_offs_published(
-    rig, tmp_path
-) -> None:
-    """Three runs: the first establishes the branch and the next two merge
-    into it. The close is the 21:00 run's best price. It is not the 14:00
-    run, and not the face-off run's longer price."""
-    processed = _publish(rig)
+def test_clv_closes_every_opinion_from_the_private_store(rig, tmp_path, monkeypatch) -> None:
+    """Three runs: the first establishes the store's day file and the next two
+    merge into it. The close is the 21:00 run's best price. It is not the
+    14:00 run, and not the face-off run's longer price."""
+    pulled, _ = _publish(rig, monkeypatch)
 
-    page, closes = _clv(processed, tmp_path)
+    page, closes = _clv(pulled, tmp_path)
 
     assert "matched to a closing price: **2**; no closing price found: **0**" in page
     assert closes == CLOSES
 
 
-def test_the_first_hand_off_alone_is_a_store_clv_reads(rig, tmp_path) -> None:
-    """With no branch yet, the published file is the artifact as handed over,
-    not merged. That is what `best_prices` and `append_captures` wrote, and
-    what the audited test promised `load_captures` reads."""
-    processed = _publish(rig, runs=RUNS[1:2])
+def test_the_first_run_alone_is_a_store_clv_reads(rig, tmp_path, monkeypatch) -> None:
+    pulled, _ = _publish(rig, monkeypatch, runs=RUNS[1:2])
 
-    page, closes = _clv(processed, tmp_path)
+    page, closes = _clv(pulled, tmp_path)
 
     assert "matched to a closing price: **2**" in page
     assert closes == CLOSES
 
 
-def test_the_published_store_is_every_row_line_movement_handed_over(rig) -> None:
-    """Full-record equality: the store CLV loads holds the producer's rows,
-    under the producer's columns, with the producer's values. It is not a
-    count of lines."""
-    processed = _publish(rig)
-    handed = pd.concat(
-        [pd.read_csv(cl.captures_path(rig["root"] / f"line-movement-{run_id}"))
-         for run_id in range(1, len(RUNS) + 1)],
-        ignore_index=True,
-    )
+def test_the_private_store_is_exactly_what_line_movement_wrote_for_closing(
+    rig, monkeypatch
+) -> None:
+    """Full-record equality with the dedicated store Line Movement writes on
+    its own runner from the same fetch (`write_round`), which is never
+    published: the store CLV loads holds the producer's rows, under the
+    producer's columns, with the producer's values. It is not a count of
+    lines."""
+    pulled, line_movement = _publish(rig, monkeypatch)
+    written = pd.read_csv(cl.captures_path(line_movement))
 
     def ordered(frame: pd.DataFrame) -> pd.DataFrame:
         return frame.sort_values(["captured_at", "selection"]).reset_index(drop=True)
 
-    loaded = cl.load_captures(processed)
+    loaded = cl.load_captures(pulled)
     assert len(loaded) == 2 * len(RUNS), "one best-price row per side per run"
-    pd.testing.assert_frame_equal(ordered(loaded), ordered(handed))
+    pd.testing.assert_frame_equal(ordered(loaded), ordered(written))
+
+
+def test_the_report_scores_the_union_when_the_store_lags_the_chain(rig, tmp_path, monkeypatch) -> None:
+    """The store received only the 14:00 round; the chain carries all three.
+    Pointed at both, as Gameday Refresh points it, the report closes every
+    opinion at the 21:00 round. Pointed at the store alone, it cannot."""
+    pulled, line_movement = _publish(rig, monkeypatch, runs=RUNS[:1])
+    capture = load_script("capture_line_movement.py")
+    for captured_at, board in RUNS[1:]:
+        rows = odds_api.normalize_event(_event(board), fetched_at=captured_at)
+        capture.write_round(rows, captured_at=captured_at, day=DAY, processed=line_movement)
+    archive = tmp_path / "archive"
+    _freeze(archive)
+    runner = load_script("run_closing_line_value.py")
+    processed = tmp_path / "gameday" / "data" / "processed"
+    processed.mkdir(parents=True)
+
+    def closes(*dirs: Path) -> dict:
+        frames = [cl.load_captures(d) for d in dirs]
+        rows, _ = cl.clv_rows(runner._opinions(processed, archive), runner.union_of_captures(frames))
+        return {r.selection: (r.closing_odds, r.closing_book, r.closed_at) for r in rows.itertuples()}
+
+    assert closes(pulled, line_movement) == CLOSES
+    assert closes(pulled) != CLOSES
+
+    out = tmp_path / "outputs"
+    code = runner.main(["--processed-dir", str(processed), "--archive-dir", str(archive),
+                        "--captures-dir", str(pulled), "--captures-dir", str(line_movement),
+                        "--output-dir", str(out), "--now", "2027-06-01T00:00:00+00:00"])
+    assert code == 0
+    page = (out / cl.REPORT_FILENAME).read_text(encoding="utf-8")
+    assert "matched to a closing price: **2**; no closing price found: **0**" in page

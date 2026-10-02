@@ -71,7 +71,7 @@ SCRIPT = {
     REBUILD: "run_allowlist_evidence.py",
 }
 
-NO_STORE = "No capture store yet"
+NO_STORE = "No private capture store is configured"
 
 
 @pytest.fixture(autouse=True)
@@ -114,9 +114,10 @@ def _id(name: str) -> str:
 
 def _stubs(tmp_path: Path, exits: dict[str, int]) -> dict:
     """A `python` that exits as `exits` says for the script it is given (0
-    otherwise), and a `git` that reaches no network: `ls-remote` finds no
-    closing-lines branch and a fetch fails, which is what a repository with
-    no capture store yet answers."""
+    otherwise), and a `git` that reaches no network. The private store's
+    pull exits 3 unless told otherwise: no NHL_CLOSING_LINES_TOKEN, which is
+    what a repository with no private store configured answers."""
+    exits = {"private_closing_store.py": 3, **exits}
     bin_dir = tmp_path / "stubs"  # not "bin": card-feed puts its `date` there
     bin_dir.mkdir(exist_ok=True)
     cases = "".join(
@@ -145,6 +146,7 @@ def _stubs(tmp_path: Path, exits: dict[str, int]) -> dict:
         "PATH": f"{bin_dir}{os.pathsep}{os.environ.get('PATH', '')}",
         "GH_TOKEN": "x",
         "PYTHONPATH": "src",
+        "RUNNER_TEMP": str(tmp_path / "runner_temp"),
     }
 
 
@@ -170,8 +172,8 @@ def _outcome(result: subprocess.CompletedProcess) -> str:
 
 
 def _report(work: Path, degraded: str, outcomes: dict[str, str], *,
-            empty_slate: str = "false", cardfeed: str = "success"
-            ) -> subprocess.CompletedProcess:
+            empty_slate: str = "false", cardfeed: str = "success",
+            store_fault: str = "") -> subprocess.CompletedProcess:
     values = {
         "steps.final.outputs.degraded": degraded,
         "steps.prices.outputs.empty_slate": empty_slate,
@@ -185,6 +187,7 @@ def _report(work: Path, degraded: str, outcomes: dict[str, str], *,
     }
     for name in WATCHED:
         values[f"steps.{_id(name)}.outcome"] = outcomes.get(name, "success")
+    values["steps.clv.outputs.store_fault"] = store_fault
     return _bash(_render(_step(REPORT)["run"], values), work, dict(os.environ))
 
 
@@ -333,9 +336,9 @@ def test_a_clean_run_stays_clean(tmp_path: Path) -> None:
 
 
 def test_no_capture_store_yet_is_not_a_fault(tmp_path: Path) -> None:
-    """Closing Lines is disabled by the owner, so there is no capture store
-    on the branch it would publish, and the report exits 0 saying so. That
-    is the expected state: not degraded, and not red."""
+    """No private store is configured until Cooper adds its secret, and the
+    report exits 0 saying so. That is an expected state: not degraded, and
+    not red."""
     work, outcomes, logs = _the_run(tmp_path, {})
 
     assert NO_STORE in logs[CLV], logs[CLV]
@@ -390,3 +393,22 @@ def test_no_failure_a_backup_would_repeat_sends_for_it(
         "the backup ran on a failure it would only repeat, buying the "
         "prices again for nothing"
     )
+
+
+def test_a_rejected_store_token_is_reported_as_one(tmp_path: Path) -> None:
+    """The CLV step fails red when the private store turns the token away.
+    "Report the outcome" must say to replace the secret, not send the reader
+    looking for a damaged file that does not exist."""
+    work = _workspace(tmp_path)
+    report = _report(work, "false", {CLV: "failure"}, store_fault="rejected-token")
+    assert report.returncode != 0
+    (line,) = [e for e in _errors(report) if "closing-line value" in e]
+    assert "NHL_CLOSING_LINES_TOKEN" in line and "Replace the secret" in line
+    assert "damaged" not in line
+
+
+def test_any_other_clv_failure_names_every_cause(tmp_path: Path) -> None:
+    work = _workspace(tmp_path)
+    report = _report(work, "false", {CLV: "failure"}, store_fault="damaged-store")
+    (line,) = [e for e in _errors(report) if "closing-line value" in e]
+    assert "damaged snapshot, movement day or capture store" in line

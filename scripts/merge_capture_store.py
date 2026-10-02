@@ -4,10 +4,12 @@
     PYTHONPATH=src .venv/bin/python scripts/merge_capture_store.py \
         --mine mine.csv --theirs theirs.csv --out store.csv
 
-Used by the Closing Lines workflow when a push is rejected because another
-capture landed first. The retry has to merge rather than re-offer what it
-hashed before it fetched — otherwise the retry silently discards the capture
-it collided with, which is the one thing a retry exists to prevent.
+`merge` is what `scripts/private_closing_store.py push` runs on every day file
+of the private store (cooperross399/nhl-closing-lines), on every attempt: a
+push rejected because another capture landed first refetches and merges
+again rather than re-offer what it merged before, which would silently
+discard the capture it collided with. Until 2026-10-01 the same merge served
+the `closing-lines` branch of this public repository, which never went live.
 
 Lives here rather than inside the workflow because a merge that can drop a
 row deserves a test, and shell embedded in YAML cannot have one.
@@ -56,7 +58,7 @@ def _refuse_a_short_read(frame: pd.DataFrame, rows_on_disk: int | None, which: s
             f"and parses to only {len(frame)} of its {rows_on_disk}, without "
             "an error (a stray quote folds rows into one field). Writing now "
             "would publish the rows that parsed in place of the ones it holds. "
-            "Restore it from the closing-lines branch, then re-run."
+            "Restore it from the store's own history (the private repository, or a branch that carried it), then re-run."
         )
 
 

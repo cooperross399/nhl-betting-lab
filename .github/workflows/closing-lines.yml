@@ -16,8 +16,26 @@ name: Closing Lines
 # honest signal that a model is finding something — or that a winning month
 # is variance.
 #
-# It writes to its own branch, never to card-feed, so it can never race the
-# daily card publish.
+# WHERE IT WRITES: the PRIVATE repository cooperross399/nhl-closing-lines, and
+# nowhere else. This repository is public, and a store here (a branch, a
+# release, a Pages site or an artifact) would be a permanent, downloadable
+# file of captured odds, which The Odds API's terms forbid.
+# `scripts/private_closing_store.py` refuses this repository as a target by
+# name and asks the GitHub API that the store is private before every push.
+# This workflow holds no write grant on this repository at all.
+# `tests/test_closing_prices_never_reach_the_public_repo.py` holds all of it.
+#
+# WHAT THAT DOES NOT COVER: the rows it pushes are derived from Line
+# Movement's `line-movement` artifact, which is public (90-day retention) and
+# carries every price this workflow stores, and more. Moving that chain is an
+# open decision recorded in CLAUDE.md.
+#
+# DISABLED since 2026-09-25 (#126), and it stays disabled until the secret
+# below exists and a push has landed in the private repository.
+#
+# THE SECRET: `NHL_CLOSING_LINES_TOKEN`, a fine-grained token limited to
+# cooperross399/nhl-closing-lines with Contents read and write. Without it
+# the publish step fails red and publishes nothing anywhere.
 
 on:
   # SCHEDULE RETIRED 2026-08-29. Line Movement Capture now performs one
@@ -32,12 +50,16 @@ on:
   # forced by hand, and the history of why the old grid looked the way
   # it did is in git rather than in a comment above a dead trigger.
   #
-  # AND THE HAND-OFF, SINCE 2026-09-24. Retiring the schedule retired this
-  # branch's only writer: Line Movement wrote the closing prices on its
-  # runner and nothing published them, so every in-season CLV report would
-  # have read an empty store. Now each Line Movement run hands its closing
-  # prices over as an artifact, and this workflow publishes them. That path
-  # fetches nothing, reads no secret and spends no credit.
+  # AND THE HAND-OFF. Retiring the schedule retired this store's only
+  # writer: Line Movement wrote the closing prices on its runner and nothing
+  # published them. From 2026-09-24 to 2026-10-01 each Line Movement run
+  # uploaded them as a `closing-line-captures` artifact for this workflow to
+  # take, which was itself a downloadable odds file on a public repository.
+  # Now this workflow reads the `line-movement` artifact Line Movement already
+  # keeps for its own restore chain, derives the closing prices from it
+  # (`closing_lines.load_movement_captures`, the same rows by construction),
+  # and pushes them to the private store. That path fetches nothing from the
+  # provider and spends no credit.
   workflow_run:
     workflows: ["Line Movement Capture"]
     types: [completed]
@@ -50,10 +72,10 @@ on:
         default: "400"
 
 permissions:
-  # Write, for exactly one ref: the closing-lines branch, which is this
-  # workflow's own store. It never touches card-feed or main.
-  contents: write
-  # To download the closing prices a Line Movement run handed over.
+  # Read only. The store is in another repository, reached with
+  # NHL_CLOSING_LINES_TOKEN, so this workflow needs no write grant here.
+  contents: read
+  # To download the captures a Line Movement run kept.
   actions: read
 
 concurrency:
@@ -89,41 +111,7 @@ jobs:
           python -m pip install -r requirements.txt
           python -m pip install -e .
 
-      - name: Restore the capture store
-        # Not on a hand-off: there the publish step below merges the handed
-        # rows into the branch tip itself, which is what it already does on
-        # every retry.
-        if: github.event_name != 'workflow_run'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -u
-          REMOTE="https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}"
-          mkdir -p data/processed
-          # Two very different situations used to take the same branch: "the
-          # store does not exist yet" and "the fetch failed". The second one
-          # then published a single night's rows over the whole append-only
-          # history, as a perfectly legal fast-forward. So the ref is probed
-          # first, and anything but a genuinely absent branch is a hard stop.
-          if git ls-remote --exit-code --heads "$REMOTE" closing-lines >/dev/null 2>&1; then
-            git fetch "$REMOTE" +refs/heads/closing-lines:refs/closing-tip || {
-              echo "::error::The closing-lines branch exists but could not be fetched. Refusing to run: publishing now would replace the season's captures with this one run."
-              exit 1
-            }
-            git show refs/closing-tip:closing_line_captures.csv > restored.csv || {
-              echo "::error::The closing-lines branch carries no capture file. Refusing to overwrite it blindly."
-              exit 1
-            }
-            # Through a temp file: a half-written store that becomes the next
-            # baseline is the same data loss by a slower route.
-            mv restored.csv data/processed/closing_line_captures.csv
-            wc -l < data/processed/closing_line_captures.csv \
-              | xargs echo "Capture rows restored:"
-          else
-            echo "No capture store yet. This run establishes it."
-          fi
-
-      - name: Take the closing prices Line Movement handed over
+      - name: Take the captures Line Movement kept
         id: handoff
         if: github.event_name == 'workflow_run'
         env:
@@ -132,23 +120,24 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p data/processed
-          # "Handed nothing over" and "could not fetch what was handed over"
-          # are different, and only the first is an ordinary night. So the
-          # artifact is looked up first; a download that then fails is a
-          # hard stop, because that run's closing prices are otherwise gone.
+          # "Kept nothing" and "could not fetch what was kept" are different,
+          # and only the first is an ordinary night. So the artifact is looked
+          # up first; a download that then fails is a hard stop.
           found=$(gh api "repos/${{ github.repository }}/actions/runs/$RUN_ID/artifacts" \
-            --jq '[.artifacts[] | select(.name == "closing-line-captures") | select(.expired | not)] | length')
+            --jq '[.artifacts[] | select(.name == "line-movement") | select(.expired | not)] | length')
           if [ "$found" = "0" ]; then
-            echo "::notice::Line Movement run $RUN_ID handed over no closing prices (no games, or its capture wrote nothing). Nothing to publish."
+            echo "::notice::Line Movement run $RUN_ID kept no captures (no games, or its capture wrote nothing). Nothing to publish."
             echo "empty=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          gh run download "$RUN_ID" --name closing-line-captures --dir data/processed --repo "${{ github.repository }}"
-          rows=$(( $(wc -l < data/processed/closing_line_captures.csv) - 1 ))
-          echo "Line Movement run $RUN_ID handed over $rows closing-price row(s)."
-          if [ "$rows" -le 0 ]; then
+          # Rooted at data/processed, where line-movement.yml roots it.
+          gh run download "$RUN_ID" --name line-movement --dir data/processed --repo "${{ github.repository }}"
+          if [ ! -d data/processed/line_movement ]; then
+            echo "::notice::Line Movement run $RUN_ID kept no price captures. Nothing to publish."
             echo "empty=true" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+          echo "Line Movement run $RUN_ID kept $(ls data/processed/line_movement | wc -l | tr -d ' ') day file(s)."
 
       - name: Capture
         id: capture
@@ -172,51 +161,14 @@ jobs:
           fi
           exit "$code"
 
-      - name: Publish the store
+      - name: Publish to the private store
+        # To cooperross399/nhl-closing-lines and nowhere else; the script
+        # refuses this repository by name and a store that is not private.
         if: steps.capture.outputs.empty_slate != 'true' && steps.handoff.outputs.empty != 'true'
         env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -u
-          REMOTE="https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}"
-          export GIT_AUTHOR_NAME="Closing Lines" GIT_AUTHOR_EMAIL="actions@github.com"
-          export GIT_COMMITTER_NAME="Closing Lines" GIT_COMMITTER_EMAIL="actions@github.com"
-          cp data/processed/closing_line_captures.csv mine.csv
-          # The tree is rebuilt inside the loop, not hashed once outside it.
-          # Hashing before the loop meant a retry after a rejected push
-          # re-offered the same content, silently discarding whatever capture
-          # had landed in between — the one thing the retry exists to stop.
-          for attempt in 1 2 3; do
-            PARENT=""
-            if git fetch "$REMOTE" +refs/heads/closing-lines:refs/closing-tip 2>/dev/null; then
-              PARENT=$(git rev-parse refs/closing-tip)
-              if git show refs/closing-tip:closing_line_captures.csv > theirs.csv 2>/dev/null; then
-                PYTHONPATH=src python scripts/merge_capture_store.py \
-                  --mine mine.csv --theirs theirs.csv \
-                  --out data/processed/closing_line_captures.csv || exit 1
-              else
-                # The restore step refuses this on a dispatch; a hand-off
-                # skips the restore, so the refusal lives here too. Skipping
-                # the merge would publish one run's rows over the branch.
-                echo "::error::The closing-lines branch exists but carries no capture file. Refusing to overwrite it blindly."
-                exit 1
-              fi
-            fi
-            BLOB=$(git hash-object -w data/processed/closing_line_captures.csv)
-            TREE=$(printf '100644 blob %s\tclosing_line_captures.csv\n' "$BLOB" | git mktree)
-            if [ -n "$PARENT" ]; then
-              COMMIT=$(git commit-tree "$TREE" -p "$PARENT" -m "captures $(date -u +%FT%TZ)")
-            else
-              COMMIT=$(git commit-tree "$TREE" -m "captures $(date -u +%FT%TZ)")
-            fi
-            if git push "$REMOTE" "$COMMIT:refs/heads/closing-lines"; then
-              echo "Capture store published (attempt $attempt)."
-              exit 0
-            fi
-            echo "Push rejected; refetching the tip and re-merging."
-          done
-          echo "::error::Could not publish the capture store after three attempts."
-          exit 1
+          NHL_CLOSING_LINES_TOKEN: ${{ secrets.NHL_CLOSING_LINES_TOKEN }}
+          PYTHONPATH: src
+        run: python scripts/private_closing_store.py push --processed-dir data/processed
 
       - name: Report the outcome
         if: always()

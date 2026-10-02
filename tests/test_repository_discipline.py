@@ -85,7 +85,9 @@ def test_no_workflow_grants_write_access_to_contents(workflow: str) -> None:
     #: recovered once the game has started.
     writers = {
         "gameday-refresh.yml": "refs/heads/card-feed",
-        "closing-lines.yml": "refs/heads/closing-lines",
+        # Not closing-lines.yml: its store is the private repository
+        # cooperross399/nhl-closing-lines, so it holds no write grant here
+        # (tests/test_closing_prices_never_reach_the_public_repo.py).
         # Pushes a branch so a moved verdict becomes a pull request a human
         # reads. It may never push main and may never edit a live verdict in
         # place: a scheduled job that rewrites the card's policy on its own

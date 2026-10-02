@@ -161,9 +161,20 @@ PYTHONPATH=src .venv/bin/python scripts/capture_closing_lines.py --live \
     --credit-cap 400
 
 # Merge two copies of the capture store without losing a row. Used by the
-# workflow when a push collides with a capture that landed first.
+# private store's push on every day file it writes.
 PYTHONPATH=src .venv/bin/python scripts/merge_capture_store.py \
     --mine mine.csv --theirs theirs.csv --out store.csv
+
+# Push this run's closing prices to the PRIVATE store
+# (cooperross399/nhl-closing-lines), or pull the whole store into a file
+# outside the workspace for the CLV report. Needs NHL_CLOSING_LINES_TOKEN.
+# A push refuses this public repository as a target, and any target the
+# GitHub API does not call private; a pull refuses to write inside the
+# workspace. Closing Lines and Gameday Refresh run it.
+PYTHONPATH=src .venv/bin/python scripts/private_closing_store.py push \
+    --processed-dir data/processed
+PYTHONPATH=src .venv/bin/python scripts/private_closing_store.py pull \
+    --out "$RUNNER_TEMP/private-closing-store/closing_line_captures.csv"
 ```
 
 # Rebuild the price CSVs from the raw cached responses. Free, and the reason
@@ -310,33 +321,40 @@ selections differ from the previous card, the comment's first paragraph
 contains the phrase `Selections changed`.
 
 **Closing Lines** (`.github/workflows/closing-lines.yml`) keeps the best price
-on every selection in its own **`closing-lines` branch**. It buys nothing on
-its own schedule: Line Movement Capture's fetch already carries the per-event
-prices, so Closing Lines runs each time Line Movement completes and publishes
-what that run handed over, the bulk moneyline, puck line and total included
-(each Line Movement round asks for them beside the per-event markets). An
-opinion in a market no round priced before face-off, such as a day captured
-before the bulk request was added or a round whose bulk request failed, is
-named as uncaptured rather than as a price the books pulled. It can still be
-dispatched by hand to force a paid capture. Gameday Refresh reads that
-store and writes
-`data/outputs/closing_line_value.md`: beat-the-close rate, CLV%, and the
+on every selection in a **private repository, `cooperross399/nhl-closing-lines`**,
+one file per UTC day. This repository is public, and a store here (a branch, a
+release, a Pages site or an artifact) would be a downloadable odds file, which
+the provider's terms forbid. Closing Lines buys nothing on its own schedule:
+Line Movement Capture's fetch already carries the prices, so Closing Lines runs
+each time Line Movement completes, reads the `line-movement` artifact that run
+kept, derives the best price per selection per round from every day it
+carries, and pushes those rows to the private store, the bulk moneyline, puck
+line and total included (each Line Movement round asks for them beside the
+per-event markets). An opinion in a market no round priced before face-off,
+such as a day captured before the bulk request was added or a round whose bulk
+request failed, is named as uncaptured rather than as a price the books pulled.
+It can still be dispatched by hand to force a paid capture. The push and
+Gameday Refresh's read both use the Actions secret
+**`NHL_CLOSING_LINES_TOKEN`**: a fine-grained token limited to
+`cooperross399/nhl-closing-lines` with Contents read and write. Closing Lines
+stays disabled until that secret exists.
+
+**Not yet private:** the `line-movement` artifact the store is derived from is
+itself a public artifact (90-day retention) holding every captured price, so
+closing prices remain downloadable from this repository until that chain
+moves too. CLAUDE.md records it as an open decision.
+
+Gameday Refresh pulls the private store into the runner's temp directory
+(never into `data/processed`, which it uploads publicly as `gameday-state`),
+restores the `line-movement` chain beside it, and scores the union of the two
+into `data/outputs/closing_line_value.md`: beat-the-close rate, CLV%, and the
 de-vigged expected value at the closing line, for opinions and for bets
 separately (a "bet" there, as in the forward-evidence report, is an opinion
 clearing the 6% prop / 3.5% team measurement bar, not a bet the card staked), with every interval clustered by game (one game's sides, rungs
-and players are not independent trials). It is the earliest honest signal
-that the model is finding something — and it is not profit, which the
+and players are not independent trials). The report is aggregate: counts,
+rates and intervals, never a price, a line or a book. It is the earliest honest
+signal that the model is finding something — and it is not profit, which the
 report says out loud.
-
-**Closing Lines is disabled as of 2026-09-25**, pending a decision about
-publishing captured odds on this public repository's `closing-lines` branch.
-Line Movement still captures every per-event price, so nothing more is lost
-while it is held. Since 2026-09-29 Gameday Refresh's closing-line report reads
-those captures directly: with no `closing-lines` branch it restores the
-`line-movement` artifact chain for that step only and removes it afterwards, so
-per-event opinions are scored against their close without any permanent odds
-file. The same chain carries the bulk moneyline, puck line and total, which
-Line Movement asks for in every round, so those opinions are scored too.
 
 Every run — including a "skip" run — also publishes the rendered comment, a
 one-object status file, and the forward-evidence report to the **`card-feed`
@@ -381,7 +399,7 @@ bought the window again and uploaded a thin copy as the newest carrier.
 | Tests | every PR and push to main | no |
 | Provider Policy PR Gate | PRs touching policy or receipts | no |
 | Gameday Refresh | daily in season at 13:30 UTC, backup 15:00 (each cron fires eight hours early and `scripts/wait_for_round.py` holds the run until its slot); on demand, at once | yes, capped |
-| Closing Lines | after every Line Movement run; by hand | only when dispatched by hand, capped |
+| Closing Lines | disabled until `NHL_CLOSING_LINES_TOKEN` exists; then after every Line Movement run, and by hand | only when dispatched by hand, capped |
 | Provider Market Discovery | on demand; once on 15 October, which asks the three bulk markets only (props, ladders and candidates need a dispatch) | yes, capped |
 | Historical Props Purchase | on demand only, never scheduled | yes, capped, required cap |
 | Venue Probe | on demand only, never scheduled | yes, capped, required cap |

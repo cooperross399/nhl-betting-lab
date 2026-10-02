@@ -712,10 +712,11 @@ Re-derive rather than trust if the data has moved.
   2026-09-24:** the movement store lives on Line Movement's runner, Gameday
   Refresh never downloaded it, and the `closing-lines` branch it reads had no
   writer and did not exist, so every in-season CLV report would have read
-  nothing. Now each Line Movement run hands its closing prices over as the
-  `closing-line-captures` artifact, and Closing Lines, triggered when Line
-  Movement completes, merges them into that branch. That path fetches nothing
-  and spends no credit. **Except the bulk team markets (found 2026-09-25):**
+  nothing. From 2026-09-24 each Line Movement run handed its closing prices
+  over as the `closing-line-captures` artifact for Closing Lines to merge
+  into that branch; since 2026-10-01 neither exists (see the next entry), and
+  Closing Lines derives the rows from the `line-movement` artifact and pushes
+  them to the private store. That path fetches nothing and spends no credit. **Except the bulk team markets (found 2026-09-25):**
   the retired capture also bought `h2h`, `spreads` and `totals`, and Line
   Movement asks only for the per-event markets and their ladders, so no
   moneyline opinion can ever meet a close, and a featured puck line or total
@@ -734,22 +735,92 @@ Re-derive rather than trust if the data has moved.
   that, and `run_ladder_coherence.py` drops those rows so the registered
   ladder depth still counts one book's one response. The site reads the
   moneyline open from them and still no open total or puck line.
-- **Closing Lines is DISABLED as of 2026-09-25, pending Cooper's decision —
-  do not re-enable it as a fix.** This repository is public, so the
-  `closing-lines` branch would be a permanent, downloadable file of captured
-  odds (book, price, line, capture time), and The Odds API's terms forbid
-  redistributing their data as downloadable files that serve as raw data.
-  Nothing more is lost while it is held: the per-event closing prices are a
-  strict subset of Line Movement's own captures (`line_movement/<day>.csv`,
-  the bulk team markets included since 2026-09-29 — see above), which keep flowing
-  through the `line-movement` artifact chain, so the store can be rebuilt from
-  them. Since 2026-09-29 the CLV step in Gameday Refresh restores that chain
-  into data/processed when no branch exists, scores against it through
-  `load_captures`' movement fallback, and removes only the folders it created
-  (so gameday-state does not carry them): the per-event CLV works with no
-  branch, and the moneyline, puck line and total CLV too for every round
-  that asked the bulk request. Cooper delegated the call that day; the answer was this, not
-  re-enabling. `tests/test_clv_reads_the_movement_chain.py` pins it.
+- **The closing-line store is the PRIVATE repository
+  `cooperross399/nhl-closing-lines` (2026-10-01), and closing prices are
+  still downloadable from this repository through Line Movement's public
+  artifact. Read both halves.** This repository is public, so a
+  `closing-lines` branch here (or a release, a Pages site, or an artifact)
+  would be a permanent, downloadable file of captured odds (book, price,
+  line, capture time), and The Odds API's terms forbid redistributing their
+  data as downloadable files that serve as raw data. That is why Closing
+  Lines was disabled on 2026-09-25 (#126), before its first in-season run.
+  Cooper's decision on 2026-10-01: closing-line data must never be published
+  publicly, and CLV must work. What #286 did:
+  - **Closing Lines** runs when Line Movement completes, downloads that run's
+    `line-movement` artifact, derives one best-price row per selection per
+    round from **every day file it carries**, one at a time
+    (`closing_lines.load_movement_captures`, the dedicated store's rows by
+    construction), and pushes them with `scripts/private_closing_store.py
+    push` to `captures/<UTC day>.csv` in the private repository, merging
+    through `merge_capture_store.merge` (no row a day file held is dropped,
+    except an exact duplicate of another row in it). Reading every day means a failed push, or a week without the
+    token, heals on the next push for as long as the chain carries the days.
+    It holds **no write grant** on this repository. Line Movement no longer
+    uploads the `closing-line-captures` artifact (the 11 already uploaded
+    expire seven days after their runs, by 2026-10-08).
+  - **The script refuses** this repository (and the repository a run is in)
+    by exact name, accepts a `--remote` (tests only) only as a local path
+    not named for a public lab or a canonical github.com URL naming exactly
+    the checked repository, and asks the GitHub API that the target is
+    private (`"private": true`, not merely not false) before every push. Exit codes:
+    0 pushed or nothing new; 1 GitHub unreachable; 2 a damaged movement day,
+    dispatched file or remote day file (every other day is still pushed; a
+    damaged movement day keeps it red until repaired, as it keeps the CLV
+    report red); 3 no token; 5 refused (public target, not private, token
+    turned away, a repository rule declining the push, store without
+    `main`). A damaged store day file is repaired by restoring
+    `captures/<day>.csv` from the private repository's history.
+  - **Gameday Refresh** pulls the store with `private_closing_store.py pull`
+    into `$RUNNER_TEMP`, outside the workspace, because "Upload the state for
+    the next run" uploads `data/processed` whole as the public `gameday-state`
+    artifact, and deletes it after the report. It **always** restores the
+    movement chain too, and `run_closing_line_value.py` scores the union of
+    both (`--captures-dir` is repeatable), so a round the store has not
+    received yet is still scored. Pull exit 3 (no token) and 4 (empty) are
+    clean runs on the chain alone; exit 1 (unreachable) degrades the run;
+    exit 2 (a damaged day file: the good days are still scored) and 5
+    (token turned away; "Report the outcome" says to replace the secret)
+    fail the step red without degrading it, because a backup would hit the
+    same fault. The published
+    report (`latest_closing_line_value.md` on card-feed, and `gameday-reports`)
+    is aggregate only: counts, rates and intervals, never a price, a line or
+    a book.
+  - **The secret is `NHL_CLOSING_LINES_TOKEN`**, an Actions secret on this
+    repository: a fine-grained personal access token, resource owner
+    cooperross399, repository access *only* `cooperross399/nhl-closing-lines`,
+    repository permissions **Contents: Read and write** (Metadata: Read is
+    added automatically), nothing else. Gameday Refresh's CLV step and
+    Closing Lines' publish step are the only steps that read it.
+  - **Closing Lines stays disabled until that secret exists and one push has
+    landed in the private repository.** Re-enable it then, and only then:
+    `gh workflow enable closing-lines.yml`. Verified locally on 2026-10-01
+    with the real private repository: a push of the 2026-10-01 14:00
+    `line-movement` artifact (23,363 rows over three days), an idempotent
+    second push, a pull, and a CLV report from the pulled store
+    byte-identical to the one from the movement chain (4,244 of 4,333
+    opinions matched).
+  - **NOT DONE, and Cooper's call: the `line-movement` artifact itself.** It
+    is uploaded from this public repository on every round with 90-day
+    retention, and its day files hold every book's every rung, face-off
+    round included, which is a superset of the private store. Anyone can
+    download it and run `load_movement_captures` on it. So "closing-line data
+    is never published publicly" is **not yet met**. Meeting it means moving
+    Line Movement's restore chain into the private repository as well (its
+    day files pushed and restored through `private_closing_store.py`'s
+    checks with the same token), pointing Closing Lines and the CLV step at
+    that copy, and dropping `data/processed/line_movement` from both public
+    uploads. It was left for its own change because Line Movement is the
+    live capture (a lost round cannot be re-captured once its games start)
+    and the change needs the token to exist first. `gameday-state` also
+    still carries that run's staging quotes, as before.
+  - `tests/test_closing_prices_never_reach_the_public_repo.py` holds the
+    routes it can: no push here carries a capture store, no artifact names
+    one, the set of uploads that can carry captured or bought prices is
+    pinned to the known six, however a path is spelled (so a new carrier
+    fails), the CLV step replayed against a
+    real private store leaves no captured price in the workspace, the
+    script's refusals, and a report built from sentinel prices prints none
+    of them.
 - **This lab has an end date, decided before the data existed: 2027-04-25.**
   Everything measurable on bought history has been measured and comes back
   null. The single open question is whether the model beats prices on data
