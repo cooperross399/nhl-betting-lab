@@ -21,11 +21,12 @@ repository may hold it on a branch, a release, a Pages site or an artifact.
 ## What this does not cover
 
 Line Movement's own `line-movement` artifact, uploaded from this public
-repository on every round with 90-day retention, carries every book's every
-rung, the face-off round included. Every row this script pushes is derived
-from it (`push` reads nothing else on a hand-off), so closing prices remain
-downloadable from this repository until that chain moves too. That is an
-open decision for Cooper, recorded in CLAUDE.md, and
+repository on every round (7-day retention since 2026-10-02, 90 before),
+carries every book's every rung, the face-off round included. Every row this
+script pushes is derived from it (`push` reads nothing else on a hand-off), so
+closing prices remain downloadable from this repository until that chain
+moves too. It is moving in two stages (`scripts/private_movement_chain.py`,
+CLAUDE.md), and
 `tests/test_closing_prices_never_reach_the_public_repo.py` pins the known
 carriers so a new one fails rather than joining them silently.
 

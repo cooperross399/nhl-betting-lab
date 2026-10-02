@@ -338,9 +338,12 @@ DEFAULT_BRANCH = ("github.event_name == 'schedule' || github.ref == "
 
 def test_the_private_steps_sit_where_they_must() -> None:
     assert _index("Restore today's captures") < _index("Fold in the private chain") < _index("Capture prices")
-    assert _index("Fold in this run's earlier attempts") < _index("Keep the captures privately")
-    assert (_index("Keep the captures privately") < _index("Check the private chain holds this round")
-            < _index("Keep the captures"))
+    # After BOTH public uploads: while the public artifact keeps the round,
+    # nothing private may delay it inside the 20-minute job.
+    public = [_index("Keep the captures"), _index("Keep this attempt's captures beside the earlier ones")]
+    assert max(public) < _index("Keep the captures privately") < _index("Check the private chain holds this round")
+    restore = _steps()[_index("Fold in the private chain")]
+    assert restore["timeout-minutes"] <= 3, "the paid fetch comes after it"
     gate = _index("Fail the run when the private chain was not kept")
     uploads = [i for i, s in enumerate(_steps()) if str(s.get("uses", "")).startswith("actions/upload-artifact")]
     assert gate > max(uploads)
@@ -405,3 +408,82 @@ def _gate(outcomes: dict[str, str], problem: str, tmp_path: Path) -> subprocess.
 def test_the_gate_is_red_for_every_fault_and_only_then(tmp_path, outcomes, problem, red) -> None:
     done = _gate(outcomes, problem, tmp_path)
     assert (done.returncode != 0) is red, done.stdout + done.stderr
+
+
+# --- the second review's findings ----------------------------------------------
+
+
+def test_an_interrupted_copy_leaves_no_truncated_day_file(bare, run, tmp_path, monkeypatch) -> None:
+    """A pull cut off mid-copy must not leave half a day file for the
+    capture to append to: the copy is written whole or not at all."""
+    assert _run("push", bare, run) == chain.EXIT_OK
+    real = subprocess.run
+
+    def cut_off(command, *a, **kw):
+        if command[:3] == ["git", "cat-file", "blob"]:
+            kw["stdout"].write(b"date,commence_time,half a ro")
+            raise KeyboardInterrupt("the step was cancelled")
+        return real(command, *a, **kw)
+
+    monkeypatch.setattr(chain.subprocess, "run", cut_off)
+    empty = tmp_path / "empty"
+    with pytest.raises(KeyboardInterrupt):
+        _run("pull", bare, empty)
+    leftovers = [p for p in empty.rglob("*") if p.is_file()]
+    assert leftovers == [], leftovers
+
+
+def test_a_fetch_that_fails_once_is_tried_again(bare, run, monkeypatch) -> None:
+    real = chain.fetch_chain_once
+    calls = {"n": 0}
+
+    def flaky(work, remote, token):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise store.Unreachable("Could not resolve host: github.com")
+        return real(work, remote, token)
+
+    waited = []
+    monkeypatch.setattr(chain, "fetch_chain_once", flaky)
+    monkeypatch.setattr(chain, "sleep", waited.append)
+    assert _run("push", bare, run) == chain.EXIT_OK
+    assert calls["n"] == 2 and waited == [5]
+
+
+def test_a_fetch_that_never_answers_is_a_failure_not_an_empty_chain(bare, run, monkeypatch) -> None:
+    def down(work, remote, token):
+        raise store.Unreachable("Could not resolve host: github.com")
+
+    monkeypatch.setattr(chain, "fetch_chain_once", down)
+    assert _run("push", bare, run) == chain.EXIT_FAILED
+    assert _run("pull", bare, run) == chain.EXIT_FAILED
+
+
+def test_a_file_the_tip_holds_byte_for_byte_passes_the_check_whatever_it_holds(bare, run) -> None:
+    """A day file whose own parse is ragged, but which the tip holds byte for
+    byte, is held; it must not turn every later round red."""
+    _write(run, DP, 'team,player\nTOR,"X\nTOR,Y\n')
+    assert _run("push", bare, run) == chain.EXIT_OK
+    assert _run("verify", bare, run) == chain.EXIT_OK
+
+
+@pytest.mark.parametrize(("name", "command", "bound"), [
+    ("Fold in the private chain", "python scripts/private_movement_chain.py pull --dest data/processed", 3),
+    ("Keep the captures privately", "python scripts/private_movement_chain.py push --processed-dir data/processed", 4),
+    ("Check the private chain holds this round", "python scripts/private_movement_chain.py verify --processed-dir data/processed", 4),
+])
+def test_each_private_step_is_bounded_soft_and_pointed_at_the_chain(name, command, bound) -> None:
+    """Soft, so it never costs the capture or the upload; bounded, inside the
+    20-minute job; and pointed at the folder the restore and the uploads use."""
+    step = _steps()[_index(name)]
+    assert step.get("continue-on-error") is True
+    assert step["timeout-minutes"] <= bound
+    assert command in step["run"]
+
+
+def test_an_empty_folder_is_not_a_passing_check(bare, run, tmp_path) -> None:
+    """A check pointed at the wrong folder sees no file; that is not a pass."""
+    assert _run("push", bare, run) == chain.EXIT_OK
+    empty = tmp_path / "nothing-here"
+    empty.mkdir()
+    assert _run("verify", bare, empty) == chain.EXIT_DAMAGED

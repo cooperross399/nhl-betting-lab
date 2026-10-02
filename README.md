@@ -177,10 +177,11 @@ PYTHONPATH=src .venv/bin/python scripts/private_closing_store.py pull \
     --out "$RUNNER_TEMP/private-closing-store/closing_line_captures.csv"
 
 # Line Movement's capture chain, kept on branch `movement` of the same private
-# repository (stage one of the move, 2026-10-02). Line Movement runs all
-# three every round: fold the private copy into what it restored, push its
-# three stores (default branch only), and check the private tip holds every
-# row it uploads publicly. Needs NHL_CLOSING_LINES_TOKEN.
+# repository (stage one of the move, 2026-10-02). Every Line Movement round
+# folds the private copy into what it restored; from the default branch it
+# also pushes its three stores and checks the private tip holds every row it
+# uploaded publicly (a feature-branch dispatch only reads). Needs
+# NHL_CLOSING_LINES_TOKEN.
 PYTHONPATH=src .venv/bin/python scripts/private_movement_chain.py pull --dest data/processed
 PYTHONPATH=src .venv/bin/python scripts/private_movement_chain.py push --processed-dir data/processed
 PYTHONPATH=src .venv/bin/python scripts/private_movement_chain.py verify --processed-dir data/processed

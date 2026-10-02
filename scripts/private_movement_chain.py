@@ -127,7 +127,24 @@ def _ok(done: subprocess.CompletedProcess) -> str:
     return done.stdout
 
 
+FETCH_ATTEMPTS = 3
+
+
 def fetch_chain(work: Path, remote: str, token: str) -> str | None:
+    """`fetch_chain_once`, tried again after a pause when GitHub could not be
+    reached; a refusal is final at once."""
+    for attempt in range(1, FETCH_ATTEMPTS + 1):
+        try:
+            return fetch_chain_once(work, remote, token)
+        except store.Unreachable as exc:
+            if attempt == FETCH_ATTEMPTS:
+                raise
+            _say(f"Could not reach the private chain (attempt {attempt}); trying again. {exc}")
+            sleep(5 * attempt)
+    return None
+
+
+def fetch_chain_once(work: Path, remote: str, token: str) -> str | None:
     """Fetch the chain's tip into `work` (depth 1, nothing checked out).
     Its commit, or None when the repository answers and has no chain yet."""
     if not (work / ".git").exists():
@@ -174,12 +191,20 @@ def blob_of(work: Path, path: Path, *, write: bool = False) -> str:
 
 
 def blob_to(work: Path, sha: str, target: Path) -> None:
+    """Write a blob to `target` whole or not at all: through a temp file and
+    a rename, so a step cut off mid-copy never leaves a truncated day file
+    for the capture to append to."""
     target.parent.mkdir(parents=True, exist_ok=True)
-    with target.open("wb") as handle:
-        done = subprocess.run(["git", "cat-file", "blob", sha], cwd=work, stdout=handle,
-                              stderr=subprocess.PIPE)
-    if done.returncode:
-        raise OSError(done.stderr.decode(errors="replace").strip())
+    partial = target.with_name(target.name + ".partial")
+    try:
+        with partial.open("wb") as handle:
+            done = subprocess.run(["git", "cat-file", "blob", sha], cwd=work, stdout=handle,
+                                  stderr=subprocess.PIPE)
+        if done.returncode:
+            raise OSError(done.stderr.decode(errors="replace").strip())
+        os.replace(partial, target)
+    finally:
+        partial.unlink(missing_ok=True)
 
 
 def _setup(args: argparse.Namespace, *, writes: bool) -> tuple[str, str] | int:
@@ -361,14 +386,20 @@ def verify(args: argparse.Namespace) -> int:
                 _error("There is no private movement chain to verify against.")
                 return EXIT_EMPTY
             on_tip = tip_files(work)
+            if not local and on_tip:
+                _error(f"This run's folder holds no movement day file while the private "
+                       f"chain holds {len(on_tip)}; nothing here was checked.")
+                return EXIT_DAMAGED
             for rel, path in local.items():
+                if on_tip.get(rel) == blob_of(work, path):
+                    # Byte for byte the tip's copy: held, whatever it holds.
+                    rows += _rows(path)
+                    continue
                 theirs = _records(path)
                 if theirs is None:
                     missing[rel] = -1
                     continue
                 rows += len(theirs[1])
-                if on_tip.get(rel) == blob_of(work, path):
-                    continue
                 if rel not in on_tip:
                     missing[rel] = len(theirs[1])
                     continue

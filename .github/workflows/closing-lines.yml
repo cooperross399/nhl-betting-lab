@@ -26,9 +26,9 @@ name: Closing Lines
 # `tests/test_closing_prices_never_reach_the_public_repo.py` holds all of it.
 #
 # WHAT THAT DOES NOT COVER: the rows it pushes are derived from Line
-# Movement's `line-movement` artifact, which is public (90-day retention) and
-# carries every price this workflow stores, and more. Moving that chain is an
-# open decision recorded in CLAUDE.md.
+# Movement's `line-movement` artifact, which is public (7-day retention since
+# 2026-10-02) and carries every price this workflow stores, and more. That
+# chain is moving to the private repository in two stages (CLAUDE.md).
 #
 # DISABLED since 2026-09-25 (#126), and it stays disabled until the secret
 # below exists and a push has landed in the private repository.
