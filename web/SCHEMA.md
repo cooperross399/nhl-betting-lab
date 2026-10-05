@@ -22,6 +22,11 @@ boardDate        "YYYY-MM-DD" (league date of the slate)
 cardGeneratedAt  ISO instant the Gameday card this board was built from was generated; null when no card was restored.
                  A regular-season board with games whose card was generated on an earlier New York day is shown but
                  never frozen into history/ (web/site_history.py::built_on_stale_state)
+ratings          "xg" | "goals" | null — what every projection below is rated on. "xg": recent expected goals with a
+                 finishing and a goaltending (GSAx) factor, from data/processed/shadow_team_ratings.json, which Publish
+                 Site builds from the NHL play-by-play (web/build_site_json.py::rate_on_xg). "goals": that file was
+                 missing or stale and the card's goals ratings were used. null: nothing was projected. The pick is
+                 always the card's, whose model is rated on goals until 2027-04-25.
 record
   straightUp     {w, l} | null        — the season so far (season_record); null until a night has settled
   picks          {w, l, p} | null     — best bets, the season so far; absent/null until a night has settled

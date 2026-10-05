@@ -8,12 +8,16 @@
 about four thousand requests). Without it, only cached games are read.
 
 Writes the per-game tables to `data/processed/shadow_*.csv` and the report to
-`data/outputs/shadow_stats.md` and `.json`. Nothing here is read by the card
-or the forward ledger (`nhl_betting_lab.shadow`). Spends no odds credits.
+`data/outputs/shadow_stats.md` and `.json`. `--tables-only` writes the tables
+and the team ratings (`data/processed/shadow_team_ratings.json`,
+`measurement.xg_team_ratings`) and stops; Publish Site runs it that way and
+rates the public board's teams on those ratings. Nothing here is read by the card or
+the forward ledger (`nhl_betting_lab.shadow`). Spends no odds credits.
 
-Exit codes: 0 measured; 1 nothing to measure; 2 measured, but the
-play-by-play disagrees with the boxscores too often, or too many fetches
-failed, to trust it.
+Exit codes: 0 measured (or, with `--tables-only`, tables written); 1 nothing
+to measure; 2 the play-by-play disagrees with the boxscores too often, or too
+many fetches failed, to trust it (with `--tables-only`, the tables are then
+not written).
 """
 
 from __future__ import annotations
@@ -28,11 +32,14 @@ import pandas as pd
 from nhl_betting_lab.config import OUTPUTS_DIR, PROCESSED_DIR, RAW_DIR
 from nhl_betting_lab.data.build_datasets import load_player_logs, load_team_games
 from nhl_betting_lab.data.nhl_api import NhlApiError, _cache_root, _read_cache, game_is_final
+from nhl_betting_lab.models.team_model import TeamModel
 from nhl_betting_lab.shadow import measurement
 from nhl_betting_lab.shadow.metrics import build_tables
 from nhl_betting_lab.shadow.play_by_play import fetch_play_by_play, game_events
 from nhl_betting_lab.shadow.xg import add_expected_goals
 
+#: The team ratings the public site's board is rated on (`--tables-only`).
+RATINGS_FILE = "shadow_team_ratings.json"
 #: Below this share of exact boxscore matches the parse is suspect.
 MINIMUM_MATCH = 0.95
 #: Above this share of failed fetches the coverage is suspect.
@@ -178,6 +185,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--processed-dir", type=Path, default=PROCESSED_DIR)
     parser.add_argument("--raw-dir", type=Path, default=RAW_DIR)
     parser.add_argument("--output-dir", type=Path, default=OUTPUTS_DIR)
+    parser.add_argument(
+        "--tables-only",
+        action="store_true",
+        help="Write the per-game tables and stop, with no comparison or report "
+        "(Publish Site, which rates the board's teams on them). Tables that "
+        "disagree with the boxscores are not written.",
+    )
     args = parser.parse_args(argv)
 
     team_games = load_team_games(args.processed_dir)
@@ -207,13 +221,32 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     scored, seasons = add_expected_goals(shots)
     team_table, player_table, goalie_table = build_tables(events, scored)
+    validation = measurement.validate_against_boxscores(team_games, team_table)
+    if args.tables_only and not _agrees(validation):
+        return 2
     args.processed_dir.mkdir(parents=True, exist_ok=True)
     team_table.to_csv(args.processed_dir / "shadow_team_games.csv", index=False)
     player_table.to_csv(args.processed_dir / "shadow_player_games.csv", index=False)
     goalie_table.to_csv(args.processed_dir / "shadow_goalie_games.csv", index=False)
 
+    if args.tables_only:
+        model = TeamModel().fit(team_games)
+        try:
+            ratings = measurement.xg_team_ratings(model.home_advantage, team_games, team_table)
+        except ValueError as exc:
+            print(f"::error::{exc} No team ratings written.")
+            return 2
+        (args.processed_dir / RATINGS_FILE).write_text(
+            json.dumps(ratings, indent=2) + "\n", encoding="utf-8"
+        )
+        print(
+            f"Shadow tables: {len(events)} of {len(ids)} games read, "
+            f"{failures} fetch failure(s), shots match {validation['shots_match']:.1%}, "
+            f"goals {validation['goals_match']:.1%}."
+        )
+        return 0
+
     out_of_sample = {s.season for s in seasons if not s.in_sample}
-    validation = measurement.validate_against_boxscores(team_games, team_table)
     team_rows, team_summary = measurement.compare_team_models(
         team_games, team_table, scored_seasons=out_of_sample
     )
@@ -275,14 +308,20 @@ def main(argv: list[str] | None = None) -> int:
     if failures > MAXIMUM_FETCH_FAILURES * max(len(ids), 1):
         print(f"::error::{failures} of {len(ids)} play-by-play fetches failed.")
         return 2
+    if not _agrees(validation):
+        return 2
+    return 0
+
+
+def _agrees(validation: dict) -> bool:
     if validation["games"] and min(validation["shots_match"], validation["goals_match"]) < MINIMUM_MATCH:
         print(
             "::error::The play-by-play disagrees with the boxscores too often "
             f"(shots {validation['shots_match']:.1%}, goals {validation['goals_match']:.1%}); "
-            "the parse is suspect and the comparison should not be trusted."
+            "the parse is suspect and its numbers should not be trusted."
         )
-        return 2
-    return 0
+        return False
+    return True
 
 
 if __name__ == "__main__":

@@ -85,6 +85,15 @@ TEAM_VARIANTS: tuple[TeamVariant, ...] = (
     ),
 )
 
+#: The variant the public site rates teams on: the one that forecast best on
+#: every column in the first measurement (2026-10-05, moneyline +7.58 per
+#: 1,000 games [+3.46, +12.15] against the card's goals-based ratings).
+SITE_VARIANT_KEY = "xg_luck"
+#: A shadow table covering less of the model's regular-season games than this
+#: is not used: the ratings would describe a different set of games from the
+#: rest of the model.
+SITE_MINIMUM_COVERAGE = 0.95
+
 
 def _as_date(value: object) -> date | None:
     try:
@@ -471,3 +480,54 @@ def latest_season_table(team_metrics: pd.DataFrame) -> pd.DataFrame:
     )
     table.attrs["season"] = season
     return table.sort_values("5v5 xGF%", ascending=False).round(2)
+
+
+def xg_team_ratings(
+    home_advantage: float, team_games: pd.DataFrame, team_metrics: pd.DataFrame
+) -> dict:
+    """Attack and defence per team on `SITE_VARIANT_KEY`, for the public site.
+
+    Built exactly as the measurement builds them: recent-weighted xGF/xGA,
+    times a finishing factor on attack and a goaltending (GSAx) factor on
+    defence, each regressed toward average. A `TeamModel` fitted with this
+    `home_advantage` that takes these as its teams' attack and defence prices
+    every market off them, as the measurement scored them.
+
+    For the public site only, which reads them from the file
+    `scripts/run_shadow_stats.py --tables-only` writes. The card's model is
+    frozen until 2027-04-25 and never reads them
+    (tests/test_the_shadow_model_cannot_reach_the_card.py). Raises ValueError
+    when the table covers less than `SITE_MINIMUM_COVERAGE` of the
+    regular-season games.
+    """
+    games = team_games.copy()
+    games = games[pd.to_numeric(games["game_type"], errors="coerce") == 2]
+    games["game_id"] = pd.to_numeric(games["game_id"], errors="coerce")
+    games["_date"] = games["date"].map(_as_date)
+    games = games.dropna(subset=["game_id", "_date"])
+    metrics = team_metrics.copy()
+    metrics["game_id"] = pd.to_numeric(metrics["game_id"], errors="coerce")
+    metrics = metrics.merge(games[["game_id", "_date"]], on="game_id", how="inner")
+    wanted = int(games["game_id"].nunique())
+    covered = int(metrics["game_id"].nunique())
+    if not wanted or covered < SITE_MINIMUM_COVERAGE * wanted:
+        raise ValueError(
+            f"The play-by-play table covers {covered} of {wanted} regular-season "
+            f"games, under {SITE_MINIMUM_COVERAGE:.0%}."
+        )
+    variant = next(v for v in TEAM_VARIANTS if v.key == SITE_VARIANT_KEY)
+    factors = shadow_factors(metrics, variant, home_advantage)
+    return {
+        "variant": SITE_VARIANT_KEY,
+        "home_advantage": home_advantage,
+        "games_covered": covered,
+        "games_wanted": wanted,
+        "last_game_date": str(games["_date"].max()),
+        "teams": {
+            team: {
+                "attack": f["attack"] * f["finishing"],
+                "defence": f["defence"] * f["goalie"],
+            }
+            for team, f in sorted(factors.items())
+        },
+    }
