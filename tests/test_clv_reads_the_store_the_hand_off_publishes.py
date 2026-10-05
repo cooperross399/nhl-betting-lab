@@ -83,7 +83,7 @@ CLOSING_LINES = WORKFLOWS / "closing-lines.yml"
 GAMEDAY = WORKFLOWS / "gameday-refresh.yml"
 RESTORE = "Restore today's captures"
 PRIVATE_PUSH = "Keep the captures privately"
-SEAL = "Seal this round when the private push failed"
+SEAL = "Seal this round when the private chain did not take it"
 SEALED_UPLOAD = "Keep the sealed round"
 HANDOFF = "Take the chain from the private repository"
 PUBLISH = "Publish to the private store"
@@ -278,7 +278,7 @@ def _keep_sealed_round(rig, temp: Path, *, run_id: int, attempt: int) -> None:
     entry = {
         "id": artifact_id, "name": _render(step["with"]["name"], values), "expired": False,
         "created_at": f"{DAY}T{artifact_id:02d}:00:00Z",
-        "workflow_run": {"id": run_id, "head_branch": "main"},
+        "workflow_run": {"id": run_id, "head_branch": "main", "repository_id": 1, "head_repository_id": 1},
     }
     with (artifacts / "listing.jsonl").open("a", encoding="utf-8") as listing:
         listing.write(json.dumps(entry) + "\n")

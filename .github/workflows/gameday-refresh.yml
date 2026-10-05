@@ -780,6 +780,8 @@ jobs:
                  STORE_TAG="${STORE_TAG:-damaged-store}" ;;
               5) STORE_FAULT="${STORE_FAULT:+$STORE_FAULT; }The private $1 turned NHL_CLOSING_LINES_TOKEN away (expired, revoked, or not granted cooperross399/nhl-closing-lines); replace the secret"
                  STORE_TAG="rejected-token" ;;
+              3) STORE_FAULT="${STORE_FAULT:+$STORE_FAULT; }NHL_CLOSING_LINES_TOKEN is not set, so the private $1 cannot be read; since stage two it is the only source of closing prices"
+                 STORE_TAG="${STORE_TAG:-no-token}" ;;
               *) STORE_FAULT="${STORE_FAULT:+$STORE_FAULT; }The private $1 read exited $2, which this step does not know"
                  STORE_TAG="${STORE_TAG:-unexpected-exit-$2}" ;;
             esac
@@ -795,7 +797,7 @@ jobs:
                  STORE_TAG="empty-read"
                fi ;;
             2) note_fault "closing-line store" 2 ;;
-            3) echo "No private capture store is configured." ;;
+            3) note_fault "closing-line store" 3 ;;
             4) echo "The private capture store holds nothing yet." ;;
             1) UNREACHABLE="the private closing-line store" ;;
             *) note_fault "closing-line store" "$PULL" ;;
@@ -808,7 +810,8 @@ jobs:
           case "$CHAIN" in
             0) echo "Read $(ls "$CHAIN_DIR/line_movement" 2>/dev/null | wc -l | tr -d ' ') line-movement day file(s) from the private chain." ;;
             2) note_fault "movement chain" 2 ;;
-            3|4) echo "No private movement chain to read." ;;
+            3) note_fault "movement chain" 3 ;;
+            4) echo "No private movement chain to read." ;;
             1) UNREACHABLE="${UNREACHABLE:+$UNREACHABLE and }the private movement chain" ;;
             *) note_fault "movement chain" "$CHAIN" ;;
           esac
@@ -1247,7 +1250,7 @@ jobs:
             failed=1
           fi
           if [ "${{ steps.clv.outcome }}" = "failure" ] && [ "${{ steps.clv.outputs.store_fault }}" = "rejected-token" ]; then
-            echo "::error::Report closing-line value failed because the private closing-line store turned NHL_CLOSING_LINES_TOKEN away (expired, revoked, or not granted cooperross399/nhl-closing-lines). Replace the secret. Today's closing-line value scored the line-movement captures without the store. It is not written into the run's health (degraded=${{ steps.final.outputs.degraded }}), so on its own it sends for no backup."
+            echo "::error::Report closing-line value failed because the private repository turned NHL_CLOSING_LINES_TOKEN away (expired, revoked, or not granted cooperross399/nhl-closing-lines). Replace the secret. Both closing-price sources live there, so today's closing-line value is incomplete or missing. It is not written into the run's health (degraded=${{ steps.final.outputs.degraded }}), so on its own it sends for no backup."
             failed=1
           elif [ "${{ steps.clv.outcome }}" = "failure" ]; then
             echo "::error::Report closing-line value failed (its log names the cause: a damaged snapshot, movement day or capture store, or a private store that could not be used), so today's closing-line value is incomplete or missing. It is not written into the run's health (degraded=${{ steps.final.outputs.degraded }}), so on its own it sends for no backup."

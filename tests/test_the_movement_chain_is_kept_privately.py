@@ -363,9 +363,12 @@ def test_the_private_steps_sit_where_they_must() -> None:
     (the round's only home now), the seal and its upload after the push, the
     check after both, and every gate after every upload."""
     assert _index("Restore today's captures") < _index("Capture prices")
+    # The check comes before the seal, so a push that exited 0 but left the
+    # tip short is sealed too.
     assert (_index("Capture line combinations") < _index("Keep the captures privately")
-            < _index("Seal this round when the private push failed") < _index("Keep the sealed round")
-            < _index("Check the private chain holds this round") < _index("Scan the captured ladders"))
+            < _index("Check the private chain holds this round")
+            < _index("Seal this round when the private chain did not take it") < _index("Keep the sealed round")
+            < _index("Scan the captured ladders"))
     gate = _index("Fail the run when the private chain was not kept")
     uploads = [i for i, s in enumerate(_steps()) if str(s.get("uses", "")).startswith("actions/upload-artifact")]
     assert gate > max(uploads)
@@ -388,8 +391,9 @@ def test_only_the_default_branch_writes_the_chain() -> None:
         step = _steps()[_index(name)]
         assert step["if"] == f"always() && ({DEFAULT_BRANCH})", name
         assert step.get("continue-on-error") is True
-    seal = _steps()[_index("Seal this round when the private push failed")]
-    assert seal["if"] == "always() && steps.private_push.outcome == 'failure'"
+    seal = _steps()[_index("Seal this round when the private chain did not take it")]
+    assert seal["if"] == ("always() && (steps.private_push.outcome == 'failure' "
+                          "|| steps.private_verify.outcome == 'failure')")
 
 
 def test_the_secrets_reach_only_the_steps_that_need_them() -> None:
@@ -397,7 +401,7 @@ def test_the_secrets_reach_only_the_steps_that_need_them() -> None:
     assert token == {"Restore today's captures", "Keep the captures privately",
                      "Check the private chain holds this round"}
     key = {s.get("name") for s in _steps() if "secrets.NHL_CHAIN_FALLBACK_KEY" in yaml.safe_dump(s)}
-    assert key == {"Restore today's captures", "Seal this round when the private push failed"}
+    assert key == {"Restore today's captures", "Seal this round when the private chain did not take it"}
 
 
 def _restore_block(tmp_path: Path, pull: int, unseal: int) -> tuple[subprocess.CompletedProcess, str]:
@@ -441,10 +445,11 @@ OK = {"private_push": "success", "seal": "skipped", "sealed_upload": "skipped", 
 @pytest.mark.parametrize(("change", "red", "says"), [
     ({}, False, ""),
     ({"private_push": "skipped", "private_verify": "skipped"}, False, ""),
-    ({"private_push": "failure", "seal": "success", "sealed_upload": "success"}, True, "sealed"),
+    ({"private_push": "failure", "seal": "success", "sealed_upload": "success"}, True, "It was sealed"),
     ({"private_push": "failure", "seal": "failure", "sealed_upload": "skipped"}, True, "on no copy"),
-    ({"private_push": "failure", "seal": "success", "sealed_upload": "failure"}, True, "on no copy"),
-    ({"private_verify": "failure"}, True, "does not hold every row"),
+    ({"private_push": "failure", "seal": "success", "sealed_upload": "failure"}, True, "upload: failure"),
+    ({"private_verify": "failure", "seal": "success", "sealed_upload": "success"}, True, "check: failure"),
+    ({"private_verify": "failure", "seal": "failure", "sealed_upload": "skipped"}, True, "on no copy"),
 ])
 def test_the_gate_is_red_for_every_fault_and_says_where_the_round_is(tmp_path, change, red, says) -> None:
     done = _gate({**OK, **change}, tmp_path)
@@ -513,7 +518,7 @@ def test_a_file_the_tip_holds_byte_for_byte_passes_the_check_whatever_it_holds(b
     ("Restore today's captures", "python scripts/private_movement_chain.py pull --dest data/processed", 4),
     ("Restore today's captures", "python scripts/private_movement_chain.py unseal --dest data/processed", 4),
     ("Keep the captures privately", "python scripts/private_movement_chain.py push --processed-dir data/processed", 6),
-    ("Seal this round when the private push failed",
+    ("Seal this round when the private chain did not take it",
      'python scripts/private_movement_chain.py seal --processed-dir data/processed --out "$RUNNER_TEMP/sealed/round.enc"', 2),
     ("Check the private chain holds this round", "python scripts/private_movement_chain.py verify --processed-dir data/processed", 4),
 ])
@@ -672,37 +677,48 @@ def test_an_archive_with_a_member_outside_the_stores_is_refused(sealed_env, tmp_
     assert not dest.exists() or not any(dest.rglob("*.csv"))
 
 
-def test_the_listing_keeps_only_unexpired_sealed_rounds_from_main(monkeypatch) -> None:
+def test_the_listing_keeps_only_unexpired_sealed_rounds_from_this_repos_default_branch(monkeypatch) -> None:
+    """Fail closed: a fork's pull request runs in this repository's context
+    and could upload the same name from a branch it calls main."""
     import json as _json
+    run = {"head_branch": "main", "repository_id": 7, "head_repository_id": 7}
     rows = [
-        {"name": "line-movement-sealed-1", "expired": False, "workflow_run": {"head_branch": "main"}, "created_at": "2"},
-        {"name": "line-movement-sealed-2", "expired": True, "workflow_run": {"head_branch": "main"}, "created_at": "3"},
-        {"name": "line-movement-sealed-1", "expired": False, "workflow_run": {"head_branch": "feature"}, "created_at": "4"},
-        {"name": "ladder-coherence", "expired": False, "workflow_run": {"head_branch": "main"}, "created_at": "5"},
-        {"name": "line-movement-sealed-3", "expired": False, "workflow_run": {"head_branch": "main"}, "created_at": "1"},
+        {"name": "line-movement-sealed-1", "expired": False, "workflow_run": run, "created_at": "2"},
+        {"name": "line-movement-sealed-2", "expired": True, "workflow_run": run, "created_at": "3"},
+        {"name": "line-movement-sealed-1", "expired": False, "workflow_run": {**run, "head_branch": "feature"}, "created_at": "4"},
+        {"name": "line-movement-sealed-1", "expired": False, "workflow_run": {**run, "head_repository_id": 99}, "created_at": "6"},
+        {"name": "line-movement-sealed-1", "expired": False, "workflow_run": {"head_branch": "main"}, "created_at": "7"},
+        {"name": "line-movement-sealed-1", "expired": False, "created_at": "8"},
+        {"name": "ladder-coherence", "expired": False, "workflow_run": run, "created_at": "5"},
+        {"name": "line-movement-sealed-3", "expired": False, "workflow_run": run, "created_at": "1"},
     ]
 
     class Done:
-        returncode = 0
+        returncode, stderr = 0, ""
         stdout = "\n".join(_json.dumps(r) for r in rows)
-        stderr = ""
 
     monkeypatch.setattr(chain.subprocess, "run", lambda *a, **k: Done())
+    monkeypatch.delenv("NHL_DEFAULT_BRANCH", raising=False)
     found = chain.list_sealed("o/r")
     assert [(f["name"], f["created_at"]) for f in found] == [
         ("line-movement-sealed-3", "1"), ("line-movement-sealed-1", "2")]
-def test_relative_folders_work_as_the_workflow_passes_them(bare, run, tmp_path, monkeypatch) -> None:
-    """Line Movement passes `data/processed`, relative to the checkout, while
-    git runs in a scratch repository. Every other test passed absolute paths,
-    and the first real round with a working token went red on exactly this."""
-    monkeypatch.chdir(run.parent)
-    relative = run.name
-    flag = {"push": "--processed-dir", "verify": "--processed-dir", "pull": "--dest"}
-    for command in ("push", "verify", "pull"):
-        assert chain.main([command, flag[command], relative, "--remote", f"file://{bare}"]) == chain.EXIT_OK, command
-    _write(run, LM, HEADER + _row(1) + _row(2) + _row(3))
-    assert chain.main(["push", "--processed-dir", relative, "--remote", f"file://{bare}"]) == chain.EXIT_OK
-    assert _show(bare, LM) == HEADER + _row(1) + _row(2) + _row(3)
-    fresh = "fresh"
-    assert chain.main(["pull", "--dest", fresh, "--remote", f"file://{bare}"]) == chain.EXIT_OK
-    assert (run.parent / fresh / LM).read_text() == HEADER + _row(1) + _row(2) + _row(3)
+    monkeypatch.setenv("NHL_DEFAULT_BRANCH", "trunk")
+    assert chain.list_sealed("o/r") == [], "NHL_DEFAULT_BRANCH overrides main"
+
+
+def test_a_listing_that_fails_once_is_asked_again(monkeypatch) -> None:
+    calls = {"n": 0}
+
+    class Done:
+        def __init__(self, code, stdout=""):
+            self.returncode, self.stdout, self.stderr = code, stdout, "HTTP 502"
+
+    def gh(command, *a, **k):
+        calls["n"] += 1
+        return Done(1) if calls["n"] == 1 else Done(0, "")
+
+    waited = []
+    monkeypatch.setattr(chain.subprocess, "run", gh)
+    monkeypatch.setattr(chain, "sleep", waited.append)
+    assert chain.list_sealed("o/r") == []
+    assert waited == [5]

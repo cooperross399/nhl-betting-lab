@@ -103,9 +103,9 @@ ROUND_2 = "2026-10-15T21:00:00+00:00,shots_on_goal,Auston Matthews,-130\n"
 #: holds no zip for them, so a download of either fails the restore.
 OTHER_ARTIFACTS = [
     {"id": 1, "name": "ladder-coherence", "expired": False, "created_at": "2026-10-15T14:05:00Z",
-     "workflow_run": {"id": 4100, "head_branch": "main"}},
+     "workflow_run": {"id": 4100, "head_branch": "main", "repository_id": 1, "head_repository_id": 1}},
     {"id": 2, "name": "line-movement-sealed-1", "expired": True, "created_at": "2026-10-01T14:05:00Z",
-     "workflow_run": {"id": 3900, "head_branch": "main"}},
+     "workflow_run": {"id": 3900, "head_branch": "main", "repository_id": 1, "head_repository_id": 1}},
 ]
 
 FAKE_GH = r'''#!{python}
@@ -304,7 +304,7 @@ class Lab:
             "name": _render(str(upload["with"]["name"]), values),
             "expired": False,
             "created_at": f"2026-10-15T18:{10 * int(attempt):02d}:00Z",
-            "workflow_run": {"id": int(RUN_ID), "head_branch": "main"},
+            "workflow_run": {"id": int(RUN_ID), "head_branch": "main", "repository_id": 1, "head_repository_id": 1},
         }
         self.listing.append(artifact)
         return artifact

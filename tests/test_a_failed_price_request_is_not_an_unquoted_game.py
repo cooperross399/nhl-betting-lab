@@ -46,7 +46,7 @@ What these tests hold, through the real `main` of each script, a real
   public `line-movement` artifact ("Keep the captures"), gone now. The keeper
   is "Keep the captures privately" (`private_movement_chain.py push`, to
   branch `movement` of cooperross399/nhl-closing-lines), and when that push
-  fails, "Seal this round when the private push failed" and "Keep the sealed
+  fails, "Seal this round when the private chain did not take it" and "Keep the sealed
   round". A red price step skips none of them. The red round's own day file
   is pushed by the keeper's own command, from the folder the capture writes,
   to a local repository standing in for the private one, and arrives byte
@@ -523,7 +523,7 @@ def _run_step(block: str, tmp_path: Path, code: int) -> tuple[str, dict[str, str
 #: when that push fails, the sealed copy and its upload.
 KEEPERS = (
     "Keep the captures privately",
-    "Seal this round when the private push failed",
+    "Seal this round when the private chain did not take it",
     "Keep the sealed round",
 )
 

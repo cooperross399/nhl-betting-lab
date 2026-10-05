@@ -94,7 +94,7 @@ GIT_ISOLATION = {
 }
 
 LM_RESTORE = "Restore today's captures"
-LM_SEAL = "Seal this round when the private push failed"
+LM_SEAL = "Seal this round when the private chain did not take it"
 LM_KEEP_SEALED = "Keep the sealed round"
 
 FAKE_GH = r'''#!{python}
@@ -436,7 +436,7 @@ def _sealed_round(tmp_path: Path, *, artifact_id: int, run_id: int, branch: str,
     return {
         "id": artifact_id, "name": _expand(upload["name"], LM_KEEP_SEALED, values),
         "expired": False, "created_at": created_at,
-        "workflow_run": {"id": run_id, "head_branch": branch},
+        "workflow_run": {"id": run_id, "head_branch": branch, "repository_id": 1, "head_repository_id": 1},
         "zip": str(archive),
     }
 

@@ -61,7 +61,7 @@ import private_movement_chain as movement_chain  # noqa: E402
 WORKFLOW = PROJECT_ROOT / ".github" / "workflows" / "line-movement.yml"
 REAL_SCRIPT = PROJECT_ROOT / "scripts" / "private_movement_chain.py"
 RESTORE_STEP = "Restore today's captures"
-SEAL_STEP = "Seal this round when the private push failed"
+SEAL_STEP = "Seal this round when the private chain did not take it"
 SEALED_UPLOAD = "Keep the sealed round"
 GATE = "Fail the run when the previous captures were not restored"
 PROBLEM_FILE = "restore_problem.txt"
@@ -309,7 +309,7 @@ class Runner:
         self.artifacts.append({"zip": str(archive), "listing": {
             "id": 7000 + len(self.artifacts), "name": name, "expired": False,
             "created_at": "2026-10-15T18:05:00Z",
-            "workflow_run": {"id": 1001, "head_branch": "main"},
+            "workflow_run": {"id": 1001, "head_branch": "main", "repository_id": 1, "head_repository_id": 1},
         }})
 
     def asked(self) -> list[str]:

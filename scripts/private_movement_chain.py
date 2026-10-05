@@ -3,10 +3,14 @@
 
     NHL_CLOSING_LINES_TOKEN=... PYTHONPATH=src .venv/bin/python \\
         scripts/private_movement_chain.py pull --dest data/processed
+    NHL_CHAIN_FALLBACK_KEY=... GH_TOKEN=... PYTHONPATH=src .venv/bin/python \\
+        scripts/private_movement_chain.py unseal --dest data/processed
     NHL_CLOSING_LINES_TOKEN=... PYTHONPATH=src .venv/bin/python \\
         scripts/private_movement_chain.py push --processed-dir data/processed
     NHL_CLOSING_LINES_TOKEN=... PYTHONPATH=src .venv/bin/python \\
         scripts/private_movement_chain.py verify --processed-dir data/processed
+    NHL_CHAIN_FALLBACK_KEY=... PYTHONPATH=src .venv/bin/python \\
+        scripts/private_movement_chain.py seal --processed-dir data/processed --out "$RUNNER_TEMP/sealed/round.enc"
 
 ## Why
 
@@ -17,14 +21,16 @@ Line Movement keeps every book's every rung, five rounds a day, in
 rule (closing-line data is never published publicly, 2026-10-01) was not met
 while it stayed public. Cooper chose a staged move (2026-10-02):
 
-1. **This stage: dual-write.** Each round restores from the public artifact as
-   before, then folds in this private copy (`pull`); after its captures it
-   pushes the three stores here (`push`) and checks that the private tip holds
-   every row of what it is about to upload publicly (`verify`). The public
-   artifact's retention drops from 90 days to 7.
-2. **Next stage, after rounds verify clean:** the public upload is dropped and
-   every reader (Line Movement, Closing Lines, Gameday Refresh's CLV step)
-   reads this copy.
+1. **Stage one (#289): dual-write.** Each round restored from the public
+   artifact, folded in this private copy, pushed here, checked the tip, and
+   still uploaded publicly (7-day retention instead of 90).
+2. **Stage two: this copy is the only one.** Each round restores from here
+   (`pull`) and folds in any sealed round (`unseal`); after its captures it
+   pushes here (`push`) and checks the tip holds the round (`verify`). If
+   either fails, the round is encrypted with Cooper's key (`seal`) into a
+   7-day artifact nobody without the key can read, and the next round's
+   `unseal` brings it home. Closing Lines and Gameday Refresh's CLV step
+   `pull` this copy too. Nothing uploads the chain publicly.
 
 ## Where
 
@@ -53,10 +59,11 @@ plumbing.
 
 ## Exit codes
 
-push: 0 pushed or nothing new; 1 GitHub unreachable after the retries; 2 a day
-file that could not be merged (named; every other file is still pushed);
-3 no token; 5 refused (a public target, a store the API does not call
-private, a token GitHub turns away, a push a rule declines).
+push: 0 pushed or nothing new; 1 GitHub unreachable after the retries, or a
+local error (named as which); 2 a day file that could not be merged (named;
+every other file is still pushed); 3 no token; 5 refused (a public target, a
+store the API does not call private, a token GitHub turns away, a push a
+rule declines).
 
 pull: 0 folded in (or nothing to fold); 2 a file that could not be merged
 (named; the copy already on disk is kept); 3 no token; 4 no chain yet (no
@@ -64,6 +71,14 @@ pull: 0 folded in (or nothing to fold); 2 a file that could not be merged
 
 verify: 0 the tip holds every row of every local file; 2 it does not (each
 file and its missing row count named); 3, 4, 1 and 5 as for pull.
+
+seal: 0 sealed; 1 openssl failed; 2 nothing on disk to seal; 3 no key;
+5 `--out` inside the workspace.
+
+unseal: 0 every sealed round folded in (or none exist); 1 GitHub could not be
+asked for the list after the retries; 2 a sealed round that could not be
+downloaded, decrypted, opened or merged (named; the others still folded in);
+3 sealed rounds exist and there is no key to open them.
 """
 
 from __future__ import annotations
@@ -306,8 +321,11 @@ def push(args: argparse.Namespace) -> int:
             except store.Refused as exc:
                 _error(str(exc))
                 return EXIT_REFUSED
-            except OSError as exc:
+            except store.Unreachable as exc:
                 _error(f"The private movement chain could not be reached: {exc}")
+                return EXIT_FAILED
+            except OSError as exc:
+                _error(f"A local error stopped the push (not GitHub): {exc}")
                 return EXIT_FAILED
             for rel, why in sorted(damaged.items()):
                 _error(f"{rel} could not be pushed to the private chain: {why}. "
@@ -332,8 +350,8 @@ def push(args: argparse.Namespace) -> int:
             if attempt < PUSH_ATTEMPTS:
                 _say(f"Push rejected (attempt {attempt}); refetching and re-merging. {failure}")
                 sleep(2 ** attempt)
-    _error(f"Could not push the private movement chain after {PUSH_ATTEMPTS} attempts. "
-           "This round is still in the public line-movement artifact.")
+    _error(f"Could not push the private movement chain after {PUSH_ATTEMPTS} attempts; "
+           "the next step seals this round so the next run can bring it home.")
     return EXIT_FAILED
 
 
@@ -437,13 +455,14 @@ def verify(args: argparse.Namespace) -> int:
     summary = os.environ.get("GITHUB_STEP_SUMMARY")
     if missing:
         for rel, count in sorted(missing.items()):
-            what = "could not be read on disk" if count < 0 else f"{count} row(s) missing from the private tip"
+            what = ("differs from the private tip and could not be read on disk" if count < 0
+                    else f"{count} row(s) missing from the private tip")
             _error(f"Private chain check: {rel}: {what}.")
-        line = (f"Private chain check FAILED: {len(missing)} of {len(local)} file(s) short "
-                "of what this run uploads publicly.")
+        line = (f"Private chain check FAILED: {len(missing)} of {len(local)} file(s) on this "
+                "run's disk are not fully held by the private tip.")
     else:
         line = (f"Private chain check passed: the private tip holds every row of all "
-                f"{len(local)} file(s) ({rows} rows) this run uploads publicly.")
+                f"{len(local)} file(s) ({rows} rows) on this run's disk.")
     _say(line)
     if summary:
         with open(summary, "a", encoding="utf-8") as handle:
@@ -495,14 +514,32 @@ def seal(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+GH_ATTEMPTS = 3
+
+
+def _gh(args: list[str], **kw) -> subprocess.CompletedProcess:
+    """A `gh` call tried again after a pause when it fails."""
+    for attempt in range(1, GH_ATTEMPTS + 1):
+        done = subprocess.run(["gh", *args], **kw)
+        if done.returncode == 0 or attempt == GH_ATTEMPTS:
+            return done
+        sleep(5 * attempt)
+    return done
+
+
 def list_sealed(repo: str) -> list[dict]:
-    """Every unexpired sealed fallback artifact of Line Movement on the
-    default branch, oldest first. Raises OSError when GitHub cannot be asked."""
-    done = subprocess.run(
-        ["gh", "api", "--paginate", f"repos/{repo}/actions/artifacts?per_page=100",
-         "--jq", ".artifacts[]"],
-        capture_output=True, text=True,
-    )
+    """Every unexpired sealed fallback artifact this repository's own default
+    branch uploaded, oldest first. Fail closed: an artifact whose run names
+    no branch, another branch, or code from another repository (a fork's pull
+    request runs in this repository's context and could upload the same name
+    from a branch it calls main; its head_repository_id is the fork's) is left
+    out. The default branch is `main`, as `restore_state.py`'s listing also
+    assumes (`--branch main`); NHL_DEFAULT_BRANCH overrides it, for tests or
+    a renamed default branch. Raises OSError when GitHub cannot be asked,
+    after the retries."""
+    default_branch = os.environ.get("NHL_DEFAULT_BRANCH", "").strip() or "main"
+    done = _gh(["api", "--paginate", f"repos/{repo}/actions/artifacts?per_page=100",
+                "--jq", ".artifacts[]"], capture_output=True, text=True)
     if done.returncode:
         raise OSError(done.stderr.strip() or "gh api failed")
     found = []
@@ -511,8 +548,10 @@ def list_sealed(repo: str) -> list[dict]:
             continue
         item = json.loads(line)
         run = item.get("workflow_run") or {}
+        same_repo = (run.get("repository_id") is not None
+                     and run.get("repository_id") == run.get("head_repository_id"))
         if (str(item.get("name", "")).startswith(SEALED_PREFIX) and not item.get("expired")
-                and run.get("head_branch") in ("main", None)):
+                and run.get("head_branch") == default_branch and same_repo):
             found.append(item)
     return sorted(found, key=lambda a: a.get("created_at", ""))
 
@@ -522,8 +561,16 @@ def download_sealed(repo: str, artifact: dict, target: Path) -> None:
     with tempfile.TemporaryDirectory() as scratch:
         archive = Path(scratch) / "a.zip"
         with archive.open("wb") as handle:
-            done = subprocess.run(["gh", "api", f"repos/{repo}/actions/artifacts/{artifact['id']}/zip"],
-                                  stdout=handle, stderr=subprocess.PIPE)
+            done = None
+            for attempt in range(1, GH_ATTEMPTS + 1):
+                handle.seek(0)
+                handle.truncate()
+                done = subprocess.run(["gh", "api", f"repos/{repo}/actions/artifacts/{artifact['id']}/zip"],
+                                      stdout=handle, stderr=subprocess.PIPE)
+                if done.returncode == 0:
+                    break
+                if attempt < GH_ATTEMPTS:
+                    sleep(5 * attempt)
         if done.returncode:
             raise OSError(done.stderr.decode(errors="replace").strip() or "download failed")
         with zipfile.ZipFile(archive) as zipped:

@@ -130,7 +130,7 @@ jobs:
     # On the job, not the workflow: runs wait for hours and overlap, and a
     # workflow-level group would keep only one of them pending, cancelling the
     # rounds between. Captures still never run two at once, so a restore
-    # always reads the previous round's upload.
+    # always reads the previous round's push to the private chain.
     concurrency:
       group: line-movement
       cancel-in-progress: false
@@ -241,8 +241,8 @@ jobs:
         # requests failed, which makes this step red. The bulk team-market
         # request beside them never moves the exit: its rows are written
         # either way, and its failure is a ::warning:: of its own. That is the report, not
-        # the damage: every step below is `if: always()`, so the uploads
-        # still run.
+        # the damage: every step below is `if: always()`, so the private push
+        # (and, if it fails, the seal) still runs.
         # tests/test_a_failed_price_request_is_not_an_unquoted_game.py holds
         # both rules.
         env:
@@ -315,14 +315,31 @@ jobs:
           PYTHONPATH: src
         run: python scripts/private_movement_chain.py push --processed-dir data/processed
 
-      - name: Seal this round when the private push failed
-        # The round is on no copy unless this works. Encrypted with Cooper's
+      - name: Check the private chain holds this round
+        # The private tip must hold every row of every file this round has on
+        # disk, counted as a multiset: the round is home. Before the seal, so
+        # a push that exited 0 but left the tip short still gets sealed. Its line goes to the run summary; a
+        # shortfall turns the run red at the last gate.
+        id: private_verify
+        if: always() && (github.event_name == 'schedule' || github.ref == format('refs/heads/{0}', github.event.repository.default_branch))
+        timeout-minutes: 4
+        continue-on-error: true
+        env:
+          NHL_CLOSING_LINES_TOKEN: ${{ secrets.NHL_CLOSING_LINES_TOKEN }}
+          PYTHONPATH: src
+        run: python scripts/private_movement_chain.py verify --processed-dir data/processed
+
+      - name: Seal this round when the private chain did not take it
+        # The push failed, or the check found the private tip short of this
+        # round: the rows not home are on no copy unless this works. The
+        # whole round is sealed (a later fold adds only what the chain
+        # lacks). Encrypted with Cooper's
         # key (AES-256, NHL_CHAIN_FALLBACK_KEY), written to $RUNNER_TEMP,
         # outside the workspace, and kept below as a 7-day artifact that
         # nobody without the key can read. Every later round's restore
         # decrypts it and folds it in, and that round's push carries it home.
         id: seal
-        if: always() && steps.private_push.outcome == 'failure'
+        if: always() && (steps.private_push.outcome == 'failure' || steps.private_verify.outcome == 'failure')
         timeout-minutes: 2
         continue-on-error: true
         env:
@@ -339,19 +356,6 @@ jobs:
           path: ${{ runner.temp }}/sealed/round.enc
           if-no-files-found: error
           retention-days: 7
-
-      - name: Check the private chain holds this round
-        # The private tip must hold every row of every file this round has on
-        # disk, counted as a multiset: the round is home. Its line goes to the run summary; a
-        # shortfall turns the run red at the last gate.
-        id: private_verify
-        if: always() && (github.event_name == 'schedule' || github.ref == format('refs/heads/{0}', github.event.repository.default_branch))
-        timeout-minutes: 4
-        continue-on-error: true
-        env:
-          NHL_CLOSING_LINES_TOKEN: ${{ secrets.NHL_CLOSING_LINES_TOKEN }}
-          PYTHONPATH: src
-        run: python scripts/private_movement_chain.py verify --processed-dir data/processed
 
       - name: Scan the captured ladders
         # The 2026-10-15 checkpoint in docs/pre_registered_ladder_coherence.md
@@ -471,15 +475,11 @@ jobs:
              && [ "${{ steps.private_verify.outcome }}" != "failure" ]; then
             exit 0
           fi
-          if [ "${{ steps.private_push.outcome }}" = "failure" ]; then
-            if [ "${{ steps.sealed_upload.outcome }}" = "success" ]; then
-              echo "::error::This round could not be pushed to the private chain. It was sealed with NHL_CHAIN_FALLBACK_KEY as line-movement-sealed-${{ github.run_attempt }}, and the next round folds it in."
-            else
-              echo "::error::This round could not be pushed to the private chain and could not be sealed (seal: ${{ steps.seal.outcome }}). It is on no copy, and a re-run cannot help: a round cannot be captured again."
-            fi
-          fi
-          if [ "${{ steps.private_verify.outcome }}" = "failure" ]; then
-            echo "::error::The private chain does not hold every row of this round's files (see Check the private chain holds this round)."
+          echo "::error::The private chain did not take this round (push: ${{ steps.private_push.outcome }}, check: ${{ steps.private_verify.outcome }})."
+          if [ "${{ steps.sealed_upload.outcome }}" = "success" ]; then
+            echo "::error::It was sealed with NHL_CHAIN_FALLBACK_KEY as line-movement-sealed-${{ github.run_attempt }}, and the next round folds it in."
+          else
+            echo "::error::It could not be sealed (seal: ${{ steps.seal.outcome }}, upload: ${{ steps.sealed_upload.outcome }}). The rows the private chain lacks are on no copy, and a re-run cannot help: a round cannot be captured again."
           fi
           exit 1
 

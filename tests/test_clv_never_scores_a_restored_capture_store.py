@@ -179,17 +179,21 @@ def _assert_nothing_restored_is_left(rig) -> None:
     assert left == [], f"restored chain folders would be uploaded again: {left}"
 
 
-def test_no_token_is_a_clean_run_that_reads_nothing_restored(rig) -> None:
+def test_no_token_is_a_red_fault_that_reads_nothing_restored(rig) -> None:
+    """Since stage two both closing-price sources need the token, so a
+    missing secret is not "nothing configured": it is a fault a backup
+    would repeat, red without degrading, and the restored copies are still
+    removed rather than scored."""
     del rig["env"]["NHL_CLOSING_LINES_TOKEN"]
 
     done, read, chain, degraded = _run(rig)
 
-    assert done.returncode == 0, done.stdout + done.stderr
+    assert done.returncode == 2, done.stdout + done.stderr
     assert read == NOT_READ
     assert chain == NO_CHAIN
     assert degraded == ""
-    assert "No private capture store is configured" in done.stdout
-    assert "No private movement chain to read." in done.stdout
+    assert "::error::NHL_CLOSING_LINES_TOKEN is not set" in done.stdout
+    assert "store_fault=no-token" in (rig["work"] / "github_output.txt").read_text()
     _assert_nothing_restored_is_left(rig)
 
 

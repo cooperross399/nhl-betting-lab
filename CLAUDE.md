@@ -776,13 +776,15 @@ Re-derive rather than trust if the data has moved.
     artifact, and deletes it after the report. It **always** restores the
     movement chain too, and `run_closing_line_value.py` scores the union of
     both (`--captures-dir` is repeatable), so a round the store has not
-    received yet is still scored. Pull exit 3 (no token) and 4 (empty) are
-    clean runs on the chain alone; exit 1 (unreachable) degrades the run;
-    exit 2 (a damaged day file: the good days are still scored) and 5
-    (token turned away; "Report the outcome" says to replace the secret)
+    received yet is still scored. Since stage two both sources are private
+    (the store on `main`, the chain on `movement`) and both are pulled into
+    `$RUNNER_TEMP`. Exit 4 (nothing there yet) is a clean run; exit 1
+    (unreachable) degrades the run; exit 2 (a damaged day file: the good days
+    are still scored), 5 (token turned away; "Report the outcome" says to
+    replace the secret) and 3 (no token at all: nothing private can be read)
     fail the step red without degrading it, because a backup would hit the
-    same fault. The published
-    report (`latest_closing_line_value.md` on card-feed, and `gameday-reports`)
+    same fault. The published report (`latest_closing_line_value.md` on
+    card-feed, and `gameday-reports`)
     is aggregate only: counts, rates and intervals, never a price, a line or
     a book.
   - **The secret is `NHL_CLOSING_LINES_TOKEN`**, an Actions secret on this
@@ -790,9 +792,12 @@ Re-derive rather than trust if the data has moved.
     cooperross399, repository access *only* `cooperross399/nhl-closing-lines`,
     repository permissions **Contents: Read and write** (Metadata: Read is
     added automatically), nothing else. The steps that read it: Gameday
-    Refresh's CLV step, Closing Lines' publish step, and Line Movement's
-    three private-chain steps (since 2026-10-02, below).
-    `tests/test_closing_prices_never_reach_the_public_repo.py` pins that list.
+    Refresh's CLV step; Closing Lines' hand-off and publish steps; and Line
+    Movement's restore, private push and private check. The fallback key
+    `NHL_CHAIN_FALLBACK_KEY` is read only by Line Movement's restore (to
+    unseal) and its seal step.
+    `tests/test_closing_prices_never_reach_the_public_repo.py` and
+    `tests/test_the_movement_chain_is_kept_privately.py` pin those lists.
   - **Closing Lines stays disabled until that secret exists and one push has
     landed in the private repository.** Re-enable it then, and only then:
     `gh workflow enable closing-lines.yml`. Verified locally on 2026-10-01
@@ -823,7 +828,8 @@ Re-derive rather than trust if the data has moved.
       Movement restores from it (`pull`), folds in any sealed round
       (`unseal`), pushes straight after the captures (default branch only),
       and checks the tip holds the round (`verify`). No step uploads the
-      chain publicly. A round whose push fails is SEALED: encrypted with
+      chain publicly. A round whose push fails, or whose check finds the
+      private tip short of it, is SEALED: encrypted with
       AES-256 under Cooper's key (secret `NHL_CHAIN_FALLBACK_KEY`, which only
       Cooper set and nobody has read) into a 7-day `line-movement-sealed-N`
       artifact that is unreadable without the key; every later round

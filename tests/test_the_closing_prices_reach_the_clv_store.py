@@ -72,7 +72,7 @@ HANDOFF = "Take the chain from the private repository"
 PUBLISH = "Publish to the private store"
 RESTORE = "Restore today's captures"
 KEEP = "Keep the captures privately"
-SEAL = "Seal this round when the private push failed"
+SEAL = "Seal this round when the private chain did not take it"
 SEALED_UPLOAD = "Keep the sealed round"
 CHAIN = "private_movement_chain.py"
 STORE = "private_closing_store.py"
@@ -421,7 +421,7 @@ def test_a_round_whose_private_push_failed_reaches_the_store_with_the_next_round
     listing = json.dumps({
         "id": 11, "expired": False, "created_at": "2026-10-08T14:06:00Z",
         "name": _fill(lm[SEALED_UPLOAD]["with"]["name"], {"github.run_attempt": "1"}),
-        "workflow_run": {"id": 7, "head_branch": "main"},
+        "workflow_run": {"id": 7, "head_branch": "main", "repository_id": 1, "head_repository_id": 1},
     })
 
     # Closing Lines after round one: the private chain does not hold it.

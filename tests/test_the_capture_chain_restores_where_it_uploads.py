@@ -358,7 +358,7 @@ def test_a_sealed_round_comes_back_where_the_next_round_appends(tmp_path, monkey
         (first / rel).write_bytes(f"captured_at,value\n2026-10-05T14:00:00Z,{n}\n".encode())
         kept[rel] = (first / rel).read_bytes()
 
-    # The push failed: "Seal this round when the private push failed".
+    # The push failed: "Seal this round when the private chain did not take it".
     (seal,) = _invocations([_step(LINE_MOVEMENT, "seal")], "private_movement_chain.py", chain)
     monkeypatch.setenv("GITHUB_WORKSPACE", str(first))
     monkeypatch.chdir(first)
@@ -376,7 +376,7 @@ def test_a_sealed_round_comes_back_where_the_next_round_appends(tmp_path, monkey
     listing = tmp_path / "listing.jsonl"
     listing.write_text(json.dumps({
         "id": 7, "name": name, "expired": False, "created_at": "2026-10-05T14:05:00Z",
-        "workflow_run": {"id": 1234, "head_branch": "main"},
+        "workflow_run": {"id": 1234, "head_branch": "main", "repository_id": 1, "head_repository_id": 1},
     }) + "\n")
     (offline / "gh").write_text(OFFLINE_GH)
     (offline / "gh").chmod(0o755)

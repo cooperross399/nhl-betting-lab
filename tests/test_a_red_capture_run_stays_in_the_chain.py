@@ -518,7 +518,7 @@ class Chain:
         self.artifacts.append({
             "id": self.next_artifact, "name": name, "expired": False,
             "created_at": this.instant, "zip": str(archive),
-            "workflow_run": {"id": this.run_id, "head_branch": "main"},
+            "workflow_run": {"id": this.run_id, "head_branch": "main", "repository_id": 1, "head_repository_id": 1},
         })
         return True
 
