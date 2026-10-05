@@ -14,7 +14,9 @@ them. These hold:
 * the board uses ratings built through the model's latest game, and falls
   back to goals, saying so, when the file is missing or stale.
 
-The card never reads these (tests/test_the_shadow_model_cannot_reach_the_card.py).
+The card's team markets read the same file through `models.team_ratings`,
+and nothing on the card's path imports the shadow package
+(tests/test_the_shadow_model_cannot_reach_the_card.py).
 """
 
 from __future__ import annotations

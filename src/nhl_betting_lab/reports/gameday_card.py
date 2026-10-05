@@ -290,6 +290,10 @@ class GamedayCard:
     #: otherwise (see `why_nothing_to_card`). Gameday Refresh reads this: a
     #: blocked card with it empty is a degraded run.
     nothing_to_card: str = ""
+    #: What the team markets were priced on: "xg" (the site's ratings,
+    #: `models.team_ratings`), "goals" (the ratings file was missing or
+    #: stale, a degraded run), or "" when no team model was fitted.
+    team_ratings: str = ""
     notes: list[str] = field(default_factory=list)
     safety: dict[str, bool] = field(
         default_factory=lambda: {

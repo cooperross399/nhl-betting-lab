@@ -80,11 +80,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -u
-          python scripts/restore_state.py --artifact historical-props --dest "$RUNNER_TEMP/bought" \
+          python scripts/restore_state.py --artifact historical-props --dest /tmp/bought \
             --workflow historical-props-purchase.yml --limit 20 --no-merge \
             --refuse-unreachable --attempts 3
-          cp "$RUNNER_TEMP/bought/processed/historical_team_prices.csv" data/processed/
-          rm -rf "$RUNNER_TEMP/bought"
+          cp /tmp/bought/processed/historical_team_prices.csv data/processed/
+          rm -rf /tmp/bought
           test -s data/processed/historical_team_prices.csv
 
       - name: Restore cached play-by-play

@@ -446,50 +446,20 @@ def rate_on_xg(model, games, processed: Path) -> str:
     """Rate the board's teams on expected goals and goaltending, as Cooper
     asked on 2026-10-05: built into the site's numbers, not shown beside them.
 
-    The fitted goals model keeps its league rate, home advantage, overtime
-    rate and back-to-back factors; its attack and defence become recent xG
-    for and against, times a finishing factor and a goaltending (GSAx)
-    factor (`shadow.measurement.xg_team_ratings`), the stack that beat the
-    goals ratings on every column of the first walk-forward measurement. So
-    `projGoals`, `winProb`, the fair moneyline, `coverProb`, `overProb` and
-    the regulation split all read off it. A team the file does not rate
-    keeps its goals rating.
-
-    The card does not. Its model is frozen until 2027-04-25, so the pick and
-    its edge on this board are still the card's, priced on goals, and the
-    board's probabilities and the pick can disagree.
-
-    Returns "xg", or "goals" with a `::warning::` when the file is missing,
-    unreadable, or was not built through the latest regular-season game this
-    model was fitted on; then the board publishes the goals ratings rather
-    than nothing.
+    The same ratings the card's team markets are priced on
+    (`models.team_ratings.apply_xg_ratings`), so the board's probabilities and
+    the card's picks come from one model. Returns "xg", or "goals" with a
+    `::warning::` when the ratings file is missing, unreadable or stale; then
+    the board publishes the goals ratings rather than nothing.
     """
-    from nhl_betting_lab.models.team_model import TeamRates
+    from nhl_betting_lab.models.team_ratings import apply_xg_ratings
 
-    path = processed / SHADOW_RATINGS
-    try:
-        ratings = json.loads(path.read_text(encoding="utf-8"))
-        teams = ratings["teams"]
-        through = str(ratings["last_game_date"])
-    except (OSError, ValueError, KeyError, TypeError) as exc:
-        print(f"::warning::{SHADOW_RATINGS} could not be read ({exc}); the board is rated on goals.")
-        return "goals"
-    import pandas as pd
-
-    regular = games[pd.to_numeric(games["game_type"], errors="coerce") == 2]
-    latest = str(regular["date"].max())[:10] if not regular.empty else ""
-    if through != latest:
-        print(f"::warning::{SHADOW_RATINGS} runs through {through}, the game history through {latest}; "
-              "the board is rated on goals.")
-        return "goals"
-    for team, rate in teams.items():
-        current = model.teams.get(team)
-        model.teams[team] = TeamRates(
-            team=team, games=current.games if current else 0,
-            attack=float(rate["attack"]), defence=float(rate["defence"]),
-        )
-    print(f"Board ratings: expected goals plus goaltending and finishing, {len(teams)} teams, through {through}.")
-    return "xg"
+    ratings, detail = apply_xg_ratings(model, games, processed)
+    if ratings == "xg":
+        print(f"Board ratings: {detail}.")
+    else:
+        print(f"::warning::{detail}; the board is rated on goals.")
+    return ratings
 
 
 def _site_history():
