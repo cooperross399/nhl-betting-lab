@@ -55,7 +55,7 @@ import stat
 import subprocess
 import sys
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Callable
 
@@ -77,6 +77,8 @@ NO_BOARD = "No board was published for this date, so there is nothing to settle.
 HISTORY_STEP = "Restore the site's history"
 
 D1, D2, D3, D4, D5 = (date(2026, 10, day) for day in range(5, 10))
+#: Publish Site's live Archive, as its own step env names it.
+LIVE_INDEX = "https://nhl.maverickhightower.com/data/history/index.json"
 
 FAKE_GH = r'''#!{python}
 import json, os, shutil, sys
@@ -104,6 +106,10 @@ if args[:2] == ["run", "list"]:
     injected("list:" + workflow, "HTTP 502: Bad Gateway (https://api.github.com/"
              "repos/owner/nhl-betting-lab/actions/workflows/" + workflow + "/runs)")
     runs = [r for r in registry if r["workflow"] == workflow]
+    # A listing that has not caught up (2026-10-05): these runs are missing
+    # from it, so an older run comes first.
+    stale = set(failures.get("stale-listing", []))
+    runs = [r for r in runs if r["databaseId"] not in stale]
     # As `gh run list --branch` does. Every run here ran on main unless a
     # test says otherwise; restore_state.py asks for main and checks it.
     branch = value("--branch")
@@ -127,6 +133,39 @@ if args[:2] == ["run", "list"]:
         print("fake gh: unsupported --jq " + jq, file=sys.stderr)
         sys.exit(2)
     sys.exit(0)
+if args[:1] == ["api"]:
+    path = args[1]
+    if "/actions/artifacts?" in path:
+        injected("api:artifacts", "HTTP 502: Bad Gateway (https://api.github.com/" + path + ")")
+        assert "--paginate" in args and "--slurp" in args, args
+        name = path.split("name=")[1].split("&")[0]
+        hidden = set(failures.get("stale-artifacts", []))
+        found = []
+        for r in registry:
+            source = (r.get("artifacts") or {{}}).get(name)
+            if source is None or r["databaseId"] in hidden:
+                continue
+            found.append({{"id": r["databaseId"] * 10, "name": name, "expired": False,
+                          "created_at": r["created_at"],
+                          "workflow_run": {{"id": r["databaseId"],
+                                           "head_branch": r.get("headBranch", "main")}}}})
+        # The API's own order is not relied on: oldest first here.
+        found.sort(key=lambda a: a["created_at"])
+        pages = [{{"total_count": len(found), "artifacts": found[i:i + 2]}}
+                 for i in range(0, max(len(found), 1), 2)]
+        print(json.dumps(pages))
+        sys.exit(0)
+    if "/actions/runs/" in path:
+        run_id = path.rsplit("/", 1)[1]
+        injected("api:run:" + run_id, "HTTP 502: Bad Gateway")
+        run = next((r for r in registry if str(r["databaseId"]) == run_id), None)
+        if run is None:
+            print("HTTP 404: Not Found", file=sys.stderr)
+            sys.exit(1)
+        print(json.dumps({{"id": run["databaseId"], "path": ".github/workflows/" + run["workflow"],
+                          "status": run["status"], "conclusion": run["conclusion"] or None,
+                          "head_branch": run.get("headBranch", "main")}}))
+        sys.exit(0)
 if args[:2] == ["run", "download"]:
     run_id, name, dest = args[2], value("--name"), Path(value("--dir"))
     injected("download:" + run_id + ":" + name,
@@ -200,6 +239,8 @@ class PublishSite:
         self.venue = "Arena"
         self.state = tmp_path / "gh"
         self.state.mkdir()
+        # The public site: whatever the last deploy put there, nothing before.
+        self.live = tmp_path / "live" / "index.json"
         bin_dir = tmp_path / "bin"
         bin_dir.mkdir()
         gh = bin_dir / "gh"
@@ -229,13 +270,21 @@ class PublishSite:
             })
         return games
 
-    def red(self, conclusion: str = "failure") -> int:
-        """A completed run that uploaded nothing (cancelled, or failed early)."""
+    @staticmethod
+    def created(run_id: int) -> str:
+        """When the run (and so its artifact) was created: in id order."""
+        return (datetime(2026, 10, 1) + timedelta(minutes=run_id)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    def red(self, conclusion: str = "failure", *, artifacts: dict | None = None,
+            branch: str = "main") -> int:
+        """A completed run that uploaded nothing (cancelled, or failed early),
+        or, with `artifacts`, one that uploaded them and then failed."""
         run_id = self.next_id
         self.next_id += 1
         self.registry.insert(0, {"databaseId": run_id, "workflow": "publish-site.yml",
                                  "status": "completed", "conclusion": conclusion,
-                                 "artifacts": {}})
+                                 "headBranch": branch, "created_at": self.created(run_id),
+                                 "artifacts": artifacts or {}})
         return run_id
 
     def expire(self, run_id: int) -> None:
@@ -250,7 +299,7 @@ class PublishSite:
         self,
         day: date,
         *,
-        fail: dict[str, int] | None = None,
+        fail: dict | None = None,
         afresh: bool = False,
         fold: str = "",
         venue: str = "Arena",
@@ -269,7 +318,8 @@ class PublishSite:
         runner_temp = self.tmp / f"runner-temp-{run_id}"
         runner_temp.mkdir()
         running = {"databaseId": run_id, "workflow": "publish-site.yml",
-                   "status": "in_progress", "conclusion": "", "artifacts": {}}
+                   "status": "in_progress", "conclusion": "",
+                   "created_at": self.created(run_id), "artifacts": {}}
         (self.state / "registry.json").write_text(
             json.dumps([running, *self.registry]), encoding="utf-8")
         (self.state / "failures.json").write_text(json.dumps(fail or {}), encoding="utf-8")
@@ -280,7 +330,12 @@ class PublishSite:
             "RUNNER_TEMP": str(runner_temp),
             # restore_state.py pauses between attempts; not in a test.
             "RESTORE_STATE_RETRY_SECONDS": "0",
+            "GITHUB_REPOSITORY": "owner/nhl-betting-lab",
         }
+        # The live Archive the step reads is this chain's last deploy.
+        # test_the_live_archive_the_step_reads_is_the_sites_own pins the
+        # URL this stands in for to web/CNAME.
+        self.world = {"DEPLOYED_INDEX": (LIVE_INDEX, self.live.as_uri())}
         expressions = {
             "${{ github.token }}": "not-a-token",
             "${{ inputs.start_history_afresh && 'true' || 'false' }}": "true" if afresh else "false",
@@ -299,6 +354,7 @@ class PublishSite:
         outcome.conclusion = "failure" if failed else "success"
         self.registry.insert(0, {"databaseId": run_id, "workflow": "publish-site.yml",
                                  "status": "completed", "conclusion": outcome.conclusion,
+                                 "created_at": self.created(run_id),
                                  "artifacts": outcome.artifacts})
         if outcome.deployed is not None:
             self.deploys.append(outcome)
@@ -327,6 +383,8 @@ class PublishSite:
                 "index": json.loads((site / "data" / "history" / "index.json").read_text()),
                 "results": json.loads((site / "data" / "results.json").read_text()),
             }
+            self.live.parent.mkdir(parents=True, exist_ok=True)
+            self.live.write_text(json.dumps(outcome.deployed["index"]), encoding="utf-8")
             return True
         assert not uses, f"the chain does not model `uses: {uses}`"
 
@@ -340,6 +398,10 @@ class PublishSite:
             if "${{" in raw:
                 assert raw in expressions, f"the chain does not model {raw!r}"
                 raw = expressions[raw]
+            if key in self.world:
+                published, here = self.world[key]
+                assert raw == published, f"{key} is {raw!r}; the chain models {published!r}"
+                raw = here
             step_env[key] = raw
         if "web/build_site_json.py" in text:
             return self._build(text, work, step_env, day, outcome, after_build)
@@ -728,3 +790,232 @@ def test_without_require_newest_a_failed_listing_still_never_fails_the_step(
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert "Could not list gameday-refresh.yml runs" in result.stdout
+
+
+# --------------------------------------------------------------------------
+# A restore of the wrong run: the floor needs a source of its own.
+#
+# On 2026-10-05 run 37318279569 restored run 36176147420 (2026-09-25),
+# because `gh run list --status success` listed it first, although run
+# 37224089121 (2026-10-04, 14 frozen boards) was newer and successful. The
+# floor was recorded from what was restored, every run stayed green, and the
+# live Archive went from 13 boards to 5. Below, `stale-listing` makes the run
+# listing leave out the newest runs, so an older publish comes first, as it
+# did that morning.
+# --------------------------------------------------------------------------
+
+
+def test_a_listing_that_names_an_older_publish_publishes_nothing_and_loses_nothing(
+    chain: PublishSite,
+) -> None:
+    """The 2026-10-05 shape. Without the guard this deploys D4 and D1 only."""
+    first = chain.run(D1)
+    second = chain.run(D2)
+    newest = chain.run(D3)
+    assert newest.boards == _dates(D3, D2, D1)
+
+    refused = chain.run(D4, fail={"stale-listing": [newest.run_id, second.run_id]})
+
+    assert f"from publish-site.yml run {first.run_id} (success)" in refused.log, (
+        "the fixture did not reproduce the stale listing")
+    assert refused.conclusion == "failure", refused.log
+    assert refused.failed_at == HISTORY_STEP, refused.failed_at
+    assert "site-history" not in refused.artifacts, "a history missing D2 and D3 was kept"
+    assert refused.deployed is None, "an archive missing D2 and D3 was deployed"
+    assert f"run {newest.run_id}" in refused.log, "the refusal does not name the newer run"
+    after = chain.run(D5)
+    assert after.conclusion == "success", after.log
+    assert after.boards == _dates(D5, D3, D2, D1)
+    assert_the_history_only_grows(chain)
+
+
+def test_the_live_archive_catches_what_a_stale_artifacts_api_would_miss(
+    chain: PublishSite,
+) -> None:
+    """Both GitHub listings behind together: the artifacts API agrees with
+    the stale run listing, and only the live Archive still shows D3 and D2."""
+    chain.run(D1)
+    second = chain.run(D2)
+    newest = chain.run(D3)
+    stale = [newest.run_id, second.run_id]
+
+    refused = chain.run(D4, fail={"stale-listing": stale, "stale-artifacts": stale})
+
+    assert refused.failed_at == HISTORY_STEP, refused.log
+    assert refused.deployed is None and "site-history" not in refused.artifacts
+    assert f"history/{D3}.json is on the live Archive" in refused.log, refused.log
+    assert f"history/{D2}.json is on the live Archive" in refused.log, refused.log
+    assert_the_history_only_grows(chain)
+
+
+def test_the_artifacts_api_catches_what_a_lagging_live_site_would_miss(
+    chain: PublishSite,
+) -> None:
+    """The live index behind too (Pages caches it for ten minutes): only the
+    artifacts API still knows the newest publish."""
+    first = chain.run(D1)
+    shown = chain.live.read_text(encoding="utf-8")
+    second = chain.run(D2)
+    newest = chain.run(D3)
+    chain.live.write_text(shown, encoding="utf-8")
+
+    refused = chain.run(D4, fail={"stale-listing": [newest.run_id, second.run_id]})
+
+    assert refused.failed_at == HISTORY_STEP, refused.log
+    assert refused.deployed is None and "site-history" not in refused.artifacts
+    assert (f"took site-history from run {first.run_id}, but the artifacts API's "
+            f"newest from a successful publish is run {newest.run_id}'s") in refused.log
+
+
+@pytest.mark.parametrize("key", ["api:artifacts", "api:run"])
+def test_an_artifacts_api_that_never_answers_is_a_refusal(
+    chain: PublishSite, key: str,
+) -> None:
+    """Could not check is not checked."""
+    chain.run(D1)
+    newest = chain.run(D2)
+    key = f"api:run:{newest.run_id}" if key == "api:run" else key
+
+    refused = chain.run(D3, fail={key: 99})
+
+    assert refused.failed_at == HISTORY_STEP, refused.log
+    assert refused.deployed is None and "site-history" not in refused.artifacts
+    assert "GitHub did not answer" in refused.log
+    retried = chain.run(D3, fail={key: 1})
+    assert retried.conclusion == "success", retried.log
+    assert retried.boards == _dates(D3, D2, D1)
+
+
+def test_a_live_site_without_an_archive_is_a_refusal_once_one_was_kept(
+    chain: PublishSite,
+) -> None:
+    """A 404 is "nothing deployed" only before the first publish."""
+    chain.run(D1)
+    chain.run(D2)
+    chain.live.unlink()
+
+    refused = chain.run(D3)
+
+    assert refused.failed_at == HISTORY_STEP, refused.log
+    assert "The live site has no history/index.json" in refused.log
+
+
+def test_a_newer_history_from_a_run_that_did_not_succeed_is_passed_over(
+    chain: PublishSite,
+) -> None:
+    """The restore passes over a red run's upload, and any run off main, so
+    the check must too, or one run that uploaded and then failed (or one
+    dispatch on a branch) would refuse every publish after it."""
+    chain.run(D1)
+    newest = chain.run(D2)
+    chain.red(artifacts=dict(newest.artifacts))
+    # A branch dispatch that succeeded: only the branch keeps it out.
+    chain.red("success", artifacts=dict(newest.artifacts), branch="rehearse-the-publish")
+
+    after = chain.run(D3)
+
+    assert after.conclusion == "success", after.log
+    assert after.boards == _dates(D3, D2, D1)
+
+
+def test_an_artifact_of_the_same_name_from_another_workflow_is_passed_over(
+    chain: PublishSite,
+) -> None:
+    """The artifacts API is asked by name, which any workflow can upload."""
+    chain.run(D1)
+    newest = chain.run(D2)
+    other = chain.red("success", artifacts=dict(newest.artifacts))
+    chain.registry[0]["workflow"] = "season-sim.yml"
+    assert chain.registry[0]["databaseId"] == other
+
+    after = chain.run(D3)
+
+    assert after.conclusion == "success", after.log
+    assert after.boards == _dates(D3, D2, D1)
+
+
+def test_the_live_archive_the_step_reads_is_the_sites_own() -> None:
+    """The chain stands its own last deploy in for DEPLOYED_INDEX; that only
+    tests anything while the URL is the site's."""
+    step = next(s for s in _steps() if s.get("name") == HISTORY_STEP)
+    host = (WEB / "CNAME").read_text(encoding="utf-8").strip()
+    assert step["env"]["DEPLOYED_INDEX"] == f"https://{host}/data/history/index.json" == LIVE_INDEX
+    assert '--record-run "$RUNNER_TEMP/site-history.run"' in step["run"]
+    assert '--restored-run "$RUNNER_TEMP/site-history.run"' in step["run"]
+
+
+def _record_with_source(tmp_path: Path, capsys, *, restored: str, newest: int | None,
+                        deployed: set[str] | None, boards=RESTORED, monkeypatch=None) -> int:
+    module = _floor_script()
+    history = _history(tmp_path / "history", boards)
+    run_file = tmp_path / "site-history.run"
+    run_file.write_text(restored, encoding="utf-8")
+    monkeypatch.setattr(module, "newest_artifact_run", lambda repo, attempts=3: newest)
+    monkeypatch.setattr(module, "deployed_boards", lambda url, attempts=3: deployed)
+    floor = tmp_path / "floor.json"
+    code = module.main(["record", "--history", str(history), "--floor", str(floor),
+                        "--restored-run", str(run_file), "--repo", "o/r",
+                        "--deployed-index", "https://example.invalid/index.json"])
+    assert floor.exists() == (code == 0), "a refused restore must not leave a floor behind"
+    return code
+
+
+def test_record_agrees_with_both_sources(tmp_path: Path, capsys, monkeypatch) -> None:
+    assert _record_with_source(tmp_path, capsys, restored="7\n", newest=7,
+                               deployed=set(RESTORED), monkeypatch=monkeypatch) == 0
+
+
+@pytest.mark.parametrize("restored,newest,deployed", [
+    ("6\n", 7, set(RESTORED)),                         # the listing named an older run
+    ("", 7, set(RESTORED)),                            # it found none; the API holds one
+    ("7\n", None, set(RESTORED)),                      # the API holds none
+    ("7\n", 7, {*RESTORED, "2026-10-04.json"}),        # the Archive shows more
+    ("7\n", 7, None),                                  # the Archive is gone
+    ("not a run\n", 7, set(RESTORED)),                 # the record is unreadable
+])
+def test_record_refuses_when_a_source_disagrees(
+    tmp_path: Path, capsys, monkeypatch, restored, newest, deployed,
+) -> None:
+    assert _record_with_source(tmp_path, capsys, restored=restored, newest=newest,
+                               deployed=deployed, monkeypatch=monkeypatch) == 1
+    assert "::error::" in capsys.readouterr().out
+
+
+def test_the_first_publish_has_nothing_to_disagree_with(tmp_path: Path, capsys, monkeypatch) -> None:
+    assert _record_with_source(tmp_path, capsys, restored="", newest=None, deployed=None,
+                               boards={}, monkeypatch=monkeypatch) == 0
+
+
+def test_record_refuses_without_the_restores_run_record(tmp_path: Path) -> None:
+    module = _floor_script()
+    history = _history(tmp_path / "history", RESTORED)
+    code = module.main(["record", "--history", str(history), "--floor", str(tmp_path / "f.json"),
+                        "--restored-run", str(tmp_path / "absent.run"), "--repo", "o/r",
+                        "--deployed-index", "https://example.invalid/index.json"])
+    assert code == 1
+
+
+def test_the_source_flags_go_together(tmp_path: Path) -> None:
+    with pytest.raises(SystemExit):
+        _floor_script().main(["record", "--history", str(tmp_path), "--floor",
+                              str(tmp_path / "f.json"), "--repo", "o/r"])
+
+
+def test_a_deployed_index_that_cannot_be_read_is_unknown_not_empty(monkeypatch) -> None:
+    import urllib.error
+    module = _floor_script()
+    monkeypatch.setenv("RESTORE_STATE_RETRY_SECONDS", "0")
+
+    def unavailable(url):
+        raise urllib.error.HTTPError(url, 503, "Service Unavailable", {}, None)
+
+    def missing(url):
+        raise urllib.error.HTTPError(url, 404, "Not Found", {}, None)
+
+    with pytest.raises(module.SourceUnknown):
+        module.deployed_boards("https://x/index.json", 2, fetch=unavailable)
+    with pytest.raises(module.SourceUnknown):
+        module.deployed_boards("https://x/index.json", 2, fetch=lambda url: b"<html>")
+    assert module.deployed_boards("https://x/index.json", 2, fetch=missing) is module.NOT_DEPLOYED
+    body = json.dumps({"dates": [{"file": "2026-10-04.json"}]}).encode()
+    assert module.deployed_boards("https://x/index.json", 2, fetch=lambda url: body) == {"2026-10-04.json"}

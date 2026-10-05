@@ -152,10 +152,23 @@ jobs:
         # site keeps its last build until the next run. Only a listing that
         # succeeds and holds no successful publish starts the history
         # afresh, or an owner who dispatches with start_history_afresh.
+        #
+        # And the listing is not trusted to name the newest publish. On
+        # 2026-10-05 run 37318279569 restored run 36176147420 (2026-09-25)
+        # although run 37224089121 (2026-10-04) was newer and successful,
+        # recorded the 4 boards it got as the floor, and went green: the live
+        # Archive went from 13 boards to 5. The floor was taken from the
+        # restore, so it could never catch a restore of the wrong run. Now
+        # `record` first checks the restored run against the newest
+        # site-history in the artifacts API, and the restored boards against
+        # every board the live Archive lists, and stops the job here when
+        # either disagrees or cannot be asked. See scripts/site_history_floor.py.
         env:
           GH_TOKEN: ${{ github.token }}
           START_HISTORY_AFRESH: ${{ inputs.start_history_afresh && 'true' || 'false' }}
           FOLD_HISTORY_FROM_RUN: ${{ inputs.fold_history_from_run || '' }}
+          # The live Archive's index, which no restore may come in under. web/CNAME's host.
+          DEPLOYED_INDEX: https://nhl.maverickhightower.com/data/history/index.json
         run: |
           set -u
           mkdir -p dist/data/history
@@ -163,7 +176,8 @@ jobs:
             echo "::warning::Dispatched with start_history_afresh: the site's history starts again from today, and every earlier frozen board leaves the public archive."
           else
             python scripts/restore_state.py --artifact site-history --dest dist/data/history \
-              --workflow publish-site.yml --success-only --require-newest --attempts 3 || {
+              --workflow publish-site.yml --success-only --require-newest --attempts 3 \
+              --record-run "$RUNNER_TEMP/site-history.run" || {
               echo "::error::The site's history could not be restored, so nothing is built, kept or deployed; the public site keeps its last build and the next run tries again. If the newest successful publish's site-history artifact has expired or been deleted it cannot come back, and dispatching Publish Site with start_history_afresh starts the history again from today."
               exit 1
             }
@@ -178,9 +192,19 @@ jobs:
             python scripts/restore_state.py --artifact site-history --dest dist/data/history \
               --fold-run "$FOLD_HISTORY_FROM_RUN" --attempts 3
           fi
-          # The floor the upload is checked against, taken before the build.
-          python scripts/site_history_floor.py record --history dist/data/history \
-            --floor "$RUNNER_TEMP/site-history-floor.json"
+          # The floor the upload is checked against, taken before the build,
+          # once the restore (and any fold above) agrees with the two sources
+          # that are not the run listing it came from. A history started
+          # afresh has nothing to agree with.
+          if [ "$START_HISTORY_AFRESH" = "true" ]; then
+            python scripts/site_history_floor.py record --history dist/data/history \
+              --floor "$RUNNER_TEMP/site-history-floor.json"
+          else
+            python scripts/site_history_floor.py record --history dist/data/history \
+              --floor "$RUNNER_TEMP/site-history-floor.json" \
+              --restored-run "$RUNNER_TEMP/site-history.run" --repo "$GITHUB_REPOSITORY" \
+              --deployed-index "$DEPLOYED_INDEX"
+          fi
 
       - name: Assemble the site
         run: |
