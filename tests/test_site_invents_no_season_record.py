@@ -29,6 +29,7 @@ import json
 from datetime import timedelta
 from pathlib import Path
 
+import test_site_never_calls_an_unpriced_game_a_pass as harness
 from test_site_never_calls_an_unpriced_game_a_pass import (
     BOARD_DAY,
     SLATE,
@@ -38,6 +39,7 @@ from test_site_never_calls_an_unpriced_game_a_pass import (
     render_results,
     site_module,
 )
+from test_site_publishes_no_forward_return import MID_SEASON, RETURN_FIELDS, THE_RETURN
 
 ACCURACY = ("straightUp", "puckLine", "totals")
 
@@ -123,6 +125,111 @@ def test_a_night_that_cannot_be_settled_is_missing_not_zero(tmp_path: Path, monk
     assert season["missingNights"] == 1
     assert season["nights"] == 0
     assert not (out / "history" / "settled").exists(), "an unsettled night is never kept"
+
+
+def _played(tally: dict) -> int:
+    return sum(tally.values())
+
+
+def test_an_unpriced_or_exhibition_row_never_counts_toward_the_season(
+        tmp_path: Path, monkeypatch) -> None:
+    """The season adds up only what the night's grading would grade.
+
+    An unpriced game carries no pick and no total line, so it can add
+    nothing to best bets, leans or totals. An exhibition is published as
+    schedule only and never reaches results.json at all. The staged,
+    all-regular slate in test_a_settled_night_is_the_boards_season_record
+    is the companion that keeps both halves from passing on an empty tally:
+    the same two games there count one best bet and two totals.
+    """
+    # Unpriced: both games are projected and played to a final, no price
+    # reaches either.
+    lab = make_lab(tmp_path / "unpriced", monkeypatch, staged=False)
+    out = tmp_path / "unpriced" / "out"
+    build(lab, out, monkeypatch)
+    board, results = build(lab, out, monkeypatch, day=BOARD_DAY + timedelta(days=1), finals=True)
+
+    assert [g["priced"] for g in results["games"]] == [False] * len(SLATE), results["games"]
+    assert results["seasonRecord"]["nights"] == 1  # the night was settled
+    for key in ("picks", "leans", "totals"):
+        assert _played(results["seasonRecord"][key]) == 0, (key, results["seasonRecord"][key])
+        assert _played(board["record"][key]) == 0, (key, board["record"][key])
+
+    # Exhibition: a priced slate where one of the two games is preseason.
+    exhibition_home = SLATE[1][1]
+    regular_only = harness.schedule
+
+    def one_exhibition(day, *, final=False):
+        games = regular_only(day, final=final)
+        for game in games:
+            if game["homeTeam"]["abbrev"] == exhibition_home:
+                game["gameType"] = 1
+        return games
+
+    monkeypatch.setattr(harness, "schedule", one_exhibition)
+    lab = make_lab(tmp_path / "exhibition", monkeypatch, staged=True)
+    out = tmp_path / "exhibition" / "out"
+    build(lab, out, monkeypatch)
+    board, results = build(lab, out, monkeypatch, day=BOARD_DAY + timedelta(days=1), finals=True)
+
+    assert [g["home"]["abbr"] for g in results["games"]] == [SLATE[0][1]], results["games"]
+    season = results["seasonRecord"]
+    # One regular-season game: one straight-up call, one total, one best bet.
+    assert _played(season["straightUp"]) == 1, season
+    assert _played(season["totals"]) == 1, season
+    assert _played(season["picks"]) == 1, season
+    for key in ("straightUp", "picks", "leans", "totals"):
+        assert board["record"][key] == season[key], (key, board["record"][key], season[key])
+
+
+def _keys_and_numbers(node, keys: set, numbers: set) -> None:
+    if isinstance(node, dict):
+        for key, value in node.items():
+            keys.add(key)
+            _keys_and_numbers(value, keys, numbers)
+    elif isinstance(node, list):
+        for value in node:
+            _keys_and_numbers(value, keys, numbers)
+    elif isinstance(node, (int, float)) and not isinstance(node, bool):
+        numbers.add(node)
+
+
+def test_the_season_leaves_forward_alone_and_publishes_no_return(
+        tmp_path: Path, monkeypatch) -> None:
+    """Merging the season into `record` must not touch the sealed ledger.
+
+    The ledger report here is mid-season and carries a per-market return
+    (+6.1%, -2.2%) and its intervals, so a leak has something to leak.
+    `forward` on the board must be exactly what load_record seals, before
+    and after a night settles, and neither file may carry a return key or
+    one of the report's return figures anywhere.
+    """
+    lab = make_lab(tmp_path, monkeypatch, staged=True)
+    report = lab / "data" / "outputs" / "forward_evidence.json"
+    report.write_text(json.dumps(MID_SEASON), encoding="utf-8")
+    sealed = site_module().load_record(report)["forward"]
+    assert sealed["rows"] == MID_SEASON["rows"], "the fixture reached load_record"
+
+    out = tmp_path / "out"
+    before, _ = build(lab, out, monkeypatch)
+    after, results = build(lab, out, monkeypatch, day=BOARD_DAY + timedelta(days=1), finals=True)
+
+    assert after["record"]["season"]["nights"] == 1, "the season was merged into the record"
+    assert before["record"]["forward"] == sealed
+    assert after["record"]["forward"] == sealed
+    assert "forward" not in results["seasonRecord"]
+
+    returns = {
+        entry[key] for entry in MID_SEASON["markets"].values()
+        for key in ("roi", "low", "high", "adjusted_low", "adjusted_high")
+    }
+    for name, payload in (("board.json", after), ("results.json", results)):
+        keys: set = set()
+        numbers: set = set()
+        _keys_and_numbers(payload, keys, numbers)
+        leaked = keys & (set(THE_RETURN) | set(RETURN_FIELDS))
+        assert not leaked, f"{name} carries {sorted(leaked)}, a forward return sealed until 2027-04-25"
+        assert not numbers & returns, f"{name} carries {sorted(numbers & returns)} from the ledger's return"
 
 
 def test_a_missing_or_broken_report_publishes_no_record_either(tmp_path: Path) -> None:
