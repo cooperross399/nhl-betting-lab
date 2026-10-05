@@ -187,7 +187,13 @@ def local_files(processed: Path) -> dict[str, Path]:
 
 
 def blob_of(work: Path, path: Path, *, write: bool = False) -> str:
-    return _ok(_git(["hash-object", *(["-w"] if write else []), "--", str(path)], work)).strip()
+    """The blob id of a file on disk. Resolved first: git runs inside the
+    scratch repository `work`, so a relative path (the workflow passes
+    `data/processed`) would be looked up there, not where it lives. That
+    turned every push, check and pull red on 2026-10-05, the first rounds
+    with a working token."""
+    target = str(Path(path).resolve())
+    return _ok(_git(["hash-object", *(["-w"] if write else []), "--", target], work)).strip()
 
 
 def blob_to(work: Path, sha: str, target: Path) -> None:
