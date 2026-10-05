@@ -14,7 +14,9 @@ them. These hold:
 * the board uses ratings built through the model's latest game, and falls
   back to goals, saying so, when the file is missing or stale.
 
-The card never reads these (tests/test_the_shadow_model_cannot_reach_the_card.py).
+The card's team markets read the same file through `models.team_ratings`,
+and nothing on the card's path imports the shadow package
+(tests/test_the_shadow_model_cannot_reach_the_card.py).
 """
 
 from __future__ import annotations
@@ -118,3 +120,47 @@ def test_the_board_reads_the_ratings_and_falls_back_to_goals(tmp_path, capsys) -
         assert rated.teams[team].defence == pytest.approx(rate["defence"])
     # AAA's goals are average; its chances are not, so the xG board likes it more.
     assert rated.moneyline_probabilities("AAA", "DDD")["home"] > goals_win
+
+
+def test_the_price_backtest_rates_each_window_on_earlier_games_only() -> None:
+    """`--price-backtest` prices the xG ratings walk-forward, as the site rates."""
+    from nhl_betting_lab.backtest.team_walk_forward import generate_team_samples
+
+    spec = importlib.util.spec_from_file_location(
+        "_shadow_script_xg", PROJECT_ROOT / "scripts" / "run_shadow_stats.py"
+    )
+    script = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(script)
+
+    games, metrics = _games_and_metrics()
+    seen: list[date] = []
+    rater = script.xg_rater(games, metrics)
+
+    def spy(model, start):
+        seen.append(start)
+        rater(model, start)
+        # Only games before the window reached the ratings: rebuild them by hand.
+        dated = metrics.merge(games.assign(_date=pd.to_datetime(games["date"]).dt.date)[["game_id", "_date"]])
+        variant = next(v for v in measurement.TEAM_VARIANTS if v.key == "xg_luck")
+        factors = measurement.shadow_factors(dated[dated["_date"] < start], variant, model.home_advantage)
+        assert model.teams["AAA"].attack == pytest.approx(factors["AAA"]["attack"] * factors["AAA"]["finishing"])
+
+    goals, _ = generate_team_samples(games, minimum_history_games=30, use_rest=False)
+    xg, walk = generate_team_samples(games, minimum_history_games=30, use_rest=False, rate=spy)
+    assert seen and walk.refits == len(seen)
+    assert set(xg["game_id"]) == set(goals["game_id"])
+    moneyline = lambda s: s[(s["market"] == "moneyline") & (s["selection"] == "home")].set_index("game_id")["model_probability"]  # noqa: E731
+    assert not moneyline(xg).equals(moneyline(goals))
+
+
+def test_a_window_the_ratings_refuse_is_skipped_and_counted() -> None:
+    from nhl_betting_lab.backtest.team_walk_forward import generate_team_samples
+
+    games, _ = _games_and_metrics()
+
+    def refuse(model, start):
+        raise ValueError("no play-by-play")
+
+    samples, walk = generate_team_samples(games, minimum_history_games=30, use_rest=False, rate=refuse)
+    assert samples.empty and walk.refits == 0 and walk.windows_skipped_for_history > 0

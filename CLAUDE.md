@@ -851,8 +851,7 @@ Re-derive rather than trust if the data has moved.
   can rule a stat out and never in. The **Shadow Stats** workflow runs it
   (no credit). Nothing on the card's path may import the package
   (`tests/test_the_shadow_model_cannot_reach_the_card.py`); promoting a
-  stat onto the card needs a price backtest and Cooper's decision, after
-  the decision date.
+  stat onto the card needs a price backtest and Cooper's decision.
   **The public site is rated on them (Cooper, 2026-10-05: "built into it,
   not separate").** The first measurement found recent xG with a
   goaltending (GSAx) and a finishing factor beat the goals ratings on every
@@ -862,9 +861,29 @@ Re-derive rather than trust if the data has moved.
   projections, win probabilities, fair prices, puck line, totals and
   regulation split read off them (`web/build_site_json.py::rate_on_xg`;
   `board.json` says `ratings`). The site reads a file and imports nothing
-  from the package. The pick and its edge are still the card's, priced on
-  goals, so the board's probability and the pick can disagree. A missing or
+  from the package. The pick and its edge are the card's, priced on the same
+  ratings since the switch below. A missing or
   stale ratings file falls back to goals with a warning, never to no board.
+  **2026-10-05, NOT a defect fix: Cooper moved the card's team markets onto
+  the same ratings ("Full switch" on a decision card), before the decision
+  date, which `docs/when_this_ends.md` lists under "may not".** Moneyline,
+  puck line, totals, the regulation three-way and team totals are priced on
+  the xG ratings from the first card of `XG_RATINGS_FROM` (2026-10-06,
+  `models/team_ratings.py`), and those are the opinions frozen into the
+  ledger. Props are untouched. Unlike the `points` staking change, this one
+  changes what is tested, so the team-market half of the test restarts:
+  `build_forward_report` sets aside team-market rows frozen before that day
+  (counted as `superseded_team_rows`, measured nowhere) and the 2027-04-25
+  verdict on team markets covers xG games only, a shorter season of
+  evidence. Gameday Refresh builds the ratings (`run_shadow_stats.py
+  --fetch --tables-only`, free) before the card; the card reads the JSON
+  and still imports nothing from the shadow package. A missing or stale
+  file prices the team markets on goals and notes it on the card
+  (`team_ratings: "goals"`); the run is not degraded, because a backup
+  would rebuy the prices to hit the same NHL outage. The evidence before the switch: outcomes only (moneyline +7.58
+  log-loss per 1,000 games [+3.46, +12.15] over 2,603 games); the price
+  backtest against the bought team markets is
+  `run_shadow_stats.py --price-backtest` (Shadow Stats, `price_backtest`).
 - **This lab has an end date, decided before the data existed: 2027-04-25.**
   Everything measurable on bought history has been measured and comes back
   null. The single open question is whether the model beats prices on data

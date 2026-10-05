@@ -493,9 +493,9 @@ def xg_team_ratings(
     `home_advantage` that takes these as its teams' attack and defence prices
     every market off them, as the measurement scored them.
 
-    For the public site only, which reads them from the file
-    `scripts/run_shadow_stats.py --tables-only` writes. The card's model is
-    frozen until 2027-04-25 and never reads them
+    The public site and the card's team markets read them from the file
+    `scripts/run_shadow_stats.py --tables-only` writes
+    (`models.team_ratings`), never by importing this package
     (tests/test_the_shadow_model_cannot_reach_the_card.py). Raises ValueError
     when the table covers less than `SITE_MINIMUM_COVERAGE` of the
     regular-season games.

@@ -64,8 +64,9 @@ from nhl_betting_lab.backtest.team_walk_forward import (
     settle_total,
 )
 from nhl_betting_lab.config import DATA_DIR, MIN_EDGE, MIN_PROP_EDGE, OUTPUTS_DIR
-from nhl_betting_lab.markets import MARKETS_BY_KEY
+from nhl_betting_lab.markets import MARKETS_BY_KEY, team_market_keys
 from nhl_betting_lab.models.player_props import player_name_aliases
+from nhl_betting_lab.models.team_ratings import XG_RATINGS_FROM
 from nhl_betting_lab.models.value import OddsError, american_to_implied, profit_on_win
 from nhl_betting_lab.puck_drop import check_commence_time
 from nhl_betting_lab.providers.team_names import (
@@ -1300,7 +1301,25 @@ def build_forward_report(
         "markets": {},
         "unsettleable": 0,
         "void": 0,
+        "superseded_team_rows": 0,
     }
+    # Cooper's "full switch" of 2026-10-05: from XG_RATINGS_FROM the team
+    # markets are priced on the xG ratings (models/team_ratings.py), and the
+    # 2027-04-25 verdict on them covers those games only. Team-market rows
+    # frozen earlier were priced on goals; they stay in the ledger, counted
+    # here, and are measured nowhere in this report. Props are untouched.
+    # The wager, void and unsettleable counts describe the whole ledger,
+    # so they are taken before the set-aside.
+    if not ledger.empty:
+        whole = collapse_to_best(ledger)
+        payload["wagers"] = int(len(whole))
+        payload["unsettleable"] = int((whole["outcome"] == "unsettleable").sum())
+        payload["void"] = int((whole["outcome"] == "void").sum())
+        superseded = ledger["market"].astype(str).isin(team_market_keys()) & (
+            ledger["snapshot_date"].astype(str) < XG_RATINGS_FROM
+        )
+        payload["superseded_team_rows"] = int(superseded.sum())
+        ledger = ledger[~superseded]
     if ledger.empty:
         payload["registered_statistic"] = registered_statistic(
             ledger, [], now=moment
@@ -1308,10 +1327,7 @@ def build_forward_report(
         return payload
 
     wagers = collapse_to_best(ledger)
-    payload["wagers"] = int(len(wagers))
     settled = wagers[wagers["outcome"].isin(["won", "lost", "push"])]
-    payload["unsettleable"] = int((wagers["outcome"] == "unsettleable").sum())
-    payload["void"] = int((wagers["outcome"] == "void").sum())
 
     markets = sorted(set(settled["market"].astype(str)))
     payload["registered_statistic"] = registered_statistic(
@@ -1556,8 +1572,15 @@ def render_forward_report(payload: dict) -> str:
             if payload["rows"]
             else ""
         ),
-        "",
     ]
+    if payload.get("superseded_team_rows"):
+        lines.append(
+            f"- Set aside: {payload['superseded_team_rows']:,} team-market ledger "
+            f"row(s) frozen before {XG_RATINGS_FROM}, priced on the goals ratings. "
+            "From that day the team markets are priced on the xG ratings, and "
+            "only those are measured here (Cooper's decision, 2026-10-05)."
+        )
+    lines.append("")
     if not payload["markets"] and not payload["rows"]:
         lines += [
             "## Nothing settled yet",

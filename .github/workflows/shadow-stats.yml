@@ -15,6 +15,11 @@ name: Shadow Stats
 # cache so a second run reads it instead of asking the NHL again.
 on:
   workflow_dispatch:
+    inputs:
+      price_backtest:
+        description: "Price the bought team markets on goals vs xG ratings instead of the outcome measurement"
+        type: boolean
+        default: false
   pull_request:
     paths:
       - "src/nhl_betting_lab/shadow/**"
@@ -66,6 +71,22 @@ jobs:
           test -s data/processed/team_games.csv
           test -s data/processed/player_game_logs.csv
 
+      - name: Restore the bought team prices
+        # Only for the price backtest, from the newest purchase run on main
+        # that carries them. Read here, never uploaded: the report below is
+        # aggregate (bets, returns, intervals) and names no price or book.
+        if: ${{ inputs.price_backtest }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -u
+          python scripts/restore_state.py --artifact historical-props --dest /tmp/bought \
+            --workflow historical-props-purchase.yml --limit 20 --no-merge \
+            --refuse-unreachable --attempts 3
+          cp /tmp/bought/processed/historical_team_prices.csv data/processed/
+          rm -rf /tmp/bought
+          test -s data/processed/historical_team_prices.csv
+
       - name: Restore cached play-by-play
         uses: actions/cache/restore@v4
         with:
@@ -76,13 +97,22 @@ jobs:
       - name: Fetch play-by-play and measure
         env:
           PYTHONPATH: src
+          PRICE_BACKTEST: ${{ inputs.price_backtest && 'true' || 'false' }}
         run: |
           set -u
           status=0
-          python scripts/run_shadow_stats.py --fetch || status=$?
-          if [ -s data/outputs/shadow_stats.md ]; then
-            cat data/outputs/shadow_stats.md >> "$GITHUB_STEP_SUMMARY"
+          if [ "$PRICE_BACKTEST" = "true" ]; then
+            python scripts/run_shadow_stats.py --fetch --price-backtest || status=$?
+            report=data/outputs/shadow_price_backtest.md
+          else
+            python scripts/run_shadow_stats.py --fetch || status=$?
+            report=data/outputs/shadow_stats.md
           fi
+          if [ -s "$report" ]; then
+            cat "$report" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          # The bought prices leave the workspace before anything is uploaded.
+          rm -f data/processed/historical_team_prices.csv
           exit "$status"
 
       - name: Keep the play-by-play for the next run
@@ -100,6 +130,8 @@ jobs:
           path: |
             data/outputs/shadow_stats.md
             data/outputs/shadow_stats.json
+            data/outputs/shadow_price_backtest.md
+            data/outputs/shadow_price_backtest.json
             data/processed/shadow_team_games.csv
             data/processed/shadow_player_games.csv
             data/processed/shadow_goalie_games.csv

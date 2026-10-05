@@ -26,7 +26,7 @@ ratings          "xg" | "goals" | null — what every projection below is rated 
                  finishing and a goaltending (GSAx) factor, from data/processed/shadow_team_ratings.json, which Publish
                  Site builds from the NHL play-by-play (web/build_site_json.py::rate_on_xg). "goals": that file was
                  missing or stale and the card's goals ratings were used. null: nothing was projected. The pick is
-                 always the card's, whose model is rated on goals until 2027-04-25.
+                 always the card's, whose team markets are priced on the same xG ratings (models/team_ratings.py).
 record
   straightUp     {w, l} | null        — the season so far (season_record); null until a night has settled
   picks          {w, l, p} | null     — best bets, the season so far; absent/null until a night has settled
