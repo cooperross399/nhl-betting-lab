@@ -320,22 +320,46 @@ TOKEN_HOLDERS = {
 }
 
 
+SECRET_READS = re.compile(
+    r"secrets\s*\.\s*nhl_closing_lines_token|secrets\s*\[\s*['\"]nhl_closing_lines_token['\"]\s*\]",
+    re.IGNORECASE,
+)
+
+
+def _reads_the_token(fragment: object) -> bool:
+    return bool(SECRET_READS.search(yaml.safe_dump(fragment)))
+
+
 def test_the_store_token_reaches_only_the_steps_that_need_it() -> None:
-    """A read of the secret, at any level. A message that names the secret
-    (Report the outcome says to replace it) reads nothing."""
-    read = "secrets.NHL_CLOSING_LINES_TOKEN"
+    """A read of the secret, at any level and in any spelling GitHub accepts
+    (dot or index, any case). A message that names the secret (Report the
+    outcome says to replace it) reads nothing."""
     holders = set()
     for path in _all_workflows():
         document = _load(path.name)
-        if read in yaml.safe_dump({k: v for k, v in document.items() if k != "jobs"}):
+        if _reads_the_token({k: v for k, v in document.items() if k != "jobs"}):
             holders.add((path.name, "<workflow level>"))
         for job in document["jobs"].values():
-            if read in yaml.safe_dump({k: v for k, v in job.items() if k != "steps"}):
+            if _reads_the_token({k: v for k, v in job.items() if k != "steps"}):
                 holders.add((path.name, "<job level>"))
             for step in job.get("steps", []):
-                if read in yaml.safe_dump(step):
+                if _reads_the_token(step):
                     holders.add((path.name, step.get("name")))
     assert holders == TOKEN_HOLDERS
+
+
+@pytest.mark.parametrize("path", _all_workflows(), ids=lambda p: p.name)
+def test_no_workflow_hands_a_step_every_secret(path: Path) -> None:
+    """toJSON(secrets) would hand the store's token to any step, past the
+    pin above."""
+    assert not re.search(r"tojson\s*\(\s*secrets", path.read_text(encoding="utf-8"), re.IGNORECASE)
+
+
+def test_the_token_reader_sees_every_spelling() -> None:
+    for spelling in ("${{ secrets.NHL_CLOSING_LINES_TOKEN }}", "${{ secrets.nhl_closing_lines_token }}",
+                     "${{ secrets['NHL_CLOSING_LINES_TOKEN'] }}", '${{ secrets["NHL_CLOSING_LINES_TOKEN"] }}'):
+        assert _reads_the_token({"env": {"T": spelling}}), spelling
+    assert not _reads_the_token({"run": "echo replace NHL_CLOSING_LINES_TOKEN"})
 
 
 def test_no_other_workflow_that_uploads_data_processed_writes_the_store() -> None:
