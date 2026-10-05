@@ -915,6 +915,11 @@ def season_record(today: date, history_dir: Path, latest: dict) -> dict:
     when every game on it has finished. A night whose finals cannot be
     fetched is left out and counted in `missingNights`, never counted as
     0–0, and the next run tries it again.
+
+    Before any night has settled the tallies are left out altogether, not
+    published as 0–0. results.json carries this object as `seasonRecord`,
+    and on opening morning it read `picks {w:0, l:0, p:0}` with `nights: 0`:
+    a record nobody had counted, which the page happened not to show.
     """
     tally = {key: {"w": 0, "l": 0} if key == "straightUp" else {"w": 0, "l": 0, "p": 0}
              for key in SEASON_KEYS}
@@ -951,7 +956,8 @@ def season_record(today: date, history_dir: Path, latest: dict) -> dict:
             for k, v in (night["summary"].get(key) or {}).items():
                 if k in tally[key]:
                     tally[key][k] += int(v)
-    return {**tally, "nights": nights, "firstDate": first, "lastDate": last, "missingNights": missing}
+    span = {"nights": nights, "firstDate": first, "lastDate": last, "missingNights": missing}
+    return {**tally, **span} if nights else span
 
 
 def grade_pick(pick: dict, home: str, away: str, hs: int, as_: int, finish: str) -> str:

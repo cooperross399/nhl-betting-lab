@@ -69,6 +69,18 @@ def test_a_settled_night_is_the_boards_season_record(tmp_path: Path, monkeypatch
     assert board["record"]["puckLine"] is None  # nothing grades a puck line
 
 
+
+def test_results_carry_no_tally_before_the_first_settled_night(tmp_path: Path, monkeypatch) -> None:
+    """results.json's `seasonRecord` names the span and nothing else until a
+    night settles: no tally key at all, so no 0–0 nobody counted."""
+    lab = make_lab(tmp_path, monkeypatch, staged=True)
+    _, results = build(lab, tmp_path / "out", monkeypatch)
+
+    season = results["seasonRecord"]
+    assert season == {"nights": 0, "firstDate": None, "lastDate": None, "missingNights": 0}, season
+    rendered = render_results(results, tmp_path)
+    assert not [c for c in rendered["strip"] if "season" in c["label"].lower()], rendered["strip"]
+
 def test_the_season_sums_old_nights_from_what_was_kept(tmp_path: Path, monkeypatch) -> None:
     """An old night is settled once, kept, and read back without the network."""
     lab = make_lab(tmp_path, monkeypatch, staged=True)
