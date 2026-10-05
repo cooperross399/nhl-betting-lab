@@ -2,7 +2,7 @@
 
 The opinion the live card actually held, written down before puck drop, settled against the boxscore after, never revised. This is the only possible price evidence for the regulation three-way, which has never been bought historically (it is per-event only and was never requested), and the accumulating out-of-sample test for everything else.
 
-- Generated: 2026-10-05T13:37:09+00:00
+- Generated: 2026-10-05T21:44:08+00:00
 - Ledger rows: 90,054 — one per book — on 17,741 wager(s), each counted once at the best price the card could have taken (264 void, 0 unsettleable)
 
 ## Accumulated so far, at the shipped edge bars
