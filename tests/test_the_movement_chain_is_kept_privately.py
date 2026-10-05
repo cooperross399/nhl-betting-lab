@@ -24,6 +24,7 @@ in for the private one:
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -72,7 +73,11 @@ def bare(tmp_path, monkeypatch) -> Path:
     seed.mkdir()
     _git(["init", "-q", "-b", "main"], cwd=seed)
     (seed / "captures").mkdir()
-    (seed / "captures" / "2026-10-08.csv").write_text("captured_at\nx\n")
+    # A readable closing-line store on main, so a pull of main writes a file
+    # whose contents a test can look into.
+    (seed / "captures" / "2026-10-08.csv").write_text(
+        "captured_at,commence_time,home_team,away_team,market,player,selection,line,american_odds,book\n"
+        "2026-10-08T22:00:00Z,2026-10-08T23:00:00Z,Toronto Maple Leafs,Boston Bruins,moneyline,,away,,120.0,MainOnlyBook\n")
     _git(["add", "-A"], cwd=seed)
     _git(["commit", "-qm", "seed"], cwd=seed)
     _git(["push", "-q", str(path), "HEAD:refs/heads/main"], cwd=seed)
@@ -179,6 +184,18 @@ def test_exact_duplicate_rows_are_kept(bare, run) -> None:
     assert _show(bare, LM) == HEADER + _row(1) + _row(1) + _row(2) + _row(2)
 
 
+def test_duplicates_survive_a_merge_of_two_diverged_copies(bare, run, tmp_path) -> None:
+    """Where duplicates matter: a thin restore or a race, when the tip and
+    this run's copy have diverged and union_csv really merges them. Each row
+    is kept as many times as the copy holding it most often has it."""
+    _write(run, LM, HEADER + _row(1) + _row(1) + _row(2))
+    assert _run("push", bare, run) == chain.EXIT_OK
+    thin = tmp_path / "thin"
+    _write(thin, LM, HEADER + _row(1) + _row(3) + _row(3))
+    assert _run("push", bare, thin) == chain.EXIT_OK
+    assert _show(bare, LM) == HEADER + _row(1) + _row(1) + _row(2) + _row(3) + _row(3)
+
+
 def _damage_tip(bare: Path, tmp_path: Path, rel: str, body: str) -> str:
     clone = tmp_path / "clone"
     _git(["clone", "-q", "-b", "movement", str(bare), str(clone)])
@@ -194,12 +211,13 @@ def test_a_damaged_tip_file_is_named_and_every_other_file_still_pushed(bare, run
     _damage_tip(bare, tmp_path, LM, folded)
     _write(run, LM, HEADER + _row(1) + _row(2) + _row(3))
     _write(run, LC, "team,line\nTOR,1\nTOR,2\n")
+    capsys.readouterr()  # only what the damaged push says counts below
 
     assert _run("push", bare, run) == chain.EXIT_DAMAGED
 
     assert _show(bare, LM) == folded, "a file that could not be merged was overwritten"
     assert _show(bare, LC) == "team,line\nTOR,1\nTOR,2\n"
-    assert LM in capsys.readouterr().out
+    assert f"{LM} could not be pushed" in capsys.readouterr().out
 
 
 def test_a_rejected_push_refetches_and_keeps_both_rounds(bare, run, tmp_path, monkeypatch) -> None:
@@ -225,6 +243,10 @@ def test_a_rejected_push_refetches_and_keeps_both_rounds(bare, run, tmp_path, mo
     assert waited == [2], "a rejected push waits before it tries again"
     assert sorted(_show(bare, LM).splitlines()[1:]) == sorted(
         (_row(1) + _row(2) + _row(9) + _row(3)).splitlines())
+    # The retry's commit is built on the refetched tip, not on this round's
+    # files alone: every file it did not change is still there.
+    assert _show(bare, LC) == (run / LC).read_text()
+    assert _show(bare, DP) == (run / DP).read_text()
 
 
 def test_the_public_lab_and_a_public_store_are_refused(bare, run, monkeypatch) -> None:
@@ -313,10 +335,10 @@ def test_the_closing_store_pull_never_reads_the_chain(bare, run, tmp_path, monke
     assert _run("push", bare, run) == chain.EXIT_OK
     monkeypatch.delenv("GITHUB_WORKSPACE", raising=False)
     out = tmp_path / "pulled" / "closing_line_captures.csv"
-    assert store.main(["pull", "--out", str(out), "--remote", f"file://{bare}"]) in (
-        store.EXIT_OK, store.EXIT_DAMAGED, store.EXIT_EMPTY)
-    if out.exists():
-        assert "ev1" not in out.read_text()
+    assert store.main(["pull", "--out", str(out), "--remote", f"file://{bare}"]) == store.EXIT_OK
+    text = out.read_text()
+    assert "MainOnlyBook" in text, "the pull did not read main"
+    assert "P1" not in text and "BetMGM" not in text, "the pull read the movement chain"
 
 
 # --- the workflow --------------------------------------------------------------
@@ -487,3 +509,32 @@ def test_an_empty_folder_is_not_a_passing_check(bare, run, tmp_path) -> None:
     empty = tmp_path / "nothing-here"
     empty.mkdir()
     assert _run("verify", bare, empty) == chain.EXIT_DAMAGED
+
+
+# --- the third review's test holes ---------------------------------------------
+
+
+def test_the_check_fails_on_a_tip_copy_it_cannot_read(bare, run, tmp_path) -> None:
+    assert _run("push", bare, run) == chain.EXIT_OK
+    _damage_tip(bare, tmp_path, LM, HEADER + _row(1).replace("P1", '"P1') + _row(2).replace("P2", 'P2"'))
+    assert _run("verify", bare, run) == chain.EXIT_DAMAGED
+
+
+def test_the_check_fails_on_a_header_that_changed(bare, run, tmp_path) -> None:
+    assert _run("push", bare, run) == chain.EXIT_OK
+    _damage_tip(bare, tmp_path, LM, HEADER.replace("captured_at", "captured") + _row(1) + _row(2))
+    assert _run("verify", bare, run) == chain.EXIT_DAMAGED
+
+
+def test_the_check_with_no_chain_is_not_a_pass(bare, run) -> None:
+    assert _run("verify", bare, run) == chain.EXIT_EMPTY
+
+
+def test_the_gate_reads_steps_that_exist() -> None:
+    """GitHub reads an unknown step id as an empty outcome, and "" is not
+    "failure": a renamed id would silence the gate."""
+    ids = {s.get("id") for s in _steps()}
+    gate = _steps()[_index("Fail the run when the private chain was not kept")]["run"]
+    named = set(re.findall(r"steps\.(\w+)\.outcome", gate))
+    assert named == {"private_restore", "private_push", "private_verify"}
+    assert named <= ids
