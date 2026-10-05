@@ -11,11 +11,16 @@ Writes the per-game tables to `data/processed/shadow_*.csv` and the report to
 `data/outputs/shadow_stats.md` and `.json`. `--tables-only` writes the tables
 and the team ratings (`data/processed/shadow_team_ratings.json`,
 `measurement.xg_team_ratings`) and stops; Publish Site runs it that way and
-rates the public board's teams on those ratings. Nothing here is read by the card or
+rates the public board's teams on those ratings. `--price-backtest` writes the
+tables and then prices the bought team markets twice, walk-forward on
+identical games: once on the card's goals ratings and once on the site's xG
+ratings (`data/outputs/shadow_price_backtest.md` and `.json`, aggregate only:
+bets, returns and intervals, never a price). It needs
+`data/processed/historical_team_prices.csv`. Nothing here is read by the card or
 the forward ledger (`nhl_betting_lab.shadow`). Spends no odds credits.
 
 Exit codes: 0 measured (or, with `--tables-only`, tables written); 1 nothing
-to measure; 2 the play-by-play disagrees with the boxscores too often, or too
+to measure (or, with `--price-backtest`, no bought team prices); 2 the play-by-play disagrees with the boxscores too often, or too
 many fetches failed, to trust it (with `--tables-only`, the tables are then
 not written).
 """
@@ -32,7 +37,14 @@ import pandas as pd
 from nhl_betting_lab.config import OUTPUTS_DIR, PROCESSED_DIR, RAW_DIR
 from nhl_betting_lab.data.build_datasets import load_player_logs, load_team_games
 from nhl_betting_lab.data.nhl_api import NhlApiError, _cache_root, _read_cache, game_is_final
-from nhl_betting_lab.models.team_model import TeamModel
+from nhl_betting_lab.backtest.team_walk_forward import generate_team_samples
+from nhl_betting_lab.models.team_model import TeamModel, TeamRates
+from nhl_betting_lab.reports.team_markets_measurement import (
+    MixedWindowError,
+    UnresolvedTeamsError,
+    build_team_measurement,
+)
+from nhl_betting_lab.verdicts import ships
 from nhl_betting_lab.shadow import measurement
 from nhl_betting_lab.shadow.metrics import build_tables
 from nhl_betting_lab.shadow.play_by_play import fetch_play_by_play, game_events
@@ -192,7 +204,18 @@ def main(argv: list[str] | None = None) -> int:
         "(Publish Site, which rates the board's teams on them). Tables that "
         "disagree with the boxscores are not written.",
     )
+    parser.add_argument(
+        "--price-backtest",
+        action="store_true",
+        help="Write the tables, then price the bought team markets on the "
+        "card's goals ratings and on the site's xG ratings, walk-forward on "
+        "identical games, and stop.",
+    )
     args = parser.parse_args(argv)
+    prices_path = args.processed_dir / "historical_team_prices.csv"
+    if args.price_backtest and not prices_path.is_file():
+        print(f"No bought team prices at {prices_path}.", file=sys.stderr)
+        return 1
 
     team_games = load_team_games(args.processed_dir)
     if team_games.empty:
@@ -222,7 +245,7 @@ def main(argv: list[str] | None = None) -> int:
     scored, seasons = add_expected_goals(shots)
     team_table, player_table, goalie_table = build_tables(events, scored)
     validation = measurement.validate_against_boxscores(team_games, team_table)
-    if args.tables_only and not _agrees(validation):
+    if (args.tables_only or args.price_backtest) and not _agrees(validation):
         return 2
     args.processed_dir.mkdir(parents=True, exist_ok=True)
     team_table.to_csv(args.processed_dir / "shadow_team_games.csv", index=False)
@@ -245,6 +268,13 @@ def main(argv: list[str] | None = None) -> int:
             f"goals {validation['goals_match']:.1%}."
         )
         return 0
+
+    if args.price_backtest:
+        print(
+            f"Shadow tables: {len(events)} of {len(ids)} games read, "
+            f"{failures} fetch failure(s)."
+        )
+        return price_backtest(team_games, team_table, pd.read_csv(prices_path), args)
 
     out_of_sample = {s.season for s in seasons if not s.in_sample}
     team_rows, team_summary = measurement.compare_team_models(
@@ -310,6 +340,126 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     if not _agrees(validation):
         return 2
+    return 0
+
+
+#: The windows the bought team store holds (`stores.label_phases`).
+PRICE_WINDOWS = ("late", "early")
+
+
+def xg_rater(team_games: pd.DataFrame, team_table: pd.DataFrame):
+    """A `generate_team_samples` hook rating teams as the site does.
+
+    Each refit takes the `xg_luck` factors from the play-by-play of games
+    strictly before the window it prices, combined as
+    `measurement.xg_team_ratings` combines them, so the backtest prices what
+    the board would have shown that day. A window with no prior play-by-play
+    is refused.
+    """
+    games = team_games[pd.to_numeric(team_games["game_type"], errors="coerce") == 2].copy()
+    games["game_id"] = pd.to_numeric(games["game_id"], errors="coerce")
+    games["_date"] = games["date"].map(measurement._as_date)
+    metrics = team_table.copy()
+    metrics["game_id"] = pd.to_numeric(metrics["game_id"], errors="coerce")
+    metrics = metrics.merge(games.dropna(subset=["_date"])[["game_id", "_date"]], on="game_id")
+    variant = next(v for v in measurement.TEAM_VARIANTS if v.key == measurement.SITE_VARIANT_KEY)
+
+    def rate(model: TeamModel, start) -> None:
+        history = metrics[metrics["_date"] < start]
+        if history.empty:
+            raise ValueError("no play-by-play before this window")
+        for team, f in measurement.shadow_factors(history, variant, model.home_advantage).items():
+            current = model.teams.get(team)
+            model.teams[team] = TeamRates(
+                team=team,
+                games=current.games if current else 0,
+                attack=f["attack"] * f["finishing"],
+                defence=f["defence"] * f["goalie"],
+            )
+
+    return rate
+
+
+def _cell(roi) -> str:
+    if roi is None or not roi.bets:
+        return "no bets"
+    return (
+        f"{roi.roi:+.1%} over {roi.bets:,} ({roi.low:+.1%} .. {roi.high:+.1%}; "
+        f"corrected {roi.adjusted_low:+.1%} .. {roi.adjusted_high:+.1%})"
+    )
+
+
+def price_backtest(team_games, team_table, prices, args) -> int:
+    """The bought team markets, priced on goals and on xG, same games."""
+    use_rest = ships("team_b2b", output_dir=args.output_dir)
+    goals, goals_walk = generate_team_samples(team_games, use_rest=use_rest)
+    xg, xg_walk = generate_team_samples(
+        team_games, use_rest=use_rest, rate=xg_rater(team_games, team_table)
+    )
+    common = set(goals["game_id"]) & set(xg["game_id"])
+    goals = goals[goals["game_id"].isin(common)]
+    xg = xg[xg["game_id"].isin(common)]
+    print(f"Goals ratings: {goals_walk.summary_line()}")
+    print(f"xG ratings: {xg_walk.summary_line()}")
+    print(f"Compared on {len(common):,} games both priced.")
+
+    payload: dict = {"games": len(common), "use_rest": use_rest, "windows": {}}
+    lines = [
+        "# Team markets against real prices: goals ratings vs xG ratings",
+        "",
+        "Walk-forward on identical games: each refit sees only games before the "
+        "window it prices. Goals is the card's `TeamModel`; xG is the same "
+        "model with every team rated as the public site rates it (recent xG, "
+        "a finishing factor and a goaltending/GSAx factor). One bet per wager "
+        "at the best price, flat stakes, at the measurement's edge bar. An "
+        "interval that includes zero means no demonstrated edge.",
+        "",
+        f"Games compared: {len(common):,}. Back-to-back adjustment: "
+        f"{'in force' if use_rest else 'off'}.",
+    ]
+    for window in PRICE_WINDOWS:
+        try:
+            reports = {
+                name: build_team_measurement(
+                    samples, prices, phase=window, processed_dir=args.processed_dir
+                )
+                for name, samples in (("goals", goals), ("xg", xg))
+            }
+        except (MixedWindowError, UnresolvedTeamsError) as exc:
+            print(f"::error::{exc}")
+            return 2
+        lines += [
+            "",
+            f"## `{window}` window (median {reports['goals'].phase_hours:.1f}h before face-off)",
+            "",
+            "| Market | Goals ratings | xG ratings |",
+            "|:--|:--|:--|",
+        ]
+        by_market = {
+            name: {m.market: m.priced for m in report.markets}
+            for name, report in reports.items()
+        }
+        payload["windows"][window] = {}
+        for market in sorted(set(by_market["goals"]) | set(by_market["xg"])):
+            g, x = by_market["goals"].get(market), by_market["xg"].get(market)
+            if (g is None or not g.bets) and (x is None or not x.bets):
+                continue
+            lines.append(f"| {market} | {_cell(g)} | {_cell(x)} |")
+            payload["windows"][window][market] = {
+                name: (
+                    {"bets": r.bets, "roi": r.roi, "low": r.low, "high": r.high,
+                     "adjusted_low": r.adjusted_low, "adjusted_high": r.adjusted_high}
+                    if r is not None and r.bets else None
+                )
+                for name, r in (("goals", g), ("xg", x))
+            }
+    report_text = "\n".join(lines) + "\n"
+    args.output_dir.mkdir(parents=True, exist_ok=True)
+    (args.output_dir / "shadow_price_backtest.md").write_text(report_text, encoding="utf-8")
+    (args.output_dir / "shadow_price_backtest.json").write_text(
+        json.dumps(payload, indent=2) + "\n", encoding="utf-8"
+    )
+    print(report_text)
     return 0
 
 
