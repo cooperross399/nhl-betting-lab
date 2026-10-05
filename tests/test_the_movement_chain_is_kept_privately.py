@@ -691,3 +691,18 @@ def test_the_listing_keeps_only_unexpired_sealed_rounds_from_main(monkeypatch) -
     found = chain.list_sealed("o/r")
     assert [(f["name"], f["created_at"]) for f in found] == [
         ("line-movement-sealed-3", "1"), ("line-movement-sealed-1", "2")]
+def test_relative_folders_work_as_the_workflow_passes_them(bare, run, tmp_path, monkeypatch) -> None:
+    """Line Movement passes `data/processed`, relative to the checkout, while
+    git runs in a scratch repository. Every other test passed absolute paths,
+    and the first real round with a working token went red on exactly this."""
+    monkeypatch.chdir(run.parent)
+    relative = run.name
+    flag = {"push": "--processed-dir", "verify": "--processed-dir", "pull": "--dest"}
+    for command in ("push", "verify", "pull"):
+        assert chain.main([command, flag[command], relative, "--remote", f"file://{bare}"]) == chain.EXIT_OK, command
+    _write(run, LM, HEADER + _row(1) + _row(2) + _row(3))
+    assert chain.main(["push", "--processed-dir", relative, "--remote", f"file://{bare}"]) == chain.EXIT_OK
+    assert _show(bare, LM) == HEADER + _row(1) + _row(2) + _row(3)
+    fresh = "fresh"
+    assert chain.main(["pull", "--dest", fresh, "--remote", f"file://{bare}"]) == chain.EXIT_OK
+    assert (run.parent / fresh / LM).read_text() == HEADER + _row(1) + _row(2) + _row(3)
