@@ -1,0 +1,107 @@
+name: Shadow Stats
+
+# Builds the modern-stats shadow model (Corsi, Fenwick, xG, high-danger
+# attempts, PDO, GSAx, special-teams rates, iCF/iFF/ixG) from the NHL's free
+# play-by-play and measures it walk-forward against the model the card runs.
+# See src/nhl_betting_lab/shadow/__init__.py.
+#
+# It fetches no odds, spends no credit, pushes no branch, edits no policy,
+# places no bet, publishes no card and writes nothing the card or the forward ledger reads.
+# The result is the `shadow-stats` artifact and the run summary.
+#
+# Manual, and on a pull request that changes the shadow model, so a change
+# to it is measured before it merges. It restores the processed tables from
+# Gameday Refresh's `gameday-state`, and keeps the play-by-play it downloads in an Actions
+# cache so a second run reads it instead of asking the NHL again.
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "src/nhl_betting_lab/shadow/**"
+      - "scripts/run_shadow_stats.py"
+      - ".github/workflows/shadow-stats.yml"
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: shadow-stats
+  cancel-in-progress: false
+
+jobs:
+  measure:
+    name: Shadow Stats
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install project
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install -e .
+
+      - name: Restore the processed tables
+        # team_games.csv and player_game_logs.csv, as the card last built
+        # them. A failure to ask GitHub stops the run: measuring on no games
+        # would report nothing as if it were a finding.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -u
+          python scripts/restore_state.py --artifact gameday-state --dest data \
+            --workflow gameday-refresh.yml --no-merge --refuse-unreachable --attempts 3
+          test -s data/processed/team_games.csv
+          test -s data/processed/player_game_logs.csv
+
+      - name: Restore cached play-by-play
+        uses: actions/cache/restore@v4
+        with:
+          path: data/raw/nhl/play_by_play
+          key: shadow-play-by-play-${{ github.run_id }}
+          restore-keys: shadow-play-by-play-
+
+      - name: Fetch play-by-play and measure
+        env:
+          PYTHONPATH: src
+        run: |
+          set -u
+          status=0
+          python scripts/run_shadow_stats.py --fetch || status=$?
+          if [ -s data/outputs/shadow_stats.md ]; then
+            cat data/outputs/shadow_stats.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit "$status"
+
+      - name: Keep the play-by-play for the next run
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: data/raw/nhl/play_by_play
+          key: shadow-play-by-play-${{ github.run_id }}
+
+      - name: Upload the measurement
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shadow-stats
+          path: |
+            data/outputs/shadow_stats.md
+            data/outputs/shadow_stats.json
+            data/processed/shadow_team_games.csv
+            data/processed/shadow_player_games.csv
+            data/processed/shadow_goalie_games.csv
+          if-no-files-found: warn
+          retention-days: 30

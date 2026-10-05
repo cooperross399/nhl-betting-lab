@@ -106,6 +106,11 @@ PYTHONPATH=src .venv/bin/python scripts/run_team_markets_measurement.py
 
 # What the evidence supports -> data/outputs/what_we_can_claim.md
 PYTHONPATH=src .venv/bin/python scripts/run_what_we_can_claim.py
+
+# Modern stats (Corsi, Fenwick, xG, PDO, GSAx, iCF/ixG) as a shadow model,
+# never on the card -> data/outputs/shadow_stats.md. --fetch downloads the
+# free NHL play-by-play for every game not yet cached.
+PYTHONPATH=src .venv/bin/python scripts/run_shadow_stats.py --fetch
 ```
 
 ### The card — offline, gated
@@ -420,6 +425,7 @@ bought the window again and uploaded a thin copy as the newest carrier.
 | Experiment Refresh | weekly; after the bought prices expire from CI (2026-11-29), it skips the experiments with a notice | no |
 | Publish Site | daily, and after each Gameday Refresh | no |
 | Season Sim | daily at 13:05 UTC, before the site builds; on demand | no |
+| Shadow Stats | on demand, and on PRs that change `src/nhl_betting_lab/shadow/` | no |
 
 The site's **Season** page (`web/Season.dc.html`) is fed by **Season Sim**, which plays the rest of the regular season 10,000 times every morning from public data only — the NHL API for standings, rosters, club schedules and season-to-date skater and goalie stats, MoneyPuck for expected goals — plus the hand-kept availability list in `data/season_sim/roster_notes.json` (injured regulars expected back, opening goalie depth charts, rookies' ice time). `python web/build_season_json.py --out DIR` builds it locally (`--cache` keeps the fetched inputs, `--sims` sets the count); the model is under `web/season_sim/` and the file it writes is described in `web/SCHEMA.md` under `season.json`. The workflow uploads that file as the `season-sim` artifact, and Publish Site lays the newest successful run's copy over the committed baseline at `web/data/season.json`; when none can be restored the page keeps the baseline and labels its age, and the board is published regardless. It is a projection of the standings, published as one: no price is read, no credit is spent, and nothing on it is a pick.
 
