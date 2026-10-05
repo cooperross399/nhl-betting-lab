@@ -65,7 +65,8 @@ games[]
 generatedAt, season, phase, notice (shown when games is empty)
 resultsDate      "YYYY-MM-DD"
 summary          {straightUp:{w,l}, picks:{w,l,p}, leans:{w,l,p}, totals:{w,l,p}}   ← picks counts best bets only; leans are tallied apart
-seasonRecord     the same object as board.json's record.season: every frozen board before today, settled and summed
+seasonRecord     the same object as board.json's record.season: every frozen board before today, settled and summed.
+                 Before a night has settled it is {nights: 0, firstDate: null, lastDate: null, missingNights} with no tallies
 teams[ABBR]      {name, short, color, fg}
 games[]
   id, startUtc
