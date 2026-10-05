@@ -40,6 +40,15 @@ on:
           deleted): every earlier frozen board leaves the public archive.
         type: boolean
         default: false
+      fold_history_from_run:
+        description: >-
+          Also fold in this earlier Publish Site run's site-history: every
+          frozen board and line file today's history lacks is copied in, and
+          nothing already here is overwritten. For a restore that came from
+          an older publish than the newest (2026-10-05 restored 2026-09-25's
+          and dropped opening night through 2026-10-04). Leave empty.
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -146,6 +155,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           START_HISTORY_AFRESH: ${{ inputs.start_history_afresh && 'true' || 'false' }}
+          FOLD_HISTORY_FROM_RUN: ${{ inputs.fold_history_from_run || '' }}
         run: |
           set -u
           mkdir -p dist/data/history
@@ -157,6 +167,16 @@ jobs:
               echo "::error::The site's history could not be restored, so nothing is built, kept or deployed; the public site keeps its last build and the next run tries again. If the newest successful publish's site-history artifact has expired or been deleted it cannot come back, and dispatching Publish Site with start_history_afresh starts the history again from today."
               exit 1
             }
+          fi
+          # Boards a stale restore dropped, folded back from the run that held
+          # them. Copies only what is missing, so a frozen board is never
+          # re-frozen; a run that cannot be read stops the job.
+          if [ -n "$FOLD_HISTORY_FROM_RUN" ]; then
+            case "$FOLD_HISTORY_FROM_RUN" in
+              *[!0-9]*) echo "::error::fold_history_from_run must be a run ID."; exit 1 ;;
+            esac
+            python scripts/restore_state.py --artifact site-history --dest dist/data/history \
+              --fold-run "$FOLD_HISTORY_FROM_RUN" --attempts 3
           fi
           # The floor the upload is checked against, taken before the build.
           python scripts/site_history_floor.py record --history dist/data/history \
