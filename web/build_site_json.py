@@ -418,6 +418,7 @@ def load_model(processed: Path, outputs: Path):
         )
         raise ThinHistory(len(games))
     model = TeamModel().fit(games)
+    ratings = rate_on_xg(model, games, processed)
     names = build_team_name_map()
     last = last_played_dates(games)
     rest = ships("team_b2b", output_dir=outputs)
@@ -430,7 +431,65 @@ def load_model(processed: Path, outputs: Path):
         "resolve": lambda label: resolve_team(label, names),
         "b2b": lambda team, day: played_previous_day(last, team, day),
         "rest": rest,
+        "ratings": ratings,
     }
+
+
+#: The team ratings Publish Site writes in the run that builds the board
+#: (`scripts/run_shadow_stats.py --tables-only`), relative to the processed
+#: directory. Read as a file, so this builder imports nothing from the shadow
+#: package.
+SHADOW_RATINGS = "shadow_team_ratings.json"
+
+
+def rate_on_xg(model, games, processed: Path) -> str:
+    """Rate the board's teams on expected goals and goaltending, as Cooper
+    asked on 2026-10-05: built into the site's numbers, not shown beside them.
+
+    The fitted goals model keeps its league rate, home advantage, overtime
+    rate and back-to-back factors; its attack and defence become recent xG
+    for and against, times a finishing factor and a goaltending (GSAx)
+    factor (`shadow.measurement.xg_team_ratings`), the stack that beat the
+    goals ratings on every column of the first walk-forward measurement. So
+    `projGoals`, `winProb`, the fair moneyline, `coverProb`, `overProb` and
+    the regulation split all read off it. A team the file does not rate
+    keeps its goals rating.
+
+    The card does not. Its model is frozen until 2027-04-25, so the pick and
+    its edge on this board are still the card's, priced on goals, and the
+    board's probabilities and the pick can disagree.
+
+    Returns "xg", or "goals" with a `::warning::` when the file is missing,
+    unreadable, or was not built through the latest regular-season game this
+    model was fitted on; then the board publishes the goals ratings rather
+    than nothing.
+    """
+    from nhl_betting_lab.models.team_model import TeamRates
+
+    path = processed / SHADOW_RATINGS
+    try:
+        ratings = json.loads(path.read_text(encoding="utf-8"))
+        teams = ratings["teams"]
+        through = str(ratings["last_game_date"])
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        print(f"::warning::{SHADOW_RATINGS} could not be read ({exc}); the board is rated on goals.")
+        return "goals"
+    import pandas as pd
+
+    regular = games[pd.to_numeric(games["game_type"], errors="coerce") == 2]
+    latest = str(regular["date"].max())[:10] if not regular.empty else ""
+    if through != latest:
+        print(f"::warning::{SHADOW_RATINGS} runs through {through}, the game history through {latest}; "
+              "the board is rated on goals.")
+        return "goals"
+    for team, rate in teams.items():
+        current = model.teams.get(team)
+        model.teams[team] = TeamRates(
+            team=team, games=current.games if current else 0,
+            attack=float(rate["attack"]), defence=float(rate["defence"]),
+        )
+    print(f"Board ratings: expected goals plus goaltending and finishing, {len(teams)} teams, through {through}.")
+    return "xg"
 
 
 def _site_history():
@@ -628,6 +687,9 @@ def build_board(day: date, lab: Path, history_dir: Path) -> dict:
         "generatedAt": now, "season": "2026–27", "phase": "preseason" if preseason else "regular",
         "boardDate": day.isoformat(), "notice": notice, "record": record, "teams": teams, "games": out_games,
         "allowlistedMarkets": allowlisted,
+        # What the projections are rated on (rate_on_xg): "xg", "goals" when
+        # the play-by-play table was not usable, None when nothing was projected.
+        "ratings": lab_model["ratings"] if lab_model else None,
         # When the Gameday card this board was built from was generated; None
         # when no card was restored. A board built on an earlier day's card is
         # shown but not frozen (web/site_history.py::built_on_stale_state).

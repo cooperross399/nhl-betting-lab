@@ -254,3 +254,53 @@ def test_a_feed_that_disagrees_with_the_boxscores_fails_the_run(tmp_path) -> Non
         ["--processed-dir", str(processed), "--raw-dir", str(raw), "--output-dir", str(tmp_path / "out")]
     )
     assert code == 2
+
+
+def test_tables_only_writes_the_site_ratings_and_no_report(tmp_path) -> None:
+    rng = np.random.default_rng(11)
+    teams = ["AAA", "BBB", "CCC", "DDD"]
+    payloads, team_rows, log_rows = _synthetic_season(rng, 2024, 3, teams)
+    raw = tmp_path / "raw"
+    cache = raw / "nhl" / "play_by_play"
+    cache.mkdir(parents=True)
+    for payload in payloads:
+        (cache / f"{payload['id']}.json").write_text(json.dumps(payload))
+    processed = tmp_path / "processed"
+    processed.mkdir()
+    pd.DataFrame(team_rows, columns=list(TEAM_GAME_COLUMNS)).to_csv(processed / "team_games.csv", index=False)
+    pd.DataFrame(log_rows, columns=list(PLAYER_LOG_COLUMNS)).to_csv(processed / "player_game_logs.csv", index=False)
+    outputs = tmp_path / "outputs"
+    script = _script()
+
+    code = script.main(
+        ["--processed-dir", str(processed), "--raw-dir", str(raw), "--output-dir", str(outputs), "--tables-only"]
+    )
+
+    assert code == 0
+    ratings = json.loads((processed / script.RATINGS_FILE).read_text())
+    assert set(ratings["teams"]) == set(teams)
+    assert ratings["last_game_date"] == max(r["date"] for r in team_rows)
+    assert not (outputs / "shadow_stats.md").exists()
+
+
+def test_tables_only_writes_nothing_from_a_feed_that_disagrees(tmp_path) -> None:
+    rng = np.random.default_rng(5)
+    payloads, team_rows, log_rows = _synthetic_season(rng, 2024, 2, ["AAA", "BBB", "CCC", "DDD"])
+    for row in team_rows:
+        row["home_shots"] += 1
+    raw = tmp_path / "raw"
+    cache = raw / "nhl" / "play_by_play"
+    cache.mkdir(parents=True)
+    for payload in payloads:
+        (cache / f"{payload['id']}.json").write_text(json.dumps(payload))
+    processed = tmp_path / "processed"
+    processed.mkdir()
+    pd.DataFrame(team_rows, columns=list(TEAM_GAME_COLUMNS)).to_csv(processed / "team_games.csv", index=False)
+    pd.DataFrame(log_rows, columns=list(PLAYER_LOG_COLUMNS)).to_csv(processed / "player_game_logs.csv", index=False)
+    script = _script()
+    code = script.main(
+        ["--processed-dir", str(processed), "--raw-dir", str(raw), "--output-dir", str(tmp_path / "o"), "--tables-only"]
+    )
+    assert code == 2
+    assert not (processed / script.RATINGS_FILE).exists()
+    assert not (processed / "shadow_team_games.csv").exists()

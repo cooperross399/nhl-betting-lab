@@ -365,6 +365,8 @@ class PublishSite:
         given = step.get("with") or {}
         if uses.startswith(("actions/checkout", "actions/setup-python")):
             return True
+        if uses.startswith(("actions/cache/restore", "actions/cache/save")):
+            return True  # a cache miss and a save nothing reads: the play-by-play is not modelled
         if uses.startswith("actions/upload-artifact"):
             source = work / str(given["path"]).strip()
             if source.is_dir() and any(p.is_file() for p in source.rglob("*")):

@@ -853,6 +853,18 @@ Re-derive rather than trust if the data has moved.
   (`tests/test_the_shadow_model_cannot_reach_the_card.py`); promoting a
   stat onto the card needs a price backtest and Cooper's decision, after
   the decision date.
+  **The public site is rated on them (Cooper, 2026-10-05: "built into it,
+  not separate").** The first measurement found recent xG with a
+  goaltending (GSAx) and a finishing factor beat the goals ratings on every
+  column (moneyline +7.58 per 1,000 games [+3.46, +12.15], 2,603 games), so
+  Publish Site builds those ratings each run (`run_shadow_stats.py
+  --tables-only`, writing `shadow_team_ratings.json`) and the board's
+  projections, win probabilities, fair prices, puck line, totals and
+  regulation split read off them (`web/build_site_json.py::rate_on_xg`;
+  `board.json` says `ratings`). The site reads a file and imports nothing
+  from the package. The pick and its edge are still the card's, priced on
+  goals, so the board's probability and the pick can disagree. A missing or
+  stale ratings file falls back to goals with a warning, never to no board.
 - **This lab has an end date, decided before the data existed: 2027-04-25.**
   Everything measurable on bought history has been measured and comes back
   null. The single open question is whether the model beats prices on data
