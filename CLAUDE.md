@@ -840,6 +840,19 @@ Re-derive rather than trust if the data has moved.
     real private store leaves no captured price in the workspace, the
     script's refusals, and a report built from sentinel prices prints none
     of them.
+- **2026-10-05: the modern stats are a shadow model, not the card's.**
+  Cooper asked for the model to use Corsi, Fenwick, xG, high-danger
+  attempts, PDO, GSAx, special-teams rates and iCF/iFF/ixG, and chose to
+  build them beside the card rather than into it, because the card's model
+  is frozen until 2027-04-25. `nhl_betting_lab.shadow` computes them from
+  the NHL's free play-by-play (the lab's own xG, each season fitted on
+  earlier seasons only) and `scripts/run_shadow_stats.py` measures them
+  walk-forward against the card's team and prop rates on outcomes, which
+  can rule a stat out and never in. The **Shadow Stats** workflow runs it
+  (no credit). Nothing on the card's path may import the package
+  (`tests/test_the_shadow_model_cannot_reach_the_card.py`); promoting a
+  stat onto the card needs a price backtest and Cooper's decision, after
+  the decision date.
 - **This lab has an end date, decided before the data existed: 2027-04-25.**
   Everything measurable on bought history has been measured and comes back
   null. The single open question is whether the model beats prices on data
