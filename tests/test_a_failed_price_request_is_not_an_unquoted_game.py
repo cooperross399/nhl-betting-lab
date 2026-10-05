@@ -40,7 +40,20 @@ What these tests hold, through the real `main` of each script, a real
   back, writes both stores, exits 0, and names every failed request in a
   `::warning::` and on stderr. A round in which requests failed and nothing
   was captured exits 2, which turns the Capture prices step red, and every
-  step after it is `if: always()`, so no upload and no hand-off is lost;
+  step after it is `if: always()`, so the round is still kept;
+* what keeps it changed on 2026-10-05 (stage two of moving the chain to the
+  private repository: closing-line data is never public). It used to be the
+  public `line-movement` artifact ("Keep the captures"), gone now. The keeper
+  is "Keep the captures privately" (`private_movement_chain.py push`, to
+  branch `movement` of cooperross399/nhl-closing-lines), and when that push
+  fails, "Seal this round when the private push failed" and "Keep the sealed
+  round". A red price step skips none of them. The red round's own day file
+  is pushed by the keeper's own command, from the folder the capture writes,
+  to a local repository standing in for the private one, and arrives byte
+  for byte, every game's bulk moneyline included. The sealed fallback is
+  checked here only for running after a red price step. Sealing and the
+  next round's unseal are left to the private chain's own tests, and Closing
+  Lines' hand-off (it now pulls the whole private chain) to Closing Lines';
 * the dispatch capture names its failed requests the same way and still
   exits 0. Its Publish step runs only after a successful Capture step, so
   a nonzero exit would throw away the team markets and the games that
@@ -55,6 +68,7 @@ from __future__ import annotations
 import io
 import os
 import re
+import shlex
 import stat
 import subprocess
 import sys
@@ -69,7 +83,7 @@ import yaml
 
 from conftest import FakeResponse
 from nhl_betting_lab.closing_lines import captures_path
-from nhl_betting_lab.config import PROJECT_ROOT
+from nhl_betting_lab.config import PROCESSED_DIR, PROJECT_ROOT
 from nhl_betting_lab.providers import odds_api
 from nhl_betting_lab.providers.env_file import ProviderEnvLoadResult
 
@@ -505,11 +519,31 @@ def _run_step(block: str, tmp_path: Path, code: int) -> tuple[str, dict[str, str
     return ("success" if result.returncode == 0 else "failure"), outputs
 
 
+#: What keeps a round since stage two (2026-10-05): the private push, and,
+#: when that push fails, the sealed copy and its upload.
+KEEPERS = (
+    "Keep the captures privately",
+    "Seal this round when the private push failed",
+    "Keep the sealed round",
+)
+
+#: The job-status functions a red step changes. Either one anywhere in a
+#: condition puts the step back behind that status, whatever `always()` leads
+#: it (`always() && success()` is `success()`).
+STATUS_CHECK = re.compile(r"\b(?:success|failure)\s*\(")
+
+
+def _argv(block: str) -> list[str]:
+    """A one-command run block as words, its line continuations dropped."""
+    return [word for word in shlex.split(block, comments=True) if word.strip()]
+
+
 def test_a_red_price_capture_costs_the_line_movement_run_nothing() -> None:
     """Exit 2 turns Capture prices red. That is the report and must stay one,
     so the step is not forgiven; and every step after it still runs, so the
-    captures (which Closing Lines derives the closing prices from) and the
-    ladder scan are all kept."""
+    round's keepers (the private push, and the sealed fallback when the push
+    fails: the chain Closing Lines derives the closing prices from) and the
+    ladder scan all run."""
     index, capture = _named(LINE_MOVEMENT, "Capture prices")
     assert "capture_line_movement.py" in capture["run"]
     assert capture.get("continue-on-error") in (None, False), (
@@ -517,11 +551,72 @@ def test_a_red_price_capture_costs_the_line_movement_run_nothing() -> None:
     )
     assert "if" not in capture, "the price capture runs on every trigger"
     later = _steps(LINE_MOVEMENT)[index + 1:]
-    assert any(step.get("name") == "Keep the captures" for step in later)
+    names = [step.get("name") for step in later]
+    for keeper in KEEPERS:
+        assert keeper in names, f"{keeper!r} must run after the price capture"
     for step in later:
-        assert str(step.get("if", "")).startswith("always()"), (
+        condition = str(step.get("if", ""))
+        assert condition.startswith("always()"), (
             f"{step.get('name')!r} would be skipped after a red price capture"
         )
+        assert not STATUS_CHECK.search(condition.removeprefix("always()")), (
+            f"{step.get('name')!r} reads the job's status behind its always(): {condition}"
+        )
+
+
+def test_a_round_that_turned_the_price_step_red_still_reaches_the_private_chain(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The keeper's own command, from the YAML, on the real files a red round
+    wrote: every request failed, the step went red, and the bulk moneylines
+    the round did capture reach the private chain byte for byte. A local bare
+    repository stands in for the private one; only the API's "is it private"
+    answer is replaced, and no token is set."""
+    code, _, _, _, processed = _movement(tmp_path, monkeypatch, _status(503, EVERY))
+    _, capture = _named(LINE_MOVEMENT, "Capture prices")
+    block = _render(capture["run"], {"inputs.credit_cap || '600'": "600"})
+    assert _run_step(block, tmp_path, code)[0] == "failure", f"script exit {code}"
+
+    # The capture names no folder, so it writes its default; the keeper must
+    # read that folder, as the runner's checkout lays it out.
+    assert "--processed-dir" not in _argv(block)
+    _, keeper = _named(LINE_MOVEMENT, "Keep the captures privately")
+    argv = _argv(keeper["run"])
+    assert argv[:3] == ["python", "scripts/private_movement_chain.py", "push"], keeper["run"]
+    folder = argv.index("--processed-dir") + 1
+    assert PROJECT_ROOT / argv[folder] == PROCESSED_DIR, (
+        f"the keeper reads {argv[folder]}, the capture writes {PROCESSED_DIR}"
+    )
+    argv[folder] = str(processed)
+
+    for key, value in {"GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}.items():
+        monkeypatch.setenv(key, value)
+    private = tmp_path / "private.git"
+    subprocess.run(["git", "init", "-q", "--bare", str(private)], check=True,
+                   capture_output=True)
+    chain = load_script("private_movement_chain.py")
+    monkeypatch.setattr(chain.store, "repo_is_private", lambda repo, token: True)
+    monkeypatch.setattr(chain, "sleep", lambda seconds: None)
+    for name in (chain.store.TOKEN_ENV, "GITHUB_REPOSITORY", "GITHUB_STEP_SUMMARY"):
+        monkeypatch.delenv(name, raising=False)
+    with _Capture() as pushed:
+        exit_code = chain.main([*argv[2:], "--remote", f"file://{private}"])
+    assert exit_code == 0, pushed.out + pushed.err
+
+    day = _movement_file(processed)
+    shown = subprocess.run(
+        ["git", "--git-dir", str(private), "show",
+         f"{chain.CHAIN_BRANCH}:{day.relative_to(processed).as_posix()}"],
+        capture_output=True,
+    )
+    assert shown.returncode == 0, (
+        f"the red round's day file is not on the private chain: {shown.stderr!r}\n"
+        + pushed.out + pushed.err
+    )
+    held = shown.stdout
+    assert held == day.read_bytes()
+    frame = pd.read_csv(io.BytesIO(held), dtype=str, keep_default_na=False)
+    assert set(frame.loc[frame["market"] == "moneyline", "provider_event_id"]) == EVERY
 
 
 @pytest.mark.parametrize(

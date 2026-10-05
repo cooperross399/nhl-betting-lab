@@ -359,16 +359,28 @@ DEFAULT_BRANCH = ("github.event_name == 'schedule' || github.ref == "
 
 
 def test_the_private_steps_sit_where_they_must() -> None:
-    assert _index("Restore today's captures") < _index("Fold in the private chain") < _index("Capture prices")
-    # After BOTH public uploads: while the public artifact keeps the round,
-    # nothing private may delay it inside the 20-minute job.
-    public = [_index("Keep the captures"), _index("Keep this attempt's captures beside the earlier ones")]
-    assert max(public) < _index("Keep the captures privately") < _index("Check the private chain holds this round")
-    restore = _steps()[_index("Fold in the private chain")]
-    assert restore["timeout-minutes"] <= 3, "the paid fetch comes after it"
+    """Restore before the paid fetch; the push straight after the captures
+    (the round's only home now), the seal and its upload after the push, the
+    check after both, and every gate after every upload."""
+    assert _index("Restore today's captures") < _index("Capture prices")
+    assert (_index("Capture line combinations") < _index("Keep the captures privately")
+            < _index("Seal this round when the private push failed") < _index("Keep the sealed round")
+            < _index("Check the private chain holds this round") < _index("Scan the captured ladders"))
     gate = _index("Fail the run when the private chain was not kept")
     uploads = [i for i, s in enumerate(_steps()) if str(s.get("uses", "")).startswith("actions/upload-artifact")]
     assert gate > max(uploads)
+
+
+def test_no_step_uploads_the_chain_publicly() -> None:
+    """Stage two: the only artifacts are the encrypted seal and the
+    aggregate ladder scan."""
+    names = {str(s["with"].get("name")) for s in _steps()
+             if str(s.get("uses", "")).startswith("actions/upload-artifact")}
+    assert names == {"line-movement-sealed-${{ github.run_attempt }}", "ladder-coherence"}
+    sealed = _steps()[_index("Keep the sealed round")]
+    assert sealed["with"]["path"] == "${{ runner.temp }}/sealed/round.enc"
+    assert sealed["with"]["retention-days"] == 7
+    assert sealed["if"] == "always() && steps.seal.outcome == 'success'"
 
 
 def test_only_the_default_branch_writes_the_chain() -> None:
@@ -376,60 +388,68 @@ def test_only_the_default_branch_writes_the_chain() -> None:
         step = _steps()[_index(name)]
         assert step["if"] == f"always() && ({DEFAULT_BRANCH})", name
         assert step.get("continue-on-error") is True
+    seal = _steps()[_index("Seal this round when the private push failed")]
+    assert seal["if"] == "always() && steps.private_push.outcome == 'failure'"
 
 
-def test_the_token_reaches_only_the_private_steps() -> None:
-    holders = {s.get("name") for s in _steps() if "secrets.NHL_CLOSING_LINES_TOKEN" in yaml.safe_dump(s)}
-    assert holders == {"Fold in the private chain", "Keep the captures privately",
-                       "Check the private chain holds this round"}
+def test_the_secrets_reach_only_the_steps_that_need_them() -> None:
+    token = {s.get("name") for s in _steps() if "secrets.NHL_CLOSING_LINES_TOKEN" in yaml.safe_dump(s)}
+    assert token == {"Restore today's captures", "Keep the captures privately",
+                     "Check the private chain holds this round"}
+    key = {s.get("name") for s in _steps() if "secrets.NHL_CHAIN_FALLBACK_KEY" in yaml.safe_dump(s)}
+    assert key == {"Restore today's captures", "Seal this round when the private push failed"}
 
 
-def test_the_public_copies_are_kept_seven_days() -> None:
-    kept = [s for s in _steps() if str(s.get("with", {}).get("name", "")).startswith("line-movement")]
-    assert len(kept) == 2
-    assert all(s["with"]["retention-days"] == 7 for s in kept)
-
-
-def _restore_block(tmp_path: Path, code: int) -> tuple[subprocess.CompletedProcess, str]:
+def _restore_block(tmp_path: Path, pull: int, unseal: int) -> tuple[subprocess.CompletedProcess, str]:
     stub = tmp_path / "bin"
     stub.mkdir()
-    (stub / "python").write_text(f"#!/bin/sh\nexit {code}\n")
+    (stub / "python").write_text(
+        "#!/bin/sh\n"
+        f'case "$2" in pull) exit {pull} ;; unseal) exit {unseal} ;; esac\nexit 0\n')
     (stub / "python").chmod(0o755)
     work = tmp_path / "work"
     work.mkdir()
-    step = _steps()[_index("Fold in the private chain")]
+    step = _steps()[_index("Restore today's captures")]
     done = _bash(_render(step["run"], {}), work,
                  {**os.environ, "PATH": f"{stub}{os.pathsep}{os.environ['PATH']}"})
-    return done, (work / "private_problem.txt").read_text()
+    return done, (work / "restore_problem.txt").read_text()
 
 
-@pytest.mark.parametrize(("code", "problem"), [(0, False), (4, False), (1, True), (2, True), (3, True), (5, True)])
-def test_the_private_restore_reports_everything_but_a_clean_read_or_no_chain(tmp_path, code, problem) -> None:
-    done, text = _restore_block(tmp_path, code)
+@pytest.mark.parametrize(("pull", "unseal", "problem"), [
+    (0, 0, False), (4, 0, False),
+    (1, 0, True), (2, 0, True), (3, 0, True), (5, 0, True),
+    (0, 1, True), (0, 2, True), (0, 3, True),
+])
+def test_the_restore_reports_everything_but_a_clean_read_or_no_chain(tmp_path, pull, unseal, problem) -> None:
+    done, text = _restore_block(tmp_path, pull, unseal)
     assert done.returncode == 0, "the restore never stops the paid capture"
     assert bool(text.strip()) is problem
 
 
-def _gate(outcomes: dict[str, str], problem: str, tmp_path: Path) -> subprocess.CompletedProcess:
+def _gate(outcomes: dict[str, str], tmp_path: Path) -> subprocess.CompletedProcess:
     step = _steps()[_index("Fail the run when the private chain was not kept")]
     values = {f"steps.{k}.outcome": v for k, v in outcomes.items()}
+    values["github.run_attempt"] = "1"
     work = tmp_path / "gate"
     work.mkdir()
-    (work / "private_problem.txt").write_text(problem)
     return _bash(_render(step["run"], values), work, dict(os.environ))
 
 
-@pytest.mark.parametrize(("outcomes", "problem", "red"), [
-    ({"private_restore": "success", "private_push": "success", "private_verify": "success"}, "", False),
-    ({"private_restore": "success", "private_push": "skipped", "private_verify": "skipped"}, "", False),
-    ({"private_restore": "success", "private_push": "failure", "private_verify": "success"}, "", True),
-    ({"private_restore": "success", "private_push": "success", "private_verify": "failure"}, "", True),
-    ({"private_restore": "failure", "private_push": "success", "private_verify": "success"}, "", True),
-    ({"private_restore": "success", "private_push": "success", "private_verify": "success"}, "could not be folded in\n", True),
+OK = {"private_push": "success", "seal": "skipped", "sealed_upload": "skipped", "private_verify": "success"}
+
+
+@pytest.mark.parametrize(("change", "red", "says"), [
+    ({}, False, ""),
+    ({"private_push": "skipped", "private_verify": "skipped"}, False, ""),
+    ({"private_push": "failure", "seal": "success", "sealed_upload": "success"}, True, "sealed"),
+    ({"private_push": "failure", "seal": "failure", "sealed_upload": "skipped"}, True, "on no copy"),
+    ({"private_push": "failure", "seal": "success", "sealed_upload": "failure"}, True, "on no copy"),
+    ({"private_verify": "failure"}, True, "does not hold every row"),
 ])
-def test_the_gate_is_red_for_every_fault_and_only_then(tmp_path, outcomes, problem, red) -> None:
-    done = _gate(outcomes, problem, tmp_path)
+def test_the_gate_is_red_for_every_fault_and_says_where_the_round_is(tmp_path, change, red, says) -> None:
+    done = _gate({**OK, **change}, tmp_path)
     assert (done.returncode != 0) is red, done.stdout + done.stderr
+    assert says in done.stdout
 
 
 # --- the second review's findings ----------------------------------------------
@@ -490,8 +510,11 @@ def test_a_file_the_tip_holds_byte_for_byte_passes_the_check_whatever_it_holds(b
 
 
 @pytest.mark.parametrize(("name", "command", "bound"), [
-    ("Fold in the private chain", "python scripts/private_movement_chain.py pull --dest data/processed", 3),
-    ("Keep the captures privately", "python scripts/private_movement_chain.py push --processed-dir data/processed", 4),
+    ("Restore today's captures", "python scripts/private_movement_chain.py pull --dest data/processed", 4),
+    ("Restore today's captures", "python scripts/private_movement_chain.py unseal --dest data/processed", 4),
+    ("Keep the captures privately", "python scripts/private_movement_chain.py push --processed-dir data/processed", 6),
+    ("Seal this round when the private push failed",
+     'python scripts/private_movement_chain.py seal --processed-dir data/processed --out "$RUNNER_TEMP/sealed/round.enc"', 2),
     ("Check the private chain holds this round", "python scripts/private_movement_chain.py verify --processed-dir data/processed", 4),
 ])
 def test_each_private_step_is_bounded_soft_and_pointed_at_the_chain(name, command, bound) -> None:
@@ -536,5 +559,135 @@ def test_the_gate_reads_steps_that_exist() -> None:
     ids = {s.get("id") for s in _steps()}
     gate = _steps()[_index("Fail the run when the private chain was not kept")]["run"]
     named = set(re.findall(r"steps\.(\w+)\.outcome", gate))
-    assert named == {"private_restore", "private_push", "private_verify"}
+    assert named == {"private_push", "seal", "sealed_upload", "private_verify"}
     assert named <= ids
+
+
+# --- stage two: the sealed fallback ----------------------------------------------
+
+
+KEY = "a-test-key-that-is-not-the-real-one"
+
+
+@pytest.fixture
+def sealed_env(monkeypatch, tmp_path):
+    monkeypatch.setenv(chain.KEY_ENV, KEY)
+    monkeypatch.delenv("GITHUB_WORKSPACE", raising=False)
+    return tmp_path / "runner_temp" / "sealed" / "round.enc"
+
+
+def _offer(monkeypatch, sealed_files: list[Path]) -> None:
+    """GitHub's listing and download, replaced by the sealed files given."""
+    artifacts = [{"id": i, "name": f"{chain.SEALED_PREFIX}1", "expired": False,
+                  "workflow_run": {"id": 100 + i, "head_branch": "main"},
+                  "created_at": f"2026-10-0{i + 1}T00:00:00Z"} for i, _ in enumerate(sealed_files)]
+    monkeypatch.setattr(chain, "list_sealed", lambda repo: artifacts)
+    monkeypatch.setattr(chain, "download_sealed",
+                        lambda repo, artifact, target: target.write_bytes(sealed_files[artifact["id"]].read_bytes()))
+
+
+def _seal(run: Path, out: Path) -> int:
+    return chain.main(["seal", "--processed-dir", str(run), "--out", str(out)])
+
+
+def test_a_sealed_round_is_not_readable_without_the_key(sealed_env, run) -> None:
+    assert _seal(run, sealed_env) == chain.EXIT_OK
+    data = sealed_env.read_bytes()
+    assert b"BetMGM" not in data and b"Toronto" not in data and b"line_movement" not in data
+
+
+def test_a_sealed_round_comes_home_with_the_next_round(sealed_env, run, tmp_path, monkeypatch) -> None:
+    """Seal, then a later round with a thin disk unseals it: every row is
+    back, and the next push would carry it into the chain."""
+    _write(run, LM, HEADER + _row(1) + _row(2) + _row(3))
+    assert _seal(run, sealed_env) == chain.EXIT_OK
+    _offer(monkeypatch, [sealed_env])
+    later = tmp_path / "later"
+    _write(later, LM, HEADER + _row(1))
+    assert chain.main(["unseal", "--dest", str(later), "--github-repo", "o/r"]) == chain.EXIT_OK
+    assert sorted((later / LM).read_text().splitlines()) == sorted(
+        (HEADER + _row(1) + _row(2) + _row(3)).splitlines())
+    assert (later / LC).read_text() == (run / LC).read_text()
+
+
+def test_unsealing_twice_adds_nothing(sealed_env, run, tmp_path, monkeypatch) -> None:
+    assert _seal(run, sealed_env) == chain.EXIT_OK
+    _offer(monkeypatch, [sealed_env])
+    later = tmp_path / "later"
+    assert chain.main(["unseal", "--dest", str(later), "--github-repo", "o/r"]) == chain.EXIT_OK
+    first = (later / LM).read_text()
+    assert chain.main(["unseal", "--dest", str(later), "--github-repo", "o/r"]) == chain.EXIT_OK
+    assert (later / LM).read_text() == first
+
+
+def test_the_wrong_key_opens_nothing_and_says_so(sealed_env, run, tmp_path, monkeypatch, capsys) -> None:
+    assert _seal(run, sealed_env) == chain.EXIT_OK
+    _offer(monkeypatch, [sealed_env])
+    monkeypatch.setenv(chain.KEY_ENV, "another-key")
+    later = tmp_path / "later"
+    _write(later, LM, HEADER + _row(1))
+    assert chain.main(["unseal", "--dest", str(later), "--github-repo", "o/r"]) == chain.EXIT_DAMAGED
+    assert (later / LM).read_text() == HEADER + _row(1)
+    assert "could not be decrypted" in capsys.readouterr().out
+
+
+def test_no_key_cannot_seal(run, tmp_path, monkeypatch) -> None:
+    monkeypatch.delenv(chain.KEY_ENV, raising=False)
+    out = tmp_path / "x" / "round.enc"
+    assert _seal(run, out) == chain.EXIT_NO_TOKEN
+    assert not out.exists()
+
+
+def test_sealed_rounds_without_a_key_are_a_fault_and_none_are_not(sealed_env, run, tmp_path, monkeypatch) -> None:
+    assert _seal(run, sealed_env) == chain.EXIT_OK
+    monkeypatch.delenv(chain.KEY_ENV)
+    _offer(monkeypatch, [sealed_env])
+    assert chain.main(["unseal", "--dest", str(tmp_path / "d"), "--github-repo", "o/r"]) == chain.EXIT_NO_TOKEN
+    _offer(monkeypatch, [])
+    assert chain.main(["unseal", "--dest", str(tmp_path / "d"), "--github-repo", "o/r"]) == chain.EXIT_OK
+
+
+def test_a_seal_inside_the_workspace_is_refused(run, tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv(chain.KEY_ENV, KEY)
+    monkeypatch.setenv("GITHUB_WORKSPACE", str(tmp_path))
+    assert _seal(run, tmp_path / "data" / "round.enc") == chain.EXIT_REFUSED
+
+
+def test_an_archive_with_a_member_outside_the_stores_is_refused(sealed_env, tmp_path, monkeypatch) -> None:
+    """A sealed archive is opened only into the three stores' day files."""
+    import tarfile
+    evil = tmp_path / "evil"
+    _write(evil, "line_movement/2026-10-08.csv", HEADER + _row(1))
+    _write(evil, "notes.txt", "x")
+    bundle = tmp_path / "round.tar"
+    with tarfile.open(bundle, "w") as tar:
+        tar.add(evil / "line_movement/2026-10-08.csv", arcname="line_movement/2026-10-08.csv")
+        tar.add(evil / "notes.txt", arcname="../outside/notes.txt")
+    sealed_env.parent.mkdir(parents=True, exist_ok=True)
+    assert chain._openssl(["-e", "-salt"], bundle, sealed_env).returncode == 0
+    _offer(monkeypatch, [sealed_env])
+    dest = tmp_path / "dest"
+    assert chain.main(["unseal", "--dest", str(dest), "--github-repo", "o/r"]) == chain.EXIT_DAMAGED
+    assert not (tmp_path / "outside").exists()
+    assert not dest.exists() or not any(dest.rglob("*.csv"))
+
+
+def test_the_listing_keeps_only_unexpired_sealed_rounds_from_main(monkeypatch) -> None:
+    import json as _json
+    rows = [
+        {"name": "line-movement-sealed-1", "expired": False, "workflow_run": {"head_branch": "main"}, "created_at": "2"},
+        {"name": "line-movement-sealed-2", "expired": True, "workflow_run": {"head_branch": "main"}, "created_at": "3"},
+        {"name": "line-movement-sealed-1", "expired": False, "workflow_run": {"head_branch": "feature"}, "created_at": "4"},
+        {"name": "ladder-coherence", "expired": False, "workflow_run": {"head_branch": "main"}, "created_at": "5"},
+        {"name": "line-movement-sealed-3", "expired": False, "workflow_run": {"head_branch": "main"}, "created_at": "1"},
+    ]
+
+    class Done:
+        returncode = 0
+        stdout = "\n".join(_json.dumps(r) for r in rows)
+        stderr = ""
+
+    monkeypatch.setattr(chain.subprocess, "run", lambda *a, **k: Done())
+    found = chain.list_sealed("o/r")
+    assert [(f["name"], f["created_at"]) for f in found] == [
+        ("line-movement-sealed-3", "1"), ("line-movement-sealed-1", "2")]

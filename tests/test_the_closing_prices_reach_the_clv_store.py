@@ -1,32 +1,58 @@
 """Line Movement's closing prices reach the store CLV is measured from.
 
-On 2026-08-29 Closing Lines lost its schedule, because Line Movement
-Capture's single fetch already produced the same best price per selection and
-two schedules were paying twice. That retired the store's only writer. From
-2026-09-24 Line Movement handed its closing prices over as a
-`closing-line-captures` artifact for Closing Lines to publish on a
-`closing-lines` branch, and both were downloadable odds files on a public
-repository, which the provider's terms forbid; Closing Lines was disabled on
-2026-09-25 (#126) before it ever published.
+History, short. Closing Lines lost its schedule on 2026-08-29 (Line
+Movement's fetch already produced the same best price per selection), which
+retired the store's only writer. Two hand-offs followed, and both were
+downloadable odds files on a public repository, which the provider's terms
+forbid: a `closing-line-captures` artifact (2026-09-24; Closing Lines was
+disabled on 09-25, #126, before it published), then Line Movement's own
+public `line-movement` artifact (2026-10-01).
 
-Since 2026-10-01, once it is re-enabled (it stays disabled until
-NHL_CLOSING_LINES_TOKEN exists), Closing Lines runs when Line Movement
-completes, reads the `line-movement` artifact Line Movement already keeps for
-its own restore chain, derives the closing prices from it, and pushes them to
-the private repository cooperross399/nhl-closing-lines. That path fetches nothing from
-the provider and spends no credit.
+Since stage two of the chain's move (2026-10-05) there is no public copy.
+Line Movement keeps its chain only on branch `movement` of the private
+repository cooperross399/nhl-closing-lines (`private_movement_chain.py
+push`). A round whose push fails is sealed with NHL_CHAIN_FALLBACK_KEY into
+a 7-day `line-movement-sealed-N` artifact, and the next round's restore
+unseals it, so that round's push carries it home. Closing Lines runs when
+Line Movement completes, pulls the chain from the private repository into
+data/processed, derives the closing prices from it, and pushes them to the
+same repository's `main`. It reads no artifact, holds no grant here beyond
+`contents: read`, and spends no credit.
 
-The structural half reads the YAML. The executed half runs the hand-off
-`run:` block exactly as written under `bash -e`, with `gh` replaced by a
-stub, and drives `private_closing_store.py push` against a local bare
-repository.
+The structural half reads the YAML. The executed half runs the step blocks
+exactly as written under the shell GitHub uses (Closing Lines' hand-off, and
+Line Movement's restore and seal), with `python` the real interpreter and
+the real scripts reaching a local bare repository through the very URL they
+build (`url.<bare>.insteadOf`); `gh` is a tripwire, or a stub serving one
+sealed artifact. Closing Lines' publish runs in-process with its step's
+exact arguments, and Line Movement's chain push with its step's subcommand
+and flag, because each asks GitHub's API that the target is private and
+only that answer is replaced. The exits the real pull cannot be made to give
+offline (unreachable, damaged, refused) come from a stub.
+
+One test fails on 2026-10-05 and should until the script changes: Line
+Movement's push, run exactly as written from its checkout, keeps nothing,
+because its folder is relative and git reads it from a temporary repository
+(`test_line_movements_push_keeps_the_round_from_its_own_checkout`). Every
+other test runs that push with the folder made absolute, so each fails only
+for its own property.
+
+Not covered here: a re-run's second attempt recovering the first attempt's
+round. It takes the same two paths (the private chain, or the first
+attempt's sealed artifact, since unseal reads every unexpired
+`line-movement-sealed-*`), but which attempt wrote an artifact is not
+something this file models, and the red gates' wording is not tested.
 """
 
 from __future__ import annotations
 
+import json
 import os
+import re
+import shlex
 import subprocess
 import sys
+import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -39,11 +65,20 @@ from nhl_betting_lab.config import PROJECT_ROOT
 
 sys.path.insert(0, str(PROJECT_ROOT / "scripts"))
 import private_closing_store as store  # noqa: E402
+import private_movement_chain as chain  # noqa: E402
 
 WORKFLOWS = PROJECT_ROOT / ".github" / "workflows"
-HANDOFF = "Take the captures Line Movement kept"
+HANDOFF = "Take the chain from the private repository"
 PUBLISH = "Publish to the private store"
+RESTORE = "Restore today's captures"
+KEEP = "Keep the captures privately"
+SEAL = "Seal this round when the private push failed"
+SEALED_UPLOAD = "Keep the sealed round"
+CHAIN = "private_movement_chain.py"
+STORE = "private_closing_store.py"
 REPO = "owner/lab"
+TOKEN = "t"
+KEY = "a-fallback-key"
 
 
 def _load(name: str) -> dict:
@@ -60,36 +95,72 @@ def _steps(document: dict) -> dict[str, dict]:
     return {step.get("name"): step for step in job["steps"]}
 
 
-def _kept_artifact() -> tuple[str, list[str]]:
-    """The artifact Line Movement keeps its day files in, and its paths."""
-    for job in _load("line-movement.yml")["jobs"].values():
-        for step in job["steps"]:
-            given = step.get("with") or {}
-            paths = str(given.get("path", "")).split()
-            if f"data/processed/{cl.MOVEMENT_DIRNAME}" in paths:
-                return str(given["name"]), paths
-    raise AssertionError("Line Movement keeps no day files")
+def _closing() -> dict[str, dict]:
+    return _steps(_load("closing-lines.yml"))
+
+
+def _movement() -> dict[str, dict]:
+    """Line Movement's capture job (the other two jobs only wait)."""
+    return {step.get("name"): step for step in _load("line-movement.yml")["jobs"]["capture"]["steps"]}
+
+
+def _invocations(run: str, script: str) -> list[list[str]]:
+    """The arguments of every `python scripts/<script>` command in a run
+    block, read as the shell reads them (comments dropped)."""
+    found = []
+    for line in run.replace("\\\n", " ").splitlines():
+        words = shlex.split(line, comments=True)
+        for i in range(len(words) - 1):
+            if words[i] == "python" and words[i + 1] == f"scripts/{script}":
+                args = []
+                for word in words[i + 2:]:
+                    if word in {"||", "&&", "|", ";"}:
+                        break
+                    args.append(word)
+                found.append(args)
+    return found
+
+
+def _exact(step: dict, script: str) -> list[str]:
+    """The arguments of a one-command step, which must call `script`."""
+    (args,) = _invocations(step["run"], script)
+    return args
 
 
 # -- structure ----------------------------------------------------------------
 
 
-def test_closing_lines_takes_the_artifact_line_movement_keeps():
-    name, paths = _kept_artifact()
-    assert name == "line-movement"
-    run = _steps(_load("closing-lines.yml"))[HANDOFF]["run"]
-    assert f"--name {name} " in run
-    assert f'select(.name == "{name}")' in run
-    # Unpacked where it is rooted, so the day files land in
-    # data/processed/line_movement, where the push reads them.
-    assert all(p.startswith("data/processed/") for p in paths)
-    assert "--dir data/processed " in run
+def test_closing_lines_pulls_the_chain_line_movement_pushes():
+    """One writer, one reader, the same repository and branch: neither names
+    a --repo or a --remote of its own, and the hand-off pulls into the
+    folder the publish reads."""
+    callers = {name: str(step["run"]) for name, step in _movement().items()
+               if f"scripts/{CHAIN}" in str(step.get("run", ""))}
+    pushes = [(name, args) for name, run in callers.items()
+              for args in _invocations(run, CHAIN) if args[:1] == ["push"]]
+    assert pushes == [(KEEP, ["push", "--processed-dir", "data/processed"])]
+    steps = _closing()
+    assert _invocations(steps[HANDOFF]["run"], CHAIN) == [["pull", "--dest", "data/processed"]]
+    assert _exact(steps[PUBLISH], STORE) == ["push", "--processed-dir", "data/processed"]
 
 
 def test_line_movement_no_longer_hands_over_a_closing_price_artifact():
     for job in _load("line-movement.yml")["jobs"].values():
         for step in job["steps"]:
             assert (step.get("with") or {}).get("name") != "closing-line-captures"
+
+
+def test_line_movement_keeps_no_day_file_in_a_public_artifact():
+    """The `line-movement` upload Closing Lines used to take is gone; the
+    only upload left beside the ladder scan is the sealed round, which is
+    written outside the workspace."""
+    uploads = [step for job in _load("line-movement.yml")["jobs"].values()
+               for step in job["steps"] if str(step.get("uses", "")).startswith("actions/upload-artifact")]
+    assert any(step.get("name") == SEALED_UPLOAD for step in uploads)
+    for step in uploads:
+        for path in str(step["with"]["path"]).split():
+            assert not path.startswith("data/processed"), (step["name"], path)
+            assert cl.MOVEMENT_DIRNAME not in path, (step["name"], path)
 
 
 def test_closing_lines_runs_when_line_movement_completes():
@@ -99,6 +170,10 @@ def test_closing_lines_runs_when_line_movement_completes():
     assert "completed" in trigger.get("types", [])
 
 
+def _secrets(step: dict) -> set[str]:
+    return set(re.findall(r"secrets\.([A-Z0-9_]+)", yaml.safe_dump(step)))
+
+
 def test_no_step_that_can_spend_runs_on_a_hand_off():
     """A step that reads the provider key is a step that can buy prices."""
     steps = _load("closing-lines.yml")["jobs"]["capture"]["steps"]
@@ -106,13 +181,20 @@ def test_no_step_that_can_spend_runs_on_a_hand_off():
     assert spending, "the dispatch path must still be able to capture"
     for step in spending:
         assert "github.event_name != 'workflow_run'" in str(step.get("if", "")), step["name"]
-    assert "secrets." not in yaml.safe_dump(_steps(_load("closing-lines.yml"))[HANDOFF])
+    # The hand-off reads the private repository and nothing else.
+    assert _secrets(_closing()[HANDOFF]) == {store.TOKEN_ENV}
 
 
-def test_the_store_token_reaches_only_the_publish_step():
-    for name, step in _steps(_load("closing-lines.yml")).items():
-        if "NHL_CLOSING_LINES_TOKEN" in yaml.safe_dump(step):
-            assert name == PUBLISH
+def test_the_store_token_reaches_only_the_private_repository_steps():
+    """The hand-off reads the chain with it, the publish writes the store
+    with it, and the step that holds the provider key never holds it."""
+    holders = {name for name, step in _closing().items() if store.TOKEN_ENV in _secrets(step)}
+    assert holders == {HANDOFF, PUBLISH}
+    for name, step in _closing().items():
+        assert not {store.TOKEN_ENV, "NHL_ODDS_API_KEY"} <= _secrets(step), name
+    # The hand-off only reads: its one command is a pull.
+    assert [args[0] for args in _invocations(_closing()[HANDOFF]["run"], CHAIN)] == ["pull"]
+    assert _invocations(_closing()[HANDOFF]["run"], STORE) == []
 
 
 def test_each_path_runs_the_steps_it_needs():
@@ -130,64 +212,246 @@ def test_a_hand_off_is_taken_only_from_the_default_branch():
     assert "github.event.repository.default_branch" in guard
 
 
-def test_the_hand_off_can_read_another_runs_artifacts():
-    permissions = _load("closing-lines.yml")["permissions"]
-    assert permissions == {"contents": "read", "actions": "read"}
+def test_closing_lines_holds_no_grant_here_beyond_reading_its_code():
+    """It reads no other run's artifacts any more, so `actions: read` went
+    with them, and it never held a write grant on this repository."""
+    assert _load("closing-lines.yml")["permissions"] == {"contents": "read"}
 
 
-# -- the hand-off, executed ---------------------------------------------------
+# -- the steps, executed ------------------------------------------------------
+
+TRIPWIRE = 'echo "$*" >> "$GH_LOG"\nexit 1\n'
+#: What a step's own `env:` supplies, so a replay holds only what it names.
+STEP_OWNED = ("NHL_CLOSING_LINES_TOKEN", "NHL_CHAIN_FALLBACK_KEY", "NHL_ODDS_API_KEY", "GH_TOKEN",
+              "PYTHONPATH", "GITHUB_REPOSITORY", "GITHUB_OUTPUT", "GITHUB_WORKSPACE", "RUNNER_TEMP",
+              "GITHUB_STEP_SUMMARY")
 
 
-def _handoff(tmp_path: Path, gh: str) -> tuple[subprocess.CompletedProcess, Path, str]:
-    stub = tmp_path / "bin"
-    stub.mkdir()
-    (stub / "gh").write_text("#!/bin/bash\n" + gh)
-    (stub / "gh").chmod(0o755)
-    work = tmp_path / "work"
-    work.mkdir()
-    output = tmp_path / "out.txt"
+def _fill(text: str, values: dict[str, str]) -> str:
+    """Fill the `${{ }}` expressions a test names; refuse any it did not."""
+    def fill(match: re.Match) -> str:
+        expression = match.group(1).strip()
+        if expression not in values:
+            raise AssertionError(f"unfilled expression: {expression}")
+        return values[expression]
+    return re.sub(r"\$\{\{(.*?)\}\}", fill, text)
+
+
+def _script(path: Path, body: str) -> None:
+    path.write_text("#!/bin/bash\n" + body, encoding="utf-8")
+    path.chmod(0o755)
+
+
+def _runner(tmp_path: Path, name: str, *, gh: str = TRIPWIRE, python: str | None = None) -> dict:
+    """A fresh runner: a checkout holding the scripts and src the blocks
+    call by relative path, a stub bin, and a RUNNER_TEMP outside the
+    checkout."""
+    root = tmp_path / name
+    work, stubs, temp = root / "work", root / "bin", root / "temp"
+    for folder in (work, stubs, temp):
+        folder.mkdir(parents=True)
+    (work / "scripts").symlink_to(PROJECT_ROOT / "scripts", target_is_directory=True)
+    (work / "src").symlink_to(PROJECT_ROOT / "src", target_is_directory=True)
+    _script(stubs / "gh", gh)
+    _script(stubs / "python", python or f'exec "{sys.executable}" "$@"\n')
+    output = root / "github_output.txt"
     output.write_text("")
-    block = _steps(_load("closing-lines.yml"))[HANDOFF]["run"].replace(
-        "${{ github.repository }}", REPO
-    )
-    assert "${{" not in block
-    env = {**os.environ, "PATH": f"{stub}{os.pathsep}{os.environ['PATH']}",
-           "RUN_ID": "7", "GITHUB_OUTPUT": str(output), "GH_TOKEN": "x"}
-    done = subprocess.run(["bash", "--noprofile", "--norc", "-eo", "pipefail", "-c", block],
-                          cwd=work, env=env, capture_output=True, text=True)
-    return done, work, output.read_text()
+    return {"work": work, "bin": stubs, "temp": temp, "output": output, "gh_log": root / "gh.log"}
 
 
-def test_a_run_that_kept_nothing_publishes_nothing(tmp_path):
-    done, _work, output = _handoff(tmp_path, 'if [ "$1" = api ]; then echo 0; exit 0; fi\nexit 9\n')
-    assert done.returncode == 0, done.stderr
-    assert "empty=true" in output
+def _run_step(runner: dict, step: dict, values: dict[str, str] | None = None) -> subprocess.CompletedProcess:
+    """`step`'s run block as written, under the shell GitHub uses, with only
+    the environment its own `env:` names plus what every runner sets."""
+    values = {"secrets.NHL_CLOSING_LINES_TOKEN": TOKEN, "secrets.NHL_CHAIN_FALLBACK_KEY": KEY,
+              "github.token": "x", **(values or {})}
+    env = {key: value for key, value in os.environ.items() if key not in STEP_OWNED}
+    env.update({"PATH": f"{runner['bin']}{os.pathsep}{os.environ['PATH']}",
+                "GITHUB_OUTPUT": str(runner["output"]), "GITHUB_WORKSPACE": str(runner["work"]),
+                "RUNNER_TEMP": str(runner["temp"]), "GITHUB_REPOSITORY": REPO,
+                "GH_LOG": str(runner["gh_log"])})
+    env.update({key: _fill(str(value), values) for key, value in (step.get("env") or {}).items()})
+    return subprocess.run(["bash", "--noprofile", "--norc", "-eo", "pipefail", "-c", _fill(step["run"], {})],
+                          cwd=runner["work"], env=env, capture_output=True, text=True)
 
 
-def test_a_kept_artifact_without_price_captures_publishes_nothing(tmp_path):
-    gh = ('if [ "$1" = api ]; then echo 1; exit 0; fi\n'
-          'while [ $# -gt 0 ]; do [ "$1" = --dir ] && dir="$2"; shift; done\n'
-          'mkdir -p "$dir/deployment"; exit 0\n')
-    done, _work, output = _handoff(tmp_path, gh)
-    assert done.returncode == 0, done.stderr
-    assert "empty=true" in output
+def _outputs(runner: dict) -> dict[str, str]:
+    """GITHUB_OUTPUT as the runner reads it: the last value of a key wins."""
+    found = {}
+    for line in runner["output"].read_text().splitlines():
+        key, _, value = line.partition("=")
+        found[key] = value
+    return found
 
 
-def test_a_download_that_fails_is_a_red_run_not_a_quiet_one(tmp_path):
-    gh = 'if [ "$1" = api ]; then echo 1; exit 0; fi\necho "HTTP 502" >&2; exit 1\n'
-    done, _work, output = _handoff(tmp_path, gh)
+def _in_process(step: dict, script: str, main, work: Path, monkeypatch) -> int:
+    """A one-command step's exact arguments, run from its checkout."""
+    monkeypatch.chdir(work)
+    return main(_exact(step, script))
+
+
+def _refs(bare: Path) -> str:
+    return subprocess.run(["git", "--git-dir", str(bare), "for-each-ref"],
+                          capture_output=True, text=True, check=True).stdout
+
+
+def _keep(work: Path, monkeypatch) -> int:
+    """Line Movement's "Keep the captures privately": the step's own
+    subcommand and flag, from its checkout, with the folder it names made
+    absolute. As written, relative, it does not keep the round; that is
+    `test_line_movements_push_keeps_the_round_from_its_own_checkout`, and
+    the tests downstream of the push are not made to fail on it too."""
+    args = _exact(_movement()[KEEP], CHAIN)
+    at = args.index("--processed-dir") + 1
+    args[at] = str(work / args[at])
+    monkeypatch.chdir(work)
+    return chain.main(args)
+
+
+def _keep_round(tmp_path: Path, name: str, rounds: list[pd.DataFrame], monkeypatch,
+                *, folder: str = cl.MOVEMENT_DIRNAME) -> None:
+    """A Line Movement round whose "Keep the captures privately" landed."""
+    work = _runner(tmp_path, name)["work"]
+    processed = work / "data" / "processed"
+    if folder == cl.MOVEMENT_DIRNAME:
+        _day_file(processed, rounds)
+    else:
+        (processed / folder).mkdir(parents=True)
+        pd.concat(rounds).to_csv(processed / folder / "2026-10-08.csv", index=False)
+    assert _keep(work, monkeypatch) == chain.EXIT_OK
+
+
+def test_line_movements_push_keeps_the_round_from_its_own_checkout(tmp_path, private, monkeypatch):
+    """The step exactly as written, run from the checkout as GitHub runs it.
+
+    Measured 2026-10-05: it returns 1 and keeps nothing, saying git "could
+    not open 'data/processed/line_movement/2026-10-08.csv'". The folder is
+    relative, and `blob_of` hands each path to git running in the push's own
+    temporary repository. In stage two this push is the round's only home,
+    so a round it does not keep lives only in its sealed artifact.
+    """
+    work = _runner(tmp_path, "movement")["work"]
+    _day_file(work / "data" / "processed", [_round(14, 120.0)])
+
+    assert _in_process(_movement()[KEEP], CHAIN, chain.main, work, monkeypatch) == chain.EXIT_OK
+
+    kept = subprocess.run(["git", "--git-dir", str(private), "show",
+                           f"{chain.CHAIN_BRANCH}:{cl.MOVEMENT_DIRNAME}/2026-10-08.csv"],
+                          capture_output=True, text=True, check=True).stdout
+    assert kept == (work / "data" / "processed" / cl.MOVEMENT_DIRNAME / "2026-10-08.csv").read_text()
+
+
+def test_a_private_repository_with_no_chain_yet_publishes_nothing(tmp_path, private):
+    runner = _runner(tmp_path, "closing")
+    done = _run_step(runner, _closing()[HANDOFF])
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert _outputs(runner).get("empty") == "true"
+
+
+def test_a_chain_without_price_captures_publishes_nothing(tmp_path, private, monkeypatch):
+    _keep_round(tmp_path, "movement", [_round(14, 120.0)], monkeypatch, folder="deployment")
+    runner = _runner(tmp_path, "closing")
+    done = _run_step(runner, _closing()[HANDOFF])
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert (runner["work"] / "data" / "processed" / "deployment" / "2026-10-08.csv").is_file()
+    assert _outputs(runner).get("empty") == "true"
+
+
+@pytest.mark.parametrize("code", [chain.EXIT_FAILED, chain.EXIT_DAMAGED, chain.EXIT_REFUSED])
+def test_a_chain_that_could_not_be_read_is_a_red_run_not_a_quiet_one(tmp_path, code):
+    """GitHub unreachable, a file that would not merge, a token turned away:
+    the rounds since the last push would be skipped quietly by a green run."""
+    fake = (f'if [ "$1" = scripts/{CHAIN} ]; then\n'
+            '  mkdir -p data/processed/line_movement && echo x > data/processed/line_movement/2026-10-08.csv\n'
+            f'  exit {code}\nfi\nexit 97\n')
+    runner = _runner(tmp_path, "closing", python=fake)
+    done = _run_step(runner, _closing()[HANDOFF])
     assert done.returncode != 0
-    assert "empty=true" not in output
+    assert "empty" not in _outputs(runner)
 
 
-def test_a_kept_day_file_lands_where_the_push_reads_it(tmp_path):
-    gh = ('if [ "$1" = api ]; then echo 1; exit 0; fi\n'
-          'while [ $# -gt 0 ]; do [ "$1" = --dir ] && dir="$2"; shift; done\n'
-          'mkdir -p "$dir/line_movement" && echo x > "$dir/line_movement/2026-10-08.csv"\n')
-    done, work, output = _handoff(tmp_path, gh)
-    assert done.returncode == 0, done.stderr
-    assert "empty=true" not in output
-    assert (work / "data" / "processed" / cl.MOVEMENT_DIRNAME / "2026-10-08.csv").is_file()
+def test_a_hand_off_without_the_token_is_a_red_run(tmp_path, private):
+    runner = _runner(tmp_path, "closing")
+    done = _run_step(runner, _closing()[HANDOFF], {"secrets.NHL_CLOSING_LINES_TOKEN": ""})
+    assert done.returncode != 0
+    assert store.TOKEN_ENV in done.stdout
+    assert "empty" not in _outputs(runner)
+
+
+def test_what_line_movement_keeps_lands_where_the_publish_reads_it(tmp_path, private, monkeypatch):
+    _keep_round(tmp_path, "movement", [_round(14, 120.0), _round(14, 125.0, "FanDuel")], monkeypatch)
+    runner = _runner(tmp_path, "closing")
+
+    done = _run_step(runner, _closing()[HANDOFF])
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert "empty" not in _outputs(runner)
+    assert (runner["work"] / "data" / "processed" / cl.MOVEMENT_DIRNAME / "2026-10-08.csv").is_file()
+    assert _in_process(_closing()[PUBLISH], STORE, store.main, runner["work"], monkeypatch) == store.EXIT_OK
+
+    stored = pd.read_csv(pd.io.common.StringIO(_stored(private)))
+    assert stored[["american_odds", "book"]].values.tolist() == [[125.0, "FanDuel"]]
+
+
+def test_the_hand_off_writes_nothing_and_asks_github_for_no_artifact(tmp_path, private, monkeypatch):
+    _keep_round(tmp_path, "movement", [_round(14, 120.0)], monkeypatch)
+    before = _refs(private)
+    runner = _runner(tmp_path, "closing")
+
+    done = _run_step(runner, _closing()[HANDOFF])
+
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert _refs(private) == before
+    assert not runner["gh_log"].exists(), runner["gh_log"].read_text()
+
+
+def test_a_round_whose_private_push_failed_reaches_the_store_with_the_next_round(
+        tmp_path, private, monkeypatch):
+    lm, closing = _movement(), _closing()
+
+    # Round one: its push failed, so the seal step ran and the upload kept
+    # what the seal wrote, at the path the upload names.
+    first = _runner(tmp_path, "round-1")
+    _day_file(first["work"] / "data" / "processed", [_round(14, 120.0), _round(14, 125.0, "FanDuel")])
+    done = _run_step(first, lm[SEAL])
+    assert done.returncode == 0, done.stdout + done.stderr
+    kept = Path(_fill(lm[SEALED_UPLOAD]["with"]["path"], {"runner.temp": str(first["temp"])}))
+    artifact = tmp_path / "sealed.zip"
+    with zipfile.ZipFile(artifact, "w") as zipped:
+        # A single-file upload is rooted at the file's own folder.
+        zipped.write(kept, arcname=kept.name)
+    listing = json.dumps({
+        "id": 11, "expired": False, "created_at": "2026-10-08T14:06:00Z",
+        "name": _fill(lm[SEALED_UPLOAD]["with"]["name"], {"github.run_attempt": "1"}),
+        "workflow_run": {"id": 7, "head_branch": "main"},
+    })
+
+    # Closing Lines after round one: the private chain does not hold it.
+    after_first = _runner(tmp_path, "closing-1")
+    assert _run_step(after_first, closing[HANDOFF]).returncode == 0
+    assert _outputs(after_first).get("empty") == "true"
+
+    # Round two, on a fresh runner: its restore opens round one...
+    gh = ('echo "$*" >> "$GH_LOG"\ncase "$*" in\n'
+          f'  *"repos/{REPO}/actions/artifacts?per_page=100"*) echo {shlex.quote(listing)} ;;\n'
+          f'  *"repos/{REPO}/actions/artifacts/11/zip"*) cat {shlex.quote(str(artifact))} ;;\n'
+          '  *) exit 1 ;;\nesac\n')
+    second = _runner(tmp_path, "round-2", gh=gh)
+    done = _run_step(second, lm[RESTORE])
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert (second["work"] / "restore_problem.txt").read_text() == ""
+    # ...appends its own round to the day file as the capture does, and its
+    # push lands.
+    day = second["work"] / "data" / "processed" / cl.MOVEMENT_DIRNAME / "2026-10-08.csv"
+    _round(21, 105.0).to_csv(day, mode="a", header=False, index=False)
+    assert _keep(second["work"], monkeypatch) == chain.EXIT_OK
+
+    # Closing Lines after round two publishes both rounds.
+    after_second = _runner(tmp_path, "closing-2")
+    done = _run_step(after_second, closing[HANDOFF])
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert _in_process(closing[PUBLISH], STORE, store.main, after_second["work"], monkeypatch) == store.EXIT_OK
+    stored = pd.read_csv(pd.io.common.StringIO(_stored(private))).sort_values("captured_at")
+    assert stored[["captured_at", "american_odds", "book"]].values.tolist() == [
+        ["2026-10-08T14:00:00Z", 125.0, "FanDuel"], ["2026-10-08T21:00:00Z", 105.0, "BetMGM"]]
 
 
 # -- the push, executed -------------------------------------------------------
@@ -231,9 +495,23 @@ def bare(tmp_path, monkeypatch) -> Path:
     subprocess.run(["git", "push", "-q", str(path), "HEAD:refs/heads/main"], cwd=seed, check=True)
     monkeypatch.setattr(store, "repo_is_private", lambda repo, token: True)
     monkeypatch.setattr(store, "utc_now", lambda: datetime(2026, 10, 9, tzinfo=timezone.utc))
-    monkeypatch.setenv(store.TOKEN_ENV, "t")
+    monkeypatch.setenv(store.TOKEN_ENV, TOKEN)
     monkeypatch.delenv("GITHUB_REPOSITORY", raising=False)
     return path
+
+
+@pytest.fixture
+def private(bare, monkeypatch) -> Path:
+    """`bare` reached as production reaches the private repository: through
+    the URL the scripts build from the token, redirected to the bare copy.
+    Only the GitHub API's privacy answer is replaced, and only for it."""
+    monkeypatch.setenv("GIT_CONFIG_COUNT", "1")
+    monkeypatch.setenv("GIT_CONFIG_KEY_0", f"url.file://{bare}.insteadOf")
+    monkeypatch.setenv("GIT_CONFIG_VALUE_0", store.remote_url(store.PRIVATE_REPO, TOKEN))
+    monkeypatch.setattr(store, "repo_is_private", lambda repo, token: repo == store.PRIVATE_REPO)
+    monkeypatch.setattr(chain, "sleep", lambda seconds: None)
+    monkeypatch.delenv("GITHUB_WORKSPACE", raising=False)
+    return bare
 
 
 def _push(processed: Path, bare: Path) -> int:
@@ -270,7 +548,7 @@ def test_later_rounds_merge_into_the_season_store(tmp_path, bare):
 
 
 def test_a_push_never_drops_a_row_the_store_holds(tmp_path, bare):
-    """A run whose artifact lost an earlier round must not erase it."""
+    """A chain that has lost an earlier round must not erase it from the store."""
     full, short = tmp_path / "full", tmp_path / "short"
     _day_file(full, [_round(14, 120.0), _round(21, 105.0)])
     _day_file(short, [_round(23, 150.0)])
@@ -293,7 +571,7 @@ def test_a_second_identical_push_commits_nothing(tmp_path, bare):
                           capture_output=True, text=True, check=True).stdout == tip
 
 
-def test_every_day_the_artifact_carries_is_pushed_so_a_gap_heals(tmp_path, bare):
+def test_every_day_the_chain_carries_is_pushed_so_a_gap_heals(tmp_path, bare):
     """A league day weeks old that the store never received (a failed push,
     a week with no token) lands on the next push, for as long as the chain
     carries it."""

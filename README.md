@@ -176,14 +176,16 @@ PYTHONPATH=src .venv/bin/python scripts/private_closing_store.py push \
 PYTHONPATH=src .venv/bin/python scripts/private_closing_store.py pull \
     --out "$RUNNER_TEMP/private-closing-store/closing_line_captures.csv"
 
-# Line Movement's capture chain, kept on branch `movement` of the same private
-# repository (stage one of the move, 2026-10-02). Every Line Movement round
-# folds the private copy into what it restored; from the default branch it
-# also pushes its three stores and checks the private tip holds every row it
-# uploaded publicly (a feature-branch dispatch only reads). Needs
-# NHL_CLOSING_LINES_TOKEN.
+# Line Movement's capture chain, which lives only on branch `movement` of the
+# same private repository. Every round restores it (pull, then unseal any
+# sealed round), pushes this round to it (default branch only), seals the round
+# with NHL_CHAIN_FALLBACK_KEY if that push failed, and checks the tip holds the
+# round (verify). Needs NHL_CLOSING_LINES_TOKEN (and the key, for seal/unseal).
 PYTHONPATH=src .venv/bin/python scripts/private_movement_chain.py pull --dest data/processed
+PYTHONPATH=src .venv/bin/python scripts/private_movement_chain.py unseal --dest data/processed
 PYTHONPATH=src .venv/bin/python scripts/private_movement_chain.py push --processed-dir data/processed
+PYTHONPATH=src .venv/bin/python scripts/private_movement_chain.py seal --processed-dir data/processed \
+    --out "$RUNNER_TEMP/sealed/round.enc"
 PYTHONPATH=src .venv/bin/python scripts/private_movement_chain.py verify --processed-dir data/processed
 ```
 
@@ -349,13 +351,13 @@ Gameday Refresh's read both use the Actions secret
 `cooperross399/nhl-closing-lines` with Contents read and write. Closing Lines
 stays disabled until that secret exists.
 
-**Not yet private, moving in two stages:** the `line-movement` artifact the store
-is derived from is itself a public artifact holding every captured price. Since
-2026-10-02 (stage one) each Line Movement round also keeps its three stores in
-the private repository's `movement` branch and checks the private copy holds
-every row it uploads publicly, and the public copies are kept 7 days instead of
-90. Stage two drops the public upload once rounds verify clean. CLAUDE.md
-records both.
+**The movement chain is private too (stage two):** Line Movement's capture
+chain, which the store is derived from and which holds every captured price,
+lives only on the private repository's `movement` branch. Line Movement
+restores from it and pushes each round to it; a round whose push fails is kept
+only sealed, encrypted with Cooper's key (`NHL_CHAIN_FALLBACK_KEY`), until the
+next round brings it home. Public `line-movement` artifacts uploaded before
+stage two stay downloadable until they expire. CLAUDE.md records both stages.
 
 Gameday Refresh pulls the private store into the runner's temp directory
 (never into `data/processed`, which it uploads publicly as `gameday-state`),
