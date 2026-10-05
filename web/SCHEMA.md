@@ -23,14 +23,18 @@ cardGeneratedAt  ISO instant the Gameday card this board was built from was gene
                  A regular-season board with games whose card was generated on an earlier New York day is shown but
                  never frozen into history/ (web/site_history.py::built_on_stale_state)
 record
-  straightUp     {w, l} | null        — null until a season tally is kept; nothing tallies one today, so it is null
+  straightUp     {w, l} | null        — the season so far (season_record); null until a night has settled
+  picks          {w, l, p} | null     — best bets, the season so far; absent/null until a night has settled
+  leans          {w, l, p} | null     — leans, the season so far, kept apart from picks
   puckLine       {w, l, p} | null     — null: nothing grades the model's puck line
-  totals         {w, l, p} | null     — null until a season tally is kept
+  totals         {w, l, p} | null     — the season so far; null until a night has settled
+  season         {nights, firstDate, lastDate, missingNights, ...the four tallies}  — absent until a night has settled
   forward        {sealed: true, decisionDate, wagers, rows, markets, firstDate, lastDate, unsettleable}
                  wagers = forward_evidence.json's `wagers`: one per selection at the best price, on slates
                  whose games have all finished (null when an older report carries no wager count);
                  rows = ledger rows, one per book quote, not rendered. The return (ROI, interval, CLV) is
-                 sealed until the decision date and is never in this file.
+                 sealed until the decision date and is never in this file. The page does not show this
+                 block (owner's call, 2026-10-05).
 teams[ABBR]      {name, short, color, fg}
 games[]
   id, startUtc, venue, city, tv
@@ -60,7 +64,8 @@ games[]
 ```
 generatedAt, season, phase, notice (shown when games is empty)
 resultsDate      "YYYY-MM-DD"
-summary          {straightUp:{w,l}, picks:{w,l,p}, totals:{w,l,p}}   ← picks counts best bets only; a lean is graded on its row and not here
+summary          {straightUp:{w,l}, picks:{w,l,p}, leans:{w,l,p}, totals:{w,l,p}}   ← picks counts best bets only; leans are tallied apart
+seasonRecord     the same object as board.json's record.season: every frozen board before today, settled and summed
 teams[ABBR]      {name, short, color, fg}
 games[]
   id, startUtc

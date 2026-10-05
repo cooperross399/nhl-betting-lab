@@ -301,6 +301,7 @@ class PublishSite:
         *,
         fail: dict | None = None,
         afresh: bool = False,
+        fold: str = "",
         venue: str = "Arena",
         after_build: Callable[[Path], None] | None = None,
     ) -> Outcome:
@@ -338,6 +339,7 @@ class PublishSite:
         expressions = {
             "${{ github.token }}": "not-a-token",
             "${{ inputs.start_history_afresh && 'true' || 'false' }}": "true" if afresh else "false",
+            "${{ inputs.fold_history_from_run || '' }}": fold,
         }
 
         outcome = Outcome(run_id=run_id, conclusion="success", log="")
@@ -624,6 +626,30 @@ def test_a_build_that_loses_a_restored_board_is_not_uploaded(chain: PublishSite)
     assert "site-history" not in refused.artifacts
     assert refused.deployed is None
     assert chain.run(D4).boards == _dates(D4, D2, D1)
+
+
+def test_a_dropped_board_is_folded_back_from_the_run_that_held_it(chain: PublishSite) -> None:
+    """2026-10-05 restored an older publish than the newest and dropped nine
+    boards. Dispatching with fold_history_from_run brings back every board
+    the named run held, and overwrites none that are already here."""
+    chain.run(D1)
+    held = chain.run(D2)
+    dropped = chain.run(D3, afresh=True)  # the history shrank to one board
+    assert dropped.boards == _dates(D3)
+    kept = (Path(dropped.artifacts["site-history"]) / f"{D3}.json").read_bytes()
+
+    folded = chain.run(D4, fold=str(held.run_id))
+
+    assert folded.conclusion == "success", folded.log
+    assert folded.boards == _dates(D4, D3, D2, D1)
+    assert (Path(folded.artifacts["site-history"]) / f"{D3}.json").read_bytes() == kept
+
+
+def test_a_fold_names_a_run_id_or_publishes_nothing(chain: PublishSite) -> None:
+    chain.run(D1)
+    refused = chain.run(D2, fold="1; rm -rf /")
+    assert refused.conclusion == "failure", refused.log
+    assert refused.deployed is None
 
 
 # --------------------------------------------------------------------------
