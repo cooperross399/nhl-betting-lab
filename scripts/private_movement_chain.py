@@ -69,20 +69,23 @@ file and its missing row count named); 3, 4, 1 and 5 as for pull.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
 import shutil
 import subprocess
 import sys
+import tarfile
 import tempfile
 import time
+import zipfile
 from collections import Counter
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import private_closing_store as store  # noqa: E402
-from restore_state import _records, _rows, union_csv  # noqa: E402
+from restore_state import _fold, _records, _rows, union_csv  # noqa: E402
 
 CHAIN_BRANCH = "movement"
 STORES = ("line_movement", "deployment", "line_combinations")
@@ -96,6 +99,13 @@ EXIT_DAMAGED = store.EXIT_DAMAGED
 EXIT_NO_TOKEN = store.EXIT_NO_TOKEN
 EXIT_EMPTY = store.EXIT_EMPTY
 EXIT_REFUSED = store.EXIT_REFUSED
+
+#: The Actions secret the sealed fallback is encrypted with (Cooper's key).
+KEY_ENV = "NHL_CHAIN_FALLBACK_KEY"
+#: Every sealed fallback artifact is named this, then the run attempt.
+SEALED_PREFIX = "line-movement-sealed-"
+SEALED_FILE = "round.enc"
+OPENSSL_CIPHER = ["-aes-256-cbc", "-pbkdf2", "-iter", "200000", "-md", "sha256"]
 
 
 def _say(message: str) -> None:
@@ -435,6 +445,141 @@ def verify(args: argparse.Namespace) -> int:
     return EXIT_DAMAGED if missing else EXIT_OK
 
 
+def _openssl(args: list[str], source: Path, target: Path) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        ["openssl", "enc", *args, *OPENSSL_CIPHER, "-pass", f"env:{KEY_ENV}",
+         "-in", str(source), "-out", str(target)],
+        capture_output=True, text=True,
+    )
+
+
+def seal(args: argparse.Namespace) -> int:
+    """Encrypt this round's three stores into `--out`, outside the workspace.
+
+    Only when the private push failed: the private repository is the round's
+    only home in stage two, and a round that reaches neither it nor this
+    sealed copy is gone. AES-256 with Cooper's key (NHL_CHAIN_FALLBACK_KEY);
+    without the key the round is not sealed, and the run says so.
+    """
+    if not os.environ.get(KEY_ENV, "").strip():
+        _error(f"{KEY_ENV} is not set, so this round cannot be sealed. It is on no copy.")
+        return EXIT_NO_TOKEN
+    out = Path(args.out)
+    try:
+        store.refuse_an_out_inside_the_workspace(out)
+    except store.Refused as exc:
+        _error(str(exc))
+        return EXIT_REFUSED
+    local = local_files(Path(args.processed_dir))
+    if not local:
+        _error("No movement day file on disk to seal.")
+        return EXIT_DAMAGED
+    out.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory() as scratch:
+        bundle = Path(scratch) / "round.tar"
+        with tarfile.open(bundle, "w") as tar:
+            for rel, path in sorted(local.items()):
+                tar.add(path, arcname=rel)
+        done = _openssl(["-e", "-salt"], bundle, out)
+    if done.returncode:
+        out.unlink(missing_ok=True)
+        _error(f"Could not seal this round: {done.stderr.strip()}")
+        return EXIT_FAILED
+    _say(f"Sealed {len(local)} day file(s) into {out.name} for the next round to fold in.")
+    return EXIT_OK
+
+
+def list_sealed(repo: str) -> list[dict]:
+    """Every unexpired sealed fallback artifact of Line Movement on the
+    default branch, oldest first. Raises OSError when GitHub cannot be asked."""
+    done = subprocess.run(
+        ["gh", "api", "--paginate", f"repos/{repo}/actions/artifacts?per_page=100",
+         "--jq", ".artifacts[]"],
+        capture_output=True, text=True,
+    )
+    if done.returncode:
+        raise OSError(done.stderr.strip() or "gh api failed")
+    found = []
+    for line in done.stdout.splitlines():
+        if not line.strip():
+            continue
+        item = json.loads(line)
+        run = item.get("workflow_run") or {}
+        if (str(item.get("name", "")).startswith(SEALED_PREFIX) and not item.get("expired")
+                and run.get("head_branch") in ("main", None)):
+            found.append(item)
+    return sorted(found, key=lambda a: a.get("created_at", ""))
+
+
+def download_sealed(repo: str, artifact: dict, target: Path) -> None:
+    """The artifact's sealed file, written to `target`. Raises OSError."""
+    with tempfile.TemporaryDirectory() as scratch:
+        archive = Path(scratch) / "a.zip"
+        with archive.open("wb") as handle:
+            done = subprocess.run(["gh", "api", f"repos/{repo}/actions/artifacts/{artifact['id']}/zip"],
+                                  stdout=handle, stderr=subprocess.PIPE)
+        if done.returncode:
+            raise OSError(done.stderr.decode(errors="replace").strip() or "download failed")
+        with zipfile.ZipFile(archive) as zipped:
+            with zipped.open(SEALED_FILE) as source, target.open("wb") as sink:
+                shutil.copyfileobj(source, sink)
+
+
+def unseal(args: argparse.Namespace) -> int:
+    """Fold every sealed fallback round into `--dest`, so this round's push
+    carries it into the private chain. Each fold is the chain's own union:
+    a row already on disk is not added twice."""
+    repo = args.github_repo or os.environ.get("GITHUB_REPOSITORY", "")
+    try:
+        sealed = list_sealed(repo)
+    except OSError as exc:
+        _error(f"Could not list sealed fallback rounds: {exc}")
+        return EXIT_FAILED
+    if not sealed:
+        _say("No sealed fallback round to fold in.")
+        return EXIT_OK
+    if not os.environ.get(KEY_ENV, "").strip():
+        _error(f"{len(sealed)} sealed fallback round(s) exist and {KEY_ENV} is not set to open them.")
+        return EXIT_NO_TOKEN
+    dest = Path(args.dest)
+    failed: list[str] = []
+    recovered = 0
+    for artifact in sealed:
+        name = f"{artifact.get('name')} (run {(artifact.get('workflow_run') or {}).get('id')})"
+        with tempfile.TemporaryDirectory() as scratch:
+            work = Path(scratch)
+            try:
+                download_sealed(repo, artifact, work / SEALED_FILE)
+            except (OSError, KeyError, zipfile.BadZipFile) as exc:
+                failed.append(f"{name}: {exc}")
+                continue
+            done = _openssl(["-d"], work / SEALED_FILE, work / "round.tar")
+            if done.returncode:
+                failed.append(f"{name}: could not be decrypted ({done.stderr.strip()})")
+                continue
+            opened = work / "opened"
+            try:
+                with tarfile.open(work / "round.tar") as tar:
+                    members = [m for m in tar.getmembers() if m.isfile()]
+                    for member in members:
+                        folder, _, file_name = member.name.partition("/")
+                        if folder not in STORES or not DAY_FILE.match(file_name) or ".." in member.name:
+                            raise tarfile.TarError(f"unexpected member {member.name}")
+                    tar.extractall(opened, members=members, filter="data")
+            except tarfile.TarError as exc:
+                failed.append(f"{name}: {exc}")
+                continue
+            report = {"not_merged": []}
+            recovered += _fold(opened, dest, name, report)
+            if report["not_merged"]:
+                failed.append(f"{name}: could not merge {', '.join(report['not_merged'])}")
+    for line in failed:
+        _error(f"Sealed fallback round {line}.")
+    _say(f"Folded in {len(sealed) - len(failed)} sealed fallback round(s): "
+         f"{recovered} row(s) the copy on disk did not have.")
+    return EXIT_DAMAGED if failed else EXIT_OK
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = parser.add_subparsers(dest="command", required=True)
@@ -445,8 +590,15 @@ def main(argv: list[str] | None = None) -> int:
     sub.choices["push"].add_argument("--processed-dir", default="data/processed")
     sub.choices["verify"].add_argument("--processed-dir", default="data/processed")
     sub.choices["pull"].add_argument("--dest", default="data/processed")
+    sealer = sub.add_parser("seal")
+    sealer.add_argument("--processed-dir", default="data/processed")
+    sealer.add_argument("--out", required=True)
+    opener = sub.add_parser("unseal")
+    opener.add_argument("--dest", default="data/processed")
+    opener.add_argument("--github-repo", default="", help="Defaults to $GITHUB_REPOSITORY.")
     args = parser.parse_args(argv)
-    return {"push": push, "pull": pull, "verify": verify}[args.command](args)
+    return {"push": push, "pull": pull, "verify": verify,
+            "seal": seal, "unseal": unseal}[args.command](args)
 
 
 if __name__ == "__main__":
