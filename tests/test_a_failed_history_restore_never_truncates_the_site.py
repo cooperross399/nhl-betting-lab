@@ -46,8 +46,9 @@ xG ratings (`scripts/run_shadow_stats.py --fetch`) runs its real block
 against a stub that fails, so the step takes its own failure path: no
 ratings, and the board rated on goals. Every block run for real is checked
 first for anything else that would leave the machine, and runs in a session
-of its own that a time-out kills whole. On 2026-10-06 that fetch, run for
-real here, held the full suite for over half an hour.
+of its own that a time-out kills whole. Found when the full suite twice
+stalled for over half an hour inside this chain's `_bash` on 2026-10-06
+(test_the_publish_chain_never_reaches_the_network.py).
 """
 
 from __future__ import annotations
@@ -99,8 +100,9 @@ SCRIPT_CALL = re.compile(r"python scripts/(\S+\.py)")
 OFFLINE_SCRIPTS = frozenset({"restore_state.py", "site_history_floor.py"})
 #: Scripts the chain replaces with STUB, so the step that runs one takes its
 #: own failure path. `run_shadow_stats.py --fetch` asks api-web.nhle.com for
-#: the play-by-play of every final game in the checkout's own team_games.csv
-#: (not this chain's), under a `timeout 10m`; its step allows a failure.
+#: the play-by-play of every final game not yet cached in the checkout's own
+#: team_games.csv (not this chain's), under a `timeout 10m`; its step allows
+#: a failure.
 STUBBED_SCRIPTS = frozenset({"run_shadow_stats.py"})
 STUB = (
     "import sys\n"
