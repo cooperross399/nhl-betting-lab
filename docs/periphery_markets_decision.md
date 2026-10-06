@@ -70,8 +70,8 @@ pinned by a test in `tests/test_periphery_markets.py`:
 Caps scale with the number of markets asked and the number of regions asked,
 because the cap bills every asked market in every asked region whether a book
 quotes it or not: nineteen markets at two regions (`us,us2`) is 38 credits an
-event, so the gameday cap of 320 buys 8 events and the probe cap of 380 buys
-10 events. The old 60 bought six events when ten markets were asked at one
+event, so the gameday cap of 640 buys 16 events (320 bought 8 until
+2026-10-06) and the probe cap of 380 buys 10 events. The old 60 bought six events when ten markets were asked at one
 region, and would buy one today — and a starved fetch reads exactly like a
 market nobody quotes.
 
@@ -84,7 +84,9 @@ those nights every market only the per-event fetch prices is INCOMPLETE and
 excluded. The probe's `--max-events 20` now outruns its cap, so a props
 dispatch at the defaults reports every per-event market priced for 10 of 20
 games. 608 is the smallest gameday cap that clips no night. Raising either cap
-spends credits and is Cooper's decision, still pending; neither has changed.)
+spends credits and is Cooper's decision. On 2026-10-06 he raised the gameday
+cap to 640, after a 9-game night's card lost every per-event market; the
+probe cap is unchanged.)
 
 ## Deferred, with the reason on the record
 

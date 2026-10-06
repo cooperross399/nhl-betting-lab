@@ -518,8 +518,11 @@ def test_every_credit_cap_is_scaled_to_the_number_of_markets_asked() -> None:
     ).read_text(encoding="utf-8")
 
     # Each default cap must buy a real slate's worth of events, not three.
-    assert 320 // asked >= 16, "the gameday cap no longer covers a full slate"
-    assert "'320'" in gameday
+    # The gameday cap is checked at both regions it bills (us,us2): 16 games
+    # is the largest night on the 2026-27 schedule.
+    provider_regions = odds_api.count_regions("us,us2")
+    assert 640 // (asked * provider_regions) >= 16, "the gameday cap no longer covers a full slate"
+    assert "'640'" in gameday
     assert 380 // asked >= 20, "the probe cap no longer covers a real probe"
     assert "'380'" in discovery
 

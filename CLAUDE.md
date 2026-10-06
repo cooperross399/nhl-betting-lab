@@ -1969,12 +1969,13 @@ Re-derive rather than trust if the data has moved.
   lab asks two (`us,us2`), so the 19 asked markets are 19 markets x 2
   regions = 38 credits an event. Uncapped, one fetch a day is **52,182
   credits** (51,072 per-event, 1,110 bulk) and two are 104,364, against the
-  3,635,739 remaining read on 2026-09-02; at today's cap one fetch a day is
-  at most 42,530. (This line said 26,091 for one fetch and 52,182 for two
+  3,635,739 remaining read on 2026-09-02; at today's cap of 640 one fetch a
+  day is at most 52,182, since 640 clips no night (42,530 at the old 320). (This line said 26,091 for one fetch and 52,182 for two
   until 2026-09-25, one region's arithmetic, and "88,527 remaining" until
   2026-09-02, a figure from before the plan changed. The conclusion held
-  both times.) **The Gameday Refresh per-event cap of 320 buys 8 events,
-  not a full slate.** Until 2026-09-25 this line said it clipped none of the
+  both times.) **The Gameday Refresh per-event cap of 640 buys 16 events,
+  a full slate; until 2026-10-06 it was 320, which bought 8.** Until
+  2026-09-25 this line said 320 clipped none of the
   185 nights, as 16 games x 19 = 304 — the region factor left out, since the
   cap was set on 2026-08-28 and `us2` was added the same day. Measured
   (read-only) on the real 2026-27 club schedules, it clips **72 of the 185
@@ -1982,13 +1983,15 @@ Re-derive rather than trust if the data has moved.
   by face-off, and on those nights every market only the per-event fetch
   prices — the seven props, the regulation three-way, team totals, 9 of the
   12 allowlisted markets — is INCOMPLETE and excluded from the card. 608 is
-  the smallest cap that clips no night (16 x 38); 640 clips 0. **Raising the
-  cap spends more credits and is Cooper's decision, still pending**; nothing
-  here changed it. Provider Market Discovery has the same gap: its 380 buys
-  10 events against a `--max-events 20`. `tests/test_periphery_markets.py`
-  divides both caps by the markets asked, not by markets x regions, which is
-  how it stayed green; the region-aware check fails at today's caps, so it
-  waits on the same decision. The second scheduled trigger now stands down
+  the smallest cap that clips no night (16 x 38); 640 clips 0. **2026-10-06:
+  Cooper raised the cap to 640** after the first 9-game night (the first card
+  on the xG ratings) lost all nine per-event markets as "priced for 8 of 9
+  games" and carried 0 best bets. One fetch a day now costs at most 52,182
+  credits a season (646 a run at most), and a small night costs what it did.
+  Provider Market Discovery still has the gap: its 380 buys 10 events
+  against a `--max-events 20`, and raising it is a separate credit decision.
+  `tests/test_periphery_markets.py` now checks the gameday cap at markets x
+  regions; the discovery check still divides by markets alone. The second scheduled trigger now stands down
   when the first already published a clean card to `card-feed`, so the
   ordinary season costs the one-run figure and the backup still fires
   whenever the primary did not finish or finished degraded.
@@ -2084,9 +2087,9 @@ Re-derive rather than trust if the data has moved.
   first/last scorer are deferred — no period model, no goal-order data —
   not silently dropped. The per-event fetch is windowed to the day's slate
   (`--horizon-days 1`; an unwindowed 32-event August board starved the
-  nearest nine games) and the cap is 320 against the pessimistic bound —
-  eight events at two regions, short of the largest nights (the quota bullet
-  above has the measurement); an asked-for market nobody quotes costs
+  nearest nine games) and the cap is 640 against the pessimistic bound —
+  sixteen events at two regions, the largest night (320, eight events, until
+  2026-10-06; the quota bullet above has the measurement); an asked-for market nobody quotes costs
   nothing.
 - **2026-09-26 (#237): a future game is not fetched every run, nor cached.**
   `fetch_nhl_data` put the whole season in scope and `fetch_boxscore` served
@@ -2162,8 +2165,8 @@ literally.
   Every Gameday Refresh run that fetches a slate uploads it in the
   `gameday-reports` artifact (kept 30 days): that day's slate, props and
   ladders asked, no credit beyond the run's own budgeted fetch. That fetch's
-  cap buys 8 events, so on a bigger night a market can read incomplete
-  because the budget stopped, not because no book quotes it. Offline,
+  cap buys 16 events (8 until 2026-10-06), so a market that reads
+  incomplete on a full slate is not the budget stopping. Offline,
   `scripts/run_provider_shadow.py` with no flags re-assesses whatever is
   already staged and spends nothing. For the whole posted board, the
   Provider Market Discovery workflow's "Fetch and report coverage" step runs
