@@ -115,10 +115,12 @@ def _id(name: str) -> str:
 def _stubs(tmp_path: Path, exits: dict[str, int]) -> dict:
     """A `python` that exits as `exits` says for the script it is given (0
     otherwise), and a `git` that reaches no network. Both private pulls (the
-    store and, since stage two, the movement chain) exit 4 unless told
-    otherwise: configured, and nothing in them yet. (A missing token, exit 3,
-    is a fault since stage two: both closing-price sources need it.)"""
-    exits = {"private_closing_store.py": 4, "private_movement_chain.py": 4, **exits}
+    store and, since stage two, the movement chain) answer unless told
+    otherwise: the store exits 4 (configured, nothing in it yet) and the
+    chain exits 0 having laid down no day file. (A missing token, exit 3, and
+    a missing movement branch, exit 4 from the chain, are faults since stage
+    two.)"""
+    exits = {"private_closing_store.py": 4, "private_movement_chain.py": 0, **exits}
     bin_dir = tmp_path / "stubs"  # not "bin": card-feed puts its `date` there
     bin_dir.mkdir(exist_ok=True)
     cases = "".join(

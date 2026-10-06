@@ -89,9 +89,13 @@ def bare(tmp_path, monkeypatch) -> Path:
     return path
 
 
-def _run(command: str, bare: Path, folder: Path) -> int:
+def _run(command: str, bare: Path, folder: Path, *, seed: bool = True) -> int:
+    """`seed` lets a push create the movement branch, as the one-off seed of
+    2026-10-02 did; no workflow passes it, and a test of the refusal sets
+    seed=False."""
     flag = "--dest" if command == "pull" else "--processed-dir"
-    return chain.main([command, flag, str(folder), "--remote", f"file://{bare}"])
+    extra = ["--allow-new-chain"] if command == "push" and seed else []
+    return chain.main([command, flag, str(folder), "--remote", f"file://{bare}", *extra])
 
 
 def _tip(bare: Path, ref: str = "movement") -> str:
@@ -217,7 +221,7 @@ def test_a_damaged_tip_file_is_named_and_every_other_file_still_pushed(bare, run
 
     assert _show(bare, LM) == folded, "a file that could not be merged was overwritten"
     assert _show(bare, LC) == "team,line\nTOR,1\nTOR,2\n"
-    assert f"{LM} could not be pushed" in capsys.readouterr().out
+    assert f"{LM} could not be merged into the private chain" in capsys.readouterr().out
 
 
 def test_a_rejected_push_refetches_and_keeps_both_rounds(bare, run, tmp_path, monkeypatch) -> None:
@@ -399,7 +403,8 @@ def test_only_the_default_branch_writes_the_chain() -> None:
 def test_the_secrets_reach_only_the_steps_that_need_them() -> None:
     token = {s.get("name") for s in _steps() if "secrets.NHL_CLOSING_LINES_TOKEN" in yaml.safe_dump(s)}
     assert token == {"Restore today's captures", "Keep the captures privately",
-                     "Check the private chain holds this round"}
+                     "Check the private chain holds this round",
+                     "Seal this round when the private chain did not take it"}
     key = {s.get("name") for s in _steps() if "secrets.NHL_CHAIN_FALLBACK_KEY" in yaml.safe_dump(s)}
     assert key == {"Restore today's captures", "Seal this round when the private chain did not take it"}
 
@@ -420,8 +425,8 @@ def _restore_block(tmp_path: Path, pull: int, unseal: int) -> tuple[subprocess.C
 
 
 @pytest.mark.parametrize(("pull", "unseal", "problem"), [
-    (0, 0, False), (4, 0, False),
-    (1, 0, True), (2, 0, True), (3, 0, True), (5, 0, True),
+    (0, 0, False),
+    (4, 0, True), (1, 0, True), (2, 0, True), (3, 0, True), (5, 0, True),
     (0, 1, True), (0, 2, True), (0, 3, True),
 ])
 def test_the_restore_reports_everything_but_a_clean_read_or_no_chain(tmp_path, pull, unseal, problem) -> None:
@@ -430,12 +435,14 @@ def test_the_restore_reports_everything_but_a_clean_read_or_no_chain(tmp_path, p
     assert bool(text.strip()) is problem
 
 
-def _gate(outcomes: dict[str, str], tmp_path: Path) -> subprocess.CompletedProcess:
+def _gate(outcomes: dict[str, str], tmp_path: Path, *, on_disk: bool = True) -> subprocess.CompletedProcess:
     step = _steps()[_index("Fail the run when the private chain was not kept")]
     values = {f"steps.{k}.outcome": v for k, v in outcomes.items()}
     values["github.run_attempt"] = "1"
     work = tmp_path / "gate"
     work.mkdir()
+    if on_disk:
+        _write(work / "data" / "processed", LM, HEADER + _row(1))
     return _bash(_render(step["run"], values), work, dict(os.environ))
 
 
@@ -455,6 +462,17 @@ def test_the_gate_is_red_for_every_fault_and_says_where_the_round_is(tmp_path, c
     done = _gate({**OK, **change}, tmp_path)
     assert (done.returncode != 0) is red, done.stdout + done.stderr
     assert says in done.stdout
+
+
+def test_a_round_with_nothing_on_disk_is_not_called_lost(tmp_path) -> None:
+    """A failed restore on a night with no games leaves no day file: the
+    check fails and there is nothing to seal, but no captured row is
+    anywhere but the chain, and the gate says so instead of "on no copy"."""
+    done = _gate({**OK, "private_verify": "failure", "seal": "failure", "sealed_upload": "skipped"},
+                 tmp_path, on_disk=False)
+    assert done.returncode != 0
+    assert "holds no day file at all" in done.stdout
+    assert "on no copy" not in done.stdout
 
 
 # --- the second review's findings ----------------------------------------------
@@ -628,7 +646,7 @@ def test_unsealing_twice_adds_nothing(sealed_env, run, tmp_path, monkeypatch) ->
 def test_the_wrong_key_opens_nothing_and_says_so(sealed_env, run, tmp_path, monkeypatch, capsys) -> None:
     assert _seal(run, sealed_env) == chain.EXIT_OK
     _offer(monkeypatch, [sealed_env])
-    monkeypatch.setenv(chain.KEY_ENV, "another-key")
+    monkeypatch.setenv(chain.KEY_ENV, "another-key-that-is-long-enough-to-use-1234")
     later = tmp_path / "later"
     _write(later, LM, HEADER + _row(1))
     assert chain.main(["unseal", "--dest", str(later), "--github-repo", "o/r"]) == chain.EXIT_DAMAGED
@@ -689,6 +707,11 @@ def test_the_listing_keeps_only_unexpired_sealed_rounds_from_this_repos_default_
         {"name": "line-movement-sealed-1", "expired": False, "workflow_run": {**run, "head_repository_id": 99}, "created_at": "6"},
         {"name": "line-movement-sealed-1", "expired": False, "workflow_run": {"head_branch": "main"}, "created_at": "7"},
         {"name": "line-movement-sealed-1", "expired": False, "created_at": "8"},
+        # Same repository, no branch at all: only the branch check refuses it.
+        {"name": "line-movement-sealed-1", "expired": False,
+         "workflow_run": {"repository_id": 7, "head_repository_id": 7}, "created_at": "9"},
+        {"name": "line-movement-sealed-1", "expired": False,
+         "workflow_run": {**run, "head_branch": None}, "created_at": "10"},
         {"name": "ladder-coherence", "expired": False, "workflow_run": run, "created_at": "5"},
         {"name": "line-movement-sealed-3", "expired": False, "workflow_run": run, "created_at": "1"},
     ]
@@ -722,3 +745,188 @@ def test_a_listing_that_fails_once_is_asked_again(monkeypatch) -> None:
     monkeypatch.setattr(chain, "sleep", waited.append)
     assert chain.list_sealed("o/r") == []
     assert waited == [5]
+
+
+# --- the stage-two review's fixes -------------------------------------------------
+
+
+def test_a_missing_chain_is_never_recreated_by_a_round(bare, run, capsys) -> None:
+    """The chain has existed since 2026-10-02. A deleted branch must not
+    come back as a thin chain holding one round, every gate green."""
+    assert _run("push", bare, run, seed=False) == chain.EXIT_REFUSED
+    with pytest.raises(subprocess.CalledProcessError):
+        _tip(bare)
+    assert "no `movement` branch" in capsys.readouterr().out
+
+
+def test_an_older_copy_that_extends_the_newer_is_taken_whole(tmp_path) -> None:
+    """The reverse of union_csv's fast path: a sealed copy that extends a
+    disk copy byte for byte folds in without a parse, even when an earlier
+    row is ragged (each append extends the bytes; only a parse refuses)."""
+    from restore_state import union_csv
+    ragged = HEADER + _row(1).replace("P1", '"P1')
+    newer, older = tmp_path / "newer.csv", tmp_path / "older.csv"
+    newer.write_text(ragged)
+    older.write_text(ragged + _row(2))
+    assert union_csv(older, newer) == 1
+    assert newer.read_text() == ragged + _row(2)
+
+
+def test_an_unmergeable_copy_is_kept_as_a_private_sidecar_and_counts_as_held(bare, run, tmp_path, capsys) -> None:
+    """Not stranded in a seal that expires: the push keeps this run's copy on
+    the private branch beside the tip's, names it, and the check counts it
+    as held, so the round is not sealed into an artifact no later round can
+    fold."""
+    assert _run("push", bare, run) == chain.EXIT_OK
+    _damage_tip(bare, tmp_path, LM, HEADER.replace("captured_at", "captured") + _row(1))
+    _write(run, LM, HEADER + _row(1) + _row(2))
+    capsys.readouterr()
+
+    assert _run("push", bare, run) == chain.EXIT_DAMAGED
+
+    out = capsys.readouterr().out
+    sidecars = _git(["--git-dir", str(bare), "ls-tree", "-r", "--name-only", "movement", "--", "unmerged"]).split()
+    assert len(sidecars) == 1 and sidecars[0].startswith("unmerged/line_movement/2026-10-08/")
+    assert _git(["--git-dir", str(bare), "show", f"movement:{sidecars[0]}"]) == HEADER + _row(1) + _row(2)
+    assert sidecars[0] in out
+    assert _run("verify", bare, run) == chain.EXIT_OK
+    assert _run("push", bare, run) == chain.EXIT_OK, "the same copy is not damage twice"
+
+
+def test_a_sealed_copy_already_home_is_skipped_and_one_that_cannot_merge_is_parked(
+    sealed_env, bare, run, tmp_path, monkeypatch, capsys
+) -> None:
+    assert _run("push", bare, run) == chain.EXIT_OK
+    assert _seal(run, sealed_env) == chain.EXIT_OK
+    _offer(monkeypatch, [sealed_env])
+    later = tmp_path / "later"
+    _write(later, LM, "a,different,header\n1,2,3\n")
+    unseal = ["unseal", "--dest", str(later), "--github-repo", "o/r", "--remote", f"file://{bare}"]
+
+    # The tip holds every sealed file byte for byte: all skipped.
+    assert chain.main(unseal) == chain.EXIT_OK
+    assert (later / LM).read_text() == "a,different,header\n1,2,3\n"
+    assert "already home" in capsys.readouterr().out
+
+    # A sealed copy the tip does not hold, and that cannot merge with the
+    # one on disk, is parked as a sidecar for the push, never dropped.
+    _write(run, LM, HEADER + _row(1) + _row(2) + _row(7))
+    assert _seal(run, sealed_env) == chain.EXIT_OK
+    _offer(monkeypatch, [sealed_env])
+    assert chain.main(unseal) == chain.EXIT_DAMAGED
+    parked = list((later / chain.UNMERGED).rglob("*.csv"))
+    assert len(parked) == 1 and _row(7) in parked[0].read_text()
+    assert _run("push", bare, later) in (chain.EXIT_OK, chain.EXIT_DAMAGED)
+    on_branch = _git(["--git-dir", str(bare), "ls-tree", "-r", "--name-only", "movement", "--", "unmerged"]).split()
+    assert parked[0].relative_to(later).as_posix() in on_branch
+
+
+def test_a_seal_holds_only_what_the_tip_lacks(sealed_env, bare, run, tmp_path, monkeypatch) -> None:
+    import tarfile
+    assert _run("push", bare, run) == chain.EXIT_OK
+    _write(run, LM, HEADER + _row(1) + _row(2) + _row(3))
+    out = tmp_path / "seal" / "round.enc"
+    assert chain.main(["seal", "--processed-dir", str(run), "--out", str(out),
+                       "--remote", f"file://{bare}"]) == chain.EXIT_OK
+    opened = tmp_path / "opened.tar"
+    assert chain._openssl(["-d"], out, opened).returncode == 0
+    with tarfile.open(opened) as tar:
+        assert tar.getnames() == [LM]
+
+
+@pytest.mark.parametrize(("key", "code"), [
+    ("", chain.EXIT_NO_TOKEN),
+    ("short-key", chain.EXIT_REFUSED),
+    (" " + "x" * 40, chain.EXIT_REFUSED),
+    ("x" * 40 + "\n", chain.EXIT_REFUSED),
+])
+def test_a_weak_key_seals_nothing(run, tmp_path, monkeypatch, key, code) -> None:
+    monkeypatch.setenv(chain.KEY_ENV, key)
+    monkeypatch.delenv("GITHUB_WORKSPACE", raising=False)
+    out = tmp_path / "x" / "round.enc"
+    assert _seal(run, out) == code
+    assert not out.exists()
+
+
+def _independent_decrypt(sealed: Path, *kdf: str) -> subprocess.CompletedProcess:
+    """openssl with the parameters written out here, not read from the
+    script, so a weaker setting in the script cannot pass by matching itself."""
+    return subprocess.run(["openssl", "enc", "-d", "-aes-256-cbc", *kdf, "-pass", f"env:{chain.KEY_ENV}",
+                           "-in", str(sealed), "-out", os.devnull], capture_output=True)
+
+
+def test_the_seal_uses_pbkdf2_at_200k_iterations_with_sha256(sealed_env, run) -> None:
+    assert _seal(run, sealed_env) == chain.EXIT_OK
+    assert _independent_decrypt(sealed_env, "-pbkdf2", "-iter", "200000", "-md", "sha256").returncode == 0
+    assert _independent_decrypt(sealed_env, "-md", "md5").returncode != 0, "legacy single-pass key derivation"
+    assert _independent_decrypt(sealed_env, "-pbkdf2", "-iter", "1", "-md", "sha256").returncode != 0
+
+
+def test_a_download_that_fails_once_is_asked_again(tmp_path, monkeypatch) -> None:
+    import io
+    import zipfile as zf
+    payload = io.BytesIO()
+    with zf.ZipFile(payload, "w") as archive:
+        archive.writestr(chain.SEALED_FILE, b"SEALED")
+    calls = []
+
+    class Done:
+        def __init__(self, code):
+            self.returncode, self.stderr = code, b"HTTP 502"
+
+    def gh(command, stdout=None, stderr=None, **k):
+        calls.append(command)
+        if len(calls) == 1:
+            stdout.write(b"half a zi")
+            return Done(1)
+        stdout.write(payload.getvalue())
+        return Done(0)
+
+    waited = []
+    monkeypatch.setattr(chain.subprocess, "run", gh)
+    monkeypatch.setattr(chain, "sleep", waited.append)
+    target = tmp_path / "round.enc"
+    chain.download_sealed("o/r", {"id": 9}, target)
+    assert target.read_bytes() == b"SEALED"
+    assert len(calls) == 2 and waited == [5]
+
+
+@pytest.mark.parametrize("bad", [
+    "staging/2026-10-08.csv", "line_movement/notes.txt", "README.md",
+    "line_movement/2026-10-08.csv.bak", "unmerged/line_movement/2026-10-08/not-a-sha.csv",
+])
+def test_an_archive_member_outside_the_allowlist_is_refused_inside_the_destination(
+    sealed_env, tmp_path, monkeypatch, bad
+) -> None:
+    """Each bad member stays inside the destination, where tarfile's own
+    filter lets it through: only the store/day-file allowlist refuses it."""
+    import tarfile
+    src = tmp_path / "src"
+    _write(src, "line_movement/2026-10-08.csv", HEADER + _row(1))
+    _write(src, bad, "x\n")
+    bundle = tmp_path / "round.tar"
+    with tarfile.open(bundle, "w") as tar:
+        tar.add(src / "line_movement/2026-10-08.csv", arcname="line_movement/2026-10-08.csv")
+        tar.add(src / bad, arcname=bad)
+    sealed_env.parent.mkdir(parents=True, exist_ok=True)
+    assert chain._openssl(["-e", "-salt"], bundle, sealed_env).returncode == 0
+    _offer(monkeypatch, [sealed_env])
+    dest = tmp_path / "dest"
+    assert chain.main(["unseal", "--dest", str(dest), "--github-repo", "o/r"]) == chain.EXIT_DAMAGED
+    assert not dest.exists() or not any(p.is_file() for p in dest.rglob("*"))
+
+
+def test_line_movement_holds_the_grant_its_unseal_needs() -> None:
+    """unseal lists and downloads sealed rounds with github.token; every
+    replay's fake gh accepts any token, so this grant is what production
+    relies on."""
+    workflow = yaml.safe_load(WORKFLOW.read_text())
+    assert workflow["permissions"].get("actions") == "read"
+    restore = _steps()[_index("Restore today's captures")]
+    assert restore["env"]["GH_TOKEN"] == "${{ github.token }}"
+
+
+def test_no_level_of_the_workflow_redirects_the_sealed_rounds_branch() -> None:
+    """NHL_DEFAULT_BRANCH set anywhere in line-movement.yml would make every
+    main round skip main's sealed rounds; the replays render step env only."""
+    assert "NHL_DEFAULT_BRANCH" not in WORKFLOW.read_text()

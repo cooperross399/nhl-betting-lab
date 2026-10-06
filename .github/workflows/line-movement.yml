@@ -171,10 +171,13 @@ jobs:
         # never merged.
         #
         # A RESTORE THAT FAILS LOSES NOTHING BY ITSELF. This round's files then
-        # start from what is on disk, and its push MERGES into the private
-        # tip instead of replacing it, so the earlier rounds stay there. It is
-        # still a red run (restore_problem.txt, read by the gate at the end),
-        # because the ladder scan and the day's files saw a thin chain.
+        # start from what is on disk, and when its push runs it MERGES into the
+        # private tip instead of replacing it, so the earlier rounds stay
+        # there. It is still a red run (restore_problem.txt, read by the gate
+        # at the end), because the ladder scan and the day's files saw a thin
+        # chain. A repository with no movement branch is a fault too: the
+        # chain has existed since 2026-10-02, and the push will not recreate
+        # it.
         #
         # BOUNDED, BECAUSE THE PAID FETCH COMES AFTER IT: four minutes, soft.
         # Free: GitHub only, no provider credit.
@@ -194,8 +197,9 @@ jobs:
           CODE=0
           python scripts/private_movement_chain.py pull --dest data/processed || CODE=$?
           case "$CODE" in
-            0|4) ;;
-            *) echo "The private movement chain could not be restored (exit $CODE); this round's files start from what was on disk, and its push merges into the private tip." >> restore_problem.txt ;;
+            0) ;;
+            4) echo "The private repository has no movement branch. The chain has existed since 2026-10-02, so it was deleted or renamed; restore it from its history. This round's files start from what was on disk." >> restore_problem.txt ;;
+            *) echo "The private movement chain could not be restored (exit $CODE); this round's files start from what was on disk." >> restore_problem.txt ;;
           esac
           CODE=0
           python scripts/private_movement_chain.py unseal --dest data/processed || CODE=$?
@@ -331,10 +335,12 @@ jobs:
 
       - name: Seal this round when the private chain did not take it
         # The push failed, or the check found the private tip short of this
-        # round: the rows not home are on no copy unless this works. The
-        # whole round is sealed (a later fold adds only what the chain
-        # lacks). Encrypted with Cooper's
-        # key (AES-256, NHL_CHAIN_FALLBACK_KEY), written to $RUNNER_TEMP,
+        # round: the rows not home are on no copy unless this works. Only the
+        # files the private tip lacks are sealed when the tip can be listed
+        # (the token is here for that alone), else every file on disk; a
+        # later fold adds only what the chain lacks either way. Encrypted
+        # with Cooper's key (AES-256, PBKDF2-SHA256, NHL_CHAIN_FALLBACK_KEY,
+        # at least 32 characters), written to $RUNNER_TEMP,
         # outside the workspace, and kept below as a 7-day artifact that
         # nobody without the key can read. Every later round's restore
         # decrypts it and folds it in, and that round's push carries it home.
@@ -344,6 +350,8 @@ jobs:
         continue-on-error: true
         env:
           NHL_CHAIN_FALLBACK_KEY: ${{ secrets.NHL_CHAIN_FALLBACK_KEY }}
+          # Only to list the tip, so the seal leaves out what is already home.
+          NHL_CLOSING_LINES_TOKEN: ${{ secrets.NHL_CLOSING_LINES_TOKEN }}
           PYTHONPATH: src
         run: python scripts/private_movement_chain.py seal --processed-dir data/processed --out "$RUNNER_TEMP/sealed/round.enc"
 
@@ -448,15 +456,15 @@ jobs:
 
       - name: Fail the run when the previous captures were not restored
         # After the round is home (or sealed): the red X is the report, not
-        # the damage. A thin restore loses nothing on its own, because the
-        # push merges into the private tip, but the day's files and the ladder
+        # the damage. A thin restore loses nothing on its own, because a push
+        # that runs merges into the private tip, but the day's files and the ladder
         # scan saw a thin chain, and a sealed round that would not open is
         # still outside the chain. restore_problem.txt says which. A restore
         # cut off by its timeout left no sentence, so its outcome is read too.
         if: always()
         run: |
           if [ "${{ steps.restore.outcome }}" = "failure" ]; then
-            echo "::error::Restore today's captures did not finish (it failed or hit its time limit), so this round's day files may have started thin. Its push still merged into the private chain; see the step's log."
+            echo "::error::Restore today's captures did not finish (it failed or hit its time limit), so this round's day files may have started thin. Whether the round reached the private chain is said by the private-chain gate below."
             exit 1
           fi
           if [ -s restore_problem.txt ]; then
@@ -476,7 +484,13 @@ jobs:
             exit 0
           fi
           echo "::error::The private chain did not take this round (push: ${{ steps.private_push.outcome }}, check: ${{ steps.private_verify.outcome }})."
-          if [ "${{ steps.sealed_upload.outcome }}" = "success" ]; then
+          ON_DISK=0
+          for f in data/processed/line_movement/*.csv data/processed/deployment/*.csv data/processed/line_combinations/*.csv; do
+            if [ -f "$f" ]; then ON_DISK=1; fi
+          done
+          if [ "$ON_DISK" = 0 ]; then
+            echo "::error::This round holds no day file at all (its restore read nothing and its captures wrote nothing), so no captured row is outside the private chain; see the restore gate for why the restore read nothing."
+          elif [ "${{ steps.sealed_upload.outcome }}" = "success" ]; then
             echo "::error::It was sealed with NHL_CHAIN_FALLBACK_KEY as line-movement-sealed-${{ github.run_attempt }}, and the next round folds it in."
           else
             echo "::error::It could not be sealed (seal: ${{ steps.seal.outcome }}, upload: ${{ steps.sealed_upload.outcome }}). The rows the private chain lacks are on no copy, and a re-run cannot help: a round cannot be captured again."

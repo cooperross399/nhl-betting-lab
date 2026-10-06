@@ -60,25 +60,32 @@ plumbing.
 ## Exit codes
 
 push: 0 pushed or nothing new; 1 GitHub unreachable after the retries, or a
-local error (named as which); 2 a day file that could not be merged (named;
-every other file is still pushed); 3 no token; 5 refused (a public target, a
-store the API does not call private, a token GitHub turns away, a push a
-rule declines).
+local error (named as which); 2 a day file that could not be merged (named,
+and this run's copy kept on the branch as a sidecar
+`unmerged/<store>/<day>/<blob>.csv`; every other file is still pushed);
+3 no token; 5 refused (a public target, a store the API does not call
+private, a token GitHub turns away, a push a rule declines, or no `movement`
+branch: a round never recreates the chain; `--allow-new-chain` seeds one).
 
 pull: 0 folded in (or nothing to fold); 2 a file that could not be merged
-(named; the copy already on disk is kept); 3 no token; 4 no chain yet (no
-`movement` branch); 1 unreachable; 5 refused.
+(named; the copy already on disk is kept); 3 no token; 4 no `movement`
+branch (a fault for every caller since the 2026-10-02 seed); 1 unreachable;
+5 refused.
 
-verify: 0 the tip holds every row of every local file; 2 it does not (each
-file and its missing row count named); 3, 4, 1 and 5 as for pull.
+verify: 0 the tip holds every row of every local file (as the day file, or
+as its kept sidecar); 2 it does not (each file and its missing row count
+named); 3, 4, 1 and 5 as for pull.
 
-seal: 0 sealed; 1 openssl failed; 2 nothing on disk to seal; 3 no key;
-5 `--out` inside the workspace.
+seal: 0 sealed (only what the tip lacks, when the tip can be listed); 1
+openssl failed; 3 no key; 4 nothing on disk to seal (said, not an error);
+5 a weak key (under 32 characters, or padded with whitespace) or `--out`
+inside the workspace.
 
-unseal: 0 every sealed round folded in (or none exist); 1 GitHub could not be
-asked for the list after the retries; 2 a sealed round that could not be
-downloaded, decrypted, opened or merged (named; the others still folded in);
-3 sealed rounds exist and there is no key to open them.
+unseal: 0 every sealed round folded in, already home, or none exist; 1 GitHub
+could not be asked for the list after the retries; 2 a sealed round that
+could not be downloaded, decrypted or opened, or a sealed copy that could not
+be merged (parked under `--dest/unmerged/` for the push to keep; named);
+3 sealed rounds exist and there is no key; 5 the key is weak.
 """
 
 from __future__ import annotations
@@ -100,10 +107,16 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import private_closing_store as store  # noqa: E402
-from restore_state import _fold, _records, _rows, union_csv  # noqa: E402
+from restore_state import _records, _rows, union_csv  # noqa: E402
 
 CHAIN_BRANCH = "movement"
+CHAIN_SUBJECT = "the private movement chain"
 STORES = ("line_movement", "deployment", "line_combinations")
+#: Where a day file's copy that cannot be merged with the tip's is kept, on
+#: the private branch: `unmerged/<store>/<day>/<blob id>.csv`. Durable and
+#: private, instead of a sealed artifact that expires; merged by hand.
+UNMERGED = "unmerged"
+SIDECAR = re.compile(r"^unmerged/(line_movement|deployment|line_combinations)/\d{4}-\d{2}-\d{2}/[0-9a-f]{40,64}\.csv$")
 DAY_FILE = re.compile(r"^\d{4}-\d{2}-\d{2}\.csv$")
 PUSH_ATTEMPTS = 5
 TIP_REF = "refs/chain-tip"
@@ -171,32 +184,52 @@ def fetch_chain(work: Path, remote: str, token: str) -> str | None:
 
 def fetch_chain_once(work: Path, remote: str, token: str) -> str | None:
     """Fetch the chain's tip into `work` (depth 1, nothing checked out).
-    Its commit, or None when the repository answers and has no chain yet."""
+    Its commit, or None when the repository answers and has no movement
+    branch (since 2026-10-02 that means it was deleted or renamed: a fault
+    for every caller but a deliberate seed)."""
     if not (work / ".git").exists():
         _ok(_git(["init", "-q"], work))
     listed = _git(["ls-remote", "--heads", remote, f"refs/heads/{CHAIN_BRANCH}"], work)
     if listed.returncode:
-        raise store._remote_failure(listed.stderr, token, "list")
+        raise store._remote_failure(listed.stderr, token, "list", CHAIN_SUBJECT)
     if not listed.stdout.strip():
         return None
     done = _git(["fetch", "-q", "--depth", "1", remote,
                  f"+refs/heads/{CHAIN_BRANCH}:{TIP_REF}"], work)
     if done.returncode:
-        raise store._remote_failure(done.stderr, token, "fetch")
+        raise store._remote_failure(done.stderr, token, "fetch", CHAIN_SUBJECT)
     return _ok(_git(["rev-parse", TIP_REF], work)).strip()
 
 
-def tip_files(work: Path) -> dict[str, str]:
-    """`store/<day>.csv` -> blob id, for every day file on the tip."""
-    out = _ok(_git(["ls-tree", "-r", TIP_REF, "--", *STORES], work))
+def tip_blobs(work: Path) -> dict[str, str]:
+    """path -> blob id, for every day file and every sidecar on the tip."""
+    out = _ok(_git(["ls-tree", "-r", TIP_REF, "--", *STORES, UNMERGED], work))
     files = {}
     for line in out.splitlines():
         meta, _, path = line.partition("\t")
         kind, sha = meta.split()[1:3]
         folder, _, name = path.partition("/")
-        if kind == "blob" and folder in STORES and DAY_FILE.match(name):
+        if kind == "blob" and ((folder in STORES and DAY_FILE.match(name)) or SIDECAR.match(path)):
             files[path] = sha
     return files
+
+
+def tip_files(work: Path) -> dict[str, str]:
+    """`store/<day>.csv` -> blob id, for every day file on the tip."""
+    return {p: sha for p, sha in tip_blobs(work).items() if not p.startswith(UNMERGED + "/")}
+
+
+def sidecar_path(rel: str, sha: str) -> str:
+    """Where a day file's unmergeable copy with blob `sha` is kept."""
+    return f"{UNMERGED}/{rel[:-len('.csv')]}/{sha}.csv"
+
+
+def held(rel: str, sha: str, on_tip: dict[str, str]) -> bool:
+    """The tip holds this exact copy: a day file as itself or as its kept
+    sidecar, a sidecar as itself."""
+    if SIDECAR.match(rel):
+        return rel in on_tip
+    return on_tip.get(rel) == sha or sidecar_path(rel, sha) in on_tip
 
 
 def local_files(processed: Path) -> dict[str, Path]:
@@ -209,6 +242,19 @@ def local_files(processed: Path) -> dict[str, Path]:
                 if DAY_FILE.match(path.name):
                     files[f"{folder}/{path.name}"] = path
     return files
+
+
+def local_sidecars(processed: Path) -> dict[str, Path]:
+    """Sidecars parked under `processed/unmerged` (by unseal) -> path."""
+    root = processed / UNMERGED
+    if not root.is_dir():
+        return {}
+    found = {}
+    for path in sorted(root.rglob("*.csv")):
+        rel = path.relative_to(processed).as_posix()
+        if SIDECAR.match(rel):
+            found[rel] = path
+    return found
 
 
 def blob_of(work: Path, path: Path, *, write: bool = False) -> str:
@@ -281,7 +327,8 @@ def push(args: argparse.Namespace) -> int:
     token, remote = setup
     processed = Path(args.processed_dir)
     local = local_files(processed)
-    if not local:
+    parked = local_sidecars(processed)
+    if not local and not parked:
         _say("No movement day file on disk; nothing to push.")
         return EXIT_OK
     stamp = store.utc_now().strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -295,29 +342,45 @@ def push(args: argparse.Namespace) -> int:
             env = {"GIT_INDEX_FILE": str(index)}
             try:
                 tip = fetch_chain(work, remote, token)
-                on_tip = tip_files(work) if tip else {}
+                if tip is None and not args.allow_new_chain:
+                    _error(f"The private repository has no `{CHAIN_BRANCH}` branch. The chain has "
+                           "existed since 2026-10-02, so it was deleted or renamed: restore it from "
+                           "its history rather than let this round start a thin one. (A first "
+                           "seed passes --allow-new-chain.)")
+                    return EXIT_REFUSED
+                on_tip = tip_blobs(work) if tip else {}
                 if tip:
                     _ok(_git(["read-tree", TIP_REF], work, env=env))
+
+                def stage(path_in_tree: str, sha: str) -> None:
+                    _ok(_git(["update-index", "--add", "--cacheinfo",
+                              f"100644,{sha},{path_in_tree}"], work, env=env))
+                    changed.append(path_in_tree)
+
                 for rel, path in local.items():
-                    if on_tip.get(rel) == blob_of(work, path):
+                    local_sha = blob_of(work, path)
+                    if held(rel, local_sha, on_tip):
                         continue
-                    source = path
                     if rel in on_tip:
                         with tempfile.TemporaryDirectory() as scratch:
                             merged, added = _merged(work, on_tip[rel], path, Path(scratch))
                             if merged is None:
-                                damaged[rel] = ("the tip's copy and this run's could not be "
-                                                "merged (a different header, or a parse that "
-                                                "disagrees with its line count)")
+                                side = sidecar_path(rel, blob_of(work, path, write=True))
+                                damaged[rel] = (
+                                    "the tip's copy and this run's could not be merged (a "
+                                    "different header, or a parse that disagrees with its line "
+                                    f"count). This run's copy is kept on the private chain as {side}; "
+                                    "merge the two by hand")
+                                stage(side, local_sha)
                                 continue
                             if not added:
                                 continue
-                            sha = blob_of(work, merged, write=True)
+                            stage(rel, blob_of(work, merged, write=True))
                     else:
-                        sha = blob_of(work, source, write=True)
-                    _ok(_git(["update-index", "--add", "--cacheinfo", f"100644,{sha},{rel}"],
-                             work, env=env))
-                    changed.append(rel)
+                        stage(rel, blob_of(work, path, write=True))
+                for rel, path in parked.items():
+                    if rel not in on_tip:
+                        stage(rel, blob_of(work, path, write=True))
             except store.Refused as exc:
                 _error(str(exc))
                 return EXIT_REFUSED
@@ -328,8 +391,8 @@ def push(args: argparse.Namespace) -> int:
                 _error(f"A local error stopped the push (not GitHub): {exc}")
                 return EXIT_FAILED
             for rel, why in sorted(damaged.items()):
-                _error(f"{rel} could not be pushed to the private chain: {why}. "
-                       "Every other file was.")
+                _error(f"{rel} could not be merged into the private chain: {why}. "
+                       "Every other file was pushed.")
             outcome = EXIT_DAMAGED if damaged else EXIT_OK
             if not changed:
                 _say("The private chain already holds every row on disk. Nothing pushed.")
@@ -343,7 +406,7 @@ def push(args: argparse.Namespace) -> int:
                 _say(f"Pushed {len(changed)} file(s) to the private chain "
                      f"({', '.join(sorted(changed)[:6])}{', ...' if len(changed) > 6 else ''}).")
                 return outcome
-            failure = store._remote_failure(done.stderr, token, "push to")
+            failure = store._remote_failure(done.stderr, token, "push to", CHAIN_SUBJECT)
             if isinstance(failure, store.Refused):
                 _error(str(failure))
                 return EXIT_REFUSED
@@ -367,7 +430,8 @@ def pull(args: argparse.Namespace) -> int:
         try:
             tip = fetch_chain(work, remote, token)
             if tip is None:
-                _say("No private movement chain yet; nothing to fold in.")
+                _error("The private repository has no `movement` branch; the chain has existed "
+                       "since 2026-10-02, so it was deleted or renamed. Nothing was folded in.")
                 return EXIT_EMPTY
             on_tip = tip_files(work)
             recovered, copied, not_merged = 0, 0, []
@@ -409,6 +473,7 @@ def verify(args: argparse.Namespace) -> int:
         return setup
     token, remote = setup
     local = local_files(Path(args.processed_dir))
+    parked = local_sidecars(Path(args.processed_dir))
     missing: dict[str, int] = {}
     rows = 0
     with tempfile.TemporaryDirectory() as scratch_dir:
@@ -419,14 +484,19 @@ def verify(args: argparse.Namespace) -> int:
             if tip is None:
                 _error("There is no private movement chain to verify against.")
                 return EXIT_EMPTY
-            on_tip = tip_files(work)
-            if not local and on_tip:
+            on_tip = tip_blobs(work)
+            day_files_on_tip = [p for p in on_tip if not p.startswith(UNMERGED + "/")]
+            if not local and day_files_on_tip:
                 _error(f"This run's folder holds no movement day file while the private "
-                       f"chain holds {len(on_tip)}; nothing here was checked.")
+                       f"chain holds {len(day_files_on_tip)}; nothing here was checked.")
                 return EXIT_DAMAGED
+            for rel in parked:
+                if rel not in on_tip:
+                    missing[rel] = _rows(parked[rel])
             for rel, path in local.items():
-                if on_tip.get(rel) == blob_of(work, path):
-                    # Byte for byte the tip's copy: held, whatever it holds.
+                if held(rel, blob_of(work, path), on_tip):
+                    # Byte for byte the tip's copy, or its kept sidecar: held,
+                    # whatever it holds.
                     rows += _rows(path)
                     continue
                 theirs = _records(path)
@@ -478,27 +548,71 @@ def _openssl(args: list[str], source: Path, target: Path) -> subprocess.Complete
     )
 
 
+#: The fallback key is a passphrase into PBKDF2; the recipe in CLAUDE.md
+#: (`openssl rand -base64 48`) gives 64 characters.
+MIN_KEY_CHARS = 32
+
+
+def key_problem() -> str | None:
+    """None for a usable fallback key, else why not. openssl reads the raw
+    environment value, so surrounding whitespace is refused rather than
+    silently made part of the key."""
+    raw = os.environ.get(KEY_ENV, "")
+    if not raw.strip():
+        return f"{KEY_ENV} is not set"
+    if raw != raw.strip():
+        return f"{KEY_ENV} has leading or trailing whitespace"
+    if len(raw) < MIN_KEY_CHARS:
+        return f"{KEY_ENV} is shorter than {MIN_KEY_CHARS} characters"
+    return None
+
+
 def seal(args: argparse.Namespace) -> int:
     """Encrypt this round's three stores into `--out`, outside the workspace.
 
-    Only when the private push failed: the private repository is the round's
-    only home in stage two, and a round that reaches neither it nor this
-    sealed copy is gone. AES-256 with Cooper's key (NHL_CHAIN_FALLBACK_KEY);
-    without the key the round is not sealed, and the run says so.
+    Only when the private push failed or the check found the tip short: the
+    private repository is the round's only home in stage two, and rows that
+    reach neither it nor this sealed copy are gone. Only what the tip lacks is
+    sealed when the tip can be listed (else everything on disk). AES-256,
+    PBKDF2-SHA256 at 200k iterations, Cooper's key (NHL_CHAIN_FALLBACK_KEY,
+    at least 32 characters, no surrounding whitespace); a weak or missing key
+    seals nothing, and the run says so.
     """
-    if not os.environ.get(KEY_ENV, "").strip():
-        _error(f"{KEY_ENV} is not set, so this round cannot be sealed. It is on no copy.")
-        return EXIT_NO_TOKEN
+    problem = key_problem()
+    if problem:
+        _error(f"This round cannot be sealed: {problem}. The rows the private chain lacks are on no copy.")
+        return EXIT_NO_TOKEN if not os.environ.get(KEY_ENV) else EXIT_REFUSED
     out = Path(args.out)
     try:
         store.refuse_an_out_inside_the_workspace(out)
     except store.Refused as exc:
         _error(str(exc))
         return EXIT_REFUSED
-    local = local_files(Path(args.processed_dir))
+    processed = Path(args.processed_dir)
+    local = {**local_files(processed), **local_sidecars(processed)}
     if not local:
-        _error("No movement day file on disk to seal.")
-        return EXIT_DAMAGED
+        _say("No movement day file on disk: this round restored nothing and captured "
+             "nothing, so no captured row is outside the private chain. Nothing to seal.")
+        return EXIT_EMPTY
+    # Only what the private tip lacks, when the tip can be read: a seal holding
+    # the whole season would grow to the chain's size, and every later round
+    # downloads it. With no listing, everything is sealed.
+    on_tip = _tip_listing(args)
+    if on_tip:
+        try:
+            with tempfile.TemporaryDirectory() as scratch_dir:
+                git_dir = Path(scratch_dir)
+                _ok(_git(["init", "-q"], git_dir))
+                lacking = {rel: path for rel, path in local.items()
+                           if not held(rel, blob_of(git_dir, path), on_tip)}
+        except OSError as exc:
+            _say(f"Could not compare this round with the private tip ({exc}); sealing everything.")
+            lacking = {}
+        # Empty when the tip already holds every file (the push failed after
+        # an earlier attempt landed, or the check failed for another reason):
+        # everything is sealed then, which costs size and loses nothing.
+        if lacking:
+            local = lacking
     out.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory() as scratch:
         bundle = Path(scratch) / "round.tar"
@@ -578,10 +692,32 @@ def download_sealed(repo: str, artifact: dict, target: Path) -> None:
                 shutil.copyfileobj(source, sink)
 
 
+def _tip_listing(args: argparse.Namespace) -> dict[str, str] | None:
+    """The private tip's blobs, to tell a sealed copy already home from one
+    that is not; None when there is no token or the tip cannot be read
+    (every sealed file is then folded, as it would have been)."""
+    token = store._token()
+    if not token and not args.remote:
+        return None
+    remote = args.remote or store.remote_url(args.repo, token)
+    try:
+        store.refuse_public_target(args.repo, remote)
+        with tempfile.TemporaryDirectory() as scratch_dir:
+            work = Path(scratch_dir) / "repo"
+            work.mkdir()
+            return tip_blobs(work) if fetch_chain(work, remote, token) else {}
+    except (store.Refused, OSError):
+        return None
+
+
 def unseal(args: argparse.Namespace) -> int:
     """Fold every sealed fallback round into `--dest`, so this round's push
     carries it into the private chain. Each fold is the chain's own union:
-    a row already on disk is not added twice."""
+    a row already on disk is not added twice. A sealed copy the private tip
+    already holds (as the day file or its sidecar) is skipped. A sealed copy
+    that cannot be merged with the one on disk is parked as a sidecar under
+    `--dest/unmerged/`, which the push keeps on the private branch, so its
+    rows never strand in an artifact that expires."""
     repo = args.github_repo or os.environ.get("GITHUB_REPOSITORY", "")
     try:
         sealed = list_sealed(repo)
@@ -591,12 +727,15 @@ def unseal(args: argparse.Namespace) -> int:
     if not sealed:
         _say("No sealed fallback round to fold in.")
         return EXIT_OK
-    if not os.environ.get(KEY_ENV, "").strip():
-        _error(f"{len(sealed)} sealed fallback round(s) exist and {KEY_ENV} is not set to open them.")
-        return EXIT_NO_TOKEN
+    problem = key_problem()
+    if problem:
+        _error(f"{len(sealed)} sealed fallback round(s) exist and they cannot be opened: {problem}")
+        return EXIT_NO_TOKEN if not os.environ.get(KEY_ENV) else EXIT_REFUSED
+    on_tip = _tip_listing(args)
     dest = Path(args.dest)
     failed: list[str] = []
-    recovered = 0
+    parked: list[str] = []
+    recovered = skipped = 0
     for artifact in sealed:
         name = f"{artifact.get('name')} (run {(artifact.get('workflow_run') or {}).get('id')})"
         with tempfile.TemporaryDirectory() as scratch:
@@ -616,21 +755,45 @@ def unseal(args: argparse.Namespace) -> int:
                     members = [m for m in tar.getmembers() if m.isfile()]
                     for member in members:
                         folder, _, file_name = member.name.partition("/")
-                        if folder not in STORES or not DAY_FILE.match(file_name) or ".." in member.name:
+                        day_file = folder in STORES and DAY_FILE.match(file_name)
+                        if ".." in member.name or not (day_file or SIDECAR.match(member.name)):
                             raise tarfile.TarError(f"unexpected member {member.name}")
                     tar.extractall(opened, members=members, filter="data")
             except tarfile.TarError as exc:
                 failed.append(f"{name}: {exc}")
                 continue
-            report = {"not_merged": []}
-            recovered += _fold(opened, dest, name, report)
-            if report["not_merged"]:
-                failed.append(f"{name}: could not merge {', '.join(report['not_merged'])}")
+            git_dir = work / "git"
+            git_dir.mkdir()
+            _git(["init", "-q"], git_dir)
+            for member in members:
+                rel = member.name
+                source = opened / rel
+                sha = blob_of(git_dir, source)
+                target = dest / rel
+                if on_tip is not None and held(rel, sha, on_tip):
+                    skipped += 1
+                    continue
+                if SIDECAR.match(rel) or not target.exists():
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copyfile(source, target)
+                    recovered += _rows(target) if not SIDECAR.match(rel) else 0
+                    continue
+                added = union_csv(source, target)
+                if added is None:
+                    side = dest / sidecar_path(rel, sha)
+                    side.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copyfile(source, side)
+                    parked.append(f"{rel} from {name} -> {sidecar_path(rel, sha)}")
+                    continue
+                recovered += added
     for line in failed:
         _error(f"Sealed fallback round {line}.")
-    _say(f"Folded in {len(sealed) - len(failed)} sealed fallback round(s): "
-         f"{recovered} row(s) the copy on disk did not have.")
-    return EXIT_DAMAGED if failed else EXIT_OK
+    for line in parked:
+        _error(f"A sealed copy could not be merged with the one on disk and is parked for the "
+               f"push to keep on the private chain as a sidecar: {line}. Merge it by hand.")
+    _say(f"Folded in {len(sealed) - len(failed)} sealed fallback round(s): {recovered} row(s) "
+         f"the copy on disk did not have; {skipped} file(s) already home.")
+    return EXIT_DAMAGED if failed or parked else EXIT_OK
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -643,12 +806,18 @@ def main(argv: list[str] | None = None) -> int:
     sub.choices["push"].add_argument("--processed-dir", default="data/processed")
     sub.choices["verify"].add_argument("--processed-dir", default="data/processed")
     sub.choices["pull"].add_argument("--dest", default="data/processed")
+    sub.choices["push"].add_argument(
+        "--allow-new-chain", action="store_true",
+        help="Create the movement branch when it does not exist (a first seed only).")
     sealer = sub.add_parser("seal")
     sealer.add_argument("--processed-dir", default="data/processed")
     sealer.add_argument("--out", required=True)
     opener = sub.add_parser("unseal")
     opener.add_argument("--dest", default="data/processed")
     opener.add_argument("--github-repo", default="", help="Defaults to $GITHUB_REPOSITORY.")
+    for command in (sealer, opener):
+        command.add_argument("--repo", default=store.PRIVATE_REPO)
+        command.add_argument("--remote", default="", help="A local store, for tests.")
     args = parser.parse_args(argv)
     return {"push": push, "pull": pull, "verify": verify,
             "seal": seal, "unseal": unseal}[args.command](args)

@@ -11,40 +11,51 @@ hand-off tests counted lines.
 So these tests run the chain the way production does. Since stage two of the
 chain's move (2026-10-05) both halves live only in the private repository
 cooperross399/nhl-closing-lines: Line Movement's capture chain on branch
-`movement`, the closing-line store on `main`. The chain is:
+`movement`, the closing-line store on `main`. The chain has existed since
+2026-10-02, so each test starts from a private repository that already
+holds it: an earlier day's round, written by the real `write_round` and
+pushed once by the real `push --allow-new-chain`, as the first seed was. The
+chain is:
 
 1. Line Movement, one run per round, each on a fresh runner: its "Restore
    today's captures" block as written, under the shell GitHub uses (the real
    `private_movement_chain.py pull` and `unseal`; `gh` is a stub that lists
    the sealed rounds this test kept); its round, written by the real
    `capture_line_movement.write_round` on rows from the real
-   `normalize_event`; then "Keep the captures privately" with the workflow's
-   exact arguments. A round whose push fails runs "Seal this round when the
-   private push failed" as written, and its upload is modelled from "Keep the
-   sealed round"'s own `name` and `path`.
+   `normalize_event`; then "Keep the captures privately" (`push`) and "Check
+   the private chain holds this round" (`verify`) with the workflow's exact
+   arguments. When either fails, "Seal this round when the private chain did
+   not take it" runs as written, and its upload is modelled from "Keep the
+   sealed round"'s own `name` and `path`. Last, the two gates "Fail the run
+   when the previous captures were not restored" and "Fail the run when the
+   private chain was not kept" run as written, on the outcomes those steps
+   had.
 2. Closing Lines' hand-off block as written, pulling the chain from
-   `movement` onto its runner.
+   `movement` onto its runner. A missing `movement` branch is a red run
+   there, never "nothing yet": the chain is the only copy, so a missing
+   branch means it was deleted or renamed.
 3. Closing Lines' publish: `private_closing_store.py push` with the
    workflow's exact arguments.
 4. Gameday Refresh: the store pulled, and the real `run_closing_line_value`
    pointed at it alone, scoring opinions frozen by the real `write_snapshot`.
-   Where the union of store and chain matters, its "Report closing-line
-   value" block runs as written, with both real pulls and the real report;
-   only a runner's own folders and clock are appended to the report's
-   arguments.
+   Where the union of store and chain matters, or a missing chain, its
+   "Report closing-line value" block runs as written, with both real pulls
+   and the real report; only a runner's own folders and clock are appended
+   to the report's arguments. A missing chain is a red fault there too,
+   which does not degrade the run.
 
 The private repository is a local bare repository reached through the real
 URL the scripts build. Only the GitHub API's privacy answer is replaced, so
-the pushes run in process; the pulls, the seal and the unseal run as the
-steps run them. Every script gets its step's own arguments, relative paths
-included, from the runner's working directory. The steps' `if:` conditions
-are not evaluated here: each scenario runs the steps it reaches.
+the pushes run in process, and the checks beside them; the pulls, the seal
+and the unseal run as the steps run them. Every script gets its step's own arguments, relative
+paths included, from the runner's working directory. The steps' `if:`
+conditions are not evaluated here: each scenario runs the steps it reaches.
 
 Until 2026-10-05 the hand-off unpacked Line Movement's public
 `line-movement` artifact with `gh run download`; that artifact and the
 re-run fold (`restore_state.py --fold-run`) are gone. A re-run's second
 attempt runs the same restore block as the next round, which folds in every
-unexpired sealed round, so the sealed-round test below covers that path too.
+unexpired sealed round, so the sealed-round tests below cover that path too.
 """
 
 from __future__ import annotations
@@ -57,6 +68,7 @@ import shutil
 import subprocess
 import sys
 import zipfile
+from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
@@ -83,14 +95,31 @@ CLOSING_LINES = WORKFLOWS / "closing-lines.yml"
 GAMEDAY = WORKFLOWS / "gameday-refresh.yml"
 RESTORE = "Restore today's captures"
 PRIVATE_PUSH = "Keep the captures privately"
+CHECK = "Check the private chain holds this round"
 SEAL = "Seal this round when the private chain did not take it"
 SEALED_UPLOAD = "Keep the sealed round"
+RESTORE_GATE = "Fail the run when the previous captures were not restored"
+CHAIN_GATE = "Fail the run when the private chain was not kept"
 HANDOFF = "Take the chain from the private repository"
 PUBLISH = "Publish to the private store"
 CLV_STEP = "Report closing-line value"
 REPO = "owner/lab"
 TOKEN = "rehearsal-token"
-FALLBACK_KEY = "rehearsal-fallback-key"
+# As long as the seal and the unseal require: a short key is refused.
+FALLBACK_KEY = "rehearsal-fallback-key-" + "0123456789abcdef" * 2
+# What Line Movement's restore and Closing Lines' hand-off say when the
+# private repository has no `movement` branch.
+NO_CHAIN = ("The private repository has no movement branch. The chain has existed since "
+            "2026-10-02, so it was deleted or renamed; restore it from its history.")
+SEALED_GATE = ("::error::The private chain did not take this round (push: failure, check: failure).\n"
+               "::error::It was sealed with NHL_CHAIN_FALLBACK_KEY as line-movement-sealed-1, "
+               "and the next round folds it in.\n")
+
+# The chain's first seed: an earlier day's round, another game.
+SEED_DAY = "2026-10-14"
+SEED_AT = f"{SEED_DAY}T21:00:00+00:00"
+SEED_GAME = {"event_id": "evt0", "start": f"{SEED_DAY}T23:00:00Z", "player": "Nick Suzuki",
+             "home": "Ottawa Senators", "away": "Montreal Canadiens"}
 
 DAY = "2026-10-15"
 START = f"{DAY}T23:00:00Z"  # 19:00 ET
@@ -116,17 +145,20 @@ CLOSES = {
 }
 
 
-def _event(board: dict[str, tuple[int, int]]) -> dict:
+def _event(
+    board: dict[str, tuple[int, int]], *, event_id: str = "evt1", start: str = START,
+    player: str = PLAYER, home: str = "Toronto Maple Leafs", away: str = "Boston Bruins",
+) -> dict:
     """One provider event payload, every book quoting both sides."""
     return {
-        "id": "evt1", "commence_time": START,
-        "home_team": "Toronto Maple Leafs", "away_team": "Boston Bruins",
+        "id": event_id, "commence_time": start,
+        "home_team": home, "away_team": away,
         "bookmakers": [
             {"key": book.lower(), "title": book, "markets": [{
                 "key": "player_shots_on_goal",
                 "outcomes": [
-                    {"name": "Over", "description": PLAYER, "price": over, "point": 2.5},
-                    {"name": "Under", "description": PLAYER, "price": under, "point": 2.5},
+                    {"name": "Over", "description": player, "price": over, "point": 2.5},
+                    {"name": "Under", "description": player, "price": under, "point": 2.5},
                 ],
             }]}
             for book, (over, under) in board.items()
@@ -253,7 +285,29 @@ def rig(tmp_path, monkeypatch):
     subprocess.run(["git", "add", "-A"], cwd=seed, check=True, env=env)
     subprocess.run(["git", "commit", "-q", "-m", "seed"], cwd=seed, check=True, env=env)
     subprocess.run(["git", "push", "-q", str(bare), "HEAD:refs/heads/main"], cwd=seed, check=True, env=env)
-    return {"root": tmp_path, "bare": bare, "env": env, "sealed": sealed}
+    # The movement chain as it has stood since 2026-10-02: seeded once, by
+    # hand, with the only flag that lets a push start the branch.
+    seed_processed = tmp_path / "chain-seed" / "data" / "processed"
+    rows = odds_api.normalize_event(
+        _event({"DraftKings": (-120, 100), "FanDuel": (-118, -102)}, **SEED_GAME), fetched_at=SEED_AT,
+    )
+    load_script("capture_line_movement.py").write_round(
+        rows, captured_at=SEED_AT, day=SEED_DAY, processed=seed_processed,
+    )
+    assert chain.main(["push", "--processed-dir", str(seed_processed), "--allow-new-chain"]) == chain.EXIT_OK
+    rig = {"root": tmp_path, "bare": bare, "env": env, "sealed": sealed, "seed": seed_processed}
+    assert _chain_tip(rig), "the seed did not start the movement branch"
+    return rig
+
+
+def _chain_tip(rig) -> str:
+    """The private repository's `movement` branch: its commit, or ""."""
+    done = subprocess.run(
+        ["git", "--git-dir", str(rig["bare"]), "rev-parse", "--verify", "-q",
+         f"refs/heads/{chain.CHAIN_BRANCH}"],
+        capture_output=True, text=True, env=rig["env"],
+    )
+    return done.stdout.strip()
 
 
 def _lines(path: Path) -> list[str]:
@@ -284,12 +338,29 @@ def _keep_sealed_round(rig, temp: Path, *, run_id: int, attempt: int) -> None:
         listing.write(json.dumps(entry) + "\n")
 
 
+def _chain_argv(name: str) -> list[str]:
+    """A Line Movement step's own `private_movement_chain.py` arguments."""
+    argv = shlex.split(_render(_step(LINE_MOVEMENT, name)["run"]))
+    assert argv[:2] == ["python", "scripts/private_movement_chain.py"], name
+    return argv[2:]
+
+
+def _outcome(code: int) -> str:
+    """A continue-on-error step's `outcome`: what it exited, before GitHub
+    lets the job carry on."""
+    return "success" if code == 0 else "failure"
+
+
 def _line_movement_run(
     rig, monkeypatch, run_id: int, captured_at: str, board: dict, *,
-    previous: Path | None, push_fails: bool = False,
+    day_so_far: list[str], push_fails: bool = False, chain_missing: bool = False,
 ) -> Path:
     """One Line Movement run on a fresh runner: restore, round, private push
-    (and the seal, when the push fails). The runner's data/processed."""
+    and check, the seal and its upload when either failed, then the two
+    gates that read them. `day_so_far` is the day file the restore must lay
+    down (sorted lines); `push_fails` cuts the push off from GitHub;
+    `chain_missing` says the private repository has no `movement` branch.
+    The runner's data/processed."""
     capture = load_script("capture_line_movement.py")
     work = rig["root"] / f"line-movement-{run_id}"
     temp = rig["root"] / f"line-movement-{run_id}-temp"
@@ -300,46 +371,97 @@ def _line_movement_run(
 
     restore = _bash(_render(_step(LINE_MOVEMENT, RESTORE)["run"]), work, env)
     assert restore.returncode == 0, f"{RESTORE}: {restore.stdout}{restore.stderr}"
-    assert (work / "restore_problem.txt").read_text(encoding="utf-8") == "", restore.stdout + restore.stderr
-    # The day so far, as the previous round left it, before this round appends.
+    problem = (work / "restore_problem.txt").read_text(encoding="utf-8")
+    if chain_missing:
+        # A fault, never "no chain yet": the chain is the only copy.
+        assert problem == f"{NO_CHAIN} This round's files start from what was on disk.\n", \
+            restore.stdout + restore.stderr
+    else:
+        assert problem == "", restore.stdout + restore.stderr
+    # The day so far, before this round appends.
     day_file = capture.capture_path(DAY, processed_dir=processed)
-    expected = _lines(capture.capture_path(DAY, processed_dir=previous)) if previous else []
-    assert _lines(day_file) == expected, f"run {run_id}'s restore did not lay down the day so far"
+    assert _lines(day_file) == day_so_far, f"run {run_id}'s restore did not lay down the day so far"
 
     rows = odds_api.normalize_event(_event(board), fetched_at=captured_at)
     capture.write_round(rows, captured_at=captured_at, day=DAY, processed=processed)
 
-    argv = shlex.split(_render(_step(LINE_MOVEMENT, PRIVATE_PUSH)["run"]))
-    assert argv[:2] == ["python", "scripts/private_movement_chain.py"]
     monkeypatch.chdir(work)
     with monkeypatch.context() as outage:
         if push_fails:
             outage.setattr(store, "repo_is_private", _github_down)
-        pushed = chain.main(argv[2:])
-    if not push_fails:
-        assert pushed == chain.EXIT_OK, f"{PRIVATE_PUSH}, with the workflow's arguments, exited {pushed}"
-        return processed
-    assert pushed != chain.EXIT_OK
-    sealed = _bash(_render(_step(LINE_MOVEMENT, SEAL)["run"]), work, env)
-    assert sealed.returncode == 0, f"{SEAL}: {sealed.stdout}{sealed.stderr}"
-    _keep_sealed_round(rig, temp, run_id=run_id, attempt=1)
+        pushed = chain.main(_chain_argv(PRIVATE_PUSH))
+    checked = chain.main(_chain_argv(CHECK))
+    if chain_missing:
+        # No thin chain in its place: the push refuses to start the branch,
+        # which stays missing for a person to restore from its history.
+        assert (pushed, checked) == (chain.EXIT_REFUSED, chain.EXIT_EMPTY)
+        assert not _chain_tip(rig), f"{PRIVATE_PUSH} started a new movement branch holding one round"
+    elif push_fails:
+        # The tip GitHub could not be asked about lacks this round.
+        assert (pushed, checked) == (chain.EXIT_FAILED, chain.EXIT_DAMAGED)
+    else:
+        assert (pushed, checked) == (chain.EXIT_OK, chain.EXIT_OK), \
+            f"{PRIVATE_PUSH} and {CHECK}, with the workflow's arguments, exited {pushed} and {checked}"
+    taken = pushed == chain.EXIT_OK and checked == chain.EXIT_OK
+    outcomes = {
+        "steps.restore.outcome": _outcome(restore.returncode),
+        "steps.private_push.outcome": _outcome(pushed),
+        "steps.private_verify.outcome": _outcome(checked),
+        "steps.seal.outcome": "skipped",
+        "steps.sealed_upload.outcome": "skipped",
+        "github.run_attempt": "1",
+    }
+    if not taken:
+        sealed = _bash(_render(_step(LINE_MOVEMENT, SEAL)["run"]), work, env)
+        assert sealed.returncode == 0, f"{SEAL}: {sealed.stdout}{sealed.stderr}"
+        outcomes["steps.seal.outcome"] = "success"
+        _keep_sealed_round(rig, temp, run_id=run_id, attempt=1)
+        outcomes["steps.sealed_upload.outcome"] = "success"
+
+    restore_gate = _bash(_render(_step(LINE_MOVEMENT, RESTORE_GATE)["run"], outcomes), work, env)
+    if chain_missing:
+        expected_gate = (1, f"::error::{NO_CHAIN} This round's files start from what was on disk. \n")
+    else:
+        expected_gate = (0, "The previous captures were restored.\n")
+    assert (restore_gate.returncode, restore_gate.stdout) == expected_gate, restore_gate.stderr
+    chain_gate = _bash(_render(_step(LINE_MOVEMENT, CHAIN_GATE)["run"], outcomes), work, env)
+    expected_gate = (0, "") if taken else (1, SEALED_GATE)
+    assert (chain_gate.returncode, chain_gate.stdout) == expected_gate, chain_gate.stderr
     return processed
 
 
-def _closing_lines_run(rig, run_id: int, monkeypatch) -> None:
-    """One Closing Lines run on a fresh checkout: hand-off, then publish."""
+def _closing_lines_run(rig, run_id: int, monkeypatch, *, chain_missing: bool = False) -> None:
+    """One Closing Lines run on a fresh checkout: hand-off, then publish.
+    With no `movement` branch the hand-off is red, and the publish, whose
+    `if:` holds no `always()`, does not run."""
     work = rig["root"] / f"closing-lines-{run_id}"
     work.mkdir()
     output = rig["root"] / f"github-output-{run_id}.txt"
     env = {**rig["env"], "GITHUB_OUTPUT": str(output), "GITHUB_WORKSPACE": str(work)}
     done = _bash(_render(_step(CLOSING_LINES, HANDOFF)["run"]), work, env)
+    handed = output.read_text(encoding="utf-8") if output.is_file() else ""
+    if chain_missing:
+        assert done.returncode == 1, f"{HANDOFF} with no movement branch: {done.stdout}{done.stderr}"
+        assert f"::error::{NO_CHAIN}" in done.stdout.splitlines(), done.stdout + done.stderr
+        assert "empty=true" not in handed, "a missing chain was handed off as nothing yet"
+        return
     assert done.returncode == 0, f"{HANDOFF}: {done.stdout}{done.stderr}"
     # Publish runs only when the hand-off carried rows (its `if:`).
-    assert "empty=true" not in (output.read_text() if output.is_file() else "")
+    assert "empty=true" not in handed
     argv = shlex.split(_render(_step(CLOSING_LINES, PUBLISH)["run"]))
     assert argv[:2] == ["python", "scripts/private_closing_store.py"]
     monkeypatch.chdir(work)
     assert store.main(argv[2:]) == store.EXIT_OK
+
+
+def _day_so_far(*runners: Path) -> list[str]:
+    """The day file every runner in `runners` held, as the union keeps it:
+    each line once per copy that has it, at most."""
+    capture = load_script("capture_line_movement.py")
+    kept: Counter = Counter()
+    for processed in runners:
+        kept |= Counter(_lines(capture.capture_path(DAY, processed_dir=processed)))
+    return sorted(kept.elements())
 
 
 def _rounds(rig, monkeypatch, runs=RUNS, *, closing_after=None, failed_push=()) -> list[Path]:
@@ -350,7 +472,7 @@ def _rounds(rig, monkeypatch, runs=RUNS, *, closing_after=None, failed_push=()) 
     for run_id, (captured_at, board) in enumerate(runs, start=1):
         runners.append(_line_movement_run(
             rig, monkeypatch, run_id, captured_at, board,
-            previous=runners[-1] if runners else None, push_fails=run_id in failed_push,
+            day_so_far=_day_so_far(*runners[-1:]), push_fails=run_id in failed_push,
         ))
         if closing_after is None or run_id in closing_after:
             _closing_lines_run(rig, run_id, monkeypatch)
@@ -405,22 +527,23 @@ def _clv(pulled: Path, tmp_path: Path) -> tuple[str, dict]:
     return page, _closes(processed, archive, pulled)
 
 
-def _gameday_clv(rig) -> SimpleNamespace:
+def _gameday_clv(rig, name: str = "gameday") -> SimpleNamespace:
     """Gameday Refresh's "Report closing-line value" block as written, on a
-    fresh runner: what it exited, the page, and each folder it handed the
-    report, in order."""
+    fresh runner: what it exited, what it wrote to $GITHUB_OUTPUT, the page,
+    each folder it handed the report (in order), and the runner's
+    workspace."""
     root = rig["root"]
     work, temp, handed, archive, output = (
-        root / d for d in ("gameday-runner", "gameday-temp", "gameday-handed",
-                           "gameday-archive", "gameday-outputs")
+        root / f"{name}-{d}" for d in ("runner", "temp", "handed", "archive", "outputs")
     )
     processed = work / "data" / "processed"
     for d in (processed, temp, handed):
         d.mkdir(parents=True)
     _freeze(archive)
+    github_output = root / f"{name}-github-output.txt"
     env = {
         **rig["env"], "RUNNER_TEMP": str(temp), "GITHUB_WORKSPACE": str(work),
-        "GITHUB_OUTPUT": str(root / "gameday-github-output.txt"),
+        "GITHUB_OUTPUT": str(github_output),
         "CLV_HANDED": str(handed), "CLV_PROCESSED": str(processed),
         "CLV_ARCHIVE": str(archive), "CLV_OUTPUT": str(output), "CLV_NOW": REPORT_NOW,
     }
@@ -428,16 +551,17 @@ def _gameday_clv(rig) -> SimpleNamespace:
     page = output / cl.REPORT_FILENAME
     return SimpleNamespace(
         done=done, page=page.read_text(encoding="utf-8") if page.is_file() else "",
+        outputs=github_output.read_text(encoding="utf-8") if github_output.is_file() else "",
         handed=sorted(handed.iterdir(), key=lambda d: int(d.name)),
-        processed=processed, archive=archive,
+        processed=processed, archive=archive, work=work,
     )
 
 
 def test_clv_closes_every_opinion_from_the_private_store(rig, tmp_path, monkeypatch) -> None:
-    """Three rounds: the first establishes the chain's day file and the
-    store's, and the next two merge into both. The close is the 21:00
-    round's best price. It is not the 14:00 round, and not the face-off
-    round's longer price."""
+    """Three rounds: the first starts the day's file in the chain (which
+    already holds an earlier day) and in the store, and the next two merge
+    into both. The close is the 21:00 round's best price. It is not the
+    14:00 round, and not the face-off round's longer price."""
     _rounds(rig, monkeypatch)
 
     page, closes = _clv(_pull_store(rig), tmp_path)
@@ -462,15 +586,17 @@ def test_the_private_store_is_exactly_what_line_movement_wrote_for_closing(
     writes on its own runner from the same fetch (`write_round`), which no
     step keeps: the store CLV loads holds the producer's rows, under the
     producer's columns, with the producer's values. It is not a count of
-    lines."""
+    lines. The chain's seed round, an earlier day's, is published with
+    them: Closing Lines publishes every day the chain holds."""
     runners = _rounds(rig, monkeypatch)
-    written = pd.concat([pd.read_csv(cl.captures_path(p)) for p in runners], ignore_index=True)
+    written = pd.concat([pd.read_csv(cl.captures_path(p)) for p in [rig["seed"], *runners]],
+                        ignore_index=True)
 
     def ordered(frame: pd.DataFrame) -> pd.DataFrame:
         return frame.sort_values(["captured_at", "selection"]).reset_index(drop=True)
 
     loaded = cl.load_captures(_pull_store(rig))
-    assert len(loaded) == 2 * len(RUNS), "one best-price row per side per run"
+    assert len(loaded) == 2 * (len(RUNS) + 1), "one best-price row per side per round, the seed's too"
     pd.testing.assert_frame_equal(ordered(loaded), ordered(written))
 
 
@@ -493,8 +619,9 @@ def test_the_report_scores_the_union_when_the_store_lags_the_chain(rig, monkeypa
 
 
 def test_a_round_the_private_push_missed_is_sealed_and_still_closes(rig, tmp_path, monkeypatch) -> None:
-    """The 21:00 round's push could not reach GitHub. Its run sealed the round
-    with the fallback key and kept it as a sealed artifact; the 23:00 round's
+    """The 21:00 round's push could not reach GitHub, and its check found the
+    tip without the round. Its run sealed the round with the fallback key and
+    kept it as a sealed artifact, and its gate said so; the 23:00 round's
     restore opened it, that round's push carried it into the chain, Closing
     Lines published it, and CLV closes on it. Lost, no opinion would close:
     the 14:00 round is too far before face-off to count, and the face-off
@@ -503,5 +630,51 @@ def test_a_round_the_private_push_missed_is_sealed_and_still_closes(rig, tmp_pat
 
     page, closes = _clv(_pull_store(rig), tmp_path)
 
+    assert MATCHED_BOTH in page
+    assert closes == CLOSES
+
+
+def test_a_deleted_chain_is_a_fault_everywhere_and_its_round_still_closes(
+    rig, tmp_path, monkeypatch
+) -> None:
+    """Branch `movement` is deleted after the 14:00 round. The chain is the
+    only copy, so a missing branch is never "no chain yet":
+
+    * the 21:00 round's restore names the missing branch and its gate is
+      red; the round starts from an empty disk; the push refuses to start a
+      new branch holding one round, the check has no chain to check, and the
+      round is sealed, as its gate says;
+    * Closing Lines' hand-off is red and publishes nothing;
+    * Gameday Refresh's CLV step is red (`store_fault=missing-chain`) without
+      degrading the run, and names what it scored: the store alone.
+
+    Once the branch is restored from its history, the 23:00 round's restore
+    is clean and folds the sealed round in, its push carries it home, and CLV
+    closes on the 21:00 round, which only the sealed round held."""
+    (first, deleted, last) = RUNS
+    round_one = _line_movement_run(rig, monkeypatch, 1, *first, day_so_far=[])
+    _closing_lines_run(rig, 1, monkeypatch)
+    history = _chain_tip(rig)
+    subprocess.run(["git", "--git-dir", str(rig["bare"]), "update-ref", "-d",
+                    f"refs/heads/{chain.CHAIN_BRANCH}"], check=True, env=rig["env"])
+
+    round_two = _line_movement_run(rig, monkeypatch, 2, *deleted, day_so_far=[], chain_missing=True)
+    _closing_lines_run(rig, 2, monkeypatch, chain_missing=True)
+    clv = _gameday_clv(rig, "gameday-no-chain")
+
+    assert clv.done.returncode == 2, clv.done.stdout + clv.done.stderr
+    assert ("::error::The private repository has no movement branch; the chain has existed since "
+            "2026-10-02, so it was deleted or renamed: restore it from its history; the "
+            "closing-line value report scored the store alone.") in clv.done.stdout.splitlines()
+    assert clv.outputs == "store_fault=missing-chain\n"
+    assert not (clv.work / "run_degraded.txt").exists(), "a missing chain degraded the run"
+    assert "matched to a closing price: **0**" in clv.page
+
+    subprocess.run(["git", "--git-dir", str(rig["bare"]), "update-ref",
+                    f"refs/heads/{chain.CHAIN_BRANCH}", history], check=True, env=rig["env"])
+    _line_movement_run(rig, monkeypatch, 3, *last, day_so_far=_day_so_far(round_one, round_two))
+    _closing_lines_run(rig, 3, monkeypatch)
+
+    page, closes = _clv(_pull_store(rig), tmp_path)
     assert MATCHED_BOTH in page
     assert closes == CLOSES

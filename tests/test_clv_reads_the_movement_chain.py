@@ -20,18 +20,27 @@ removed when the report is done. These pin:
 - chain folders an older gameday-state left in data/processed are removed
   first, so they are neither scored nor uploaded again;
 - the report's own exit is the step's, and the clean-up runs either way;
-- no chain yet (exit 4, or a pull that wrote no day file) is an ordinary night;
+- a pull that exits 0 and wrote no day file is an ordinary night: the chain
+  holds nothing for the report yet;
 - a chain GitHub could not be reached for (exit 1) degrades the run, and says
   what was actually scored;
-- a chain that is damaged (2), turns the token away (5) or exits with a code
-  the step does not know fails the step (exit 2, `store_fault`) without
-  degrading the run, and a damaged chain's good days are still scored.
+- a chain that is damaged (2), has no token to read with (3), has no
+  `movement` branch (4), turns the token away (5) or exits with a code the
+  step does not know fails the step (exit 2, `store_fault`) without degrading
+  the run (the backup would read the same chain), a damaged chain's good days
+  are still scored, and a chain fault beside a store that was read is still a
+  fault. A missing branch is not "nothing yet": the chain has existed since
+  2026-10-02, so a missing branch was deleted or renamed, and a quiet night
+  would let the season drop off the tip unreported.
 
-Not pinned here: a pull with no token (exit 3), which the step treats as
-quietly as exit 4. The public restore's `--union 3` (a run's artifact could be
-partial) has no counterpart to replay: the private branch accumulates every
-push, which `test_the_movement_chain_is_kept_privately.py` covers. The store's
-own paths are in `test_closing_prices_never_reach_the_public_repo.py`.
+The no-token case stubs the chain alone to exit 3 (the real pull answers 3
+only when the secret is missing, which also stops the store) so that the
+chain's own `3)` arm is under test; the real pull with no token is replayed in
+`test_clv_never_scores_a_restored_capture_store.py`. The public restore's
+`--union 3` (a run's artifact could be partial) has no counterpart to replay:
+the private branch accumulates every push, which
+`test_the_movement_chain_is_kept_privately.py` covers. The store's own paths
+are in `test_closing_prices_never_reach_the_public_repo.py`.
 
 These run the workflow's own step block under `bash -eo pipefail`, with the
 step's own `env:` (the secret rendered as a test value), a stub `python`, and
@@ -168,8 +177,8 @@ def _read(tmp_path: Path, name: str) -> str:
 def test_the_report_reads_the_movement_captures(tmp_path: Path) -> None:
     result, work = _run(tmp_path)
     assert result.returncode == 0, result.stdout + result.stderr
-    # Without the step's token the real pull answers 3, which this step takes
-    # as quietly as "no chain yet".
+    # The pull gets the step's own token; without it the real pull answers 3,
+    # which this step fails red as store_fault=no-token.
     assert _read(tmp_path, "chain_token.txt").strip() == "test-token"
     # Pointed at the folder the pull wrote, and nothing else: with no store
     # there is no second source.
@@ -230,14 +239,14 @@ def test_the_reports_own_exit_is_the_steps_exit(tmp_path: Path, code: int) -> No
     assert not _chain_dir(tmp_path).exists()
 
 
-@pytest.mark.parametrize(("chain_exit", "said"), [
-    (4, "No private movement chain to read."),
-    (0, "Read 0 line-movement day file(s) from the private chain."),
-], ids=["no-branch", "no-day-file"])
-def test_no_captures_yet_is_not_a_fault(tmp_path: Path, chain_exit: int, said: str) -> None:
-    result, work = _run(tmp_path, chain_exit=chain_exit, chain_writes=False)
+def test_no_captures_yet_is_not_a_fault(tmp_path: Path) -> None:
+    """A pull that exits 0 and wrote no day file: the chain exists and holds
+    nothing for the report yet. Only a missing branch (exit 4) is a fault,
+    in test_a_chain_that_could_not_be_used_fails_the_step."""
+    result, work = _run(tmp_path, chain_exit=0, chain_writes=False)
     assert result.returncode == 0, result.stdout + result.stderr
-    assert said in result.stdout
+    assert "Read 0 line-movement day file(s) from the private chain." in result.stdout
+    assert "::error::" not in result.stdout
     # The report still runs, on the (empty) chain folder, and says so itself.
     assert _read(tmp_path, "clv_args.txt").split() == ["--captures-dir", str(_chain_dir(tmp_path))]
     assert _read(tmp_path, "clv_saw.txt").split() == []
@@ -262,11 +271,19 @@ def test_a_chain_that_could_not_be_reached_is_recorded(
     assert "store_fault" not in _outputs(tmp_path / "records" / "github_output")
 
 
+DAMAGED_CHAIN = ("The private movement chain has damaged day file(s), named above; "
+                 "its good days, if any, were still scored")
+MISSING_CHAIN = ("The private repository has no movement branch; the chain has existed "
+                 "since 2026-10-02, so it was deleted or renamed: restore it from its history")
+
+
 @pytest.mark.parametrize(("chain_exit", "chain_writes", "tag", "fault", "scored"), [
-    (2, True, "damaged-store",
-     "The private movement chain has damaged day file(s), named above; "
-     "its good days, if any, were still scored",
-     "the movement chain alone"),
+    (2, True, "damaged-store", DAMAGED_CHAIN, "the movement chain alone"),
+    (3, False, "no-token",
+     "NHL_CLOSING_LINES_TOKEN is not set, so the private movement chain cannot be read; "
+     "since stage two it is the only source of closing prices",
+     "no closing price"),
+    (4, False, "missing-chain", MISSING_CHAIN, "no closing price"),
     (5, False, "rejected-token",
      "The private movement chain turned NHL_CLOSING_LINES_TOKEN away (expired, revoked, "
      "or not granted cooperross399/nhl-closing-lines); replace the secret",
@@ -274,16 +291,48 @@ def test_a_chain_that_could_not_be_reached_is_recorded(
     (7, False, "unexpected-exit-7",
      "The private movement chain read exited 7, which this step does not know",
      "no closing price"),
-], ids=["damaged", "rejected-token", "unknown-exit"])
+], ids=["damaged", "no-token", "missing-chain", "rejected-token", "unknown-exit"])
 def test_a_chain_that_could_not_be_used_fails_the_step(
         tmp_path: Path, chain_exit: int, chain_writes: bool, tag: str, fault: str,
         scored: str) -> None:
     """Red (exit 2, which "Report the outcome" reads) even though the report
-    itself exited 0, and not degraded: the backup would read the same chain."""
+    itself exited 0, and not degraded: the backup would read the same chain.
+    The store holds nothing (exit 4, not a fault), so the whole ::error:: line
+    is the chain's own arm."""
     result, work = _run(tmp_path, chain_exit=chain_exit, chain_writes=chain_writes)
     assert result.returncode == 2, result.stdout + result.stderr
-    assert f"::error::{fault}; the closing-line value report scored {scored}." in result.stdout
+    (error,) = [line for line in result.stdout.splitlines() if line.startswith("::error::")]
+    assert error == f"::error::{fault}; the closing-line value report scored {scored}."
     assert _outputs(tmp_path / "records" / "github_output")["store_fault"] == tag
+    # The report still ran, on whatever the chain left.
+    assert _read(tmp_path, "clv_saw.txt").split() == ([DAY_FILE] if chain_writes else [])
+    assert (work / "run_degraded.txt").read_text() == ""
+    assert not _chain_dir(tmp_path).exists()
+    # A missing branch used to be "nothing yet"; it is never said quietly now.
+    assert "No private movement chain to read." not in result.stdout
+
+
+@pytest.mark.parametrize(("chain_exit", "chain_writes", "tag", "fault", "scored"), [
+    (4, False, "missing-chain", MISSING_CHAIN, "the store alone"),
+    (2, True, "damaged-store", DAMAGED_CHAIN, "the store and the movement chain"),
+], ids=["missing-chain", "damaged"])
+def test_a_chain_fault_beside_a_store_that_was_read_still_fails(
+        tmp_path: Path, chain_exit: int, chain_writes: bool, tag: str, fault: str,
+        scored: str) -> None:
+    """A store that was read does not cover for the chain: a missing branch
+    beside a good store is still red, and the line says the store was all that
+    was scored; a damaged chain's good days are scored beside the store."""
+    result, work = _run(tmp_path, chain_exit=chain_exit, chain_writes=chain_writes,
+                        store_exit=0)
+    assert result.returncode == 2, result.stdout + result.stderr
+    assert "Read the capture store from the private repository." in result.stdout
+    (error,) = [line for line in result.stdout.splitlines() if line.startswith("::error::")]
+    assert error == f"::error::{fault}; the closing-line value report scored {scored}."
+    assert _outputs(tmp_path / "records" / "github_output")["store_fault"] == tag
+    assert _read(tmp_path, "clv_args.txt").split() == [
+        "--captures-dir", str(tmp_path / "runner_temp" / "private-closing-store"),
+        "--captures-dir", str(_chain_dir(tmp_path)),
+    ]
     assert _read(tmp_path, "clv_saw.txt").split() == ([DAY_FILE] if chain_writes else [])
     assert (work / "run_degraded.txt").read_text() == ""
     assert not _chain_dir(tmp_path).exists()

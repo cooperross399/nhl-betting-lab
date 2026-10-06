@@ -326,17 +326,17 @@ def _scrub(text: str, token: str) -> str:
     return text.replace(token, "***") if len(token) >= 8 else text
 
 
-def _remote_failure(stderr: str, token: str, what: str) -> Exception:
+def _remote_failure(stderr: str, token: str, what: str,
+                    subject: str = "the closing-line store") -> Exception:
     # Classified on git's own words, scrubbed only for display: scrubbing
     # first let a token that happens to occur inside a marker hide it.
     raw = stderr.strip()
     text = _scrub(raw, token)
     if any(marker in raw.lower() for marker in AUTH_FAILURES):
         return Refused(
-            f"GitHub turned the token away while trying to {what} the "
-            f"closing-line store: {text}"
+            f"GitHub turned the token away while trying to {what} {subject}: {text}"
         )
-    return Unreachable(f"could not {what} the closing-line store: {text}")
+    return Unreachable(f"could not {what} {subject}: {text}")
 
 
 def fetch_tip(work: Path, remote: str, token: str) -> str:

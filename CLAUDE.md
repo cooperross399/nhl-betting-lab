@@ -715,8 +715,9 @@ Re-derive rather than trust if the data has moved.
   nothing. From 2026-09-24 each Line Movement run handed its closing prices
   over as the `closing-line-captures` artifact for Closing Lines to merge
   into that branch; since 2026-10-01 neither exists (see the next entry), and
-  Closing Lines derives the rows from the `line-movement` artifact and pushes
-  them to the private store. That path fetches nothing and spends no credit. **Except the bulk team markets (found 2026-09-25):**
+  Closing Lines derives the rows from the chain (since stage two, pulled from
+  the private repository's `movement` branch) and pushes them to the private
+  store. That path fetches nothing and spends no credit. **Except the bulk team markets (found 2026-09-25):**
   the retired capture also bought `h2h`, `spreads` and `totals`, and Line
   Movement asks only for the per-event markets and their ladders, so no
   moneyline opinion can ever meet a close, and a featured puck line or total
@@ -842,6 +843,21 @@ Re-derive rather than trust if the data has moved.
       chain into `$RUNNER_TEMP`, never `data/processed`. The site's moneyline
       open, which no frozen board ever carried, simply stays empty: the site
       may never hold the store's token.
+    - **Review fixes (third commit of #298):** a missing `movement` branch is a
+      fault everywhere (Line Movement's restore, Closing Lines, the CLV step),
+      and `push` refuses to recreate it (`--allow-new-chain` is for a manual
+      seed only), so a deleted branch cannot come back as a thin chain. A day
+      file whose copy cannot be merged with the tip's is kept on the private
+      branch as a sidecar (`unmerged/<store>/<day>/<blob>.csv`), counted as
+      held by `verify`, and parked the same way by `unseal`, so no rows strand
+      in a seal that expires. `unseal` skips sealed copies the tip already
+      holds; `seal` holds only what the tip lacks. `restore_state.union_csv`
+      takes an older copy whole when it extends the newer byte for byte. The
+      fallback key must be at least 32 characters with no surrounding
+      whitespace. **Known limit:** a seal lasts 7 days and no Line Movement
+      round runs from May to late September, so a round sealed in the
+      season's last week (push failing then) would expire unfolded; the lab's
+      end date (2027-04-25) falls inside that window.
     - **What is still downloadable:** the `line-movement` artifacts uploaded
       before stage two, until they expire (90 days for those before
       2026-10-02, 7 after). Deleting them needs `actions: write` and is

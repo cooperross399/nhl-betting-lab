@@ -25,13 +25,19 @@ default-branch rounds write ("Keep the captures privately" is gated on the
 default branch; tests/test_the_movement_chain_is_kept_privately.py pins that
 condition, this file does not), then unseals every unexpired
 `line-movement-sealed-*` artifact, which `private_movement_chain.list_sealed`
-takes only from runs whose `head_branch` is main. So the rehearsal's public
-artifact is never asked for, and a sealed round from a branch is never folded
-in. The seal step never runs on a branch (its push is skipped there; its
-`if:` is read, not evaluated, by this file), so a branch-sealed artifact
-takes a branch whose workflow was edited; the scenario
-plants one so the `head_branch` check is exercised on its own, beside a main
-round that must come back, so the check cannot pass by folding in nothing.
+takes only from runs whose `head_branch` is main (NHL_DEFAULT_BRANCH, when
+set, names another) and whose `repository_id` and `head_repository_id` are
+both present and equal. So the rehearsal's public artifact is never asked
+for, and a sealed round from a branch is never folded in. The seal step never
+runs on a branch (it runs only when the push or the check failed, and both
+are skipped there; this file does not evaluate those `if:`s), so a
+branch-sealed artifact takes a branch whose workflow was edited. The scenario
+plants one, two rounds whose run names no branch (`head_branch` null, and
+the key missing altogether) and a fork's round that calls its branch main;
+each fails one check and passes the others. Beside them is a main round that
+must come back, so no check can pass by folding in nothing. The restore runs with the
+env GitHub would give it, the workflow's and the job's `env:` beneath the
+step's own, so an NHL_DEFAULT_BRANCH set at any level reaches it.
 restore_state.py's `--union` has no workflow caller since stage two; its
 branch checks are still run here because the option is still in the script.
 
@@ -44,7 +50,9 @@ client-side check is exercised on its own. The private repository is a local
 bare repository reached through git's `url.<base>.insteadOf`, under
 `GIT_ALLOW_PROTOCOL=file`, so a URL the redirect misses fails instead of
 reaching GitHub. A sealed round is made by the workflow's own seal step and
-zipped under the name, and in the layout, its upload step gives it.
+zipped under the name, and in the layout, its upload step gives it; the seal
+step lists the private tip with the chain token, so it runs under the same
+redirect.
 """
 
 from __future__ import annotations
@@ -76,7 +84,9 @@ FEATURE = "try-new-edge-bar"
 #: What a step's `${{ }}` expressions stand for in these replays.
 REPOSITORY = "owner/nhl-betting-lab"
 CHAIN_TOKEN = "not-a-token"
-FALLBACK_KEY = "a-test-key-and-not-coopers"
+#: At least private_movement_chain.MIN_KEY_CHARS (32), or seal and unseal
+#: refuse it before anything is sealed or opened.
+FALLBACK_KEY = "a-test-key-and-not-coopers-padded-to-39"
 EXPRESSIONS = {
     "github.repository": REPOSITORY,
     "github.token": "not-a-token",
@@ -238,7 +248,9 @@ def _env(tmp_path: Path, registry: list[dict], *, ignores_branch: bool = False,
     (tmp_path / "registry.json").write_text(json.dumps(registry), encoding="utf-8")
     (tmp_path / "artifacts.json").write_text(json.dumps(artifacts or []), encoding="utf-8")
     return {
-        **os.environ,
+        # The default branch the scripts honour is the workflow's to set
+        # (`_step_env`), never this shell's.
+        **{k: v for k, v in os.environ.items() if k != "NHL_DEFAULT_BRANCH"},
         "PATH": f"{bin_dir}:{Path(sys.executable).parent}:{os.environ.get('PATH', '')}",
         "GH_TOKEN": "not-a-token",
         "FAKE_GH_REGISTRY": str(tmp_path / "registry.json"),
@@ -262,14 +274,19 @@ def _script(tmp_path: Path, registry: list[dict], *args: str,
     return dest, result.stdout
 
 
-def _step_node(workflow: str, name: str) -> dict:
+def _located(workflow: str, name: str) -> tuple[dict, dict, dict]:
+    """The workflow, the job holding the step named `name`, and the step."""
     document = yaml.safe_load((WORKFLOWS / workflow).read_text(encoding="utf-8"))
     found = [
-        step for job in document["jobs"].values()
+        (document, job, step) for job in document["jobs"].values()
         for step in job.get("steps", []) if step.get("name") == name
     ]
     assert len(found) == 1, f"exactly one step named {name!r} in {workflow}"
     return found[0]
+
+
+def _step_node(workflow: str, name: str) -> dict:
+    return _located(workflow, name)[2]
 
 
 def _expand(text: str, name: str, values: dict[str, str] | None = None) -> str:
@@ -284,8 +301,14 @@ def _step(workflow: str, name: str) -> str:
 
 
 def _step_env(workflow: str, name: str) -> dict[str, str]:
-    """The step's own `env:`, its secrets and tokens stood in for."""
-    env = _step_node(workflow, name).get("env") or {}
+    """The env the step runs with, as GitHub builds it: the workflow's
+    `env:`, then its job's, then the step's own, each overriding the one
+    before; secrets and tokens stood in for. Reading the step's alone missed
+    an NHL_DEFAULT_BRANCH set on the job, which would point list_sealed at
+    another branch's sealed rounds in every round."""
+    document, job, step = _located(workflow, name)
+    env = {**(document.get("env") or {}), **(job.get("env") or {}),
+           **(step.get("env") or {})}
     return {key: _expand(str(value), name) for key, value in env.items()}
 
 
@@ -372,6 +395,31 @@ BRANCH_SEALED = {
 MAIN_RESTORED = [MOVEMENT_HEADER, *EARLIER, _movement("2026-10-04T21:00:00Z"),
                  _movement("2026-10-04T23:00:00Z")]
 
+#: A sealed round's run, as GitHub's artifacts API lists it, when main's own
+#: code in this repository uploaded it.
+MAIN_RUN = {"head_branch": "main", "repository_id": 1, "head_repository_id": 1}
+#: Sealed rounds list_sealed must leave out. Each fails one of its checks and
+#: passes the others, so each check is exercised on its own.
+REFUSED_RUNS = {
+    # Another branch: a workflow edited to seal on the rehearsal branch.
+    REHEARSAL_BRANCH: {**MAIN_RUN, "head_branch": REHEARSAL_BRANCH},
+    # No branch: GitHub's null, and the key missing altogether.
+    "branch-null": {**MAIN_RUN, "head_branch": None},
+    "branch-key-missing": {k: v for k, v in MAIN_RUN.items() if k != "head_branch"},
+    # A fork's pull request, run in this repository's context from a branch
+    # it calls main: the code is the fork's.
+    "fork-calls-it-main": {**MAIN_RUN, "head_repository_id": 2},
+}
+
+
+def _refused_rows(label: str, minute: int) -> dict[str, list[str]]:
+    """What a refused round sealed: the day as main had it, plus a row of
+    its own, booked under its label, so a fold of it shows on disk."""
+    if label == REHEARSAL_BRANCH:
+        return BRANCH_SEALED
+    return {MOVEMENT_DAY: [MOVEMENT_HEADER, *EARLIER,
+                           _movement(f"2026-10-04T22:{minute:02d}:00Z", book=label)]}
+
 
 def _line_movement_history(tmp_path: Path) -> list[dict]:
     rehearsal = _captures(tmp_path / "a-rehearsal", REHEARSAL_LINES)
@@ -390,7 +438,9 @@ def _git(args: list[str], cwd: Path | None = None) -> None:
 
 def _private_chain(tmp_path: Path, rows: dict[str, list[str]]) -> Path:
     """A local bare repository standing in for the private one, holding
-    `rows` on branch `movement`."""
+    `rows` on branch `movement`: the chain exists, as it has since
+    2026-10-02 (a missing branch is a fault, which these scenarios are not
+    about)."""
     bare = tmp_path / "nhl-closing-lines.git"
     _git(["init", "-q", "--bare", "-b", "main", str(bare)])
     seed = _captures(tmp_path / "chain-seed", rows)
@@ -399,6 +449,18 @@ def _private_chain(tmp_path: Path, rows: dict[str, list[str]]) -> Path:
     _git(["commit", "-qm", "main's rounds"], cwd=seed)
     _git(["push", "-q", str(bare), "movement:refs/heads/movement"], cwd=seed)
     return bare
+
+
+def _chain_redirect(bare: Path) -> dict[str, str]:
+    """The private repository is the bare one; any other URL is refused by
+    git before it leaves the machine."""
+    return {
+        **GIT_ISOLATION,
+        "GIT_ALLOW_PROTOCOL": "file",
+        "GIT_CONFIG_COUNT": "1",
+        "GIT_CONFIG_KEY_0": f"url.file://{bare}.insteadOf",
+        "GIT_CONFIG_VALUE_0": CHAIN_REMOTE,
+    }
 
 
 def _line_movement_checkout(work: Path) -> Path:
@@ -410,20 +472,24 @@ def _line_movement_checkout(work: Path) -> Path:
     return work
 
 
-def _sealed_round(tmp_path: Path, *, artifact_id: int, run_id: int, branch: str,
-                  rows: dict[str, list[str]], created_at: str) -> dict:
+def _sealed_round(tmp_path: Path, bare: Path, *, artifact_id: int, run_id: int,
+                  workflow_run: dict, rows: dict[str, list[str]],
+                  created_at: str) -> dict:
     """A round sealed by the workflow's own seal step, zipped under the name
     and in the layout its upload step gives it (one file, rooted at its own
-    folder), listed as GitHub's artifacts API lists it."""
+    folder), listed as GitHub's artifacts API lists it, its run's fields
+    `workflow_run`. The seal step lists the private tip with the chain token
+    to leave out what is already home, so it reads `bare` and nothing else."""
     home = tmp_path / f"run-{run_id}"
     work = _line_movement_checkout(home / "work")
     _captures(work / "data" / "processed", rows)
     runner_temp = home / "runner-temp"
     _bash(_step("line-movement.yml", LM_SEAL), work, {
-        **os.environ,
+        **{k: v for k, v in os.environ.items() if k != "NHL_DEFAULT_BRANCH"},
         "PATH": f"{Path(sys.executable).parent}:{os.environ.get('PATH', '')}",
         "PYTHONDONTWRITEBYTECODE": "1",
         **_step_env("line-movement.yml", LM_SEAL),
+        **_chain_redirect(bare),
         "RUNNER_TEMP": str(runner_temp),
         "GITHUB_WORKSPACE": str(work),
     })
@@ -436,7 +502,7 @@ def _sealed_round(tmp_path: Path, *, artifact_id: int, run_id: int, branch: str,
     return {
         "id": artifact_id, "name": _expand(upload["name"], LM_KEEP_SEALED, values),
         "expired": False, "created_at": created_at,
-        "workflow_run": {"id": run_id, "head_branch": branch, "repository_id": 1, "head_repository_id": 1},
+        "workflow_run": {"id": run_id, **workflow_run},
         "zip": str(archive),
     }
 
@@ -445,31 +511,31 @@ def test_the_branch_rehearsal_does_not_seed_the_seasons_capture_chain(
     tmp_path: Path,
 ) -> None:
     """Line Movement's own restore step, with the rehearsal's public artifact
-    still on GitHub, main's rounds on the private chain, and two sealed
-    rounds: main's 21:00, whose push failed, and one from the rehearsal
-    branch. Main's chain and main's sealed round both come back; nothing of
-    the branch's does, and no public run artifact is asked for."""
+    still on GitHub, main's rounds on the private chain, and five sealed
+    rounds: main's 21:00, whose push failed, then one from the rehearsal
+    branch, two whose run names no branch, and a fork's that calls its
+    branch main. Main's chain and main's sealed round both come back;
+    nothing of the other four does (not one of them is even downloaded), and
+    no public run artifact is asked for."""
     bare = _private_chain(tmp_path, MAIN_CHAIN)
-    main_round = _sealed_round(tmp_path, artifact_id=4101, run_id=9601, branch="main",
-                               rows=MAIN_SEALED, created_at="2026-10-05T01:10:00Z")
-    branch_round = _sealed_round(tmp_path, artifact_id=4102, run_id=9602,
-                                 branch=REHEARSAL_BRANCH, rows=BRANCH_SEALED,
-                                 created_at="2026-10-05T02:30:00Z")
+    main_round = _sealed_round(tmp_path, bare, artifact_id=4101, run_id=9601,
+                               workflow_run=MAIN_RUN, rows=MAIN_SEALED,
+                               created_at="2026-10-05T01:10:00Z")
+    refused = {
+        label: _sealed_round(tmp_path, bare, artifact_id=4102 + n, run_id=9602 + n,
+                             workflow_run=run, rows=_refused_rows(label, 30 + 5 * n),
+                             created_at=f"2026-10-05T02:{30 + 5 * n:02d}:00Z")
+        for n, (label, run) in enumerate(REFUSED_RUNS.items())
+    }
     work = _line_movement_checkout(tmp_path / "work")
     env = {
         **_env(tmp_path, _line_movement_history(tmp_path),
-               artifacts=[main_round, branch_round], real_git=True),
-        **GIT_ISOLATION,
+               artifacts=[main_round, *refused.values()], real_git=True),
         **_step_env("line-movement.yml", LM_RESTORE),
         "PYTHONDONTWRITEBYTECODE": "1",
         "GITHUB_REPOSITORY": REPOSITORY,
         "GITHUB_WORKSPACE": str(work),
-        # The private repository is the bare one; any other URL is refused
-        # by git before it leaves the machine.
-        "GIT_ALLOW_PROTOCOL": "file",
-        "GIT_CONFIG_COUNT": "1",
-        "GIT_CONFIG_KEY_0": f"url.file://{bare}.insteadOf",
-        "GIT_CONFIG_VALUE_0": CHAIN_REMOTE,
+        **_chain_redirect(bare),
     }
 
     result = _bash(_step("line-movement.yml", LM_RESTORE), work, env)
@@ -482,13 +548,16 @@ def test_the_branch_rehearsal_does_not_seed_the_seasons_capture_chain(
     assert (work / "restore_problem.txt").read_text(encoding="utf-8") == "", out
     assert (processed / UNITS_DAY).read_text().splitlines() == UNITS, out
     assert (processed / MOVEMENT_DAY).read_text().splitlines() == MAIN_RESTORED, (
-        "main's chain with main's sealed 21:00 round folded in, and no branch row\n" + out
+        "main's chain with main's sealed 21:00 round folded in, and no row of a "
+        "refused round\n" + out
     )
     calls = _gh_calls(tmp_path)
     assert not [call for call in calls if call.startswith("run ")], (
         f"the restore asked for a public run artifact: {calls}"
     )
-    assert f"api repos/{REPOSITORY}/actions/artifacts/{branch_round['id']}/zip" not in calls
+    downloaded = [label for label, artifact in refused.items()
+                  if f"api repos/{REPOSITORY}/actions/artifacts/{artifact['id']}/zip" in calls]
+    assert downloaded == [], f"sealed rounds list_sealed should have left out: {downloaded}"
     assert f"api repos/{REPOSITORY}/actions/artifacts/{main_round['id']}/zip" in calls
 
 

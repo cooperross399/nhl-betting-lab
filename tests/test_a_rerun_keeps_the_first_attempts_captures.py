@@ -18,23 +18,35 @@ re-run keeps attempt 1's round in three ways, each run here:
 * attempt 1 pushes its round straight after its captures ("Keep the
   captures privately"). The chain belongs to no run, so attempt 2's "Restore
   today's captures" pulls it as it pulls any earlier round;
-* when that push failed, attempt 1 sealed its round into
-  `line-movement-sealed-1`. The attempt number in the name, and no upload in
+* when that push failed, or "Check the private chain holds this round"
+  found the tip short, attempt 1 sealed into `line-movement-sealed-1` the
+  day files the tip lacks. The attempt number in the name, and no upload in
   the job using `overwrite: true` for a capture, mean attempt 2 never
   replaces it, and attempt 2's restore unseals every sealed round, attempt
   1's included;
 * attempt 2's push merges into the private tip, so an attempt 2 whose
   restore came back thin never deletes attempt 1's rows.
 
-A sealed round that cannot be listed, fetched or merged is a sentence in
-restore_problem.txt, and the gate after it turns the run red.
+The chain itself must already exist. It has since 2026-10-02, so a private
+repository with no `movement` branch means it was deleted or renamed: the
+restore says so in restore_problem.txt (the run is red), and a push refuses
+to start a thin chain in its place. `--allow-new-chain` is a manual first
+seed that no workflow step passes; these tests seed the stand-in with it,
+once, before the run under test.
 
-How: "Restore today's captures" and "Seal this round when the private push
-failed" are taken from the workflow and run under `bash --noprofile --norc
--eo pipefail` with their own `env:` blocks, against a local bare repository
-standing in for the private one (git's `insteadOf` points the step's GitHub
-URL at it, and `GIT_ALLOW_PROTOCOL=file` refuses every other transport), an
-offline `gh`, and the machine's openssl. The push and the check run
+A sealed round that cannot be listed or fetched is a sentence in
+restore_problem.txt, and the gate after it turns the run red. One whose day
+file cannot be merged with the copy on disk is a sentence too, and is parked
+as a sidecar under data/processed/unmerged/, which attempt 2's push keeps on
+the private branch.
+
+How: "Restore today's captures" and "Seal this round when the private chain
+did not take it" are taken from the workflow and run under `bash --noprofile
+--norc -eo pipefail` with their own `env:` blocks, against a local bare
+repository standing in for the private one (git's `insteadOf` points the
+steps' GitHub URL at it, and `GIT_ALLOW_PROTOCOL=file` refuses every other
+transport; the seal reads the tip too, to leave out what is already home),
+an offline `gh`, and the machine's openssl. The push and the check run
 in-process with their steps' own arguments plus `--remote` aimed at that
 repository, because the push asks api.github.com whether the store is
 private; that answer is replaced. Their folder, which the steps name
@@ -57,6 +69,7 @@ import shutil
 import stat
 import subprocess
 import sys
+import tarfile
 import zipfile
 from collections import Counter
 from pathlib import Path
@@ -83,9 +96,12 @@ DP = f"deployment/{DAY}.csv"
 TOKEN = "not-a-real-token"
 PRIVATE_URL = f"https://x-access-token:{TOKEN}@github.com/cooperross399/nhl-closing-lines.git"
 #: What the steps' `${{ }}` expressions stand for on this offline runner.
+#: The seal and unseal refuse a key shorter than 32 characters, so this one
+#: is long enough to be used and is still nobody's real key.
+FALLBACK_KEY = "not-coopers-key-only-for-this-offline-test"
 EXPRESSIONS = {
     "secrets.NHL_CLOSING_LINES_TOKEN": TOKEN,
-    "secrets.NHL_CHAIN_FALLBACK_KEY": "not-coopers-key",
+    "secrets.NHL_CHAIN_FALLBACK_KEY": FALLBACK_KEY,
     "github.token": "not-a-github-token",
 }
 
@@ -130,6 +146,16 @@ if args == ["api", "--paginate", artifacts + "?per_page=100", "--jq", ".artifact
 wanted = re.fullmatch(re.escape(artifacts) + r"/(\d+)/zip", args[1]) if len(args) == 2 and args[0] == "api" else None
 if wanted:
     archive = Path(os.environ["FAKE_GH_ZIPS"]) / (wanted.group(1) + ".zip")
+    if mode == "zip-flaky":
+        # The first download of each artifact breaks off half-written with a
+        # 502; every later one answers.
+        asked = archive.with_suffix(".asked")
+        first = not asked.exists()
+        asked.write_text("asked\n")
+        if first:
+            sys.stdout.buffer.write(b"half an archive")
+            print("HTTP 502: Bad Gateway", file=sys.stderr)
+            sys.exit(1)
     if mode == "zip-down" or not archive.is_file():
         print("HTTP 502: Bad Gateway", file=sys.stderr)
         sys.exit(1)
@@ -210,6 +236,7 @@ class Lab:
         self.zips.mkdir()
         self.log = tmp_path / "gh.log"
         self.listing: list[dict] = list(OTHER_ARTIFACTS)
+        self.sealed: dict[str, Path] = {}
 
     def workspace(self, name: str, files: dict[str, str]) -> Path:
         """A runner's checkout: the project's scripts and src, and
@@ -224,21 +251,43 @@ class Lab:
             path.write_text(body, encoding="utf-8")
         return work
 
-    def keep(self, work: Path, step_id: str = "private_push", *, as_written: bool = False) -> int:
+    def keep(self, work: Path, step_id: str = "private_push", *, as_written: bool = False,
+             seed: bool = False) -> int:
         """The push (or, with `private_verify`, the check) with its step's own
         arguments, in-process from `work`, against the stand-in. The step
         names its folder relative to the workspace; that folder is handed
         over absolute unless `as_written`, so that only
         test_the_push_and_the_check_read_the_folder_their_steps_name fails
-        when a relative folder cannot be read."""
+        when a relative folder cannot be read. `seed` adds
+        `--allow-new-chain`, the manual first seed no step passes: only
+        _chain_before_this_run uses it, to stand up the chain that has
+        existed since 2026-10-02."""
         argv = shlex.split(_step(step_id)[1]["run"])
         assert argv[:2] == ["python", f"scripts/{CHAIN}"], argv
         args = argv[2:]
         if not as_written:
             flag = args.index("--processed-dir") + 1
             args[flag] = str(work / args[flag])
+        if seed:
+            assert "--allow-new-chain" not in args, "the push step itself seeds a new chain"
+            args.append("--allow-new-chain")
         self.monkeypatch.chdir(work)
         return self.chain.main([*args, "--remote", f"file://{self.bare}"])
+
+    def has_chain(self) -> bool:
+        """The stand-in has a `movement` branch."""
+        return subprocess.run(
+            ["git", "--git-dir", str(self.bare), "rev-parse", "--verify", "-q", "refs/heads/movement"],
+            capture_output=True,
+        ).returncode == 0
+
+    def reach_the_stand_in(self, env: dict) -> None:
+        """Point the GitHub URL a step builds from its token at the stand-in."""
+        env.update({
+            "GIT_CONFIG_COUNT": "1",
+            "GIT_CONFIG_KEY_0": f"url.file://{self.bare}.insteadOf",
+            "GIT_CONFIG_VALUE_0": PRIVATE_URL,
+        })
 
     def env(self, step: dict, work: Path, attempt: str) -> dict:
         """A runner's environment for `step`: none of this machine's
@@ -269,24 +318,23 @@ class Lab:
         """'Restore today's captures' as the runner runs it, in `work`."""
         _, step = _step("restore")
         env = self.env(step, work, attempt="2")
-        env.update({
-            "GIT_CONFIG_COUNT": "1",
-            "GIT_CONFIG_KEY_0": f"url.file://{self.bare}.insteadOf",
-            "GIT_CONFIG_VALUE_0": PRIVATE_URL,
-            "FAKE_GH_MODE": mode,
-        })
+        self.reach_the_stand_in(env)
+        env["FAKE_GH_MODE"] = mode
         (self.tmp / "listing.json").write_text(json.dumps(self.listing), encoding="utf-8")
         return _bash(_render(step["run"], {}), work, env)
 
     def seal(self, attempt: str, files: dict[str, str]) -> dict:
-        """Attempt `attempt` of run RUN_ID, whose private push failed: its
-        seal step run as the runner runs it, and its upload added to the
-        listing as the artifact upload-artifact would make of it."""
+        """Attempt `attempt` of run RUN_ID, which the private chain did not
+        take: its seal step run as the runner runs it (reading the stand-in's
+        tip with the step's own token, to leave out what is already home),
+        and its upload added to the listing as the artifact upload-artifact
+        would make of it. The sealed file is kept in `self.sealed[attempt]`."""
         work = self.workspace(f"attempt{attempt}-sealed", files)
         runner_temp = self.tmp / f"runner-temp-{attempt}"
         runner_temp.mkdir()
         _, step = _step("seal")
         env = self.env(step, work, attempt)
+        self.reach_the_stand_in(env)
         env["RUNNER_TEMP"] = str(runner_temp)
         done = _bash(_render(step["run"], {}), work, env)
         assert done.returncode == 0, done.stdout + done.stderr
@@ -295,6 +343,7 @@ class Lab:
         [kept] = [Path(line.strip()) for line in _render(str(upload["with"]["path"]), values).splitlines()
                   if line.strip()]
         assert kept.is_file(), "the sealed upload keeps the file the seal step wrote"
+        self.sealed[attempt] = kept
         artifact_id = 100 + int(attempt)
         # One file is rooted at its own folder: the zip holds it by its name.
         with zipfile.ZipFile(self.zips / f"{artifact_id}.zip", "w") as zipped:
@@ -330,8 +379,13 @@ def lab(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Lab:
 
 
 def _chain_before_this_run(lab: Lab) -> None:
-    """The private chain as the rounds before this run left it: 14:00."""
-    assert lab.keep(lab.workspace("earlier", {LM: BASE})) == 0
+    """The private chain as the rounds before this run left it: 14:00. It
+    is seeded once with `--allow-new-chain`, as the real chain was on
+    2026-10-02; every push after this is the step's own, which refuses to
+    start a chain."""
+    assert not lab.has_chain()
+    assert lab.keep(lab.workspace("earlier", {LM: BASE}), seed=True) == 0
+    assert lab.has_chain()
 
 
 # --------------------------------------------------------------------------
@@ -376,21 +430,72 @@ def test_a_rerun_restores_the_round_its_first_attempt_sealed(lab: Lab) -> None:
     assert lab.tip(DP) == DEPLOYMENT
 
 
-@pytest.mark.parametrize("chain_exists", [True, False], ids=["chain-without-the-round", "no-chain-yet"])
-def test_a_rerun_whose_first_attempt_kept_nothing_is_not_a_fault(lab: Lab, chain_exists: bool) -> None:
-    if chain_exists:
-        _chain_before_this_run(lab)
+def test_a_seal_leaves_out_what_the_chain_holds_and_a_rerun_still_gets_the_whole_round(
+        lab: Lab, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Attempt 1's price capture went red, so its line_movement file is
+    byte for byte the tip's, and only its scratch list is new; its push
+    failed. Its seal step reads the tip with the token its step is given and
+    seals the scratch list alone, and attempt 2 still restores the whole
+    round: the day file from the chain, the scratch list from the seal."""
+    _chain_before_this_run(lab)
+    lab.seal("1", {LM: BASE, DP: DEPLOYMENT})
+    monkeypatch.setenv(lab.chain.KEY_ENV, FALLBACK_KEY)
+    opened = lab.tmp / "opened.tar"
+    assert lab.chain._openssl(["-d"], lab.sealed["1"], opened).returncode == 0
+    with tarfile.open(opened) as tar:
+        assert tar.getnames() == [DP], "the seal kept a day file the private tip already holds"
+    second = lab.workspace("attempt2", {})
+    done = lab.restore(second)
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert (second / "restore_problem.txt").read_text(encoding="utf-8") == ""
+    assert _read(second, LM) == BASE
+    assert _read(second, DP) == DEPLOYMENT
+
+
+def test_a_rerun_whose_first_attempt_kept_nothing_is_not_a_fault(lab: Lab) -> None:
+    """The chain is there and holds nothing of attempt 1's, because attempt 1
+    kept nothing: nothing is wrong, and the restore gate is green. A chain
+    that is not there at all is the next test."""
+    _chain_before_this_run(lab)
     second = lab.workspace("attempt2", {})
     done = lab.restore(second)
     assert done.returncode == 0, done.stdout + done.stderr
     assert (second / "restore_problem.txt").read_text(encoding="utf-8") == ""
     gate = _restore_gate(second)
     assert gate.returncode == 0, gate.stdout + gate.stderr
-    if chain_exists:
-        assert _read(second, LM) == BASE
-    else:
-        assert not (second / "data" / "processed" / LM).exists()
+    assert _read(second, LM) == BASE
     assert not (second / "data" / "processed" / "deployment").exists()
+
+
+def test_a_rerun_that_finds_no_chain_is_red_and_starts_no_thin_one(lab: Lab) -> None:
+    """The private repository has no `movement` branch: it was deleted or
+    renamed, since the chain has existed since 2026-10-02. Attempt 1's push
+    refuses to start a new chain and its round is sealed. Attempt 2's
+    restore says the branch is missing (red), still folds in attempt 1's
+    sealed round, and its push refuses too, so neither attempt replaces the
+    season with a chain one round long."""
+    first = lab.workspace("attempt1", {LM: HEADER + ROUND_1, DP: DEPLOYMENT})
+    assert lab.keep(first) == lab.chain.EXIT_REFUSED
+    assert not lab.has_chain(), "a push started a new chain where the season's was missing"
+    lab.seal("1", {LM: HEADER + ROUND_1, DP: DEPLOYMENT})
+    second = lab.workspace("attempt2", {})
+    done = lab.restore(second)
+    assert done.returncode == 0, done.stdout + done.stderr
+    problem = (second / "restore_problem.txt").read_text(encoding="utf-8")
+    # One sentence, the missing branch's: the sealed round folded in cleanly.
+    assert len(problem.splitlines()) == 1, problem
+    assert "has no movement branch" in problem
+    assert "deleted or renamed" in problem
+    gate = _restore_gate(second)
+    assert gate.returncode != 0, gate.stdout + gate.stderr
+    assert "::error::" in gate.stdout
+    assert problem.strip() in gate.stdout
+    assert "merged into the private" not in gate.stdout
+    assert _read(second, LM) == HEADER + ROUND_1
+    assert _read(second, DP) == DEPLOYMENT
+    _append(second, LM, ROUND_2)
+    assert lab.keep(second) == lab.chain.EXIT_REFUSED
+    assert not lab.has_chain(), "a re-run's push started a new chain where the season's was missing"
 
 
 @pytest.mark.parametrize("mode", ["list-down", "zip-down"])
@@ -415,11 +520,33 @@ def test_a_sealed_round_that_cannot_be_fetched_makes_the_run_red(lab: Lab, mode:
     assert not (second / "data" / "processed" / "deployment").exists()
 
 
-def test_a_sealed_round_that_cannot_be_merged_is_red_and_overwrites_nothing(lab: Lab) -> None:
-    """A day file the union cannot read safely leaves the copy on disk as it
-    was; the rest of the sealed round still comes in, and the run is red."""
+def test_a_sealed_round_whose_download_breaks_off_once_still_comes_home(lab: Lab) -> None:
+    """One 502 mid-download is asked again, from an empty file: attempt 1's
+    sealed round is the only copy of a round the chain did not take, so a
+    single transient failure must not leave it out of attempt 2."""
     _chain_before_this_run(lab)
-    lab.seal("1", {LM: "captured_at,market\n" + ROUND_1, DP: DEPLOYMENT})
+    sealed = lab.seal("1", {LM: BASE + ROUND_1, DP: DEPLOYMENT})
+    second = lab.workspace("attempt2", {})
+    done = lab.restore(second, mode="zip-flaky")
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert (second / "restore_problem.txt").read_text(encoding="utf-8") == ""
+    assert _read(second, LM) == BASE + ROUND_1
+    assert _read(second, DP) == DEPLOYMENT
+    asked = [line for line in lab.log.read_text(encoding="utf-8").splitlines()
+             if line.endswith(f"actions/artifacts/{sealed['id']}/zip")]
+    assert len(asked) == 2, asked
+
+
+def test_a_sealed_round_that_cannot_be_merged_is_red_and_parked_for_the_push(lab: Lab) -> None:
+    """A day file the union cannot read safely leaves the copy on disk as it
+    was; the rest of the sealed round still comes in, and the run is red.
+    The sealed copy is not left to expire with its artifact: it is parked as
+    a sidecar under data/processed/unmerged/, named by its blob id, and
+    attempt 2's push keeps it on the private branch beside the day file,
+    which it leaves as it was."""
+    _chain_before_this_run(lab)
+    unmergeable = "captured_at,market\n" + ROUND_1
+    lab.seal("1", {LM: unmergeable, DP: DEPLOYMENT})
     second = lab.workspace("attempt2", {})
     done = lab.restore(second)
     out = done.stdout + done.stderr
@@ -430,6 +557,18 @@ def test_a_sealed_round_that_cannot_be_merged_is_red_and_overwrites_nothing(lab:
     assert _read(second, DP) == DEPLOYMENT
     gate = _restore_gate(second)
     assert gate.returncode != 0, gate.stdout + gate.stderr
+    blob = subprocess.run(["git", "hash-object", "--stdin"], input=unmergeable, check=True,
+                          capture_output=True, text=True).stdout.strip()
+    sidecar = f"unmerged/line_movement/{DAY}/{blob}.csv"
+    parked = sorted(p.relative_to(second / "data" / "processed").as_posix()
+                    for p in (second / "data" / "processed" / "unmerged").rglob("*") if p.is_file())
+    assert parked == [sidecar], "the sealed copy that could not be merged was not parked"
+    assert _read(second, sidecar) == unmergeable
+    assert lab.keep(second) == 0
+    assert lab.tip(sidecar) == unmergeable
+    assert lab.tip(LM) == BASE
+    assert lab.tip(DP) == DEPLOYMENT
+    assert lab.keep(second, "private_verify") == 0
 
 
 def test_the_push_and_the_check_read_the_folder_their_steps_name(lab: Lab) -> None:
@@ -510,26 +649,34 @@ def test_every_attempt_restores_before_the_paid_fetch_and_keeps_its_round_after_
     captures = [_named(name)[0] for name in
                 ("Capture prices", "Capture deployment", "Capture line combinations")]
     push_index, push = _step("private_push")
+    verify_index, verify = _step("private_verify")
     seal_index, seal = _step("seal")
     upload_index, upload = _step("sealed_upload")
     assert restore_index < min(captures)
-    assert max(captures) < push_index < seal_index < upload_index
-    # Attempt 2 restores, keeps and seals as attempt 1 did: nothing here
-    # asks which attempt is running.
-    for step in (restore, push, seal, upload):
+    # The check before the seal: a push that exited 0 but left the tip short
+    # is sealed too.
+    assert max(captures) < push_index < verify_index < seal_index < upload_index
+    # Attempt 2 restores, keeps, checks and seals as attempt 1 did: nothing
+    # here asks which attempt is running.
+    for step in (restore, push, verify, seal, upload):
         assert "run_attempt" not in str(step.get("if", "")), step["name"]
     # Kept whatever the captures did: a red price capture still leaves a
     # scratch list and line units that no re-run can capture again.
     assert "always()" in str(push.get("if", ""))
+    assert "always()" in str(verify.get("if", ""))
     assert "always()" in str(seal.get("if", ""))
     assert "steps.private_push.outcome == 'failure'" in str(seal.get("if", ""))
+    assert "steps.private_verify.outcome == 'failure'" in str(seal.get("if", ""))
     assert "always()" in str(upload.get("if", ""))
     assert "steps.seal.outcome == 'success'" in str(upload.get("if", ""))
     # None of them can stop the job before the round is kept and the gates run.
-    for step in (restore, push, seal):
+    for step in (restore, push, verify, seal):
         assert step.get("continue-on-error") is True, step["name"]
-    for step in (restore, push, seal, upload):
+    for step in (restore, push, verify, seal, upload):
         assert "NHL_ODDS_API_KEY" not in json.dumps(step), step["name"]
+    # No step may start a new chain: a missing one was deleted or renamed.
+    for step in _steps():
+        assert "allow-new-chain" not in str(step.get("run", "")), step.get("name")
 
 
 def test_no_upload_that_holds_a_round_reuses_an_earlier_attempt_s_name() -> None:

@@ -906,9 +906,24 @@ def union_csv(older: Path, newer: Path) -> int | None:
     Returns None, leaving `newer` exactly as it was, when the two cannot be
     merged safely: different headers, or a parse that disagrees with the
     file's line count.
+
+    The reverse case needs no parse either (2026-10-05): when the older copy
+    extends the newer one byte for byte, the newer copy is a truncation of
+    it, and the older copy is taken whole, through a temp file and a rename.
+    Without this, a copy whose earlier bytes do not parse could be extended
+    by appends (each append is a byte extension, which the first check
+    passes) but never folded back into a thinner copy of itself, and the
+    movement chain's sealed rounds were stranded that way.
     """
-    if newer.read_bytes().startswith(older.read_bytes()):
+    old_bytes, new_bytes = older.read_bytes(), newer.read_bytes()
+    if new_bytes.startswith(old_bytes):
         return 0
+    if old_bytes.startswith(new_bytes):
+        grown = newer.with_name(newer.name + ".union")
+        grown.write_bytes(old_bytes)
+        recovered = _rows(grown) - _rows(newer)
+        grown.replace(newer)
+        return recovered
     old, new = _records(older), _records(newer)
     if old is None or new is None or old[0] != new[0]:
         return None

@@ -5,10 +5,15 @@ only home is branch `movement` of cooperross399/nhl-closing-lines.
 "Restore today's captures" pulls it (`private_movement_chain.py pull`) and
 then folds in every sealed fallback round (`unseal`). Straight after the
 captures, "Keep the captures privately" merges this round's three stores
-into the private tip (`push`). When that push fails, "Seal this round when
-the private push failed" encrypts the round with NHL_CHAIN_FALLBACK_KEY and
-"Keep the sealed round" keeps it as `line-movement-sealed-<attempt>`, for the
-next restore to fold in. "Check the private chain holds this round" checks.
+into the private tip (`push`), and "Check the private chain holds this
+round" checks that the tip holds every row (`verify`). When either fails,
+"Seal this round when the private chain did not take it" encrypts the round
+(only the files the tip lacks, when it can list the tip) with
+NHL_CHAIN_FALLBACK_KEY and "Keep the sealed round" keeps it as
+`line-movement-sealed-<attempt>`, for the next restore to fold in. The
+branch has existed since 2026-10-02 (seeded by hand with `push
+--allow-new-chain`, which no workflow passes), so a missing branch is a
+fault, never "no chain yet": the restore says so and the push refuses.
 
 History, short. Until stage two the chain was the public `line-movement`
 artifact, and its restore took `gh run list --status success --limit 1`. A
@@ -30,21 +35,28 @@ there:
   `always()`, after every capture step;
 * a run whose restore could not read the chain loses nothing, however many
   come in a row, because its push MERGES into the private tip;
-* a round whose push failed is sealed, and the next restore unseals it so
-  the next push brings it home; a re-run's attempt 2 folds attempt 1's
-  sealed round in, and seals under a name of its own. (A re-run whose first
-  attempt DID push reads that round back from the chain, the ordinary
-  restore every other test here replays; the re-run test covers the sealed
-  path, the one that used to need `--fold-run`.)
+* a round whose push failed, or that the check found short after a push
+  that exited 0, is sealed, and the next restore unseals it so the next
+  push brings it home; a re-run's attempt 2 folds attempt 1's sealed round
+  in, and seals under a name of its own. (A re-run whose first attempt DID
+  push reads that round back from the chain, the ordinary restore every
+  other test here replays; the re-run test covers the sealed path, the one
+  that used to need `--fold-run`.)
+* a round that finds the branch deleted does not start a thin chain in its
+  place (every later restore, Closing Lines and the CLV step would read it
+  as the season): its restore writes the fault, its push refuses, and the
+  round is sealed until the branch is restored from its history.
 
 They replay those steps, taken from the workflow file in its order, under
 `bash --noprofile --norc -eo pipefail`, with the real scripts. Each step runs
 only when its `if:` holds by GitHub's rules: after a red step, only the
 steps that say `always()`. The private repository is a local bare repository:
 git's `url.<base>.insteadOf` rewrites the real remote to it, and every other
-transport is refused, so nothing leaves the machine. Every round is a
-scheduled run on the default branch. The GitHub API's
-privacy answer is stubbed in a `sitecustomize` the steps' Python loads (it
+transport is refused, so nothing leaves the machine. Before the first round
+the fixture seeds its `movement` branch with a 2026-10-02 round, by the
+manual seed's own command. Every round is a scheduled run on the default
+branch. The GitHub API's privacy answer is stubbed in a `sitecustomize` the
+steps' Python loads (it
 also skips the retry pauses), and an offline `gh` serves the sealed
 artifacts. Between restore and push they run the real
 `capture_deployment.main` and `capture_line_combinations.main` with network
@@ -63,7 +75,10 @@ import shutil
 import stat
 import subprocess
 import sys
+import tarfile
 import zipfile
+from collections import Counter
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -91,7 +106,9 @@ REPLAYED = {RESTORE_STEP, PRICES_STEP, DEPLOYMENT_STEP, LINES_STEP, PUSH, SEAL, 
 THIS_REPO = "cooperross399/nhl-betting-lab"
 PRIVATE_REPO = "cooperross399/nhl-closing-lines"
 TOKEN = "not-a-real-token"
-KEY = "not-a-real-fallback-key"
+#: Long enough for the seal and the unseal, which refuse a key shorter than
+#: 32 characters (the recipe, `openssl rand -base64 48`, gives 64).
+KEY = "not-a-real-fallback-key-but-as-long-as-a-real-one-is"
 #: The remote the scripts build from the token; git is told it is the bare repository.
 PRIVATE_REMOTE = f"https://x-access-token:{TOKEN}@github.com/{PRIVATE_REPO}.git"
 SECRETS = {
@@ -116,6 +133,16 @@ AT_01 = "2026-10-16T01:00:00+00:00"
 AT_18_40 = "2026-10-15T18:40:00+00:00"
 #: 21:00 Eastern the evening before.
 YESTERDAY = "2026-10-15T01:00:00+00:00"
+#: The round the chain was seeded with: it has existed since 2026-10-02.
+SEEDED = "2026-10-02T23:00:00+00:00"
+SEEDED_DAY = "2026-10-02"
+#: The manual first seed. No workflow passes --allow-new-chain.
+SEED_STEP = {
+    "name": "Seed the chain by hand",
+    "env": {"NHL_CLOSING_LINES_TOKEN": "${{ secrets.NHL_CLOSING_LINES_TOKEN }}", "PYTHONPATH": "src"},
+    "run": "python scripts/private_movement_chain.py push --allow-new-chain --processed-dir data/processed",
+}
+BRANCH = "refs/heads/movement"
 
 FAKE_GH = r'''
 import json, os, re, sys
@@ -350,6 +377,8 @@ class Chain:
         self.rounds: list[Round] = []
         self.artifacts: list[dict] = []  # what `gh api .../actions/artifacts` lists
         self.next_artifact = 5000
+        #: What the seeded day holds, once `seed` has run.
+        self.seeded: dict[str, list[str]] = {}
         bin_dir = tmp_path / "bin"
         bin_dir.mkdir()
         gh = bin_dir / "gh"
@@ -366,28 +395,63 @@ class Chain:
         self.deployment = load_script("capture_deployment.py")
         self.lines = load_script("capture_line_combinations.py")
 
-    def run(
-        self, instant: str, *, prices: bool = True, lines: bool = True,
-        pull_down: bool = False, push_down: bool = False, rerun: bool = False,
-    ) -> Round:
-        """One round: every replayed step whose `if:` holds, in order.
-
-        `pull_down`: GitHub could not be reached during the restore.
-        `push_down`: nor during the push and the check after it.
-        `rerun`: a Re-run of the previous round (same run, next attempt).
-        """
-        if rerun:
-            run_id, attempt = self.rounds[-1].run_id, self.rounds[-1].attempt + 1
-        else:
-            run_id, attempt = self.next_id, 1
-            self.next_id += 1
+    def _round(self, instant: str, run_id: int, attempt: int) -> Round:
+        """A fresh checkout and runner temp for one attempt."""
         work = self.tmp / f"run{run_id}-{attempt}"
         work.mkdir()
         (work / "scripts").symlink_to(PROJECT_ROOT / "scripts", target_is_directory=True)
         (work / "src").symlink_to(PROJECT_ROOT / "src", target_is_directory=True)
         temp = self.tmp / f"runner-temp{run_id}-{attempt}"  # outside the workspace
         temp.mkdir()
-        this = Round(instant, run_id, attempt, work, temp)
+        return Round(instant, run_id, attempt, work, temp)
+
+    def seed(self) -> dict[str, list[str]]:
+        """Branch `movement` as it has stood since 2026-10-02: one round's
+        captures, pushed by the manual first seed's own command. What the
+        seeded day holds, store by store."""
+        assert self.branch() is None, "the bare repository starts with no chain"
+        this = self._round(SEEDED, 1, 1)
+        self._prices(this)
+        self._deployment(this)
+        self._lines(this, True)
+        assert self._bash(SEED_STEP, this, down=False), this.logs
+        assert self.branch(), "the manual seed made no movement branch"
+        seeded = _instants(this.processed, SEEDED_DAY)
+        assert all(seeded.values()) and self.tip(SEEDED_DAY) == seeded
+        return seeded
+
+    def branch(self) -> str | None:
+        """The private branch's commit, or None when there is no branch."""
+        shown = _git(["--git-dir", str(self.store), "rev-parse", "-q", "--verify", BRANCH])
+        return shown.stdout.strip() if shown.returncode == 0 else None
+
+    def set_branch(self, commit: str) -> None:
+        """Point the private branch at `commit`, as a force-push would."""
+        assert _git(["--git-dir", str(self.store), "update-ref", BRANCH, commit]).returncode == 0
+
+    def delete_branch(self) -> None:
+        assert _git(["--git-dir", str(self.store), "update-ref", "-d", BRANCH]).returncode == 0
+        assert self.branch() is None
+
+    def run(
+        self, instant: str, *, prices: bool = True, lines: bool = True,
+        pull_down: bool = False, push_down: bool = False, rerun: bool = False,
+        after_push: Callable[[], None] | None = None,
+    ) -> Round:
+        """One round: every replayed step whose `if:` holds, in order.
+
+        `pull_down`: GitHub could not be reached during the restore.
+        `push_down`: nor during the push, the check and the seal's listing.
+        `rerun`: a Re-run of the previous round (same run, next attempt).
+        `after_push`: what happens to the private repository between the
+        push and the check (another writer's).
+        """
+        if rerun:
+            run_id, attempt = self.rounds[-1].run_id, self.rounds[-1].attempt + 1
+        else:
+            run_id, attempt = self.next_id, 1
+            self.next_id += 1
+        this = self._round(instant, run_id, attempt)
         found = set()
         for step in self.steps:
             key = next((k for k in (step.get("name"), step.get("id")) if k in REPLAYED), None)
@@ -415,6 +479,8 @@ class Chain:
                 this.outcomes[step["id"]] = "success" if ok else "failure"
             if not ok and not step.get("continue-on-error"):
                 this.red = True
+            if key == PUSH and after_push is not None:
+                after_push()
         assert found == REPLAYED, f"line-movement.yml has no step {sorted(REPLAYED - found)}"
         self.rounds.append(this)
         return this
@@ -531,13 +597,34 @@ class Chain:
                            if shown.returncode == 0 else [])
         return held
 
+    def sealed_files(self, this: Round) -> set[str]:
+        """The files `this` round's kept seal holds, opened with the key."""
+        name = f"line-movement-sealed-{this.attempt}"
+        (artifact,) = [a for a in self.artifacts
+                       if a["name"] == name and a["workflow_run"]["id"] == this.run_id]
+        opened = self.tmp / f"opened{this.run_id}-{this.attempt}"
+        opened.mkdir()
+        with zipfile.ZipFile(artifact["zip"]) as zipped:
+            zipped.extract("round.enc", opened)
+        cipher = load_script("private_movement_chain.py").OPENSSL_CIPHER
+        done = subprocess.run(
+            ["openssl", "enc", "-d", *cipher, "-pass", "env:NHL_CHAIN_FALLBACK_KEY",
+             "-in", str(opened / "round.enc"), "-out", str(opened / "round.tar")],
+            env={**os.environ, "NHL_CHAIN_FALLBACK_KEY": KEY}, capture_output=True, text=True,
+        )
+        assert done.returncode == 0, done.stderr
+        with tarfile.open(opened / "round.tar") as tar:
+            return {m.name for m in tar.getmembers() if m.isfile()}
+
 
 @pytest.fixture
 def chain(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Chain:
     for tool in ("bash", "git", "openssl"):
         if shutil.which(tool) is None:
             pytest.fail(f"this test needs {tool}, which every runner here has")
-    return Chain(tmp_path, monkeypatch)
+    built = Chain(tmp_path, monkeypatch)
+    built.seeded = built.seed()
+    return built
 
 
 def _column(processed: Path, store: str, column: str, day: str = "2026-10-15") -> list[str]:
@@ -608,7 +695,9 @@ def test_a_run_whose_restore_could_not_read_the_chain_loses_nothing(chain: Chain
     thin = chain.run(AT_18, pull_down=True)
     assert thin.restored == NOTHING, "this restore was meant to come back empty"
     assert not (thin.processed / "line_movement" / "2026-10-14.csv").exists()
-    assert thin.restore_problem, "a restore that could not read the chain says so"
+    # Said as a chain it could not read, not as one that is gone.
+    assert "could not be restored" in thin.restore_problem, thin.logs.get("restore")
+    assert "no movement branch" not in thin.restore_problem
     _went_home(thin)
     after = chain.run(AT_21).processed
 
@@ -621,6 +710,7 @@ def test_a_run_whose_restore_could_not_read_the_chain_loses_nothing(chain: Chain
     assert chain.tip("2026-10-14") == yesterday
     for store, instants in yesterday.items():
         assert instants and set(instants) == {YESTERDAY}, f"yesterday's {store} was lost"
+    assert chain.tip(SEEDED_DAY) == _instants(after, SEEDED_DAY) == chain.seeded
 
 
 def test_three_thin_runs_in_a_row_lose_nothing(chain: Chain) -> None:
@@ -687,9 +777,83 @@ def test_a_rerun_folds_in_its_first_attempts_sealed_round_and_seals_its_own(
         assert AT_18_40 in instants, f"attempt 2's {store} never reached the chain"
 
 
+def test_a_round_the_check_found_short_is_sealed_though_its_push_went_through(
+    chain: Chain,
+) -> None:
+    """The push exited 0, and then the private branch was rewound before the
+    check (another writer's force-push), so the tip lacks the round and the
+    push's own exit says nothing of it. The check runs before the seal and
+    the seal runs on its failure too. The seal lists the tip and holds only
+    what it lacks: the seeded day, home already, stays out, so the seal does
+    not grow to the chain's size. The next round brings the round home."""
+    _went_home(chain.run(AT_14))
+    before = chain.branch()
+    short = chain.run(AT_18, after_push=lambda: chain.set_branch(before))
+    assert short.outcomes[PUSH] == "success", short.logs.get(PUSH)
+    assert short.outcomes[VERIFY] == "failure", short.logs.get(VERIFY)
+    assert "row(s) missing from the private tip" in short.logs[VERIFY]
+    assert short.outcomes[SEAL] == "success", short.logs.get(SEAL)
+    assert short.outcomes[SEALED_UPLOAD] == "success"
+    assert chain.sealed_files(short) == {f"{store}/2026-10-15.csv" for store in COLUMNS}
+    assert not any(AT_18 in held for held in chain.tip().values()), "the branch was meant to be rewound"
+
+    home = chain.run(AT_21)
+    assert home.restore_problem == "", home.logs.get("restore")
+    _went_home(home)
+    for store, held in chain.tip().items():
+        assert held == sorted(held), f"{store} is not in capture order"
+        assert {AT_14, AT_18, AT_21} <= set(held), f"the chain lacks {store} rows"
+
+
+def test_a_deleted_chain_is_a_fault_and_no_round_starts_a_thin_one(chain: Chain) -> None:
+    """The chain has existed since 2026-10-02, so a missing `movement`
+    branch was deleted or renamed; it is not "no chain yet". A round that
+    finds it gone must not start a thin chain in its place, which every
+    later restore, Closing Lines and the CLV step would read as the season.
+    Its restore writes the fault for the restore gate, its push refuses, and
+    the round is sealed; the next round folds that seal in and seals both.
+    Once the branch is restored from its history, as the fault says to do,
+    the next round brings every sealed round home.
+
+    Row order is not pinned here, unlike the tests above: `unseal` folds a
+    sealed copy in as the OLDER one, so rounds sealed while the branch was
+    gone land ahead of the 14:00 rows the restored branch brings back, and
+    the push keeps that order (reported with the stage-two review)."""
+    _went_home(chain.run(AT_14))
+    history = chain.branch()
+    chain.delete_branch()
+    gone = [chain.run(AT_18), chain.run(AT_21)]
+    for this in gone:
+        assert "The private repository has no movement branch" in this.restore_problem, (
+            this.logs.get("restore"))
+        assert "restore it from its history" in this.restore_problem
+        assert this.outcomes[PUSH] == "failure"
+        assert "has no `movement` branch" in this.logs[PUSH], this.logs[PUSH]
+        assert chain.branch() is None, "a round started a thin chain in place of the deleted one"
+        assert this.outcomes[VERIFY] == "failure"
+        assert this.outcomes[SEAL] == "success", this.logs.get(SEAL)
+        assert this.outcomes[SEALED_UPLOAD] == "success"
+    assert AT_18 in gone[1].restored["deployment"], "the second round did not fold the first's seal in"
+    assert chain.sealed_files(gone[1]) == {f"{store}/2026-10-15.csv" for store in COLUMNS}
+
+    chain.set_branch(history)
+    home = chain.run(AT_23)
+    assert home.restore_problem == "", home.logs.get("restore")
+    _went_home(home)
+    for store, held in chain.tip().items():
+        # Each round's own rows, as many times as it captured them: none
+        # lost, none doubled by the two seals that both carry 18:00.
+        captured = Counter(instant for this in chain.rounds
+                           for instant in _instants(this.processed)[store] if instant == this.instant)
+        assert set(captured) == {AT_14, AT_18, AT_21, AT_23}, store
+        assert Counter(held) == captured, f"the chain does not hold each {store} row once"
+    assert chain.tip(SEEDED_DAY) == chain.seeded
+
+
 # --------------------------------------------------------------------------
 # The union every fold of the chain makes: the pull, the push's merge into
-# the tip, and the unseal, all through `private_movement_chain.union_csv`.
+# the tip, and the unseal, all through `restore_state.union_csv`, which
+# `private_movement_chain` imports.
 # --------------------------------------------------------------------------
 
 def _union():
@@ -752,6 +916,23 @@ def test_a_newer_copy_that_lost_rows_gets_them_back(tmp_path: Path) -> None:
 
     assert _union()(older, newer) == 1
     assert newer.read_text() == "a,b\n1,x\n2,y\n"
+
+
+def test_a_copy_that_does_not_parse_is_still_made_whole_by_one_that_extends_it(
+    tmp_path: Path,
+) -> None:
+    """The same prefix case when the shared bytes do not parse (a stray quote
+    in a row both copies hold). Each capture appended to the damaged copy, a
+    byte extension the union passes unread, so the sealed copy extends the
+    one the pull lays down; it is taken whole, unread. Parsed, neither copy
+    could be merged, and the sealed round would never come home."""
+    damaged = 'a,b\n1,"x\n'
+    older = _write(tmp_path / "old.csv", damaged + "2,y\n3,z\n")
+    newer = _write(tmp_path / "new.csv", damaged)
+
+    assert _union()(older, newer) == 2
+    assert newer.read_text() == damaged + "2,y\n3,z\n"
+    assert not list(tmp_path.glob("*.union")), "the temp file was left behind"
 
 
 def test_a_merged_file_is_byte_for_byte_what_the_capture_would_have_written(

@@ -178,9 +178,11 @@ PYTHONPATH=src .venv/bin/python scripts/private_closing_store.py pull \
 
 # Line Movement's capture chain, which lives only on branch `movement` of the
 # same private repository. Every round restores it (pull, then unseal any
-# sealed round), pushes this round to it (default branch only), seals the round
-# with NHL_CHAIN_FALLBACK_KEY if that push failed, and checks the tip holds the
-# round (verify). Needs NHL_CLOSING_LINES_TOKEN (and the key, for seal/unseal).
+# sealed round), pushes this round to it (default branch only), checks the tip
+# holds the round (verify), and seals what the tip lacks with
+# NHL_CHAIN_FALLBACK_KEY if the push or the check failed. Needs
+# NHL_CLOSING_LINES_TOKEN (and the key, for seal/unseal). A missing `movement`
+# branch is refused, never recreated by a round (--allow-new-chain seeds one).
 PYTHONPATH=src .venv/bin/python scripts/private_movement_chain.py pull --dest data/processed
 PYTHONPATH=src .venv/bin/python scripts/private_movement_chain.py unseal --dest data/processed
 PYTHONPATH=src .venv/bin/python scripts/private_movement_chain.py push --processed-dir data/processed
@@ -338,8 +340,9 @@ one file per UTC day. This repository is public, and a store here (a branch, a
 release, a Pages site or an artifact) would be a downloadable odds file, which
 the provider's terms forbid. Closing Lines buys nothing on its own schedule:
 Line Movement Capture's fetch already carries the prices, so Closing Lines runs
-each time Line Movement completes, reads the `line-movement` artifact that run
-kept, derives the best price per selection per round from every day it
+each time Line Movement completes, pulls Line Movement's capture chain from
+branch `movement` of the private repository onto its own runner (it uploads
+nothing), derives the best price per selection per round from every day it
 carries, and pushes those rows to the private store, the bulk moneyline, puck
 line and total included (each Line Movement round asks for them beside the
 per-event markets). An opinion in a market no round priced before face-off,
@@ -398,11 +401,11 @@ branch is never a source: it ran code nobody reviewed, and Line Movement's
 only unexpired artifact on 2026-09-25 was such a rehearsal, which would have
 seeded the season's capture chain. Choosing "the newest successful run" picked a
 skipped backup run (a success with no artifact) and threw away every degraded
-run's cache and frozen snapshot. Line Movement Capture restores its captures
-the same way, and then unions every day file, row by row, with the two
-carriers before the newest (`--union 3`): a red run's scratch list and line
-units used to fall out of the chain, and a run whose own restore found nothing
-must not become the base the season is lost from. Historical Props Purchase
+run's cache and frozen snapshot. Line Movement Capture used to restore its
+captures the same way, with `--union 3`; since stage two of the chain's move it
+restores from the private repository's `movement` branch instead (see Closing
+Lines above), and its push merges into that tip, so a run whose restore found
+nothing cannot become the base the season is lost from. Historical Props Purchase
 restores its bought prices and its state with `--refuse-unreachable`. If
 GitHub cannot be asked, the run stops before it spends a credit or uploads
 anything. Only an answer that no run carries them starts it without them: one

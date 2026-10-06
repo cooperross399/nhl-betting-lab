@@ -30,7 +30,10 @@ Line Movement steps' own `run:` blocks:
 * that split holds on what the restore really delivers: the restore step,
   pulling from a local bare repository that stands in for the private one
   (with an offline `gh` that lists no sealed round), brings a damaged day
-  back whole every round, where the scan step reads it;
+  back whole every round, where the scan step reads it; and when that
+  repository has no `movement` branch (deleted or renamed: the chain has
+  existed since 2026-10-02), the restore says so and its gate is red, since
+  the scan alone reads the thin round green and names nothing;
 * the step stays `continue-on-error`, and one gate, placed after the round is
   pushed or sealed and after every upload, turns the run red; it points the
   repair at the repository and branch the push writes, and names no artifact
@@ -397,7 +400,12 @@ def test_the_step_no_longer_swallows_its_own_exit() -> None:
     # or sealed): the step is still forgiven and still runs after a failed
     # capture.
     assert step.get("continue-on-error") is True
-    assert str(step.get("if", "")).startswith("always()")
+    # Exactly always(), not a prefix of it. The push, the check and the seal
+    # (each able to fail) run just before the scan, so a condition such as
+    # `always() && steps.private_push.outcome != 'failure'` would skip the
+    # scan on every round the private push failed: outcome "skipped", the
+    # gate silent, no depth in the summary.
+    assert step.get("if") == "always()", step.get("if")
     assert step.get("id") == "ladder", "the gate reads this step by its id"
 
 
@@ -600,10 +608,47 @@ def test_the_step_is_red_when_the_day_it_wrote_is_damaged(tmp_path: Path) -> Non
     assert "this run's day" in summary, summary
 
 
+#: What Line Movement uploaded before stage two moved the chain off the
+#: public repository (`git show 787a09c:.github/workflows/line-movement.yml`).
+#: No workflow uploads either now, so a gate naming one sends the reader to a
+#: copy no run makes. The pre-stage-two gate named the first ("gh run
+#: download <run-id> -n line-movement"), and its test forbade "Restore the
+#: file from the line-movement artifact".
+RETIRED_ARTIFACTS = ("line-movement", "line-movement-attempt-${{ github.run_attempt }}")
+
+#: A character that can continue an artifact name. A `.` is left out, so a
+#: name that ends a sentence ("the line-movement artifact." or "-n
+#: line-movement.") is still the name.
+_NAME_CHAR = r"[A-Za-z0-9_-]"
+
+
+def _uploaded_names(path: Path) -> set[str]:
+    document = yaml.safe_load(path.read_text(encoding="utf-8"))
+    return {
+        str(step["with"]["name"])
+        for job in document["jobs"].values() for step in job["steps"]
+        if str(step.get("uses", "")).startswith("actions/upload-artifact")
+    }
+
+
+def _name_pattern(name: str) -> str:
+    """An upload's `name:` as a regex: a `${{ }}` expression is any token."""
+    pieces = re.split(r"\$\{\{.*?\}\}", name)
+    return r"[A-Za-z0-9._-]+".join(re.escape(piece) for piece in pieces)
+
+
 def test_the_gate_names_no_repair_it_cannot_describe(tmp_path: Path) -> None:
     """Earlier copies of a day file are in the history of the branch the push
     writes, in the repository it writes to; stage two keeps no public copy,
-    so the gate may name no artifact this workflow does not upload."""
+    so the gate may name no artifact this workflow does not upload.
+
+    Two checks, because prose cannot be parsed. Every artifact name this
+    repository uploads in any workflow, or Line Movement uploaded before
+    stage two, is looked for as a token, however the sentence introduces it
+    ("from the line-movement artifact", "--name=line-movement"); only this
+    workflow's own uploads may appear. And whatever follows `-n` or `--name`
+    must be one of this workflow's uploads. The limit: a name never uploaded
+    anywhere and not introduced by a flag is not recognized as a name."""
     chain = load_script("private_movement_chain.py")
     steps = _steps()
     [push_at] = _indices_running(steps, "private_movement_chain.py push")
@@ -613,12 +658,21 @@ def test_the_gate_names_no_repair_it_cannot_describe(tmp_path: Path) -> None:
 
     assert repo in said, said
     assert f"{chain.CHAIN_BRANCH} branch" in said, said
-    uploaded = {
-        str(step["with"]["name"]) for step in steps
-        if str(step.get("uses", "")).startswith("actions/upload-artifact")
-    }
-    named = re.findall(r"(?:-n|--name)\s+([A-Za-z0-9._-]+)", said)
-    assert set(named) <= uploaded, (named, uploaded)
+
+    uploaded = _uploaded_names(WORKFLOW)
+    assert uploaded, "the workflow uploads its sealed round and its report"
+    allowed = [_name_pattern(name) for name in uploaded]
+    known = set(RETIRED_ARTIFACTS).union(
+        *(_uploaded_names(path) for path in WORKFLOW.parent.glob("*.y*ml"))
+    )
+    for name in sorted(known - uploaded):
+        token = rf"(?<!{_NAME_CHAR}){_name_pattern(name)}(?!{_NAME_CHAR})"
+        assert not re.search(token, said), (name, said)
+
+    named = re.findall(r"(?<![\w-])(?:-n|--name)[\s=]+['\"]?([A-Za-z0-9._-]+)", said)
+    for name in named:
+        name = name.rstrip(".")
+        assert any(re.fullmatch(p, name) for p in allowed), (name, sorted(uploaded))
 
 
 # --------------------------------------------------------------------------
@@ -635,8 +689,8 @@ def _git(args: list[str], cwd: Path) -> None:
                    env={**os.environ, **GIT_ENV})
 
 
-def _private_chain(root: Path, damaged_day: str) -> Path:
-    """A bare repository whose `movement` branch holds GOOD_DAY whole and
+def _private_chain(root: Path, damaged_day: str, branch: str = "movement") -> Path:
+    """A bare repository whose `branch` holds GOOD_DAY whole and
     `damaged_day` with stray quotes, laid out as the chain is."""
     seed = root / "seed"
     _capture_day(seed, GOOD_DAY, 1)
@@ -646,8 +700,25 @@ def _private_chain(root: Path, damaged_day: str) -> Path:
     _git(["init", "-q"], seed)
     _git(["add", "-A"], seed)
     _git(["commit", "-qm", "earlier rounds"], seed)
-    _git(["push", "-q", str(bare), "HEAD:refs/heads/movement"], seed)
+    _git(["push", "-q", str(bare), f"HEAD:refs/heads/{branch}"], seed)
     return bare
+
+
+def _restore(root: Path, bare: Path) -> tuple[int, str, str]:
+    """The restore step's own block, pulling from `bare`, with the league
+    day pinned to TODAY and an offline `gh` that lists no sealed round.
+    Returns its exit, its log, and what it asked `gh`."""
+    root.mkdir(exist_ok=True)
+    _install(root / "bin", "date", DATE_STUB)
+    _install(root / "bin", "gh", STUB_GH)
+    gh_log = root / "gh.log"
+    code, _, log = _replay(
+        root, _step("Restore today's captures"), **GIT_ENV,
+        CHAIN=str(PROJECT_ROOT / "scripts" / "private_movement_chain.py"),
+        CHAIN_REMOTE=f"file://{bare}", GH_LOG=str(gh_log),
+    )
+    asked = gh_log.read_text(encoding="utf-8") if gh_log.is_file() else ""
+    return code, log, asked
 
 
 @pytest.mark.parametrize(
@@ -663,19 +734,10 @@ def test_a_damaged_day_the_private_chain_holds_comes_back_every_round(
     a standing warning on every later day, never silence."""
     bare = _private_chain(tmp_path / "private", damaged_day)
     root = tmp_path / "run"
-    root.mkdir()
-    _install(root / "bin", "date", DATE_STUB)
-    _install(root / "bin", "gh", STUB_GH)
-    gh_log = root / "gh.log"
 
-    code, _, log = _replay(
-        root, _step("Restore today's captures"), **GIT_ENV,
-        CHAIN=str(PROJECT_ROOT / "scripts" / "private_movement_chain.py"),
-        CHAIN_REMOTE=f"file://{bare}", GH_LOG=str(gh_log),
-    )
+    code, log, asked = _restore(root, bare)
     assert code == 0, log
     assert (root / "restore_problem.txt").read_text(encoding="utf-8") == "", log
-    asked = gh_log.read_text(encoding="utf-8") if gh_log.is_file() else ""
     assert "actions/artifacts" in asked, "the restore must look for sealed rounds too"
     # This round's capture appends to the league day the clock reads.
     _capture_day(root / "data" / "processed", TODAY, 1)
@@ -686,3 +748,49 @@ def test_a_damaged_day_the_private_chain_holds_comes_back_every_round(
     assert f"`{damaged_day}.csv`" in summary and label in summary, summary
     # Every readable day the chain held, and this round's, is in the depth.
     assert f"### Ladder depth: {1 if red else 2}\n" in summary, summary
+
+
+def _restore_gate(root: Path, outcome: str = "success") -> subprocess.CompletedProcess:
+    """The gate that reads restore_problem.txt, with the restore step's
+    outcome put where GitHub puts it."""
+    gate = _step("Fail the run when the previous captures were not restored")
+    run = gate["run"].replace("${{ steps.restore.outcome }}", outcome)
+    assert "${{" not in run, run
+    return subprocess.run(
+        ["bash", "-e", "-c", run], cwd=root, env={"PATH": os.environ["PATH"]},
+        capture_output=True, text=True, timeout=30,
+    )
+
+
+def test_a_missing_movement_branch_is_a_fault_not_a_clean_scan(tmp_path: Path) -> None:
+    """The chain has existed since 2026-10-02, so a private repository with no
+    `movement` branch had it deleted or renamed. The damaged day it held does
+    not come back, the scan reads only this round's capture, and the scan by
+    itself is green and names nothing: the silence the round above rules out.
+    So the restore must say the branch is missing, and its gate must be red
+    with that sentence. Until stage two's review a missing branch (pull exit
+    4) was a clean restore, and a deleted chain read as "no chain yet"."""
+    bare = _private_chain(tmp_path / "private", BAD_DAY, branch="movement-renamed")
+    root = tmp_path / "run"
+
+    code, log, asked = _restore(root, bare)
+
+    assert code == 0, log  # the step is soft; its sentence is the report
+    problem = (root / "restore_problem.txt").read_text(encoding="utf-8")
+    assert "has no movement branch" in problem, (problem, log)
+    assert "deleted or renamed" in problem, problem
+    assert "actions/artifacts" in asked, "a missing chain must not skip the sealed rounds"
+    assert not (root / "data" / "processed" / "line_movement").exists(), (
+        "nothing may be restored from a branch other than movement"
+    )
+
+    gate = _restore_gate(root)
+    assert gate.returncode == 1, gate.stdout + gate.stderr
+    assert "::error::" in gate.stdout and "has no movement branch" in gate.stdout, gate.stdout
+
+    # Why the gate must carry it: the scan, alone, cannot see what was lost.
+    _capture_day(root / "data" / "processed", TODAY, 1)
+    code, summary, log = _run_step(root)
+    assert code == 0, log
+    assert f"{BAD_DAY}.csv" not in summary, summary
+    assert "### Ladder depth: 1\n" in summary, summary

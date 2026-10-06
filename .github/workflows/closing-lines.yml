@@ -114,11 +114,12 @@ jobs:
 
       - name: Take the chain from the private repository
         # Every day the chain carries, pulled onto this runner and nowhere
-        # else (this workflow uploads nothing). "No chain yet" is an ordinary
-        # answer; a chain that could not be read is a red run, because the
-        # rounds since the last push would otherwise be skipped quietly
-        # (they heal on the next push that can read it: each push reads
-        # every day).
+        # else (this workflow uploads nothing). A chain with no price file yet
+        # publishes nothing and stays green. A chain that could not be read,
+        # or a repository with no movement branch at all (deleted or renamed:
+        # it has existed since 2026-10-02), is a red run, because the rounds
+        # since the last push would otherwise be skipped quietly (they heal
+        # on the next push that can read it: each push reads every day).
         id: handoff
         if: github.event_name == 'workflow_run'
         env:
@@ -129,7 +130,11 @@ jobs:
           mkdir -p data/processed
           CODE=0
           python scripts/private_movement_chain.py pull --dest data/processed || CODE=$?
-          if [ "$CODE" = 4 ] || { [ "$CODE" = 0 ] && [ ! -d data/processed/line_movement ]; }; then
+          if [ "$CODE" = 4 ]; then
+            echo "::error::The private repository has no movement branch. The chain has existed since 2026-10-02, so it was deleted or renamed; restore it from its history."
+            exit 1
+          fi
+          if [ "$CODE" = 0 ] && [ ! -d data/processed/line_movement ]; then
             echo "::notice::The private chain holds no price captures yet. Nothing to publish."
             echo "empty=true" >> "$GITHUB_OUTPUT"
             exit 0

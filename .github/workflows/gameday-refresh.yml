@@ -738,10 +738,12 @@ jobs:
         # FAILURES. A damaged snapshot, capture store or movement day exits
         # 2, which "Report the outcome" reads and fails the run on, without
         # degrading it: the backup would read the same damaged files, so it
-        # is not sent for. A private source that is damaged (exit 2) or that
-        # turns the token away (exit 5) is the same kind of fault and is
-        # treated the same way. Only a source GitHub could not be reached for
-        # (exit 1) degrades the run.
+        # is not sent for. A private source that is damaged (exit 2), that
+        # turns the token away (exit 5), that cannot be read for want of a
+        # token (exit 3), or a missing movement branch (chain exit 4) is the
+        # same kind of fault and is treated the same way; each names itself
+        # in the step's outputs (store_fault) for "Report the outcome". Only a
+        # source GitHub could not be reached for (exit 1) degrades the run.
         #
         # WHAT LEAVES THIS STEP IS AGGREGATE. The report prints counts, rates
         # and intervals, never a price, a line or a book, and it is the only
@@ -782,6 +784,8 @@ jobs:
                  STORE_TAG="rejected-token" ;;
               3) STORE_FAULT="${STORE_FAULT:+$STORE_FAULT; }NHL_CLOSING_LINES_TOKEN is not set, so the private $1 cannot be read; since stage two it is the only source of closing prices"
                  STORE_TAG="${STORE_TAG:-no-token}" ;;
+              4) STORE_FAULT="${STORE_FAULT:+$STORE_FAULT; }The private repository has no movement branch; the chain has existed since 2026-10-02, so it was deleted or renamed: restore it from its history"
+                 STORE_TAG="${STORE_TAG:-missing-chain}" ;;
               *) STORE_FAULT="${STORE_FAULT:+$STORE_FAULT; }The private $1 read exited $2, which this step does not know"
                  STORE_TAG="${STORE_TAG:-unexpected-exit-$2}" ;;
             esac
@@ -811,7 +815,7 @@ jobs:
             0) echo "Read $(ls "$CHAIN_DIR/line_movement" 2>/dev/null | wc -l | tr -d ' ') line-movement day file(s) from the private chain." ;;
             2) note_fault "movement chain" 2 ;;
             3) note_fault "movement chain" 3 ;;
-            4) echo "No private movement chain to read." ;;
+            4) note_fault "movement chain" 4 ;;
             1) UNREACHABLE="${UNREACHABLE:+$UNREACHABLE and }the private movement chain" ;;
             *) note_fault "movement chain" "$CHAIN" ;;
           esac
@@ -1251,6 +1255,12 @@ jobs:
           fi
           if [ "${{ steps.clv.outcome }}" = "failure" ] && [ "${{ steps.clv.outputs.store_fault }}" = "rejected-token" ]; then
             echo "::error::Report closing-line value failed because the private repository turned NHL_CLOSING_LINES_TOKEN away (expired, revoked, or not granted cooperross399/nhl-closing-lines). Replace the secret. Both closing-price sources live there, so today's closing-line value is incomplete or missing. It is not written into the run's health (degraded=${{ steps.final.outputs.degraded }}), so on its own it sends for no backup."
+            failed=1
+          elif [ "${{ steps.clv.outcome }}" = "failure" ] && [ "${{ steps.clv.outputs.store_fault }}" = "missing-chain" ]; then
+            echo "::error::Report closing-line value failed because the private repository cooperross399/nhl-closing-lines has no movement branch. The chain has existed since 2026-10-02, so it was deleted or renamed: restore it from its history. Today's closing-line value scored the store alone, if at all. It is not written into the run's health (degraded=${{ steps.final.outputs.degraded }}), so on its own it sends for no backup."
+            failed=1
+          elif [ "${{ steps.clv.outcome }}" = "failure" ] && [ "${{ steps.clv.outputs.store_fault }}" = "no-token" ]; then
+            echo "::error::Report closing-line value failed because NHL_CLOSING_LINES_TOKEN is not set, so the private repository cooperross399/nhl-closing-lines could not be read. Set the secret. Both closing-price sources live there, so today's closing-line value is incomplete or missing. It is not written into the run's health (degraded=${{ steps.final.outputs.degraded }}), so on its own it sends for no backup."
             failed=1
           elif [ "${{ steps.clv.outcome }}" = "failure" ]; then
             echo "::error::Report closing-line value failed (its log names the cause: a damaged snapshot, movement day or capture store, or a private store that could not be used), so today's closing-line value is incomplete or missing. It is not written into the run's health (degraded=${{ steps.final.outputs.degraded }}), so on its own it sends for no backup."

@@ -11,13 +11,25 @@ public `line-movement` artifact (2026-10-01).
 Since stage two of the chain's move (2026-10-05) there is no public copy.
 Line Movement keeps its chain only on branch `movement` of the private
 repository cooperross399/nhl-closing-lines (`private_movement_chain.py
-push`). A round whose push fails is sealed with NHL_CHAIN_FALLBACK_KEY into
+push`). A round the private chain did not take (its push failed, or the
+check found the tip short of it) is sealed with NHL_CHAIN_FALLBACK_KEY into
 a 7-day `line-movement-sealed-N` artifact, and the next round's restore
 unseals it, so that round's push carries it home. Closing Lines runs when
 Line Movement completes, pulls the chain from the private repository into
 data/processed, derives the closing prices from it, and pushes them to the
 same repository's `main`. It reads no artifact, holds no grant here beyond
 `contents: read`, and spends no credit.
+
+The branch has existed since 2026-10-02, so a private repository without
+it lost the chain (deleted or renamed): that is a fault, never "no chain
+yet". Closing Lines' hand-off goes red naming it, and Line Movement's push
+refuses (exit 5) rather than start a one-round chain the hand-off would
+then publish from as if it were the season; only a manual first seed
+passes `--allow-new-chain`, and no workflow does. So every scenario that
+needs a chain starts from one (the `seeded` fixture: branch `movement`
+laid down with plain git, not by the push under test, holding one earlier
+day's line-unit file and no price capture). A chain that exists and holds
+no price capture is still "nothing to publish", and green.
 
 The structural half reads the YAML. The executed half runs the step blocks
 exactly as written under the shell GitHub uses (Closing Lines' hand-off, and
@@ -30,12 +42,17 @@ and flag, because each asks GitHub's API that the target is private and
 only that answer is replaced. The exits the real pull cannot be made to give
 offline (unreachable, damaged, refused) come from a stub.
 
-One test fails on 2026-10-05 and should until the script changes: Line
-Movement's push, run exactly as written from its checkout, keeps nothing,
-because its folder is relative and git reads it from a temporary repository
-(`test_line_movements_push_keeps_the_round_from_its_own_checkout`). Every
+Line Movement's push is run exactly as written, from its checkout, by the
+two tests named for it. Its folder is relative, and until `blob_of`
+resolved it (2026-10-05, #294) git read it from the push's temporary
+repository and the push kept nothing; that is
+`test_line_movements_push_keeps_the_round_from_its_own_checkout`. Every
 other test runs that push with the folder made absolute, so each fails only
-for its own property.
+for its own property. One other step meets the same bug as written: since
+4f2b1db the seal step hands its relative folder to `blob_of` too, to leave
+out what the tip already holds, and without the resolve it stops with a
+traceback and seals nothing, so a return of that bug also fails
+`test_a_round_whose_private_push_failed_reaches_the_store_with_the_next_round`.
 
 Not covered here: a re-run's second attempt recovering the first attempt's
 round. It takes the same two paths (the private chain, or the first
@@ -52,6 +69,7 @@ import re
 import shlex
 import subprocess
 import sys
+import tarfile
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -78,7 +96,12 @@ CHAIN = "private_movement_chain.py"
 STORE = "private_closing_store.py"
 REPO = "owner/lab"
 TOKEN = "t"
-KEY = "a-fallback-key"
+#: Long enough for the seal and unseal (32 characters or more, unpadded);
+#: not Cooper's key.
+KEY = "a-fallback-key-for-tests-and-never-the-real-one"
+#: The chain's branch, written out: the tests compare what the scripts do
+#: with the branch production uses, not with the scripts' own constant.
+BRANCH = "movement"
 
 
 def _load(name: str) -> dict:
@@ -297,7 +320,8 @@ def _refs(bare: Path) -> str:
 def _keep(work: Path, monkeypatch) -> int:
     """Line Movement's "Keep the captures privately": the step's own
     subcommand and flag, from its checkout, with the folder it names made
-    absolute. As written, relative, it does not keep the round; that is
+    absolute. As written the folder is relative, which kept nothing until
+    `blob_of` resolved it (#294); that is
     `test_line_movements_push_keeps_the_round_from_its_own_checkout`, and
     the tests downstream of the push are not made to fail on it too."""
     args = _exact(_movement()[KEEP], CHAIN)
@@ -309,7 +333,8 @@ def _keep(work: Path, monkeypatch) -> int:
 
 def _keep_round(tmp_path: Path, name: str, rounds: list[pd.DataFrame], monkeypatch,
                 *, folder: str = cl.MOVEMENT_DIRNAME) -> None:
-    """A Line Movement round whose "Keep the captures privately" landed."""
+    """A Line Movement round whose "Keep the captures privately" landed on
+    the chain that already exists (`seeded`)."""
     work = _runner(tmp_path, name)["work"]
     processed = work / "data" / "processed"
     if folder == cl.MOVEMENT_DIRNAME:
@@ -320,34 +345,80 @@ def _keep_round(tmp_path: Path, name: str, rounds: list[pd.DataFrame], monkeypat
     assert _keep(work, monkeypatch) == chain.EXIT_OK
 
 
-def test_line_movements_push_keeps_the_round_from_its_own_checkout(tmp_path, private, monkeypatch):
-    """The step exactly as written, run from the checkout as GitHub runs it.
+def _on_branch(bare: Path, path: str) -> str | None:
+    """A file on branch `movement` of the store, as git reads it; None when
+    the branch does not hold it."""
+    done = subprocess.run(["git", "--git-dir", str(bare), "show", f"{BRANCH}:{path}"],
+                          capture_output=True, text=True)
+    return done.stdout if done.returncode == 0 else None
 
-    Measured 2026-10-05: it returns 1 and keeps nothing, saying git "could
-    not open 'data/processed/line_movement/2026-10-08.csv'". The folder is
-    relative, and `blob_of` hands each path to git running in the push's own
-    temporary repository. In stage two this push is the round's only home,
-    so a round it does not keep lives only in its sealed artifact.
+
+def test_line_movements_push_keeps_the_round_from_its_own_checkout(tmp_path, seeded, monkeypatch):
+    """The step exactly as written, run from the checkout as GitHub runs it,
+    onto the chain that is already there.
+
+    Measured 2026-10-05, before `blob_of` resolved its path (#294): it
+    returned 1 and kept nothing, saying git "could not open
+    'data/processed/line_movement/2026-10-08.csv'". The folder is relative,
+    and git runs in the push's own temporary repository. In stage two this
+    push is the round's only home, so a round it does not keep lives only in
+    its sealed artifact. It merges into the tip rather than replacing it, so
+    the days already there stay for Closing Lines to publish.
     """
     work = _runner(tmp_path, "movement")["work"]
     _day_file(work / "data" / "processed", [_round(14, 120.0)])
 
     assert _in_process(_movement()[KEEP], CHAIN, chain.main, work, monkeypatch) == chain.EXIT_OK
 
-    kept = subprocess.run(["git", "--git-dir", str(private), "show",
-                           f"{chain.CHAIN_BRANCH}:{cl.MOVEMENT_DIRNAME}/2026-10-08.csv"],
-                          capture_output=True, text=True, check=True).stdout
+    kept = _on_branch(seeded, f"{cl.MOVEMENT_DIRNAME}/2026-10-08.csv")
     assert kept == (work / "data" / "processed" / cl.MOVEMENT_DIRNAME / "2026-10-08.csv").read_text()
+    assert _on_branch(seeded, SEEDED) == SEEDED_TEXT, "the push replaced the tip instead of merging"
 
 
-def test_a_private_repository_with_no_chain_yet_publishes_nothing(tmp_path, private):
+def test_line_movements_push_refuses_to_start_a_chain_the_private_repository_lost(
+        tmp_path, private, monkeypatch, capsys):
+    """The step exactly as written, against a private repository with no
+    `movement` branch. The chain has existed since 2026-10-02, so the branch
+    was deleted or renamed: the push refuses (exit 5, so the step fails, the
+    round is sealed and the run ends red) and creates nothing, instead of
+    starting a one-round chain that every later hand-off would publish from
+    as if it were the season. Only a manual first seed passes
+    --allow-new-chain; no workflow does."""
+    work = _runner(tmp_path, "movement")["work"]
+    _day_file(work / "data" / "processed", [_round(14, 120.0)])
+    before = _refs(private)
+
+    assert _in_process(_movement()[KEEP], CHAIN, chain.main, work, monkeypatch) == chain.EXIT_REFUSED
+
+    assert _refs(private) == before, "the push started a new chain"
+    out = capsys.readouterr().out
+    assert f"::error::The private repository has no `{BRANCH}` branch" in out
+    assert "deleted or renamed" in out and "--allow-new-chain" in out
+    # No workflow command passes the seed flag, however it calls the script
+    # (comments, which may name the flag, are dropped as the shell drops them;
+    # each block is read whole, since a quote may span its lines).
+    for path in sorted(WORKFLOWS.glob("*.yml")):
+        for job in yaml.safe_load(path.read_text(encoding="utf-8"))["jobs"].values():
+            for step in job.get("steps", []):
+                words = shlex.split(str(step.get("run", "")), comments=True)
+                assert not any("allow-new-chain" in word for word in words), (path.name, step.get("name"))
+
+
+def test_a_private_repository_without_the_movement_branch_is_a_red_hand_off(tmp_path, private):
+    """The real pull answers 4 (no `movement` branch). Until 2026-10-05 that
+    was "no chain yet", a green run that published nothing; the chain has
+    existed since 2026-10-02, so it now means the branch was deleted or
+    renamed, and the hand-off fails red, naming that."""
     runner = _runner(tmp_path, "closing")
     done = _run_step(runner, _closing()[HANDOFF])
-    assert done.returncode == 0, done.stdout + done.stderr
-    assert _outputs(runner).get("empty") == "true"
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert "::error::The private repository has no movement branch" in done.stdout
+    assert "deleted or renamed" in done.stdout
+    assert "empty" not in _outputs(runner)
+    assert not (runner["work"] / "data" / "processed" / cl.MOVEMENT_DIRNAME).exists()
 
 
-def test_a_chain_without_price_captures_publishes_nothing(tmp_path, private, monkeypatch):
+def test_a_chain_without_price_captures_publishes_nothing(tmp_path, seeded, monkeypatch):
     _keep_round(tmp_path, "movement", [_round(14, 120.0)], monkeypatch, folder="deployment")
     runner = _runner(tmp_path, "closing")
     done = _run_step(runner, _closing()[HANDOFF])
@@ -356,10 +427,11 @@ def test_a_chain_without_price_captures_publishes_nothing(tmp_path, private, mon
     assert _outputs(runner).get("empty") == "true"
 
 
-@pytest.mark.parametrize("code", [chain.EXIT_FAILED, chain.EXIT_DAMAGED, chain.EXIT_REFUSED])
+@pytest.mark.parametrize("code", [chain.EXIT_FAILED, chain.EXIT_DAMAGED, chain.EXIT_EMPTY, chain.EXIT_REFUSED])
 def test_a_chain_that_could_not_be_read_is_a_red_run_not_a_quiet_one(tmp_path, code):
-    """GitHub unreachable, a file that would not merge, a token turned away:
-    the rounds since the last push would be skipped quietly by a green run."""
+    """GitHub unreachable, a file that would not merge, no `movement` branch
+    (deleted or renamed), a token turned away: the rounds since the last push
+    would be skipped quietly by a green run, even with a day file on disk."""
     fake = (f'if [ "$1" = scripts/{CHAIN} ]; then\n'
             '  mkdir -p data/processed/line_movement && echo x > data/processed/line_movement/2026-10-08.csv\n'
             f'  exit {code}\nfi\nexit 97\n')
@@ -377,7 +449,7 @@ def test_a_hand_off_without_the_token_is_a_red_run(tmp_path, private):
     assert "empty" not in _outputs(runner)
 
 
-def test_what_line_movement_keeps_lands_where_the_publish_reads_it(tmp_path, private, monkeypatch):
+def test_what_line_movement_keeps_lands_where_the_publish_reads_it(tmp_path, seeded, monkeypatch):
     _keep_round(tmp_path, "movement", [_round(14, 120.0), _round(14, 125.0, "FanDuel")], monkeypatch)
     runner = _runner(tmp_path, "closing")
 
@@ -387,33 +459,50 @@ def test_what_line_movement_keeps_lands_where_the_publish_reads_it(tmp_path, pri
     assert (runner["work"] / "data" / "processed" / cl.MOVEMENT_DIRNAME / "2026-10-08.csv").is_file()
     assert _in_process(_closing()[PUBLISH], STORE, store.main, runner["work"], monkeypatch) == store.EXIT_OK
 
-    stored = pd.read_csv(pd.io.common.StringIO(_stored(private)))
+    stored = pd.read_csv(pd.io.common.StringIO(_stored(seeded)))
     assert stored[["american_odds", "book"]].values.tolist() == [[125.0, "FanDuel"]]
 
 
-def test_the_hand_off_writes_nothing_and_asks_github_for_no_artifact(tmp_path, private, monkeypatch):
+def test_the_hand_off_writes_nothing_and_asks_github_for_no_artifact(tmp_path, seeded, monkeypatch):
     _keep_round(tmp_path, "movement", [_round(14, 120.0)], monkeypatch)
-    before = _refs(private)
+    before = _refs(seeded)
     runner = _runner(tmp_path, "closing")
 
     done = _run_step(runner, _closing()[HANDOFF])
 
     assert done.returncode == 0, done.stdout + done.stderr
-    assert _refs(private) == before
+    assert _refs(seeded) == before
     assert not runner["gh_log"].exists(), runner["gh_log"].read_text()
 
 
+def _sealed_members(sealed: Path, monkeypatch) -> list[str]:
+    """What a sealed round holds, opened with the key as unseal opens it."""
+    monkeypatch.setenv(chain.KEY_ENV, KEY)
+    opened = sealed.with_name("opened.tar")
+    done = chain._openssl(["-d"], sealed, opened)
+    assert done.returncode == 0, done.stderr
+    with tarfile.open(opened) as tar:
+        return sorted(member.name for member in tar.getmembers() if member.isfile())
+
+
 def test_a_round_whose_private_push_failed_reaches_the_store_with_the_next_round(
-        tmp_path, private, monkeypatch):
+        tmp_path, seeded, monkeypatch):
     lm, closing = _movement(), _closing()
 
     # Round one: its push failed, so the seal step ran and the upload kept
-    # what the seal wrote, at the path the upload names.
+    # what the seal wrote, at the path the upload names. Its disk also holds
+    # the earlier day its restore pulled from the chain; the seal step reads
+    # the tip with the store token it is given and leaves that day out, so
+    # the artifact holds only the round the chain lacks.
     first = _runner(tmp_path, "round-1")
-    _day_file(first["work"] / "data" / "processed", [_round(14, 120.0), _round(14, 125.0, "FanDuel")])
+    processed = first["work"] / "data" / "processed"
+    _day_file(processed, [_round(14, 120.0), _round(14, 125.0, "FanDuel")])
+    (processed / SEEDED).parent.mkdir(parents=True)
+    (processed / SEEDED).write_text(SEEDED_TEXT)
     done = _run_step(first, lm[SEAL])
     assert done.returncode == 0, done.stdout + done.stderr
     kept = Path(_fill(lm[SEALED_UPLOAD]["with"]["path"], {"runner.temp": str(first["temp"])}))
+    assert _sealed_members(kept, monkeypatch) == [f"{cl.MOVEMENT_DIRNAME}/2026-10-08.csv"]
     artifact = tmp_path / "sealed.zip"
     with zipfile.ZipFile(artifact, "w") as zipped:
         # A single-file upload is rooted at the file's own folder.
@@ -424,9 +513,11 @@ def test_a_round_whose_private_push_failed_reaches_the_store_with_the_next_round
         "workflow_run": {"id": 7, "head_branch": "main", "repository_id": 1, "head_repository_id": 1},
     })
 
-    # Closing Lines after round one: the private chain does not hold it.
+    # Closing Lines after round one: the private chain does not hold it (it
+    # holds the earlier line-unit day and no price capture).
     after_first = _runner(tmp_path, "closing-1")
-    assert _run_step(after_first, closing[HANDOFF]).returncode == 0
+    done = _run_step(after_first, closing[HANDOFF])
+    assert done.returncode == 0, done.stdout + done.stderr
     assert _outputs(after_first).get("empty") == "true"
 
     # Round two, on a fresh runner: its restore opens round one...
@@ -449,7 +540,7 @@ def test_a_round_whose_private_push_failed_reaches_the_store_with_the_next_round
     done = _run_step(after_second, closing[HANDOFF])
     assert done.returncode == 0, done.stdout + done.stderr
     assert _in_process(closing[PUBLISH], STORE, store.main, after_second["work"], monkeypatch) == store.EXIT_OK
-    stored = pd.read_csv(pd.io.common.StringIO(_stored(private))).sort_values("captured_at")
+    stored = pd.read_csv(pd.io.common.StringIO(_stored(seeded))).sort_values("captured_at")
     assert stored[["captured_at", "american_odds", "book"]].values.tolist() == [
         ["2026-10-08T14:00:00Z", 125.0, "FanDuel"], ["2026-10-08T21:00:00Z", 105.0, "BetMGM"]]
 
@@ -512,6 +603,28 @@ def private(bare, monkeypatch) -> Path:
     monkeypatch.setattr(chain, "sleep", lambda seconds: None)
     monkeypatch.delenv("GITHUB_WORKSPACE", raising=False)
     return bare
+
+
+#: The one file the existing chain holds before a test's round: an earlier
+#: day's line units, and no price capture, so on its own it publishes nothing.
+SEEDED = "deployment/2026-10-07.csv"
+SEEDED_TEXT = "game_id,team,line,player\n2026020001,TOR,1,Auston Matthews\n"
+
+
+@pytest.fixture
+def seeded(private, tmp_path) -> Path:
+    """`private` with branch `movement` already there, as it has been since
+    2026-10-02: laid down with plain git, not by the push under test, so a
+    test of that push does not build its own precondition."""
+    seed = tmp_path / "chain-seed"
+    (seed / SEEDED).parent.mkdir(parents=True)
+    (seed / SEEDED).write_text(SEEDED_TEXT)
+    subprocess.run(["git", "init", "-q", "-b", BRANCH], cwd=seed, check=True)
+    subprocess.run(["git", "add", "-A"], cwd=seed, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", "an earlier round"], cwd=seed, check=True)
+    subprocess.run(["git", "push", "-q", str(private), f"HEAD:refs/heads/{BRANCH}"], cwd=seed, check=True)
+    assert _on_branch(private, SEEDED) == SEEDED_TEXT
+    return private
 
 
 def _push(processed: Path, bare: Path) -> int:

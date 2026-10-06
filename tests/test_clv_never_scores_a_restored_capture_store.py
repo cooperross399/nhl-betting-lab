@@ -21,13 +21,18 @@ the move) is removed before either read, and the report is pointed only at
 the two temp directories, so it scores only what this run fetched. For each
 source it tells the states apart:
 
-* no NHL_CLOSING_LINES_TOKEN, or nothing there yet: nothing to read, and not
-  a fault;
+* nothing there yet (a store with no captures; a `movement` branch that
+  holds no movement day): nothing to read, and not a fault;
 * GitHub could not be reached: a fault that may pass, written to
   `run_degraded.txt` as one sentence naming every source not reached and what
   was scored instead, so the backup is sent for;
-* the store is damaged, or GitHub turns the token away: a fault the backup
-  would hit again, so the step fails red (exit 2) WITHOUT degrading the run;
+* the store is damaged, GitHub turns the token away, NHL_CLOSING_LINES_TOKEN
+  is not set (since stage two both sources need it), or the private
+  repository has no `movement` branch at all (the chain has existed since
+  2026-10-02, so a missing branch was deleted or renamed, not "not yet"): a
+  fault the backup would hit again, so the step fails red (exit 2) WITHOUT
+  degrading the run, with one `::error::` line naming every fault and what
+  was scored, and a `store_fault` tag for "Report the outcome";
 * the source was read: the report scores it, and nothing restored.
 
 The chain's own damaged-file exit (pull 2) is not replayed here: the step
@@ -133,7 +138,9 @@ def rig(clv_rig):
 
 
 def _seed_chain(rig, files: dict[str, str]) -> None:
-    """Branch `movement` of the stand-in repository, where the chain lives."""
+    """Branch `movement` of the stand-in repository, where the chain lives.
+    Every `_seed_private` here passes `chain=False`, so this file decides
+    whether the branch exists at all."""
     seed, env = rig["root"] / "seed-chain", rig["env"]
     seed.mkdir()
     _git(["init", "-q", "-b", "movement"], seed, env)
@@ -146,10 +153,49 @@ def _seed_chain(rig, files: dict[str, str]) -> None:
     _git(["push", "-q", str(rig["bare"]), "HEAD:refs/heads/movement"], seed, env)
 
 
-def _seed_both(rig) -> None:
+def _seed_store(rig) -> None:
     _seed_private(rig["bare"], rig["root"], rig["env"],
-                  {"captures/2026-10-08.csv": _day_file([_capture_row(book="Todaystore")])})
+                  {"captures/2026-10-08.csv": _day_file([_capture_row(book="Todaystore")])},
+                  chain=False)
+
+
+def _seed_both(rig) -> None:
+    _seed_store(rig)
     _seed_chain(rig, {"line_movement/2026-10-08.csv": _day_file([_capture_row(book="Todaychain")])})
+
+
+def _seed_chain_with_no_movement_day(rig) -> None:
+    """A `movement` branch that exists and holds no `line_movement` day: the
+    pull reads it (exit 0) and finds nothing to score. Not a missing chain."""
+    _seed_chain(rig, {"deployment/2026-10-08.csv": "game_id\n"})
+
+
+def _step_error(done, expected: str) -> None:
+    """The step's own `::error::` line, matched whole. Matching a prefix is
+    not enough: the scripts print `::error::` lines of their own that start
+    the same way, and a source muted in the step would still leave the
+    other's words in place."""
+    errors = [line for line in done.stdout.splitlines() if line.startswith("::error::")]
+    assert f"::error::{expected}" in errors, errors
+
+
+def _store_faults(rig) -> list[str]:
+    """Every `store_fault` tag the step wrote to $GITHUB_OUTPUT."""
+    out = rig["work"] / "github_output.txt"
+    lines = out.read_text(encoding="utf-8").splitlines() if out.is_file() else []
+    return [line.partition("=")[2] for line in lines if line.startswith("store_fault=")]
+
+
+#: The step's sentences, as `note_fault` writes them.
+NO_TOKEN = ("NHL_CLOSING_LINES_TOKEN is not set, so the private {} cannot be read; "
+            "since stage two it is the only source of closing prices")
+TURNED_AWAY = ("The private {} turned NHL_CLOSING_LINES_TOKEN away (expired, revoked, or not "
+               "granted cooperross399/nhl-closing-lines); replace the secret")
+DAMAGED = ("The private {} has damaged day file(s), named above; its good days, if any, "
+           "were still scored")
+MISSING_CHAIN = ("The private repository has no movement branch; the chain has existed since "
+                 "2026-10-02, so it was deleted or renamed: restore it from its history")
+STORE, CHAIN = "closing-line store", "movement chain"
 
 
 def _git_fails_for_the_chain(rig, stderr: str) -> None:
@@ -192,14 +238,20 @@ def test_no_token_is_a_red_fault_that_reads_nothing_restored(rig) -> None:
     assert read == NOT_READ
     assert chain == NO_CHAIN
     assert degraded == ""
-    assert "::error::NHL_CLOSING_LINES_TOKEN is not set" in done.stdout
-    assert "store_fault=no-token" in (rig["work"] / "github_output.txt").read_text()
+    # Both sources named, in one line: muting either reader's no-token arm
+    # leaves the other's sentence, the exit 2 and the tag all standing.
+    _step_error(done, f"{NO_TOKEN.format(STORE)}; {NO_TOKEN.format(CHAIN)}; "
+                      "the closing-line value report scored no closing price.")
+    assert _store_faults(rig) == ["no-token"]
     _assert_nothing_restored_is_left(rig)
 
 
 def test_a_store_and_chain_with_nothing_yet_is_a_clean_run(rig) -> None:
-    """A store with no captures, and no `movement` branch at all."""
-    _seed_private(rig["bare"], rig["root"], rig["env"], {"captures/.gitkeep": ""})
+    """A store with no captures, and a `movement` branch that holds no
+    movement day yet: both are read, neither has anything to score, and that
+    is not a fault."""
+    _seed_private(rig["bare"], rig["root"], rig["env"], {"captures/.gitkeep": ""}, chain=False)
+    _seed_chain_with_no_movement_day(rig)
 
     done, read, chain, degraded = _run(rig)
 
@@ -207,8 +259,29 @@ def test_a_store_and_chain_with_nothing_yet_is_a_clean_run(rig) -> None:
     assert read == NOT_READ
     assert chain == NO_CHAIN
     assert degraded == ""
-    assert "holds nothing yet" in done.stdout
-    assert "No private movement chain to read." in done.stdout
+    assert "The private capture store holds nothing yet." in done.stdout
+    assert "Read 0 line-movement day file(s) from the private chain." in done.stdout
+    assert not any(line.startswith("::error::") for line in done.stdout.splitlines()), done.stdout
+    assert _store_faults(rig) == []
+    _assert_nothing_restored_is_left(rig)
+
+
+def test_a_missing_movement_branch_is_a_red_fault_that_scores_nothing_restored(rig) -> None:
+    """The chain has lived on `movement` since 2026-10-02, so a repository
+    that answers with no such branch lost it (deleted or renamed); it is not
+    "nothing yet". A backup would find the same repository, so the step
+    fails red without degrading, names the fault, still scores the store it
+    did read, and scores no restored chain in the chain's place."""
+    _seed_store(rig)
+
+    done, read, chain, degraded = _run(rig)
+
+    assert done.returncode == 2, done.stdout + done.stderr
+    assert "Todaystore" in read and "Yesterday" not in read
+    assert chain == NO_CHAIN, "the report scored a chain this run did not fetch"
+    assert degraded == "", "a lost branch is not a fault the backup can pass"
+    _step_error(done, f"{MISSING_CHAIN}; the closing-line value report scored the store alone.")
+    assert _store_faults(rig) == ["missing-chain"]
     _assert_nothing_restored_is_left(rig)
 
 
@@ -221,6 +294,7 @@ def test_both_sources_are_read_in_place_of_the_restored_ones(rig) -> None:
     assert "Todaystore" in read and "Yesterday" not in read
     assert "Todaychain" in chain and "Yesterday" not in chain
     assert degraded == ""
+    assert _store_faults(rig) == []
     _assert_nothing_restored_is_left(rig)
 
 
@@ -262,9 +336,14 @@ def test_an_unreachable_chain_degrades_the_run_and_scores_no_restored_chain(rig)
 
 
 def _damaged(rig) -> None:
+    """The store's only day is damaged, so it yields no row. The chain is
+    there and holds no movement day, so the store's damage is the only
+    fault in play (a missing branch would be a second one, red on its own)."""
     good = _day_file([_capture_row(book="Today")])
     _seed_private(rig["bare"], rig["root"], rig["env"],
-                  {"captures/2026-10-08.csv": good + 'x,"unterminated\n'})
+                  {"captures/2026-10-08.csv": good + 'x,"unterminated\n'},
+                  chain=False)
+    _seed_chain_with_no_movement_day(rig)
 
 
 def _token_turned_away(rig) -> None:
@@ -282,14 +361,21 @@ def _token_turned_away(rig) -> None:
 
 
 @pytest.mark.parametrize(
-    "fault",
-    [pytest.param(_damaged, id="store-damaged"),
-     pytest.param(_token_turned_away, id="token-turned-away")],
+    ("fault", "tag", "error"),
+    [pytest.param(_damaged, "damaged-store",
+                  f"{DAMAGED.format(STORE)}; the closing-line value report scored no closing price.",
+                  id="store-damaged"),
+     pytest.param(_token_turned_away, "rejected-token",
+                  f"{TURNED_AWAY.format(STORE)}; {TURNED_AWAY.format(CHAIN)}; "
+                  "the closing-line value report scored no closing price.",
+                  id="token-turned-away")],
 )
-def test_a_fault_a_backup_would_repeat_fails_red_without_degrading(rig, fault) -> None:
+def test_a_fault_a_backup_would_repeat_fails_red_without_degrading(rig, fault, tag, error) -> None:
     """A degraded run sends for the backup, which buys prices again and would
     meet the same damaged file or the same rejected token. So the step exits
-    2, which "Report the outcome" fails the run on, and degrades nothing."""
+    2, which "Report the outcome" fails the run on, and degrades nothing; its
+    tag tells "Report the outcome" which of the two it was (a turned-away
+    token is reported as one, with "Replace the secret")."""
     fault(rig)
 
     done, read, chain, degraded = _run(rig)
@@ -298,7 +384,31 @@ def test_a_fault_a_backup_would_repeat_fails_red_without_degrading(rig, fault) -
     assert read == NOT_READ, "the report scored a store this run did not fetch"
     assert chain == NO_CHAIN, "the report scored a chain this run did not fetch"
     assert degraded == ""
-    assert "::error::The private closing-line store" in done.stdout
+    _step_error(done, error)
+    assert _store_faults(rig) == [tag]
+    _assert_nothing_restored_is_left(rig)
+
+
+def test_a_damaged_store_still_scores_its_good_days_beside_the_chain(rig) -> None:
+    """One damaged day in a store that also holds a good one: the good day
+    and the chain are both scored, and the step still fails red, saying it
+    scored both, so the reader knows the report is not empty."""
+    good = _day_file([_capture_row(book="Todaystore")])
+    _seed_private(rig["bare"], rig["root"], rig["env"],
+                  {"captures/2026-10-08.csv": good,
+                   "captures/2026-10-07.csv": good + 'x,"unterminated\n'},
+                  chain=False)
+    _seed_chain(rig, {"line_movement/2026-10-08.csv": _day_file([_capture_row(book="Todaychain")])})
+
+    done, read, chain, degraded = _run(rig)
+
+    assert done.returncode == 2, done.stdout + done.stderr
+    assert "Todaystore" in read and "Yesterday" not in read
+    assert "Todaychain" in chain and "Yesterday" not in chain
+    assert degraded == ""
+    _step_error(done, f"{DAMAGED.format(STORE)}; "
+                      "the closing-line value report scored the store and the movement chain.")
+    assert _store_faults(rig) == ["damaged-store"]
     _assert_nothing_restored_is_left(rig)
 
 
@@ -314,5 +424,6 @@ def test_a_chain_that_turns_the_token_away_fails_red_without_degrading(rig) -> N
     assert "Todaystore" in read
     assert chain == NO_CHAIN, "the report scored a chain this run did not fetch"
     assert degraded == ""
-    assert "::error::The private movement chain turned NHL_CLOSING_LINES_TOKEN away" in done.stdout
+    _step_error(done, f"{TURNED_AWAY.format(CHAIN)}; the closing-line value report scored the store alone.")
+    assert _store_faults(rig) == ["rejected-token"]
     _assert_nothing_restored_is_left(rig)

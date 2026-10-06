@@ -313,6 +313,7 @@ TOKEN_HOLDERS = {
     ("line-movement.yml", "Restore today's captures"),
     ("line-movement.yml", "Keep the captures privately"),
     ("line-movement.yml", "Check the private chain holds this round"),
+    ("line-movement.yml", "Seal this round when the private chain did not take it"),
 }
 
 
@@ -392,7 +393,10 @@ def _capture_row(**overrides) -> dict:
     return row
 
 
-def _seed_private(bare: Path, root: Path, env: dict, files: dict[str, str]) -> None:
+def _seed_private(bare: Path, root: Path, env: dict, files: dict[str, str], *, chain: bool = True) -> None:
+    """The private store as it stands since 2026-10-02: `main` holding the
+    files given, and a `movement` branch (empty of day files unless a test
+    seeds one), because a missing chain is a fault since stage two."""
     seed = root / "seed"
     seed.mkdir()
     _git(["init", "-q", "-b", "main"], seed, env)
@@ -404,6 +408,13 @@ def _seed_private(bare: Path, root: Path, env: dict, files: dict[str, str]) -> N
     _git(["add", "-A"], seed, env)
     _git(["commit", "-q", "-m", "seed"], seed, env)
     _git(["push", "-q", str(bare), "HEAD:refs/heads/main"], seed, env)
+    if chain:
+        _git(["checkout", "-q", "--orphan", "movement"], seed, env)
+        _git(["rm", "-q", "-rf", "."], seed, env)
+        (seed / "README.md").write_text("chain\n", encoding="utf-8")
+        _git(["add", "-A"], seed, env)
+        _git(["commit", "-q", "-m", "chain"], seed, env)
+        _git(["push", "-q", str(bare), "HEAD:refs/heads/movement"], seed, env)
 
 
 def _day_file(rows: list[dict]) -> str:
@@ -551,7 +562,7 @@ def _seed_chain(rig: dict, book: str = SENTINEL_BOOK) -> None:
         f"player_points,Sentinel Skater,over,17.5,1777,{book},2026-10-08T21:00:00Z,2026-10-08T21:00:00Z\n")
     _git(["add", "-A"], work, env)
     _git(["commit", "-qm", "round"], work, env)
-    _git(["push", "-q", str(rig["bare"]), "HEAD:refs/heads/movement"], work, env)
+    _git(["push", "-q", "--force", str(rig["bare"]), "HEAD:refs/heads/movement"], work, env)
 
 
 def test_with_a_store_the_report_scores_the_store_and_the_chain(clv_rig) -> None:

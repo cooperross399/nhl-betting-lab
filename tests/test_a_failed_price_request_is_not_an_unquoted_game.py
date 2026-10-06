@@ -48,9 +48,12 @@ What these tests hold, through the real `main` of each script, a real
   branch `movement` of cooperross399/nhl-closing-lines), and when that push
   fails, "Seal this round when the private chain did not take it" and "Keep the sealed
   round". A red price step skips none of them. The red round's own day file
-  is pushed by the keeper's own command, from the folder the capture writes,
-  to a local repository standing in for the private one, and arrives byte
-  for byte, every game's bulk moneyline included. The sealed fallback is
+  is pushed by the keeper's own command, from the folder the capture's own
+  default writes, to a local repository standing in for the private one,
+  and arrives byte for byte, every game's bulk moneyline included, beside
+  the day the chain already held. A repository with no `movement` branch is
+  refused (exit 5), not given a new chain of one round: the chain has
+  existed since 2026-10-02, so a missing branch is a fault. The sealed fallback is
   checked here only for running after a red price step. Sealing and the
   next round's unseal are left to the private chain's own tests, and Closing
   Lines' hand-off (it now pulls the whole private chain) to Closing Lines';
@@ -252,13 +255,20 @@ class _Capture:
 
 
 def _drive(script: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
-           per_event, *, cap: int) -> tuple[int, str, str, Transport, Path]:
+           per_event, *, cap: int, argv: list[str] | None = None,
+           ) -> tuple[int, str, str, Transport, Path]:
     """The real script with the workflow's own flags, over a stub transport.
 
     The default data directories point away from the checkout: the line
     capture runs the preseason screen, which reads the club-schedule cache
     and the team-name map, and a populated checkout's schedule would screen
-    these games out before a request was made."""
+    these games out before a request was made.
+
+    With `argv` (a step's own words, which name no folder) the script writes
+    its default folder. `main` builds that default from the module's
+    `PROCESSED_DIR` when it is called, so that one constant is pointed at
+    the scratch folder and the default itself is left as the script has it.
+    """
     point_default_data_dirs_at(monkeypatch, tmp_path / "defaults")
     module: ModuleType = load_script(script)
     transport = Transport(per_event)
@@ -274,16 +284,21 @@ def _drive(script: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     )
     monkeypatch.setattr(module, "datetime", _Frozen)
     processed = tmp_path / "processed"
+    if argv is None:
+        argv = ["--live", "--credit-cap", str(cap), "--processed-dir", str(processed)]
+    else:
+        assert module.PROCESSED_DIR == PROCESSED_DIR, module.PROCESSED_DIR
+        monkeypatch.setattr(module, "PROCESSED_DIR", processed)
     capture = _Capture()
     with capture:
-        code = module.main([
-            "--live", "--credit-cap", str(cap), "--processed-dir", str(processed),
-        ])
+        code = module.main(argv)
     return code, capture.out, capture.err, transport, processed
 
 
-def _movement(tmp_path, monkeypatch, per_event, *, cap: int = 600):
-    return _drive("capture_line_movement.py", tmp_path, monkeypatch, per_event, cap=cap)
+def _movement(tmp_path, monkeypatch, per_event, *, cap: int = 600,
+              argv: list[str] | None = None):
+    return _drive("capture_line_movement.py", tmp_path, monkeypatch, per_event,
+                  cap=cap, argv=argv)
 
 
 def _closing(tmp_path, monkeypatch, per_event, *, cap: int = 400):
@@ -527,10 +542,16 @@ KEEPERS = (
     "Keep the sealed round",
 )
 
-#: The job-status functions a red step changes. Either one anywhere in a
-#: condition puts the step back behind that status, whatever `always()` leads
-#: it (`always() && success()` is `success()`).
-STATUS_CHECK = re.compile(r"\b(?:success|failure)\s*\(")
+#: What a red step changes in a condition: the status functions `success()`
+#: and `failure()`, and the `job.status` context. Any one anywhere in a
+#: condition puts the step back behind the job's status, whatever `always()`
+#: leads it (`always() && success()` is `success()`). That is every way an
+#: expression reads this job's status; `cancelled()` and `always()` do not
+#: move on a red step, and `steps.<id>.outcome`, which the seal reads, is
+#: one step's result. Its limit: a spelling of these three, not an evaluator.
+#: test_the_movement_chain_is_kept_privately pins the exact conditions of
+#: the push, the check and the seal.
+STATUS_CHECK = re.compile(r"\b(?:success|failure)\s*\(|\bjob\.status\b")
 
 
 def _argv(block: str) -> list[str]:
@@ -564,30 +585,83 @@ def test_a_red_price_capture_costs_the_line_movement_run_nothing() -> None:
         )
 
 
+#: The private repository's chain branch, spelled out rather than read from
+#: the script, so a script that pushed anywhere else could not agree with
+#: itself here.
+MOVEMENT_BRANCH = "movement"
+
+#: A day the chain already held before this round.
+EARLIER_DAY = "line_movement/2026-10-06.csv"
+
+
+def _seed_chain(private: Path, tmp_path: Path) -> bytes:
+    """Give the bare repository a `movement` branch holding one earlier day,
+    as the private repository has held since 2026-10-02. Plain git, not the
+    script under test. Returns that day file's bytes."""
+    seed = tmp_path / "seed"
+    (seed / "line_movement").mkdir(parents=True)
+    earlier = (",".join([*odds_api.PRICE_COLUMNS, "captured_at"]) + "\n").encode()
+    (seed / EARLIER_DAY).write_bytes(earlier)
+    identity = ["-c", "user.name=seed", "-c", "user.email=seed@example.invalid"]
+    for args in (["init", "-q"], ["add", "--", EARLIER_DAY],
+                 [*identity, "commit", "-q", "-m", "an earlier round"],
+                 ["push", "-q", f"file://{private}", f"HEAD:refs/heads/{MOVEMENT_BRANCH}"]):
+        subprocess.run(["git", "-C", str(seed), *args], check=True, capture_output=True)
+    return earlier
+
+
+def _show(private: Path, path: str) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        ["git", "--git-dir", str(private), "show", f"{MOVEMENT_BRANCH}:{path}"],
+        capture_output=True,
+    )
+
+
 def test_a_round_that_turned_the_price_step_red_still_reaches_the_private_chain(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The keeper's own command, from the YAML, on the real files a red round
     wrote: every request failed, the step went red, and the bulk moneylines
-    the round did capture reach the private chain byte for byte. A local bare
-    repository stands in for the private one; only the API's "is it private"
-    answer is replaced, and no token is set."""
-    code, _, _, _, processed = _movement(tmp_path, monkeypatch, _status(503, EVERY))
+    the round did capture reach the private chain byte for byte, beside the
+    days the chain already held. A local bare repository stands in for the
+    private one; only the API's "is it private" answer is replaced, and no
+    token is set.
+
+    The capture runs on the step's own words, so it writes the folder its
+    own default names, and the keeper reads the folder its own words name.
+
+    Since 2026-10-05 a repository with no `movement` branch is a fault, not a
+    first round: the chain has existed since 2026-10-02, so a missing branch
+    was deleted or renamed, and the keeper's command refuses (exit 5) rather
+    than start a thin chain holding only this round. No workflow passes the
+    first-seed flag, so the keeper's own words are refused here too."""
     _, capture = _named(LINE_MOVEMENT, "Capture prices")
     block = _render(capture["run"], {"inputs.credit_cap || '600'": "600"})
-    assert _run_step(block, tmp_path, code)[0] == "failure", f"script exit {code}"
-
+    step_argv = _argv(block)
+    assert step_argv[:2] == ["python", "scripts/capture_line_movement.py"], block
     # The capture names no folder, so it writes its default; the keeper must
     # read that folder, as the runner's checkout lays it out.
-    assert "--processed-dir" not in _argv(block)
+    assert "--processed-dir" not in step_argv
+    code, _, _, _, processed = _movement(
+        tmp_path, monkeypatch, _status(503, EVERY), argv=step_argv[2:]
+    )
+    assert _run_step(block, tmp_path, code)[0] == "failure", f"script exit {code}"
+
     _, keeper = _named(LINE_MOVEMENT, "Keep the captures privately")
     argv = _argv(keeper["run"])
     assert argv[:3] == ["python", "scripts/private_movement_chain.py", "push"], keeper["run"]
     folder = argv.index("--processed-dir") + 1
+    # The capture's default was PROCESSED_DIR, moved to `processed` above; the
+    # keeper's folder moves with it only if it is that same folder.
     assert PROJECT_ROOT / argv[folder] == PROCESSED_DIR, (
         f"the keeper reads {argv[folder]}, the capture writes {PROCESSED_DIR}"
     )
     argv[folder] = str(processed)
+    day = _movement_file(processed)
+    assert day.is_file(), (
+        f"the red round wrote no day file in the folder the keeper reads ({argv[folder]}): "
+        f"{sorted(p.relative_to(processed).as_posix() for p in processed.rglob('*.csv'))}"
+    )
 
     for key, value in {"GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}.items():
         monkeypatch.setenv(key, value)
@@ -599,16 +673,28 @@ def test_a_round_that_turned_the_price_step_red_still_reaches_the_private_chain(
     monkeypatch.setattr(chain, "sleep", lambda seconds: None)
     for name in (chain.store.TOKEN_ENV, "GITHUB_REPOSITORY", "GITHUB_STEP_SUMMARY"):
         monkeypatch.delenv(name, raising=False)
+
+    # No chain on the private repository: a fault, and nothing is created.
+    with _Capture() as refused:
+        refused_code = chain.main([*argv[2:], "--remote", f"file://{private}"])
+    assert refused_code == 5, (
+        f"exit {refused_code}: a missing chain must be refused, not started\n"
+        + refused.out + refused.err
+    )
+    assert f"::error::The private repository has no `{MOVEMENT_BRANCH}` branch" in refused.out, (
+        refused.out
+    )
+    branches = subprocess.run(["git", "--git-dir", str(private), "branch", "--list"],
+                              capture_output=True, text=True, check=True).stdout
+    assert branches.strip() == "", f"a refused push created a branch: {branches!r}"
+
+    # The chain as it is in season: the same command now merges the round in.
+    earlier = _seed_chain(private, tmp_path)
     with _Capture() as pushed:
         exit_code = chain.main([*argv[2:], "--remote", f"file://{private}"])
     assert exit_code == 0, pushed.out + pushed.err
 
-    day = _movement_file(processed)
-    shown = subprocess.run(
-        ["git", "--git-dir", str(private), "show",
-         f"{chain.CHAIN_BRANCH}:{day.relative_to(processed).as_posix()}"],
-        capture_output=True,
-    )
+    shown = _show(private, day.relative_to(processed).as_posix())
     assert shown.returncode == 0, (
         f"the red round's day file is not on the private chain: {shown.stderr!r}\n"
         + pushed.out + pushed.err
@@ -617,6 +703,11 @@ def test_a_round_that_turned_the_price_step_red_still_reaches_the_private_chain(
     assert held == day.read_bytes()
     frame = pd.read_csv(io.BytesIO(held), dtype=str, keep_default_na=False)
     assert set(frame.loc[frame["market"] == "moneyline", "provider_event_id"]) == EVERY
+    # Merged into the chain, not a chain of one round.
+    kept = _show(private, EARLIER_DAY)
+    assert kept.returncode == 0 and kept.stdout == earlier, (
+        f"the push dropped a day the chain already held: {kept.stderr!r}"
+    )
 
 
 @pytest.mark.parametrize(

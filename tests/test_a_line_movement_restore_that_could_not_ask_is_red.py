@@ -10,19 +10,32 @@ which a gate at the end turns red.
 
 STAGE TWO (2026-10-05). The chain's only home is branch `movement` of the
 private repository, and the restore asks two things:
-`private_movement_chain.py pull` (the chain: exit 0 folded in, 4 no chain
-yet, anything else a problem) and `unseal` (every unexpired
-`line-movement-sealed-N` round that a failed push left sealed: anything but
-0 a problem). Each problem becomes one sentence in `restore_problem.txt`,
-which is emptied first. The gate, placed after every step that keeps the
-round, turns that file, or a restore that did not finish, into a red run.
+`private_movement_chain.py pull` (the chain: exit 0 folded in, anything else
+a problem) and `unseal` (every unexpired `line-movement-sealed-N` round that
+a failed push left sealed: anything but 0 a problem). Each problem becomes
+one sentence in `restore_problem.txt`, which is emptied first. The gate,
+placed after every step that keeps the round, turns that file, or a restore
+that did not finish, into a red run.
 
-A thin restore no longer costs the chain anything, because this round's push
-merges into the private tip (test_the_movement_chain_is_kept_privately.py).
-It is still red, because the day's files and the ladder scan saw a thin chain.
+A MISSING CHAIN IS A FAULT (4f2b1db). The pull's exit 4, the private
+repository answering with no `movement` branch, was once "no chain yet" and
+green. The chain has existed since 2026-10-02, so a missing branch now means
+it was deleted or renamed, and the restore writes a sentence of its own for
+it ("...has no movement branch..."). The push no longer creates the branch
+either (it refuses without `--allow-new-chain`, which no workflow passes).
+A branch that exists and holds no day file yet is still a clean pull (exit 0).
+
+A thin restore does not by itself cost the chain anything, because a push
+that succeeds merges into the private tip
+(test_the_movement_chain_is_kept_privately.py). It is still red, because the
+day's files and the ladder scan saw a thin chain. The restore's sentences
+and its gate say nothing about the push: the restore is written before the
+push runs, and whether the round reached the private chain is the next
+gate's to say. A sealed copy that cannot be merged with the one on disk is
+parked under data/processed/unmerged/, where the push keeps it, and is red.
 A re-run is no longer a special case either. Its attempt 2 restores attempt
 1's round like any later round does: from the chain if attempt 1 pushed it,
-or from attempt 1's sealed artifact. The last replay below runs the second
+or from attempt 1's sealed artifact. The last replays below run the second
 path from the seal step to the next restore. The offline `gh` lists every
 artifact a test registers, so one thing is assumed here, not tested: that
 GitHub's artifact listing shows attempt 1's artifact while attempt 2 of the
@@ -31,12 +44,15 @@ same run is still in progress.
 HOW. The workflow's own restore step, seal step and gate run under bash. In
 the replay's folder, `scripts/private_movement_chain.py` is a shim. It runs
 the real script, with a local bare repository standing in for the private one
-(passed as the pull's `--remote`, and only when the step gave the pull a
-token) and an offline `gh` standing in for GitHub's artifact API. Or it exits
-with a chosen code to drive the step's own branches. Each step's `env:`
-block is that replay's environment, so a test fails if a step stops passing
-a secret. The retries happen inside the script (`fetch_chain`), so they are
-tested in-process.
+(passed as `--remote` to pull, seal and unseal, and only when the step gave
+it a token, so a step that stops passing the token stops reaching the
+stand-in) and an offline `gh` standing in for GitHub's artifact API. Or it
+exits with a chosen code to drive the step's own branches. Git in a replay
+may use local repositories only (`GIT_ALLOW_PROTOCOL=file`), so no step can
+reach GitHub. Each step's `env:` block is that replay's environment, so a
+test fails if a step stops passing a secret. The retries happen inside the
+script (`fetch_chain`, `download_sealed`); the pull's are tested in-process,
+the download's through the replay's `gh` log.
 """
 
 from __future__ import annotations
@@ -47,6 +63,7 @@ import re
 import stat
 import subprocess
 import sys
+import tarfile
 import zipfile
 from pathlib import Path
 
@@ -65,15 +82,19 @@ SEAL_STEP = "Seal this round when the private chain did not take it"
 SEALED_UPLOAD = "Keep the sealed round"
 GATE = "Fail the run when the previous captures were not restored"
 PROBLEM_FILE = "restore_problem.txt"
-#: The opening words of the two sentences the restore step can write.
+#: The opening words of the three sentences the restore step can write.
 PULL_PROBLEM = "The private movement chain could not be restored"
+MISSING_CHAIN = "The private repository has no movement branch."
 UNSEAL_PROBLEM = "A sealed fallback round could not be folded in"
+#: Seal and unseal refuse a key shorter than this (exit 5).
+FALLBACK_KEY = "test-fallback-key-not-a-real-one-0123456789"
+assert len(FALLBACK_KEY) >= movement_chain.MIN_KEY_CHARS
 
 #: What the runner fills into the steps' `${{ }}` expressions. An unset
 #: secret renders as the empty string.
 SECRETS = {
     "secrets.NHL_CLOSING_LINES_TOKEN": "test-token-not-a-real-one",
-    "secrets.NHL_CHAIN_FALLBACK_KEY": "test-fallback-key",
+    "secrets.NHL_CHAIN_FALLBACK_KEY": FALLBACK_KEY,
     "github.token": "test-github-token",
 }
 
@@ -124,8 +145,9 @@ sys.exit(2)
 '''
 
 SHIM = r'''"""The real private_movement_chain.py, with the private repository's
-stand-in as the pull's --remote when the step gave the pull a token and no
-pause between attempts; or the exit code a test chose."""
+stand-in as --remote for every command that reads the chain, when the step
+gave it a token, and no pause between attempts; or the exit code a test
+chose."""
 import importlib.util, os, sys
 args = sys.argv[1:]
 with open(os.environ["SHIM_LOG"], "a") as log:
@@ -138,7 +160,7 @@ spec = importlib.util.spec_from_file_location("private_movement_chain", {script!
 real = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(real)
 real.sleep = lambda seconds: None
-if args[0] == "pull" and os.environ.get("NHL_CLOSING_LINES_TOKEN", "").strip():
+if args[0] in ("pull", "seal", "unseal") and os.environ.get("NHL_CLOSING_LINES_TOKEN", "").strip():
     args += ["--remote", os.environ["SHIM_REMOTE"]]
 sys.exit(real.main(args))
 '''
@@ -205,6 +227,9 @@ class Runner:
             "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com",
             "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.com",
             "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1",
+            # Local repositories only: nothing in a replay may reach GitHub,
+            # whatever remote a script builds from the fake token.
+            "GIT_ALLOW_PROTOCOL": "file",
         }
         self.store = tmp_path / "store.git"
         self._git(["init", "-q", "--bare", "-b", "main", str(self.store)], tmp_path)
@@ -256,7 +281,8 @@ class Runner:
         registry.write_text(json.dumps(self.artifacts), encoding="utf-8")
         env = {key: value for key, value in self.git_env.items()
                if key not in ("NHL_CLOSING_LINES_TOKEN", "NHL_CHAIN_FALLBACK_KEY",
-                              "GH_TOKEN", "GITHUB_TOKEN", "GITHUB_STEP_SUMMARY")
+                              "GH_TOKEN", "GITHUB_TOKEN", "GITHUB_STEP_SUMMARY",
+                              "NHL_DEFAULT_BRANCH")
                and not key.startswith("SHIM_EXIT_")}
         env.update({
             "PATH": self.path,
@@ -287,9 +313,10 @@ class Runner:
         # `continue-on-error: true`: whatever it returned, the job goes on.
         return work
 
-    def sealed_round(self, files: dict[str, str], attempt: str = "1") -> None:
+    def sealed_round(self, files: dict[str, str], attempt: str = "1") -> Path:
         """A round whose private push failed: the workflow's seal step seals
-        it, and the sealed upload keeps it as upload-artifact would."""
+        it, and the sealed upload keeps it as upload-artifact would. Returns
+        the sealed file the upload keeps."""
         work = self.workspace()
         for rel, body in files.items():
             _write(work / "data" / "processed", rel, body)
@@ -311,6 +338,7 @@ class Runner:
             "created_at": "2026-10-15T18:05:00Z",
             "workflow_run": {"id": 1001, "head_branch": "main", "repository_id": 1, "head_repository_id": 1},
         }})
+        return kept
 
     def asked(self) -> list[str]:
         return _lines(self.shim_log) if self.shim_log.is_file() else []
@@ -351,17 +379,35 @@ def _sealed_round_without_its_key(runner: Runner) -> None:
     runner.secrets["secrets.NHL_CHAIN_FALLBACK_KEY"] = ""
 
 
+def _sealed_round_with_a_short_key(runner: Runner) -> None:
+    """Sealed with the real key; the restore is given one too short to be it."""
+    runner.sealed_round({LM: HEADER + _row(3)})
+    runner.secrets["secrets.NHL_CHAIN_FALLBACK_KEY"] = FALLBACK_KEY[:movement_chain.MIN_KEY_CHARS - 1]
+
+
+def _sealed_round_with_a_padded_key(runner: Runner) -> None:
+    """The right key with a trailing newline, as a pasted secret can carry:
+    openssl would read the newline as part of the key."""
+    runner.sealed_round({LM: HEADER + _row(3)})
+    runner.secrets["secrets.NHL_CHAIN_FALLBACK_KEY"] = FALLBACK_KEY + "\n"
+
+
 @pytest.mark.parametrize(("fault", "sentence", "code"), [
     (_private_repository_unreachable, PULL_PROBLEM, movement_chain.EXIT_FAILED),
     (_no_token_for_the_private_repository, PULL_PROBLEM, movement_chain.EXIT_NO_TOKEN),
     (_artifact_api_down, UNSEAL_PROBLEM, movement_chain.EXIT_FAILED),
     (_sealed_round_will_not_download, UNSEAL_PROBLEM, movement_chain.EXIT_DAMAGED),
     (_sealed_round_without_its_key, UNSEAL_PROBLEM, movement_chain.EXIT_NO_TOKEN),
+    (_sealed_round_with_a_short_key, UNSEAL_PROBLEM, movement_chain.EXIT_REFUSED),
+    (_sealed_round_with_a_padded_key, UNSEAL_PROBLEM, movement_chain.EXIT_REFUSED),
 ], ids=["private-repo-unreachable", "no-token", "artifact-api-down",
-        "sealed-round-will-not-download", "sealed-round-without-its-key"])
+        "sealed-round-will-not-download", "sealed-round-without-its-key",
+        "sealed-round-with-a-short-key", "sealed-round-with-a-padded-key"])
 def test_a_restore_that_could_not_ask_turns_the_run_red(
     runner: Runner, fault, sentence: str, code: int,
 ) -> None:
+    """The sentence says what the restore could not do and nothing about the
+    push: it is written before the push runs."""
     runner.chain({YESTERDAY_LM: HEADER + _row(1)})
     fault(runner)
     work = runner.restore()
@@ -370,9 +416,26 @@ def test_a_restore_that_could_not_ask_turns_the_run_red(
     assert len(problems) == 1, runner.log
     assert problems[0].startswith(sentence), problems
     assert f"(exit {code})" in problems[0], problems
+    assert "merge" not in problems[0] and "push" not in problems[0], problems
     gate = _gate(work)
     assert gate.returncode != 0
     assert f"::error::{problems[0]}" in gate.stdout
+
+
+def test_a_sealed_round_that_will_not_download_is_asked_for_three_times(
+    runner: Runner,
+) -> None:
+    """`download_sealed` retries the zip like every other `gh` call, so one
+    HTTP 500 does not leave the only copy of a round outside this restore.
+    The replay's `gh` refuses every zip, so the log shows each ask."""
+    runner.chain({YESTERDAY_LM: HEADER + _row(1)})
+    _sealed_round_will_not_download(runner)
+    work = runner.restore()
+
+    zips = [line for line in _lines(runner.gh_log) if line.endswith("/zip")]
+    assert len(zips) == movement_chain.GH_ATTEMPTS == 3, zips
+    assert zips == ["api repos/cooperross399/nhl-betting-lab/actions/artifacts/7000/zip"] * 3
+    assert _problems(work)[0].startswith(UNSEAL_PROBLEM)
 
 
 def test_a_restore_that_reached_the_private_chain_leaves_the_run_green(
@@ -394,26 +457,53 @@ def test_a_restore_that_reached_the_private_chain_leaves_the_run_green(
     assert "::error::" not in gate.stdout
 
 
-def test_the_first_run_of_the_season_with_no_chain_is_green(runner: Runner) -> None:
-    """No `movement` branch yet (pull exit 4): an answer, not a failure to ask."""
+def test_a_private_repository_with_no_movement_branch_is_a_red_run(
+    runner: Runner,
+) -> None:
+    """The private repository answers, and has no `movement` branch (pull
+    exit 4). That was once the first run of the season and green; the chain
+    has existed since 2026-10-02, so now it means the branch was deleted or
+    renamed, and a run that started thin from it is red and says so."""
     work = runner.restore()
 
-    assert "pull --dest data/processed" in runner.asked()
+    assert runner.asked() == ["pull --dest data/processed", "unseal --dest data/processed"]
     assert not (work / "data" / "processed" / "line_movement").exists()
-    assert (work / PROBLEM_FILE).read_text(encoding="utf-8") == ""
-    assert _gate(work).returncode == 0
+    problems = _problems(work)
+    assert len(problems) == 1, runner.log
+    assert problems[0].startswith(MISSING_CHAIN), problems
+    assert "deleted or renamed" in problems[0], problems
+    assert "merge" not in problems[0] and "push" not in problems[0], problems
+    gate = _gate(work)
+    assert gate.returncode != 0
+    assert f"::error::{problems[0]}" in gate.stdout
+
+
+def test_a_movement_branch_with_no_day_file_yet_is_green(runner: Runner) -> None:
+    """A chain that exists and holds nothing yet is a clean pull (exit 0):
+    "nothing yet" now lives there, not in a missing branch."""
+    runner.chain({"README.md": "the movement chain\n"})
+    work = runner.restore()
+
+    assert not (work / "data" / "processed" / "line_movement").exists()
+    assert (work / PROBLEM_FILE).read_text(encoding="utf-8") == "", runner.log
+    gate = _gate(work)
+    assert gate.returncode == 0, gate.stdout + gate.stderr
 
 
 @pytest.mark.parametrize(("pull", "unseal", "expected"), [
-    (4, 0, []),
+    (0, 0, []),
+    (4, 0, [(MISSING_CHAIN, None)]),
     (9, 0, [(PULL_PROBLEM, 9)]),
     (0, 9, [(UNSEAL_PROBLEM, 9)]),
+    # A missing chain still unseals: a sealed round may be the only copy.
+    (4, 9, [(MISSING_CHAIN, None), (UNSEAL_PROBLEM, 9)]),
     # A failed pull still unseals, and unseal has no "nothing yet" exit, so
     # its 4 is a problem too: both sentences are written.
     (5, 4, [(PULL_PROBLEM, 5), (UNSEAL_PROBLEM, 4)]),
-], ids=["no-chain-yet", "pull-other-exit", "unseal-other-exit", "both"])
+], ids=["clean", "missing-chain", "pull-other-exit", "unseal-other-exit",
+        "missing-chain-and-unseal", "both"])
 def test_any_other_exit_is_recorded_and_unseal_runs_whatever_the_pull_did(
-    runner: Runner, pull: int, unseal: int, expected: list[tuple[str, int]],
+    runner: Runner, pull: int, unseal: int, expected: list[tuple[str, int | None]],
 ) -> None:
     runner.forced = {"pull": pull, "unseal": unseal}
     work = runner.restore()
@@ -422,7 +512,8 @@ def test_any_other_exit_is_recorded_and_unseal_runs_whatever_the_pull_did(
     problems = _problems(work)
     assert len(problems) == len(expected), problems
     for line, (sentence, code) in zip(problems, expected):
-        assert line.startswith(sentence) and f"(exit {code})" in line, problems
+        assert line.startswith(sentence), problems
+        assert code is None or f"(exit {code})" in line, problems
     assert (_gate(work).returncode != 0) == bool(expected)
 
 
@@ -461,6 +552,9 @@ def test_the_restore_asks_the_private_chain_three_times_before_it_says_so(
 def test_a_private_chain_that_answers_on_the_third_ask_is_read(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """The third ask's answer is taken, not turned into exit 1. The answer
+    here is "no movement branch" (exit 4), which the restore step then
+    reports as a missing chain."""
     answers = [movement_chain.store.Unreachable("HTTP 502"),
                movement_chain.store.Unreachable("HTTP 502"), None]
 
@@ -508,7 +602,12 @@ def test_a_restore_that_timed_out_is_red_though_it_wrote_no_problem(
     tmp_path: Path,
 ) -> None:
     """A step killed at its time limit writes nothing to the problem file;
-    its outcome is what says it did not finish."""
+    its outcome is what says it did not finish. The message claims nothing
+    about the push, which may have failed or (off the default branch) never
+    run: it once said "Its push still merged into the private chain" either
+    way. The private-chain gate after it says whether the round is home, and
+    `_gate` fills only the restore's outcome, so this gate reading any other
+    step's outcome fails here as an unfilled expression."""
     work = tmp_path / "run"
     work.mkdir()
     (work / PROBLEM_FILE).write_text("", encoding="utf-8")
@@ -516,6 +615,8 @@ def test_a_restore_that_timed_out_is_red_though_it_wrote_no_problem(
     gate = _gate(work, restore="failure")
     assert gate.returncode != 0
     assert "::error::Restore today's captures did not finish" in gate.stdout
+    assert "merge" not in gate.stdout, gate.stdout
+    assert "private-chain gate" in gate.stdout, gate.stdout
     assert _gate(work, restore="success").returncode == 0
 
 
@@ -556,3 +657,66 @@ def test_a_round_sealed_by_a_failed_push_comes_home_through_the_next_restore(
     assert (processed / DP).read_text(encoding="utf-8") == "team,player\nTOR,X\n"
     assert (work / PROBLEM_FILE).read_text(encoding="utf-8") == "", runner.log
     assert _gate(work).returncode == 0
+
+
+def _sealed_members(sealed: Path, tmp_path: Path) -> set[str]:
+    """The day files a sealed round holds, opened with the fallback key."""
+    bundle = tmp_path / "opened.tar"
+    done = subprocess.run(
+        ["openssl", "enc", "-d", *movement_chain.OPENSSL_CIPHER, "-pass", "env:KEY",
+         "-in", str(sealed), "-out", str(bundle)],
+        env={**os.environ, "KEY": FALLBACK_KEY}, capture_output=True, text=True,
+    )
+    assert done.returncode == 0, done.stderr
+    with tarfile.open(bundle) as tar:
+        return {member.name for member in tar.getmembers() if member.isfile()}
+
+
+@pytest.mark.parametrize(("token", "expected"), [
+    ("test-token-not-a-real-one", {LM}),
+    ("", {LM, YESTERDAY_LM}),
+], ids=["tip-listed", "no-token"])
+def test_the_seal_step_leaves_out_what_the_private_tip_already_holds(
+    runner: Runner, tmp_path: Path, token: str, expected: set[str],
+) -> None:
+    """The seal step is given the private token only to list the tip, so a
+    seal holds what the chain lacks instead of growing to the season, which
+    every later round downloads. Yesterday's file is on the tip byte for
+    byte and is left out; today's is not on the tip and is sealed. Without
+    the token the tip cannot be listed and everything is sealed."""
+    runner.chain({YESTERDAY_LM: HEADER + _row(1)})
+    runner.secrets["secrets.NHL_CLOSING_LINES_TOKEN"] = token
+    sealed = runner.sealed_round({YESTERDAY_LM: HEADER + _row(1), LM: HEADER + _row(3)})
+
+    assert _sealed_members(sealed, tmp_path) == expected
+
+
+def test_a_sealed_round_that_cannot_be_merged_is_red_and_parked_for_the_push(
+    runner: Runner,
+) -> None:
+    """A sealed copy whose header differs from the copy on disk cannot be
+    folded. It is parked under data/processed/unmerged/<store>/<day>/, named
+    by its blob id, where the next push keeps it on the private branch, so
+    its rows never strand in an artifact that expires. The copy on disk is
+    kept as it was, and the run is red."""
+    other_header = HEADER.replace(",captured_at\n", ",captured_at,source\n")
+    sealed_copy = other_header + _row(3).replace("\n", ",replay\n")
+    runner.sealed_round({LM: sealed_copy})
+    runner.chain({LM: HEADER + _row(1)})
+    work = runner.restore()
+
+    processed = work / "data" / "processed"
+    assert (processed / LM).read_text(encoding="utf-8") == HEADER + _row(1), runner.log
+    parked = sorted((processed / "unmerged").rglob("*"))
+    parked = [path for path in parked if path.is_file()]
+    blob = subprocess.run(["git", "hash-object", "--stdin"], input=sealed_copy,
+                          capture_output=True, text=True, check=True).stdout.strip()
+    rel = f"unmerged/line_movement/2026-10-15/{blob}.csv"
+    assert [path.relative_to(processed).as_posix() for path in parked] == [rel], runner.log
+    assert movement_chain.local_sidecars(processed) == {rel: processed / rel}
+    assert (processed / rel).read_text(encoding="utf-8") == sealed_copy
+    problems = _problems(work)
+    assert len(problems) == 1, runner.log
+    assert problems[0].startswith(UNSEAL_PROBLEM), problems
+    assert f"(exit {movement_chain.EXIT_DAMAGED})" in problems[0], problems
+    assert _gate(work).returncode != 0
