@@ -232,14 +232,14 @@ def test_the_gameday_cap_is_stated_at_what_it_buys() -> None:
     claim = f"{cap} buys {bought} events"
     rate = f"{len(PER_EVENT)} markets x 2 regions = {_per_event_bound()} credits an event"
 
-    assert bought == 8
+    assert bought == 16
     for relative in ("CLAUDE.md", ".github/workflows/gameday-refresh.yml"):
         prose = _prose(_read(relative))
         assert claim in prose, f"{relative} does not say {claim!r}"
         assert rate in prose, f"{relative} does not say {rate!r}"
     claude = _prose(_read("CLAUDE.md"))
     assert "clips zero of the 185 nights" not in claude
-    assert "Cooper's decision, still pending" in claude
+    assert "Cooper raised the cap to 640" in claude
     gameday = _prose(_read(".github/workflows/gameday-refresh.yml"))
     assert "320 covers a sixteen-game slate" not in gameday
     assert "duplicate is 26,091 credits" not in gameday
