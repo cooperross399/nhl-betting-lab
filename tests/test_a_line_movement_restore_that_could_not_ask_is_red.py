@@ -535,7 +535,7 @@ def test_the_restore_asks_the_private_chain_three_times_before_it_says_so(
     apart, and only then is the pull's exit 1, the step's sentence."""
     asked, waited = [], []
 
-    def unreachable(work, remote, token):
+    def unreachable(work, remote, token, **kw):
         asked.append(remote)
         raise movement_chain.store.Unreachable("HTTP 502")
 
@@ -558,7 +558,7 @@ def test_a_private_chain_that_answers_on_the_third_ask_is_read(
     answers = [movement_chain.store.Unreachable("HTTP 502"),
                movement_chain.store.Unreachable("HTTP 502"), None]
 
-    def flaky(work, remote, token):
+    def flaky(work, remote, token, **kw):
         answer = answers.pop(0)
         if isinstance(answer, Exception):
             raise answer

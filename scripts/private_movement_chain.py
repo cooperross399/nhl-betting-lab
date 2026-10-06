@@ -27,7 +27,8 @@ while it stayed public. Cooper chose a staged move (2026-10-02):
 2. **Stage two: this copy is the only one.** Each round restores from here
    (`pull`) and folds in any sealed round (`unseal`); after its captures it
    pushes here (`push`) and checks the tip holds the round (`verify`). If
-   either fails, the round is encrypted with Cooper's key (`seal`) into a
+   that check does not pass, the round is encrypted with Cooper's key
+   (`seal`) into a
    7-day artifact nobody without the key can read, and the next round's
    `unseal` brings it home. Closing Lines and Gameday Refresh's CLV step
    `pull` this copy too. Nothing uploads the chain publicly.
@@ -76,8 +77,9 @@ verify: 0 the tip holds every row of every local file (as the day file, or
 as its kept sidecar); 2 it does not (each file and its missing row count
 named); 3, 4, 1 and 5 as for pull.
 
-seal: 0 sealed (only what the tip lacks, when the tip can be listed); 1
-openssl failed; 3 no key (unset, or saved as whitespace only); 4 nothing
+seal: 0 sealed (only what the tip lacks, when the tip can be listed within
+TIP_LISTING_SECONDS per call; everything on disk when it cannot, or when it
+lacks nothing); 1 openssl failed; 3 no key (unset, or saved as whitespace only); 4 nothing
 on disk to seal (said, not an error);
 5 a weak key (under 32 characters, or padded with whitespace) or `--out`
 inside the workspace.
@@ -97,6 +99,7 @@ import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import tarfile
@@ -151,14 +154,31 @@ def sleep(seconds: float) -> None:
     time.sleep(seconds)
 
 
-def _git(args: list[str], cwd: Path, *, env: dict | None = None) -> subprocess.CompletedProcess:
-    return subprocess.run(
-        ["git", *args], cwd=cwd, capture_output=True, text=True,
-        env={**os.environ, "GIT_TERMINAL_PROMPT": "0",
-             "GIT_AUTHOR_NAME": "Line Movement", "GIT_AUTHOR_EMAIL": "actions@github.com",
-             "GIT_COMMITTER_NAME": "Line Movement", "GIT_COMMITTER_EMAIL": "actions@github.com",
-             **(env or {})},
-    )
+def _git(args: list[str], cwd: Path, *, env: dict | None = None,
+         timeout: float | None = None) -> subprocess.CompletedProcess:
+    """git, with no deadline unless `timeout` is given. With one, git and
+    every process it started (git-remote-https) run in their own process
+    group, and the whole group is killed when the deadline passes: git sets
+    no deadline of its own on a stalled connection, and killing git alone
+    leaves its transport holding the line."""
+    full_env = {**os.environ, "GIT_TERMINAL_PROMPT": "0",
+                "GIT_AUTHOR_NAME": "Line Movement", "GIT_AUTHOR_EMAIL": "actions@github.com",
+                "GIT_COMMITTER_NAME": "Line Movement", "GIT_COMMITTER_EMAIL": "actions@github.com",
+                **(env or {})}
+    if timeout is None:
+        return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, env=full_env)
+    with subprocess.Popen(["git", *args], cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                          text=True, env=full_env, start_new_session=True) as proc:
+        try:
+            out, err = proc.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            proc.communicate()
+            raise store.Unreachable(f"git {args[0]} gave no answer within {timeout:g} s") from None
+    return subprocess.CompletedProcess(proc.args, proc.returncode, out, err)
 
 
 def _ok(done: subprocess.CompletedProcess) -> str:
@@ -170,34 +190,35 @@ def _ok(done: subprocess.CompletedProcess) -> str:
 FETCH_ATTEMPTS = 3
 
 
-def fetch_chain(work: Path, remote: str, token: str) -> str | None:
+def fetch_chain(work: Path, remote: str, token: str, *, attempts: int = FETCH_ATTEMPTS,
+                timeout: float | None = None) -> str | None:
     """`fetch_chain_once`, tried again after a pause when GitHub could not be
-    reached; a refusal is final at once."""
-    for attempt in range(1, FETCH_ATTEMPTS + 1):
+    reached; a refusal is final at once. `timeout` bounds each git call."""
+    for attempt in range(1, attempts + 1):
         try:
-            return fetch_chain_once(work, remote, token)
+            return fetch_chain_once(work, remote, token, timeout=timeout)
         except store.Unreachable as exc:
-            if attempt == FETCH_ATTEMPTS:
+            if attempt == attempts:
                 raise
             _say(f"Could not reach the private chain (attempt {attempt}); trying again. {exc}")
             sleep(5 * attempt)
     return None
 
 
-def fetch_chain_once(work: Path, remote: str, token: str) -> str | None:
+def fetch_chain_once(work: Path, remote: str, token: str, *, timeout: float | None = None) -> str | None:
     """Fetch the chain's tip into `work` (depth 1, nothing checked out).
     Its commit, or None when the repository answers and has no movement
     branch (since 2026-10-02 that means it was deleted or renamed: a fault
     for every caller but a deliberate seed)."""
     if not (work / ".git").exists():
         _ok(_git(["init", "-q"], work))
-    listed = _git(["ls-remote", "--heads", remote, f"refs/heads/{CHAIN_BRANCH}"], work)
+    listed = _git(["ls-remote", "--heads", remote, f"refs/heads/{CHAIN_BRANCH}"], work, timeout=timeout)
     if listed.returncode:
         raise store._remote_failure(listed.stderr, token, "list", CHAIN_SUBJECT)
     if not listed.stdout.strip():
         return None
     done = _git(["fetch", "-q", "--depth", "1", remote,
-                 f"+refs/heads/{CHAIN_BRANCH}:{TIP_REF}"], work)
+                 f"+refs/heads/{CHAIN_BRANCH}:{TIP_REF}"], work, timeout=timeout)
     if done.returncode:
         raise store._remote_failure(done.stderr, token, "fetch", CHAIN_SUBJECT)
     return _ok(_git(["rev-parse", TIP_REF], work)).strip()
@@ -477,6 +498,7 @@ def verify(args: argparse.Namespace) -> int:
     local = local_files(Path(args.processed_dir))
     parked = local_sidecars(Path(args.processed_dir))
     missing: dict[str, int] = {}
+    waiting: list[str] = []
     rows = 0
     with tempfile.TemporaryDirectory() as scratch_dir:
         work = Path(scratch_dir) / "repo"
@@ -487,6 +509,7 @@ def verify(args: argparse.Namespace) -> int:
                 _error("There is no private movement chain to verify against.")
                 return EXIT_EMPTY
             on_tip = tip_blobs(work)
+            waiting = sorted(p for p in on_tip if p.startswith(UNMERGED + "/"))
             day_files_on_tip = [p for p in on_tip if not p.startswith(UNMERGED + "/")]
             if not local and day_files_on_tip:
                 _error(f"This run's folder holds no movement day file while the private "
@@ -536,9 +559,21 @@ def verify(args: argparse.Namespace) -> int:
         line = (f"Private chain check passed: the private tip holds every row of all "
                 f"{len(local)} file(s) ({rows} rows) on this run's disk.")
     _say(line)
+    # Every round, not just the one that kept it: a sidecar's rows reach no
+    # reader (pull, Closing Lines, the CLV report and the ladder scan read
+    # day files only) until someone merges it by hand, and the round that
+    # kept it is the only red one.
+    reminder = ""
+    if waiting:
+        reminder = (f"{len(waiting)} sidecar(s) on the private chain await a hand merge, and "
+                    "their rows reach no reader until then (CLAUDE.md, \"Merging a sidecar\"): "
+                    f"{', '.join(waiting[:6])}{', ...' if len(waiting) > 6 else ''}.")
+        print(f"::warning::{reminder}", flush=True)
     if summary:
         with open(summary, "a", encoding="utf-8") as handle:
             handle.write(line + "\n")
+            if reminder:
+                handle.write(reminder + "\n")
     return EXIT_DAMAGED if missing else EXIT_OK
 
 
@@ -551,7 +586,7 @@ def _openssl(args: list[str], source: Path, target: Path) -> subprocess.Complete
 
 
 #: The fallback key is a passphrase into PBKDF2; the recipe in CLAUDE.md
-#: (`openssl rand -base64 48`) gives 64 characters.
+#: ("The fallback key", `openssl rand -base64 48`) gives 64 characters.
 MIN_KEY_CHARS = 32
 
 
@@ -578,10 +613,12 @@ def key_exit() -> int:
 def seal(args: argparse.Namespace) -> int:
     """Encrypt this round's three stores into `--out`, outside the workspace.
 
-    Only when the private push failed or the check found the tip short: the
-    private repository is the round's only home in stage two, and rows that
-    reach neither it nor this sealed copy are gone. Only what the tip lacks is
-    sealed when the tip can be listed (else everything on disk). AES-256,
+    Only when the check did not find the tip holding this round (a push that
+    failed while the check passed has nothing to seal): the private
+    repository is the round's only home in stage two, and rows that reach
+    neither it nor this sealed copy are gone. Only what the tip lacks is
+    sealed when the tip can be listed in time (else everything on disk, and
+    everything when the tip lacks nothing). A gzip-compressed tar, AES-256,
     PBKDF2-SHA256 at 200k iterations, Cooper's key (NHL_CHAIN_FALLBACK_KEY,
     at least 32 characters, no surrounding whitespace); a weak or missing key
     seals nothing, and the run says so.
@@ -624,7 +661,10 @@ def seal(args: argparse.Namespace) -> int:
     out.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory() as scratch:
         bundle = Path(scratch) / "round.tar"
-        with tarfile.open(bundle, "w") as tar:
+        # Compressed: when the tip cannot be listed this is the whole season,
+        # and every round's restore downloads it for seven days. unseal opens
+        # plain and compressed archives alike.
+        with tarfile.open(bundle, "w:gz") as tar:
             for rel, path in sorted(local.items()):
                 tar.add(path, arcname=rel)
         done = _openssl(["-e", "-salt"], bundle, out)
@@ -700,10 +740,19 @@ def download_sealed(repo: str, artifact: dict, target: Path) -> None:
                 shutil.copyfileobj(source, sink)
 
 
+#: How long each git call of the tip listing may take. The listing only
+#: trims a seal and skips sealed copies already home, so it gets one attempt
+#: and a deadline: the seal step is cut at 2 minutes, and a seal still waiting
+#: on a stalled GitHub then leaves the round on no copy, in exactly the case
+#: the seal exists for.
+TIP_LISTING_SECONDS = 20
+
+
 def _tip_listing(args: argparse.Namespace) -> dict[str, str] | None:
-    """The private tip's blobs, to tell a sealed copy already home from one
-    that is not; None when there is no token or the tip cannot be read
-    (every sealed file is then folded, as it would have been)."""
+    """The private tip's blobs, to tell a copy already home from one that is
+    not; None when there is no token or the tip cannot be read in time
+    (everything is then sealed, or every sealed file folded, as it would
+    have been)."""
     token = store._token()
     if not token and not args.remote:
         return None
@@ -713,8 +762,10 @@ def _tip_listing(args: argparse.Namespace) -> dict[str, str] | None:
         with tempfile.TemporaryDirectory() as scratch_dir:
             work = Path(scratch_dir) / "repo"
             work.mkdir()
-            return tip_blobs(work) if fetch_chain(work, remote, token) else {}
-    except (store.Refused, OSError):
+            tip = fetch_chain(work, remote, token, attempts=1, timeout=TIP_LISTING_SECONDS)
+            return tip_blobs(work) if tip else {}
+    except (store.Refused, OSError) as exc:
+        _say(f"The private tip could not be listed ({exc}); nothing is left out as already home.")
         return None
 
 

@@ -308,8 +308,10 @@ jobs:
         # a row dropped, duplicates kept, a rejected push or an unreachable
         # GitHub tried again with a pause. Only from the default branch: a
         # feature branch's dispatch must never write the season's chain (a
-        # rehearsal keeps nothing). A failure here is caught by the next step,
-        # which seals the round so the next run can bring it home.
+        # rehearsal keeps nothing). Whether the round is home is the next
+        # step's call, not this one's: when the check finds the tip short, the
+        # round is sealed so the next run can bring it home. Its exit is kept
+        # for the gate, which words exit 2 (a copy kept as a sidecar) apart.
         id: private_push
         if: always() && (github.event_name == 'schedule' || github.ref == format('refs/heads/{0}', github.event.repository.default_branch))
         timeout-minutes: 6
@@ -317,7 +319,12 @@ jobs:
         env:
           NHL_CLOSING_LINES_TOKEN: ${{ secrets.NHL_CLOSING_LINES_TOKEN }}
           PYTHONPATH: src
-        run: python scripts/private_movement_chain.py push --processed-dir data/processed
+        run: |
+          set +e
+          python scripts/private_movement_chain.py push --processed-dir data/processed
+          CODE=$?
+          echo "exit=$CODE" >> "$GITHUB_OUTPUT"
+          exit $CODE
 
       - name: Check the private chain holds this round
         # The private tip must hold every row of every file this round has on
@@ -334,18 +341,21 @@ jobs:
         run: python scripts/private_movement_chain.py verify --processed-dir data/processed
 
       - name: Seal this round when the private chain did not take it
-        # The push failed, or the check found the private tip short of this
-        # round: the rows not home are on no copy unless this works. Only the
-        # files the private tip lacks are sealed when the tip can be listed
-        # (the token is here for that alone), else every file on disk; a
-        # later fold adds only what the chain lacks either way. Encrypted
+        # The check did not find the private tip holding this round (it
+        # failed, timed out or was cancelled): the rows not home are on no
+        # copy unless this works. The check is the authority, not the push: a
+        # push that failed while the check passed (an earlier attempt landed,
+        # or a copy kept as a sidecar) leaves nothing to seal. Only the files
+        # the private tip lacks are sealed when the tip can be listed within
+        # 20 seconds a call (the token is here for that alone), else every
+        # file on disk; a later fold adds only what the chain lacks either way. Encrypted
         # with Cooper's key (AES-256, PBKDF2-SHA256, NHL_CHAIN_FALLBACK_KEY,
         # at least 32 characters), written to $RUNNER_TEMP,
         # outside the workspace, and kept below as a 7-day artifact that
         # nobody without the key can read. Every later round's restore
         # decrypts it and folds it in, and that round's push carries it home.
         id: seal
-        if: always() && (steps.private_push.outcome == 'failure' || steps.private_verify.outcome == 'failure')
+        if: always() && steps.private_verify.outcome != 'success' && steps.private_verify.outcome != 'skipped'
         timeout-minutes: 2
         continue-on-error: true
         env:
@@ -475,13 +485,23 @@ jobs:
 
       - name: Fail the run when the private chain was not kept
         # After every upload, like the gates around it. The push or the check
-        # failed: the round is either sealed (it comes home with the next
-        # run) or on no copy at all, and this says which.
+        # failed. When the check passed, the round is home and nothing was
+        # sealed (a sidecar still needs a hand merge); otherwise the round is
+        # either sealed (it comes home with the next run) or on no copy at
+        # all, and this says which.
         if: always()
         run: |
           if [ "${{ steps.private_push.outcome }}" != "failure" ] \
              && [ "${{ steps.private_verify.outcome }}" != "failure" ]; then
             exit 0
+          fi
+          if [ "${{ steps.private_verify.outcome }}" = "success" ]; then
+            if [ "${{ steps.private_push.outputs.exit }}" = "2" ]; then
+              echo "::error::The private push kept this round's copy of a day file beside the tip's as a sidecar (unmerged/..., named in the push step's errors), because the two could not be merged. Every row is on the private branch and nothing was sealed, but Closing Lines, the CLV report and the ladder scan read day files only: merge the sidecar into its day file by hand (CLAUDE.md, \"Merging a sidecar\"). Every later check warns until it is merged."
+            else
+              echo "::error::The private push failed (exit ${{ steps.private_push.outputs.exit }}), but the check found every row of this round on the private tip, so nothing was sealed and nothing is lost. The push step's log says why it failed."
+            fi
+            exit 1
           fi
           echo "::error::The private chain did not take this round (push: ${{ steps.private_push.outcome }}, check: ${{ steps.private_verify.outcome }})."
           ON_DISK=0

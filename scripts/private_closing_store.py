@@ -20,15 +20,17 @@ repository may hold it on a branch, a release, a Pages site or an artifact.
 
 ## What this does not cover
 
-Line Movement's own `line-movement` artifact, uploaded from this public
-repository on every round (7-day retention since 2026-10-02, 90 before),
-carries every book's every rung, the face-off round included. Every row this
-script pushes is derived from it (`push` reads nothing else on a hand-off), so
-closing prices remain downloadable from this repository until that chain
-moves too. It is moving in two stages (`scripts/private_movement_chain.py`,
-CLAUDE.md), and
-`tests/test_closing_prices_never_reach_the_public_repo.py` pins the known
-carriers so a new one fails rather than joining them silently.
+Every row this script pushes is derived from Line Movement's capture chain
+(every book's every rung, the face-off round included), and `push` reads
+nothing else on a hand-off. Until stage two (#298) that chain was uploaded
+from this public repository as the `line-movement` artifact on every round
+(7-day retention from 2026-10-02, 90 before), so closing prices were
+downloadable here; those artifacts stay downloadable until they expire.
+Since stage two the chain lives only on branch `movement` of the same private
+repository (`scripts/private_movement_chain.py`, CLAUDE.md), and Closing Lines
+pulls it from there. `tests/test_closing_prices_never_reach_the_public_repo.py`
+pins the known price carriers so a new one fails rather than joining them
+silently.
 
 ## The refusals before every push
 

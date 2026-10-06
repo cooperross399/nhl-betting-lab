@@ -185,7 +185,7 @@ PYTHONPATH=src .venv/bin/python scripts/private_closing_store.py pull \
 # same private repository. Every round restores it (pull, then unseal any
 # sealed round), pushes this round to it (default branch only), checks the tip
 # holds the round (verify), and seals what the tip lacks with
-# NHL_CHAIN_FALLBACK_KEY if the push or the check failed. Needs
+# NHL_CHAIN_FALLBACK_KEY when that check did not pass. Needs
 # NHL_CLOSING_LINES_TOKEN (and the key, for seal/unseal). A missing `movement`
 # branch is refused, never recreated by a round (--allow-new-chain seeds one).
 PYTHONPATH=src .venv/bin/python scripts/private_movement_chain.py pull --dest data/processed
@@ -362,14 +362,17 @@ stays disabled until that secret exists.
 **The movement chain is private too (stage two):** Line Movement's capture
 chain, which the store is derived from and which holds every captured price,
 lives only on the private repository's `movement` branch. Line Movement
-restores from it and pushes each round to it; a round whose push fails is kept
-only sealed, encrypted with Cooper's key (`NHL_CHAIN_FALLBACK_KEY`), until the
-next round brings it home. Public `line-movement` artifacts uploaded before
+restores from it and pushes each round to it; a round the private tip does
+not hold after the push is kept only sealed, encrypted with Cooper's key
+(`NHL_CHAIN_FALLBACK_KEY`), until the next round brings it home. **Never re-run
+a Line Movement run created before stage two merged:** a re-run executes that
+run's old workflow, which pulled the whole private chain and uploaded it
+publicly (CLAUDE.md). Public `line-movement` artifacts uploaded before
 stage two stay downloadable until they expire. CLAUDE.md records both stages.
 
 Gameday Refresh pulls the private store into the runner's temp directory
 (never into `data/processed`, which it uploads publicly as `gameday-state`),
-restores the `line-movement` chain beside it, and scores the union of the two
+pulls the private movement chain beside it, and scores the union of the two
 into `data/outputs/closing_line_value.md`: beat-the-close rate, CLV%, and the
 de-vigged expected value at the closing line, for opinions and for bets
 separately (a "bet" there, as in the forward-evidence report, is an opinion

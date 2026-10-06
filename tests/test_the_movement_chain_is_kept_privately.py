@@ -1,11 +1,12 @@
-"""Line Movement's capture chain is kept in the private repository too.
+"""Line Movement's capture chain is kept in the private repository only.
 
-Stage one of the move Cooper chose on 2026-10-02 (closing-line data is never
-published publicly; the chain is moved in stages): every round folds the
-private copy (branch `movement` of cooperross399/nhl-closing-lines) into what
-it restored from the public artifact, pushes its three stores there, and
-checks that the private tip holds every row of what it then uploads
-publicly. `scripts/private_movement_chain.py` does all three.
+The move Cooper chose on 2026-10-02 (closing-line data is never published
+publicly; the chain is moved in stages). Since stage two, every round pulls
+the chain (branch `movement` of cooperross399/nhl-closing-lines) and folds in
+any sealed fallback round, pushes its three stores there, checks that the
+private tip holds every row on its disk, and seals the round (encrypted,
+7-day artifact) only when that check did not pass.
+`scripts/private_movement_chain.py` does all of it.
 
 What must hold, and is driven here against a local bare repository standing
 in for the private one:
@@ -16,8 +17,8 @@ in for the private one:
 * the check fails when the tip is short of anything uploaded publicly;
 * the chain lives on its own branch and never touches the closing-line
   store's `main`;
-* the workflow runs the pull before the paid fetch, the push and the check
-  before the public upload, only from the default branch, and a red gate
+* the workflow runs the pull before the paid fetch, the push, the check and
+  the seal after the captures, only from the default branch, and a red gate
   after every upload.
 """
 
@@ -231,8 +232,8 @@ def test_a_rejected_push_refetches_and_keeps_both_rounds(bare, run, tmp_path, mo
     real = chain.fetch_chain
     calls = {"n": 0}
 
-    def racing(work, remote, token):
-        tip = real(work, remote, token)
+    def racing(work, remote, token, **kw):
+        tip = real(work, remote, token, **kw)
         calls["n"] += 1
         if calls["n"] == 1:
             _damage_tip(bare, tmp_path, LM, HEADER + _row(1) + _row(2) + _row(9))
@@ -395,9 +396,21 @@ def test_only_the_default_branch_writes_the_chain() -> None:
         step = _steps()[_index(name)]
         assert step["if"] == f"always() && ({DEFAULT_BRANCH})", name
         assert step.get("continue-on-error") is True
+    # The check is the authority on whether the round is home: a push that
+    # failed while the check passed (an earlier attempt landed, or a copy kept
+    # as a sidecar) has nothing to seal, and a check that failed, timed out or
+    # was cancelled is sealed whatever the push said.
     seal = _steps()[_index("Seal this round when the private chain did not take it")]
-    assert seal["if"] == ("always() && (steps.private_push.outcome == 'failure' "
-                          "|| steps.private_verify.outcome == 'failure')")
+    assert seal["if"] == ("always() && steps.private_verify.outcome != 'success' "
+                          "&& steps.private_verify.outcome != 'skipped'")
+
+
+def test_the_push_hands_its_exit_to_the_gate() -> None:
+    """The gate words a sidecar (push exit 2) apart from a failed push, so the
+    push step must record its exit and still fail with it."""
+    push = _steps()[_index("Keep the captures privately")]["run"]
+    assert 'echo "exit=$CODE" >> "$GITHUB_OUTPUT"' in push
+    assert push.rstrip().endswith("exit $CODE")
 
 
 def test_the_secrets_reach_only_the_steps_that_need_them() -> None:
@@ -435,33 +448,63 @@ def test_the_restore_reports_everything_but_a_clean_read_or_no_chain(tmp_path, p
     assert bool(text.strip()) is problem
 
 
-def _gate(outcomes: dict[str, str], tmp_path: Path, *, on_disk: bool = True) -> subprocess.CompletedProcess:
+def _gate(outcomes: dict[str, str], tmp_path: Path, *, on_disk: str | None = LM,
+          push_exit: str = "") -> subprocess.CompletedProcess:
+    """The gate as the runner renders it. `on_disk` is the one day file the
+    round holds (None: none at all); `push_exit` is the push step's output."""
     step = _steps()[_index("Fail the run when the private chain was not kept")]
     values = {f"steps.{k}.outcome": v for k, v in outcomes.items()}
     values["github.run_attempt"] = "1"
+    values["steps.private_push.outputs.exit"] = push_exit
     work = tmp_path / "gate"
-    work.mkdir()
+    work.mkdir(parents=True)
     if on_disk:
-        _write(work / "data" / "processed", LM, HEADER + _row(1))
+        _write(work / "data" / "processed", on_disk, HEADER + _row(1))
     return _bash(_render(step["run"], values), work, dict(os.environ))
 
 
 OK = {"private_push": "success", "seal": "skipped", "sealed_upload": "skipped", "private_verify": "success"}
 
 
-@pytest.mark.parametrize(("change", "red", "says"), [
-    ({}, False, ""),
-    ({"private_push": "skipped", "private_verify": "skipped"}, False, ""),
-    ({"private_push": "failure", "seal": "success", "sealed_upload": "success"}, True, "It was sealed"),
-    ({"private_push": "failure", "seal": "failure", "sealed_upload": "skipped"}, True, "on no copy"),
-    ({"private_push": "failure", "seal": "success", "sealed_upload": "failure"}, True, "upload: failure"),
-    ({"private_verify": "failure", "seal": "success", "sealed_upload": "success"}, True, "check: failure"),
-    ({"private_verify": "failure", "seal": "failure", "sealed_upload": "skipped"}, True, "on no copy"),
+BOTH_FAILED = {"private_push": "failure", "private_verify": "failure"}
+
+
+@pytest.mark.parametrize(("change", "push_exit", "red", "says", "never"), [
+    ({}, "0", False, "", "::error::"),
+    ({"private_push": "skipped", "private_verify": "skipped"}, "", False, "", "::error::"),
+    # The check passed: the round is home and nothing was sealed.
+    ({"private_push": "failure"}, "1", True, "nothing was sealed and nothing is lost", "on no copy"),
+    ({"private_push": "failure"}, "2", True, "Merging a sidecar", "It was sealed"),
+    # The check failed: sealed, or on no copy.
+    ({**BOTH_FAILED, "seal": "success", "sealed_upload": "success"}, "1", True, "It was sealed", "on no copy"),
+    ({**BOTH_FAILED, "seal": "failure", "sealed_upload": "skipped"}, "1", True, "on no copy", "It was sealed"),
+    ({**BOTH_FAILED, "seal": "success", "sealed_upload": "failure"}, "1", True, "upload: failure", "It was sealed"),
+    ({"private_verify": "failure", "seal": "success", "sealed_upload": "success"}, "0", True, "check: failure", "on no copy"),
+    ({"private_verify": "failure", "seal": "failure", "sealed_upload": "skipped"}, "0", True, "on no copy", "It was sealed"),
 ])
-def test_the_gate_is_red_for_every_fault_and_says_where_the_round_is(tmp_path, change, red, says) -> None:
-    done = _gate({**OK, **change}, tmp_path)
+def test_the_gate_is_red_for_every_fault_and_says_where_the_round_is(tmp_path, change, push_exit, red, says, never) -> None:
+    done = _gate({**OK, **change}, tmp_path, push_exit=push_exit)
     assert (done.returncode != 0) is red, done.stdout + done.stderr
     assert says in done.stdout
+    assert never not in done.stdout
+
+
+@pytest.mark.parametrize("folder", chain.STORES)
+def test_a_lone_day_file_in_any_store_is_never_called_safe(tmp_path, folder) -> None:
+    """The gate tells "nothing captured" from "lost" by globbing the three
+    stores; a day file in any one of them alone is a captured round."""
+    rel = f"{folder}/2026-10-08.csv"
+    lost = _gate({**OK, "private_verify": "failure", "seal": "failure", "sealed_upload": "skipped"},
+                 tmp_path / "lost", on_disk=rel)
+    assert "on no copy" in lost.stdout and "holds no day file" not in lost.stdout
+    sealed = _gate({**OK, "private_verify": "failure", "seal": "success", "sealed_upload": "success"},
+                   tmp_path / "sealed", on_disk=rel)
+    assert "It was sealed" in sealed.stdout and "holds no day file" not in sealed.stdout
+
+
+def test_the_gate_globs_exactly_the_chains_stores() -> None:
+    gate = _steps()[_index("Fail the run when the private chain was not kept")]["run"]
+    assert set(re.findall(r"data/processed/(\w+)/\*\.csv", gate)) == set(chain.STORES)
 
 
 def test_a_round_with_nothing_on_disk_is_not_called_lost(tmp_path) -> None:
@@ -469,7 +512,7 @@ def test_a_round_with_nothing_on_disk_is_not_called_lost(tmp_path) -> None:
     check fails and there is nothing to seal, but no captured row is
     anywhere but the chain, and the gate says so instead of "on no copy"."""
     done = _gate({**OK, "private_verify": "failure", "seal": "failure", "sealed_upload": "skipped"},
-                 tmp_path, on_disk=False)
+                 tmp_path, on_disk=None)
     assert done.returncode != 0
     assert "holds no day file at all" in done.stdout
     assert "on no copy" not in done.stdout
@@ -502,11 +545,11 @@ def test_a_fetch_that_fails_once_is_tried_again(bare, run, monkeypatch) -> None:
     real = chain.fetch_chain_once
     calls = {"n": 0}
 
-    def flaky(work, remote, token):
+    def flaky(work, remote, token, **kw):
         calls["n"] += 1
         if calls["n"] == 1:
             raise store.Unreachable("Could not resolve host: github.com")
-        return real(work, remote, token)
+        return real(work, remote, token, **kw)
 
     waited = []
     monkeypatch.setattr(chain, "fetch_chain_once", flaky)
@@ -516,7 +559,7 @@ def test_a_fetch_that_fails_once_is_tried_again(bare, run, monkeypatch) -> None:
 
 
 def test_a_fetch_that_never_answers_is_a_failure_not_an_empty_chain(bare, run, monkeypatch) -> None:
-    def down(work, remote, token):
+    def down(work, remote, token, **kw):
         raise store.Unreachable("Could not resolve host: github.com")
 
     monkeypatch.setattr(chain, "fetch_chain_once", down)
@@ -584,6 +627,7 @@ def test_the_gate_reads_steps_that_exist() -> None:
     named = set(re.findall(r"steps\.(\w+)\.outcome", gate))
     assert named == {"private_push", "seal", "sealed_upload", "private_verify"}
     assert named <= ids
+    assert set(re.findall(r"steps\.(\w+)\.outputs\.exit", gate)) == {"private_push"}
 
 
 # --- stage two: the sealed fallback ----------------------------------------------
@@ -790,6 +834,11 @@ def test_an_unmergeable_copy_is_kept_as_a_private_sidecar_and_counts_as_held(bar
     assert _git(["--git-dir", str(bare), "show", f"movement:{sidecars[0]}"]) == HEADER + _row(1) + _row(2)
     assert sidecars[0] in out
     assert _run("verify", bare, run) == chain.EXIT_OK
+    # Every later check warns while the sidecar waits, because only the
+    # round that kept it is red and its rows reach no reader until merged.
+    warned = [line for line in capsys.readouterr().out.splitlines() if line.startswith("::warning::")]
+    assert len(warned) == 1 and "1 sidecar(s) on the private chain await a hand merge" in warned[0]
+    assert sidecars[0] in warned[0]
     assert _run("push", bare, run) == chain.EXIT_OK, "the same copy is not damage twice"
 
 
@@ -843,7 +892,9 @@ def test_a_seal_holds_only_what_the_tip_lacks(sealed_env, bare, run, tmp_path, m
                        "--remote", f"file://{bare}"]) == chain.EXIT_OK
     opened = tmp_path / "opened.tar"
     assert chain._openssl(["-d"], out, opened).returncode == 0
-    with tarfile.open(opened) as tar:
+    # Compressed: when the tip cannot be listed a seal is the whole season,
+    # and every restore for a week downloads it.
+    with tarfile.open(opened, "r:gz") as tar:
         assert tar.getnames() == [LM]
 
 
@@ -984,3 +1035,77 @@ def test_no_level_of_the_workflow_redirects_the_sealed_rounds_branch() -> None:
     """NHL_DEFAULT_BRANCH set anywhere in line-movement.yml would make every
     main round skip main's sealed rounds; the replays render step env only."""
     assert "NHL_DEFAULT_BRANCH" not in WORKFLOW.read_text()
+
+
+# --- the pre-merge review's findings (2026-10-06) ------------------------------
+
+
+def test_a_clean_check_warns_of_nothing(bare, run, capsys) -> None:
+    assert _run("push", bare, run) == chain.EXIT_OK
+    capsys.readouterr()
+    assert _run("verify", bare, run) == chain.EXIT_OK
+    assert "::warning::" not in capsys.readouterr().out
+
+
+def test_a_ragged_file_the_tip_lost_is_short_not_passed(bare, run, capsys) -> None:
+    """A day file the tip does not hold, and whose own parse disagrees with
+    its line count, cannot be counted row by row: it is short, not passed.
+    The push exits 0 (a new file goes up whole); the branch is then set back,
+    as a rewrite between push and check would, so the tip lacks it."""
+    assert _run("push", bare, run) == chain.EXIT_OK
+    before = _tip(bare)
+    ragged = "line_movement/2026-10-09.csv"
+    _write(run, ragged, HEADER + _row(1).replace("P1", '"P1') + _row(2))
+    assert _run("push", bare, run) == chain.EXIT_OK
+    _git(["--git-dir", str(bare), "update-ref", "refs/heads/movement", before])
+    capsys.readouterr()
+    assert _run("verify", bare, run) == chain.EXIT_DAMAGED
+    assert f"{ragged}: differs from the private tip and could not be read on disk" in capsys.readouterr().out
+
+
+def test_a_parked_sidecar_the_tip_lacks_fails_the_check(bare, run, tmp_path, monkeypatch, capsys) -> None:
+    """unseal parks a sealed copy it could not merge; the check counts it
+    like any day file, so a tip that lacks it is short and the round is
+    sealed again rather than the parked rows living only in an artifact
+    that expires."""
+    assert _run("push", bare, run) == chain.EXIT_OK
+    side = f"unmerged/line_movement/2026-10-08/{'ab' * 20}.csv"
+    _write(run, side, HEADER + _row(5))
+    summary = tmp_path / "summary.md"
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary))
+    capsys.readouterr()
+    assert _run("verify", bare, run) == chain.EXIT_DAMAGED
+    assert f"{side}: 1 row(s) missing from the private tip" in capsys.readouterr().out
+    assert "FAILED" in summary.read_text()
+
+
+def test_a_stalled_github_cannot_hold_the_seal_past_its_step(sealed_env, run, tmp_path, monkeypatch, capsys) -> None:
+    """The listing that trims a seal is one attempt under a deadline: a
+    remote that accepts and never answers costs seconds, and the whole round
+    is still sealed. Unbounded, git would wait past the step's 2 minutes and
+    the round would be on no copy, in exactly the case the seal is for."""
+    import tarfile
+    import time
+    hang = tmp_path / "hang.sh"
+    hang.write_text("#!/bin/sh\nsleep 60\n")
+    hang.chmod(0o755)
+    stalled = tmp_path / "stalled.git"
+    for key, value in {"GIT_CONFIG_COUNT": "2",
+                       "GIT_CONFIG_KEY_0": f"url.ext::{hang}.insteadOf", "GIT_CONFIG_VALUE_0": f"file://{stalled}",
+                       "GIT_CONFIG_KEY_1": "protocol.ext.allow", "GIT_CONFIG_VALUE_1": "always",
+                       "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}.items():
+        monkeypatch.setenv(key, value)
+    monkeypatch.setattr(chain, "TIP_LISTING_SECONDS", 2)
+    waited = []
+    monkeypatch.setattr(chain, "sleep", waited.append)
+    capsys.readouterr()
+    started = time.monotonic()
+    assert chain.main(["seal", "--processed-dir", str(run), "--out", str(sealed_env),
+                       "--remote", f"file://{stalled}"]) == chain.EXIT_OK
+    assert time.monotonic() - started < 15
+    assert waited == [], "the listing is one attempt, never retried"
+    assert "could not be listed" in capsys.readouterr().out
+    opened = tmp_path / "opened.tar"
+    assert chain._openssl(["-d"], sealed_env, opened).returncode == 0
+    with tarfile.open(opened) as tar:
+        assert sorted(tar.getnames()) == sorted(p.relative_to(run).as_posix() for p in run.rglob("*.csv"))

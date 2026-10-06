@@ -57,6 +57,7 @@ import yaml
 from nhl_betting_lab import closing_lines as cl
 from nhl_betting_lab.config import PROJECT_ROOT
 from test_a_blocked_card_is_a_degraded_run import _bash, _render
+from test_the_capture_chain_restores_where_it_uploads import upload_paths
 
 sys.path.insert(0, str(PROJECT_ROOT / "scripts"))
 import private_closing_store as store  # noqa: E402
@@ -142,19 +143,72 @@ def test_no_push_to_this_repository_carries_a_capture_store(path: Path) -> None:
 # --- An artifact ---------------------------------------------------------
 
 
+UPLOADS = ("actions/upload-artifact", "actions/upload-pages-artifact")
+
+#: `${{ runner.temp }}` in any spacing or case (the spelling upload-artifact
+#: expands) and `${RUNNER_TEMP}`, both read as `$RUNNER_TEMP`.
+TEMP_SPELLINGS = re.compile(r"\$\{\{\s*runner\s*\.\s*temp\s*\}\}|\$\{\s*RUNNER_TEMP\s*\}", re.IGNORECASE)
+
+#: The folders the private sources are pulled into, on any runner.
+PRIVATE_FOLDERS = ("closing_line_captures", "private-closing-store", "private-movement-chain")
+
+#: The one upload from the runner's temp directory: Line Movement's
+#: encrypted seal, which nobody without NHL_CHAIN_FALLBACK_KEY can read.
+SEALED_UPLOAD = ("line-movement.yml", "$RUNNER_TEMP/sealed/round.enc")
+
+
+def _upload_entries(step: dict) -> list[str]:
+    """The paths an upload step searches, one per line as upload-artifact
+    reads them (a whitespace split cut `${{ runner.temp }}/x` into three
+    words, none of which named the folder)."""
+    return [TEMP_SPELLINGS.sub("$RUNNER_TEMP", entry)
+            for entry in upload_paths(str(step.get("with", {}).get("path", "")))]
+
+
+def _forbidden_upload(workflow: str, entry: str) -> str | None:
+    for folder in PRIVATE_FOLDERS:
+        if folder in entry:
+            return f"names {folder}"
+    if re.search(r"runner.{0,8}temp", entry, re.IGNORECASE) and (workflow, entry) != SEALED_UPLOAD:
+        return "uploads from the runner's temp directory, where the private sources are pulled"
+    return None
+
+
 @pytest.mark.parametrize("path", _all_workflows(), ids=lambda p: p.name)
 def test_no_artifact_carries_a_capture_store(path: Path) -> None:
     for step in _steps(_load(path.name)):
-        if not str(step.get("uses", "")).startswith("actions/upload-artifact"):
+        if not str(step.get("uses", "")).startswith(UPLOADS):
             continue
-        given = step.get("with", {})
-        assert given.get("name") != "closing-line-captures", path.name
-        for entry in str(given.get("path", "")).split():
+        assert step.get("with", {}).get("name") != "closing-line-captures", path.name
+        for entry in _upload_entries(step):
             # The aggregate report, data/outputs/closing_line_value.md, may
-            # travel; the store may not.
-            assert "closing_line_captures" not in entry, (path.name, entry)
-            assert "private-closing-store" not in entry, (path.name, entry)
-            assert "RUNNER_TEMP" not in entry, (path.name, entry)
+            # travel; the store and the chain may not.
+            assert _forbidden_upload(path.name, entry) is None, (path.name, entry)
+
+
+@pytest.mark.parametrize("block", [
+    "${{ runner.temp }}/private-movement-chain",
+    "${{runner.temp}}/private-movement-chain/line_movement",
+    "${{ RUNNER.TEMP }}/anything",
+    "${{ runner['temp'] }}/x",
+    "$RUNNER_TEMP/private-closing-store",
+    "${RUNNER_TEMP}/x",
+    "data/outputs/report.md\n${{ runner.temp }}/sealed/round.enc",
+    "# a comment\n${{ runner.temp }}/private-movement-chain/*.csv",
+])
+def test_the_upload_reader_sees_every_spelling_of_the_private_folders(block) -> None:
+    """Each block is refused in a workflow other than the seal's, and the
+    seal's own path is refused anywhere but its own step's workflow."""
+    entries = _upload_entries({"with": {"path": block}})
+    assert any(_forbidden_upload("gameday-refresh.yml", e) for e in entries), entries
+
+
+def test_the_seal_is_the_one_temp_upload_and_only_in_line_movement() -> None:
+    entries = _upload_entries({"with": {"path": "${{ runner.temp }}/sealed/round.enc"}})
+    assert entries == ["$RUNNER_TEMP/sealed/round.enc"]
+    assert _forbidden_upload("line-movement.yml", entries[0]) is None
+    assert _forbidden_upload("closing-lines.yml", entries[0]) is not None
+    assert _forbidden_upload("line-movement.yml", "$RUNNER_TEMP/private-movement-chain") is not None
 
 
 def test_line_movement_uploads_no_store_folder() -> None:
@@ -162,9 +216,9 @@ def test_line_movement_uploads_no_store_folder() -> None:
     Movement upload names a store folder or data/processed at all; the
     sealed fallback is one encrypted file in the runner's temp directory."""
     for step in _steps(_load("line-movement.yml")):
-        if not str(step.get("uses", "")).startswith("actions/upload-artifact"):
+        if not str(step.get("uses", "")).startswith(UPLOADS):
             continue
-        for entry in str(step["with"].get("path", "")).split():
+        for entry in _upload_entries(step):
             assert "data/processed" not in entry and not _can_carry_prices(entry), entry
 
 
@@ -206,6 +260,8 @@ def _can_carry_prices(entry: str) -> bool:
     """A whole data directory, a glob outside the report folders, or a path
     under one of the known price locations, however it is spelled."""
     entry = _normalise(entry)
+    if any(folder in entry for folder in PRIVATE_FOLDERS):
+        return True
     if entry in {".", "data", "data/processed", "data/raw"}:
         return True
     if any(c in entry for c in "*?[") and not entry.startswith(("data/outputs/", "dist/")):
@@ -218,11 +274,9 @@ def test_the_uploads_that_carry_prices_are_the_known_ones() -> None:
     for path in _all_workflows():
         for step in _steps(_load(path.name)):
             # upload-pages-artifact too: the Pages site is public.
-            if not str(step.get("uses", "")).startswith(
-                ("actions/upload-artifact", "actions/upload-pages-artifact")
-            ):
+            if not str(step.get("uses", "")).startswith(UPLOADS):
                 continue
-            entries = str(step.get("with", {}).get("path", "")).split()
+            entries = _upload_entries(step)
             if any(_can_carry_prices(e) for e in entries):
                 carriers.add((path.name, str(step["with"].get("name", "github-pages"))))
     assert carriers == KNOWN_PRICE_CARRIERS
@@ -288,6 +342,10 @@ def test_the_site_never_reads_the_store() -> None:
         assert "closing_line_captures" not in text
         assert "private_closing_store" not in text
         assert "NHL_CLOSING_LINES_TOKEN" not in text
+        # Nor the chain, which holds the prices the store is derived from,
+        # nor the key that opens a sealed round of it.
+        assert "private_movement_chain" not in text
+        assert "NHL_CHAIN_FALLBACK_KEY" not in text
 
 
 def test_the_docs_say_what_is_still_downloadable() -> None:
@@ -317,32 +375,62 @@ TOKEN_HOLDERS = {
 }
 
 
-SECRET_READS = re.compile(
-    r"secrets\s*\.\s*nhl_closing_lines_token|secrets\s*\[\s*['\"]nhl_closing_lines_token['\"]\s*\]",
-    re.IGNORECASE,
-)
+#: Every step, in every workflow, that may read NHL_CHAIN_FALLBACK_KEY. The
+#: key plus the public `line-movement-sealed-N` artifacts is enough to read
+#: sealed rounds of the chain, so its readers are pinned like the token's.
+KEY_HOLDERS = {
+    ("line-movement.yml", "Restore today's captures"),
+    ("line-movement.yml", "Seal this round when the private chain did not take it"),
+}
+
+
+def _secret_reads(name: str) -> re.Pattern:
+    """A read of secret `name` in any spelling GitHub accepts: dot or index,
+    any case, any spacing. A longer name that starts with it counts too (a
+    renamed NHL_CLOSING_LINES_TOKEN_V2 stays pinned): fail closed."""
+    lowered = re.escape(name.lower())
+    return re.compile(rf"secrets\s*\.\s*{lowered}|secrets\s*\[\s*['\"]{lowered}['\"]\s*\]",
+                      re.IGNORECASE)
+
+
+SECRET_READS = _secret_reads("NHL_CLOSING_LINES_TOKEN")
+KEY_READS = _secret_reads("NHL_CHAIN_FALLBACK_KEY")
 
 
 def _reads_the_token(fragment: object) -> bool:
     return bool(SECRET_READS.search(yaml.safe_dump(fragment)))
 
 
+def _holders(reads: re.Pattern) -> set[tuple[str, str]]:
+    """Every workflow, job and step that reads a secret, at any level."""
+    def hit(fragment: object) -> bool:
+        return bool(reads.search(yaml.safe_dump(fragment)))
+    holders = set()
+    for path in _all_workflows():
+        document = _load(path.name)
+        if hit({k: v for k, v in document.items() if k != "jobs"}):
+            holders.add((path.name, "<workflow level>"))
+        for job in document["jobs"].values():
+            if hit({k: v for k, v in job.items() if k != "steps"}):
+                holders.add((path.name, "<job level>"))
+            for step in job.get("steps", []):
+                if hit(step):
+                    holders.add((path.name, step.get("name")))
+    return holders
+
+
 def test_the_store_token_reaches_only_the_steps_that_need_it() -> None:
     """A read of the secret, at any level and in any spelling GitHub accepts
     (dot or index, any case). A message that names the secret (Report the
     outcome says to replace it) reads nothing."""
-    holders = set()
-    for path in _all_workflows():
-        document = _load(path.name)
-        if _reads_the_token({k: v for k, v in document.items() if k != "jobs"}):
-            holders.add((path.name, "<workflow level>"))
-        for job in document["jobs"].values():
-            if _reads_the_token({k: v for k, v in job.items() if k != "steps"}):
-                holders.add((path.name, "<job level>"))
-            for step in job.get("steps", []):
-                if _reads_the_token(step):
-                    holders.add((path.name, step.get("name")))
-    assert holders == TOKEN_HOLDERS
+    assert _holders(SECRET_READS) == TOKEN_HOLDERS
+
+
+def test_the_fallback_key_reaches_only_the_steps_that_need_it() -> None:
+    """The restore (to unseal) and the seal, in Line Movement, and nowhere
+    else at any level: another workflow holding the key could unseal rounds
+    and write their rows somewhere public."""
+    assert _holders(KEY_READS) == KEY_HOLDERS
 
 
 @pytest.mark.parametrize("path", _all_workflows(), ids=lambda p: p.name)
@@ -357,6 +445,12 @@ def test_the_token_reader_sees_every_spelling() -> None:
                      "${{ secrets['NHL_CLOSING_LINES_TOKEN'] }}", '${{ secrets["NHL_CLOSING_LINES_TOKEN"] }}'):
         assert _reads_the_token({"env": {"T": spelling}}), spelling
     assert not _reads_the_token({"run": "echo replace NHL_CLOSING_LINES_TOKEN"})
+    for spelling in ("${{ secrets.NHL_CHAIN_FALLBACK_KEY }}", "${{ secrets.nhl_chain_fallback_key }}",
+                     "${{ secrets['NHL_CHAIN_FALLBACK_KEY'] }}", '${{ secrets [ "NHL_CHAIN_FALLBACK_KEY" ] }}'):
+        assert KEY_READS.search(yaml.safe_dump({"env": {"K": spelling}})), spelling
+    assert not KEY_READS.search(yaml.safe_dump({"run": "echo It was sealed with NHL_CHAIN_FALLBACK_KEY"}))
+    # A renamed token keeps its pin.
+    assert SECRET_READS.search(yaml.safe_dump({"env": {"T": "${{ secrets.NHL_CLOSING_LINES_TOKEN_V2 }}"}}))
 
 
 def test_no_other_workflow_that_uploads_data_processed_writes_the_store() -> None:

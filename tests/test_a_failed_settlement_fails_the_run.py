@@ -410,6 +410,27 @@ def test_a_rejected_store_token_is_reported_as_one(tmp_path: Path) -> None:
     assert "damaged" not in line
 
 
+@pytest.mark.parametrize(("fault", "says"), [
+    ("rejected-token", "Replace the secret"),
+    ("missing-chain", "has no movement branch"),
+    ("no-token", "is not set"),
+    ("damaged-store", "damaged snapshot, movement day or capture store"),
+    ("empty-read", "damaged snapshot, movement day or capture store"),
+    ("unexpected-exit-7", "damaged snapshot, movement day or capture store"),
+    ("", "damaged snapshot, movement day or capture store"),
+])
+def test_every_clv_fault_is_red_and_says_one_thing(tmp_path: Path, fault: str, says: str) -> None:
+    """Whatever fault the CLV step names, a failed step fails the run and
+    "Report the outcome" says one closing-line sentence, in that fault's
+    words: no arm's wording can stand in for the exit."""
+    work = _workspace(tmp_path)
+    report = _report(work, "false", {CLV: "failure"}, store_fault=fault)
+    assert report.returncode != 0, report.stdout
+    (line,) = [e for e in _errors(report) if "closing-line value" in e]
+    assert says in line
+    assert "Clean run." not in report.stdout
+
+
 def test_any_other_clv_failure_names_every_cause(tmp_path: Path) -> None:
     work = _workspace(tmp_path)
     report = _report(work, "false", {CLV: "failure"}, store_fault="damaged-store")

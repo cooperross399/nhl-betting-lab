@@ -1287,17 +1287,20 @@ jobs:
             echo "::error::Rebuild the measurement reports failed (its log names the script), so a report in this run's artifacts may be the committed copy or an earlier run's, looking current. The card does not depend on them. It is not written into the run's health (degraded=${{ steps.final.outputs.degraded }}), so on its own it sends for no backup."
             failed=1
           fi
-          if [ "${{ steps.clv.outcome }}" = "failure" ] && [ "${{ steps.clv.outputs.store_fault }}" = "rejected-token" ]; then
-            echo "::error::Report closing-line value failed because the private repository turned NHL_CLOSING_LINES_TOKEN away (expired, revoked, or not granted cooperross399/nhl-closing-lines). Replace the secret. Both closing-price sources live there, so today's closing-line value is incomplete or missing. It is not written into the run's health (degraded=${{ steps.final.outputs.degraded }}), so on its own it sends for no backup."
-            failed=1
-          elif [ "${{ steps.clv.outcome }}" = "failure" ] && [ "${{ steps.clv.outputs.store_fault }}" = "missing-chain" ]; then
-            echo "::error::Report closing-line value failed because the private repository cooperross399/nhl-closing-lines has no movement branch. The chain has existed since 2026-10-02, so it was deleted or renamed: restore it from its history. Today's closing-line value scored the store alone, if at all. It is not written into the run's health (degraded=${{ steps.final.outputs.degraded }}), so on its own it sends for no backup."
-            failed=1
-          elif [ "${{ steps.clv.outcome }}" = "failure" ] && [ "${{ steps.clv.outputs.store_fault }}" = "no-token" ]; then
-            echo "::error::Report closing-line value failed because NHL_CLOSING_LINES_TOKEN is not set, so the private repository cooperross399/nhl-closing-lines could not be read. Set the secret. Both closing-price sources live there, so today's closing-line value is incomplete or missing. It is not written into the run's health (degraded=${{ steps.final.outputs.degraded }}), so on its own it sends for no backup."
-            failed=1
-          elif [ "${{ steps.clv.outcome }}" = "failure" ]; then
-            echo "::error::Report closing-line value failed (its log names the cause: a damaged snapshot, movement day or capture store, or a private store that could not be used), so today's closing-line value is incomplete or missing. It is not written into the run's health (degraded=${{ steps.final.outputs.degraded }}), so on its own it sends for no backup."
+          # A failed CLV step is red whatever its fault; the fault only picks
+          # the words, so no wording can turn the run green.
+          if [ "${{ steps.clv.outcome }}" = "failure" ]; then
+            case "${{ steps.clv.outputs.store_fault }}" in
+              rejected-token)
+                WHY=" because the private repository turned NHL_CLOSING_LINES_TOKEN away (expired, revoked, or not granted cooperross399/nhl-closing-lines). Replace the secret. Both closing-price sources live there, so today's closing-line value is incomplete or missing." ;;
+              missing-chain)
+                WHY=" because the private repository cooperross399/nhl-closing-lines has no movement branch. The chain has existed since 2026-10-02, so it was deleted or renamed: restore it from its history. Today's closing-line value scored the store alone, if at all." ;;
+              no-token)
+                WHY=" because NHL_CLOSING_LINES_TOKEN is not set, so the private repository cooperross399/nhl-closing-lines could not be read. Set the secret. Both closing-price sources live there, so today's closing-line value is incomplete or missing." ;;
+              *)
+                WHY=" (its log names the cause: a damaged snapshot, movement day or capture store, or a private store that could not be used), so today's closing-line value is incomplete or missing." ;;
+            esac
+            echo "::error::Report closing-line value failed${WHY} It is not written into the run's health (degraded=${{ steps.final.outputs.degraded }}), so on its own it sends for no backup."
             failed=1
           fi
           if [ "$failed" != 0 ]; then
