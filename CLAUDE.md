@@ -967,20 +967,22 @@ Re-derive rather than trust if the data has moved.
       fresh capture. Either is Cooper's call.
     - **The cutover.** A run executes the workflow file of the commit it was
       created at, and Line Movement runs are created hours before their
-      round. A stage-one run still queued or in progress at the merge would
-      run stage one's file afterwards: pull the whole private chain and
-      upload it publicly, not just its round. So #298 was merged only in a
-      gap with no Line Movement run queued, waiting or in progress (`gh run
-      list -R cooperross399/nhl-betting-lab -w line-movement.yml -L 50 --json
-      status -q '.[] | select(.status != "completed") | .status'` printing
-      nothing), and every later run uses stage two's file. Had one been in
-      flight and failed its private push or check, its round would be only
-      in its public artifact, which no stage-two round reads; it would be
-      folded in by hand, outside any checkout (`D=$(mktemp -d); gh run
+      round. So any stage-one run still queued or in progress when #298
+      merged runs stage one's file afterwards: it uploads the chain publicly,
+      as every stage-one round did, and pushes its round privately. Runs
+      created after the merge use stage two's file. Waiting for a gap would
+      not have helped: the in-flight runs upload either way, and every run
+      created while waiting would have been one more stage-one upload; nor
+      would cancelling them, which loses rounds that cannot be captured
+      again. What the cutover needs is a check of each in-flight run after it
+      finishes: if its private push or check failed, its round is only in
+      its public artifact, which no stage-two round reads, so fold it in by
+      hand within its 7 days, outside any checkout (`D=$(mktemp -d); gh run
       download <run-id> -R cooperross399/nhl-betting-lab -n line-movement -D
       "$D"`; the artifact unpacks to the three store folders, so
       `private_movement_chain.py push --processed-dir "$D"` with the store
-      token takes them; then `rm -rf "$D"`), within its 7 days.
+      token takes them; then `rm -rf "$D"`). The runs in flight at the merge
+      and what their checks said are recorded on #298.
     - **What is still downloadable:** the `line-movement` artifacts uploaded
       before stage two, until they expire (90 days for those before
       2026-10-02, 7 after). Deleting them needs `actions: write` and is
