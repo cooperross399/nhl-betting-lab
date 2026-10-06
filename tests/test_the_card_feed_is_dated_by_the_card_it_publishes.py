@@ -36,14 +36,19 @@ What these tests hold:
 Every block is the workflow's own `run:`, under `bash -eo pipefail`, with
 real git plumbing into a local bare remote and real jq. Only `date` is
 stubbed: asked for "now" it answers the publish clock; asked to convert an
-instant (`-d`) it is the real `date`.
+instant (`-d`) it is the real `date`, where that is GNU's as on a runner.
+macOS's has no `-d`, so there a stand-in answers the forms the steps use,
+held to GNU's answers by test_the_stand_in_answers_as_gnu_date_does.
 """
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import stat
 import subprocess
+import sys
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -67,6 +72,60 @@ MORNING_CARD = "2026-10-15T13:40:00+00:00"
 
 REAL_DATE = shutil.which("date")
 
+#: GNU date, for a host whose own has no `-d` (macOS): `[-d INSTANT]
+#: +FORMAT` in the TZ the step sets, INSTANT `@SECONDS` or ISO 8601, which
+#: is every form the steps here ask for. Anything else is refused, not
+#: guessed at.
+GNU_DATE_STAND_IN = r'''#!{python}
+import sys
+from datetime import datetime, timezone
+
+args = sys.argv[1:]
+when = datetime.now(timezone.utc)
+form = "%a %b %d %H:%M:%S %Z %Y"
+while args:
+    arg = args.pop(0)
+    if arg in ("-d", "--date") or arg.startswith("--date="):
+        text = arg.partition("=")[2] if arg.startswith("--date=") else args.pop(0)
+        try:
+            when = (datetime.fromtimestamp(int(text[1:]), timezone.utc) if text.startswith("@")
+                    else datetime.fromisoformat(text.replace("Z", "+00:00")))
+        except ValueError:
+            sys.exit(f"date: invalid date '{{text}}'")
+    elif arg.startswith("+"):
+        form = arg[1:]
+    else:
+        sys.exit(f"date stand-in: {{arg!r}} is not modelled")
+# astimezone() reads the zone from TZ, as GNU date does, and takes an
+# instant with no offset as local time there.
+local = when.astimezone()
+print(local.strftime(form.replace("%F", "%Y-%m-%d").replace("%s", str(int(local.timestamp())))))
+'''
+
+
+def _is_gnu(date: str | None) -> bool:
+    if not date:
+        return False
+    probe = subprocess.run([date, "-u", "-d", "@0", "+%F"],
+                           capture_output=True, text=True, timeout=30)
+    return probe.returncode == 0 and probe.stdout.strip() == "1970-01-01"
+
+
+GNU_DATE = _is_gnu(REAL_DATE)
+
+
+def _stand_in(directory: Path) -> Path:
+    path = directory / "gnu-date-stand-in"
+    path.write_text(GNU_DATE_STAND_IN.format(python=sys.executable), encoding="utf-8")
+    path.chmod(path.stat().st_mode | stat.S_IEXEC)
+    return path
+
+
+def _converter(bin_dir: Path) -> str:
+    """The `date` that converts instants: the real one where it is GNU's,
+    the stand-in beside the stub where it is not."""
+    return str(REAL_DATE) if GNU_DATE else str(_stand_in(bin_dir))
+
 
 def _env(tmp_path: Path, clock: str) -> dict:
     """`_git_env`, with a `date` that converts instants for real and answers
@@ -74,10 +133,11 @@ def _env(tmp_path: Path, clock: str) -> dict:
     assert REAL_DATE, "the publish step converts the card's instant with date"
     env = _git_env(tmp_path, clock)
     stub = Path(env["PATH"].split(":", 1)[0]) / "date"
+    converter = _converter(stub.parent)
     stub.write_text(
         "#!/bin/sh\n"
         'for arg in "$@"; do\n'
-        '  case "$arg" in -d|--date|--date=*) exec ' + REAL_DATE + ' "$@";; esac\n'
+        '  case "$arg" in -d|--date|--date=*) exec ' + converter + ' "$@";; esac\n'
         "done\n"
         f"echo {clock}\n",
         encoding="utf-8",
@@ -286,18 +346,16 @@ def _clock_env(tmp_path: Path, instant: str) -> dict:
     real `date` in whatever TZ the caller sets. Asked to convert an instant
     (`-d`), it is the real `date` as it stands."""
     assert REAL_DATE, "the steps read the clock with date"
-    epoch = subprocess.run(
-        [REAL_DATE, "-u", "-d", instant, "+%s"],
-        capture_output=True, text=True, check=True,
-    ).stdout.strip()
+    epoch = int(datetime.fromisoformat(instant.replace("Z", "+00:00")).timestamp())
     env = _git_env(tmp_path, "unused")
     stub = Path(env["PATH"].split(":", 1)[0]) / "date"
+    converter = _converter(stub.parent)
     stub.write_text(
         "#!/bin/sh\n"
         'for arg in "$@"; do\n'
-        '  case "$arg" in -d|--date|--date=*) exec ' + REAL_DATE + ' "$@";; esac\n'
+        '  case "$arg" in -d|--date|--date=*) exec ' + converter + ' "$@";; esac\n'
         "done\n"
-        f'exec {REAL_DATE} -d @{epoch} "$@"\n',
+        f'exec {converter} -d @{epoch} "$@"\n',
         encoding="utf-8",
     )
     stub.chmod(stub.stat().st_mode | stat.S_IEXEC)
@@ -339,6 +397,32 @@ def test_the_clock_stub_honours_the_time_zone(tmp_path: Path) -> None:
     new_york = _bash("TZ=America/New_York date +%F", tmp_path, env)
     utc = _bash("TZ=UTC date +%F", tmp_path, env)
     assert (new_york.stdout.strip(), utc.stdout.strip()) == (CARD_DAY, NEXT_DAY)
+
+
+@pytest.mark.parametrize("command, answer", [
+    (f"TZ=America/New_York date -d {LATE_CARD} +%F", CARD_DAY),
+    (f"TZ=America/New_York date -d {MORNING_CARD} +%F", NEXT_DAY),
+    (f"TZ=UTC date -d {LATE_CARD} +%F", NEXT_DAY),
+    (f"TZ=America/New_York date -d {RUN_STARTS} +%F", CARD_DAY),
+    (f"TZ=America/New_York date --date={RUN_PUBLISHES} +%F", NEXT_DAY),
+    ("TZ=America/New_York date -d @1792036200 +%F", CARD_DAY),
+    (f"TZ=UTC date -d {RUN_STARTS} +%s", "1792036200"),
+])
+def test_the_stand_in_answers_as_gnu_date_does(tmp_path: Path, command: str, answer: str) -> None:
+    """Every form the steps ask `date` for, with the answer GNU date gives:
+    the stand-in on every host, and the real date too where it is GNU's, so
+    a runner holds the stand-in to it."""
+    stand_in = tmp_path / "stand-in"
+    stand_in.mkdir()
+    _stand_in(stand_in).rename(stand_in / "date")
+    dates = {"stand-in": f"{stand_in}:{os.environ['PATH']}"}
+    if GNU_DATE:
+        dates["real"] = os.environ["PATH"]
+    for which, path in dates.items():
+        ran = subprocess.run(["bash", "--noprofile", "--norc", "-c", command],
+                             env={**os.environ, "PATH": path},
+                             capture_output=True, text=True, timeout=30)
+        assert (ran.returncode, ran.stdout.strip()) == (0, answer), (which, ran.stderr)
 
 
 def test_a_run_starting_at_2350_et_notes_the_league_day_not_the_utc_date(

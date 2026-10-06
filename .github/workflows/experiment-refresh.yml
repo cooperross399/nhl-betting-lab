@@ -102,8 +102,9 @@ jobs:
           # the state this restores, so a thin cache padded with a season of
           # future games cleared the floor. `|| true`: grep exits non-zero on
           # a missing cache or one with no final game, which under pipefail
-          # would end the step before the error below could say why.
-          games=$(grep -rliE --include='*.json' '"gameState":[[:space:]]*"(OFF|FINAL)"' data/raw/nhl/boxscore 2>/dev/null | wc -l || true)
+          # would end the step before the error below could say why. `tr`:
+          # BSD wc pads its count, and the suite runs this block on macOS too.
+          games=$(grep -rliE --include='*.json' '"gameState":[[:space:]]*"(OFF|FINAL)"' data/raw/nhl/boxscore 2>/dev/null | wc -l | tr -d ' ' || true)
           echo "Boxscores restored: $games"
           if [ "$games" -lt 500 ]; then
             echo "::error::Only $games boxscores restored. Re-deciding on a thin cache would report a verdict change that is really a data shortage."
