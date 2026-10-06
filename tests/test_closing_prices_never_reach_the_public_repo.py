@@ -228,6 +228,7 @@ def test_no_artifact_carries_a_capture_store(path: Path) -> None:
     "data/processed/closing_line_captures.csv",
     # Spellings the guard cannot resolve, refused rather than reasoned about.
     "${{ env.CLV_INPUTS }}",
+    "data/${{ env.SUB }}/x",  # mid-path: only the expression rule sees it
     "~/work/_temp",
     "../../_temp/x",
     "/home/runner/work/_temp/private",
