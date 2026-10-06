@@ -158,7 +158,8 @@ jobs:
           # file per scheduled game from before fetch_boxscore stopped caching
           # non-final answers, and counting those kept the "No boxscores were
           # restored" warning below silent over a cache with no result in it.
-          restored=$(grep -rliE --include='*.json' '"gameState":[[:space:]]*"(OFF|FINAL)"' data/raw/nhl/boxscore 2>/dev/null | wc -l || true)
+          # `tr`: BSD wc pads its count, and the suite runs this on macOS too.
+          restored=$(grep -rliE --include='*.json' '"gameState":[[:space:]]*"(OFF|FINAL)"' data/raw/nhl/boxscore 2>/dev/null | wc -l | tr -d ' ' || true)
           echo "Cached boxscores restored: $restored"
 
           # The bought prices themselves. This artifact was uploaded by every
@@ -197,7 +198,7 @@ jobs:
             mkdir -p data/raw/historical_props data/processed
             cp -R /tmp/probe/raw/historical_props/. data/raw/historical_props/ 2>/dev/null || true
             cp -R /tmp/probe/processed/. data/processed/ 2>/dev/null || true
-            cached=$(find data/raw/historical_props -name '*.json' 2>/dev/null | wc -l)
+            cached=$(find data/raw/historical_props -name '*.json' 2>/dev/null | wc -l | tr -d ' ')
             echo "Bought-price cache restored from run $bought on main: $cached response(s)."
           else
             echo "No purchase run on main carries bought prices. Anything bought this run is bought fresh."

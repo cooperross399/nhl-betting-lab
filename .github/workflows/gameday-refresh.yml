@@ -551,8 +551,9 @@ jobs:
           # This counted every file, and until fetch_boxscore stopped caching
           # non-final answers the fetch left one per scheduled game, so a
           # thin history padded with a season of future games read as
-          # healthy. A restored cache can still hold those files.
-          games=$(grep -rliE --include='*.json' '"gameState":[[:space:]]*"(OFF|FINAL)"' data/raw/nhl/boxscore 2>/dev/null | wc -l || true)
+          # healthy. A restored cache can still hold those files. `tr`: BSD
+          # wc pads its count, and the suite runs this block on macOS too.
+          games=$(grep -rliE --include='*.json' '"gameState":[[:space:]]*"(OFF|FINAL)"' data/raw/nhl/boxscore 2>/dev/null | wc -l | tr -d ' ' || true)
           echo "Boxscores cached: $games"
           # 1000 is config.THIN_HISTORY_GAMES: the public board projects
           # nothing from a history below it either, and
