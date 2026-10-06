@@ -854,7 +854,8 @@ Re-derive rather than trust if the data has moved.
       holds; `seal` holds only what the tip lacks. `restore_state.union_csv`
       takes an older copy whole when it extends the newer byte for byte. The
       fallback key must be at least 32 characters with no surrounding
-      whitespace. **Known limit:** a seal lasts 7 days and no Line Movement
+      whitespace (one saved as whitespace only reads as not set, exit 3).
+      **Known limit:** a seal lasts 7 days and no Line Movement
       round runs from May to late September, so a round sealed in the
       season's last week (push failing then) would expire unfolded; the lab's
       end date (2027-04-25) falls inside that window.

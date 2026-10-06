@@ -819,6 +819,19 @@ def test_a_sealed_copy_already_home_is_skipped_and_one_that_cannot_merge_is_park
     assert _run("push", bare, later) in (chain.EXIT_OK, chain.EXIT_DAMAGED)
     on_branch = _git(["--git-dir", str(bare), "ls-tree", "-r", "--name-only", "movement", "--", "unmerged"]).split()
     assert parked[0].relative_to(later).as_posix() in on_branch
+    # The parked sidecar, now on the tip as itself, is held: the check passes,
+    # and a later seal from this folder carries only what is new, not the
+    # parked copy that is already home.
+    assert _run("verify", bare, later) == chain.EXIT_OK
+    import tarfile
+    _write(later, LC, "team,line\nTOR,1\nMTL,2\n")
+    out = tmp_path / "again" / "round.enc"
+    assert chain.main(["seal", "--processed-dir", str(later), "--out", str(out),
+                       "--remote", f"file://{bare}"]) == chain.EXIT_OK
+    opened = tmp_path / "again.tar"
+    assert chain._openssl(["-d"], out, opened).returncode == 0
+    with tarfile.open(opened) as tar:
+        assert tar.getnames() == [LC]
 
 
 def test_a_seal_holds_only_what_the_tip_lacks(sealed_env, bare, run, tmp_path, monkeypatch) -> None:
@@ -846,6 +859,47 @@ def test_a_weak_key_seals_nothing(run, tmp_path, monkeypatch, key, code) -> None
     out = tmp_path / "x" / "round.enc"
     assert _seal(run, out) == code
     assert not out.exists()
+
+
+@pytest.mark.parametrize("command", ["seal", "unseal"])
+def test_a_blank_key_is_a_missing_secret_and_says_so(sealed_env, run, tmp_path, monkeypatch, capsys, command) -> None:
+    """A secret saved as whitespace is not set, in the words and in the exit:
+    the gate's "set the secret" answer, not "the key is weak"."""
+    if command == "unseal":
+        assert _seal(run, sealed_env) == chain.EXIT_OK
+        _offer(monkeypatch, [sealed_env])
+    capsys.readouterr()
+    monkeypatch.setenv(chain.KEY_ENV, "   ")
+    out = tmp_path / "x" / "round.enc"
+    argv = (["seal", "--processed-dir", str(run), "--out", str(out)] if command == "seal"
+            else ["unseal", "--dest", str(tmp_path / "d"), "--github-repo", "o/r"])
+    assert chain.main(argv) == chain.EXIT_NO_TOKEN
+    assert f"{chain.KEY_ENV} is not set" in capsys.readouterr().out
+    assert not out.exists()
+
+
+def test_a_tip_that_cannot_be_compared_seals_everything(sealed_env, bare, run, tmp_path, monkeypatch, capsys) -> None:
+    """The comparison that trims a seal to the tip's gap is an economy, never
+    a gate: when it fails locally, the whole round is sealed and the run says
+    so, rather than the seal failing and the round being on no copy."""
+    import tarfile
+    assert _run("push", bare, run) == chain.EXIT_OK
+    _write(run, LM, HEADER + _row(1) + _row(2) + _row(3))
+
+    def unreadable(git_dir, path):
+        raise PermissionError(13, "Permission denied", str(path))
+
+    monkeypatch.setattr(chain, "blob_of", unreadable)
+    capsys.readouterr()
+    out = tmp_path / "seal" / "round.enc"
+    assert chain.main(["seal", "--processed-dir", str(run), "--out", str(out),
+                       "--remote", f"file://{bare}"]) == chain.EXIT_OK
+    assert "sealing everything" in capsys.readouterr().out
+    opened = tmp_path / "opened.tar"
+    assert chain._openssl(["-d"], out, opened).returncode == 0
+    with tarfile.open(opened) as tar:
+        assert sorted(tar.getnames()) == sorted(
+            p.relative_to(run).as_posix() for p in run.rglob("*.csv"))
 
 
 def _independent_decrypt(sealed: Path, *kdf: str) -> subprocess.CompletedProcess:

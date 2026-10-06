@@ -77,7 +77,8 @@ as its kept sidecar); 2 it does not (each file and its missing row count
 named); 3, 4, 1 and 5 as for pull.
 
 seal: 0 sealed (only what the tip lacks, when the tip can be listed); 1
-openssl failed; 3 no key; 4 nothing on disk to seal (said, not an error);
+openssl failed; 3 no key (unset, or saved as whitespace only); 4 nothing
+on disk to seal (said, not an error);
 5 a weak key (under 32 characters, or padded with whitespace) or `--out`
 inside the workspace.
 
@@ -85,7 +86,8 @@ unseal: 0 every sealed round folded in, already home, or none exist; 1 GitHub
 could not be asked for the list after the retries; 2 a sealed round that
 could not be downloaded, decrypted or opened, or a sealed copy that could not
 be merged (parked under `--dest/unmerged/` for the push to keep; named);
-3 sealed rounds exist and there is no key; 5 the key is weak.
+3 sealed rounds exist and there is no key (unset, or whitespace only); 5 the
+key is weak.
 """
 
 from __future__ import annotations
@@ -567,6 +569,12 @@ def key_problem() -> str | None:
     return None
 
 
+def key_exit() -> int:
+    """The exit for a key `key_problem` refused: a key that is unset or blank
+    is a missing secret (3), as its message says; a weak one is refused (5)."""
+    return EXIT_NO_TOKEN if not os.environ.get(KEY_ENV, "").strip() else EXIT_REFUSED
+
+
 def seal(args: argparse.Namespace) -> int:
     """Encrypt this round's three stores into `--out`, outside the workspace.
 
@@ -581,7 +589,7 @@ def seal(args: argparse.Namespace) -> int:
     problem = key_problem()
     if problem:
         _error(f"This round cannot be sealed: {problem}. The rows the private chain lacks are on no copy.")
-        return EXIT_NO_TOKEN if not os.environ.get(KEY_ENV) else EXIT_REFUSED
+        return key_exit()
     out = Path(args.out)
     try:
         store.refuse_an_out_inside_the_workspace(out)
@@ -730,7 +738,7 @@ def unseal(args: argparse.Namespace) -> int:
     problem = key_problem()
     if problem:
         _error(f"{len(sealed)} sealed fallback round(s) exist and they cannot be opened: {problem}")
-        return EXIT_NO_TOKEN if not os.environ.get(KEY_ENV) else EXIT_REFUSED
+        return key_exit()
     on_tip = _tip_listing(args)
     dest = Path(args.dest)
     failed: list[str] = []
