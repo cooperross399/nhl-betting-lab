@@ -665,8 +665,10 @@ def test_every_attempt_restores_before_the_paid_fetch_and_keeps_its_round_after_
     assert "always()" in str(push.get("if", ""))
     assert "always()" in str(verify.get("if", ""))
     assert "always()" in str(seal.get("if", ""))
-    assert "steps.private_push.outcome == 'failure'" in str(seal.get("if", ""))
-    assert "steps.private_verify.outcome == 'failure'" in str(seal.get("if", ""))
+    # The check decides the seal, not the push: whatever the push did, a
+    # round the check did not find home is sealed, and one it did is not.
+    assert "steps.private_verify.outcome != 'success'" in str(seal.get("if", ""))
+    assert "private_push" not in str(seal.get("if", ""))
     assert "always()" in str(upload.get("if", ""))
     assert "steps.seal.outcome == 'success'" in str(upload.get("if", ""))
     # None of them can stop the job before the round is kept and the gates run.

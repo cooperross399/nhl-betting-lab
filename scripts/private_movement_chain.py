@@ -748,6 +748,15 @@ def download_sealed(repo: str, artifact: dict, target: Path) -> None:
 TIP_LISTING_SECONDS = 20
 
 
+def _is_archive(path: Path) -> bool:
+    """A gzip stream or a tar header. CBC carries no check of its own, so a
+    wrong key passes openssl's padding check about once in 256 tries and
+    yields noise; without this the run named a tar error, not the key."""
+    with path.open("rb") as handle:
+        head = handle.read(512)
+    return head[:2] == b"\x1f\x8b" or head[257:262] == b"ustar"
+
+
 def _tip_listing(args: argparse.Namespace) -> dict[str, str] | None:
     """The private tip's blobs, to tell a copy already home from one that is
     not; None when there is no token or the tip cannot be read in time
@@ -807,6 +816,10 @@ def unseal(args: argparse.Namespace) -> int:
             done = _openssl(["-d"], work / SEALED_FILE, work / "round.tar")
             if done.returncode:
                 failed.append(f"{name}: could not be decrypted ({done.stderr.strip()})")
+                continue
+            if not _is_archive(work / "round.tar"):
+                failed.append(f"{name}: could not be decrypted (the key turned it into something "
+                              "that is not an archive: a different key sealed it)")
                 continue
             opened = work / "opened"
             try:
@@ -878,8 +891,26 @@ def main(argv: list[str] | None = None) -> int:
         command.add_argument("--repo", default=store.PRIVATE_REPO)
         command.add_argument("--remote", default="", help="A local store, for tests.")
     args = parser.parse_args(argv)
-    return {"push": push, "pull": pull, "verify": verify,
-            "seal": seal, "unseal": unseal}[args.command](args)
+    handler = {"push": push, "pull": pull, "verify": verify,
+               "seal": seal, "unseal": unseal}[args.command]
+    if args.command != "push":
+        return handler(args)
+    # The push's exit goes to the step's outputs for the gate, which words a
+    # sidecar (2) apart from any other failed push. Here rather than in the
+    # step, so the step stays the one command the tests replay; a crash is
+    # recorded as the 1 Python exits with.
+    code = EXIT_FAILED
+    try:
+        code = handler(args)
+        return code
+    finally:
+        output = os.environ.get("GITHUB_OUTPUT")
+        if output:
+            try:
+                with open(output, "a", encoding="utf-8") as handle:
+                    handle.write(f"exit={code}\n")
+            except OSError as exc:
+                _say(f"Could not record the push's exit for the gate: {exc}")
 
 
 if __name__ == "__main__":

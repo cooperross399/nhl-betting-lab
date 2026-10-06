@@ -386,10 +386,15 @@ def _line_movement_run(
     capture.write_round(rows, captured_at=captured_at, day=DAY, processed=processed)
 
     monkeypatch.chdir(work)
+    # The push writes its exit to its step's outputs, which the gate reads.
+    push_output = work / "push_github_output.txt"
     with monkeypatch.context() as outage:
+        outage.setenv("GITHUB_OUTPUT", str(push_output))
         if push_fails:
             outage.setattr(store, "repo_is_private", _github_down)
         pushed = chain.main(_chain_argv(PRIVATE_PUSH))
+    recorded = dict(line.split("=", 1) for line in push_output.read_text(encoding="utf-8").splitlines())
+    assert recorded == {"exit": str(pushed)}, recorded
     checked = chain.main(_chain_argv(CHECK))
     if chain_missing:
         # No thin chain in its place: the push refuses to start the branch,
@@ -406,12 +411,14 @@ def _line_movement_run(
     outcomes = {
         "steps.restore.outcome": _outcome(restore.returncode),
         "steps.private_push.outcome": _outcome(pushed),
+        "steps.private_push.outputs.exit": recorded["exit"],
         "steps.private_verify.outcome": _outcome(checked),
         "steps.seal.outcome": "skipped",
         "steps.sealed_upload.outcome": "skipped",
         "github.run_attempt": "1",
     }
-    if not taken:
+    # The seal's `if:`: the check decides, not the push.
+    if checked != chain.EXIT_OK:
         sealed = _bash(_render(_step(LINE_MOVEMENT, SEAL)["run"]), work, env)
         assert sealed.returncode == 0, f"{SEAL}: {sealed.stdout}{sealed.stderr}"
         outcomes["steps.seal.outcome"] = "success"

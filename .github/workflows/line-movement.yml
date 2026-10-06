@@ -310,8 +310,9 @@ jobs:
         # feature branch's dispatch must never write the season's chain (a
         # rehearsal keeps nothing). Whether the round is home is the next
         # step's call, not this one's: when the check finds the tip short, the
-        # round is sealed so the next run can bring it home. Its exit is kept
-        # for the gate, which words exit 2 (a copy kept as a sidecar) apart.
+        # round is sealed so the next run can bring it home. The script writes
+        # its exit to this step's outputs (exit=N) for the gate, which words
+        # exit 2 (a copy kept as a sidecar) apart.
         id: private_push
         if: always() && (github.event_name == 'schedule' || github.ref == format('refs/heads/{0}', github.event.repository.default_branch))
         timeout-minutes: 6
@@ -319,12 +320,7 @@ jobs:
         env:
           NHL_CLOSING_LINES_TOKEN: ${{ secrets.NHL_CLOSING_LINES_TOKEN }}
           PYTHONPATH: src
-        run: |
-          set +e
-          python scripts/private_movement_chain.py push --processed-dir data/processed
-          CODE=$?
-          echo "exit=$CODE" >> "$GITHUB_OUTPUT"
-          exit $CODE
+        run: python scripts/private_movement_chain.py push --processed-dir data/processed
 
       - name: Check the private chain holds this round
         # The private tip must hold every row of every file this round has on
@@ -496,10 +492,11 @@ jobs:
             exit 0
           fi
           if [ "${{ steps.private_verify.outcome }}" = "success" ]; then
-            if [ "${{ steps.private_push.outputs.exit }}" = "2" ]; then
+            PUSH_EXIT="${{ steps.private_push.outputs.exit }}"
+            if [ "$PUSH_EXIT" = "2" ]; then
               echo "::error::The private push kept this round's copy of a day file beside the tip's as a sidecar (unmerged/..., named in the push step's errors), because the two could not be merged. Every row is on the private branch and nothing was sealed, but Closing Lines, the CLV report and the ladder scan read day files only: merge the sidecar into its day file by hand (CLAUDE.md, \"Merging a sidecar\"). Every later check warns until it is merged."
             else
-              echo "::error::The private push failed (exit ${{ steps.private_push.outputs.exit }}), but the check found every row of this round on the private tip, so nothing was sealed and nothing is lost. The push step's log says why it failed."
+              echo "::error::The private push failed (exit ${PUSH_EXIT:-not recorded: the step was killed by its time limit}), but the check found every row of this round on the private tip, so nothing was sealed and nothing is lost. The push step's log says why it failed."
             fi
             exit 1
           fi

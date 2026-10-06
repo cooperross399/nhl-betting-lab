@@ -405,12 +405,38 @@ def test_only_the_default_branch_writes_the_chain() -> None:
                           "&& steps.private_verify.outcome != 'skipped'")
 
 
-def test_the_push_hands_its_exit_to_the_gate() -> None:
-    """The gate words a sidecar (push exit 2) apart from a failed push, so the
-    push step must record its exit and still fail with it."""
+def test_the_push_step_is_the_one_command_the_tests_replay() -> None:
     push = _steps()[_index("Keep the captures privately")]["run"]
-    assert 'echo "exit=$CODE" >> "$GITHUB_OUTPUT"' in push
-    assert push.rstrip().endswith("exit $CODE")
+    assert push.strip() == "python scripts/private_movement_chain.py push --processed-dir data/processed"
+
+
+@pytest.mark.parametrize("outcome", ["pushed", "sidecar", "crashed"])
+def test_the_push_hands_its_exit_to_the_gate(bare, run, tmp_path, monkeypatch, outcome) -> None:
+    """The gate words a sidecar (push exit 2) apart from any other failed
+    push, so the push writes its exit to the step's outputs, whatever ends
+    it; a crash is recorded as the 1 Python exits with."""
+    output = tmp_path / "github_output.txt"
+    monkeypatch.setenv("GITHUB_OUTPUT", str(output))
+    if outcome == "pushed":
+        assert _run("push", bare, run) == chain.EXIT_OK
+        assert output.read_text() == "exit=0\n"
+        return
+    assert _run("push", bare, run) == chain.EXIT_OK
+    output.unlink()
+    if outcome == "sidecar":
+        _damage_tip(bare, tmp_path, LM, HEADER.replace("captured_at", "captured") + _row(1))
+        _write(run, LM, HEADER + _row(1) + _row(2))
+        assert _run("push", bare, run) == chain.EXIT_DAMAGED
+        assert output.read_text() == "exit=2\n"
+        return
+
+    def crash(*args, **kw):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(chain, "local_files", crash)
+    with pytest.raises(RuntimeError):
+        _run("push", bare, run)
+    assert output.read_text() == "exit=1\n"
 
 
 def test_the_secrets_reach_only_the_steps_that_need_them() -> None:
@@ -475,6 +501,8 @@ BOTH_FAILED = {"private_push": "failure", "private_verify": "failure"}
     # The check passed: the round is home and nothing was sealed.
     ({"private_push": "failure"}, "1", True, "nothing was sealed and nothing is lost", "on no copy"),
     ({"private_push": "failure"}, "2", True, "Merging a sidecar", "It was sealed"),
+    # Killed by its time limit before it could record an exit.
+    ({"private_push": "failure"}, "", True, "not recorded", "Merging a sidecar"),
     # The check failed: sealed, or on no copy.
     ({**BOTH_FAILED, "seal": "success", "sealed_upload": "success"}, "1", True, "It was sealed", "on no copy"),
     ({**BOTH_FAILED, "seal": "failure", "sealed_upload": "skipped"}, "1", True, "on no copy", "It was sealed"),
@@ -628,6 +656,7 @@ def test_the_gate_reads_steps_that_exist() -> None:
     assert named == {"private_push", "seal", "sealed_upload", "private_verify"}
     assert named <= ids
     assert set(re.findall(r"steps\.(\w+)\.outputs\.exit", gate)) == {"private_push"}
+    assert "private_push" in ids
 
 
 # --- stage two: the sealed fallback ----------------------------------------------
@@ -696,6 +725,29 @@ def test_the_wrong_key_opens_nothing_and_says_so(sealed_env, run, tmp_path, monk
     assert chain.main(["unseal", "--dest", str(later), "--github-repo", "o/r"]) == chain.EXIT_DAMAGED
     assert (later / LM).read_text() == HEADER + _row(1)
     assert "could not be decrypted" in capsys.readouterr().out
+
+
+def test_a_wrong_key_that_slips_past_the_padding_check_is_still_named(sealed_env, run, tmp_path, monkeypatch, capsys) -> None:
+    """CBC has no check of its own: about once in 256 a wrong key decrypts
+    "successfully" into noise. That is still a wrong key, said as one."""
+    assert _seal(run, sealed_env) == chain.EXIT_OK
+    _offer(monkeypatch, [sealed_env])
+    real = chain._openssl
+
+    def noise(args, source, target):
+        if args == ["-d"]:
+            target.write_bytes(bytes(range(256)) * 4)
+            return subprocess.CompletedProcess(args, 0, "", "")
+        return real(args, source, target)
+
+    monkeypatch.setattr(chain, "_openssl", noise)
+    later = tmp_path / "later"
+    _write(later, LM, HEADER + _row(1))
+    capsys.readouterr()
+    assert chain.main(["unseal", "--dest", str(later), "--github-repo", "o/r"]) == chain.EXIT_DAMAGED
+    out = capsys.readouterr().out
+    assert "could not be decrypted" in out and "a different key sealed it" in out
+    assert (later / LM).read_text() == HEADER + _row(1)
 
 
 def test_no_key_cannot_seal(run, tmp_path, monkeypatch) -> None:
