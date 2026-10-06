@@ -887,62 +887,100 @@ Re-derive rather than trust if the data has moved.
         its whole process group after 20 seconds (`TIP_LISTING_SECONDS`);
         on a timeout everything on disk is sealed. Unbounded, git waited past
         the step's 2 minutes and the round was on no copy, in exactly the
-        case the seal exists for. Seals are gzip-compressed (`unseal` opens
-        plain ones too).
+        case the seal exists for. Seals are gzip-compressed at level 1, so a
+        whole-season seal still fits the step (`unseal` opens plain ones
+        too), and `unseal` names a wrong key even when CBC's padding check
+        lets it through (about once in 256) by checking for an archive.
       - **Every check warns while a sidecar waits** (`::warning::` and a run
         summary line naming it), because only the round that kept it is red.
-      - The guards now pin the fallback key's readers across every workflow,
-        read upload paths line by line with every `${{ runner.temp }}`
-        spelling (the chain's `$RUNNER_TEMP/private-movement-chain` and the
-        store's folder may never be uploaded, and the seal is the only
-        upload from the runner's temp directory), and keep the site from
-        naming the chain's script or the key.
+      - The guards now pin the fallback key's readers across every workflow
+        (reading every raw string, so `secrets['NAME']` inside a `run:` is
+        seen, and counting any index that is not a quoted literal, or
+        `toJSON(secrets)`, as reading every secret); read upload paths line
+        by line and fail closed (the private folders, the runner's temp
+        directory in any spelling, an unresolved `${{ }}`, `~`, an absolute
+        path or `..` are refused, the seal being the one pinned exception);
+        treat any action named `upload-artifact` as an upload whatever its
+        owner, and pin the set of actions used; keep the site from naming
+        the chain's script or the key; and `.gitignore` the chain's folders,
+        `merged/`, `unmerged/` and `round.enc`/`round.tar`, so a local pull
+        or an opened seal cannot be committed here.
     - **Merging a sidecar.** A push that cannot merge this run's copy of a
       day file with the tip's (a different header, or a parse that disagrees
       with its line count) keeps it as `unmerged/<store>/<day>/<blob>.csv` on
       `movement` and exits 2. Its rows reach no reader until merged: pull,
       Closing Lines, the CLV report and the ladder scan read day files only.
-      By hand: clone the branch (`gh repo clone cooperross399/nhl-closing-lines
-      -- -b movement`), compare the sidecar with `<store>/<day>.csv`, repair
-      whichever side is damaged so both share the header, write the day file
-      as the multiset union of both (no row dropped, exact duplicates kept,
-      as `restore_state.union_csv` does), delete the sidecar, commit, and
-      push normally (never force). The next check stops warning.
+      By hand, in a folder outside any checkout of this public repository:
+      `D=$(mktemp -d); gh repo clone cooperross399/nhl-closing-lines
+      "$D/chain" -- -b movement`. In `$D/chain`, compare each
+      `unmerged/<store>/<day>/<blob>.csv` with `<store>/<day>.csv`, repair
+      whichever side is damaged so both share the header, and write the day
+      file as the multiset union of both (no row dropped, exact duplicates
+      kept, as `restore_state.union_csv` does). Then MOVE each merged
+      sidecar, do not delete it: `mkdir -p merged/<store>/<day> && git mv
+      unmerged/<store>/<day>/<blob>.csv merged/<store>/<day>/`. A sealed
+      round holding the same copy stays downloadable for up to 7 days, and
+      the `merged/` mark is what tells its unseal the copy is home; deleted,
+      it would be parked again and that round would go red. Commit, push
+      normally (never force), and `rm -rf "$D"`. The next check stops
+      warning; `merged/` is never read as a day file.
     - **The fallback key.** Cooper set `NHL_CHAIN_FALLBACK_KEY` on
       2026-10-05 with `openssl rand -base64 48 | tr -d '\n' | gh secret set
-      NHL_CHAIN_FALLBACK_KEY -R cooperross399/nhl-betting-lab` and kept no
-      copy, so today only a workflow round can open a seal. To be able to
+      NHL_CHAIN_FALLBACK_KEY -R cooperross399/nhl-betting-lab`, which keeps
+      no copy, so today only a workflow round can open a seal. To be able to
       open one by hand (the known limit above is the case for it), replace
-      the key with one you keep: `KEY=$(openssl rand -base64 48)`, store
-      `$KEY` somewhere safe, then `gh secret set NHL_CHAIN_FALLBACK_KEY -R
-      cooperross399/nhl-betting-lab --body "$KEY"`. Replace it only when no
-      unexpired `line-movement-sealed-N` artifact exists (`gh api
+      it with a key you keep, at a moment when both of these print nothing:
+      no Line Movement run unfinished (`gh run list -R
+      cooperross399/nhl-betting-lab -w line-movement.yml -L 50 --json status
+      -q '.[] | select(.status != "completed") | .status'`; a run reads its
+      secrets when it is queued, so one already waiting would seal with the
+      old key), and no unexpired seal (`gh api
       repos/cooperross399/nhl-betting-lab/actions/artifacts --paginate -q
       '.artifacts[] | select(.name | startswith("line-movement-sealed-")) |
-      select(.expired | not) | .name'` prints nothing), because a seal opens
-      only with the key that made it. By hand: `gh run download <run-id> -n
-      line-movement-sealed-<attempt>`, then `NHL_CHAIN_FALLBACK_KEY=... openssl
-      enc -d -aes-256-cbc -pbkdf2 -iter 200000 -md sha256 -pass
-      env:NHL_CHAIN_FALLBACK_KEY -in round.enc -out round.tar` and `tar -xf
-      round.tar` (gzip or plain).
+      select(.expired | not) | .name'`), because a seal opens only with the
+      key that made it. Then `KEY=$(openssl rand -base64 48)`, keep `$KEY`
+      somewhere safe off GitHub, and `gh secret set NHL_CHAIN_FALLBACK_KEY -R
+      cooperross399/nhl-betting-lab --body "$KEY"`. To open a seal by hand,
+      outside any checkout of this repository: `D=$(mktemp -d); gh run
+      download <run-id> -R cooperross399/nhl-betting-lab -n
+      line-movement-sealed-<attempt> -D "$D"`, then
+      `NHL_CHAIN_FALLBACK_KEY="$KEY" openssl enc -d -aes-256-cbc -pbkdf2 -iter
+      200000 -md sha256 -pass env:NHL_CHAIN_FALLBACK_KEY -in "$D/round.enc"
+      -out "$D/round.tar" && tar -xf "$D/round.tar" -C "$D"` (gzip or plain).
+      Its files go home with `private_movement_chain.py push --processed-dir
+      "$D"` and the store token; then `rm -rf "$D"`.
     - **Never re-run a Line Movement run created before #298 merged.** A
-      re-run executes that run's own workflow file (GitHub keeps the original
-      commit for 30 days) with today's secrets. Stage one's file pulled the
-      whole private chain into `data/processed` and uploaded it as the public
-      `line-movement` artifact, and every older file uploads its fresh paid
-      capture publicly. The red runs of 2026-10-02 to 10-05 (the 401-token
-      weekend) look like candidates; they are not. Those rounds cannot be
-      captured again. Making it impossible rather than a rule is Cooper's
-      call: delete those runs (`gh run delete`, which also deletes their
-      public artifacts), or move the token to a new secret name.
-    - **The cutover.** Line Movement runs are created hours before their
-      round, so one or two stage-one runs were still in flight when #298
-      merged, and each uploads its round publicly and pushes it privately.
-      If one of them failed its private push or check, its round is only in
-      its public artifact, which no stage-two round reads: fold it in by
-      hand (`gh run download <run-id> -n line-movement`, then
-      `private_movement_chain.py push --processed-dir <that folder>` with the
-      token) before the artifact expires (7 days).
+      re-run executes that run's own workflow file (GitHub re-runs a run at
+      its original commit, up to 30 days after it started) with the secrets
+      as they are today. Stage one's file (#289 until #298) pulled the whole
+      private chain into `data/processed` and uploaded it as the public
+      `line-movement` artifact, and every older file uploads its own fresh
+      paid capture publicly. That is every such run, green or red: the red
+      runs of 2026-10-02 to 10-05 (the 401-token weekend) look like
+      candidates and are not, and those rounds cannot be captured again
+      anyway. Only deleting the runs makes a re-run impossible (`gh run
+      delete <id>`, which also deletes their public artifacts; list them
+      with `gh run list -R cooperross399/nhl-betting-lab -w line-movement.yml
+      -L 500 --json databaseId,createdAt -q '.[] | select(.createdAt <
+      "<merge time, UTC>") | .databaseId'`). Moving the token to a new secret
+      name would stop a re-run pulling the chain, but not uploading its own
+      fresh capture. Either is Cooper's call.
+    - **The cutover.** A run executes the workflow file of the commit it was
+      created at, and Line Movement runs are created hours before their
+      round. A stage-one run still queued or in progress at the merge would
+      run stage one's file afterwards: pull the whole private chain and
+      upload it publicly, not just its round. So #298 was merged only in a
+      gap with no Line Movement run queued, waiting or in progress (`gh run
+      list -R cooperross399/nhl-betting-lab -w line-movement.yml -L 50 --json
+      status -q '.[] | select(.status != "completed") | .status'` printing
+      nothing), and every later run uses stage two's file. Had one been in
+      flight and failed its private push or check, its round would be only
+      in its public artifact, which no stage-two round reads; it would be
+      folded in by hand, outside any checkout (`D=$(mktemp -d); gh run
+      download <run-id> -R cooperross399/nhl-betting-lab -n line-movement -D
+      "$D"`; the artifact unpacks to the three store folders, so
+      `private_movement_chain.py push --processed-dir "$D"` with the store
+      token takes them; then `rm -rf "$D"`), within its 7 days.
     - **What is still downloadable:** the `line-movement` artifacts uploaded
       before stage two, until they expire (90 days for those before
       2026-10-02, 7 after). Deleting them needs `actions: write` and is

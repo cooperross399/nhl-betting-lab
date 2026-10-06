@@ -868,7 +868,7 @@ def test_an_older_copy_that_extends_the_newer_is_taken_whole(tmp_path) -> None:
     assert newer.read_text() == ragged + _row(2)
 
 
-def test_an_unmergeable_copy_is_kept_as_a_private_sidecar_and_counts_as_held(bare, run, tmp_path, capsys) -> None:
+def test_an_unmergeable_copy_is_kept_as_a_private_sidecar_and_counts_as_held(bare, run, tmp_path, capsys, monkeypatch) -> None:
     """Not stranded in a seal that expires: the push keeps this run's copy on
     the private branch beside the tip's, names it, and the check counts it
     as held, so the round is not sealed into an artifact no later round can
@@ -885,12 +885,20 @@ def test_an_unmergeable_copy_is_kept_as_a_private_sidecar_and_counts_as_held(bar
     assert len(sidecars) == 1 and sidecars[0].startswith("unmerged/line_movement/2026-10-08/")
     assert _git(["--git-dir", str(bare), "show", f"movement:{sidecars[0]}"]) == HEADER + _row(1) + _row(2)
     assert sidecars[0] in out
+    # Set only now, so only the check below writes to it.
+    summary = tmp_path / "summary.md"
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary))
     assert _run("verify", bare, run) == chain.EXIT_OK
-    # Every later check warns while the sidecar waits, because only the
-    # round that kept it is red and its rows reach no reader until merged.
+    # Every later check warns while the sidecar waits, in the log and in the
+    # run summary, because only the round that kept it is red and its rows
+    # reach no reader until merged.
     warned = [line for line in capsys.readouterr().out.splitlines() if line.startswith("::warning::")]
     assert len(warned) == 1 and "1 sidecar(s) on the private chain await a hand merge" in warned[0]
     assert sidecars[0] in warned[0]
+    written = summary.read_text()
+    assert "Private chain check passed" in written
+    assert "1 sidecar(s) on the private chain await a hand merge" in written and sidecars[0] in written
+    monkeypatch.delenv("GITHUB_STEP_SUMMARY")
     assert _run("push", bare, run) == chain.EXIT_OK, "the same copy is not damage twice"
 
 
@@ -1092,11 +1100,14 @@ def test_no_level_of_the_workflow_redirects_the_sealed_rounds_branch() -> None:
 # --- the pre-merge review's findings (2026-10-06) ------------------------------
 
 
-def test_a_clean_check_warns_of_nothing(bare, run, capsys) -> None:
+def test_a_clean_check_warns_of_nothing(bare, run, tmp_path, capsys, monkeypatch) -> None:
     assert _run("push", bare, run) == chain.EXIT_OK
     capsys.readouterr()
+    summary = tmp_path / "summary.md"
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary))
     assert _run("verify", bare, run) == chain.EXIT_OK
     assert "::warning::" not in capsys.readouterr().out
+    assert "await a hand merge" not in summary.read_text()
 
 
 def test_a_ragged_file_the_tip_lost_is_short_not_passed(bare, run, capsys) -> None:
@@ -1131,21 +1142,33 @@ def test_a_parked_sidecar_the_tip_lacks_fails_the_check(bare, run, tmp_path, mon
     assert "FAILED" in summary.read_text()
 
 
-def test_a_stalled_github_cannot_hold_the_seal_past_its_step(sealed_env, run, tmp_path, monkeypatch, capsys) -> None:
-    """The listing that trims a seal is one attempt under a deadline: a
-    remote that accepts and never answers costs seconds, and the whole round
-    is still sealed. Unbounded, git would wait past the step's 2 minutes and
-    the round would be on no copy, in exactly the case the seal is for."""
+@pytest.mark.parametrize(("stall_at", "cut"), [(1, "git ls-remote gave no answer"),
+                                               (2, "git fetch gave no answer")])
+def test_a_stalled_github_cannot_hold_the_seal_past_its_step(
+    sealed_env, bare, run, tmp_path, monkeypatch, capsys, stall_at, cut
+) -> None:
+    """The listing that trims a seal is one attempt under a deadline on each
+    git call: a remote that answers the listing and then stalls the pack (2),
+    or never answers at all (1), costs seconds, and the whole round is still
+    sealed. Unbounded, git would wait past the step's 2 minutes and the round
+    would be on no copy, in exactly the case the seal is for."""
     import tarfile
     import time
-    hang = tmp_path / "hang.sh"
-    hang.write_text("#!/bin/sh\nsleep 60\n")
-    hang.chmod(0o755)
+    assert _run("push", bare, run) == chain.EXIT_OK  # a real tip, so the fetch is reached
+    _write(run, LM, HEADER + _row(1) + _row(2) + _row(3))
+    count = tmp_path / "connections"
+    proxy = tmp_path / "proxy.sh"
+    proxy.write_text(
+        "#!/bin/sh\n"
+        f'n=$(( $(cat "{count}" 2>/dev/null || echo 0) + 1 )); echo "$n" > "{count}"\n'
+        f'if [ "$n" -ge {stall_at} ]; then sleep 60; fi\n'
+        f'exec git upload-pack "{bare}"\n')
+    proxy.chmod(0o755)
     stalled = tmp_path / "stalled.git"
-    for key, value in {"GIT_CONFIG_COUNT": "2",
-                       "GIT_CONFIG_KEY_0": f"url.ext::{hang}.insteadOf", "GIT_CONFIG_VALUE_0": f"file://{stalled}",
+    for key, value in {"GIT_CONFIG_COUNT": "3",
+                       "GIT_CONFIG_KEY_0": f"url.ext::{proxy}.insteadOf", "GIT_CONFIG_VALUE_0": f"file://{stalled}",
                        "GIT_CONFIG_KEY_1": "protocol.ext.allow", "GIT_CONFIG_VALUE_1": "always",
-                       "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}.items():
+                       "GIT_CONFIG_KEY_2": "protocol.version", "GIT_CONFIG_VALUE_2": "0"}.items():
         monkeypatch.setenv(key, value)
     monkeypatch.setattr(chain, "TIP_LISTING_SECONDS", 2)
     waited = []
@@ -1156,8 +1179,70 @@ def test_a_stalled_github_cannot_hold_the_seal_past_its_step(sealed_env, run, tm
                        "--remote", f"file://{stalled}"]) == chain.EXIT_OK
     assert time.monotonic() - started < 15
     assert waited == [], "the listing is one attempt, never retried"
-    assert "could not be listed" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "could not be listed" in out and cut in out, out
+    assert count.read_text().strip() == str(stall_at), "the stall was not where this case puts it"
     opened = tmp_path / "opened.tar"
     assert chain._openssl(["-d"], sealed_env, opened).returncode == 0
     with tarfile.open(opened) as tar:
         assert sorted(tar.getnames()) == sorted(p.relative_to(run).as_posix() for p in run.rglob("*.csv"))
+
+
+def test_the_tip_listing_deadline_fits_inside_the_steps_that_list() -> None:
+    """The stall test sets its own short deadline, so the real one is pinned
+    here: two timed git calls (ls-remote, then the fetch) plus room to tar,
+    compress and encrypt must fit inside the seal step, and inside the
+    restore step that unseals with the same listing."""
+    per_call = chain.TIP_LISTING_SECONDS
+    assert isinstance(per_call, (int, float)) and 0 < per_call
+    for name, room in (("Seal this round when the private chain did not take it", 45),
+                       ("Restore today's captures", 120)):
+        limit = 60 * int(_steps()[_index(name)]["timeout-minutes"])
+        assert 2 * per_call + room <= limit, (name, per_call, limit)
+
+
+def test_a_sidecar_merged_by_hand_stays_home_while_its_seal_lives(sealed_env, bare, run, tmp_path, monkeypatch, capsys) -> None:
+    """unseal parks a sealed copy that cannot merge; the push keeps it as a
+    sidecar; someone merges it by hand and moves it to merged/. The seal
+    still lives for up to 7 days, and every restore downloads it again: the
+    merged mark is what tells it the copy is home, so it is not parked again
+    and the next round is not red."""
+    assert _run("push", bare, run) == chain.EXIT_OK
+    _write(run, LM, HEADER + _row(1) + _row(2) + _row(7))
+    assert _seal(run, sealed_env) == chain.EXIT_OK
+    _offer(monkeypatch, [sealed_env])
+    later = tmp_path / "later"
+    _write(later, LM, "a,different,header\n1,2,3\n")
+    unseal = ["unseal", "--dest", str(later), "--github-repo", "o/r", "--remote", f"file://{bare}"]
+    assert chain.main(unseal) == chain.EXIT_DAMAGED
+    (parked,) = list((later / chain.UNMERGED).rglob("*.csv"))
+    side = parked.relative_to(later).as_posix()
+    assert _run("push", bare, later) == chain.EXIT_DAMAGED  # the disk copy is a sidecar too
+    # The hand merge, as CLAUDE.md says: fold the rows into the day file,
+    # then move the sidecar to merged/.
+    clone = tmp_path / "hand"
+    _git(["clone", "-q", "-b", "movement", str(bare), str(clone)])
+    (clone / LM).write_text(HEADER + _row(1) + _row(2) + _row(7))
+    waiting = sorted(p.relative_to(clone).as_posix() for p in (clone / chain.UNMERGED).rglob("*.csv"))
+    assert side in waiting and len(waiting) == 2  # the parked copy, and the disk copy the push kept
+    for each in waiting:
+        (clone / chain.merged_path(each)).parent.mkdir(parents=True, exist_ok=True)  # git mv needs the folder
+        _git(["mv", each, chain.merged_path(each)], cwd=clone)
+    _git(["add", "-A"], cwd=clone)
+    _git(["commit", "-qm", "merge by hand"], cwd=clone)
+    _git(["push", "-q", "origin", "HEAD:movement"], cwd=clone)
+
+    # The folder that parked it still holds the parked copy: the next push
+    # from it must not put the merged sidecar back.
+    assert _run("push", bare, later) == chain.EXIT_OK
+    assert not _git(["--git-dir", str(bare), "ls-tree", "-r", "--name-only", "movement", "--", "unmerged"]).split()
+
+    fresh = tmp_path / "fresh"
+    assert _run("pull", bare, fresh) == chain.EXIT_OK
+    assert not (fresh / chain.MERGED).exists(), "a merged mark is not a day file"
+    capsys.readouterr()
+    assert chain.main(["unseal", "--dest", str(fresh), "--github-repo", "o/r",
+                       "--remote", f"file://{bare}"]) == chain.EXIT_OK
+    assert not (fresh / chain.UNMERGED).exists(), "the merged copy was parked again"
+    assert _run("verify", bare, fresh) == chain.EXIT_OK
+    assert "await a hand merge" not in capsys.readouterr().out

@@ -145,6 +145,22 @@ def test_no_push_to_this_repository_carries_a_capture_store(path: Path) -> None:
 
 UPLOADS = ("actions/upload-artifact", "actions/upload-pages-artifact")
 
+#: Every action any workflow uses, at any level (a job-level reusable
+#: workflow included). A new one, an upload action by another owner or a
+#: local composite, fails `test_every_action_is_a_known_one` until someone
+#: reads what it does with the private folders and adds it here.
+KNOWN_ACTIONS = {
+    "actions/cache/restore", "actions/cache/save", "actions/checkout",
+    "actions/deploy-pages", "actions/setup-python",
+    "actions/upload-artifact", "actions/upload-pages-artifact",
+}
+
+
+def _is_upload(step: dict) -> bool:
+    """Owner and case aside: any action named like an upload is one."""
+    name = str(step.get("uses", "")).split("@")[0].lower()
+    return name.rsplit("/", 1)[-1] in ("upload-artifact", "upload-pages-artifact")
+
 #: `${{ runner.temp }}` in any spacing or case (the spelling upload-artifact
 #: expands) and `${RUNNER_TEMP}`, both read as `$RUNNER_TEMP`.
 TEMP_SPELLINGS = re.compile(r"\$\{\{\s*runner\s*\.\s*temp\s*\}\}|\$\{\s*RUNNER_TEMP\s*\}", re.IGNORECASE)
@@ -166,18 +182,28 @@ def _upload_entries(step: dict) -> list[str]:
 
 
 def _forbidden_upload(workflow: str, entry: str) -> str | None:
+    """Why an upload path may not be published, or None. Fails closed: a path
+    this guard cannot resolve to the workspace is refused, so a new spelling
+    of the runner's temp directory (`${{ env.X }}`, `~/work/_temp`,
+    `../../_temp`) is refused before anyone has to think of it."""
     for folder in PRIVATE_FOLDERS:
         if folder in entry:
             return f"names {folder}"
-    if re.search(r"runner.{0,8}temp", entry, re.IGNORECASE) and (workflow, entry) != SEALED_UPLOAD:
+    if (workflow, entry) == SEALED_UPLOAD:
+        return None
+    if re.search(r"runner.{0,8}temp", entry, re.IGNORECASE):
         return "uploads from the runner's temp directory, where the private sources are pulled"
+    if "${{" in entry:
+        return "an expression this guard cannot resolve"
+    if entry.startswith(("~", "/", "$")) or ".." in entry.split("/"):
+        return "a path outside the workspace"
     return None
 
 
 @pytest.mark.parametrize("path", _all_workflows(), ids=lambda p: p.name)
 def test_no_artifact_carries_a_capture_store(path: Path) -> None:
     for step in _steps(_load(path.name)):
-        if not str(step.get("uses", "")).startswith(UPLOADS):
+        if not _is_upload(step):
             continue
         assert step.get("with", {}).get("name") != "closing-line-captures", path.name
         for entry in _upload_entries(step):
@@ -195,12 +221,69 @@ def test_no_artifact_carries_a_capture_store(path: Path) -> None:
     "${RUNNER_TEMP}/x",
     "data/outputs/report.md\n${{ runner.temp }}/sealed/round.enc",
     "# a comment\n${{ runner.temp }}/private-movement-chain/*.csv",
+    # The folder names alone, wherever they are pulled to: the temp check
+    # above would mask a missing name for every runner.temp spelling.
+    "private-movement-chain/line_movement",
+    "${{ github.workspace }}/private-closing-store/closing_line_captures.csv",
+    "data/processed/closing_line_captures.csv",
+    # Spellings the guard cannot resolve, refused rather than reasoned about.
+    "${{ env.CLV_INPUTS }}",
+    "~/work/_temp",
+    "../../_temp/x",
+    "/home/runner/work/_temp/private",
+    "$HOME/x",
 ])
 def test_the_upload_reader_sees_every_spelling_of_the_private_folders(block) -> None:
     """Each block is refused in a workflow other than the seal's, and the
     seal's own path is refused anywhere but its own step's workflow."""
     entries = _upload_entries({"with": {"path": block}})
     assert any(_forbidden_upload("gameday-refresh.yml", e) for e in entries), entries
+
+
+def _uses_everywhere(node: object) -> list[str]:
+    found = []
+    if isinstance(node, dict):
+        if "uses" in node:
+            found.append(str(node["uses"]).split("@")[0].lower())
+        for value in node.values():
+            found += _uses_everywhere(value)
+    elif isinstance(node, list):
+        for value in node:
+            found += _uses_everywhere(value)
+    return found
+
+
+@pytest.mark.parametrize("path", [
+    "data/processed/line_movement/2026-10-08.csv",
+    "data/processed/deployment/2026-10-08.csv",
+    "data/processed/line_combinations/2026-10-08.csv",
+    "data/processed/unmerged/line_movement/2026-10-08/" + "ab" * 20 + ".csv",
+    "data/processed/closing_line_captures.csv",
+    "line_movement/2026-10-08.csv",
+    "merged/line_movement/2026-10-08/" + "ab" * 20 + ".csv",
+    "captures/2026-10-08.csv",
+    "round.enc",
+    "round.tar",
+])
+def test_the_chain_cannot_be_committed_here(path: str) -> None:
+    """A local pull, a sealed round opened by hand, or a downloaded artifact
+    leaves raw odds in a checkout of this public repository; git must ignore
+    every one, so `git add -A` cannot publish them."""
+    done = subprocess.run(["git", "check-ignore", "-q", "--no-index", path], cwd=PROJECT_ROOT)
+    assert done.returncode == 0, f"{path} is not ignored"
+
+
+def test_every_action_is_a_known_one() -> None:
+    used = set()
+    for path in _all_workflows():
+        used |= set(_uses_everywhere(_load(path.name)))
+    assert used == KNOWN_ACTIONS
+
+
+def test_an_upload_by_another_owner_or_case_is_still_an_upload() -> None:
+    for uses in ("someone/upload-artifact@v4", "Actions/Upload-Artifact@v4", "x/upload-pages-artifact@v3"):
+        assert _is_upload({"uses": uses}), uses
+    assert not _is_upload({"uses": "actions/checkout@v4"})
 
 
 def test_the_seal_is_the_one_temp_upload_and_only_in_line_movement() -> None:
@@ -216,7 +299,7 @@ def test_line_movement_uploads_no_store_folder() -> None:
     Movement upload names a store folder or data/processed at all; the
     sealed fallback is one encrypted file in the runner's temp directory."""
     for step in _steps(_load("line-movement.yml")):
-        if not str(step.get("uses", "")).startswith(UPLOADS):
+        if not _is_upload(step):
             continue
         for entry in _upload_entries(step):
             assert "data/processed" not in entry and not _can_carry_prices(entry), entry
@@ -274,7 +357,7 @@ def test_the_uploads_that_carry_prices_are_the_known_ones() -> None:
     for path in _all_workflows():
         for step in _steps(_load(path.name)):
             # upload-pages-artifact too: the Pages site is public.
-            if not str(step.get("uses", "")).startswith(UPLOADS):
+            if not _is_upload(step):
                 continue
             entries = _upload_entries(step)
             if any(_can_carry_prices(e) for e in entries):
@@ -396,15 +479,39 @@ def _secret_reads(name: str) -> re.Pattern:
 SECRET_READS = _secret_reads("NHL_CLOSING_LINES_TOKEN")
 KEY_READS = _secret_reads("NHL_CHAIN_FALLBACK_KEY")
 
+#: A read this guard cannot name, so it reads every secret: an index that is
+#: not a quoted literal (`secrets[format(...)]`, `secrets[env.X]`) or the whole
+#: map (`toJSON(secrets)`).
+ANY_SECRET = re.compile(r"secrets\s*\[\s*(?!['\"][^'\"\]]*['\"]\s*\])|tojson\s*\(\s*secrets", re.IGNORECASE)
+
+
+def _leaves(fragment: object):
+    """Every key and scalar in a loaded fragment, as written. (The reader
+    used to search yaml.safe_dump's text, which doubles every ' in a
+    multi-line `run:` and so hid `secrets['NAME']` inside one.)"""
+    if isinstance(fragment, dict):
+        for key, value in fragment.items():
+            yield str(key)
+            yield from _leaves(value)
+    elif isinstance(fragment, list):
+        for value in fragment:
+            yield from _leaves(value)
+    elif fragment is not None:
+        yield str(fragment)
+
+
+def _reads(reads: re.Pattern, fragment: object) -> bool:
+    return any(reads.search(text) or ANY_SECRET.search(text) for text in _leaves(fragment))
+
 
 def _reads_the_token(fragment: object) -> bool:
-    return bool(SECRET_READS.search(yaml.safe_dump(fragment)))
+    return _reads(SECRET_READS, fragment)
 
 
 def _holders(reads: re.Pattern) -> set[tuple[str, str]]:
     """Every workflow, job and step that reads a secret, at any level."""
     def hit(fragment: object) -> bool:
-        return bool(reads.search(yaml.safe_dump(fragment)))
+        return _reads(reads, fragment)
     holders = set()
     for path in _all_workflows():
         document = _load(path.name)
@@ -447,10 +554,16 @@ def test_the_token_reader_sees_every_spelling() -> None:
     assert not _reads_the_token({"run": "echo replace NHL_CLOSING_LINES_TOKEN"})
     for spelling in ("${{ secrets.NHL_CHAIN_FALLBACK_KEY }}", "${{ secrets.nhl_chain_fallback_key }}",
                      "${{ secrets['NHL_CHAIN_FALLBACK_KEY'] }}", '${{ secrets [ "NHL_CHAIN_FALLBACK_KEY" ] }}'):
-        assert KEY_READS.search(yaml.safe_dump({"env": {"K": spelling}})), spelling
-    assert not KEY_READS.search(yaml.safe_dump({"run": "echo It was sealed with NHL_CHAIN_FALLBACK_KEY"}))
+        assert _reads(KEY_READS, {"env": {"K": spelling}}), spelling
+        # Inside a multi-line run block too, where YAML would double the '.
+        assert _reads(KEY_READS, {"run": f"echo one\necho {spelling}\n"}), spelling
+    assert not _reads(KEY_READS, {"run": "echo It was sealed with NHL_CHAIN_FALLBACK_KEY"})
+    # A read the guard cannot name reads every secret, and so both pins fail.
+    for computed in ("${{ secrets[format('NHL_{0}', 'X')] }}", "${{ secrets[env.WHICH] }}",
+                     "${{ toJSON(secrets) }}"):
+        assert _reads(KEY_READS, {"run": f"echo {computed}"}) and _reads_the_token({"env": {"A": computed}}), computed
     # A renamed token keeps its pin.
-    assert SECRET_READS.search(yaml.safe_dump({"env": {"T": "${{ secrets.NHL_CLOSING_LINES_TOKEN_V2 }}"}}))
+    assert _reads_the_token({"env": {"T": "${{ secrets.NHL_CLOSING_LINES_TOKEN_V2 }}"}})
 
 
 def test_no_other_workflow_that_uploads_data_processed_writes_the_store() -> None:

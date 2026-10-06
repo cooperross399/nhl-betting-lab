@@ -122,6 +122,11 @@ STORES = ("line_movement", "deployment", "line_combinations")
 #: private, instead of a sealed artifact that expires; merged by hand.
 UNMERGED = "unmerged"
 SIDECAR = re.compile(r"^unmerged/(line_movement|deployment|line_combinations)/\d{4}-\d{2}-\d{2}/[0-9a-f]{40,64}\.csv$")
+#: A sidecar merged by hand is moved here (`git mv unmerged/... merged/...`,
+#: CLAUDE.md "Merging a sidecar"), so a seal still holding that copy knows it
+#: is home and does not park it again. Never read as a day file, never warned of.
+MERGED = "merged"
+MERGED_MARK = re.compile(r"^merged/(line_movement|deployment|line_combinations)/\d{4}-\d{2}-\d{2}/[0-9a-f]{40,64}\.csv$")
 DAY_FILE = re.compile(r"^\d{4}-\d{2}-\d{2}\.csv$")
 PUSH_ATTEMPTS = 5
 TIP_REF = "refs/chain-tip"
@@ -225,21 +230,22 @@ def fetch_chain_once(work: Path, remote: str, token: str, *, timeout: float | No
 
 
 def tip_blobs(work: Path) -> dict[str, str]:
-    """path -> blob id, for every day file and every sidecar on the tip."""
-    out = _ok(_git(["ls-tree", "-r", TIP_REF, "--", *STORES, UNMERGED], work))
+    """path -> blob id, for every day file, sidecar and merged mark on the tip."""
+    out = _ok(_git(["ls-tree", "-r", TIP_REF, "--", *STORES, UNMERGED, MERGED], work))
     files = {}
     for line in out.splitlines():
         meta, _, path = line.partition("\t")
         kind, sha = meta.split()[1:3]
         folder, _, name = path.partition("/")
-        if kind == "blob" and ((folder in STORES and DAY_FILE.match(name)) or SIDECAR.match(path)):
+        if kind == "blob" and ((folder in STORES and DAY_FILE.match(name))
+                               or SIDECAR.match(path) or MERGED_MARK.match(path)):
             files[path] = sha
     return files
 
 
 def tip_files(work: Path) -> dict[str, str]:
     """`store/<day>.csv` -> blob id, for every day file on the tip."""
-    return {p: sha for p, sha in tip_blobs(work).items() if not p.startswith(UNMERGED + "/")}
+    return {p: sha for p, sha in tip_blobs(work).items() if p.partition("/")[0] in STORES}
 
 
 def sidecar_path(rel: str, sha: str) -> str:
@@ -247,12 +253,18 @@ def sidecar_path(rel: str, sha: str) -> str:
     return f"{UNMERGED}/{rel[:-len('.csv')]}/{sha}.csv"
 
 
+def merged_path(sidecar: str) -> str:
+    """Where a sidecar goes once it has been merged by hand."""
+    return MERGED + sidecar[len(UNMERGED):]
+
+
 def held(rel: str, sha: str, on_tip: dict[str, str]) -> bool:
     """The tip holds this exact copy: a day file as itself or as its kept
-    sidecar, a sidecar as itself."""
+    sidecar, a sidecar as itself; either one also once merged by hand."""
     if SIDECAR.match(rel):
-        return rel in on_tip
-    return on_tip.get(rel) == sha or sidecar_path(rel, sha) in on_tip
+        return rel in on_tip or merged_path(rel) in on_tip
+    side = sidecar_path(rel, sha)
+    return on_tip.get(rel) == sha or side in on_tip or merged_path(side) in on_tip
 
 
 def local_files(processed: Path) -> dict[str, Path]:
@@ -402,7 +414,7 @@ def push(args: argparse.Namespace) -> int:
                     else:
                         stage(rel, blob_of(work, path, write=True))
                 for rel, path in parked.items():
-                    if rel not in on_tip:
+                    if not held(rel, "", on_tip):
                         stage(rel, blob_of(work, path, write=True))
             except store.Refused as exc:
                 _error(str(exc))
@@ -510,13 +522,13 @@ def verify(args: argparse.Namespace) -> int:
                 return EXIT_EMPTY
             on_tip = tip_blobs(work)
             waiting = sorted(p for p in on_tip if p.startswith(UNMERGED + "/"))
-            day_files_on_tip = [p for p in on_tip if not p.startswith(UNMERGED + "/")]
+            day_files_on_tip = [p for p in on_tip if p.partition("/")[0] in STORES]
             if not local and day_files_on_tip:
                 _error(f"This run's folder holds no movement day file while the private "
                        f"chain holds {len(day_files_on_tip)}; nothing here was checked.")
                 return EXIT_DAMAGED
             for rel in parked:
-                if rel not in on_tip:
+                if not held(rel, "", on_tip):
                     missing[rel] = _rows(parked[rel])
             for rel, path in local.items():
                 if held(rel, blob_of(work, path), on_tip):
@@ -664,7 +676,9 @@ def seal(args: argparse.Namespace) -> int:
         # Compressed: when the tip cannot be listed this is the whole season,
         # and every round's restore downloads it for seven days. unseal opens
         # plain and compressed archives alike.
-        with tarfile.open(bundle, "w:gz") as tar:
+        # Level 1: a whole-season seal (no listing) must compress well inside
+        # the step's 2 minutes; the size gained above level 1 is small for CSV.
+        with tarfile.open(bundle, "w:gz", compresslevel=1) as tar:
             for rel, path in sorted(local.items()):
                 tar.add(path, arcname=rel)
         done = _openssl(["-e", "-salt"], bundle, out)
