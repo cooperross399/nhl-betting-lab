@@ -469,7 +469,7 @@ def _price_step(work: Path, tmp_path: Path, code: int) -> tuple[str, dict[str, s
     output = tmp_path / "prices_output"
     output.write_text("", encoding="utf-8")
     block = _render(_step("prices")["run"], {
-        "inputs.props_credit_cap || '320'": "320",
+        "inputs.props_credit_cap || '640'": "640",
     })
     env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}",
            "GITHUB_OUTPUT": str(output)}

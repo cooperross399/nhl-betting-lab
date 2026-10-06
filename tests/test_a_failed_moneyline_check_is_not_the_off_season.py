@@ -462,7 +462,7 @@ def _price_and_health(tmp_path: Path, code: int) -> tuple[str, dict[str, str], d
     prices_output = tmp_path / "prices_output"
     prices_output.write_text("", encoding="utf-8")
     block = _render(_step("prices")["run"], {
-        "inputs.props_credit_cap || '320'": "320",
+        "inputs.props_credit_cap || '640'": "640",
     })
     result = _bash(block, work, {**os.environ,
                                  "PATH": f"{bin_dir}:{os.environ['PATH']}",

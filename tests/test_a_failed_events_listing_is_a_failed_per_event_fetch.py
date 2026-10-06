@@ -601,7 +601,7 @@ def test_the_run_health_names_the_per_event_fetch(
     prices_output = tmp_path / "prices_output"
     prices_output.write_text("", encoding="utf-8")
     prices = _bash(
-        _render(_step("prices")["run"], {"inputs.props_credit_cap || '320'": "320"}),
+        _render(_step("prices")["run"], {"inputs.props_credit_cap || '640'": "640"}),
         work,
         {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}",
          "GITHUB_OUTPUT": str(prices_output)},
