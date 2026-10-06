@@ -42,7 +42,8 @@ test_a_failed_history_restore_never_truncates_the_site.py — every `run:`
 block from the workflow under `bash --noprofile --norc -eo pipefail`, the
 real restore_state.py behind an offline `gh` with injected HTTP 502s, the
 real build_site_json.py and site_history.py `main()`s with only the NHL
-schedule stubbed, `continue-on-error` honoured from the YAML — with Gameday
+schedule stubbed, the play-by-play fetch run against a stub so that no test
+reaches the network, `continue-on-error` honoured from the YAML — with Gameday
 Refresh runs added to the registry, carrying a `gameday-state` artifact
 whose game history the model fits on. Results are rendered through the
 page's own adapter (web/lib/sports.js) under node.

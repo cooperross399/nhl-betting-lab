@@ -40,6 +40,14 @@ build step through the real `web/build_site_json.py` and `web/site_history.py`
 `if: always()` honoured from the YAML, and each `upload-artifact` and Pages
 deploy taken from the paths the YAML names. The floor check itself is also
 driven directly, through `scripts/site_history_floor.py`'s `main()`.
+
+No block reaches the network. The NHL play-by-play fetch behind the board's
+xG ratings (`scripts/run_shadow_stats.py --fetch`) runs its real block
+against a stub that fails, so the step takes its own failure path: no
+ratings, and the board rated on goals. Every block run for real is checked
+first for anything else that would leave the machine, and runs in a session
+of its own that a time-out kills whole. On 2026-10-06 that fetch, run for
+real here, held the full suite for over half an hour.
 """
 
 from __future__ import annotations
@@ -51,9 +59,11 @@ import os
 import re
 import shlex
 import shutil
+import signal
 import stat
 import subprocess
 import sys
+import time
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -79,6 +89,31 @@ HISTORY_STEP = "Restore the site's history"
 D1, D2, D3, D4, D5 = (date(2026, 10, day) for day in range(5, 10))
 #: Publish Site's live Archive, as its own step env names it.
 LIVE_INDEX = "https://nhl.maverickhightower.com/data/history/index.json"
+
+#: How a run block names a repository script, which the chain copies in.
+SCRIPT_CALL = re.compile(r"python scripts/(\S+\.py)")
+#: Scripts a block may run for real here. Neither reaches past the offline
+#: `gh` below and the file the live Archive stands in for. A script Publish
+#: Site gains is refused until it is named here or stubbed, so a new step
+#: cannot reach the network by being new.
+OFFLINE_SCRIPTS = frozenset({"restore_state.py", "site_history_floor.py"})
+#: Scripts the chain replaces with STUB, so the step that runs one takes its
+#: own failure path. `run_shadow_stats.py --fetch` asks api-web.nhle.com for
+#: the play-by-play of every final game in the checkout's own team_games.csv
+#: (not this chain's), under a `timeout 10m`; its step allows a failure.
+STUBBED_SCRIPTS = frozenset({"run_shadow_stats.py"})
+STUB = (
+    "import sys\n"
+    "print('The chain does not run this script: it reaches the network.', file=sys.stderr)\n"
+    "sys.exit(1)\n"
+)
+#: Commands that leave the machine wherever they appear, and the flags that
+#: make a repository script fetch. A list of spellings: it sees what Publish
+#: Site spells today, and not a request written in Python inside a heredoc.
+NETWORK_COMMANDS = re.compile(r"\b(?:curl|wget)\b")
+FETCH_FLAGS = re.compile(r"--(?:fetch|live)\b")
+#: How long one block may run. Offline, every one takes seconds.
+BLOCK_SECONDS = 120
 
 FAKE_GH = r'''#!{python}
 import json, os, shutil, sys
@@ -209,6 +244,66 @@ def _dispatch_inputs() -> dict:
     return (on.get("workflow_dispatch") or {}).get("inputs") or {}
 
 
+def _is_stub(path: Path) -> bool:
+    return path.is_file() and path.read_text(encoding="utf-8") == STUB
+
+
+def _network_fetches(text: str, work: Path) -> list[str]:
+    """The lines of a run block that would reach the network if the chain ran
+    them for real from `work`: a script not known to be offline, a stubbed
+    script whose copy in `work` is not the stub, a fetch flag on anything but
+    a stub, and curl or wget anywhere."""
+    found = []
+    for line in text.splitlines():
+        scripts = SCRIPT_CALL.findall(line)
+        unknown = [name for name in scripts if name not in OFFLINE_SCRIPTS | STUBBED_SCRIPTS]
+        stubbed = [name for name in scripts if name in STUBBED_SCRIPTS]
+        stubs_in_place = all(_is_stub(work / "scripts" / name) for name in stubbed)
+        fetch = FETCH_FLAGS.search(line) and not (stubbed and stubs_in_place)
+        if unknown or not stubs_in_place or fetch or NETWORK_COMMANDS.search(line):
+            found.append(line.strip())
+    return found
+
+
+def _kill_session(leader: int) -> None:
+    """SIGKILL the process group and then the session `leader` heads, until
+    nothing in the session is left alive.
+
+    The group alone is not enough. `timeout` moves itself and its command
+    into a group of their own (measured on macOS's /usr/bin/timeout; GNU's
+    does the same without --foreground), so killing bash's group leaves the
+    fetch running with the block's pipes open, and once bash is gone it is no
+    longer anyone's child either. It cannot leave the session without
+    calling setsid(). A process that did would escape this, and the bounded
+    wait in `_bash` then fails the test rather than hanging it."""
+    try:
+        os.killpg(leader, signal.SIGKILL)
+    except OSError:
+        pass  # the group is already empty
+    for _ in range(100):
+        listing = subprocess.run(["ps", "-A", "-o", "pid=,stat="], capture_output=True,
+                                 text=True, timeout=30, check=True)
+        alive = []
+        for row in listing.stdout.splitlines():
+            fields = row.split()
+            if len(fields) < 2 or fields[1].startswith("Z"):
+                continue  # a zombie has exited and holds nothing open
+            try:
+                if os.getsid(int(fields[0])) == leader:
+                    alive.append(int(fields[0]))
+            except OSError:
+                continue  # gone since the listing, or not ours to ask about
+        if not alive:
+            return
+        for pid in alive:
+            try:
+                os.kill(pid, signal.SIGKILL)
+            except OSError:
+                pass
+        time.sleep(0.05)
+    raise AssertionError(f"session {leader} still had live processes after 100 sweeps")
+
+
 @dataclass
 class Outcome:
     run_id: int
@@ -243,10 +338,11 @@ class PublishSite:
         self.live = tmp_path / "live" / "index.json"
         bin_dir = tmp_path / "bin"
         bin_dir.mkdir()
-        gh = bin_dir / "gh"
-        gh.write_text(FAKE_GH.format(python=sys.executable), encoding="utf-8")
-        gh.chmod(gh.stat().st_mode | stat.S_IEXEC)
+        self.gh = bin_dir / "gh"
+        self.gh.write_text(FAKE_GH.format(python=sys.executable), encoding="utf-8")
+        self.gh.chmod(self.gh.stat().st_mode | stat.S_IEXEC)
         self.path = f"{bin_dir}:{Path(sys.executable).parent}:{os.environ.get('PATH', '')}"
+        self.block_seconds = BLOCK_SECONDS
         self.build = _web_module("build_site_json.py")
         self.history = _web_module("site_history.py")
         monkeypatch.setattr(self.build, "schedule_for", self._schedule)
@@ -313,8 +409,11 @@ class PublishSite:
         shutil.copytree(WEB, work / "web")
         (work / "scripts").mkdir()
         for step in _steps():
-            for name in re.findall(r"python scripts/(\S+\.py)", str(step.get("run", ""))):
-                shutil.copy(SCRIPTS / name, work / "scripts" / name)
+            for name in SCRIPT_CALL.findall(str(step.get("run", ""))):
+                if name in STUBBED_SCRIPTS:
+                    (work / "scripts" / name).write_text(STUB, encoding="utf-8")
+                else:
+                    shutil.copy(SCRIPTS / name, work / "scripts" / name)
         runner_temp = self.tmp / f"runner-temp-{run_id}"
         runner_temp.mkdir()
         running = {"databaseId": run_id, "workflow": "publish-site.yml",
@@ -410,12 +509,30 @@ class PublishSite:
         return self._bash(text, work, step_env, outcome)
 
     def _bash(self, text, work, env, outcome) -> bool:
-        result = subprocess.run(
+        fetches = _network_fetches(text, work)
+        assert not fetches, f"the chain would reach the network running {fetches}; stub it"
+        assert shutil.which("gh", path=env["PATH"]) == str(self.gh), "a block would ask the real GitHub"
+        # A session of its own, so a time-out can kill everything the block
+        # started (_kill_session). subprocess.run's timeout killed bash alone.
+        process = subprocess.Popen(
             ["bash", "--noprofile", "--norc", "-eo", "pipefail", "-c", text],
-            cwd=work, env=env, capture_output=True, text=True, timeout=120,
+            cwd=work, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            start_new_session=True,
         )
-        outcome.log += result.stdout + result.stderr
-        return result.returncode == 0
+        try:
+            stdout, stderr = process.communicate(timeout=self.block_seconds)
+        except subprocess.TimeoutExpired:
+            _kill_session(process.pid)
+            stdout, stderr = process.communicate(timeout=30)
+            outcome.log += stdout + stderr
+            pytest.fail(f"a run block was still running after {self.block_seconds}s, and it "
+                        f"and everything it started were killed:\n{text}\n{stdout}{stderr}")
+        except BaseException:
+            _kill_session(process.pid)
+            process.wait()
+            raise
+        outcome.log += stdout + stderr
+        return process.returncode == 0
 
     def _build(self, text, work, env, day, outcome, after_build) -> bool:
         """The build step, line by line: the two generators in-process (the
