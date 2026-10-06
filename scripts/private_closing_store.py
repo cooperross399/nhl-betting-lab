@@ -20,15 +20,17 @@ repository may hold it on a branch, a release, a Pages site or an artifact.
 
 ## What this does not cover
 
-Line Movement's own `line-movement` artifact, uploaded from this public
-repository on every round (7-day retention since 2026-10-02, 90 before),
-carries every book's every rung, the face-off round included. Every row this
-script pushes is derived from it (`push` reads nothing else on a hand-off), so
-closing prices remain downloadable from this repository until that chain
-moves too. It is moving in two stages (`scripts/private_movement_chain.py`,
-CLAUDE.md), and
-`tests/test_closing_prices_never_reach_the_public_repo.py` pins the known
-carriers so a new one fails rather than joining them silently.
+Every row this script pushes is derived from Line Movement's capture chain
+(every book's every rung, the face-off round included), and `push` reads
+nothing else on a hand-off. Until stage two (#298) that chain was uploaded
+from this public repository as the `line-movement` artifact on every round
+(7-day retention from 2026-10-02, 90 before), so closing prices were
+downloadable here; those artifacts stay downloadable until they expire.
+Since stage two the chain lives only on branch `movement` of the same private
+repository (`scripts/private_movement_chain.py`, CLAUDE.md), and Closing Lines
+pulls it from there. `tests/test_closing_prices_never_reach_the_public_repo.py`
+pins the known price carriers so a new one fails rather than joining them
+silently.
 
 ## The refusals before every push
 
@@ -326,17 +328,17 @@ def _scrub(text: str, token: str) -> str:
     return text.replace(token, "***") if len(token) >= 8 else text
 
 
-def _remote_failure(stderr: str, token: str, what: str) -> Exception:
+def _remote_failure(stderr: str, token: str, what: str,
+                    subject: str = "the closing-line store") -> Exception:
     # Classified on git's own words, scrubbed only for display: scrubbing
     # first let a token that happens to occur inside a marker hide it.
     raw = stderr.strip()
     text = _scrub(raw, token)
     if any(marker in raw.lower() for marker in AUTH_FAILURES):
         return Refused(
-            f"GitHub turned the token away while trying to {what} the "
-            f"closing-line store: {text}"
+            f"GitHub turned the token away while trying to {what} {subject}: {text}"
         )
-    return Unreachable(f"could not {what} the closing-line store: {text}")
+    return Unreachable(f"could not {what} {subject}: {text}")
 
 
 def fetch_tip(work: Path, remote: str, token: str) -> str:

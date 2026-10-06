@@ -24,9 +24,9 @@ the reason; the same names go to stderr as `::error::` lines.
 With `--fail-on-day YYYY-MM-DD` (the Line Movement job passes the league day
 it captured into), only damage in that day's file exits 2. Damage in an
 earlier day is still named in the report, the JSON and on stderr, as a
-`::warning::`, and exits 0. The job's artifact carries every day and each
-run restores the newest copy, so a day damaged in October is still damaged
-in March: were every damaged file to fail the run, one bad day would turn
+`::warning::`, and exits 0. The private movement chain carries every day and
+each run restores the newest copy, so a day damaged in October is still
+damaged in March: were every damaged file to fail the run, one bad day would turn
 every later run of the season red, and the red X that reports uncollectable
 line units or scratch lists would be lost under one that nothing clears.
 """

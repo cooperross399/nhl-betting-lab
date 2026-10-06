@@ -17,8 +17,10 @@ name: Line Movement Capture
 # SCOPE: it writes under data/processed/ (line_movement/, deployment/,
 # line_combinations/, and the closing-line rows the capture derives, which no
 # step keeps) and data/outputs/ladder_coherence.*, and, from the default branch,
-# the `movement` branch of the PRIVATE repository cooperross399/nhl-closing-lines
-# (stage one of moving the chain there, 2026-10-02). It does not touch
+# the `movement` branch of the PRIVATE repository cooperross399/nhl-closing-lines,
+# which is the chain's only home since stage two of the move: no step uploads
+# the chain publicly. A round whose private push fails is kept only sealed
+# (encrypted with Cooper's key) until the next round brings it home. It does not touch
 # data/staging/ (which the card reads), the forward ledger, the policy, or the
 # card. It places no bet, allowlists nothing, and decides nothing.
 #
@@ -128,7 +130,7 @@ jobs:
     # On the job, not the workflow: runs wait for hours and overlap, and a
     # workflow-level group would keep only one of them pending, cancelling the
     # rounds between. Captures still never run two at once, so a restore
-    # always reads the previous round's upload.
+    # always reads the previous round's push to the private chain.
     concurrency:
       group: line-movement
       cancel-in-progress: false
@@ -155,100 +157,59 @@ jobs:
         # captures have to come back or every run writes the first line of a
         # new file and the movement is lost.
         #
-        # FROM THE NEWEST RUN THAT CARRIES THEM, WHATEVER ITS CONCLUSION. This
-        # used to restore `gh run list --status success --limit 1`. A run goes
-        # red when the price capture's events list fails or when the line
-        # units or the scratch list were not captured (the gates at the end),
-        # and either way the steps marked `if: always()` still captured and
-        # uploaded: the deployment and line units on a price failure, the
-        # prices and the deployment on a line failure, the prices and the line
-        # units on a scratch-list failure. The next restore skipped such a
-        # run, so its rows fell out of the chain; in the failure-shape
-        # audit's replay (14:00 green, 18:00 red, 21:00 green) the 18:00
-        # scratch list and PP1 promotion were first seen at 21:00, three hours
-        # late, and neither source keeps an archive. `--union 3` then folds
-        # in, row by row, what the two carriers before the newest hold that it
-        # lacks, so a run whose own restore found nothing cannot become the
-        # base the season is lost from. See scripts/restore_state.py.
+        # FROM THE PRIVATE REPOSITORY, AND ONLY FROM IT (stage two of the
+        # move, Cooper's decision of 2026-10-01/02: closing-line data is never
+        # published publicly). The chain lives on branch `movement` of
+        # cooperross399/nhl-closing-lines; scripts/private_movement_chain.py
+        # pulls it into data/processed, writing each day file whole or not at
+        # all. It then folds in any SEALED round: a round whose private push
+        # failed is encrypted with Cooper's key (NHL_CHAIN_FALLBACK_KEY) into
+        # a 7-day `line-movement-sealed-N` artifact (below), and every later
+        # round decrypts it and unions it in, so this round's push carries it
+        # home. Every fold is restore_state.union_csv: no row dropped,
+        # duplicates kept, a file whose parse disagrees with its line count
+        # never merged.
         #
-        # A RESTORE THAT COULD NOT ASK GITHUB IS A RED RUN. This made one
-        # attempt at each call, named no --problem-file, and turned any
-        # failure into a ::warning::, so a failed `gh run list` started every
-        # day file afresh, uploaded a carrier holding this round alone, and
-        # finished green. The union reads the newest carrier and the two
-        # before it, so three such runs in a row (three 502s, or seven hours
-        # of listing failures at five runs a day) and the next run unioned
-        # three thin carriers and never read an older one: every earlier
-        # capture, yesterday's and the season's, left the chain for good
-        # with every run green (sweep 5, line-movement-three-thin-carriers-
-        # drop-the-season). Now each call is tried three times, as Gameday
-        # Refresh's restore is, and whatever still could not be reached is
-        # written to restore_problem.txt, which the last gate reads after
-        # every upload and turns into a red run. One thin run is then seen
-        # the day it happens, not after the third. Free: GitHub's API only.
+        # A RESTORE THAT FAILS LOSES NOTHING BY ITSELF. This round's files then
+        # start from what is on disk, and when its push runs it MERGES into the
+        # private tip instead of replacing it, so the earlier rounds stay
+        # there. It is still a red run (restore_problem.txt, read by the gate
+        # at the end), because the ladder scan and the day's files saw a thin
+        # chain. A repository with no movement branch is a fault too: the
+        # chain has existed since 2026-10-02, and the push will not recreate
+        # it.
         #
-        # BOUNDED, BECAUSE THE PAID FETCH COMES AFTER IT. Three attempts
-        # pause 10 s + 20 s after each failed call, and the restore walks the
-        # listed runs, so an artifact outage across a --limit 30 walk sleeps
-        # about 15 minutes of the job's 20 before "Capture prices": the job
-        # could be cancelled during or after the fetch, credits spent and
-        # nothing written. --limit 10 still spans the union's three carriers
-        # and the cancelled runs between them, and the step is cut at five
-        # minutes. continue-on-error keeps the capture running either way;
-        # a timed-out restore writes nothing to the problem file, so the gate
-        # at the end reads this step's outcome (`id: restore`) too.
+        # BOUNDED, BECAUSE THE PAID FETCH COMES AFTER IT: four minutes, soft.
+        # Free: GitHub only, no provider credit.
         id: restore
-        timeout-minutes: 5
+        timeout-minutes: 4
         continue-on-error: true
         env:
+          NHL_CLOSING_LINES_TOKEN: ${{ secrets.NHL_CLOSING_LINES_TOKEN }}
+          NHL_CHAIN_FALLBACK_KEY: ${{ secrets.NHL_CHAIN_FALLBACK_KEY }}
           GH_TOKEN: ${{ github.token }}
+          PYTHONPATH: src
         run: |
           set -u
           DAY=$(TZ=America/New_York date +%F)
           mkdir -p data/processed
           : > restore_problem.txt
-          python scripts/restore_state.py --artifact line-movement --dest data/processed \
-            --workflow line-movement.yml --union 3 --limit 10 \
-            --attempts 3 --problem-file restore_problem.txt \
-            || {
-              echo "::warning::The previous captures could not be restored; this run starts the day's files afresh."
-              echo "restore_state.py exited non-zero, so the previous captures were not restored." >> restore_problem.txt
-            }
+          CODE=0
+          python scripts/private_movement_chain.py pull --dest data/processed || CODE=$?
+          case "$CODE" in
+            0) ;;
+            4) echo "The private repository has no movement branch. The chain has existed since 2026-10-02, so it was deleted or renamed; restore it from its history. This round's files start from what was on disk." >> restore_problem.txt ;;
+            *) echo "The private movement chain could not be restored (exit $CODE); this round's files start from what was on disk." >> restore_problem.txt ;;
+          esac
+          CODE=0
+          python scripts/private_movement_chain.py unseal --dest data/processed || CODE=$?
+          if [ "$CODE" != 0 ]; then
+            echo "A sealed fallback round could not be folded in (exit $CODE)." >> restore_problem.txt
+          fi
           for store in line_movement deployment line_combinations; do
             ls -la "data/processed/$store/$DAY.csv" 2>/dev/null \
               || echo "No $store file for $DAY yet; this run starts it."
           done
-
-      - name: Fold in the private chain
-        # THE CHAIN IS MOVING TO THE PRIVATE REPOSITORY (Cooper, 2026-10-02:
-        # closing-line data is never public, moved in stages). Stage one:
-        # every round still restores from the public artifact above, and
-        # then folds in the private copy on branch `movement` of
-        # cooperross399/nhl-closing-lines, row by row with the same
-        # union the restore uses (scripts/private_movement_chain.py). A
-        # public restore that comes back thin, as the 09-30 18:00 round's
-        # did with every run green, is made whole here. Free: GitHub only.
-        # Bounded at three minutes (it takes seconds), because the paid fetch
-        # comes after it and the restore above may already have used five.
-        # A copy that could
-        # not be read or merged is written to private_problem.txt, which the
-        # last gate turns red after every upload; "no chain yet" is not a
-        # fault.
-        id: private_restore
-        timeout-minutes: 3
-        continue-on-error: true
-        env:
-          NHL_CLOSING_LINES_TOKEN: ${{ secrets.NHL_CLOSING_LINES_TOKEN }}
-          PYTHONPATH: src
-        run: |
-          set -u
-          : > private_problem.txt
-          CODE=0
-          python scripts/private_movement_chain.py pull --dest data/processed || CODE=$?
-          case "$CODE" in
-            0|4) ;;
-            *) echo "The private movement chain could not be folded in (exit $CODE)." >> private_problem.txt ;;
-          esac
 
       - name: Cache the club schedules
         # For the preseason screen in the next step. The capture spends its
@@ -284,8 +245,8 @@ jobs:
         # requests failed, which makes this step red. The bulk team-market
         # request beside them never moves the exit: its rows are written
         # either way, and its failure is a ::warning:: of its own. That is the report, not
-        # the damage: every step below is `if: always()`, so the uploads
-        # still run.
+        # the damage: every step below is `if: always()`, so the private push
+        # (and, if it fails, the seal) still runs.
         # tests/test_a_failed_price_request_is_not_an_unquoted_game.py holds
         # both rules.
         env:
@@ -340,6 +301,76 @@ jobs:
             python scripts/capture_line_combinations.py
           fi
 
+      - name: Keep the captures privately
+        # THE ROUND'S HOME. Straight after the captures (stage two dropped
+        # the public upload that used to keep it), this round's three stores
+        # are merged into branch `movement` of the private repository: never
+        # a row dropped, duplicates kept, a rejected push or an unreachable
+        # GitHub tried again with a pause. Only from the default branch: a
+        # feature branch's dispatch must never write the season's chain (a
+        # rehearsal keeps nothing). Whether the round is home is the next
+        # step's call, not this one's: when the check finds the tip short, the
+        # round is sealed so the next run can bring it home. The script writes
+        # its exit to this step's outputs (exit=N) for the gate, which words
+        # exit 2 (a copy kept as a sidecar) apart.
+        id: private_push
+        if: always() && (github.event_name == 'schedule' || github.ref == format('refs/heads/{0}', github.event.repository.default_branch))
+        timeout-minutes: 6
+        continue-on-error: true
+        env:
+          NHL_CLOSING_LINES_TOKEN: ${{ secrets.NHL_CLOSING_LINES_TOKEN }}
+          PYTHONPATH: src
+        run: python scripts/private_movement_chain.py push --processed-dir data/processed
+
+      - name: Check the private chain holds this round
+        # The private tip must hold every row of every file this round has on
+        # disk, counted as a multiset: the round is home. Before the seal, so
+        # a push that exited 0 but left the tip short still gets sealed. Its line goes to the run summary; a
+        # shortfall turns the run red at the last gate.
+        id: private_verify
+        if: always() && (github.event_name == 'schedule' || github.ref == format('refs/heads/{0}', github.event.repository.default_branch))
+        timeout-minutes: 4
+        continue-on-error: true
+        env:
+          NHL_CLOSING_LINES_TOKEN: ${{ secrets.NHL_CLOSING_LINES_TOKEN }}
+          PYTHONPATH: src
+        run: python scripts/private_movement_chain.py verify --processed-dir data/processed
+
+      - name: Seal this round when the private chain did not take it
+        # The check did not find the private tip holding this round (it
+        # failed, timed out or was cancelled): the rows not home are on no
+        # copy unless this works. The check is the authority, not the push: a
+        # push that failed while the check passed (an earlier attempt landed,
+        # or a copy kept as a sidecar) leaves nothing to seal. Only the files
+        # the private tip lacks are sealed when the tip can be listed within
+        # 20 seconds a call (the token is here for that alone), else every
+        # file on disk; a later fold adds only what the chain lacks either way. Encrypted
+        # with Cooper's key (AES-256, PBKDF2-SHA256, NHL_CHAIN_FALLBACK_KEY,
+        # at least 32 characters), written to $RUNNER_TEMP,
+        # outside the workspace, and kept below as a 7-day artifact that
+        # nobody without the key can read. Every later round's restore
+        # decrypts it and folds it in, and that round's push carries it home.
+        id: seal
+        if: always() && steps.private_verify.outcome != 'success' && steps.private_verify.outcome != 'skipped'
+        timeout-minutes: 2
+        continue-on-error: true
+        env:
+          NHL_CHAIN_FALLBACK_KEY: ${{ secrets.NHL_CHAIN_FALLBACK_KEY }}
+          # Only to list the tip, so the seal leaves out what is already home.
+          NHL_CLOSING_LINES_TOKEN: ${{ secrets.NHL_CLOSING_LINES_TOKEN }}
+          PYTHONPATH: src
+        run: python scripts/private_movement_chain.py seal --processed-dir data/processed --out "$RUNNER_TEMP/sealed/round.enc"
+
+      - name: Keep the sealed round
+        id: sealed_upload
+        if: always() && steps.seal.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: line-movement-sealed-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/sealed/round.enc
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Scan the captured ladders
         # The 2026-10-15 checkpoint in docs/pre_registered_ladder_coherence.md
         # reads rung DEPTH, and this puts that number in every run summary
@@ -367,7 +398,7 @@ jobs:
         # the captures being kept; the last step reads its outcome and turns
         # the run red after every upload.
         #
-        # RED ONLY FOR THE DAY THIS RUN WROTE. The artifact carries every day
+        # RED ONLY FOR THE DAY THIS RUN WROTE. The chain carries every day
         # and each run restores the newest copy, so a day damaged in October
         # is still damaged in March. `--fail-on-day` names the league day the
         # capture appended to (computed as `capture_line_movement.py` and the
@@ -409,129 +440,6 @@ jobs:
           fi
           exit "$SCAN_EXIT"
 
-      - name: Fold in this run's earlier attempts
-        # A RE-RUN MUST NOT DELETE THE ROUND IT WAS RUN TO RESCUE. The gates
-        # at the end say a lost night "cannot be collected later", which
-        # invites a Re-run. An artifact belongs to the run, not the attempt,
-        # so the upload below (`overwrite: true`) deleted attempt 1's
-        # `line-movement`, the only copy of its prices, scratch list and line
-        # units; and "Restore today's captures" could not have brought that
-        # round back, because GitHub lists this run as in progress while it
-        # re-runs and only completed runs are restore sources. So on every
-        # attempt after the first, this run's own artifact is unioned row by
-        # row into data/processed (the restore's own `union_csv`) before it
-        # is uploaded again. A run whose earlier attempt uploaded nothing
-        # recovers nothing. Free: GitHub's API only, no provider credit.
-        # A download that fails otherwise makes this step's outcome a
-        # failure: the upload below then does not run, this attempt's
-        # captures are kept beside the earlier ones under their own name,
-        # and the gate at the end makes the run red.
-        # tests/test_a_rerun_keeps_the_first_attempts_captures.py runs it.
-        id: earlier
-        if: always() && github.run_attempt != '1'
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          python scripts/restore_state.py --fold-run "$GITHUB_RUN_ID" \
-            --artifact line-movement --dest data/processed --attempts 3
-
-      - name: Keep the captures
-        # ONE ROOT. upload-artifact roots an artifact at the common ancestor
-        # of its paths, and "Restore today's captures" unpacks it into
-        # data/processed, so every path here must sit under data/processed.
-        # Two data/outputs files were added to this list on 2026-09-22, which
-        # moved the root to data/: every restored capture would have landed
-        # one directory too deep, each run would have started the day's file
-        # afresh, and continue-on-error would have kept the job green. The
-        # history then lives only in per-run artifacts (7-day retention since
-        # 2026-10-02, and the private chain).
-        # tests/test_the_capture_chain_restores_where_it_uploads.py derives
-        # this from the file rather than trusting this comment.
-        #
-        # Not after a failed fold (above): overwriting an earlier attempt's
-        # artifact that could not be read would delete its captures.
-        #
-        # data/processed/closing_line_captures.csv, which the capture also
-        # writes, is not kept here. But this artifact is public, and its
-        # line_movement day files carry every book's every rung, the
-        # face-off round included: a superset of the closing-line store.
-        # Closing Lines derives the store's rows from exactly these files
-        # and pushes them to the private repository
-        # (scripts/private_closing_store.py). Until stage two drops this upload
-        # (the chain is moving to the private repository; CLAUDE.md), closing
-        # prices remain downloadable from this repository for its retention,
-        # and tests/test_closing_prices_never_reach_the_public_repo.py pins
-        # this upload as a known carrier.
-        if: always() && steps.earlier.outcome != 'failure'
-        uses: actions/upload-artifact@v4
-        with:
-          name: line-movement
-          path: |
-            data/processed/line_movement
-            data/processed/deployment
-            data/processed/line_combinations
-          if-no-files-found: warn
-          # 7 days, not 90 (2026-10-02): the restore reads only the newest
-          # carriers, and every day file is also kept privately now, so a
-          # public copy older than a week serves nobody but a downloader.
-          retention-days: 7
-          overwrite: true
-
-      - name: Keep this attempt's captures beside the earlier ones
-        # Only when this run's earlier artifact could not be read. Nothing
-        # restores this name, so the round lives here until someone unions
-        # it by hand; that is the red gate's report, not a silent loss of
-        # either attempt. Kept 7 days (2026-10-02): the private push below
-        # runs after this upload either way and merges this attempt's rows
-        # into the private chain, so a hand union is needed only when that
-        # push failed too, and the gate says so.
-        if: always() && steps.earlier.outcome == 'failure'
-        uses: actions/upload-artifact@v4
-        with:
-          name: line-movement-attempt-${{ github.run_attempt }}
-          path: |
-            data/processed/line_movement
-            data/processed/deployment
-            data/processed/line_combinations
-          if-no-files-found: warn
-          retention-days: 7
-
-      - name: Keep the captures privately
-        # Stage one of the move: this round's three stores go to branch
-        # `movement` of the private repository, merged into its tip (never a
-        # row dropped, duplicates kept). AFTER both public uploads, on
-        # purpose: while the public artifact is still the round's keeper,
-        # nothing private may stand between the paid capture and it, and the
-        # job is cut at 20 minutes. (Stage two, which drops the public
-        # upload, moves this to straight after the capture.) Only from the
-        # default branch: a feature branch's dispatch must never write the
-        # season's chain. A rejected push or an unreachable GitHub is tried
-        # again with a pause; a failure here loses nothing, because the public
-        # artifact already kept the round, and the last gate turns the run red.
-        id: private_push
-        if: always() && (github.event_name == 'schedule' || github.ref == format('refs/heads/{0}', github.event.repository.default_branch))
-        timeout-minutes: 4
-        continue-on-error: true
-        env:
-          NHL_CLOSING_LINES_TOKEN: ${{ secrets.NHL_CLOSING_LINES_TOKEN }}
-          PYTHONPATH: src
-        run: python scripts/private_movement_chain.py push --processed-dir data/processed
-
-      - name: Check the private chain holds this round
-        # The row-for-row check stage two waits on: the private tip must
-        # hold every row of every file the uploads above made public,
-        # counted as a multiset. Its line goes to the run summary; a
-        # shortfall turns the run red at the last gate.
-        id: private_verify
-        if: always() && (github.event_name == 'schedule' || github.ref == format('refs/heads/{0}', github.event.repository.default_branch))
-        timeout-minutes: 4
-        continue-on-error: true
-        env:
-          NHL_CLOSING_LINES_TOKEN: ${{ secrets.NHL_CLOSING_LINES_TOKEN }}
-          PYTHONPATH: src
-        run: python scripts/private_movement_chain.py verify --processed-dir data/processed
-
       - name: Keep the ladder scan
         # Its own artifact, for the reason above: it lives under data/outputs.
         if: always()
@@ -552,58 +460,58 @@ jobs:
           echo "It wrote no staging file, froze no opinion, edited no policy,"
           echo "allowlisted no provider, and placed no bet."
 
-      - name: Fail the run when an earlier attempt could not be folded in
-        # After every upload: this attempt's captures are kept under
-        # line-movement-attempt-N, the earlier attempt's under line-movement,
-        # and neither is in the next run's restore until the two are unioned.
-        if: always() && steps.earlier.outcome == 'failure'
-        run: |
-          echo "::error::This run's line-movement artifact from an earlier attempt could not be downloaded or merged (see Fold in this run's earlier attempts), so it was not overwritten. This attempt's captures are in line-movement-attempt-${{ github.run_attempt }}; the next run restores only line-movement, so union the two (scripts/restore_state.py union_csv) or this attempt's round is missing from the chain."
-          exit 1
-
       - name: Fail the run when the previous captures were not restored
-        # After every upload: this run's round is kept either way, and the
-        # red X is the report, not the damage. It names what the restore
-        # could not ask GitHub (restore_problem.txt, written by "Restore
-        # today's captures"), because a run that started its day files
-        # afresh uploaded a carrier holding its own round alone, and three
-        # of those in a row leave every earlier capture outside the union's
-        # window. Seen after one, the chain can be repaired by hand before
-        # the third: gh run download <run-id> -n line-movement from the last
-        # run that restored normally, and union it (scripts/restore_state.py
-        # union_csv). tests/test_a_line_movement_restore_that_could_not_ask_is_red.py
-        # runs it. A restore cut off by its timeout (or failing outright)
-        # left no sentence in the file, so its outcome is read as well.
+        # After the round is home (or sealed): the red X is the report, not
+        # the damage. A thin restore loses nothing on its own, because a push
+        # that runs merges into the private tip, but the day's files and the ladder
+        # scan saw a thin chain, and a sealed round that would not open is
+        # still outside the chain. restore_problem.txt says which. A restore
+        # cut off by its timeout left no sentence, so its outcome is read too.
         if: always()
         run: |
           if [ "${{ steps.restore.outcome }}" = "failure" ]; then
-            echo "::error::Restore today's captures did not finish (it failed or hit its 5-minute limit), so this run may have started its day files afresh and uploaded a carrier missing earlier rounds. Three such runs in a row drop every earlier capture from the chain."
+            echo "::error::Restore today's captures did not finish (it failed or hit its time limit), so this round's day files may have started thin. Whether the round reached the private chain is said by the private-chain gate below."
             exit 1
           fi
           if [ -s restore_problem.txt ]; then
-            echo "::error::The previous captures were not fully restored this run, so it uploaded a carrier missing earlier rounds. Three such runs in a row drop every earlier capture from the chain. What could not be reached: $(tr '\n' ' ' < restore_problem.txt)"
+            echo "::error::$(tr '\n' ' ' < restore_problem.txt)"
             exit 1
           fi
           echo "The previous captures were restored."
 
       - name: Fail the run when the private chain was not kept
-        # After every upload, like the gates around it. Any of: the private
-        # copy could not be folded in, this round could not be pushed, or the
-        # private tip is short of what was just made public. During stage
-        # one the public artifact still holds the round, so this red is the
-        # report, not the loss; it is what stage two's cutover waits on.
+        # After every upload, like the gates around it. The push or the check
+        # failed. When the check passed, the round is home and nothing was
+        # sealed (a sidecar still needs a hand merge); otherwise the round is
+        # either sealed (it comes home with the next run) or on no copy at
+        # all, and this says which.
         if: always()
         run: |
-          if [ -s private_problem.txt ]; then
-            echo "::error::$(cat private_problem.txt)"
-          fi
-          if [ ! -s private_problem.txt ] \
-             && [ "${{ steps.private_restore.outcome }}" != "failure" ] \
-             && [ "${{ steps.private_push.outcome }}" != "failure" ] \
+          if [ "${{ steps.private_push.outcome }}" != "failure" ] \
              && [ "${{ steps.private_verify.outcome }}" != "failure" ]; then
             exit 0
           fi
-          echo "::error::The private movement chain was not kept for this round (restore: ${{ steps.private_restore.outcome }}, push: ${{ steps.private_push.outcome }}, check: ${{ steps.private_verify.outcome }}). Whether a public artifact kept it is in the upload steps above (line-movement, or line-movement-attempt-N after a failed fold); if neither did, this round is on no copy."
+          if [ "${{ steps.private_verify.outcome }}" = "success" ]; then
+            PUSH_EXIT="${{ steps.private_push.outputs.exit }}"
+            if [ "$PUSH_EXIT" = "2" ]; then
+              echo "::error::The private push kept this round's copy of a day file beside the tip's as a sidecar (unmerged/..., named in the push step's errors), because the two could not be merged. Every row is on the private branch and nothing was sealed, but Closing Lines, the CLV report and the ladder scan read day files only: merge the sidecar into its day file by hand (CLAUDE.md, \"Merging a sidecar\"). Every later check warns until it is merged."
+            else
+              echo "::error::The private push failed (exit ${PUSH_EXIT:-not recorded: the step was killed by its time limit}), but the check found every row of this round on the private tip, so nothing was sealed and nothing is lost. The push step's log says why it failed."
+            fi
+            exit 1
+          fi
+          echo "::error::The private chain did not take this round (push: ${{ steps.private_push.outcome }}, check: ${{ steps.private_verify.outcome }})."
+          ON_DISK=0
+          for f in data/processed/line_movement/*.csv data/processed/deployment/*.csv data/processed/line_combinations/*.csv; do
+            if [ -f "$f" ]; then ON_DISK=1; fi
+          done
+          if [ "$ON_DISK" = 0 ]; then
+            echo "::error::This round holds no day file at all (its restore read nothing and its captures wrote nothing), so no captured row is outside the private chain; see the restore gate for why the restore read nothing."
+          elif [ "${{ steps.sealed_upload.outcome }}" = "success" ]; then
+            echo "::error::It was sealed with NHL_CHAIN_FALLBACK_KEY as line-movement-sealed-${{ github.run_attempt }}, and the next round folds it in."
+          else
+            echo "::error::It could not be sealed (seal: ${{ steps.seal.outcome }}, upload: ${{ steps.sealed_upload.outcome }}). The rows the private chain lacks are on no copy, and a re-run cannot help: a round cannot be captured again."
+          fi
           exit 1
 
       - name: Fail the run when the line units were not captured
@@ -654,5 +562,5 @@ jobs:
         # X is the report, not the damage.
         if: always() && steps.ladder.outcome == 'failure'
         run: |
-          echo "::error::The ladder scan failed, or could not read the day file this run appended to (see Scan the captured ladders, which names it). That day's ladders are left out of the depth in this run's summary. Earlier runs' line-movement artifacts keep earlier copies of the file (gh run download <run-id> -n line-movement); no step in this workflow repairs it in the chain."
+          echo "::error::The ladder scan failed, or could not read the day file this run appended to (see Scan the captured ladders, which names it). That day's ladders are left out of the depth in this run's summary. Earlier copies of the file are in the history of the private repository's movement branch (cooperross399/nhl-closing-lines); no step in this workflow repairs it in the chain."
           exit 1

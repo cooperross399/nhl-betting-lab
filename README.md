@@ -181,14 +181,18 @@ PYTHONPATH=src .venv/bin/python scripts/private_closing_store.py push \
 PYTHONPATH=src .venv/bin/python scripts/private_closing_store.py pull \
     --out "$RUNNER_TEMP/private-closing-store/closing_line_captures.csv"
 
-# Line Movement's capture chain, kept on branch `movement` of the same private
-# repository (stage one of the move, 2026-10-02). Every Line Movement round
-# folds the private copy into what it restored; from the default branch it
-# also pushes its three stores and checks the private tip holds every row it
-# uploaded publicly (a feature-branch dispatch only reads). Needs
-# NHL_CLOSING_LINES_TOKEN.
+# Line Movement's capture chain, which lives only on branch `movement` of the
+# same private repository. Every round restores it (pull, then unseal any
+# sealed round), pushes this round to it (default branch only), checks the tip
+# holds the round (verify), and seals what the tip lacks with
+# NHL_CHAIN_FALLBACK_KEY when that check did not pass. Needs
+# NHL_CLOSING_LINES_TOKEN (and the key, for seal/unseal). A missing `movement`
+# branch is refused, never recreated by a round (--allow-new-chain seeds one).
 PYTHONPATH=src .venv/bin/python scripts/private_movement_chain.py pull --dest data/processed
+PYTHONPATH=src .venv/bin/python scripts/private_movement_chain.py unseal --dest data/processed
 PYTHONPATH=src .venv/bin/python scripts/private_movement_chain.py push --processed-dir data/processed
+PYTHONPATH=src .venv/bin/python scripts/private_movement_chain.py seal --processed-dir data/processed \
+    --out "$RUNNER_TEMP/sealed/round.enc"
 PYTHONPATH=src .venv/bin/python scripts/private_movement_chain.py verify --processed-dir data/processed
 ```
 
@@ -341,8 +345,9 @@ one file per UTC day. This repository is public, and a store here (a branch, a
 release, a Pages site or an artifact) would be a downloadable odds file, which
 the provider's terms forbid. Closing Lines buys nothing on its own schedule:
 Line Movement Capture's fetch already carries the prices, so Closing Lines runs
-each time Line Movement completes, reads the `line-movement` artifact that run
-kept, derives the best price per selection per round from every day it
+each time Line Movement completes, pulls Line Movement's capture chain from
+branch `movement` of the private repository onto its own runner (it uploads
+nothing), derives the best price per selection per round from every day it
 carries, and pushes those rows to the private store, the bulk moneyline, puck
 line and total included (each Line Movement round asks for them beside the
 per-event markets). An opinion in a market no round priced before face-off,
@@ -354,17 +359,20 @@ Gameday Refresh's read both use the Actions secret
 `cooperross399/nhl-closing-lines` with Contents read and write. Closing Lines
 stays disabled until that secret exists.
 
-**Not yet private, moving in two stages:** the `line-movement` artifact the store
-is derived from is itself a public artifact holding every captured price. Since
-2026-10-02 (stage one) each Line Movement round also keeps its three stores in
-the private repository's `movement` branch and checks the private copy holds
-every row it uploads publicly, and the public copies are kept 7 days instead of
-90. Stage two drops the public upload once rounds verify clean. CLAUDE.md
-records both.
+**The movement chain is private too (stage two):** Line Movement's capture
+chain, which the store is derived from and which holds every captured price,
+lives only on the private repository's `movement` branch. Line Movement
+restores from it and pushes each round to it; a round the private tip does
+not hold after the push is kept only sealed, encrypted with Cooper's key
+(`NHL_CHAIN_FALLBACK_KEY`), until the next round brings it home. **Never re-run
+a Line Movement run created before stage two merged:** a re-run executes that
+run's old workflow, which pulled the whole private chain and uploaded it
+publicly (CLAUDE.md). Public `line-movement` artifacts uploaded before
+stage two stay downloadable until they expire. CLAUDE.md records both stages.
 
 Gameday Refresh pulls the private store into the runner's temp directory
 (never into `data/processed`, which it uploads publicly as `gameday-state`),
-restores the `line-movement` chain beside it, and scores the union of the two
+pulls the private movement chain beside it, and scores the union of the two
 into `data/outputs/closing_line_value.md`: beat-the-close rate, CLV%, and the
 de-vigged expected value at the closing line, for opinions and for bets
 separately (a "bet" there, as in the forward-evidence report, is an opinion
@@ -401,11 +409,11 @@ branch is never a source: it ran code nobody reviewed, and Line Movement's
 only unexpired artifact on 2026-09-25 was such a rehearsal, which would have
 seeded the season's capture chain. Choosing "the newest successful run" picked a
 skipped backup run (a success with no artifact) and threw away every degraded
-run's cache and frozen snapshot. Line Movement Capture restores its captures
-the same way, and then unions every day file, row by row, with the two
-carriers before the newest (`--union 3`): a red run's scratch list and line
-units used to fall out of the chain, and a run whose own restore found nothing
-must not become the base the season is lost from. Historical Props Purchase
+run's cache and frozen snapshot. Line Movement Capture used to restore its
+captures the same way, with `--union 3`; since stage two of the chain's move it
+restores from the private repository's `movement` branch instead (see Closing
+Lines above), and its push merges into that tip, so a run whose restore found
+nothing cannot become the base the season is lost from. Historical Props Purchase
 restores its bought prices and its state with `--refuse-unreachable`. If
 GitHub cannot be asked, the run stops before it spends a credit or uploads
 anything. Only an answer that no run carries them starts it without them: one

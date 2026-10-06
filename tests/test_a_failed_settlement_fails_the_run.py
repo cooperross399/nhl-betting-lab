@@ -71,7 +71,7 @@ SCRIPT = {
     REBUILD: "run_allowlist_evidence.py",
 }
 
-NO_STORE = "No private capture store is configured"
+NO_STORE = "The private capture store holds nothing yet"
 
 
 @pytest.fixture(autouse=True)
@@ -114,10 +114,13 @@ def _id(name: str) -> str:
 
 def _stubs(tmp_path: Path, exits: dict[str, int]) -> dict:
     """A `python` that exits as `exits` says for the script it is given (0
-    otherwise), and a `git` that reaches no network. The private store's
-    pull exits 3 unless told otherwise: no NHL_CLOSING_LINES_TOKEN, which is
-    what a repository with no private store configured answers."""
-    exits = {"private_closing_store.py": 3, **exits}
+    otherwise), and a `git` that reaches no network. Both private pulls (the
+    store and, since stage two, the movement chain) answer unless told
+    otherwise: the store exits 4 (configured, nothing in it yet) and the
+    chain exits 0 having laid down no day file. (A missing token, exit 3, and
+    a missing movement branch, exit 4 from the chain, are faults since stage
+    two.)"""
+    exits = {"private_closing_store.py": 4, "private_movement_chain.py": 0, **exits}
     bin_dir = tmp_path / "stubs"  # not "bin": card-feed puts its `date` there
     bin_dir.mkdir(exist_ok=True)
     cases = "".join(
@@ -405,6 +408,27 @@ def test_a_rejected_store_token_is_reported_as_one(tmp_path: Path) -> None:
     (line,) = [e for e in _errors(report) if "closing-line value" in e]
     assert "NHL_CLOSING_LINES_TOKEN" in line and "Replace the secret" in line
     assert "damaged" not in line
+
+
+@pytest.mark.parametrize(("fault", "says"), [
+    ("rejected-token", "Replace the secret"),
+    ("missing-chain", "has no movement branch"),
+    ("no-token", "is not set"),
+    ("damaged-store", "damaged snapshot, movement day or capture store"),
+    ("empty-read", "damaged snapshot, movement day or capture store"),
+    ("unexpected-exit-7", "damaged snapshot, movement day or capture store"),
+    ("", "damaged snapshot, movement day or capture store"),
+])
+def test_every_clv_fault_is_red_and_says_one_thing(tmp_path: Path, fault: str, says: str) -> None:
+    """Whatever fault the CLV step names, a failed step fails the run and
+    "Report the outcome" says one closing-line sentence, in that fault's
+    words: no arm's wording can stand in for the exit."""
+    work = _workspace(tmp_path)
+    report = _report(work, "false", {CLV: "failure"}, store_fault=fault)
+    assert report.returncode != 0, report.stdout
+    (line,) = [e for e in _errors(report) if "closing-line value" in e]
+    assert says in line
+    assert "Clean run." not in report.stdout
 
 
 def test_any_other_clv_failure_names_every_cause(tmp_path: Path) -> None:

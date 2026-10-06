@@ -40,3 +40,21 @@ build/
 dist/
 .coverage
 htmlcov/
+# Line Movement's capture chain and anything opened from it: raw odds that
+# live only in the private repository (cooperross399/nhl-closing-lines).
+# A local pull, a sealed round opened by hand, or a downloaded artifact must
+# never become a commit to this public repository. The hand procedures in
+# CLAUDE.md work in a folder outside the checkout; this is the second line.
+data/processed/line_movement/
+data/processed/deployment/
+data/processed/line_combinations/
+data/processed/unmerged/
+data/processed/closing_line_captures*.csv
+/line_movement/
+/deployment/
+/line_combinations/
+/unmerged/
+/merged/
+/captures/
+round.enc
+round.tar

@@ -311,13 +311,17 @@ Re-derive rather than trust if the data has moved.
   and exits 2, which the step keeps under `continue-on-error` until a final
   gate after every upload (`steps.ladder.outcome == 'failure'`) turns the
   run red. A damaged *earlier* day is a standing `::warning::` and a summary
-  line on every later run, and exits 0: the artifact carries every day and
+  line on every later run, and exits 0: the chain carries every day and
   each run restores the newest copy, so otherwise one bad October day would
   red every run of the season and bury the line-unit and scratch-list gates.
   Run by hand with no day named, any damage exits 2. No step repairs a
-  damaged file in the artifact chain; earlier runs' `line-movement`
-  artifacts keep earlier copies (`gh run download <run-id> -n
-  line-movement`), and whether to add a repair procedure is Cooper's call.
+  damaged file in the chain. Since stage two (#298) the chain is branch
+  `movement` of the private `cooperross399/nhl-closing-lines`, and earlier
+  copies of a day are in that branch's history (no `line-movement` artifact
+  is uploaded any more). `private_movement_chain.py push` cannot replace a
+  damaged tip copy: it keeps the repaired file beside it as an `unmerged/`
+  sidecar and exits 2 (see "Merging a sidecar"). Whether to add a repair
+  procedure is still Cooper's call.
 - **The oracle ceiling was an outcome filter, not a line-label result.**
   Abstaining above a 2-minute realised rise gives +3.11% [+1.39%, +4.80%] and
   a random-removal placebo reaches only −0.30% (z=8.3), so the cell is
@@ -715,8 +719,9 @@ Re-derive rather than trust if the data has moved.
   nothing. From 2026-09-24 each Line Movement run handed its closing prices
   over as the `closing-line-captures` artifact for Closing Lines to merge
   into that branch; since 2026-10-01 neither exists (see the next entry), and
-  Closing Lines derives the rows from the `line-movement` artifact and pushes
-  them to the private store. That path fetches nothing and spends no credit. **Except the bulk team markets (found 2026-09-25):**
+  Closing Lines derives the rows from the chain (since stage two, pulled from
+  the private repository's `movement` branch) and pushes them to the private
+  store. That path fetches nothing and spends no credit. **Except the bulk team markets (found 2026-09-25):**
   the retired capture also bought `h2h`, `spreads` and `totals`, and Line
   Movement asks only for the per-event markets and their ladders, so no
   moneyline opinion can ever meet a close, and a featured puck line or total
@@ -736,9 +741,10 @@ Re-derive rather than trust if the data has moved.
   ladder depth still counts one book's one response. The site reads the
   moneyline open from them and still no open total or puck line.
 - **The closing-line store is the PRIVATE repository
-  `cooperross399/nhl-closing-lines` (2026-10-01), and closing prices are
-  still downloadable from this repository through Line Movement's public
-  artifact. Read both halves.** This repository is public, so a
+  `cooperross399/nhl-closing-lines` (2026-10-01), and since stage two (#298)
+  so is the movement chain it is derived from; only the public
+  `line-movement` artifacts uploaded before stage two are still
+  downloadable, until they expire. Read both halves.** This repository is public, so a
   `closing-lines` branch here (or a release, a Pages site, or an artifact)
   would be a permanent, downloadable file of captured odds (book, price,
   line, capture time), and The Odds API's terms forbid redistributing their
@@ -746,9 +752,11 @@ Re-derive rather than trust if the data has moved.
   Lines was disabled on 2026-09-25 (#126), before its first in-season run.
   Cooper's decision on 2026-10-01: closing-line data must never be published
   publicly, and CLV must work. What #286 did:
-  - **Closing Lines** runs when Line Movement completes, downloads that run's
-    `line-movement` artifact, derives one best-price row per selection per
-    round from **every day file it carries**, one at a time
+  - **Closing Lines** runs when Line Movement completes, pulls the chain from
+    the private repository's `movement` branch onto its runner (until stage
+    two it downloaded that run's public `line-movement` artifact), derives
+    one best-price row per selection per round from **every day file the
+    chain holds**, one at a time
     (`closing_lines.load_movement_captures`, the dedicated store's rows by
     construction), and pushes them with `scripts/private_closing_store.py
     push` to `captures/<UTC day>.csv` in the private repository, merging
@@ -776,13 +784,19 @@ Re-derive rather than trust if the data has moved.
     artifact, and deletes it after the report. It **always** restores the
     movement chain too, and `run_closing_line_value.py` scores the union of
     both (`--captures-dir` is repeatable), so a round the store has not
-    received yet is still scored. Pull exit 3 (no token) and 4 (empty) are
-    clean runs on the chain alone; exit 1 (unreachable) degrades the run;
-    exit 2 (a damaged day file: the good days are still scored) and 5
-    (token turned away; "Report the outcome" says to replace the secret)
+    received yet is still scored. Since stage two both sources are private
+    (the store on `main`, the chain on `movement`) and both are pulled into
+    `$RUNNER_TEMP`. Store exit 4 (no captures yet) is a clean run, and so is
+    a `movement` branch that exists and holds no day (the chain's pull exits
+    0); chain exit 4 means the private repository has no `movement` branch,
+    which since 2026-10-02 means it was deleted or renamed, so the step fails
+    red with `store_fault=missing-chain`. Exit 1 (unreachable) degrades the
+    run; exit 2 (a damaged day file: the good days
+    are still scored), 5 (token turned away; "Report the outcome" says to
+    replace the secret) and 3 (no token at all: nothing private can be read)
     fail the step red without degrading it, because a backup would hit the
-    same fault. The published
-    report (`latest_closing_line_value.md` on card-feed, and `gameday-reports`)
+    same fault. The published report (`latest_closing_line_value.md` on
+    card-feed, and `gameday-reports`)
     is aggregate only: counts, rates and intervals, never a price, a line or
     a book.
   - **The secret is `NHL_CLOSING_LINES_TOKEN`**, an Actions secret on this
@@ -790,9 +804,13 @@ Re-derive rather than trust if the data has moved.
     cooperross399, repository access *only* `cooperross399/nhl-closing-lines`,
     repository permissions **Contents: Read and write** (Metadata: Read is
     added automatically), nothing else. The steps that read it: Gameday
-    Refresh's CLV step, Closing Lines' publish step, and Line Movement's
-    three private-chain steps (since 2026-10-02, below).
-    `tests/test_closing_prices_never_reach_the_public_repo.py` pins that list.
+    Refresh's CLV step; Closing Lines' hand-off and publish steps; and Line
+    Movement's restore, private push, private check and seal (the seal reads
+    it only to list the tip). The fallback key `NHL_CHAIN_FALLBACK_KEY` is
+    read only by Line Movement's restore (to unseal) and its seal step.
+    `tests/test_closing_prices_never_reach_the_public_repo.py` pins both
+    lists across every workflow, at workflow, job and step level and in any
+    spelling (`TOKEN_HOLDERS`, `KEY_HOLDERS`).
   - **Closing Lines stays disabled until that secret exists and one push has
     landed in the private repository.** Re-enable it then, and only then:
     `gh workflow enable closing-lines.yml`. Verified locally on 2026-10-01
@@ -801,41 +819,179 @@ Re-derive rather than trust if the data has moved.
     second push, a pull, and a CLV report from the pulled store
     byte-identical to the one from the movement chain (4,244 of 4,333
     opinions matched).
-  - **IN PROGRESS, in two stages (Cooper chose "staged", 2026-10-02): the
-    `line-movement` artifact itself.** It is uploaded from this public
-    repository on every round, and its day files hold every book's every
-    rung, face-off round included, a superset of the private store. Anyone
-    can download it and run `load_movement_captures` on it. So "closing-line
-    data is never published publicly" is **not yet met** until stage two.
-    - **Stage one (2026-10-02): dual-write.** Each round still
-      restores from the public artifact, then folds in the private copy on
-      branch `movement` of `cooperross399/nhl-closing-lines`
-      (`scripts/private_movement_chain.py pull`), pushes its three stores
-      there (`push`, default branch only), and checks that the private tip
-      holds every row of what it uploads publicly, as a multiset (`verify`,
-      one line in the run summary). The merge is `restore_state.union_csv`,
-      the chain's own union: no row dropped, exact duplicates kept (3.7% of
-      movement rows are), a file whose parse disagrees with its line count
-      never merged. A gate after every upload turns the run red if the
-      private copy could not be folded in, pushed or matched. The public
-      artifact's retention dropped from 90 days to 7. A branch of its own,
-      because a movement file on `main` would be read by the store's pull as
-      closing prices (every book's row, the flattering basis). The chain was
-      seeded 2026-10-02 from run 37032219942's artifact (12 files, 258,447
-      rows), and a fresh pull of it was byte-identical to that artifact.
-    - **Stage two, after rounds verify clean:** drop the public
-      `line-movement` uploads; Line Movement restores from the private copy
-      alone; Closing Lines and the CLV step read it; the site's moneyline
-      open (which no frozen board has ever carried) is retired or read
-      privately. The public artifacts already uploaded stay downloadable until
-      they expire (90 days for those before 2026-10-02, 7 after); deleting
-      them needs `actions: write` and is Cooper's call.
-    - `gameday-state` also still carries that run's staging quotes, as
-      before.
+  - **The movement chain moved too, in two stages (Cooper chose "staged",
+    2026-10-02).** Line Movement's day files hold every book's every rung,
+    face-off round included, a superset of the private store; until stage
+    two they lived in the public `line-movement` artifact, where anyone could
+    download them and run `load_movement_captures`.
+    - **Stage one (#289, 2026-10-02): dual-write.** Each round restored from
+      the public artifact, folded in the private copy on branch `movement`
+      of `cooperross399/nhl-closing-lines`, pushed its three stores there,
+      and checked the private tip held every row it uploaded publicly
+      (`scripts/private_movement_chain.py` pull/push/verify). Every merge is
+      `restore_state.union_csv`: no row dropped, exact duplicates kept (3.7%
+      of movement rows are), a file whose parse disagrees with its line
+      count never merged. Public retention dropped from 90 days to 7. The
+      branch is separate from `main` because a movement file there would be
+      read by the store's pull as closing prices. Seeded 2026-10-02 from run
+      37032219942 (12 files, 258,447 rows; a fresh pull was byte-identical).
+      Its first weekend ran with a token GitHub rejected (401), so nothing
+      reached the private copy from Actions until 2026-10-05.
+    - **Stage two: the chain's only home is the private repository.** Line
+      Movement restores from it (`pull`), folds in any sealed round
+      (`unseal`), pushes straight after the captures (default branch only),
+      and checks the tip holds the round (`verify`). No step uploads the
+      chain publicly. A round whose push fails, or whose check finds the
+      private tip short of it, is SEALED (since the pre-merge review, the
+      check alone decides: see below): encrypted with
+      AES-256 under Cooper's key (secret `NHL_CHAIN_FALLBACK_KEY`, which only
+      Cooper set and nobody has read) into a 7-day `line-movement-sealed-N`
+      artifact that is unreadable without the key; every later round
+      decrypts and folds it in, and that round's push brings it home. The
+      gate says whether a failed round was sealed or is on no copy. A
+      re-run's second attempt recovers the first from the private chain or
+      its seal; `--fold-run` and `line-movement-attempt-N` are gone. Closing
+      Lines pulls the chain from the private repository onto its runner
+      (uploading nothing), and the CLV step pulls both the store and the
+      chain into `$RUNNER_TEMP`, never `data/processed`. The site's moneyline
+      open, which no frozen board ever carried, simply stays empty: the site
+      may never hold the store's token.
+    - **Review fixes (third commit of #298):** a missing `movement` branch is a
+      fault everywhere (Line Movement's restore, Closing Lines, the CLV step),
+      and `push` refuses to recreate it (`--allow-new-chain` is for a manual
+      seed only), so a deleted branch cannot come back as a thin chain. A day
+      file whose copy cannot be merged with the tip's is kept on the private
+      branch as a sidecar (`unmerged/<store>/<day>/<blob>.csv`), counted as
+      held by `verify`, and parked the same way by `unseal`, so no rows strand
+      in a seal that expires. `unseal` skips sealed copies the tip already
+      holds; `seal` holds only what the tip lacks (everything, when the tip
+      cannot be listed in time or lacks nothing). `restore_state.union_csv`
+      takes an older copy whole when it extends the newer byte for byte. The
+      fallback key must be at least 32 characters with no surrounding
+      whitespace (one saved as whitespace only reads as not set, exit 3).
+      **Known limit:** a seal lasts 7 days and no Line Movement
+      round runs from May to late September, so a round sealed in the
+      season's last week (push failing then) would expire unfolded; the lab's
+      end date (2027-04-25) falls inside that window.
+    - **Pre-merge review fixes (2026-10-06, last commit of #298):**
+      - **The check decides the seal, not the push.** The seal runs when
+        the check did not pass (failed, timed out or cancelled). A push that
+        failed while the check passed (an earlier attempt landed, or a copy
+        kept as a sidecar) has nothing to seal; before this it sealed the
+        whole season and the gate said the round would "fold in". The push
+        step records its exit (`steps.private_push.outputs.exit`) and the
+        gate says which: exit 2 means "merge the sidecar by hand", any other
+        means "nothing is lost, the push log says why".
+      - **The seal cannot wait out its step on a stalled GitHub.** Listing
+        the tip (to trim the seal) is one attempt, each git call killed with
+        its whole process group after 20 seconds (`TIP_LISTING_SECONDS`);
+        on a timeout everything on disk is sealed. Unbounded, git waited past
+        the step's 2 minutes and the round was on no copy, in exactly the
+        case the seal exists for. Seals are gzip-compressed at level 1, so a
+        whole-season seal still fits the step (`unseal` opens plain ones
+        too), and `unseal` names a wrong key even when CBC's padding check
+        lets it through (about once in 256) by checking for an archive.
+      - **Every check warns while a sidecar waits** (`::warning::` and a run
+        summary line naming it), because only the round that kept it is red.
+      - The guards now pin the fallback key's readers across every workflow
+        (reading every raw string, so `secrets['NAME']` inside a `run:` is
+        seen, and counting any index that is not a quoted literal, or
+        `toJSON(secrets)`, as reading every secret); read upload paths line
+        by line and fail closed (the private folders, the runner's temp
+        directory in any spelling, an unresolved `${{ }}`, `~`, an absolute
+        path or `..` are refused, the seal being the one pinned exception);
+        treat any action named `upload-artifact` as an upload whatever its
+        owner, and pin the set of actions used; keep the site from naming
+        the chain's script or the key; and `.gitignore` the chain's folders,
+        `merged/`, `unmerged/` and `round.enc`/`round.tar`, so a local pull
+        or an opened seal cannot be committed here.
+    - **Merging a sidecar.** A push that cannot merge this run's copy of a
+      day file with the tip's (a different header, or a parse that disagrees
+      with its line count) keeps it as `unmerged/<store>/<day>/<blob>.csv` on
+      `movement` and exits 2. Its rows reach no reader until merged: pull,
+      Closing Lines, the CLV report and the ladder scan read day files only.
+      By hand, in a folder outside any checkout of this public repository:
+      `D=$(mktemp -d); gh repo clone cooperross399/nhl-closing-lines
+      "$D/chain" -- -b movement`. In `$D/chain`, compare each
+      `unmerged/<store>/<day>/<blob>.csv` with `<store>/<day>.csv`, repair
+      whichever side is damaged so both share the header, and write the day
+      file as the multiset union of both (no row dropped, exact duplicates
+      kept, as `restore_state.union_csv` does). Then MOVE each merged
+      sidecar, do not delete it: `mkdir -p merged/<store>/<day> && git mv
+      unmerged/<store>/<day>/<blob>.csv merged/<store>/<day>/`. A sealed
+      round holding the same copy stays downloadable for up to 7 days, and
+      the `merged/` mark is what tells its unseal the copy is home; deleted,
+      it would be parked again and that round would go red. Commit, push
+      normally (never force), and `rm -rf "$D"`. The next check stops
+      warning; `merged/` is never read as a day file.
+    - **The fallback key.** Cooper set `NHL_CHAIN_FALLBACK_KEY` on
+      2026-10-05 with `openssl rand -base64 48 | tr -d '\n' | gh secret set
+      NHL_CHAIN_FALLBACK_KEY -R cooperross399/nhl-betting-lab`, which keeps
+      no copy, so today only a workflow round can open a seal. To be able to
+      open one by hand (the known limit above is the case for it), replace
+      it with a key you keep, at a moment when both of these print nothing:
+      no Line Movement run unfinished (`gh run list -R
+      cooperross399/nhl-betting-lab -w line-movement.yml -L 50 --json status
+      -q '.[] | select(.status != "completed") | .status'`; a run reads its
+      secrets when it is queued, so one already waiting would seal with the
+      old key), and no unexpired seal (`gh api
+      repos/cooperross399/nhl-betting-lab/actions/artifacts --paginate -q
+      '.artifacts[] | select(.name | startswith("line-movement-sealed-")) |
+      select(.expired | not) | .name'`), because a seal opens only with the
+      key that made it. Then `KEY=$(openssl rand -base64 48)`, keep `$KEY`
+      somewhere safe off GitHub, and `gh secret set NHL_CHAIN_FALLBACK_KEY -R
+      cooperross399/nhl-betting-lab --body "$KEY"`. To open a seal by hand,
+      outside any checkout of this repository: `D=$(mktemp -d); gh run
+      download <run-id> -R cooperross399/nhl-betting-lab -n
+      line-movement-sealed-<attempt> -D "$D"`, then
+      `NHL_CHAIN_FALLBACK_KEY="$KEY" openssl enc -d -aes-256-cbc -pbkdf2 -iter
+      200000 -md sha256 -pass env:NHL_CHAIN_FALLBACK_KEY -in "$D/round.enc"
+      -out "$D/round.tar" && tar -xf "$D/round.tar" -C "$D"` (gzip or plain).
+      Its files go home with `private_movement_chain.py push --processed-dir
+      "$D"` and the store token; then `rm -rf "$D"`.
+    - **Never re-run a Line Movement run created before #298 merged.** A
+      re-run executes that run's own workflow file (GitHub re-runs a run at
+      its original commit, up to 30 days after it started) with the secrets
+      as they are today. Stage one's file (#289 until #298) pulled the whole
+      private chain into `data/processed` and uploaded it as the public
+      `line-movement` artifact, and every older file uploads its own fresh
+      paid capture publicly. That is every such run, green or red: the red
+      runs of 2026-10-02 to 10-05 (the 401-token weekend) look like
+      candidates and are not, and those rounds cannot be captured again
+      anyway. Only deleting the runs makes a re-run impossible (`gh run
+      delete <id>`, which also deletes their public artifacts; list them
+      with `gh run list -R cooperross399/nhl-betting-lab -w line-movement.yml
+      -L 500 --json databaseId,createdAt -q '.[] | select(.createdAt <
+      "<merge time, UTC>") | .databaseId'`). Moving the token to a new secret
+      name would stop a re-run pulling the chain, but not uploading its own
+      fresh capture. Either is Cooper's call.
+    - **The cutover.** A run executes the workflow file of the commit it was
+      created at, and Line Movement runs are created hours before their
+      round. So any stage-one run still queued or in progress when #298
+      merged runs stage one's file afterwards: it uploads the chain publicly,
+      as every stage-one round did, and pushes its round privately. Runs
+      created after the merge use stage two's file. Waiting for a gap would
+      not have helped: the in-flight runs upload either way, and every run
+      created while waiting would have been one more stage-one upload; nor
+      would cancelling them, which loses rounds that cannot be captured
+      again. What the cutover needs is a check of each in-flight run after it
+      finishes: if its private push or check failed, its round is only in
+      its public artifact, which no stage-two round reads, so fold it in by
+      hand within its 7 days, outside any checkout (`D=$(mktemp -d); gh run
+      download <run-id> -R cooperross399/nhl-betting-lab -n line-movement -D
+      "$D"`; the artifact unpacks to the three store folders, so
+      `private_movement_chain.py push --processed-dir "$D"` with the store
+      token takes them; then `rm -rf "$D"`). The runs in flight at the merge
+      and what their checks said are recorded on #298.
+    - **What is still downloadable:** the `line-movement` artifacts uploaded
+      before stage two, until they expire (90 days for those before
+      2026-10-02, 7 after). Deleting them needs `actions: write` and is
+      Cooper's call. `gameday-state` also still carries that run's staging
+      quotes, as before.
   - `tests/test_closing_prices_never_reach_the_public_repo.py` holds the
     routes it can: no push here carries a capture store, no artifact names
     one, the set of uploads that can carry captured or bought prices is
-    pinned to the known six, however a path is spelled (so a new carrier
+    pinned to the known four, however a path is spelled (so a new carrier
     fails), the CLV step replayed against a
     real private store leaves no captured price in the workspace, the
     script's refusals, and a report built from sentinel prices prints none
@@ -1015,8 +1171,9 @@ Re-derive rather than trust if the data has moved.
   good days being scored. The run is red for *any* damaged movement day,
   including one that predates a schema change and lacks a capture column
   (the old code skipped those on purpose), until the file is restored or
-  removed. Not live today: the only workflow that runs the CLV report,
-  Gameday Refresh, restores no movement store.
+  removed. Live: Gameday Refresh's CLV step scores the movement chain beside
+  the store (since stage two it pulls the chain from the private
+  repository).
 - **2026-09-26: seven passages of wording said something the numbers did
   not.** No
   number, verdict, gate, stake or ledger row moved in any of them, and a

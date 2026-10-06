@@ -25,13 +25,13 @@ name: Closing Lines
 # This workflow holds no write grant on this repository at all.
 # `tests/test_closing_prices_never_reach_the_public_repo.py` holds all of it.
 #
-# WHAT THAT DOES NOT COVER: the rows it pushes are derived from Line
-# Movement's `line-movement` artifact, which is public (7-day retention since
-# 2026-10-02) and carries every price this workflow stores, and more. That
-# chain is moving to the private repository in two stages (CLAUDE.md).
+# WHERE IT READS: the rows it pushes are derived from Line Movement's chain,
+# which since stage two of the move lives only on branch `movement` of the
+# same private repository (CLAUDE.md). It never touches a public artifact.
 #
-# DISABLED since 2026-09-25 (#126), and it stays disabled until the secret
-# below exists and a push has landed in the private repository.
+# Disabled from 2026-09-25 (#126) to 2026-10-02, and again from 2026-10-05
+# while NHL_CLOSING_LINES_TOKEN was a value GitHub rejected (401); whether it
+# is on now is GitHub's state, not this comment's.
 #
 # THE SECRET: `NHL_CLOSING_LINES_TOKEN`, a fine-grained token limited to
 # cooperross399/nhl-closing-lines with Contents read and write. Without it
@@ -55,11 +55,13 @@ on:
   # published them. From 2026-09-24 to 2026-10-01 each Line Movement run
   # uploaded them as a `closing-line-captures` artifact for this workflow to
   # take, which was itself a downloadable odds file on a public repository.
-  # Now this workflow reads the `line-movement` artifact Line Movement already
-  # keeps for its own restore chain, derives the closing prices from it
-  # (`closing_lines.load_movement_captures`, the same rows by construction),
-  # and pushes them to the private store. That path fetches nothing from the
-  # provider and spends no credit.
+  # From 2026-10-01 it read the public `line-movement` artifact instead.
+  # Since stage two of the chain's move, Line Movement keeps no public copy:
+  # this workflow pulls the chain from branch `movement` of the private
+  # repository onto its own runner (it uploads nothing), derives the closing
+  # prices from it (`closing_lines.load_movement_captures`, the same rows by
+  # construction), and pushes them to the private store's `main`. That path
+  # fetches nothing from the provider and spends no credit.
   workflow_run:
     workflows: ["Line Movement Capture"]
     types: [completed]
@@ -72,11 +74,10 @@ on:
         default: "400"
 
 permissions:
-  # Read only. The store is in another repository, reached with
-  # NHL_CLOSING_LINES_TOKEN, so this workflow needs no write grant here.
+  # Read only. The store and the chain are in another repository, reached
+  # with NHL_CLOSING_LINES_TOKEN, so this workflow needs no grant here
+  # beyond reading its own code.
   contents: read
-  # To download the captures a Line Movement run kept.
-  actions: read
 
 concurrency:
   group: closing-lines
@@ -111,33 +112,38 @@ jobs:
           python -m pip install -r requirements.txt
           python -m pip install -e .
 
-      - name: Take the captures Line Movement kept
+      - name: Take the chain from the private repository
+        # Every day the chain carries, pulled onto this runner and nowhere
+        # else (this workflow uploads nothing). A chain with no price file yet
+        # publishes nothing and stays green. A chain that could not be read,
+        # or a repository with no movement branch at all (deleted or renamed:
+        # it has existed since 2026-10-02), is a red run, because the rounds
+        # since the last push would otherwise be skipped quietly (they heal
+        # on the next push that can read it: each push reads every day).
         id: handoff
         if: github.event_name == 'workflow_run'
         env:
-          GH_TOKEN: ${{ github.token }}
-          RUN_ID: ${{ github.event.workflow_run.id }}
+          NHL_CLOSING_LINES_TOKEN: ${{ secrets.NHL_CLOSING_LINES_TOKEN }}
+          PYTHONPATH: src
         run: |
-          set -euo pipefail
+          set -u
           mkdir -p data/processed
-          # "Kept nothing" and "could not fetch what was kept" are different,
-          # and only the first is an ordinary night. So the artifact is looked
-          # up first; a download that then fails is a hard stop.
-          found=$(gh api "repos/${{ github.repository }}/actions/runs/$RUN_ID/artifacts" \
-            --jq '[.artifacts[] | select(.name == "line-movement") | select(.expired | not)] | length')
-          if [ "$found" = "0" ]; then
-            echo "::notice::Line Movement run $RUN_ID kept no captures (no games, or its capture wrote nothing). Nothing to publish."
+          CODE=0
+          python scripts/private_movement_chain.py pull --dest data/processed || CODE=$?
+          if [ "$CODE" = 4 ]; then
+            echo "::error::The private repository has no movement branch. The chain has existed since 2026-10-02, so it was deleted or renamed; restore it from its history."
+            exit 1
+          fi
+          if [ "$CODE" = 0 ] && [ ! -d data/processed/line_movement ]; then
+            echo "::notice::The private chain holds no price captures yet. Nothing to publish."
             echo "empty=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          # Rooted at data/processed, where line-movement.yml roots it.
-          gh run download "$RUN_ID" --name line-movement --dir data/processed --repo "${{ github.repository }}"
-          if [ ! -d data/processed/line_movement ]; then
-            echo "::notice::Line Movement run $RUN_ID kept no price captures. Nothing to publish."
-            echo "empty=true" >> "$GITHUB_OUTPUT"
-            exit 0
+          if [ "$CODE" != 0 ]; then
+            echo "::error::The private movement chain could not be read (exit $CODE)."
+            exit 1
           fi
-          echo "Line Movement run $RUN_ID kept $(ls data/processed/line_movement | wc -l | tr -d ' ') day file(s)."
+          echo "Took $(ls data/processed/line_movement | wc -l | tr -d ' ') line-movement day file(s) from the private chain."
 
       - name: Capture
         id: capture

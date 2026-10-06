@@ -27,11 +27,14 @@ What this module holds, by what the code does rather than what a comment says:
   `gameday-reports` artifact, so it is built from captures carrying sentinel
   prices and books, and must print none of them.
 
-**What it does not hold, and says so:** Line Movement's `line-movement`
-artifact (and its `line-movement-attempt-N` twin) is public and carries every
-captured price, a superset of the private store. Those uploads are on the
-pinned list below as known carriers, not as safe ones. Moving that chain is
-Cooper's open decision (CLAUDE.md).
+**The movement chain too, since stage two (2026-10-05).** Line Movement's
+capture chain, a superset of the closing-line store, lived in the public
+`line-movement` artifact until then; it now lives only on the private store's
+`movement` branch, and no Line Movement upload names a store folder. A round
+whose private push fails is kept only sealed (AES-256, Cooper's key), as one
+file in the runner's temp directory. What remains on the pinned list below
+is bought history and a run's staging quotes, which predate #286, and the
+public artifacts uploaded before stage two until they expire.
 """
 
 from __future__ import annotations
@@ -54,6 +57,7 @@ import yaml
 from nhl_betting_lab import closing_lines as cl
 from nhl_betting_lab.config import PROJECT_ROOT
 from test_a_blocked_card_is_a_degraded_run import _bash, _render
+from test_the_capture_chain_restores_where_it_uploads import upload_paths
 
 sys.path.insert(0, str(PROJECT_ROOT / "scripts"))
 import private_closing_store as store  # noqa: E402
@@ -88,7 +92,7 @@ def _all_workflows() -> list[Path]:
 
 def test_closing_lines_holds_no_write_grant_here() -> None:
     workflow = _load("closing-lines.yml")
-    assert workflow["permissions"] == {"contents": "read", "actions": "read"}
+    assert workflow["permissions"] == {"contents": "read"}
 
 
 def test_closing_lines_pushes_nothing_itself() -> None:
@@ -139,50 +143,178 @@ def test_no_push_to_this_repository_carries_a_capture_store(path: Path) -> None:
 # --- An artifact ---------------------------------------------------------
 
 
+UPLOADS = ("actions/upload-artifact", "actions/upload-pages-artifact")
+
+#: Every action any workflow uses, at any level (a job-level reusable
+#: workflow included). A new one, an upload action by another owner or a
+#: local composite, fails `test_every_action_is_a_known_one` until someone
+#: reads what it does with the private folders and adds it here.
+KNOWN_ACTIONS = {
+    "actions/cache/restore", "actions/cache/save", "actions/checkout",
+    "actions/deploy-pages", "actions/setup-python",
+    "actions/upload-artifact", "actions/upload-pages-artifact",
+}
+
+
+def _is_upload(step: dict) -> bool:
+    """Owner and case aside: any action named like an upload is one."""
+    name = str(step.get("uses", "")).split("@")[0].lower()
+    return name.rsplit("/", 1)[-1] in ("upload-artifact", "upload-pages-artifact")
+
+#: `${{ runner.temp }}` in any spacing or case (the spelling upload-artifact
+#: expands) and `${RUNNER_TEMP}`, both read as `$RUNNER_TEMP`.
+TEMP_SPELLINGS = re.compile(r"\$\{\{\s*runner\s*\.\s*temp\s*\}\}|\$\{\s*RUNNER_TEMP\s*\}", re.IGNORECASE)
+
+#: The folders the private sources are pulled into, on any runner.
+PRIVATE_FOLDERS = ("closing_line_captures", "private-closing-store", "private-movement-chain")
+
+#: The one upload from the runner's temp directory: Line Movement's
+#: encrypted seal, which nobody without NHL_CHAIN_FALLBACK_KEY can read.
+SEALED_UPLOAD = ("line-movement.yml", "$RUNNER_TEMP/sealed/round.enc")
+
+
+def _upload_entries(step: dict) -> list[str]:
+    """The paths an upload step searches, one per line as upload-artifact
+    reads them (a whitespace split cut `${{ runner.temp }}/x` into three
+    words, none of which named the folder)."""
+    return [TEMP_SPELLINGS.sub("$RUNNER_TEMP", entry)
+            for entry in upload_paths(str(step.get("with", {}).get("path", "")))]
+
+
+def _forbidden_upload(workflow: str, entry: str) -> str | None:
+    """Why an upload path may not be published, or None. Fails closed: a path
+    this guard cannot resolve to the workspace is refused, so a new spelling
+    of the runner's temp directory (`${{ env.X }}`, `~/work/_temp`,
+    `../../_temp`) is refused before anyone has to think of it."""
+    for folder in PRIVATE_FOLDERS:
+        if folder in entry:
+            return f"names {folder}"
+    if (workflow, entry) == SEALED_UPLOAD:
+        return None
+    if re.search(r"runner.{0,8}temp", entry, re.IGNORECASE):
+        return "uploads from the runner's temp directory, where the private sources are pulled"
+    if "${{" in entry:
+        return "an expression this guard cannot resolve"
+    if entry.startswith(("~", "/", "$")) or ".." in entry.split("/"):
+        return "a path outside the workspace"
+    return None
+
+
 @pytest.mark.parametrize("path", _all_workflows(), ids=lambda p: p.name)
 def test_no_artifact_carries_a_capture_store(path: Path) -> None:
     for step in _steps(_load(path.name)):
-        if not str(step.get("uses", "")).startswith("actions/upload-artifact"):
+        if not _is_upload(step):
             continue
-        given = step.get("with", {})
-        assert given.get("name") != "closing-line-captures", path.name
-        for entry in str(given.get("path", "")).split():
+        assert step.get("with", {}).get("name") != "closing-line-captures", path.name
+        for entry in _upload_entries(step):
             # The aggregate report, data/outputs/closing_line_value.md, may
-            # travel; the store may not.
-            assert "closing_line_captures" not in entry, (path.name, entry)
-            assert "private-closing-store" not in entry, (path.name, entry)
-            assert "RUNNER_TEMP" not in entry, (path.name, entry)
+            # travel; the store and the chain may not.
+            assert _forbidden_upload(path.name, entry) is None, (path.name, entry)
 
 
-def test_line_movement_keeps_exactly_its_three_folders() -> None:
-    """The capture also writes data/processed/closing_line_captures.csv on
-    its runner. Both of Line Movement's chain uploads keep exactly three
-    named folders, with no glob, so that file is not among them. (The
-    line_movement folder itself carries every price: see the module
-    docstring.)"""
-    lists = [
-        str(step["with"].get("path", "")).split()
-        for step in _steps(_load("line-movement.yml"))
-        if str(step.get("uses", "")).startswith("actions/upload-artifact")
-        and str(step["with"].get("name", "")).startswith("line-movement")
-    ]
-    assert len(lists) == 2
-    for entries in lists:
-        assert entries == ["data/processed/line_movement", "data/processed/deployment",
-                           "data/processed/line_combinations"]
+@pytest.mark.parametrize("block", [
+    "${{ runner.temp }}/private-movement-chain",
+    "${{runner.temp}}/private-movement-chain/line_movement",
+    "${{ RUNNER.TEMP }}/anything",
+    "${{ runner['temp'] }}/x",
+    "$RUNNER_TEMP/private-closing-store",
+    "${RUNNER_TEMP}/x",
+    "data/outputs/report.md\n${{ runner.temp }}/sealed/round.enc",
+    "# a comment\n${{ runner.temp }}/private-movement-chain/*.csv",
+    # The folder names alone, wherever they are pulled to: the temp check
+    # above would mask a missing name for every runner.temp spelling.
+    "private-movement-chain/line_movement",
+    "${{ github.workspace }}/private-closing-store/closing_line_captures.csv",
+    "data/processed/closing_line_captures.csv",
+    # Spellings the guard cannot resolve, refused rather than reasoned about.
+    "${{ env.CLV_INPUTS }}",
+    "data/${{ env.SUB }}/x",  # mid-path: only the expression rule sees it
+    "~/work/_temp",
+    "../../_temp/x",
+    "/home/runner/work/_temp/private",
+    "$HOME/x",
+])
+def test_the_upload_reader_sees_every_spelling_of_the_private_folders(block) -> None:
+    """Each block is refused in a workflow other than the seal's, and the
+    seal's own path is refused anywhere but its own step's workflow."""
+    entries = _upload_entries({"with": {"path": block}})
+    assert any(_forbidden_upload("gameday-refresh.yml", e) for e in entries), entries
+
+
+def _uses_everywhere(node: object) -> list[str]:
+    found = []
+    if isinstance(node, dict):
+        if "uses" in node:
+            found.append(str(node["uses"]).split("@")[0].lower())
+        for value in node.values():
+            found += _uses_everywhere(value)
+    elif isinstance(node, list):
+        for value in node:
+            found += _uses_everywhere(value)
+    return found
+
+
+@pytest.mark.parametrize("path", [
+    "data/processed/line_movement/2026-10-08.csv",
+    "data/processed/deployment/2026-10-08.csv",
+    "data/processed/line_combinations/2026-10-08.csv",
+    "data/processed/unmerged/line_movement/2026-10-08/" + "ab" * 20 + ".csv",
+    "data/processed/closing_line_captures.csv",
+    "line_movement/2026-10-08.csv",
+    "merged/line_movement/2026-10-08/" + "ab" * 20 + ".csv",
+    "captures/2026-10-08.csv",
+    "round.enc",
+    "round.tar",
+])
+def test_the_chain_cannot_be_committed_here(path: str) -> None:
+    """A local pull, a sealed round opened by hand, or a downloaded artifact
+    leaves raw odds in a checkout of this public repository; git must ignore
+    every one, so `git add -A` cannot publish them."""
+    done = subprocess.run(["git", "check-ignore", "-q", "--no-index", path], cwd=PROJECT_ROOT)
+    assert done.returncode == 0, f"{path} is not ignored"
+
+
+def test_every_action_is_a_known_one() -> None:
+    used = set()
+    for path in _all_workflows():
+        used |= set(_uses_everywhere(_load(path.name)))
+    assert used == KNOWN_ACTIONS
+
+
+def test_an_upload_by_another_owner_or_case_is_still_an_upload() -> None:
+    for uses in ("someone/upload-artifact@v4", "Actions/Upload-Artifact@v4", "x/upload-pages-artifact@v3"):
+        assert _is_upload({"uses": uses}), uses
+    assert not _is_upload({"uses": "actions/checkout@v4"})
+
+
+def test_the_seal_is_the_one_temp_upload_and_only_in_line_movement() -> None:
+    entries = _upload_entries({"with": {"path": "${{ runner.temp }}/sealed/round.enc"}})
+    assert entries == ["$RUNNER_TEMP/sealed/round.enc"]
+    assert _forbidden_upload("line-movement.yml", entries[0]) is None
+    assert _forbidden_upload("closing-lines.yml", entries[0]) is not None
+    assert _forbidden_upload("line-movement.yml", "$RUNNER_TEMP/private-movement-chain") is not None
+
+
+def test_line_movement_uploads_no_store_folder() -> None:
+    """Stage two: the chain's only home is the private repository. No Line
+    Movement upload names a store folder or data/processed at all; the
+    sealed fallback is one encrypted file in the runner's temp directory."""
+    for step in _steps(_load("line-movement.yml")):
+        if not _is_upload(step):
+            continue
+        for entry in _upload_entries(step):
+            assert "data/processed" not in entry and not _can_carry_prices(entry), entry
 
 
 #: Every upload that can carry captured or bought prices, and why it is on
 #: the list. A new carrier fails `test_the_uploads_that_carry_prices_are_the_known_ones`.
-#: These are KNOWN, not safe: the two line-movement uploads carry every
-#: closing price (Cooper's open decision, CLAUDE.md), and the rest carry
-#: bought history or a run's staging quotes, which predate #286.
+#: These are KNOWN, not safe: they carry bought history or a run's staging
+#: quotes, which predate #286. (Line Movement's two chain uploads left this
+#: list in stage two, 2026-10-05.)
 KNOWN_PRICE_CARRIERS = {
     ("gameday-refresh.yml", "gameday-state"),
     ("historical-props-purchase.yml", "gameday-state"),
     ("historical-props-purchase.yml", "historical-props"),
-    ("line-movement.yml", "line-movement"),
-    ("line-movement.yml", "line-movement-attempt-${{ github.run_attempt }}"),
     ("venue-probe.yml", "venue-probe"),
 }
 PRICE_PATHS = (
@@ -212,6 +344,8 @@ def _can_carry_prices(entry: str) -> bool:
     """A whole data directory, a glob outside the report folders, or a path
     under one of the known price locations, however it is spelled."""
     entry = _normalise(entry)
+    if any(folder in entry for folder in PRIVATE_FOLDERS):
+        return True
     if entry in {".", "data", "data/processed", "data/raw"}:
         return True
     if any(c in entry for c in "*?[") and not entry.startswith(("data/outputs/", "dist/")):
@@ -224,11 +358,9 @@ def test_the_uploads_that_carry_prices_are_the_known_ones() -> None:
     for path in _all_workflows():
         for step in _steps(_load(path.name)):
             # upload-pages-artifact too: the Pages site is public.
-            if not str(step.get("uses", "")).startswith(
-                ("actions/upload-artifact", "actions/upload-pages-artifact")
-            ):
+            if not _is_upload(step):
                 continue
-            entries = str(step.get("with", {}).get("path", "")).split()
+            entries = _upload_entries(step)
             if any(_can_carry_prices(e) for e in entries):
                 carriers.add((path.name, str(step["with"].get("name", "github-pages"))))
     assert carriers == KNOWN_PRICE_CARRIERS
@@ -294,17 +426,22 @@ def test_the_site_never_reads_the_store() -> None:
         assert "closing_line_captures" not in text
         assert "private_closing_store" not in text
         assert "NHL_CLOSING_LINES_TOKEN" not in text
+        # Nor the chain, which holds the prices the store is derived from,
+        # nor the key that opens a sealed round of it.
+        assert "private_movement_chain" not in text
+        assert "NHL_CHAIN_FALLBACK_KEY" not in text
 
 
-def test_the_docs_say_the_movement_chain_is_still_public() -> None:
-    """The honest half of the record. CLAUDE.md and the README must keep
-    saying that Line Movement's public artifact carries every closing
-    price until the chain moves, not that closing prices are never published."""
+def test_the_docs_say_what_is_still_downloadable() -> None:
+    """The honest half of the record. CLAUDE.md and the README say the chain
+    moved, and that the public artifacts uploaded before the move stay
+    downloadable until they expire."""
     claude = (PROJECT_ROOT / "CLAUDE.md").read_text(encoding="utf-8")
     readme = (PROJECT_ROOT / "README.md").read_text(encoding="utf-8")
-    assert "**IN PROGRESS, in two stages" in claude
-    assert "**not yet met** until stage two" in claude
-    assert "**Not yet private, moving in two stages:**" in readme
+    assert "**Stage two: the chain's only home is the private repository.**" in claude
+    assert "**What is still downloadable:** the `line-movement` artifacts uploaded" in claude
+    assert "**The movement chain is private too (stage two):**" in readme
+    assert "stay downloadable until they expire" in readme
     for text in (claude, readme):
         assert "closing-line data is never published from here" not in text
         assert "Closing-line data is never published from this repository" not in text
@@ -312,40 +449,96 @@ def test_the_docs_say_the_movement_chain_is_still_public() -> None:
 
 #: Every step, in every workflow, that may read NHL_CLOSING_LINES_TOKEN.
 TOKEN_HOLDERS = {
+    ("closing-lines.yml", "Take the chain from the private repository"),
     ("closing-lines.yml", "Publish to the private store"),
     ("gameday-refresh.yml", "Report closing-line value"),
-    ("line-movement.yml", "Fold in the private chain"),
+    ("line-movement.yml", "Restore today's captures"),
     ("line-movement.yml", "Keep the captures privately"),
     ("line-movement.yml", "Check the private chain holds this round"),
+    ("line-movement.yml", "Seal this round when the private chain did not take it"),
 }
 
 
-SECRET_READS = re.compile(
-    r"secrets\s*\.\s*nhl_closing_lines_token|secrets\s*\[\s*['\"]nhl_closing_lines_token['\"]\s*\]",
-    re.IGNORECASE,
-)
+#: Every step, in every workflow, that may read NHL_CHAIN_FALLBACK_KEY. The
+#: key plus the public `line-movement-sealed-N` artifacts is enough to read
+#: sealed rounds of the chain, so its readers are pinned like the token's.
+KEY_HOLDERS = {
+    ("line-movement.yml", "Restore today's captures"),
+    ("line-movement.yml", "Seal this round when the private chain did not take it"),
+}
+
+
+def _secret_reads(name: str) -> re.Pattern:
+    """A read of secret `name` in any spelling GitHub accepts: dot or index,
+    any case, any spacing. A longer name that starts with it counts too (a
+    renamed NHL_CLOSING_LINES_TOKEN_V2 stays pinned): fail closed."""
+    lowered = re.escape(name.lower())
+    return re.compile(rf"secrets\s*\.\s*{lowered}|secrets\s*\[\s*['\"]{lowered}['\"]\s*\]",
+                      re.IGNORECASE)
+
+
+SECRET_READS = _secret_reads("NHL_CLOSING_LINES_TOKEN")
+KEY_READS = _secret_reads("NHL_CHAIN_FALLBACK_KEY")
+
+#: A read this guard cannot name, so it reads every secret: an index that is
+#: not a quoted literal (`secrets[format(...)]`, `secrets[env.X]`) or the whole
+#: map (`toJSON(secrets)`).
+ANY_SECRET = re.compile(r"secrets\s*\[\s*(?!['\"][^'\"\]]*['\"]\s*\])|tojson\s*\(\s*secrets", re.IGNORECASE)
+
+
+def _leaves(fragment: object):
+    """Every key and scalar in a loaded fragment, as written. (The reader
+    used to search yaml.safe_dump's text, which doubles every ' in a
+    multi-line `run:` and so hid `secrets['NAME']` inside one.)"""
+    if isinstance(fragment, dict):
+        for key, value in fragment.items():
+            yield str(key)
+            yield from _leaves(value)
+    elif isinstance(fragment, list):
+        for value in fragment:
+            yield from _leaves(value)
+    elif fragment is not None:
+        yield str(fragment)
+
+
+def _reads(reads: re.Pattern, fragment: object) -> bool:
+    return any(reads.search(text) or ANY_SECRET.search(text) for text in _leaves(fragment))
 
 
 def _reads_the_token(fragment: object) -> bool:
-    return bool(SECRET_READS.search(yaml.safe_dump(fragment)))
+    return _reads(SECRET_READS, fragment)
+
+
+def _holders(reads: re.Pattern) -> set[tuple[str, str]]:
+    """Every workflow, job and step that reads a secret, at any level."""
+    def hit(fragment: object) -> bool:
+        return _reads(reads, fragment)
+    holders = set()
+    for path in _all_workflows():
+        document = _load(path.name)
+        if hit({k: v for k, v in document.items() if k != "jobs"}):
+            holders.add((path.name, "<workflow level>"))
+        for job in document["jobs"].values():
+            if hit({k: v for k, v in job.items() if k != "steps"}):
+                holders.add((path.name, "<job level>"))
+            for step in job.get("steps", []):
+                if hit(step):
+                    holders.add((path.name, step.get("name")))
+    return holders
 
 
 def test_the_store_token_reaches_only_the_steps_that_need_it() -> None:
     """A read of the secret, at any level and in any spelling GitHub accepts
     (dot or index, any case). A message that names the secret (Report the
     outcome says to replace it) reads nothing."""
-    holders = set()
-    for path in _all_workflows():
-        document = _load(path.name)
-        if _reads_the_token({k: v for k, v in document.items() if k != "jobs"}):
-            holders.add((path.name, "<workflow level>"))
-        for job in document["jobs"].values():
-            if _reads_the_token({k: v for k, v in job.items() if k != "steps"}):
-                holders.add((path.name, "<job level>"))
-            for step in job.get("steps", []):
-                if _reads_the_token(step):
-                    holders.add((path.name, step.get("name")))
-    assert holders == TOKEN_HOLDERS
+    assert _holders(SECRET_READS) == TOKEN_HOLDERS
+
+
+def test_the_fallback_key_reaches_only_the_steps_that_need_it() -> None:
+    """The restore (to unseal) and the seal, in Line Movement, and nowhere
+    else at any level: another workflow holding the key could unseal rounds
+    and write their rows somewhere public."""
+    assert _holders(KEY_READS) == KEY_HOLDERS
 
 
 @pytest.mark.parametrize("path", _all_workflows(), ids=lambda p: p.name)
@@ -360,6 +553,18 @@ def test_the_token_reader_sees_every_spelling() -> None:
                      "${{ secrets['NHL_CLOSING_LINES_TOKEN'] }}", '${{ secrets["NHL_CLOSING_LINES_TOKEN"] }}'):
         assert _reads_the_token({"env": {"T": spelling}}), spelling
     assert not _reads_the_token({"run": "echo replace NHL_CLOSING_LINES_TOKEN"})
+    for spelling in ("${{ secrets.NHL_CHAIN_FALLBACK_KEY }}", "${{ secrets.nhl_chain_fallback_key }}",
+                     "${{ secrets['NHL_CHAIN_FALLBACK_KEY'] }}", '${{ secrets [ "NHL_CHAIN_FALLBACK_KEY" ] }}'):
+        assert _reads(KEY_READS, {"env": {"K": spelling}}), spelling
+        # Inside a multi-line run block too, where YAML would double the '.
+        assert _reads(KEY_READS, {"run": f"echo one\necho {spelling}\n"}), spelling
+    assert not _reads(KEY_READS, {"run": "echo It was sealed with NHL_CHAIN_FALLBACK_KEY"})
+    # A read the guard cannot name reads every secret, and so both pins fail.
+    for computed in ("${{ secrets[format('NHL_{0}', 'X')] }}", "${{ secrets[env.WHICH] }}",
+                     "${{ toJSON(secrets) }}"):
+        assert _reads(KEY_READS, {"run": f"echo {computed}"}) and _reads_the_token({"env": {"A": computed}}), computed
+    # A renamed token keeps its pin.
+    assert _reads_the_token({"env": {"T": "${{ secrets.NHL_CLOSING_LINES_TOKEN_V2 }}"}})
 
 
 def test_no_other_workflow_that_uploads_data_processed_writes_the_store() -> None:
@@ -396,7 +601,10 @@ def _capture_row(**overrides) -> dict:
     return row
 
 
-def _seed_private(bare: Path, root: Path, env: dict, files: dict[str, str]) -> None:
+def _seed_private(bare: Path, root: Path, env: dict, files: dict[str, str], *, chain: bool = True) -> None:
+    """The private store as it stands since 2026-10-02: `main` holding the
+    files given, and a `movement` branch (empty of day files unless a test
+    seeds one), because a missing chain is a fault since stage two."""
     seed = root / "seed"
     seed.mkdir()
     _git(["init", "-q", "-b", "main"], seed, env)
@@ -408,6 +616,13 @@ def _seed_private(bare: Path, root: Path, env: dict, files: dict[str, str]) -> N
     _git(["add", "-A"], seed, env)
     _git(["commit", "-q", "-m", "seed"], seed, env)
     _git(["push", "-q", str(bare), "HEAD:refs/heads/main"], seed, env)
+    if chain:
+        _git(["checkout", "-q", "--orphan", "movement"], seed, env)
+        _git(["rm", "-q", "-rf", "."], seed, env)
+        (seed / "README.md").write_text("chain\n", encoding="utf-8")
+        _git(["add", "-A"], seed, env)
+        _git(["commit", "-q", "-m", "chain"], seed, env)
+        _git(["push", "-q", str(bare), "HEAD:refs/heads/movement"], seed, env)
 
 
 def _day_file(rows: list[dict]) -> str:
@@ -420,8 +635,9 @@ def _day_file(rows: list[dict]) -> str:
 def clv_rig(tmp_path: Path) -> dict:
     """The CLV step's own block, with real git and the real pull script
     against a bare repository standing in for the private store, reached
-    through the exact URL the script builds. `restore_state.py` and the
-    report are stubs; the report records the store it was pointed at."""
+    through the exact URL the script builds, for both the store (`main`) and
+    the movement chain (`movement`). The report is a stub; it records the
+    folders it was pointed at and what was in them while it ran."""
     if not (shutil.which("git") and shutil.which("bash")):
         pytest.fail("this test needs git and bash, which every runner here has")
     bare, bin_dir, home, work, temp = (
@@ -434,14 +650,11 @@ def clv_rig(tmp_path: Path) -> dict:
     python.write_text(
         "#!/bin/bash\n"
         'case "$1" in\n'
-        f'  scripts/private_closing_store.py) exec "{sys.executable}" "$@" ;;\n'
-        "  scripts/restore_state.py)\n"
-        '    if [ -n "${RESTORE_DAY:-}" ]; then mkdir -p data/processed/line_movement;'
-        ' echo x > "data/processed/line_movement/$RESTORE_DAY"; fi\n'
-        '    exit "${RESTORE_EXIT:-0}" ;;\n'
+        f'  scripts/private_closing_store.py|scripts/private_movement_chain.py) exec "{sys.executable}" "$@" ;;\n'
         "  scripts/run_closing_line_value.py)\n"
         '    shift; printf "%s\\n" "$@" > clv_args.txt\n'
-        '    if [ -n "$(ls -A data/processed/line_movement 2>/dev/null)" ]; then echo chain > clv_chain.txt; fi\n'
+        '    for last in "$@"; do :; done\n'
+        '    if [ -n "$(ls -A "$last/line_movement" 2>/dev/null)" ]; then cat "$last"/line_movement/*.csv > clv_chain.txt; fi\n'
         '    dir="$2"\n'
         '    if [ -f "$dir/closing_line_captures.csv" ]; then cat "$dir/closing_line_captures.csv" > report_read.txt;\n'
         "    else echo '<no store>' > report_read.txt; fi\n"
@@ -473,7 +686,8 @@ def clv_rig(tmp_path: Path) -> dict:
     (work / "run_degraded.txt").write_text("", encoding="utf-8")
     # The scripts the block calls, at the paths it calls them by.
     (work / "scripts").mkdir()
-    for name in ("private_closing_store.py", "merge_capture_store.py"):
+    for name in ("private_closing_store.py", "merge_capture_store.py",
+                 "private_movement_chain.py", "restore_state.py"):
         shutil.copy2(PROJECT_ROOT / "scripts" / name, work / "scripts" / name)
     return {"root": tmp_path, "bare": bare, "work": work, "env": env, "temp": temp}
 
@@ -540,21 +754,70 @@ def _args_given(rig: dict) -> list[str]:
     return path.read_text(encoding="utf-8").splitlines() if path.is_file() else []
 
 
+MOVEMENT_HEADER = ("date,commence_time,provider_event_id,home_team,away_team,market,player,"
+                   "selection,line,american_odds,book,fetched_at,captured_at\n")
+
+
+def _seed_chain(rig: dict, book: str = SENTINEL_BOOK) -> None:
+    """A `movement` branch on the private store, as Line Movement pushes it."""
+    work = rig["root"] / "chain-seed"
+    work.mkdir()
+    env = rig["env"]
+    _git(["init", "-q", "-b", "movement"], work, env)
+    (work / "line_movement").mkdir()
+    (work / "line_movement" / "2026-10-08.csv").write_text(
+        MOVEMENT_HEADER + f"2026-10-08,2026-10-08T23:00:00Z,ev1,Boston Bruins,Chicago Blackhawks,"
+        f"player_points,Sentinel Skater,over,17.5,1777,{book},2026-10-08T21:00:00Z,2026-10-08T21:00:00Z\n")
+    _git(["add", "-A"], work, env)
+    _git(["commit", "-qm", "round"], work, env)
+    _git(["push", "-q", "--force", str(rig["bare"]), "HEAD:refs/heads/movement"], work, env)
+
+
 def test_with_a_store_the_report_scores_the_store_and_the_chain(clv_rig) -> None:
-    """Both sources, in that order: a round the store has not received yet is
-    still scored from the chain."""
+    """Both private sources, in that order: a round the store has not
+    received yet is still scored from the chain, and neither is left
+    behind in the workspace or the temp directory."""
     _seed_private(clv_rig["bare"], clv_rig["root"], clv_rig["env"],
                   {"captures/2026-10-08.csv": _day_file([_capture_row()])})
-    clv_rig["env"]["RESTORE_DAY"] = "2026-10-08.csv"
+    _seed_chain(clv_rig, book="Chainbook")
 
-    run_clv_step(clv_rig)
+    done, read, degraded = run_clv_step(clv_rig)
 
-    # The chain was restored and on disk when the report ran, store or not.
-    assert (clv_rig["work"] / "clv_chain.txt").is_file()
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert degraded == ""
+    assert SENTINEL_BOOK in read
+    assert "Chainbook" in (clv_rig["work"] / "clv_chain.txt").read_text()
     assert _args_given(clv_rig) == [
         "--captures-dir", str(clv_rig["temp"] / "private-closing-store"),
-        "--captures-dir", "data/processed",
+        "--captures-dir", str(clv_rig["temp"] / "private-movement-chain"),
     ]
+    assert _leaks(clv_rig["work"]) == [] and _leaks(clv_rig["temp"]) == []
+    for leftover in ("Chainbook",):
+        assert not any(leftover in p.read_text(errors="ignore")
+                       for p in clv_rig["work"].rglob("*") if p.is_file()
+                       and p.name not in ("clv_chain.txt", "report_read.txt") and ".git" not in p.parts)
+
+
+def test_the_chain_alone_is_scored_when_there_is_no_store(clv_rig) -> None:
+    _seed_private(clv_rig["bare"], clv_rig["root"], clv_rig["env"], {"captures/.gitkeep": ""})
+    _seed_chain(clv_rig, book="Chainbook")
+
+    done, read, degraded = run_clv_step(clv_rig)
+
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert degraded == ""
+    assert _args_given(clv_rig) == ["--captures-dir", str(clv_rig["temp"] / "private-movement-chain")]
+    assert "Chainbook" in (clv_rig["work"] / "clv_chain.txt").read_text()
+
+
+def test_chain_folders_restored_with_an_older_state_are_removed(clv_rig) -> None:
+    """gameday-state from before the move may carry the chain in
+    data/processed; it must not be scored or uploaded again."""
+    old = clv_rig["work"] / "data" / "processed" / "line_movement"
+    old.mkdir(parents=True)
+    (old / "2026-10-01.csv").write_text(MOVEMENT_HEADER + "x\n")
+    run_clv_step(clv_rig)
+    assert not old.exists()
 
 
 def test_a_store_path_with_a_space_stays_one_argument(clv_rig) -> None:
@@ -572,29 +835,40 @@ def test_a_store_path_with_a_space_stays_one_argument(clv_rig) -> None:
     assert SENTINEL_BOOK in read
 
 
-@pytest.mark.parametrize(
-    ("restore", "chain_scored"),
-    [
-        pytest.param({"RESTORE_DAY": "2026-10-08.csv"}, True, id="chain-restored"),
-        pytest.param({"RESTORE_EXIT": "1"}, False, id="restore-failed"),
-        pytest.param({}, False, id="no-chain-yet"),
-    ],
-)
-def test_an_unreachable_store_says_what_was_actually_scored(clv_rig, restore, chain_scored) -> None:
-    """The sentence about what was scored is written after the restore, from
-    what the restore actually laid down."""
-    clv_rig["env"].update(restore)
-    shutil.rmtree(clv_rig["bare"])  # GitHub cannot be reached
+def _unreachable_for(rig: dict, ref: str) -> None:
+    """GitHub cannot be reached for one branch of the private store."""
+    real = shutil.which("git", path=os.environ["PATH"])
+    wrapper = rig["root"] / "bin" / "git"
+    wrapper.write_text(
+        "#!/bin/sh\n"
+        f'case "$*" in *{ref}*) echo "fatal: unable to access: Could not resolve host: github.com" >&2; exit 128;; esac\n'
+        f'exec "{real}" "$@"\n'
+    )
+    wrapper.chmod(0o755)
+
+
+def test_an_unreachable_store_with_a_chain_scores_the_chain_and_says_so(clv_rig) -> None:
+    _seed_private(clv_rig["bare"], clv_rig["root"], clv_rig["env"],
+                  {"captures/2026-10-08.csv": _day_file([_capture_row()])})
+    _seed_chain(clv_rig, book="Chainbook")
+    _unreachable_for(clv_rig, "refs/heads/main")
+
+    done, read, degraded = run_clv_step(clv_rig)
+
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert read == "<no store>\n"
+    assert degraded == ("GitHub could not be reached for the private closing-line store, so the "
+                        "closing-line value report scored the movement chain alone today.\n")
+
+
+def test_nothing_reachable_says_nothing_was_scored(clv_rig) -> None:
+    shutil.rmtree(clv_rig["bare"])
 
     done, _read, degraded = run_clv_step(clv_rig)
 
     assert done.returncode == 0, done.stdout + done.stderr
-    assert "The private closing-line store could not be reached" in degraded
-    if chain_scored:
-        assert "scored the line-movement captures alone today" in degraded
-    else:
-        assert "scored the line-movement captures" not in degraded + done.stdout
-        assert "scored no closing price today" in degraded
+    assert degraded == ("GitHub could not be reached for the private closing-line store and the private "
+                        "movement chain, so the closing-line value report scored no closing price today.\n")
 
 
 def test_a_damaged_day_costs_only_that_day(clv_rig) -> None:
