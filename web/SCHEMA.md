@@ -22,15 +22,24 @@ boardDate        "YYYY-MM-DD" (league date of the slate)
 cardGeneratedAt  ISO instant the Gameday card this board was built from was generated; null when no card was restored.
                  A regular-season board with games whose card was generated on an earlier New York day is shown but
                  never frozen into history/ (web/site_history.py::built_on_stale_state)
+ratings          "xg" | "goals" | null — what every projection below is rated on. "xg": recent expected goals with a
+                 finishing and a goaltending (GSAx) factor, from data/processed/shadow_team_ratings.json, which Publish
+                 Site builds from the NHL play-by-play (web/build_site_json.py::rate_on_xg). "goals": that file was
+                 missing or stale and the card's goals ratings were used. null: nothing was projected. The pick is
+                 always the card's, whose team markets are priced on the same xG ratings (models/team_ratings.py).
 record
-  straightUp     {w, l} | null        — null until a season tally is kept; nothing tallies one today, so it is null
+  straightUp     {w, l} | null        — the season so far (season_record); null until a night has settled
+  picks          {w, l, p} | null     — best bets, the season so far; absent/null until a night has settled
+  leans          {w, l, p} | null     — leans, the season so far, kept apart from picks
   puckLine       {w, l, p} | null     — null: nothing grades the model's puck line
-  totals         {w, l, p} | null     — null until a season tally is kept
+  totals         {w, l, p} | null     — the season so far; null until a night has settled
+  season         {nights, firstDate, lastDate, missingNights, ...the four tallies}  — absent until a night has settled
   forward        {sealed: true, decisionDate, wagers, rows, markets, firstDate, lastDate, unsettleable}
                  wagers = forward_evidence.json's `wagers`: one per selection at the best price, on slates
                  whose games have all finished (null when an older report carries no wager count);
                  rows = ledger rows, one per book quote, not rendered. The return (ROI, interval, CLV) is
-                 sealed until the decision date and is never in this file.
+                 sealed until the decision date and is never in this file. The page does not show this
+                 block (owner's call, 2026-10-05).
 teams[ABBR]      {name, short, color, fg}
 games[]
   id, startUtc, venue, city, tv
@@ -60,7 +69,9 @@ games[]
 ```
 generatedAt, season, phase, notice (shown when games is empty)
 resultsDate      "YYYY-MM-DD"
-summary          {straightUp:{w,l}, picks:{w,l,p}, totals:{w,l,p}}   ← picks counts best bets only; a lean is graded on its row and not here
+summary          {straightUp:{w,l}, picks:{w,l,p}, leans:{w,l,p}, totals:{w,l,p}}   ← picks counts best bets only; leans are tallied apart
+seasonRecord     the same object as board.json's record.season: every frozen board before today, settled and summed.
+                 Before a night has settled it is {nights: 0, firstDate: null, lastDate: null, missingNights} with no tallies
 teams[ABBR]      {name, short, color, fg}
 games[]
   id, startUtc

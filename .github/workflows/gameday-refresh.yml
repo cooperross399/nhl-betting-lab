@@ -443,6 +443,40 @@ jobs:
           python scripts/build_datasets.py
           exit "$code"
 
+      - name: Restore cached play-by-play
+        # The NHL play-by-play the team ratings are built from, shared with
+        # Publish Site and Shadow Stats, so a run fetches only new games.
+        uses: actions/cache/restore@v4
+        with:
+          path: data/raw/nhl/play_by_play
+          key: shadow-play-by-play-${{ github.run_id }}
+          restore-keys: shadow-play-by-play-
+
+      - name: Rate the teams on expected goals and goaltending
+        # Cooper's decision of 2026-10-05: the card's team markets are priced
+        # on the same ratings as the public site (models/team_ratings.py).
+        # Free and keyless. Soft: on any failure the card prices the team
+        # markets on goals and says so in its notes and in `team_ratings`.
+        id: ratings
+        timeout-minutes: 12
+        continue-on-error: true
+        env:
+          PYTHONPATH: src
+        run: |
+          set -u
+          if ! timeout --kill-after=30s 10m python scripts/run_shadow_stats.py --fetch --tables-only; then
+            rm -f data/processed/shadow_team_ratings.json
+            echo "::warning::The xG team ratings could not be built; the card prices team markets on goals."
+            exit 1
+          fi
+
+      - name: Keep the play-by-play for the next run
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: data/raw/nhl/play_by_play
+          key: shadow-play-by-play-${{ github.run_id }}
+
       - name: Fetch prices into staging
         # Soft for the same reason: without fresh prices the card is refused,
         # and a blocked card that explains itself beats a red X with a

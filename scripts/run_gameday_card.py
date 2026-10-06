@@ -33,6 +33,7 @@ from nhl_betting_lab.market_eligibility import (
 from nhl_betting_lab.models.player_props import PlayerPropsModel
 from nhl_betting_lab.models.toi_corrections import load_current_corrections
 from nhl_betting_lab.models.team_model import TeamModel
+from nhl_betting_lab.models.team_ratings import apply_xg_ratings
 from nhl_betting_lab.providers import odds_api
 from nhl_betting_lab.providers.team_names import (
     TEAM_NAMES_FILENAME,
@@ -586,6 +587,7 @@ def main(argv: list[str] | None = None) -> int:
         except (KeyError, ValueError) as exc:
             blockers.append(f"The props model could not be fitted: {exc}")
 
+    team_ratings, ratings_detail = "", ""
     if games.empty:
         blockers.append(
             "No team games on disk, so no team market can be priced."
@@ -594,6 +596,14 @@ def main(argv: list[str] | None = None) -> int:
         try:
             team_model = TeamModel().fit(games)
             print(team_model.report.summary_line())
+            # Cooper's decision of 2026-10-05: the team markets are priced on
+            # the site's xG ratings. A missing or stale ratings file falls
+            # back to goals, which Gameday Refresh records as a degraded run.
+            team_ratings, ratings_detail = apply_xg_ratings(team_model, games, processed)
+            if team_ratings == "xg":
+                print(f"Team ratings: {ratings_detail}.")
+            else:
+                print(f"::warning::{ratings_detail}; the team markets are priced on goals.")
             # Schedule history reaches the team pricer only while the
             # recorded verdict ships the adjustment — the same door the props
             # side reads, because a policy the verdict file has withdrawn
@@ -697,6 +707,14 @@ def main(argv: list[str] | None = None) -> int:
         allowlisted_markets=allowlisted,
         scheduled_games=still_to_play,
     )
+    card.team_ratings = team_ratings
+    if team_ratings == "goals":
+        # The reason (a path, a date) is printed above, not carried on the
+        # card, so a reproduced card stays byte-identical.
+        card.notes.append(
+            "Team markets were priced on the goals ratings: the xG ratings "
+            "file was missing or not built through the latest game."
+        )
     paths = save_card(card, output_dir=outputs)
     print(card.summary_line())
     if not card.card_generated:

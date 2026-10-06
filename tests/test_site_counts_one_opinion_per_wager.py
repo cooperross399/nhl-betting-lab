@@ -40,7 +40,10 @@ from nhl_betting_lab import forward_evidence as fe
 from test_forward_evidence import _games, _logs, _price_row, _settle, _snapshot
 from test_site_never_calls_an_unpriced_game_a_pass import render_board, site_module
 
-FORWARD = "Forward ledger · sealed"
+#: The board strip no longer shows the forward ledger (owner's call,
+#: 2026-10-05). board.json still carries its size, so the count tests below
+#: hold the payload, and each also holds that the page shows no ledger cell.
+FORWARD = "Forward ledger"
 
 BOOKS = ("DraftKings", "FanDuel", "BetMGM", "Caesars")
 
@@ -73,10 +76,10 @@ def _board(record: dict) -> dict:
             "allowlistedMarkets": ["moneyline"]}
 
 
-def _forward_cell(record: dict, tmp_path: Path) -> dict:
-    cells = [c for c in render_board(_board(record), tmp_path)["board"]["strip"] if c["label"] == FORWARD]
-    assert len(cells) == 1, cells
-    return cells[0]
+def _assert_no_forward_cell(record: dict, tmp_path: Path) -> None:
+    strip = render_board(_board(record), tmp_path)["board"]["strip"]
+    shown = [c for c in strip if FORWARD.lower() in json.dumps(c, ensure_ascii=False).lower()]
+    assert not shown, f"the board strip shows the forward ledger again: {shown}"
 
 
 @pytest.mark.parametrize("shape", sorted(SHAPES))
@@ -94,18 +97,12 @@ def test_a_wager_quoted_by_several_books_is_one_opinion(tmp_path: Path, shape: s
     assert forward["rows"] == books * len(lines), "rows stays the per-quote size it is"
 
 
-def test_the_page_prints_the_wager_count_as_settled_opinions(tmp_path: Path) -> None:
+def test_the_page_shows_no_forward_ledger_cell(tmp_path: Path) -> None:
     books, lines, wagers = SHAPES["one-selection-three-books"]
     record = site_module().load_record(_settled_report(tmp_path, books, lines))
+    assert record["forward"]["wagers"] == wagers  # the size is still published
 
-    cell = _forward_cell(record, tmp_path)
-
-    assert cell["value"] == str(wagers), cell
-    assert "frozen" not in cell["sub"], (
-        "the ledger holds settled slates only; today's frozen opinions are not "
-        f"in it, so 'frozen' misdescribes the count: {cell['sub']!r}"
-    )
-    assert "settled slate" in cell["sub"], cell
+    _assert_no_forward_cell(record, tmp_path)
 
 
 def test_opening_night_does_not_say_nothing_is_frozen(tmp_path: Path) -> None:
@@ -118,12 +115,7 @@ def test_opening_night_does_not_say_nothing_is_frozen(tmp_path: Path) -> None:
 
     record = site_module().load_record(Path(written["json"]))
     assert record["forward"]["wagers"] == 0
-
-    cell = _forward_cell(record, tmp_path)
-    assert "Nothing frozen" not in cell["sub"], (
-        f"three quotes were frozen this morning and the page said {cell['sub']!r}"
-    )
-    assert "No slate settled yet" in cell["sub"], cell
+    _assert_no_forward_cell(record, tmp_path)
 
 
 def test_a_report_without_a_wager_count_never_publishes_the_quote_count(tmp_path: Path) -> None:
@@ -142,12 +134,7 @@ def test_a_report_without_a_wager_count_never_publishes_the_quote_count(tmp_path
     record = module.load_record(target)
     assert record["forward"]["wagers"] is None
 
-    cell = _forward_cell(record, tmp_path)
-    assert cell["value"] == "—" and "180" not in json.dumps(cell), cell
-    assert "not reported" in cell["sub"], (
-        "180 ledger rows are not 'no slate settled'; an unknown count must "
-        f"say it is unknown: {cell['sub']!r}"
-    )
+    _assert_no_forward_cell(record, tmp_path)
 
 
 @pytest.mark.parametrize("content", [None, "{not json", "[]", b"\xff\xfe"],
@@ -171,6 +158,4 @@ def test_a_report_that_cannot_be_read_is_an_unknown_count_not_zero(
 
     assert record["forward"]["sealed"] is True
     assert record["forward"]["wagers"] is None
-    cell = _forward_cell(record, tmp_path)
-    assert cell["value"] == "—", cell
-    assert "not reported" in cell["sub"] and "No slate settled" not in cell["sub"], cell
+    _assert_no_forward_cell(record, tmp_path)

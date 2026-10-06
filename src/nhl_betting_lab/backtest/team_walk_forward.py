@@ -22,7 +22,7 @@ systematically biased. They are handled explicitly rather than by a shared
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import date, timedelta
 
@@ -242,12 +242,20 @@ def generate_team_samples(
     start_date: str = "",
     end_date: str = "",
     use_rest: bool = True,
+    rate: Callable[[TeamModel, date], None] | None = None,
 ) -> tuple[pd.DataFrame, TeamWalkForwardReport]:
     """Price every game with a model that could not see it.
 
     `use_rest=False` prices with rest ignored, which exists so the two
     policies can be compared on identical games — the comparison that decides
     whether the back-to-back adjustment ships.
+
+    `rate`, when given, is called with each refit's model and the first day
+    of the window it prices, and may replace the model's team ratings using
+    only what was known before that day. It exists so other ratings can be
+    priced on identical games and settlement (the modern-stats price
+    backtest, `scripts/run_shadow_stats.py --price-backtest`). A window it
+    refuses with ValueError is skipped and counted.
     """
     report = TeamWalkForwardReport()
     if games.empty:
@@ -287,6 +295,13 @@ def generate_team_samples(
             report.windows_skipped_for_history += 1
             window_start = window_end + timedelta(days=1)
             continue
+        if rate is not None:
+            try:
+                rate(model, window_start)
+            except ValueError:
+                report.windows_skipped_for_history += 1
+                window_start = window_end + timedelta(days=1)
+                continue
         report.refits += 1
 
         window = frame[

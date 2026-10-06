@@ -39,7 +39,10 @@ Sources, in order of trust:
     `config.THIN_HISTORY_GAMES`, the line below which Gameday Refresh calls
     its own run degraded (load_model).
   * data/outputs/forward_evidence.json: the forward ledger's SIZE, in wagers.
-    Never its return, and never a season record: nothing here tallies one.
+    Never its return. The page does not show it (owner's call, 2026-10-05).
+  * history/settled/YYYY-MM-DD.json: each night's settlement, kept so the
+    season record sums every frozen board without re-fetching old finals
+    (season_record).
 
 Preseason (gameType 1) is published as schedule only. The models are fitted
 on regular-season games and the card excludes exhibitions, so no projection
@@ -56,6 +59,7 @@ import argparse
 import csv
 import importlib.util
 import json
+import re
 import sys
 import urllib.request
 from datetime import date, datetime, timedelta, timezone
@@ -414,6 +418,7 @@ def load_model(processed: Path, outputs: Path):
         )
         raise ThinHistory(len(games))
     model = TeamModel().fit(games)
+    ratings = rate_on_xg(model, games, processed)
     names = build_team_name_map()
     last = last_played_dates(games)
     rest = ships("team_b2b", output_dir=outputs)
@@ -426,7 +431,35 @@ def load_model(processed: Path, outputs: Path):
         "resolve": lambda label: resolve_team(label, names),
         "b2b": lambda team, day: played_previous_day(last, team, day),
         "rest": rest,
+        "ratings": ratings,
     }
+
+
+#: The team ratings Publish Site writes in the run that builds the board
+#: (`scripts/run_shadow_stats.py --tables-only`), relative to the processed
+#: directory. Read as a file, so this builder imports nothing from the shadow
+#: package.
+SHADOW_RATINGS = "shadow_team_ratings.json"
+
+
+def rate_on_xg(model, games, processed: Path) -> str:
+    """Rate the board's teams on expected goals and goaltending, as Cooper
+    asked on 2026-10-05: built into the site's numbers, not shown beside them.
+
+    The same ratings the card's team markets are priced on
+    (`models.team_ratings.apply_xg_ratings`), so the board's probabilities and
+    the card's picks come from one model. Returns "xg", or "goals" with a
+    `::warning::` when the ratings file is missing, unreadable or stale; then
+    the board publishes the goals ratings rather than nothing.
+    """
+    from nhl_betting_lab.models.team_ratings import apply_xg_ratings
+
+    ratings, detail = apply_xg_ratings(model, games, processed)
+    if ratings == "xg":
+        print(f"Board ratings: {detail}.")
+    else:
+        print(f"::warning::{detail}; the board is rated on goals.")
+    return ratings
 
 
 def _site_history():
@@ -624,6 +657,9 @@ def build_board(day: date, lab: Path, history_dir: Path) -> dict:
         "generatedAt": now, "season": "2026–27", "phase": "preseason" if preseason else "regular",
         "boardDate": day.isoformat(), "notice": notice, "record": record, "teams": teams, "games": out_games,
         "allowlistedMarkets": allowlisted,
+        # What the projections are rated on (rate_on_xg): "xg", "goals" when
+        # the play-by-play table was not usable, None when nothing was projected.
+        "ratings": lab_model["ratings"] if lab_model else None,
         # When the Gameday card this board was built from was generated; None
         # when no card was restored. A board built on an earlier day's card is
         # shown but not frozen (web/site_history.py::built_on_stale_state).
@@ -810,7 +846,8 @@ def settle(day: date, history_dir: Path) -> dict:
     now = datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
     frozen = history_dir / f"{day.isoformat()}.json"
     base = {"generatedAt": now, "season": "2026–27", "resultsDate": day.isoformat(), "teams": {}, "games": [],
-            "summary": {"straightUp": {"w": 0, "l": 0}, "picks": {"w": 0, "l": 0, "p": 0}, "totals": {"w": 0, "l": 0, "p": 0}}}
+            "summary": {"straightUp": {"w": 0, "l": 0}, "picks": {"w": 0, "l": 0, "p": 0},
+                        "leans": {"w": 0, "l": 0, "p": 0}, "totals": {"w": 0, "l": 0, "p": 0}}}
     if not frozen.exists():
         base["notice"] = "No board was published for this date, so there is nothing to settle."
         return base
@@ -868,8 +905,10 @@ def settle(day: date, history_dir: Path) -> dict:
             # and kept out of it: it was recorded, not staked. A pick frozen
             # before `kind` existed reads as a bet, as site_history.py and
             # the page read it.
-            if pick.get("kind", "bet") == "bet":
-                s["picks"]["w" if outcome == "win" else "l" if outcome == "loss" else "p"] += 1
+            # Leans keep their own tally, so the season can show how the
+            # recorded-not-staked calls did without mixing them into it.
+            tally = s["picks"] if pick.get("kind", "bet") == "bet" else s["leans"]
+            tally["w" if outcome == "win" else "l" if outcome == "loss" else "p"] += 1
             row["pick"] = {**pick, "result": outcome}
         else:
             # A game with no pick settles with no pick. This used to write
@@ -887,6 +926,70 @@ def settle(day: date, history_dir: Path) -> dict:
             row["pick"] = None
         base["games"].append(row)
     return base
+
+
+#: Where each night's settlement is kept, inside the history Publish Site
+#: restores and uploads, so the season record reads an old night once.
+SETTLED_DIR = "settled"
+
+#: A frozen board's name: one per league day. Slot copies are not settled.
+FROZEN_BOARD = re.compile(r"^(\d{4}-\d{2}-\d{2})\.json$")
+
+SEASON_KEYS = ("straightUp", "picks", "leans", "totals")
+
+
+def season_record(today: date, history_dir: Path, latest: dict) -> dict:
+    """The season so far: every frozen board before `today`, settled and summed.
+
+    `latest` is the night this run just settled (yesterday), used as is. Any
+    other night is read from `history/settled/<day>.json` when one is kept,
+    and otherwise settled now and kept once it is at least two days old,
+    when every game on it has finished. A night whose finals cannot be
+    fetched is left out and counted in `missingNights`, never counted as
+    0–0, and the next run tries it again.
+
+    Before any night has settled the tallies are left out altogether, not
+    published as 0–0. results.json carries this object as `seasonRecord`,
+    and on opening morning it read `picks {w:0, l:0, p:0}` with `nights: 0`:
+    a record nobody had counted, which the page happened not to show.
+    """
+    tally = {key: {"w": 0, "l": 0} if key == "straightUp" else {"w": 0, "l": 0, "p": 0}
+             for key in SEASON_KEYS}
+    kept = history_dir / SETTLED_DIR
+    nights, missing, first, last = 0, 0, None, None
+    for path in sorted(history_dir.glob("*.json")):
+        m = FROZEN_BOARD.match(path.name)
+        if not m:
+            continue
+        day = date.fromisoformat(m[1])
+        if day >= today:
+            continue
+        cached = kept / path.name
+        if day.isoformat() == latest.get("resultsDate"):
+            night = {"games": len(latest.get("games") or []), "summary": latest.get("summary") or {}}
+        elif cached.is_file():
+            night = json.loads(cached.read_text(encoding="utf-8"))
+        else:
+            try:
+                settled = settle(day, history_dir)
+            except (OSError, ValueError, KeyError):
+                missing += 1
+                continue
+            night = {"games": len(settled["games"]), "summary": settled["summary"]}
+        if day <= today - timedelta(days=2) and not cached.is_file():
+            kept.mkdir(parents=True, exist_ok=True)
+            cached.write_text(json.dumps({"resultsDate": day.isoformat(), **night}, indent=1), encoding="utf-8")
+        if not night["games"]:
+            continue
+        nights += 1
+        first = first or day.isoformat()
+        last = day.isoformat()
+        for key in SEASON_KEYS:
+            for k, v in (night["summary"].get(key) or {}).items():
+                if k in tally[key]:
+                    tally[key][k] += int(v)
+    span = {"nights": nights, "firstDate": first, "lastDate": last, "missingNights": missing}
+    return {**tally, **span} if nights else span
 
 
 def grade_pick(pick: dict, home: str, away: str, hs: int, as_: int, finish: str) -> str:
@@ -923,6 +1026,12 @@ def main(argv: list[str] | None = None) -> int:
     out.mkdir(parents=True, exist_ok=True)
     board = build_board(today, Path(args.lab), history)
     results = settle(today - timedelta(days=1), history)
+    season = season_record(today, history, results)
+    results["seasonRecord"] = season
+    # The board's record is the season's. Untallied (no settled night yet)
+    # stays None, which the page renders as an absence, never 0–0.
+    if season["nights"]:
+        board["record"].update({key: season[key] for key in SEASON_KEYS}, season=season)
     (out / "board.json").write_text(json.dumps(board, indent=1, ensure_ascii=False), encoding="utf-8")
     (out / "results.json").write_text(json.dumps(results, indent=1, ensure_ascii=False), encoding="utf-8")
     print(f"board {today}: {len(board['games'])} games ({board['phase']}); results {today - timedelta(days=1)}: {len(results['games'])} settled.")
