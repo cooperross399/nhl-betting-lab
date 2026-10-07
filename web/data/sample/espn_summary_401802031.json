@@ -1,0 +1,190 @@
+{
+ "boxscore": {
+  "teams": [
+   {
+    "team": {
+     "abbreviation": "NYR"
+    },
+    "statistics": [
+     {
+      "name": "shotsTotal",
+      "displayValue": "28"
+     }
+    ]
+   },
+   {
+    "team": {
+     "abbreviation": "PHI"
+    },
+    "statistics": [
+     {
+      "name": "shotsTotal",
+      "displayValue": "31"
+     }
+    ]
+   }
+  ],
+  "players": [
+   {
+    "team": {
+     "abbreviation": "NYR"
+    },
+    "statistics": [
+     {
+      "name": "forwards",
+      "keys": [
+       "blockedShots",
+       "hits",
+       "takeaways",
+       "plusMinus",
+       "timeOnIce",
+       "shotsTotal",
+       "goals",
+       "assists"
+      ],
+      "labels": [
+       "BS",
+       "HT",
+       "TK",
+       "+/-",
+       "TOI",
+       "S",
+       "G",
+       "A"
+      ],
+      "athletes": [
+       {
+        "athlete": {
+         "id": "2563",
+         "displayName": "Artemi Panarin"
+        },
+        "stats": [
+         "0",
+         "0",
+         "1",
+         "-2",
+         "19:40",
+         "3",
+         "0",
+         "0"
+        ]
+       }
+      ]
+     },
+     {
+      "name": "goalies",
+      "keys": [
+       "goalsAgainst",
+       "shotsAgainst",
+       "saves",
+       "savePct",
+       "timeOnIce"
+      ],
+      "labels": [
+       "GA",
+       "SA",
+       "SV",
+       "SV%",
+       "TOI"
+      ],
+      "athletes": [
+       {
+        "athlete": {
+         "id": "3151",
+         "displayName": "Igor Shesterkin"
+        },
+        "stats": [
+         "4",
+         "31",
+         "27",
+         ".871",
+         "58:30"
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "team": {
+     "abbreviation": "PHI"
+    },
+    "statistics": [
+     {
+      "name": "forwards",
+      "keys": [
+       "blockedShots",
+       "hits",
+       "takeaways",
+       "plusMinus",
+       "timeOnIce",
+       "shotsTotal",
+       "goals",
+       "assists"
+      ],
+      "labels": [
+       "BS",
+       "HT",
+       "TK",
+       "+/-",
+       "TOI",
+       "S",
+       "G",
+       "A"
+      ],
+      "athletes": [
+       {
+        "athlete": {
+         "id": "5150",
+         "displayName": "Matvei Michkov"
+        },
+        "stats": [
+         "0",
+         "1",
+         "0",
+         "+2",
+         "16:12",
+         "4",
+         "1",
+         "1"
+        ]
+       }
+      ]
+     },
+     {
+      "name": "goalies",
+      "keys": [
+       "goalsAgainst",
+       "shotsAgainst",
+       "saves",
+       "savePct",
+       "timeOnIce"
+      ],
+      "labels": [
+       "GA",
+       "SA",
+       "SV",
+       "SV%",
+       "TOI"
+      ],
+      "athletes": [
+       {
+        "athlete": {
+         "id": "4880",
+         "displayName": "Samuel Ersson"
+        },
+        "stats": [
+         "2",
+         "28",
+         "26",
+         ".929",
+         "60:00"
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

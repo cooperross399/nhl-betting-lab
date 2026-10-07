@@ -115,3 +115,45 @@ method             {sigma, hfa, tieRate, leagueAvgPts}  — the engine's calibra
 ```
 
 Standings to date come from the NHL standings endpoint (`api-web.nhle.com/v1/standings/<date>`) and finals from each club's season schedule (`club-schedule-season`); the previous season's line is read at the last standings day the API states for it. The page never recomputes a record: in season, `now` is the league's own table and `proj` adds the simulated remainder to it.
+
+
+## Additions (props and live scores)
+
+### board.json
+```
+unitDollars      number — dollars per unit for the stake line ("1 unit · $25"); default 25
+games[].pick     + side   "away" | "home" | "over" | "under"  — which side the pick is on; drives the live winning/losing status
+                 + line   number | null — the total's or puck line's number; null for moneyline and regulation
+                 Written by build_site_json.py::pick_side_and_line from the card candidate's own selection and line.
+games[].drought  [] on every regular-season game — Cooper's drought rule (2026-10-07), an unstaked list he picks from:
+                 70+ points, 30+ goals or 30+ assists last regular season and 5+ straight games without one in that category.
+  []             {player, playerId, team, market ("points"|"goals"|"assists"), line (0.5), lastSeason (that category's total),
+                 drought (games in a row without one, entering tonight), price (best American odds | null: not posted),
+                 book (string | null), heavyJuice (bool: shorter than -160)}
+                 A missing price stays null and renders "price not posted"; it is never filled in.
+droughtNote      one sentence shown above each game's list: the rule and the backtest headline, read from
+                 data/outputs/drought_rule_backtest.json
+props            {status, note, marketNotes, rows[]} | absent (absent renders "Props are not on this board")
+  status         "ok" | "no_lines" | "abstain"
+  note           optional sentence under the heading (or the body of the empty state)
+  marketNotes    {[market]: string} — honesty badge per market, e.g. "Tested as a loss over two seasons"
+  rows[]         gameId, player, playerId, team, opp, position, market, line, side ("over"|"under"), price, book,
+                 projection, modelProb, fairPrice, edgePct, kind ("bet"|"lean"|"pass"), tier ("A"|"B"|null), units (number|null),
+                 allowlisted (bool), starterConfirmed (true|false|null — null: not a goalie market),
+                 espnId (optional — ESPN athlete id; the live tracker matches on it before falling back to name + team)
+                 A row with starterConfirmed false is never written as kind "bet".
+```
+
+### results.json
+```
+props            {status, note, summary, season, rows[]} | absent
+  summary        {w, l, p, units, ungraded} — best bets only, this date; units = profit in units
+  season         {w, l, p, units, nights}   — best bets only, every settled night so far
+  rows[]         the board row's gameId, player, team, opp, position, market, line, side, price, book, kind, tier, units, plus
+                 actual (number | null — the player's final stat; null when he did not play),
+                 result ("win"|"loss"|"push"|"void"|null), profitUnits (number, best bets only)
+```
+Props are never counted in `summary.picks` or `record`; team picks are never counted in `props.summary`.
+
+### Live scores (browser only, not written by the pipeline)
+The Board reads ESPN's public scoreboard (`site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard?dates=YYYYMMDD`, from `boardDate`) and, for open live games, the game summary (`.../summary?event=ID`). Mapping tables live in `lib/live.js`: `ESPN_TO_BOARD` (team codes) and `PROP_STATS` (prop market → box-score column).

@@ -603,6 +603,7 @@ def build_board(day: date, lab: Path, history_dir: Path) -> dict:
                         row["pick"] = {
                             "kind": kind, "market": MARKET_LABEL[top["market"]], "label": pick_label(top, h, a),
                             "price": int(float(top["american_odds"])), "edgePct": round(float(top["edge"]) * 100, 1),
+                            **pick_side_and_line(top),
                         }
                         break
         out_games.append(row)
@@ -673,6 +674,25 @@ def build_board(day: date, lab: Path, history_dir: Path) -> dict:
     elif not frozen.exists():  # the day's first published opinion stands
         frozen.write_text(json.dumps(board, indent=1), encoding="utf-8")
     return board
+
+
+def pick_side_and_line(c: dict) -> dict:
+    """What the page's live status needs to judge a pick against the score.
+
+    `side` is the candidate's own selection (home, away, over, under; a
+    regulation draw has none) and `line` the total's or puck line's number.
+    Without them the live status reads "unavailable" (web/lib/live.js
+    `pickStatus`). Nothing is inferred from the label.
+    """
+    sel = str(c.get("selection", "")).lower()
+    line = c.get("line")
+    try:
+        line = float(line) if c.get("market") in ("total_goals", "puck_line") and line not in (None, "") else None
+    except (TypeError, ValueError):
+        line = None
+    if line is not None and line != line:  # NaN from a CSV-borne blank
+        line = None
+    return {"side": sel if sel in ("home", "away", "over", "under") else None, "line": line}
 
 
 def pick_label(c: dict, home: str, away: str) -> str:

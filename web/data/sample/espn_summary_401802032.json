@@ -1,0 +1,206 @@
+{
+ "boxscore": {
+  "teams": [
+   {
+    "team": {
+     "abbreviation": "TB"
+    },
+    "statistics": [
+     {
+      "name": "shotsTotal",
+      "displayValue": "17"
+     }
+    ]
+   },
+   {
+    "team": {
+     "abbreviation": "NJ"
+    },
+    "statistics": [
+     {
+      "name": "shotsTotal",
+      "displayValue": "21"
+     }
+    ]
+   }
+  ],
+  "players": [
+   {
+    "team": {
+     "abbreviation": "TB"
+    },
+    "statistics": [
+     {
+      "name": "forwards",
+      "keys": [
+       "blockedShots",
+       "hits",
+       "takeaways",
+       "plusMinus",
+       "timeOnIce",
+       "shotsTotal",
+       "goals",
+       "assists"
+      ],
+      "labels": [
+       "BS",
+       "HT",
+       "TK",
+       "+/-",
+       "TOI",
+       "S",
+       "G",
+       "A"
+      ],
+      "athletes": [
+       {
+        "athlete": {
+         "id": "3069",
+         "displayName": "Nikita Kucherov"
+        },
+        "stats": [
+         "0",
+         "0",
+         "1",
+         "+1",
+         "14:02",
+         "2",
+         "1",
+         "1"
+        ]
+       },
+       {
+        "athlete": {
+         "id": "4024",
+         "displayName": "Brandon Hagel"
+        },
+        "stats": [
+         "1",
+         "2",
+         "0",
+         "+1",
+         "13:40",
+         "3",
+         "1",
+         "0"
+        ]
+       }
+      ]
+     },
+     {
+      "name": "goalies",
+      "keys": [
+       "goalsAgainst",
+       "shotsAgainst",
+       "saves",
+       "savePct",
+       "timeOnIce"
+      ],
+      "labels": [
+       "GA",
+       "SA",
+       "SV",
+       "SV%",
+       "TOI"
+      ],
+      "athletes": [
+       {
+        "athlete": {
+         "id": "5164",
+         "displayName": "Andrei Vasilevskiy"
+        },
+        "stats": [
+         "1",
+         "21",
+         "20",
+         ".952",
+         "32:41"
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "team": {
+     "abbreviation": "NJ"
+    },
+    "statistics": [
+     {
+      "name": "forwards",
+      "keys": [
+       "blockedShots",
+       "hits",
+       "takeaways",
+       "plusMinus",
+       "timeOnIce",
+       "shotsTotal",
+       "goals",
+       "assists"
+      ],
+      "labels": [
+       "BS",
+       "HT",
+       "TK",
+       "+/-",
+       "TOI",
+       "S",
+       "G",
+       "A"
+      ],
+      "athletes": [
+       {
+        "athlete": {
+         "id": "4352",
+         "displayName": "Jack Hughes"
+        },
+        "stats": [
+         "0",
+         "1",
+         "0",
+         "-1",
+         "15:10",
+         "3",
+         "0",
+         "1"
+        ]
+       }
+      ]
+     },
+     {
+      "name": "goalies",
+      "keys": [
+       "goalsAgainst",
+       "shotsAgainst",
+       "saves",
+       "savePct",
+       "timeOnIce"
+      ],
+      "labels": [
+       "GA",
+       "SA",
+       "SV",
+       "SV%",
+       "TOI"
+      ],
+      "athletes": [
+       {
+        "athlete": {
+         "id": "2593",
+         "displayName": "Jacob Markström"
+        },
+        "stats": [
+         "2",
+         "17",
+         "15",
+         ".882",
+         "32:41"
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

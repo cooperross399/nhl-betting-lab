@@ -1,0 +1,303 @@
+{
+ "generatedAt": "2026-10-07T12:10:00Z",
+ "season": "2026–27",
+ "phase": "regular",
+ "resultsDate": "2026-10-06",
+ "summary": {
+  "straightUp": {
+   "w": 2,
+   "l": 1
+  },
+  "picks": {
+   "w": 1,
+   "l": 0,
+   "p": 0
+  },
+  "leans": {
+   "w": 0,
+   "l": 1,
+   "p": 0
+  },
+  "totals": {
+   "w": 1,
+   "l": 2,
+   "p": 0
+  }
+ },
+ "seasonRecord": {
+  "nights": 8,
+  "firstDate": "2026-09-29",
+  "lastDate": "2026-10-06",
+  "missingNights": 0,
+  "picks": {
+   "w": 6,
+   "l": 5,
+   "p": 0
+  },
+  "straightUp": {
+   "w": 44,
+   "l": 36
+  },
+  "leans": {
+   "w": 9,
+   "l": 11,
+   "p": 0
+  },
+  "totals": {
+   "w": 37,
+   "l": 40,
+   "p": 3
+  }
+ },
+ "teams": {
+  "MTL": {
+   "name": "Montréal Canadiens",
+   "short": "Canadiens",
+   "color": "#AF1E2D",
+   "fg": "#FFFFFF"
+  },
+  "TOR": {
+   "name": "Toronto Maple Leafs",
+   "short": "Maple Leafs",
+   "color": "#00205B",
+   "fg": "#FFFFFF"
+  },
+  "COL": {
+   "name": "Colorado Avalanche",
+   "short": "Avalanche",
+   "color": "#6F263D",
+   "fg": "#FFFFFF"
+  },
+  "DAL": {
+   "name": "Dallas Stars",
+   "short": "Stars",
+   "color": "#006847",
+   "fg": "#FFFFFF"
+  },
+  "EDM": {
+   "name": "Edmonton Oilers",
+   "short": "Oilers",
+   "color": "#FF4C00",
+   "fg": "#FFFFFF"
+  },
+  "SEA": {
+   "name": "Seattle Kraken",
+   "short": "Kraken",
+   "color": "#001628",
+   "fg": "#FFFFFF"
+  }
+ },
+ "games": [
+  {
+   "id": "2026020021",
+   "startUtc": "2026-10-06T23:00:00Z",
+   "away": {
+    "abbr": "MTL",
+    "projGoals": 2.7,
+    "final": 2
+   },
+   "home": {
+    "abbr": "TOR",
+    "projGoals": 3.4,
+    "final": 5
+   },
+   "finish": "REG",
+   "projWinner": "TOR",
+   "total": {
+    "line": 6.5,
+    "proj": 6.1,
+    "result": "over"
+   },
+   "priced": true,
+   "pick": {
+    "kind": "bet",
+    "market": "Moneyline",
+    "label": "TOR ML",
+    "price": -150,
+    "edgePct": 3.4,
+    "result": "win"
+   }
+  },
+  {
+   "id": "2026020022",
+   "startUtc": "2026-10-07T00:00:00Z",
+   "away": {
+    "abbr": "COL",
+    "projGoals": 3.1,
+    "final": 3
+   },
+   "home": {
+    "abbr": "DAL",
+    "projGoals": 3,
+    "final": 2
+   },
+   "finish": "SO",
+   "projWinner": "COL",
+   "total": {
+    "line": 5.5,
+    "proj": 6.1,
+    "result": "under"
+   },
+   "priced": true,
+   "pick": {
+    "kind": "lean",
+    "market": "Total",
+    "label": "Over 5.5",
+    "price": -110,
+    "edgePct": 2.2,
+    "result": "loss"
+   }
+  },
+  {
+   "id": "2026020023",
+   "startUtc": "2026-10-07T02:00:00Z",
+   "away": {
+    "abbr": "EDM",
+    "projGoals": 3.3,
+    "final": 4
+   },
+   "home": {
+    "abbr": "SEA",
+    "projGoals": 2.8,
+    "final": 1
+   },
+   "finish": "REG",
+   "projWinner": "EDM",
+   "total": {
+    "line": 6,
+    "proj": 6.1,
+    "result": "under"
+   },
+   "priced": true,
+   "pick": null
+  }
+ ],
+ "props": {
+  "status": "ok",
+  "note": "",
+  "summary": {
+   "w": 1,
+   "l": 1,
+   "p": 1,
+   "units": 0.37,
+   "ungraded": 0
+  },
+  "season": {
+   "w": 9,
+   "l": 11,
+   "p": 1,
+   "units": -2.64,
+   "nights": 8
+  },
+  "rows": [
+   {
+    "gameId": "2026020021",
+    "player": "Cole Caufield",
+    "team": "MTL",
+    "opp": "TOR",
+    "position": "RW",
+    "market": "shots_on_goal",
+    "line": 3.5,
+    "side": "over",
+    "price": -115,
+    "book": "DraftKings",
+    "kind": "bet",
+    "tier": "A",
+    "units": 1,
+    "actual": 5,
+    "result": "win",
+    "profitUnits": 0.87
+   },
+   {
+    "gameId": "2026020021",
+    "player": "William Nylander",
+    "team": "TOR",
+    "opp": "MTL",
+    "position": "RW",
+    "market": "points",
+    "line": 1.5,
+    "side": "over",
+    "price": 140,
+    "book": "FanDuel",
+    "kind": "lean",
+    "tier": null,
+    "units": null,
+    "actual": 2,
+    "result": "win",
+    "profitUnits": null
+   },
+   {
+    "gameId": "2026020022",
+    "player": "Cale Makar",
+    "team": "COL",
+    "opp": "DAL",
+    "position": "D",
+    "market": "shots_on_goal",
+    "line": 3.5,
+    "side": "under",
+    "price": 100,
+    "book": "FanDuel",
+    "kind": "bet",
+    "tier": "B",
+    "units": 0.5,
+    "actual": 4,
+    "result": "loss",
+    "profitUnits": -0.5
+   },
+   {
+    "gameId": "2026020022",
+    "player": "Jake Oettinger",
+    "team": "DAL",
+    "opp": "COL",
+    "position": "G",
+    "market": "goalie_saves",
+    "line": 26.5,
+    "side": "over",
+    "price": -110,
+    "book": "DraftKings",
+    "kind": "lean",
+    "tier": null,
+    "units": null,
+    "actual": 26,
+    "result": "loss",
+    "profitUnits": null
+   },
+   {
+    "gameId": "2026020023",
+    "player": "Leon Draisaitl",
+    "team": "EDM",
+    "opp": "SEA",
+    "position": "C",
+    "market": "shots_on_goal",
+    "line": 3,
+    "side": "over",
+    "price": -105,
+    "book": "DraftKings",
+    "kind": "bet",
+    "tier": "B",
+    "units": 0.5,
+    "actual": 3,
+    "result": "push",
+    "profitUnits": 0
+   },
+   {
+    "gameId": "2026020023",
+    "player": "Matty Beniers",
+    "team": "SEA",
+    "opp": "EDM",
+    "position": "C",
+    "market": "hits",
+    "line": 0.5,
+    "side": "over",
+    "price": -150,
+    "book": "FanDuel",
+    "kind": "lean",
+    "tier": null,
+    "units": null,
+    "actual": null,
+    "result": "void",
+    "profitUnits": null
+   }
+  ]
+ }
+}
