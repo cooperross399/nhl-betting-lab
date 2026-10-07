@@ -128,7 +128,7 @@ def test_with_nothing_settled_the_report_states_no_return(tmp_path: Path) -> Non
 
 
 def _registered_test(tmp_path: Path, *, with_drought: bool) -> dict[str, bytes]:
-    """The registered organ end to end in `tmp_path`, with or without the drought list beside it."""
+    """The registered organ end to end in `tmp_path`, with or without the Due List beside it."""
     archive, processed, outputs = tmp_path / "archive", tmp_path / "processed", tmp_path / "outputs"
     prices = pd.DataFrame([{"commence_time": "2026-10-09T00:10:00Z", "home_team": "Toronto Maple Leafs",
                             "away_team": "Boston Bruins", "market": "shots_on_goal", "player": "Auston Matthews",
@@ -174,7 +174,7 @@ def test_the_registered_forward_test_is_byte_for_byte_what_it_would_have_been(tm
     beside = _registered_test(tmp_path / "beside", with_drought=True)
 
     strip = lambda files, root: {k.split("/", 1)[1]: v for k, v in files.items()}  # noqa: E731
-    assert plain and sorted(strip(plain, "")) == sorted(strip(beside, "")), "the drought rule added or removed a registered file"
+    assert plain and sorted(strip(plain, "")) == sorted(strip(beside, "")), "the Due List added or removed a registered file"
     assert any(name.endswith("forward_evidence.csv") for name in strip(plain, ""))
     assert any(name.endswith("forward_evidence.md") for name in strip(plain, ""))
     assert any("priced_snapshots" in name for name in strip(plain, ""))
@@ -221,7 +221,7 @@ def test_a_changed_drought_list_posts_without_calling_it_a_selection_change() ->
     assert not again.post, "the same names the next run is not news"
     assert not priced_only.post, "a moving price is not a changed list"
     body = cn.render_comment(card, first)
-    assert cn.SELECTIONS_CHANGED_MARKER not in body and "drought list changed" in body
+    assert cn.SELECTIONS_CHANGED_MARKER not in body and "Due List changed" in body
     assert cn.previous_drought_fingerprint_from({"drought_rows": card.drought_rows}) == card.drought_fingerprint()
     assert cn.previous_drought_fingerprint_from({"best_bets": []}) is None
 

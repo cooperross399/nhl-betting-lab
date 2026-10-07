@@ -101,7 +101,7 @@ class NotificationDecision:
     reason: str
     selections_changed: bool
     degraded: bool
-    #: Cooper's drought list names someone it did not name on the previous
+    #: Cooper's Due List names someone it did not name on the previous
     #: card. Not a selection change: the marker phrase is never attached to it.
     drought_changed: bool = False
 
@@ -119,7 +119,7 @@ def decide(
 ) -> NotificationDecision:
     """Decide whether this card is worth an email.
 
-    Cooper's drought list is a list he picks from every night, and the best-bet
+    Cooper's Due List is a list he picks from every night, and the best-bet
     fingerprint says nothing about it, so a night whose only news is the list
     would never post. A list that names someone the previous card's did not
     posts too, without calling it a selection change.
@@ -182,7 +182,7 @@ def decide(
     ):
         return NotificationDecision(
             post=True,
-            reason="Cooper's drought list differs from the previous card's.",
+            reason="Cooper's Due List differs from the previous card's.",
             selections_changed=False,
             degraded=False,
             drought_changed=True,
@@ -263,7 +263,7 @@ def render_comment(
     elif decision.drought_changed:
         opening.append(
             "Selections are unchanged since the previous card; this comment is here because "
-            "Cooper's drought list changed."
+            "Cooper's Due List changed."
         )
     else:
         # Unchanged and clean only posts when the caller forced it. Saying
@@ -325,7 +325,7 @@ def previous_fingerprint_from(payload: Any) -> str | None:
 
 
 def previous_drought_fingerprint_from(payload: Any) -> str | None:
-    """The previous card's drought-list fingerprint, from its saved JSON.
+    """The previous card's Due List fingerprint, from its saved JSON.
 
     None when the card predates the list or holds no usable rows, which
     reads as "no previous list" and so as a change if tonight's has anyone.

@@ -241,8 +241,8 @@ def test_the_schema_the_builder_writes_is_the_one_the_page_reads() -> None:
 
 #: Drives web/Board.dc.html's x-dc component under node on a board.json, as the browser does
 #: after load(): S/F/L are the three lib modules, vm is ADAPTERS.nhl.board(data). Prints each
-#: game's Drought List rows as the Tonight tab lays them out (meta: the bar and the "for him"
-#: line; record: the cell), and the Props tab's Drought List view beside it.
+#: game's Due List rows as the Tonight tab lays them out (meta: the bar and the "for him"
+#: line; record: the cell), and the Props tab's Due List view beside it.
 _PAGE_DRIVER = r"""
 import { readFileSync } from "node:fs";
 import * as S from "./lib/sports.js";

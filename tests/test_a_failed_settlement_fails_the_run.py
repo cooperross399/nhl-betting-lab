@@ -188,7 +188,7 @@ def _report(work: Path, degraded: str, outcomes: dict[str, str], *,
         "github.ref": "refs/heads/main",
         "github.event.repository.default_branch": "main",
     }
-    # The drought list's settlement is read by the same step; it is soft too,
+    # The Due List's settlement is read by the same step; it is soft too,
     # and its failure is covered by tests/test_the_drought_forward_record.py.
     values["steps.drought.outcome"] = "success"
     for name in WATCHED:

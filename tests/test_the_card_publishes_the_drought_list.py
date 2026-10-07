@@ -1,4 +1,4 @@
-"""Cooper's drought list, through the card's real `main()`, on a night with and without prices.
+"""Cooper's Due List, through the card's real `main()`, on a night with and without prices.
 
 The qualifiers need only the logs, the rosters and the schedule, so a card blocked for
 prices still lists them with "not posted"; a staged price for the player shows with its
@@ -95,7 +95,7 @@ def test_a_card_with_no_prices_still_publishes_the_list_with_not_posted(tmp_path
     assert listed["rows"][0]["rule"] == "both" and listed["rows"][0]["cell_record"]["wagers"] == bucket["wagers"]
     recorded = pd.read_csv(tmp_path / "processed" / "drought_list" / "2026-10-15.csv")
     assert recorded.player.tolist() == ["Skater 1"] and recorded.american_odds.isna().all()
-    assert "Drought list for 2026-10-15: 1 row(s), 1 with no price posted" in out
+    assert "Due List for 2026-10-15: 1 row(s), 1 with no price posted" in out
 
 
 def test_a_staged_price_shows_with_its_book(tmp_path, raw_dirs, capsys) -> None:

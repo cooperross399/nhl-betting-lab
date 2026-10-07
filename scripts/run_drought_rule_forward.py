@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Settle the drought list's dated files and restate the rule's own forward record.
+"""Settle the Due List's dated files and restate the rule's own forward record.
 
     PYTHONPATH=src .venv/bin/python scripts/run_drought_rule_forward.py
 
@@ -41,7 +41,7 @@ def main(argv: list[str] | None = None) -> int:
     payload = build_report(load_ledger(processed), pending_rows=pending_rows(processed), outputs_dir=outputs)
     for name, path in save_report(payload, output_dir=outputs).items():
         print(f"  {name}: {path}")
-    print("The drought list is unstaked; no bet was placed and the registered forward test was not touched.")
+    print("The Due List is unstaked; no bet was placed and the registered forward test was not touched.")
     return 0
 
 

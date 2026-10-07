@@ -745,8 +745,8 @@ def main(argv: list[str] | None = None) -> int:
     except (KeyError, ValueError) as exc:
         from nhl_betting_lab.drought_rule import DroughtList
 
-        drought = DroughtList(day=snapshot_day, notes=[f"The drought list could not be built: {exc}"])
-        print(f"::warning::The drought list could not be built: {exc}")
+        drought = DroughtList(day=snapshot_day, notes=[f"The Due List could not be built: {exc}"])
+        print(f"::warning::The Due List could not be built: {exc}")
     card.drought_rows = drought.rows
     card.drought_unresolved = drought.unresolved
     card.drought_notes = list(drought.notes)
@@ -756,7 +756,7 @@ def main(argv: list[str] | None = None) -> int:
             "its start could not be confirmed."
         )
     print(
-        f"Drought list for {snapshot_day}: {len(drought.rows)} row(s), "
+        f"Due List for {snapshot_day}: {len(drought.rows)} row(s), "
         f"{sum(1 for r in drought.rows if r['american_odds'] is None)} with no price posted, "
         f"{len(drought.unresolved)} unresolved name(s)."
     )
@@ -767,9 +767,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.now and processed.resolve() == PROCESSED_DIR.resolve():
         # The real ledger's own rule (see the archive above): a reproduction
         # of a past night must not write a dated list into the real record.
-        print("A reproduction records no drought list in the real processed directory: it is not tonight's.")
+        print("A reproduction records no Due List in the real processed directory: it is not tonight's.")
     else:
-        print(f"Drought list: {record_list(drought.rows, snapshot_day, processed_dir=processed)}")
+        print(f"Due List: {record_list(drought.rows, snapshot_day, processed_dir=processed)}")
     paths = save_card(card, output_dir=outputs)
     print(card.summary_line())
     if not card.card_generated:
