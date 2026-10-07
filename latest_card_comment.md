@@ -1,9 +1,9 @@
-**Selections changed** since the previous card — 8 best bet(s), 2.25 unit(s) staked.
+Selections are unchanged since the previous card; this comment was posted on request, and the run was clean.
 
 # NHL gameday card
 
-- Generated: 2026-10-07T13:40:31+00:00
-- 8 best bet(s), 64 lean(s), 1455 pass(es) across 3 game(s); 2.25 unit(s) staked.
+- Generated: 2026-10-07T13:50:02+00:00
+- 8 best bet(s), 66 lean(s), 1488 pass(es) across 3 game(s); 2.25 unit(s) staked.
 - Included markets: **assists, goals, moneyline, points, puck_line, regulation_3_way, shots_on_goal, team_total, total_goals**
 - Unit size: $25
 
@@ -40,6 +40,7 @@
 | Pittsburgh Penguins @ Washington Capitals | Oct 7, 7:40 PM ET | `shots_on_goal` | Ben Kindel under 1.5 | 51.7% | +10.1% | +140 | Hard Rock Bet |
 | Pittsburgh Penguins @ Washington Capitals | Oct 7, 7:40 PM ET | `shots_on_goal` | Nick Robertson over 1.5 | 47.0% | +9.9% | +170 | Bally Bet |
 | Pittsburgh Penguins @ Washington Capitals | Oct 7, 7:40 PM ET | `shots_on_goal` | Bryan Rust over 3.5 | 26.2% | +9.5% | +500 | Fanatics |
+| Pittsburgh Penguins @ Washington Capitals | Oct 7, 7:40 PM ET | `shots_on_goal` | Bryan Rust over 2.5 | 42.8% | +9.5% | +200 | Fanatics |
 | Edmonton Oilers @ Anaheim Ducks | Oct 7, 10:00 PM ET | `points` | Beckett Sennecke under 0.5 | 53.9% | +9.5% | +125 | BetMGM |
 | Pittsburgh Penguins @ Washington Capitals | Oct 7, 7:40 PM ET | `team_total` | away_over 2.5 | 68.6% | +9.4% | -145 | BetOnline.ag |
 | Pittsburgh Penguins @ Washington Capitals | Oct 7, 7:40 PM ET | `team_total` | away_over 3.5 | 47.4% | +9.4% | +163 | Bally Bet |
@@ -49,15 +50,15 @@
 | Pittsburgh Penguins @ Washington Capitals | Oct 7, 7:40 PM ET | `assists` | Erik Karlsson under 0.5 | 66.5% | +9.1% | -135 | BetMGM |
 | Colorado Avalanche @ Winnipeg Jets | Oct 7, 7:30 PM ET | `shots_on_goal` | Cale Makar under 2.5 | 59.7% | +8.7% | -104 | Bally Bet |
 | Pittsburgh Penguins @ Washington Capitals | Oct 7, 7:40 PM ET | `points` | Cole Hutson under 0.5 | 68.6% | +8.6% | -150 | Bally Bet |
-| Pittsburgh Penguins @ Washington Capitals | Oct 7, 7:40 PM ET | `shots_on_goal` | Bryan Rust over 2.5 | 42.8% | +8.4% | +190 | Fanatics |
+| Colorado Avalanche @ Winnipeg Jets | Oct 7, 7:30 PM ET | `points` | Artturi Lehkonen under 0.5 | 59.6% | +8.4% | -105 | Hard Rock Bet |
 | Colorado Avalanche @ Winnipeg Jets | Oct 7, 7:30 PM ET | `shots_on_goal` | Brock Nelson over 3.5 | 25.9% | +8.3% | +470 | FanDuel |
 | Colorado Avalanche @ Winnipeg Jets | Oct 7, 7:30 PM ET | `points` | Cale Makar under 0.5 | 45.4% | +8.3% | +170 | Bally Bet |
 | Edmonton Oilers @ Anaheim Ducks | Oct 7, 10:00 PM ET | `shots_on_goal` | Leo Carlsson under 2.5 | 64.8% | +8.3% | -130 | theScore Bet |
 | Edmonton Oilers @ Anaheim Ducks | Oct 7, 10:00 PM ET | `goals` | Cutter Gauthier under 0.5 | 69.6% | +8.1% | -160 | FanDuel |
 | Edmonton Oilers @ Anaheim Ducks | Oct 7, 10:00 PM ET | `assists` | Beckett Sennecke under 0.5 | 69.2% | +7.7% | -160 | BetMGM |
+| Pittsburgh Penguins @ Washington Capitals | Oct 7, 7:40 PM ET | `shots_on_goal` | Anthony Beauvillier over 2.5 | 33.3% | +7.7% | +290 | Fanatics |
 | Edmonton Oilers @ Anaheim Ducks | Oct 7, 10:00 PM ET | `assists` | Leo Carlsson under 0.5 | 65.8% | +7.6% | -139 | Bally Bet |
 | Pittsburgh Penguins @ Washington Capitals | Oct 7, 7:40 PM ET | `points` | Justin Sourdif over 0.5 | 37.4% | +7.5% | +235 | Bally Bet |
-| Colorado Avalanche @ Winnipeg Jets | Oct 7, 7:30 PM ET | `points` | Artturi Lehkonen under 0.5 | 59.6% | +7.5% | -109 | Bally Bet |
 | Colorado Avalanche @ Winnipeg Jets | Oct 7, 7:30 PM ET | `points` | Devon Toews under 0.5 | 68.2% | +7.4% | -155 | BetMGM |
 | Colorado Avalanche @ Winnipeg Jets | Oct 7, 7:30 PM ET | `shots_on_goal` | Brock Nelson over 2.5 | 42.5% | +7.4% | +185 | FanDuel |
 | Colorado Avalanche @ Winnipeg Jets | Oct 7, 7:30 PM ET | `points` | Nathan MacKinnon under 1.5 | 63.9% | +7.4% | -130 | BetOnline.ag |
@@ -77,6 +78,7 @@
 | Pittsburgh Penguins @ Washington Capitals | Oct 7, 7:40 PM ET | `shots_on_goal` | Rickard Rakell under 2.5 | 59.8% | +6.3% | -115 | Bally Bet |
 | Colorado Avalanche @ Winnipeg Jets | Oct 7, 7:30 PM ET | `shots_on_goal` | Cole Perfetti under 1.5 | 46.2% | +6.2% | +150 | BetMGM |
 | Pittsburgh Penguins @ Washington Capitals | Oct 7, 7:40 PM ET | `assists` | Aliaksei Protas over 0.5 | 29.6% | +6.1% | +325 | Hard Rock Bet |
+| Pittsburgh Penguins @ Washington Capitals | Oct 7, 7:40 PM ET | `shots_on_goal` | Jakob Chychrun under 2.5 | 59.5% | +6.0% | -115 | Courtside |
 | Edmonton Oilers @ Anaheim Ducks | Oct 7, 10:00 PM ET | `total_goals` | over 6.5 | 61.6% | +5.7% | -127 | Courtside |
 | Edmonton Oilers @ Anaheim Ducks | Oct 7, 10:00 PM ET | `total_goals` | over 7.5 | 42.2% | +5.1% | +170 | Bally Bet |
 | Pittsburgh Penguins @ Washington Capitals | Oct 7, 7:40 PM ET | `total_goals` | over 8.5 | 28.3% | +5.1% | +330 | FanDuel |
@@ -119,21 +121,21 @@ Leans are recorded and not staked.
 | Edmonton Oilers @ Anaheim Ducks | Oct 7, 10:00 PM ET | `assists` | A.J. Greer under 0.5 | 80.4% | +8.9% | -250 | Bally Bet |
 | Pittsburgh Penguins @ Washington Capitals | Oct 7, 7:40 PM ET | `team_total` | away_over 2 | 83.4% | +8.8% | -295 | BetMGM |
 | Colorado Avalanche @ Winnipeg Jets | Oct 7, 7:30 PM ET | `points` | Martin Necas under 1.5 | 74.7% | +8.0% | -200 | theScore Bet |
+| Pittsburgh Penguins @ Washington Capitals | Oct 7, 7:40 PM ET | `shots_on_goal` | Bryan Rust over 4.5 | 15.0% | +7.9% | +1300 | Fanatics |
 | Pittsburgh Penguins @ Washington Capitals | Oct 7, 7:40 PM ET | `puck_line` | away +2.5 | 84.0% | +7.8% | -320 | FanDuel |
 | Pittsburgh Penguins @ Washington Capitals | Oct 7, 7:40 PM ET | `assists` | Cole Hutson under 0.5 | 75.8% | +7.5% | -215 | Bally Bet |
 | Colorado Avalanche @ Winnipeg Jets | Oct 7, 7:30 PM ET | `assists` | Nazem Kadri under 0.5 | 72.4% | +7.3% | -186 | Bally Bet |
 | Colorado Avalanche @ Winnipeg Jets | Oct 7, 7:30 PM ET | `assists` | Devon Toews under 0.5 | 74.0% | +7.3% | -200 | BetMGM |
-| Pittsburgh Penguins @ Washington Capitals | Oct 7, 7:40 PM ET | `shots_on_goal` | Bryan Rust over 4.5 | 15.0% | +7.3% | +1200 | Fanatics |
 | Edmonton Oilers @ Anaheim Ducks | Oct 7, 10:00 PM ET | `shots_on_goal` | Max Jones under 1.5 | 69.8% | +7.3% | -167 | Bally Bet |
+| Pittsburgh Penguins @ Washington Capitals | Oct 7, 7:40 PM ET | `shots_on_goal` | Anthony Beauvillier over 3.5 | 18.2% | +7.1% | +800 | Fanatics |
 | Edmonton Oilers @ Anaheim Ducks | Oct 7, 10:00 PM ET | `assists` | Cutter Gauthier under 0.5 | 70.6% | +6.9% | -175 | Courtside |
 | Edmonton Oilers @ Anaheim Ducks | Oct 7, 10:00 PM ET | `goals` | Kasperi Kapanen under 0.5 | 85.6% | +6.9% | -370 | theScore Bet |
 | Colorado Avalanche @ Winnipeg Jets | Oct 7, 7:30 PM ET | `assists` | Artturi Lehkonen under 0.5 | 76.9% | +6.8% | -235 | Bally Bet |
-| Colorado Avalanche @ Winnipeg Jets | Oct 7, 7:30 PM ET | `shots_on_goal` | Brock Nelson over 4.5 | 14.8% | +6.4% | +1100 | Fanatics |
 | Edmonton Oilers @ Anaheim Ducks | Oct 7, 10:00 PM ET | `points` | Leo Carlsson under 1.5 | 83.3% | +6.3% | -335 | Bally Bet |
 | Pittsburgh Penguins @ Washington Capitals | Oct 7, 7:40 PM ET | `shots_on_goal` | Alex Ovechkin under 3.5 | 68.8% | +5.9% | -170 | Hard Rock Bet |
 | Colorado Avalanche @ Winnipeg Jets | Oct 7, 7:30 PM ET | `assists` | Cale Makar under 1.5 | 88.6% | +5.8% | -480 | Bally Bet |
 
-_1430 further passes not listed._
+_1463 further passes not listed._
 
 These are genuine model judgements about markets that were priced and modelled. They are **not** the same thing as the excluded markets below.
 
@@ -188,6 +190,6 @@ What the evidence actually supports:
 - `data/outputs/props_calibration.md`
 - `data/outputs/what_we_can_claim.md`
 
-Run: https://github.com/cooperross399/nhl-betting-lab/actions/runs/37617056241
+Run: https://github.com/cooperross399/nhl-betting-lab/actions/runs/37630477933
 
 Recommendations only. No bet was placed, no policy was edited, and no market was allowlisted by this run.
