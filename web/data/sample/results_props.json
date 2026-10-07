@@ -298,6 +298,87 @@
     "result": "void",
     "profitUnits": null
    }
+  ],
+  "seasonLeans": {
+   "w": 14,
+   "l": 17,
+   "p": 2,
+   "nights": 8
+  }
+ },
+ "dueList": {
+  "summary": {
+   "w": 1,
+   "l": 2,
+   "p": 0
+  },
+  "season": {
+   "w": 13,
+   "l": 29,
+   "p": 0,
+   "nights": 8,
+   "impliedPct": 36.8,
+   "byMarket": {
+    "points": {
+     "w": 6,
+     "l": 9
+    },
+    "goals": {
+     "w": 4,
+     "l": 13
+    },
+    "assists": {
+     "w": 3,
+     "l": 7
+    }
+   }
+  },
+  "rows": [
+   {
+    "gameId": "2026020021",
+    "player": "Mitch Marner",
+    "team": "TOR",
+    "opp": "MTL",
+    "market": "points",
+    "line": 0.5,
+    "lastSeason": 102,
+    "drought": 5,
+    "price": -210,
+    "book": "DraftKings",
+    "heavyJuice": true,
+    "actual": 2,
+    "result": "win"
+   },
+   {
+    "gameId": "2026020022",
+    "player": "Mikko Rantanen",
+    "team": "DAL",
+    "opp": "COL",
+    "market": "goals",
+    "line": 0.5,
+    "lastSeason": 32,
+    "drought": 6,
+    "price": 140,
+    "book": "FanDuel",
+    "heavyJuice": false,
+    "actual": 0,
+    "result": "loss"
+   },
+   {
+    "gameId": "2026020023",
+    "player": "Ryan Nugent-Hopkins",
+    "team": "EDM",
+    "opp": "SEA",
+    "market": "assists",
+    "line": 0.5,
+    "lastSeason": 31,
+    "drought": 7,
+    "price": null,
+    "book": null,
+    "heavyJuice": false,
+    "actual": 0,
+    "result": "loss"
+   }
   ]
  }
 }

@@ -83,6 +83,27 @@ def test_results_carry_no_tally_before_the_first_settled_night(tmp_path: Path, m
     rendered = render_results(results, tmp_path)
     assert not [c for c in rendered["strip"] if "season" in c["label"].lower()], rendered["strip"]
 
+def test_no_settled_night_publishes_no_props_or_due_list_record(tmp_path: Path, monkeypatch) -> None:
+    """`record.props`, `record.propLeans`, `record.dueList` and
+    `props.seasonLeans` are absent before a night settles, not {w: 0, l: 0}.
+    The board carries a Due List tonight, so the absence is for want of a
+    settled night, not of a list."""
+    from test_the_site_board_carries_the_drought_list import build as build_with_list, row, write_list
+
+    lab = make_lab(tmp_path, monkeypatch, staged=True)
+    write_list(lab, [row("TOR", "MTL")])
+    out = tmp_path / "out"
+    board = build_with_list(lab, out, monkeypatch)
+    results = json.loads((out / "results.json").read_text(encoding="utf-8"))
+
+    assert any(g["drought"] for g in board["games"]), board["games"]
+    for key in ("props", "propLeans", "dueList"):
+        assert key not in board["record"], (key, board["record"][key])
+    assert "seasonLeans" not in (results.get("props") or {})
+    assert "dueList" not in results and "dueList" not in results["seasonRecord"]
+    assert results["seasonRecord"] == {"nights": 0, "firstDate": None, "lastDate": None, "missingNights": 0}
+
+
 def test_the_season_sums_old_nights_from_what_was_kept(tmp_path: Path, monkeypatch) -> None:
     """An old night is settled once, kept, and read back without the network."""
     lab = make_lab(tmp_path, monkeypatch, staged=True)

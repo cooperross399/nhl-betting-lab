@@ -157,3 +157,24 @@ Props are never counted in `summary.picks` or `record`; team picks are never cou
 
 ### Live scores (browser only, not written by the pipeline)
 The Board reads ESPN's public scoreboard (`site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard?dates=YYYYMMDD`, from `boardDate`) and, for open live games, the game summary (`.../summary?event=ID`). Mapping tables live in `lib/live.js`: `ESPN_TO_BOARD` (team codes) and `PROP_STATS` (prop market → box-score column).
+
+
+## Additions (season tracking: props leans, Due List)
+
+board.json
+```
+record.props       {w, l, p, units, nights}  — prop best bets, the season so far
+record.propLeans   {w, l, p, nights}         — prop leans, the season so far (no units)
+record.dueList     {w, l, p, nights}         — the Due List (games[].drought), the season so far (never units)
+```
+results.json
+```
+props.seasonLeans  {w, l, p, nights}
+dueList            {summary, season, rows[]} | absent (absent hides the section)
+  summary          {w, l, p}  — this date
+  season           {w, l, p, nights, impliedPct, byMarket: {points|goals|assists: {w, l}}}
+                   impliedPct = mean implied probability of the posted prices graded (optional)
+  rows[]           the board's drought entry (player, team, opp, market, line, lastSeason, drought, price, book, heavyJuice)
+                   + actual (number | null) and result ("win"|"loss"|"push"|"void"|null)
+```
+Every entry on a frozen board's Due List is graded, whether or not it was bet. An entry with no posted price is graded and counted; it shows "price not posted".
