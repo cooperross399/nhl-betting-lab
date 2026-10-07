@@ -1,4 +1,4 @@
-"""Cooper's Drought List on the card: a selection list, built from the same function as the evidence.
+"""Cooper's Due List on the card: a selection list, built from the same function as the evidence.
 
 The rule (2026-10-07 evening): 70+ points, 30+ goals or 30+ assists last regular season,
 listed in that category when the drought reaches EITHER bar: the tier bar from last
@@ -425,7 +425,7 @@ def test_the_section_is_a_list_with_no_units_no_stakes_and_one_headline_line():
     section = text[text.index(f"## {dr.SECTION_TITLE}"):]
     section = section[: section.index("\n## ", 5)] if "\n## " in section[5:] else section
 
-    assert dr.SECTION_TITLE == "Drought List" and "Drought rule" not in text
+    assert dr.SECTION_TITLE == "Due List" and "Drought rule" not in text
     assert "Assist Man" in section and "+170" in section and "DraftKings" in section and "over 0.5" in section
     assert "| 5 (both) | tier 5 / surprise 5 | 1 in 32 for him | band 30-44 @5: +10.5% over 184 (95% -1.7% to +23.9%) |" in section
     assert "| Test Scorer |" in section and "| no record |" in section

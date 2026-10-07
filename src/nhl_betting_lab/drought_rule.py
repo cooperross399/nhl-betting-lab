@@ -1,4 +1,4 @@
-"""Cooper's Drought List, in one place, for the evidence and for the card.
+"""Cooper's Due List, in one place, for the evidence and for the card.
 
 The rule (Cooper, 2026-10-07 evening; it replaces the flat 5-game rule shipped
 that morning in #307): a skater with 70+ points, 30+ goals or 30+ assists LAST
@@ -65,7 +65,7 @@ TIERS: dict[str, tuple[tuple[int, int], ...]] = {
 SURPRISE_LEVEL = 0.05
 LINE = 0.5
 BACKTEST_JSON = "drought_rule_backtest.json"
-SECTION_TITLE = "Drought List"
+SECTION_TITLE = "Due List"
 
 #: Prices shorter than this are flagged on the row, never hidden: Cooper picks.
 HEAVY_JUICE = MAX_DEFAULT_JUICE

@@ -1,6 +1,6 @@
 """`games[].drought` and `droughtNote`: the shape web/SCHEMA.md names, written by the site builder.
 
-The Board's game cards render Cooper's Drought List (2026-10-07; that evening the tier and
+The Board's game cards render Cooper's Due List (2026-10-07; that evening the tier and
 equal-surprise bars replaced the flat 5-game rule of #307). The site reads a file and
 imports nothing from the card: the card writes `data/outputs/drought_list.json`, Publish
 Site restores it with `gameday-reports`, and `web/build_site_json.py` turns it into
@@ -138,7 +138,7 @@ def test_a_row_without_the_bars_publishes_with_nulls_not_a_crash(lab, tmp_path, 
 def test_the_sentence_names_the_drought_list_and_both_bars(lab, tmp_path, monkeypatch) -> None:
     sentence = site_module().DROUGHT_RULE_SENTENCE
 
-    assert "Drought List" in sentence and "unstaked" in sentence
+    assert "Due List" in sentence and "unstaked" in sentence
     assert "tier bar" in sentence and "equal-surprise bar" in sentence and "either bar" in sentence
     assert "5+ straight" not in sentence, "the flat rule of #307 is gone"
     assert sentence.count(". ") == 0 and sentence.endswith("."), "one sentence"
@@ -176,7 +176,7 @@ def test_the_note_is_the_rule_and_the_backtest_headline_read_from_its_file(lab, 
     board = build(lab, tmp_path / "out", monkeypatch)
     note = board["droughtNote"]
 
-    assert "70+ points, 30+ goals or 30+ assists" in note and "unstaked" in note and "Drought List" in note
+    assert "70+ points, 30+ goals or 30+ assists" in note and "unstaked" in note and "Due List" in note
     # The shipped rule's card-window headline (either bar), as the committed backtest JSON states it.
     assert "points -1.6% over 311 wagers" in note and "goals -7.0% over 1355" in note and "assists -8.4% over 2135" in note
     assert "no category's interval sits above zero" in note

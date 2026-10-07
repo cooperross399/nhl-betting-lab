@@ -1,4 +1,4 @@
-"""The Drought List's backtest: the drought count, last season's record, and the buckets each bar fills."""
+"""The Due List's backtest: the drought count, last season's record, and the buckets each bar fills."""
 import importlib.util
 from pathlib import Path
 
@@ -107,7 +107,7 @@ def test_the_json_keeps_its_keys_and_names_the_tiers_the_level_and_the_rule():
     assert payload["surprise_level"] == 0.05 and payload["min_drought"] == 5
     assert "either" in payload["rule"] and "(1 - p)^n <= 0.05" in payload["rule"] and "100+ -> 3" in payload["rule"]
     text = drb.render(result, {"card": {"graded": 9}}, "now")
-    assert text.startswith("# Drought List backtest") and "## Headline (card window, the shipped rule: either bar)" in text
+    assert text.startswith("# Due List backtest") and "## Headline (card window, the shipped rule: either bar)" in text
     assert "| assists | 7 | 7 |" in text, "the headline row is the SHIPPED bucket"
     assert "| assists | 60+ | 3 | 3 |" in text and "| assists | 30-44 | 5 | 2 |" in text, "the per-band table"
     assert "| points | 0 | 0 |" in text, "a market with no wager is a row of zeros, not a missing row"
@@ -125,4 +125,4 @@ def test_the_committed_report_was_generated_by_the_shipped_rule():
     assert {"SHIPPED: either bar", "TIER bars only", "SURPRISE 5% only", "RULE: drought 5+", "not in drought (0-4)"} <= buckets
     assert {drb.tier_bucket(drb.band_label(m, floor), bar) for m, tiers in drb.TIERS.items() for floor, bar in tiers} <= buckets
     markdown = (root / "drought_rule_backtest.md").read_text(encoding="utf-8")
-    assert markdown.startswith("# Drought List backtest") and payload["generated_at"] in markdown
+    assert markdown.startswith("# Due List backtest") and payload["generated_at"] in markdown
