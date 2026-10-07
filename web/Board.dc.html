@@ -553,7 +553,10 @@ class Component extends DCLogic {
   startLive() {
     const L = this.L, { data, sportKey } = this.state, choice = this.props.live || "Auto";
     this.stopLive();
-    let mode = choice === "Off" ? "off" : choice === "ESPN" ? "espn" : choice === "Fixture" ? "fixture" : choice === "Fixture · ESPN down" ? "down" : this.onSite() ? "espn" : "fixture";
+    // On the real domain live scores always come from ESPN: a preview setting
+    // ("Fixture", "Off") must never serve sample scores on the live site, the
+    // same rule #305 applies to the board's data.
+    let mode = this.onSite() ? "espn" : choice === "Off" ? "off" : choice === "ESPN" ? "espn" : choice === "Fixture" ? "fixture" : choice === "Fixture · ESPN down" ? "down" : "fixture";
     if (sportKey !== "nhl" || !data || data.__archived || !(data.games || []).length) mode = "off";
     const blank = { mode, data: null, at: null, error: null, nextAt: null };
     if (mode === "off") { this.setState({ live: blank, boxes: {} }); return; }
