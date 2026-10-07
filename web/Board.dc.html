@@ -313,7 +313,7 @@
                     <sc-if value="{{ g.drought.show }}" hint-placeholder-val="{{ false }}">
                       <div style="border-top:2px solid var(--ink);padding-top:4px;">
                         <div style="display:flex;justify-content:space-between;align-items:center;gap:4px 12px;flex-wrap:wrap;">
-                          <span style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute);min-height:44px;display:inline-flex;align-items:center;">Drought List · potential bets</span>
+                          <span style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute);min-height:44px;display:inline-flex;align-items:center;">Due List · potential bets</span>
                           <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--mute);border:1px solid var(--rule);padding:2px 6px;">Not model bets · no stake</span>
                         </div>
                         <sc-for list="{{ g.drought.rows }}" as="r" hint-placeholder-count="0">
@@ -367,16 +367,18 @@
             </sc-for>
           </div>
 
+          <div style="display:flex;flex-wrap:wrap;gap:4px 20px;padding:10px 0;border-bottom:1px solid var(--rule);font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ink-2);">
+            <sc-for list="{{ propSeason }}" as="x" hint-placeholder-count="3"><span><span style="color:var(--mute);text-transform:uppercase;letter-spacing:.08em;font-size:11px;">{{ x.label }}</span> {{ x.value }}</span></sc-for>
+          </div>
+
           <sc-if value="{{ isDroughtView }}" hint-placeholder-val="{{ false }}">
             <div role="note" style="display:flex;flex-wrap:wrap;gap:10px 20px;align-items:flex-start;padding:16px 0;border-bottom:1px solid var(--ink);">
               <span style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:14px;letter-spacing:.14em;text-transform:uppercase;border:1px solid var(--ink);padding:4px 9px;white-space:nowrap;">Not model bets</span>
-              <p style="margin:0;flex:1 1 280px;font-size:15px;line-height:1.5;color:var(--ink-2);max-width:760px;text-wrap:pretty;">{{ dv.note }}</p>
             </div>
             <sc-if value="{{ dv.empty }}" hint-placeholder-val="{{ false }}">
               <div role="status" style="display:flex;flex-direction:column;gap:8px;padding:24px 0;border-bottom:1px solid var(--rule);">
                 <span style="align-self:flex-start;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:14px;letter-spacing:.14em;text-transform:uppercase;border:1px solid var(--ink);padding:4px 9px;">{{ dv.empty.tag }}</span>
                 <p style="margin:0;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:26px;line-height:1.05;text-transform:uppercase;">{{ dv.empty.title }}</p>
-                <p style="margin:0;font-size:15px;line-height:1.5;color:var(--ink-2);max-width:620px;text-wrap:pretty;">{{ dv.empty.body }}</p>
               </div>
             </sc-if>
             <sc-for list="{{ dv.groups }}" as="dg" hint-placeholder-count="2">
@@ -647,7 +649,7 @@ class Component extends DCLogic {
       ...(pv ? [{ label: "Props", href: `${links.board}#props`, onClick: (e) => { e.preventDefault(); this.setTab("props"); }, current: tab === "props" ? "page" : undefined, shadow: tab === "props" ? "inset 0 -3px 0 var(--ink)" : "none", color: "var(--ink)", badge: pv.status === "ok" && pv.counts.bets + pv.counts.leans ? String(pv.counts.bets + pv.counts.leans) : "" }] : []),
       tabLink("Results", links.results), ...(sk === "nhl" ? [tabLink("Season", links.season)] : []), tabLink("Archive", links.archive),
     ];
-    if (!vm) return { links, themeAttr, tabs: tabsFor("tonight", null), groups: [], strip: [], otherSports: [], scoreCards: [], showScores: false, isTonight: true, isProps: false, title1: "Tonight's", title2: "Board.", pv: { rows: [] }, propViews: [], dv: { groups: [] }, isModelView: true, isDroughtView: false };
+    if (!vm) return { links, themeAttr, tabs: tabsFor("tonight", null), groups: [], strip: [], otherSports: [], scoreCards: [], showScores: false, isTonight: true, isProps: false, title1: "Tonight's", title2: "Board.", pv: { rows: [] }, propViews: [], dv: { groups: [] }, isModelView: true, isDroughtView: false, propSeason: [] };
     const L = this.L, F = this.F, S = this.state, live = S.live, now = S.now, data = S.data, T = data.teams || {}, pv = S.pv, nhl = sk === "nhl", epl = sk === "epl";
     const start = (g) => g.startUtc || g.kickoff || g.tip, SL = (e) => L.stateLabelFor(sk, e);
     const [p1, p2] = epl ? ["home", "away"] : ["away", "home"];
@@ -655,7 +657,7 @@ class Component extends DCLogic {
     const M = live.data ? L.matchEventsFor(sk, live.data, this.liveGames(), T) : { byGame: {}, unmatched: [] };
     const tone = { win: "var(--win)", lose: "var(--alert)", flat: "var(--ink)", mute: "var(--mute)" };
 
-    // Cooper's Drought List (board.json games[].drought): an unstaked list he picks from. Never styled as a pick, never given units.
+    // Cooper's Due List (board.json games[].drought): an unstaked list he picks from. Never styled as a pick, never given units.
     const DROUGHT_UNITS = { points: ["point", "points", "1+ point", "a point"], goals: ["goal", "goals", "Anytime goal", "a goal"], assists: ["assist", "assists", "1+ assist", "an assist"] };
     const DROUGHT_NOTE = data.droughtNote || "70+ points, 30+ goals or 30+ assists last season, and a drought in that category at the tier bar his total sets or at his own equal-surprise bar.";
     // The seasons the cell records were measured on ("2024-26"), read from the board (SCHEMA.md droughtWindow); a board
@@ -758,7 +760,7 @@ class Component extends DCLogic {
           awayScore: scored ? String(e[p1].score) : "", homeScore: scored ? String(e[p2].score) : "", sep: scored ? "–" : epl ? "v" : "@",
           awayWeight: scored && e[p1].score > e[p2].score ? 700 : 400, homeWeight: scored && e[p2].score > e[p1].score ? 700 : 400,
           tag: g.pick.kind === "none" ? shortNone(g.pick.label) : g.pick.label, tagColor: g.pick.kind === "none" ? "var(--mute)" : "var(--ink)",
-          drought: dr.length ? `Drought List ×${dr.length}` : "",
+          drought: dr.length ? `Due List ×${dr.length}` : "",
           kind: liveV.has ? [kindShort, liveV.word].filter(Boolean).join(" · ") : kindShort, kindColor: liveV.has ? liveV.color : "var(--mute)", chev: open ? "−" : "+" },
         box: scored || (e && e.state !== "pre") ? { show: true, title: st.tone === "in" ? `Live · ${st.top}` : st.top, titleColor: st.tone === "in" ? "var(--alert)" : "var(--ink)",
           score: `${r[p1].abbr} ${scored ? e[p1].score : "–"} – ${scored ? e[p2].score : "–"} ${r[p2].abbr}`, shots,
@@ -821,9 +823,9 @@ class Component extends DCLogic {
         rows: rows.map((x) => drRow(x, g.id)) };
     });
     const dCount = dGroups.reduce((n, x) => n + x.rows.length, 0);
-    const dEmpty = !dRegular ? { tag: "Preseason", title: "Drought List starts with the regular season", body: "The list needs last season's totals and this season's games; exhibition games count for neither." }
-      : !dHasField ? { tag: "Not on this board", title: "No Drought List on this board", body: "This board was built before the Drought List was published." }
-      : !dCount ? { tag: "Nobody tonight", title: "Nobody is on the Drought List tonight", body: "The list needs 70+ points, 30+ goals or 30+ assists last season and a drought in that category at the tier bar his total sets or at his own equal-surprise bar." } : null;
+    const dEmpty = !dRegular ? { tag: "Preseason", title: "Due List starts with the regular season", body: "" }
+      : !dHasField ? { tag: "Not on this board", title: "No Due List on this board", body: "" }
+      : !dCount ? { tag: "Nobody tonight", title: "Nobody on the Due List tonight", body: "" } : null;
     const isDrought = S.propView === "drought";
     const viewBtn = (key, label) => ({ label, pressed: S.propView === key ? "true" : "false", bg: S.propView === key ? "var(--ink)" : "transparent", fg: S.propView === key ? "var(--paper)" : "var(--ink)", onClick: () => this.setView(key) });
     const view = pv ? { ...pv, rows: rows.map(deco), empty, filtered, hasRows: pv.status === "ok" && all.length > 0,
@@ -837,7 +839,18 @@ class Component extends DCLogic {
       toggleAllLabel: S.allOpen ?? S.wide ? "Collapse all" : "Expand all",
       onToggleAll: () => { const next = !(S.allOpen ?? S.wide); this.setState({ allOpen: next, expanded: {} }, () => this.syncBoxes()); },
       pv: view, f, isModelView: !isDrought, isDroughtView: isDrought,
-      propViews: [viewBtn("model", pv && pv.status === "ok" ? `Model props · ${pv.counts.total}` : "Model props"), viewBtn("drought", `Drought List · ${dCount}`)],
+      // Season-long lines from board.json record (props, propLeans, dueList); a dash until a night has settled.
+      propSeason: (() => {
+        const R = data.record || {}, rec = (r) => `${r.w || 0}–${r.l || 0}${r.p != null ? `–${r.p}` : ""}`, ok = (r) => r && r.nights;
+        const u = (x) => (typeof x === "number" ? ` · ${x > 0 ? "+" : x < 0 ? "−" : ""}${Math.abs(x).toFixed(2)} u` : "");
+        const hit = (r) => { const n = (r.w || 0) + (r.l || 0); return n ? ` · ${Math.round(((r.w || 0) / n) * 100)}%` : ""; };
+        return [
+          { label: "Props best bets · season", value: ok(R.props) ? rec(R.props) + u(R.props.units) : "—" },
+          { label: "Props leans · season", value: ok(R.propLeans) ? rec(R.propLeans) + hit(R.propLeans) : "—" },
+          { label: "Due List · season", value: ok(R.dueList) ? rec(R.dueList) + hit(R.dueList) : "—" },
+        ];
+      })(),
+      propViews: [viewBtn("model", pv && pv.status === "ok" ? `Model props · ${pv.counts.total}` : "Model props"), viewBtn("drought", `Due List · ${dCount}`)],
       dv: { groups: dGroups, empty: dEmpty, note: DROUGHT_NOTE }, headSummary: isDrought ? (dCount ? `${dCount} player${dCount === 1 ? "" : "s"} · ${dGroups.length} game${dGroups.length === 1 ? "" : "s"}` : "") : view.summary || "",
       gameOptions: [{ value: "", label: "All games" }, ...(data.games || []).filter((g) => byGameProps[g.id]).map((g) => ({ value: g.id, label: `${g.away.abbr} @ ${g.home.abbr} · ${F.fmtTime(g.startUtc)}` }))],
       teamOptions: [{ value: "", label: "All teams" }, ...uniq(all.map((r) => [r.team, r.teamName])).sort((x, y) => x[1].localeCompare(y[1])).map(([value, label]) => ({ value, label }))],
