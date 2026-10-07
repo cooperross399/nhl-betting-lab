@@ -1,6 +1,6 @@
-# Drought List backtest
+# Due List backtest
 
-Generated 2026-10-07T19:14:02+00:00 by `scripts/run_drought_rule_backtest.py`. Every figure below comes from that script.
+Generated 2026-10-07T21:08:40+00:00 by `scripts/run_drought_rule_backtest.py`. Every figure below comes from that script.
 
 **The rule.** A skater with 70+ points, 30+ goals or 30+ assists last regular season is listed in that category when his drought reaches either the tier bar from last season's total (points 100+ -> 3, 85-99 -> 4, 70-84 -> 5; goals 40+ -> 3, 35-39 -> 4, 30-34 -> 5; assists 60+ -> 3, 45-59 -> 4, 30-44 -> 5) or the surprise bar from his own prior-season hit rate p, the smallest n with (1 - p)^n <= 0.05; the wager is the over 0.5.
 

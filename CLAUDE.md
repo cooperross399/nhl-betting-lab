@@ -2267,6 +2267,8 @@ Re-derive rather than trust if the data has moved.
   at equal 4-dp rarity, the committed headline's 311 / 1,355 / 2,135 (the
   flat rule's test pinned 69 / 971 / 1,804), and the page's rows rendered
   through its own component under node on the builder's output.
+  2026-10-07 (later): renamed to Due List, Cooper's name for it, on every
+  page and the card; identifiers keep `drought`.
 
 ## Contract strings — never change these
 

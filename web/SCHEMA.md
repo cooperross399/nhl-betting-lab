@@ -125,7 +125,7 @@ unitDollars      number — dollars per unit for the stake line ("1 unit · $25"
 games[].pick     + side   "away" | "home" | "over" | "under"  — which side the pick is on; drives the live winning/losing status
                  + line   number | null — the total's or puck line's number; null for moneyline and regulation
                  Written by build_site_json.py::pick_side_and_line from the card candidate's own selection and line.
-games[].drought  [] on every regular-season game — Cooper's Drought List (2026-10-07; that evening the two bars below replaced
+games[].drought  [] on every regular-season game — Cooper's Due List (2026-10-07; that evening the two bars below replaced
                  the flat 5-game rule of #307), an unstaked list he picks from: 70+ points, 30+ goals or 30+ assists last regular
                  season, and a drought in that category (games dressed without one, carried across the season boundary) that
                  has reached EITHER bar. Rows come in the card's order: points, goals, assists; then rarity ascending (rarest
@@ -162,7 +162,7 @@ games[].drought  [] on every regular-season game — Cooper's Drought List (2026
                  publishes, with nulls. Nothing is computed or filled in here, and a missing price still renders "price not
                  posted". The page guards every one of these reads: a board without the drought field (EPL, CBB) and an NHL
                  board frozen before they existed render exactly as before.
-droughtNote      one sentence shown above each game's list: the Drought List rule (both bars, either lists him) and the
+droughtNote      one sentence shown above each game's list: the Due List rule (both bars, either lists him) and the
                  backtest headline, read from data/outputs/drought_rule_backtest.json
 droughtWindow    string | null — the seasons the cell records were measured on, as the page's label ("2024-26": the first
                  season start to the last season's end), read from that file's card-window buckets by

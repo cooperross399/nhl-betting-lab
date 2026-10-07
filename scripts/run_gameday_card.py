@@ -724,7 +724,7 @@ def main(argv: list[str] | None = None) -> int:
             "Team markets were priced on the goals ratings: the xG ratings "
             "file was missing or not built through the latest game."
         )
-    # Cooper's Drought List: an unstaked list he picks from, built every game
+    # Cooper's Due List: an unstaked list he picks from, built every game
     # day from the logs, the rosters and the schedule alone, so it publishes
     # with "not posted" prices on a night the card is blocked for prices. It
     # touches no best bet, stake, verdict or frozen opinion above. Each row

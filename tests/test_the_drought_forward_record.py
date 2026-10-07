@@ -1,4 +1,4 @@
-"""The drought rule's own forward record, kept apart from the registered forward test.
+"""The Due List's own forward record, kept apart from the registered forward test.
 
 Every listed row is recorded with its price to a dated file of its own, settled by the
 forward ledger's rules (voids, the 14-day patience window, one row per wager at the

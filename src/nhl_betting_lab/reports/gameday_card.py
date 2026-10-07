@@ -300,7 +300,7 @@ class GamedayCard:
     #: `models.team_ratings`), "goals" (the ratings file was missing or
     #: stale, a degraded run), or "" when no team model was fitted.
     team_ratings: str = ""
-    #: Cooper's Drought List (2026-10-07): an UNSTAKED list he picks from.
+    #: Cooper's Due List (2026-10-07): an UNSTAKED list he picks from.
     #: `drought_built` tells a card that built the list (possibly empty) from
     #: one that never asked, which renders no section. Nothing here is a best
     #: bet, a lean or a pass, and nothing here is in the selection
@@ -966,7 +966,7 @@ def _demoted_leans_by_reason(leans: Sequence[Mapping[str, Any]]) -> list[str]:
 
 
 def render_drought_section(card: GamedayCard) -> list[str]:
-    """Cooper's Drought List: a selection list, not staked bets.
+    """Cooper's Due List: a selection list, not staked bets.
 
     No units, no stakes, no edge, no model probability: a row is a player in a
     category on a drought that has reached a bar, with the bar he reached and
