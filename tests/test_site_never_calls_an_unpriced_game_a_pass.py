@@ -408,8 +408,7 @@ def test_staged_prices_still_publish_the_pick_and_the_lines(tmp_path: Path, monk
 
     tor = next(g for g in board["games"] if g["home"]["abbr"] == "TOR")
     assert tor["priced"] is True
-    assert tor["pick"] == {"kind": "bet", "market": "Moneyline", "label": "TOR +112", "price": 112, "edgePct": 11.0,
-                          "side": "home", "line": None}
+    assert tor["pick"] == {"kind": "bet", "market": "Moneyline", "label": "TOR +112", "price": 112, "edgePct": 11.0, "side": "home", "line": None}
     assert tor["moneyline"]["current"] == {"home": 112.0, "away": -130.0}
     assert board["notice"] is None
     rendered = render_board(board, tmp_path)

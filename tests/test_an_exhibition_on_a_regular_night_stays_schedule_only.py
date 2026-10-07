@@ -127,12 +127,9 @@ def test_the_regular_game_keeps_its_pick_beside_an_exhibition(tmp_path: Path, mo
 
     tor = next(g for g in board["games"] if g["home"]["abbr"] == "TOR")
     # `kind` (bet or lean) is another test's subject; this one is about the
-    # game keeping its pick at all, so it compares the pick without it. `side`
-    # and `line` are the live status's inputs (web/SCHEMA.md): a moneyline
-    # pick has a side and no line.
+    # game keeping its pick at all, so it compares the pick without it.
     pick = {k: v for k, v in tor["pick"].items() if k != "kind"}
-    assert pick == {"market": "Moneyline", "label": "TOR +112", "price": 112, "edgePct": 11.0,
-                    "side": "home", "line": None}
+    assert pick == {"market": "Moneyline", "label": "TOR +112", "price": 112, "edgePct": 11.0, "side": "home", "line": None}
 
 
 @EXHIBITION_IS

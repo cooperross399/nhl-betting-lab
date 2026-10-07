@@ -205,7 +205,9 @@ class Component extends DCLogic {
   state = { vm: null, feedNotice: null, loadedFor: null };
   async load() {
     const onSite = /(^|\.)maverickhightower\.com$/.test(location.hostname);
-    const scenario = this.props.scenario || (onSite ? "Normal" : "Props sample");
+    // On the real domain, always the real results (see Board.dc.html: the
+    // preview default made `props.scenario ||` serve the sample on the domain).
+    const scenario = onSite ? "Normal" : this.props.scenario || "Props sample";
     const want = (this.props.sport || "nhl") + "|" + scenario;
     if (this.state.loadedFor === want) return;
     this.setState({ loadedFor: want });
