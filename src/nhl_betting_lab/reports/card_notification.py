@@ -58,6 +58,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
+from nhl_betting_lab.drought_rule import fingerprint as drought_fingerprint_of
 from nhl_betting_lab.reports.gameday_card import (
     GamedayCard,
     render_card,
@@ -100,6 +101,9 @@ class NotificationDecision:
     reason: str
     selections_changed: bool
     degraded: bool
+    #: Cooper's drought list names someone it did not name on the previous
+    #: card. Not a selection change: the marker phrase is never attached to it.
+    drought_changed: bool = False
 
     def summary_line(self) -> str:
         return ("post" if self.post else "skip") + f": {self.reason}"
@@ -111,8 +115,15 @@ def decide(
     previous_fingerprint: str | None,
     degraded_notes: Sequence[str] = (),
     force: bool = False,
+    previous_drought_fingerprint: str | None = None,
 ) -> NotificationDecision:
-    """Decide whether this card is worth an email."""
+    """Decide whether this card is worth an email.
+
+    Cooper's drought list is a list he picks from every night, and the best-bet
+    fingerprint says nothing about it, so a night whose only news is the list
+    would never post. A list that names someone the previous card's did not
+    posts too, without calling it a selection change.
+    """
     # A blocked card is a fault unless the card says, in `nothing_to_card`,
     # why it is not: nothing allowlisted, or no game left to card today. This
     # reads that field exactly as Gameday Refresh does ("a blocked card with
@@ -164,6 +175,17 @@ def decide(
             reason="The selections differ from the previous card.",
             selections_changed=True,
             degraded=False,
+        )
+    if card.drought_rows and (
+        previous_drought_fingerprint is None
+        or card.drought_fingerprint() != previous_drought_fingerprint
+    ):
+        return NotificationDecision(
+            post=True,
+            reason="Cooper's drought list differs from the previous card's.",
+            selections_changed=False,
+            degraded=False,
+            drought_changed=True,
         )
     return NotificationDecision(
         post=False,
@@ -238,6 +260,11 @@ def render_comment(
             "Selections are unchanged since the previous card: there is no "
             f"card this run either. {benign_reason}"
         )
+    elif decision.drought_changed:
+        opening.append(
+            "Selections are unchanged since the previous card; this comment is here because "
+            "Cooper's drought list changed."
+        )
     else:
         # Unchanged and clean only posts when the caller forced it. Saying
         # "degraded" here sent the reader looking for a fault that did not
@@ -295,3 +322,17 @@ def previous_fingerprint_from(payload: Any) -> str | None:
         return selection_fingerprint_of(rows)
     value = payload.get("selection_fingerprint")
     return str(value) if isinstance(value, str) else None
+
+
+def previous_drought_fingerprint_from(payload: Any) -> str | None:
+    """The previous card's drought-list fingerprint, from its saved JSON.
+
+    None when the card predates the list or holds no usable rows, which
+    reads as "no previous list" and so as a change if tonight's has anyone.
+    """
+    if not isinstance(payload, dict):
+        return None
+    rows = payload.get("drought_rows")
+    if isinstance(rows, list) and rows and all(isinstance(row, dict) for row in rows):
+        return drought_fingerprint_of(rows)
+    return None

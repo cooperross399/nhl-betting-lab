@@ -26,6 +26,14 @@ import pandas as pd
 from nhl_betting_lab.config import OUTPUTS_DIR, PROCESSED_DIR, STAGING_DIR
 from nhl_betting_lab.data.build_datasets import load_player_logs, load_team_games
 from nhl_betting_lab.data.nhl_api import current_rosters
+from nhl_betting_lab.drought_forward import record_list
+from nhl_betting_lab.drought_rule import (
+    SITE_LIST_FILENAME,
+    backtest_headline,
+    build_drought_list,
+    save_site_list,
+    site_payload,
+)
 from nhl_betting_lab.market_eligibility import (
     assess_markets,
     slate_games_with_schedule,
@@ -715,6 +723,50 @@ def main(argv: list[str] | None = None) -> int:
             "Team markets were priced on the goals ratings: the xG ratings "
             "file was missing or not built through the latest game."
         )
+    # Cooper's drought rule: an unstaked list he picks from, built every game
+    # day from the logs, the rosters and the schedule alone, so it publishes
+    # with "not posted" prices on a night the card is blocked for prices. It
+    # touches no best bet, stake, verdict or frozen opinion above.
+    card.drought_built = True
+    card.drought_headline = backtest_headline(outputs, fallback=OUTPUTS_DIR)
+    try:
+        drought = build_drought_list(
+            logs=logs,
+            rosters=current_rosters(raw_dir=raw),
+            starts=starts,
+            prices=priceable,
+            team_names=team_names,
+            day=snapshot_day,
+            now=moment,
+        )
+    except (KeyError, ValueError) as exc:
+        from nhl_betting_lab.drought_rule import DroughtList
+
+        drought = DroughtList(day=snapshot_day, notes=[f"The drought list could not be built: {exc}"])
+        print(f"::warning::The drought list could not be built: {exc}")
+    card.drought_rows = drought.rows
+    card.drought_unresolved = drought.unresolved
+    card.drought_notes = list(drought.notes)
+    if drought.removed_by_guard:
+        card.drought_notes.append(
+            f"{drought.removed_by_guard} qualifier(s) are not listed: their game has started or "
+            "its start could not be confirmed."
+        )
+    print(
+        f"Drought list for {snapshot_day}: {len(drought.rows)} row(s), "
+        f"{sum(1 for r in drought.rows if r['american_odds'] is None)} with no price posted, "
+        f"{len(drought.unresolved)} unresolved name(s)."
+    )
+    save_site_list(
+        outputs / SITE_LIST_FILENAME,
+        site_payload(drought, card.drought_headline, card.generated_at),
+    )
+    if args.now and processed.resolve() == PROCESSED_DIR.resolve():
+        # The real ledger's own rule (see the archive above): a reproduction
+        # of a past night must not write a dated list into the real record.
+        print("A reproduction records no drought list in the real processed directory: it is not tonight's.")
+    else:
+        print(f"Drought list: {record_list(drought.rows, snapshot_day, processed_dir=processed)}")
     paths = save_card(card, output_dir=outputs)
     print(card.summary_line())
     if not card.card_generated:

@@ -759,6 +759,26 @@ jobs:
         run: |
           python scripts/run_forward_evidence.py
 
+      - name: Settle the drought list
+        # Cooper's drought rule (2026-10-07) is an unstaked list he picks from.
+        # The card records each row it listed, with the best price it showed,
+        # to data/processed/drought_list/<day>.csv, and this settles those
+        # files after the games by the forward ledger's rules into its own
+        # ledger (data/processed/drought_forward.csv) and report
+        # (data/outputs/drought_rule_forward.md). It reads and writes nothing
+        # of the registered forward test: not the snapshots, not
+        # forward_evidence.csv, not its report. Soft, like the settlement
+        # above, and read by "Report the outcome" the same way: a failure
+        # fails the run and does not degrade it, since a backup would
+        # restore the same files and fail the same way.
+        id: drought
+        if: always()
+        continue-on-error: true
+        env:
+          PYTHONPATH: src
+        run: |
+          python scripts/run_drought_rule_forward.py
+
       - name: Report closing-line value
         # Scores every frozen opinion against the market's last word, from
         # the union of two PRIVATE sources in cooperross399/nhl-closing-lines:
@@ -1201,6 +1221,9 @@ jobs:
           path: |
             data/outputs/gameday_card.md
             data/outputs/gameday_card.json
+            data/outputs/drought_list.json
+            data/outputs/drought_rule_forward.md
+            data/outputs/drought_rule_forward.json
             data/outputs/provider_shadow_verification.md
             data/outputs/provider_market_discovery.md
             data/outputs/props_calibration.md
@@ -1280,6 +1303,10 @@ jobs:
           fi
           if [ "${{ steps.settle.outcome }}" = "failure" ]; then
             echo "::error::Settle the forward ledger failed (its log says why: a ledger or snapshot that could not be read, a team map that resolves nothing, or a ledger that would have shrunk), so finished games did not reach the out-of-sample record. Nothing that failed to settle was marked settled; it settles once the state is repaired. It is not written into the run's health (degraded=${{ steps.final.outputs.degraded }}), so on its own it sends for no backup."
+            failed=1
+          fi
+          if [ "${{ steps.drought.outcome }}" = "failure" ]; then
+            echo "::error::Settle the drought list failed (its log says why), so Cooper's drought rule has no forward record for finished games yet. It touches nothing of the registered forward test and is not written into the run's health (degraded=${{ steps.final.outputs.degraded }}), so on its own it sends for no backup."
             failed=1
           fi
           if [ "${{ steps.rebuild.outcome }}" = "failure" ]; then

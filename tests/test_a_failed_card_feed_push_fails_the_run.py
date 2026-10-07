@@ -84,6 +84,7 @@ def _report(work: Path, *, degraded: str, published: str,
         f"steps.{_publish_id()}.outcome": published,
         # The three steps that fail the run the same way ran clean here.
         "steps.settle.outcome": "success",
+        "steps.drought.outcome": "success",
         "steps.rebuild.outcome": "success",
         "steps.clv.outcome": "success",
         "steps.clv.outputs.store_fault": "",

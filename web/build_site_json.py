@@ -485,6 +485,7 @@ def build_board(day: date, lab: Path, history_dir: Path) -> dict:
     if card_path.is_file():
         card = json.loads(card_path.read_text(encoding="utf-8"))
     candidates = [r for r in card.get("best_bets", []) + card.get("leans", []) + card.get("passes", []) if r.get("market") in MARKET_LABEL]
+    drought_listed = read_drought_list(lab, day) if not preseason else None
     prices = todays_rows(read_prices(lab / "data" / "staging"), day) if not preseason else []
     featured = todays_rows(read_prices(lab / "data" / "staging", featured_only=True), day) if not preseason else []
     opens = earliest_capture(lab / "data" / "processed", day) if not preseason else []
@@ -533,6 +534,13 @@ def build_board(day: date, lab: Path, history_dir: Path) -> dict:
             # no type reads as preseason, as `preseason` above reads it.
             "gameType": int(g.get("gameType", 1)),
         }
+        if row["gameType"] == REGULAR_SEASON_GAME_TYPE:
+            # Every regular-season game carries the list, empty when nobody
+            # qualifies or the game has started. It needs the card's list
+            # and nothing of the model, so it is written even on a board
+            # that could not project.
+            begun = (_moment(g["startTimeUTC"]) or datetime.min.replace(tzinfo=timezone.utc)) <= datetime.now(timezone.utc)
+            row["drought"] = drought_for_game(drought_listed, h, a, begun)
         if not preseason and lab_model and row["gameType"] == REGULAR_SEASON_GAME_TYPE:
             home_key = lab_model["resolve"](f"{home.get('placeName', {}).get('default', '')} {home.get('commonName', {}).get('default', '')}".strip()) or h
             away_key = lab_model["resolve"](f"{away.get('placeName', {}).get('default', '')} {away.get('commonName', {}).get('default', '')}".strip()) or a
@@ -656,7 +664,7 @@ def build_board(day: date, lab: Path, history_dir: Path) -> dict:
                   "A game here without a pick was not priced, which is not the same as the model passing on it.")
     board = {
         "generatedAt": now, "season": "2026–27", "phase": "preseason" if preseason else "regular",
-        "boardDate": day.isoformat(), "notice": notice, "record": record, "teams": teams, "games": out_games,
+        "boardDate": day.isoformat(), "droughtNote": drought_note(lab, drought_listed is not None), "notice": notice, "record": record, "teams": teams, "games": out_games,
         "allowlistedMarkets": allowlisted,
         # What the projections are rated on (rate_on_xg): "xg", "goals" when
         # the play-by-play table was not usable, None when nothing was projected.
@@ -674,6 +682,64 @@ def build_board(day: date, lab: Path, history_dir: Path) -> dict:
     elif not frozen.exists():  # the day's first published opinion stands
         frozen.write_text(json.dumps(board, indent=1), encoding="utf-8")
     return board
+
+
+DROUGHT_RULE_SENTENCE = ("Cooper's drought rule: 70+ points, 30+ goals or 30+ assists last regular season and "
+                         "5+ straight games without one in that category. An unstaked list he picks from.")
+
+
+def read_drought_list(lab: Path, day: date) -> dict | None:
+    """The card's drought list for `day`, or None when this build holds none for it.
+
+    The card writes it (data/outputs/drought_list.json) and Publish Site restores
+    it with the rest of `gameday-reports`; the site imports nothing from the card.
+    A list built for another day is never shown on this one.
+    """
+    path = lab / "data" / "outputs" / "drought_list.json"
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(payload, dict) or payload.get("day") != day.isoformat() or not isinstance(payload.get("rows"), list):
+        return None
+    return payload
+
+
+def drought_note(lab: Path, listed: bool) -> str:
+    """One sentence above each game's list: the rule and the backtest headline, read from its file."""
+    try:
+        from nhl_betting_lab.drought_rule import backtest_headline
+        headline = backtest_headline(lab / "data" / "outputs")
+    except ImportError:
+        headline = "Backtest headline unavailable: the lab's package could not be imported."
+    note = f"{DROUGHT_RULE_SENTENCE} {headline}"
+    if not listed:
+        note += " The card's list for this day did not reach this build, so no game shows one."
+    return note
+
+
+def drought_for_game(listed: dict | None, home: str, away: str, started: bool) -> list[dict]:
+    """The listed players of one game, in the card's order, in the shape web/SCHEMA.md names.
+
+    A game that has started lists nobody (the puck-drop guard). A price the card
+    did not stage stays null; nothing is filled in.
+    """
+    if not listed or started:
+        return []
+    out = []
+    for r in listed["rows"]:
+        if r.get("home_team") != home or r.get("away_team") != away:
+            continue
+        odds = r.get("american_odds")
+        out.append({
+            "player": r.get("player"), "playerId": r.get("player_id"), "team": r.get("team"),
+            "market": r.get("market"), "line": r.get("line"), "lastSeason": r.get("last_season"),
+            "drought": r.get("drought"),
+            "price": None if odds is None else (int(odds) if float(odds).is_integer() else float(odds)),
+            "book": (r.get("book") or None) if odds is not None else None,
+            "heavyJuice": bool(r.get("heavy_juice")),
+        })
+    return out
 
 
 def pick_side_and_line(c: dict) -> dict:

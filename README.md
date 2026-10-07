@@ -96,6 +96,12 @@ PYTHONPATH=src .venv/bin/python scripts/run_props_calibration.py
 # Price-based backtest -> data/outputs/player_props_backtest.md
 PYTHONPATH=src .venv/bin/python scripts/run_player_props_backtest.py
 
+# Cooper's drought rule (70+ pts / 30+ g / 30+ a last season, 5+ games dry)
+# against bought prices -> data/outputs/drought_rule_backtest.md
+PYTHONPATH=src .venv/bin/python scripts/run_drought_rule_backtest.py
+# Settle the card's drought list and restate the rule's own forward record (offline)
+PYTHONPATH=src .venv/bin/python scripts/run_drought_rule_forward.py
+
 # Did a result on one window hold on another? -> data/outputs/replication.md
 PYTHONPATH=src .venv/bin/python scripts/run_replication.py \
     --discovery data/outputs/player_props_backtest_2025-26.json \

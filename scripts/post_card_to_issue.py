@@ -22,6 +22,7 @@ from nhl_betting_lab.reports.card_notification import (
     OPERATING_HOME_BODY,
     OPERATING_HOME_TITLE,
     decide,
+    previous_drought_fingerprint_from,
     previous_fingerprint_from,
     render_comment,
     render_no_card_comment,
@@ -84,13 +85,14 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     previous = None
+    previous_drought = None
     if args.previous_json:
         path = Path(args.previous_json)
         if path.is_file():
             try:
-                previous = previous_fingerprint_from(
-                    json.loads(path.read_text(encoding="utf-8"))
-                )
+                payload = json.loads(path.read_text(encoding="utf-8"))
+                previous = previous_fingerprint_from(payload)
+                previous_drought = previous_drought_fingerprint_from(payload)
             except (OSError, UnicodeError, json.JSONDecodeError):
                 previous = None
 
@@ -99,6 +101,7 @@ def main(argv: list[str] | None = None) -> int:
         previous_fingerprint=previous,
         degraded_notes=degraded,
         force=args.force,
+        previous_drought_fingerprint=previous_drought,
     )
     body = render_comment(
         card, decision, run_url=args.run_url, degraded_notes=degraded
