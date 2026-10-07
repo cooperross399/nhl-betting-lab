@@ -684,8 +684,72 @@ def build_board(day: date, lab: Path, history_dir: Path) -> dict:
     return board
 
 
-DROUGHT_RULE_SENTENCE = ("Cooper's drought rule: 70+ points, 30+ goals or 30+ assists last regular season and "
-                         "5+ straight games without one in that category. An unstaked list he picks from.")
+#: The rule in one sentence (Cooper, 2026-10-07 evening; it replaces the flat
+#: 5-game rule shipped in #307). Two bars, and a drought at EITHER lists him.
+DROUGHT_RULE_SENTENCE = ("Cooper's Drought List, an unstaked list he picks from: a skater with 70+ points, 30+ goals or 30+ assists "
+                         "last regular season whose drought in that category has reached either bar, the tier bar his total sets "
+                         "(points 100+ → 3, 85-99 → 4, 70-84 → 5; goals 40+ → 3, 35-39 → 4, 30-34 → 5; assists 60+ → 3, 45-59 → 4, "
+                         "30-44 → 5) or his own equal-surprise bar, the shortest drought with no more than a 5% chance at his "
+                         "last-season hit rate.")
+
+#: What a listed row carries beyond the #307 fields, as the card's
+#: drought_list.json spells it -> as this board spells it. Each is read, never
+#: computed here, and is null when the row lacks it (a list written by the
+#: flat-rule card, or a field the lab could not fill).
+DROUGHT_BAR_FIELDS = (("tier_bar", "tierBar"), ("surprise_bar", "surpriseBar"))
+DROUGHT_RATE_FIELDS = (("hit_rate", "hitRate"), ("rarity", "rarity"))
+DROUGHT_RULES = frozenset({"tier", "surprise", "both"})
+
+
+def _whole(value: object) -> int | None:
+    """An integer field, or None: a blank, NaN or unreadable value is nothing."""
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    if number != number or not number.is_integer():
+        return None
+    return int(number)
+
+
+def _real(value: object) -> float | None:
+    """A float field, or None: a blank, NaN or unreadable value is nothing."""
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return None if number != number else number
+
+
+def cell_record(source: object) -> dict | None:
+    """The band's measured record in percent, or None when the lab gave none.
+
+    The card writes `cell_record` as {wagers, roi, ci_low, ci_high} (fractions,
+    from data/outputs/drought_rule_backtest.json, card window, both seasons)
+    or null when that file lacks the cell. Here it is {wagers, returnPct,
+    lowPct, highPct}, the three figures as percents rounded to one place, and
+    a record missing any of the four is None rather than a half-record.
+
+    The keys are not spelled roiPct / ciLowPct / ciHighPct, which is how the
+    FORWARD ledger's return would be spelled on the page, and
+    tests/test_site_publishes_no_forward_return.py forbids those spellings on
+    Board.dc.html (and `roi` / `low` / `high` as keys anywhere on the board).
+    That seal is on the pre-registered forward test; this cell is the
+    historical backtest's, the same measurement `droughtNote` already prints,
+    and its keys say so rather than borrowing the sealed ones.
+    """
+    if not isinstance(source, dict):
+        return None
+    wagers = _whole(source.get("wagers"))
+    figures = [_real(source.get(key)) for key in ("roi", "ci_low", "ci_high")]
+    if wagers is None or any(figure is None for figure in figures):
+        return None
+    pct = [round(figure * 100, 1) for figure in figures]
+    return {"wagers": wagers, "returnPct": pct[0], "lowPct": pct[1], "highPct": pct[2]}
 
 
 def read_drought_list(lab: Path, day: date) -> dict | None:
@@ -722,7 +786,10 @@ def drought_for_game(listed: dict | None, home: str, away: str, started: bool) -
     """The listed players of one game, in the card's order, in the shape web/SCHEMA.md names.
 
     A game that has started lists nobody (the puck-drop guard). A price the card
-    did not stage stays null; nothing is filled in.
+    did not stage stays null; nothing is filled in. The same holds for the bars,
+    the hit rate, the rarity, the rule, the band and the cell record: each is
+    the card's figure or null, never computed or guessed here, so a list the
+    flat-rule card wrote (no such fields) still publishes, with nulls.
     """
     if not listed or started:
         return []
@@ -731,6 +798,7 @@ def drought_for_game(listed: dict | None, home: str, away: str, started: bool) -
         if r.get("home_team") != home or r.get("away_team") != away:
             continue
         odds = r.get("american_odds")
+        rule, band = r.get("rule"), r.get("band")
         out.append({
             "player": r.get("player"), "playerId": r.get("player_id"), "team": r.get("team"),
             "market": r.get("market"), "line": r.get("line"), "lastSeason": r.get("last_season"),
@@ -738,6 +806,11 @@ def drought_for_game(listed: dict | None, home: str, away: str, started: bool) -
             "price": None if odds is None else (int(odds) if float(odds).is_integer() else float(odds)),
             "book": (r.get("book") or None) if odds is not None else None,
             "heavyJuice": bool(r.get("heavy_juice")),
+            **{site: _whole(r.get(card)) for card, site in DROUGHT_BAR_FIELDS},
+            **{site: _real(r.get(card)) for card, site in DROUGHT_RATE_FIELDS},
+            "rule": rule if rule in DROUGHT_RULES else None,
+            "band": band if isinstance(band, str) and band else None,
+            "cellRecord": cell_record(r.get("cell_record")),
         })
     return out
 
