@@ -125,14 +125,49 @@ unitDollars      number — dollars per unit for the stake line ("1 unit · $25"
 games[].pick     + side   "away" | "home" | "over" | "under"  — which side the pick is on; drives the live winning/losing status
                  + line   number | null — the total's or puck line's number; null for moneyline and regulation
                  Written by build_site_json.py::pick_side_and_line from the card candidate's own selection and line.
-games[].drought  [] on every regular-season game — Cooper's drought rule (2026-10-07), an unstaked list he picks from:
-                 70+ points, 30+ goals or 30+ assists last regular season and 5+ straight games without one in that category.
+games[].drought  [] on every regular-season game — Cooper's Drought List (2026-10-07; that evening the two bars below replaced
+                 the flat 5-game rule of #307), an unstaked list he picks from: 70+ points, 30+ goals or 30+ assists last regular
+                 season, and a drought in that category (games dressed without one, carried across the season boundary) that
+                 has reached EITHER bar. Rows come in the card's order: points, goals, assists; then rarity ascending (rarest
+                 first); then drought descending; then name.
   []             {player, playerId, team, market ("points"|"goals"|"assists"), line (0.5), lastSeason (that category's total),
                  drought (games in a row without one, entering tonight), price (best American odds | null: not posted),
-                 book (string | null), heavyJuice (bool: shorter than -160)}
-                 A missing price stays null and renders "price not posted"; it is never filled in.
-droughtNote      one sentence shown above each game's list: the rule and the backtest headline, read from
-                 data/outputs/drought_rule_backtest.json
+                 book (string | null), heavyJuice (bool: shorter than -160),
+                 tierBar      int | null — the bar his last-season total sets: points 100+ 3, 85-99 4, 70-84 5;
+                              goals 40+ 3, 35-39 4, 30-34 5; assists 60+ 3, 45-59 4, 30-44 5
+                 surpriseBar  int | null — his own equal-surprise bar, the smallest n >= 1 with (1 - hitRate)^n <= 0.05;
+                              null when hitRate is 0 (that bar never lists him; 1 when hitRate is 1)
+                 hitRate      float | null — prior-season regular-season games with one in the category over games dressed
+                 rarity       float | null — (1 - hitRate)^drought, rounded to 4 dp: how unlikely a drought this long is for HIM
+                 oneIn        int | null — N in "1 in N for him", round(1 / (1 - hitRate)^drought) from the UNROUNDED figure
+                              (the card's one_in), so the rarest rows are not quantised by rarity's 4 dp (0.25^7 is 1 in
+                              16,384, where rarity 0.0001 would read 1 in 10,000); null when the figure is 0 (hitRate 1).
+                              The page prints "1 in N for him" from it, with a thousands separator. A row without it (written
+                              before the field existed) reads N = round(1 / rarity) instead, and a rarity of exactly 0 prints
+                              the card's two spellings: "never last season" when hitRate is 1, otherwise "rarer than 1 in
+                              10,000 for him". The line is omitted only when oneIn and rarity are both null.
+                 rule         "tier" | "surprise" | "both" | null — which bars his drought has reached
+                 band         string | null — the tier band label: "100+", "85-99", "70-84", "40+", ..., "60+", "45-59", "30-44"
+                 cellRecord   {wagers, returnPct, lowPct, highPct} | null — that band's measured record from
+                              data/outputs/drought_rule_backtest.json (card window, both seasons, bucket "TIER <band> @<bar>"):
+                              wagers, the return and its 95% interval as percents rounded to 1 dp (the card's roi, ci_low,
+                              ci_high × 100); null when the file lacks the cell, and the page then says "no record for this
+                              cell". The page prints it as "This cell <droughtWindow>: ..." (the window from the board, below),
+                              a number beside a number, never coloured good or bad. The keys are
+                              not the forward ledger's spellings (roiPct, ciLow, ciHigh), which
+                              tests/test_site_publishes_no_forward_return.py keeps off the Board page: this is the historical
+                              backtest's cell, the same measurement droughtNote prints, not the sealed forward return.}
+                 Each field past heavyJuice is read from the card's drought_list.json row (tier_bar, surprise_bar, hit_rate,
+                 rarity, one_in, rule, band, cell_record) and is null when the row lacks it — a list the flat-rule card wrote still
+                 publishes, with nulls. Nothing is computed or filled in here, and a missing price still renders "price not
+                 posted". The page guards every one of these reads: a board without the drought field (EPL, CBB) and an NHL
+                 board frozen before they existed render exactly as before.
+droughtNote      one sentence shown above each game's list: the Drought List rule (both bars, either lists him) and the
+                 backtest headline, read from data/outputs/drought_rule_backtest.json
+droughtWindow    string | null — the seasons the cell records were measured on, as the page's label ("2024-26": the first
+                 season start to the last season's end), read from that file's card-window buckets by
+                 build_site_json.py::drought_window; null when the file is missing or names no season, and the page then
+                 prints "This cell:" with no window rather than a season the record was not measured on
 props            {status, note, marketNotes, rows[]} | absent (absent renders "Props are not on this board")
   status         "ok" | "no_lines" | "abstain"
   note           optional sentence under the heading (or the body of the empty state)
