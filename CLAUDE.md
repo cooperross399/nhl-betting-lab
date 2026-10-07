@@ -2178,6 +2178,71 @@ Re-derive rather than trust if the data has moved.
   (`STAKE_EXCLUDED_MARKETS` included), how the model's own selections are
   chosen, the provider policy and the registered 2027-04-25 forward test.**
   This is a list added beside them, not a change to any of them.
+- **2026-10-07, evening: the Drought List. The drought bar now scales with
+  the player, two ways, and the list is named for what it is.** Cooper's
+  framing: the better the player, the shorter the drought that makes him
+  worth a look. The flat 5-game bar shipped that morning (#307, above) is
+  replaced; the base qualifier is not: 70+ points, 30+ goals or 30+ assists
+  LAST regular season, per category, and the current drought is still the
+  straight regular-season games he dressed for without one in that category,
+  carried across the season boundary, exactly as `prepare_logs` counts it. A
+  player is listed when his drought reaches EITHER of two bars:
+  1. **The tier bar**, from last season's total in the category (`TIERS`):
+     points 100+ -> 3, 85-99 -> 4, 70-84 -> 5; goals 40+ -> 3, 35-39 -> 4,
+     30-34 -> 5; assists 60+ -> 3, 45-59 -> 4, 30-44 -> 5.
+  2. **The surprise bar** (equal surprise, which Cooper also liked), from his
+     own prior-season hit rate p = (prior-season regular-season games with
+     one or more in the category) / (prior-season regular-season games
+     dressed, never his team's games): the smallest n >= 1 with (1 - p)^n
+     <= 0.05 (`SURPRISE_LEVEL`). Undefined when p = 0, so he never qualifies
+     on this bar; 1 when p = 1.
+  Each listed row carries both bars, which bars his drought has reached
+  (`rule`: "tier", "surprise" or "both"), his hit rate, the rarity of a
+  streak this long for HIM ((1 - p)^drought, shown as "1 in N for him"), his
+  tier band and that band's measured record from the committed backtest
+  (`cell_record`, null when the file lacks it, never guessed). Sorted by
+  category, then rarest first, then longest drought, then name.
+  **The measurement, read from the regenerated
+  `data/outputs/drought_rule_backtest.json` (`SHIPPED: either bar`, 2024-25
+  and 2025-26 bought prices, best price, card window, flat stake, 95%
+  interval bootstrapped over game nights): points -1.6% over 311 wagers
+  (-10.8% to +7.1%); goals -7.0% over 1,355 (-14.1% to +0.4%); assists
+  -8.4% over 2,135 (-14.4% to -2.3%). No category's interval sits above
+  zero: no demonstrated edge, and assists is a demonstrated deficit.** The
+  two bars apart, same window: for points the surprise bar lists everyone
+  the tier bar does and more (surprise only 311 at -1.6%, tier only 101 at
+  -6.9%); for goals the tier bar does (tier only 1,355 at -7.0%, surprise
+  only 508 at -11.1%); assists tier only 2,130 at -8.4%, surprise only
+  1,068 at -12.9%. Three cells are worth naming, and none is a finding:
+  **assists 60+ @3 is +10.5% over 184 (-1.2% to +23.6%)**, the one band
+  whose interval nearly clears zero and does not; **goals 40+ @3 is -12.4%
+  over 494 (-22.8% to -1.0%)**, a loss whose interval excludes zero, which
+  is the best goal scorers on a 3-game drought; and **points 100+ @3 is
+  +15.5% over 15 wagers (-25.5% to +46.9%)**, fifteen wagers, which can say
+  nothing either way. Cooper has seen the morning's numbers and decided to
+  implement the list regardless, as a list he picks from with his own NHL
+  knowledge; the card states the headline in one line and does not argue
+  it. What shipped: `drought_rule.TIERS`, `SURPRISE_LEVEL`, `tier_bar`,
+  `surprise_bar`, `band_label`, `bars_reached` and `cell_records`;
+  `prepare_logs` now also carries `prior_gp` and `prior_hit_<market>`;
+  `qualifiers_entering` and `build_drought_list` list on either bar and
+  carry the new fields; the backtest keeps the flat rule's buckets (`RULE:
+  drought 5+` and the control, so the history reads the same) and adds
+  `SHIPPED: either bar`, `TIER bars only`, `SURPRISE 5% only` and, per
+  band, `TIER <band> @<bar>` and `TIER <band> ==<bar>`, with `tiers`,
+  `surprise_level` and `rule` at the top of its JSON; `backtest_headline`
+  reads the SHIPPED bucket. The card section is titled "Drought List"
+  (`SECTION_TITLE`; it was "Drought rule — Cooper's list") and shows the bar
+  reached ("3 (tier)", "4 (both)"), both bars, the rarity and the band's
+  record beside the price. The dated lists and their forward record
+  (`drought_forward`) keep their columns. **Still an UNSTAKED list: no
+  units, no tiers-as-stakes, nothing in the model's selections, the
+  selection fingerprint, the stakes, `STAKE_EXCLUDED_MARKETS`,
+  `write_snapshot`, `forward_evidence.csv` or `build_forward_report`.
+  Unchanged: the model, the edge bar, the market list, the staking rule and
+  the registered 2027-04-25 forward test.** The site (`web/`) still renders
+  the list from `drought_list.json`; its own sentence about the rule is the
+  site's to update.
 
 ## Contract strings — never change these
 
