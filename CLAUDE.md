@@ -2243,6 +2243,30 @@ Re-derive rather than trust if the data has moved.
   the registered 2027-04-25 forward test.** The site (`web/`) still renders
   the list from `drought_list.json`; its own sentence about the rule is the
   site's to update.
+  **Review fixes (same evening), nothing staked or registered touched.** The
+  row also carries `one_in`, N in "1 in N for him" computed once from the
+  UNROUNDED (1 - p)^drought (`drought_rule.one_in`): `rarity`'s 4 dp had
+  quantised the rarest rows, the ones the sort puts first (0.25^7 printed
+  "1 in 10,000" where it is 1 in 16,384, and anything under 0.00005 printed
+  "rarer than 1 in 10,000"); `rarity_text` and the page read it, and a row
+  without it (written before the field) reads N off the rarity as before.
+  The page (`web/Board.dc.html`) had omitted the "for him" line for exactly
+  those rows (rarity 0.0 while the card printed "rarer than 1 in 10,000 for
+  him"); it now prints the card's spellings, with a thousands separator,
+  and skips a row that is not an object instead of throwing on it. The
+  cell's "This cell 2024-26" label was hard-coded on a page three labs
+  share; the builder now publishes `droughtWindow` ("2024-26", read from
+  the backtest JSON's card-window seasons, null without the file) and the
+  page prints that. `drought_for_game` no longer dies on an unhashable
+  `rule` (a TypeError that took the whole site build down), and `_real` /
+  `_whole` refuse an infinity (json.dumps writes `Infinity`, which the
+  browser's JSON.parse refuses). `surprise_bar` returns None, not a
+  ZeroDivisionError, for a p so small that 1 - p is 1.0; `drought_before`
+  refuses a None/NaN stat (it had counted one as a hit) and counts a hit at
+  one or more. The tests pin the sort's "then drought descending" tiebreak
+  at equal 4-dp rarity, the committed headline's 311 / 1,355 / 2,135 (the
+  flat rule's test pinned 69 / 971 / 1,804), and the page's rows rendered
+  through its own component under node on the builder's output.
 
 ## Contract strings — never change these
 

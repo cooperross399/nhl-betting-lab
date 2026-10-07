@@ -18,6 +18,7 @@ import math
 from datetime import datetime, timezone
 
 import pandas as pd
+import pytest
 
 from nhl_betting_lab import drought_rule as dr
 from nhl_betting_lab.reports.gameday_card import GamedayCard, render_card
@@ -111,6 +112,8 @@ def test_the_surprise_bar_is_the_smallest_drought_at_or_under_the_level():
     assert dr.surprise_bar(0.75) == 3 and dr.surprise_bar(0.55) == 4 and dr.surprise_bar(0.3) == 9
     assert dr.surprise_bar(0.5) == 5, "0.5^4 = 0.0625 is above the level; 0.5^5 = 0.03125 is under it"
     assert dr.surprise_bar(19 / 20) == 1, "(1 - 19/20)^1 is the level itself, whatever the float says"
+    assert dr.surprise_bar(1e-17) is None, "1 - p is 1.0 at this p: undefined, as p == 0 is, not a division by zero"
+    assert dr.surprise_bar(1 / 85) == 254, "the smallest hit rate a season of games dressed can give"
     for hits in range(1, 82):
         p = hits / 82
         n = dr.surprise_bar(p)
@@ -118,6 +121,15 @@ def test_the_surprise_bar_is_the_smallest_drought_at_or_under_the_level():
         assert n == 1 or (1 - p) ** (n - 1) > dr.SURPRISE_LEVEL, (p, n)
         assert n == max(1, math.ceil(math.log(dr.SURPRISE_LEVEL) / math.log(1 - p))) or math.isclose(
             (1 - p) ** (n - 1), dr.SURPRISE_LEVEL, rel_tol=1e-9), (p, n)
+
+
+def test_the_drought_counts_a_hit_at_one_or_more_and_refuses_a_missing_stat():
+    assert dr.drought_before([0, 0, 1, 0, 2, 0, 0]) == [0, 1, 2, 0, 1, 0, 1]
+    assert dr.drought_before([]) == [] and dr.drought_before([3]) == [0]
+    # Counted as a hit (NaN == 0 is False), a missing stat would end a drought nobody saw end; it is refused instead.
+    for missing in (float("nan"), None):
+        with pytest.raises(ValueError, match="no stat recorded"):
+            dr.drought_before([0, 0, missing, 0])
 
 
 def _either_bar_logs() -> pd.DataFrame:
@@ -166,15 +178,27 @@ def test_a_player_is_listed_when_either_bar_is_reached_and_the_rule_names_which(
     surprise_only = by.loc[(12, "points")]
     assert (surprise_only.tier_bar, surprise_only.surprise_bar, surprise_only.hit_rate, surprise_only.band, surprise_only.rarity) == (
         5, 3, 0.737, "70-84", 0.0048), "0.263^4"
+    assert surprise_only.one_in == 209, "1 / (20/76)^4 = 208.5 from the unrounded figure; 1 / 0.0048 would say 208"
     assert (by.loc[(12, "assists")].tier_bar, by.loc[(12, "assists")].surprise_bar, by.loc[(12, "assists")].hit_rate) == (5, 4, 0.553)
     both = by.loc[(13, "points")]
-    assert (both.tier_bar, both.surprise_bar, both.hit_rate, both.rarity) == (3, 3, 0.75, 0.001), "0.25^5"
+    assert (both.tier_bar, both.surprise_bar, both.hit_rate, both.rarity, both.one_in) == (3, 3, 0.75, 0.001, 1024), "0.25^5"
     assert (by.loc[(15, "assists")].tier_bar, by.loc[(15, "assists")].surprise_bar, by.loc[(15, "assists")].band,
             by.loc[(15, "assists")].drought) == (5, 9, "30-44", 5)
     assert (by.loc[(15, "points")].tier_bar, by.loc[(15, "points")].surprise_bar, by.loc[(15, "points")].hit_rate) == (5, 5, 0.5)
     assert dr.bars_reached("points", 70, 0.5, 4) is None and dr.bars_reached("points", 69, 1.0, 50) is None
-    assert dr.bars_reached("goals", 40, 0.0, 3) == {"tier_bar": 3, "surprise_bar": None, "hit_rate": 0.0, "rarity": 1.0,
+    assert dr.bars_reached("goals", 40, 0.0, 3) == {"tier_bar": 3, "surprise_bar": None, "hit_rate": 0.0, "rarity": 1.0, "one_in": 1,
                                                     "rule": "tier", "band": "40+"}, "p = 0: the surprise bar is undefined"
+
+
+def test_one_in_is_computed_from_the_unrounded_figure_not_the_four_dp_rarity():
+    # 0.25^7 = 1 / 16,384 rounds to a rarity of 0.0001, which would read as 1 in 10,000; 0.25^8 rounds to 0.0.
+    seven, eight = dr.bars_reached("points", 70, 0.75, 7), dr.bars_reached("points", 70, 0.75, 8)
+    assert (seven["rarity"], seven["one_in"]) == (0.0001, 16384) and (eight["rarity"], eight["one_in"]) == (0.0, 65536)
+    assert dr.rarity_text(seven) == "1 in 16,384 for him" and dr.rarity_text(eight) == "1 in 65,536 for him"
+    assert dr.bars_reached("points", 100, 0.9, 5)["one_in"] == 100000 and dr.one_in(0.9, 5) == 100000
+    assert dr.one_in(1.0, 3) is None and dr.rarity_text(dr.bars_reached("points", 100, 1.0, 3)) == "never last season"
+    assert dr.one_in(0.0, 4) == 1 and dr.one_in(0.5, 5) == 32 and dr.one_in(float("nan"), 2) == 1
+    assert dr.one_in(0.9, 400) is None, "a float underflow is 0, not a division by zero"
 
 
 def test_the_hit_rate_and_rarity_count_the_games_he_dressed_for_not_his_teams():
@@ -186,7 +210,7 @@ def test_the_hit_rate_and_rarity_count_the_games_he_dressed_for_not_his_teams():
     q = dr.qualifiers_entering(pd.DataFrame(rows), DAY).set_index(["player_id", "market"]).loc[(22, "assists")]
 
     assert (q.hit_rate, q.surprise_bar, q.tier_bar, q.rule) == (0.75, 3, 4, "both"), "at 45/82 the surprise bar would be 4"
-    assert q.rarity == 0.0039, "0.25^4; at 45/82 it would be 0.0413"
+    assert q.rarity == 0.0039 and q.one_in == 256, "0.25^4; at 45/82 it would be 0.0413"
     prepared = dr.prepare_logs(pd.DataFrame(rows)).set_index(["player_id", "season_start"])
     assert (prepared.loc[(22, 2026), "prior_gp"].iloc[0], prepared.loc[(22, 2026), "prior_hit_assists"].iloc[0]) == (60, 45)
     assert prepared.loc[(22, 2026), "prior_assists"].iloc[0] == 45 and prepared.loc[(22, 2025), "prior_gp"].isna().all()
@@ -239,8 +263,8 @@ def test_the_list_publishes_with_not_posted_prices_when_no_book_has_posted():
     assert all(r["cell_record"] is None for r in result.rows), "no backtest records were given: none is guessed"
     assert dr.price_text(result.rows[0]) == "not posted"
     row = result.rows[1]
-    assert (row["tier_bar"], row["surprise_bar"], row["hit_rate"], row["rarity"], row["rule"], row["band"]) == (
-        5, 5, 0.5, 0.0312, "both", "30-44")
+    assert (row["tier_bar"], row["surprise_bar"], row["hit_rate"], row["rarity"], row["one_in"], row["rule"], row["band"]) == (
+        5, 5, 0.5, 0.0312, 32, "both", "30-44")
 
 
 def test_the_team_is_the_rosters_not_the_logs_last_club():
@@ -305,18 +329,24 @@ def test_rows_sort_by_category_then_rarest_first_not_longest_drought():
     # 8: 60 assists in 75 games (p = 0.8), 5 dry: rarity 0.2^5 = 0.0003, the rarest streak on the list.
     # 10: 31 assists in 62 games (p = 0.5), 7 dry (the 8th game is dated DAY: tonight, not history): 0.5^7 = 0.0078.
     # Assist Man: p = 0.5, 5 dry: 0.0312. A longer drought at a lower hit rate sorts AFTER a shorter, rarer one.
+    # 16: 36 assists in 82 games (p = 0.439), 6 dry: 0.561^6 = 0.03117, which is 0.0312 at 4 dp, the same rarity as
+    #     Assist Man's 0.03125. At equal rarity the LONGER drought is listed first (the registered tiebreak).
     extra = (_games(8, "Short Rare", 20252026, "2025-10-10", 15)
              + _games(8, "Short Rare", 20252026, "2025-10-25", 60, assists=1, offset=15)
              + _games(8, "Short Rare", 20262027, "2026-10-01", 5)
              + _games(10, "Long Dry", 20252026, "2025-10-10", 31)
              + _games(10, "Long Dry", 20252026, "2025-11-10", 31, assists=1, offset=31)
-             + _games(10, "Long Dry", 20262027, "2026-10-01", 8))
-    result = build(logs=pd.concat([make_logs(), pd.DataFrame(extra)]), rosters={**ROSTERS, 8: "CGY", 10: "CGY"})
+             + _games(10, "Long Dry", 20262027, "2026-10-01", 8)
+             + _games(16, "Tied Rare", 20252026, "2025-10-10", 46)
+             + _games(16, "Tied Rare", 20252026, "2025-11-25", 36, assists=1, offset=46)
+             + _games(16, "Tied Rare", 20262027, "2026-10-01", 6))
+    result = build(logs=pd.concat([make_logs(), pd.DataFrame(extra)]), rosters={**ROSTERS, 8: "CGY", 10: "CGY", 16: "CGY"})
 
     assert [(r["market"], r["player"], r["drought"], r["rarity"]) for r in result.rows] == [
         ("goals", "Test Scorer", 5, 0.0394), ("assists", "Short Rare", 5, 0.0003),
-        ("assists", "Long Dry", 7, 0.0078), ("assists", "Assist Man", 5, 0.0312)]
-    assert [r["rule"] for r in result.rows] == ["both", "both", "both", "both"]
+        ("assists", "Long Dry", 7, 0.0078), ("assists", "Tied Rare", 6, 0.0312), ("assists", "Assist Man", 5, 0.0312)]
+    assert [r["rule"] for r in result.rows] == ["both"] * 5
+    assert [r["one_in"] for r in result.rows] == [25, 3125, 128, 32, 32]
 
 
 # -- the band's record, read from the backtest ------------------------------
@@ -371,8 +401,13 @@ def test_the_row_texts_read_the_bar_the_rarity_and_the_record():
     assert dr.bar_text({"rule": "tier", "tier_bar": 3, "surprise_bar": None}) == "3 (tier)" and dr.bar_text({}) == "-"
     assert dr.bars_text({"tier_bar": 5, "surprise_bar": 3}) == "tier 5 / surprise 3"
     assert dr.bars_text({"tier_bar": 3, "surprise_bar": None}) == "tier 3 / surprise -"
+    assert dr.rarity_text({"rarity": 0.0001, "hit_rate": 0.75, "one_in": 16384}) == "1 in 16,384 for him"
+    assert dr.rarity_text({"rarity": 0.0, "hit_rate": 0.9, "one_in": 100000}) == "1 in 100,000 for him"
+    assert dr.rarity_text({"rarity": 0.0312, "hit_rate": 0.5, "one_in": 32.0}) == "1 in 32 for him"
+    # A row written before `one_in` existed reads N off the 4-dp rarity, and names the two ends that rounding reaches.
     assert dr.rarity_text({"rarity": 0.0039, "hit_rate": 0.75}) == "1 in 256 for him"
-    assert dr.rarity_text({"rarity": 0.0312, "hit_rate": 0.5}) == "1 in 32 for him"
+    assert dr.rarity_text({"rarity": 0.0312, "hit_rate": 0.5, "one_in": None}) == "1 in 32 for him"
+    assert dr.rarity_text({"rarity": 0.0312, "hit_rate": 0.5, "one_in": float("nan")}) == "1 in 32 for him"
     assert dr.rarity_text({"rarity": 0.0, "hit_rate": 1.0}) == "never last season"
     assert dr.rarity_text({"rarity": 0.0, "hit_rate": 0.9}) == "rarer than 1 in 10,000 for him"
     assert dr.rarity_text({}) == "-"
@@ -441,5 +476,6 @@ def test_the_headline_is_read_from_the_shipped_bucket_of_the_backtest_json(tmp_p
 def test_the_committed_backtest_headline_reads_its_file():
     line = dr.backtest_headline(dr.Path(__file__).resolve().parents[1] / "data" / "outputs")
 
-    assert "points" in line and "goals" in line and "assists" in line and "unavailable" not in line
-    assert "no category's interval sits above zero" in line
+    # The committed JSON's SHIPPED bucket (either bar), card window, both seasons. The flat rule read 69 / 971 / 1804.
+    assert "points -1.6% over 311 wagers" in line and "goals -7.0% over 1355 wagers" in line and "assists -8.4% over 2135 wagers" in line
+    assert "unavailable" not in line and "no category's interval sits above zero" in line

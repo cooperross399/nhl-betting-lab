@@ -658,6 +658,10 @@ class Component extends DCLogic {
     // Cooper's Drought List (board.json games[].drought): an unstaked list he picks from. Never styled as a pick, never given units.
     const DROUGHT_UNITS = { points: ["point", "points", "1+ point", "a point"], goals: ["goal", "goals", "Anytime goal", "a goal"], assists: ["assist", "assists", "1+ assist", "an assist"] };
     const DROUGHT_NOTE = data.droughtNote || "70+ points, 30+ goals or 30+ assists last season, and a drought in that category at the tier bar his total sets or at his own equal-surprise bar.";
+    // The seasons the cell records were measured on ("2024-26"), read from the board (SCHEMA.md droughtWindow); a board
+    // without it names no window rather than one the record was not measured on.
+    const DROUGHT_WINDOW = typeof data.droughtWindow === "string" && data.droughtWindow ? ` ${data.droughtWindow}` : "";
+    const thousands = (n) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
     const track = (r) => {
       const e = M.byGame[r.gameId];
       if (!e || e.state === "pre") return { show: false };
@@ -677,6 +681,9 @@ class Component extends DCLogic {
     };
     const deco = (r) => ({ ...r, stake: r.kind === "lean" ? "" : r.stake, track: track(r), opacity: r.unconfirmed ? "0.6" : "1", isBet: r.kind === "bet" && !r.unconfirmed, isLean: r.kind === "lean" && !r.unconfirmed, isPass: r.kind === "pass" || r.unconfirmed,
       aria: `${r.player}, ${r.label}, ${r.kindLabel}` });
+    // The rows of one game's list: an absent or malformed field is no list, and a row that is not an object is skipped
+    // rather than thrown on, so one bad row cannot take the board down.
+    const droughtRows = (rows) => (Array.isArray(rows) ? rows : []).filter((x) => x != null && typeof x === "object");
     const drRow = (x, gid) => {
       const u = DROUGHT_UNITS[x.market] || [x.market, x.market, x.market, x.market], line = typeof x.line === "number" ? x.line : 0.5, t = T[x.team] || {}, priced = typeof x.price === "number";
       // The two bars (2026-10-07 evening; SCHEMA.md games[].drought). Every read is guarded: this page is shared byte for
@@ -684,11 +691,18 @@ class Component extends DCLogic {
       // fields existed; such a row shows nothing extra. "bar N · rule" is the bar his drought reached under the rule
       // named; under "both" it is the higher of the two, which he has also cleared. The cell record is a number beside
       // a number, never coloured good or bad; a null record says so, an absent one (an older board) says nothing.
-      const num = (v) => (typeof v === "number" && Number.isFinite(v) ? v : null), tier = num(x.tierBar), surprise = num(x.surpriseBar), rarity = num(x.rarity);
+      const num = (v) => (typeof v === "number" && Number.isFinite(v) ? v : null), tier = num(x.tierBar), surprise = num(x.surpriseBar), rarity = num(x.rarity), oneIn = num(x.oneIn), hit = num(x.hitRate);
       const bar = x.rule === "tier" ? tier : x.rule === "surprise" ? surprise : x.rule === "both" ? (tier != null && surprise != null ? Math.max(tier, surprise) : tier ?? surprise) : null;
-      const meta = [bar != null ? `bar ${bar} · ${x.rule}` : "", rarity != null && rarity > 0 ? `1 in ${Math.round(1 / rarity)} for him` : ""].filter(Boolean).join(" · ");
+      // "1 in N for him" is the card's own N (oneIn, from the unrounded figure). A row without it (written before the field
+      // existed) reads N off the 4-dp rarity, as the card did, and spells the two ends that rounding reaches as the card does:
+      // 0 is "never last season" when he hit in every game, otherwise rarer than the rounding can say. Only a row with
+      // neither figure shows no line.
+      const forHim = oneIn != null && oneIn > 0 ? `1 in ${thousands(Math.round(oneIn))} for him`
+        : rarity == null ? "" : rarity > 0 ? `1 in ${thousands(Math.round(1 / rarity))} for him`
+        : hit != null && hit >= 1 ? "never last season" : "rarer than 1 in 10,000 for him";
+      const meta = [bar != null ? `bar ${bar} · ${x.rule}` : "", forHim].filter(Boolean).join(" · ");
       const c = x.cellRecord, pc = (v) => `${v > 0 ? "+" : ""}${v.toFixed(1)}%`, whole = !!c && typeof c === "object" && [c.wagers, c.returnPct, c.lowPct, c.highPct].every((v) => num(v) != null);
-      const record = !(x != null && typeof x === "object" && "cellRecord" in x) ? "" : whole ? `This cell 2024-26: ${pc(c.returnPct)} over ${c.wagers} (95% ${pc(c.lowPct)} to ${pc(c.highPct)})` : "no record for this cell";
+      const record = !("cellRecord" in x) ? "" : whole ? `This cell${DROUGHT_WINDOW}: ${pc(c.returnPct)} over ${c.wagers} (95% ${pc(c.lowPct)} to ${pc(c.highPct)})` : "no record for this cell";
       return { player: x.player, team: x.team || "", color: t.color || "var(--ink)", fg: t.fg || "var(--paper)", streak: x.drought != null ? String(x.drought) : "—", category: u[2],
         history: `${x.lastSeason ?? "—"} ${u[1]} last season · ${x.drought} straight games without ${u[3]}`, meta, record,
         price: priced ? F.fmtOdds(x.price) : "—", book: priced ? x.book || "" : "price not posted", priceColor: priced ? "var(--ink)" : "var(--mute)", juice: !!x.heavyJuice,
@@ -732,7 +746,7 @@ class Component extends DCLogic {
       const sog = (x) => (x ? x.shotsTotal ?? x.shotsOnGoal ?? x.shots : null);
       const shots = bt && sog(bt[a]) != null && sog(bt[h]) != null ? `Shots on goal ${a} ${sog(bt[a])} – ${sog(bt[h])} ${h}` : "";
       const gp = byGameProps[g.id] || [], shown = gp.filter((x) => x.kind !== "pass");
-      const dr = (Array.isArray(r.drought) ? r.drought : []).map((x) => drRow(x, g.id));
+      const dr = droughtRows(r.drought).map((x) => drRow(x, g.id));
       return { ...g, hasBar: g.bar.length > 0, anchor: `g-${g.id}`, panelId: `p-${g.id}`, expanded: open, expandedAttr: open ? "true" : "false", onToggle: () => this.toggle(g.id),
         ariaLabel: `${g.sides[0].name} at ${g.sides[1].name}, ${g.time}`,
         barAria: g.sides.map((s) => `${s.name} ${s.win || ""}`.trim()).join(", "),
@@ -800,11 +814,11 @@ class Component extends DCLogic {
     const dGames = (data.games || []).slice().sort((x, y) => Date.parse(x.startUtc) - Date.parse(y.startUtc));
     const dHasField = dGames.some((g) => Array.isArray(g.drought));
     const dRegular = data.phase !== "preseason" && dGames.some((g) => g.gameType == null || g.gameType === 2);
-    const dGroups = dGames.filter((g) => Array.isArray(g.drought) && g.drought.length).map((g) => {
-      const e = M.byGame[g.id], st = e ? SL(e) : null, scored = !!e && e.state !== "pre" && e.away.score != null;
+    const dGroups = dGames.filter((g) => droughtRows(g.drought).length).map((g) => {
+      const e = M.byGame[g.id], st = e ? SL(e) : null, scored = !!e && e.state !== "pre" && e.away.score != null, rows = droughtRows(g.drought);
       return { title: `${g.away.abbr} @ ${g.home.abbr}`, subColor: st && st.tone === "in" ? "var(--alert)" : "var(--mute)",
-        sub: [st && st.top ? st.top : F.fmtTime(g.startUtc), scored ? `${e.away.score}–${e.home.score}` : "", `${g.drought.length} listed`].filter(Boolean).join(" · "),
-        rows: g.drought.map((x) => drRow(x, g.id)) };
+        sub: [st && st.top ? st.top : F.fmtTime(g.startUtc), scored ? `${e.away.score}–${e.home.score}` : "", `${rows.length} listed`].filter(Boolean).join(" · "),
+        rows: rows.map((x) => drRow(x, g.id)) };
     });
     const dCount = dGroups.reduce((n, x) => n + x.rows.length, 0);
     const dEmpty = !dRegular ? { tag: "Preseason", title: "Drought List starts with the regular season", body: "The list needs last season's totals and this season's games; exhibition games count for neither." }

@@ -18,7 +18,8 @@ shorter the drought:
 
 Each listed row says which bars the drought has reached (`rule`: "tier",
 "surprise" or "both"), his hit rate, the rarity of a streak this long for HIM
-((1 - p)^drought) and the band's measured record from the committed backtest.
+((1 - p)^drought, and `one_in`: "1 in N for him" from the unrounded figure)
+and the band's measured record from the committed backtest.
 
 `scripts/run_drought_rule_backtest.py` measures it against bought prices and
 the Gameday card lists tonight's qualifiers from it. Both call `prepare_logs`
@@ -103,18 +104,38 @@ def _at_most(value: float, level: float) -> bool:
 
 
 def surprise_bar(hit_rate) -> int | None:
-    """The smallest n >= 1 with (1 - p)^n <= SURPRISE_LEVEL; None when p == 0 (undefined), 1 when p == 1."""
+    """The smallest n >= 1 with (1 - p)^n <= SURPRISE_LEVEL; None when p == 0 (undefined), 1 when p == 1.
+
+    A p too small for 1 - p to differ from 1 (below about 1e-16; no hit rate
+    of games dressed, at most one in 85, gets near it) is treated as p == 0.
+    """
     if hit_rate is None or pd.isna(hit_rate) or hit_rate <= 0:
         return None
     if hit_rate >= 1:
         return 1
     miss = 1.0 - float(hit_rate)
+    if miss >= 1.0:
+        return None
     n = max(1, math.ceil(math.log(SURPRISE_LEVEL) / math.log(miss)))
     while n > 1 and _at_most(miss ** (n - 1), SURPRISE_LEVEL):
         n -= 1
     while not _at_most(miss ** n, SURPRISE_LEVEL):
         n += 1
     return n
+
+
+def one_in(hit_rate, drought: int) -> int | None:
+    """N in "1 in N for him": round(1 / (1 - p)^drought) from the UNROUNDED figure.
+
+    The row's `rarity` is that figure rounded to 4 dp, which quantises the
+    rarest rows (0.25^7 is 1 in 16,384, and 0.0001 reads as 1 in 10,000), so
+    N is computed here once and carried on the row. None when the figure is
+    0: p == 1 (he hit in every game last season), or a drought so long the
+    float underflows.
+    """
+    p = 0.0 if hit_rate is None or pd.isna(hit_rate) else float(hit_rate)
+    chance = (1.0 - p) ** int(drought)
+    return None if chance <= 0 else int(round(1.0 / chance))
 
 
 def bars_reached(market: str, prior_total, hit_rate, drought: int) -> dict[str, Any] | None:
@@ -124,8 +145,9 @@ def bars_reached(market: str, prior_total, hit_rate, drought: int) -> dict[str, 
     has reached neither bar. Otherwise the row's own fields: `tier_bar`,
     `surprise_bar` (None when undefined), `hit_rate` (p, 3 dp), `rarity`
     ((1 - p)^drought, 4 dp: how unlikely a streak this long is for HIM),
-    `rule` ("tier", "surprise" or "both": the bars the drought has reached)
-    and `band` (the tier band's label).
+    `one_in` (N in "1 in N for him" from the unrounded figure; None when it
+    is 0), `rule` ("tier", "surprise" or "both": the bars the drought has
+    reached) and `band` (the tier band's label).
     """
     tier = tier_bar(market, prior_total)
     if tier is None:
@@ -137,18 +159,25 @@ def bars_reached(market: str, prior_total, hit_rate, drought: int) -> dict[str, 
         return None
     return {
         "tier_bar": tier, "surprise_bar": surprise, "hit_rate": round(p, 3),
-        "rarity": round((1.0 - p) ** int(drought), 4),
+        "rarity": round((1.0 - p) ** int(drought), 4), "one_in": one_in(p, drought),
         "rule": "both" if len(reached) == 2 else reached[0],
         "band": band_label(market, prior_total),
     }
 
 
 def drought_before(values) -> list[int]:
-    """Games in a row without the stat, entering each game (the game itself excluded)."""
+    """Games in a row without the stat, entering each game (the game itself excluded).
+
+    A missing stat (None or NaN) is refused: counted as a hit it would end a
+    drought nobody saw end, counted as a miss it would lengthen one. The
+    built logs carry none (int64 columns), so this names a loader defect.
+    """
     out, run = [], 0
     for v in values:
+        if v is None or v != v:
+            raise ValueError("a player-game row has no stat recorded, so its drought cannot be counted")
         out.append(run)
-        run = run + 1 if v == 0 else 0
+        run = 0 if v >= 1 else run + 1
     return out
 
 
@@ -178,7 +207,7 @@ def prepare_logs(logs: pd.DataFrame) -> pd.DataFrame:
 
 
 QUALIFIER_COLUMNS = ["player_id", "player", "market", "last_season", "drought",
-                     "tier_bar", "surprise_bar", "hit_rate", "rarity", "rule", "band"]
+                     "tier_bar", "surprise_bar", "hit_rate", "rarity", "one_in", "rule", "band"]
 
 
 def qualifiers_entering(logs: pd.DataFrame, day: str) -> pd.DataFrame:
@@ -296,7 +325,8 @@ def build_drought_list(
             "player": q.player, "player_id": int(q.player_id), "market": q.market, "line": LINE,
             "selection": "over", "last_season": int(q.last_season), "drought": int(q.drought),
             "tier_bar": int(q.tier_bar), "surprise_bar": _optional_int(q.surprise_bar),
-            "hit_rate": float(q.hit_rate), "rarity": float(q.rarity), "rule": str(q.rule), "band": str(q.band),
+            "hit_rate": float(q.hit_rate), "rarity": float(q.rarity), "one_in": _optional_int(q.one_in),
+            "rule": str(q.rule), "band": str(q.band),
             "cell_record": dict(record) if record is not None else None,
             "american_odds": None, "book": "", "heavy_juice": False,
         })
@@ -451,8 +481,16 @@ def bars_text(row: Mapping[str, Any]) -> str:
 
 
 def rarity_text(row: Mapping[str, Any]) -> str:
-    """"1 in N for him", N = round(1 / rarity); the two ends the rounding reaches are named."""
-    rarity, hit_rate = row.get("rarity"), row.get("hit_rate")
+    """"1 in N for him", N = the row's `one_in` (computed by `one_in` from the unrounded figure).
+
+    A row carrying no `one_in` (written before it existed) falls back to
+    N = round(1 / rarity), whose 4-dp rounding reaches two ends that are named:
+    0 is "never last season" when he hit in every game, otherwise rarer than
+    the rounding can say.
+    """
+    n, rarity, hit_rate = row.get("one_in"), row.get("rarity"), row.get("hit_rate")
+    if n is not None and not (isinstance(n, float) and np.isnan(n)):
+        return f"1 in {int(n):,} for him"
     if rarity is None or (isinstance(rarity, float) and np.isnan(rarity)):
         return "-"
     if float(rarity) <= 0:

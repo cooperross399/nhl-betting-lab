@@ -59,6 +59,7 @@ import argparse
 import csv
 import importlib.util
 import json
+import math
 import re
 import sys
 import urllib.request
@@ -664,7 +665,8 @@ def build_board(day: date, lab: Path, history_dir: Path) -> dict:
                   "A game here without a pick was not priced, which is not the same as the model passing on it.")
     board = {
         "generatedAt": now, "season": "2026–27", "phase": "preseason" if preseason else "regular",
-        "boardDate": day.isoformat(), "droughtNote": drought_note(lab, drought_listed is not None), "notice": notice, "record": record, "teams": teams, "games": out_games,
+        "boardDate": day.isoformat(), "droughtNote": drought_note(lab, drought_listed is not None), "droughtWindow": drought_window(lab),
+        "notice": notice, "record": record, "teams": teams, "games": out_games,
         "allowlistedMarkets": allowlisted,
         # What the projections are rated on (rate_on_xg): "xg", "goals" when
         # the play-by-play table was not usable, None when nothing was projected.
@@ -696,33 +698,37 @@ DROUGHT_RULE_SENTENCE = ("Cooper's Drought List, an unstaked list he picks from:
 #: drought_list.json spells it -> as this board spells it. Each is read, never
 #: computed here, and is null when the row lacks it (a list written by the
 #: flat-rule card, or a field the lab could not fill).
-DROUGHT_BAR_FIELDS = (("tier_bar", "tierBar"), ("surprise_bar", "surpriseBar"))
+DROUGHT_BAR_FIELDS = (("tier_bar", "tierBar"), ("surprise_bar", "surpriseBar"), ("one_in", "oneIn"))
 DROUGHT_RATE_FIELDS = (("hit_rate", "hitRate"), ("rarity", "rarity"))
 DROUGHT_RULES = frozenset({"tier", "surprise", "both"})
 
 
 def _whole(value: object) -> int | None:
-    """An integer field, or None: a blank, NaN or unreadable value is nothing."""
+    """An integer field, or None: a blank, NaN, infinite or unreadable value is nothing."""
     if value is None or isinstance(value, bool):
         return None
     try:
         number = float(value)
     except (TypeError, ValueError):
         return None
-    if number != number or not number.is_integer():
+    if not math.isfinite(number) or not number.is_integer():
         return None
     return int(number)
 
 
 def _real(value: object) -> float | None:
-    """A float field, or None: a blank, NaN or unreadable value is nothing."""
+    """A float field, or None: a blank, NaN, infinite or unreadable value is nothing.
+
+    An infinity is refused because json.dumps would write it as `Infinity`,
+    which the browser's JSON.parse rejects, and the board would not load.
+    """
     if value is None or isinstance(value, bool):
         return None
     try:
         number = float(value)
     except (TypeError, ValueError):
         return None
-    return None if number != number else number
+    return number if math.isfinite(number) else None
 
 
 def cell_record(source: object) -> dict | None:
@@ -769,6 +775,28 @@ def read_drought_list(lab: Path, day: date) -> dict | None:
     return payload
 
 
+def drought_window(lab: Path) -> str | None:
+    """The seasons the cell records were measured on, as the page's label ("2024-26"), read from the backtest file.
+
+    The label spans the first season start to the last season's end, taken
+    from the card-window buckets of data/outputs/drought_rule_backtest.json
+    (their `season` is the start year; "both" is the pooled bucket). None when
+    the file is missing, unreadable or names no season; the page then prints
+    the cell record with no window named rather than a season it was not
+    measured on.
+    """
+    path = lab / "data" / "outputs" / "drought_rule_backtest.json"
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        starts = sorted({int(b["season"]) for b in payload["buckets"]
+                         if b.get("window") == "card" and str(b.get("season")).isdigit()})
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+    if not starts:
+        return None
+    return f"{starts[0]}-{str(starts[-1] + 1)[-2:]}"
+
+
 def drought_note(lab: Path, listed: bool) -> str:
     """One sentence above each game's list: the rule and the backtest headline, read from its file."""
     try:
@@ -808,7 +836,7 @@ def drought_for_game(listed: dict | None, home: str, away: str, started: bool) -
             "heavyJuice": bool(r.get("heavy_juice")),
             **{site: _whole(r.get(card)) for card, site in DROUGHT_BAR_FIELDS},
             **{site: _real(r.get(card)) for card, site in DROUGHT_RATE_FIELDS},
-            "rule": rule if rule in DROUGHT_RULES else None,
+            "rule": rule if isinstance(rule, str) and rule in DROUGHT_RULES else None,
             "band": band if isinstance(band, str) and band else None,
             "cellRecord": cell_record(r.get("cell_record")),
         })
