@@ -139,7 +139,8 @@ def test_a_priced_game_with_no_pick_is_a_pass_and_a_pick_is_still_graded(
 
     rows = _by_home(results["games"], lambda g: g["home"]["abbr"])
     assert rows["TOR"]["pick"] == {
-        "kind": "bet", "market": "Moneyline", "label": "TOR +112", "price": 112, "edgePct": 11.0, "result": "win",
+        "kind": "bet", "market": "Moneyline", "label": "TOR +112", "price": 112, "edgePct": 11.0, "side": "home", "line": None,
+        "result": "win",
     }
     assert rows["NYI"]["pick"] is None and rows["NYI"]["priced"] is True, rows["NYI"]
     assert results["summary"]["picks"] == {"w": 1, "l": 0, "p": 0}

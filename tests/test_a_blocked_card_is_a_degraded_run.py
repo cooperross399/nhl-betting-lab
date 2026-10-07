@@ -422,6 +422,7 @@ def _report(work: Path, degraded: str) -> int:
         # The card-feed publish ran; its failure is its own test's business.
         "steps.cardfeed.outcome": "success",
         "steps.settle.outcome": "success",
+        "steps.drought.outcome": "success",
         "steps.rebuild.outcome": "success",
         "steps.clv.outcome": "success",
         "steps.clv.outputs.store_fault": "",

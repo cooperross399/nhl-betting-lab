@@ -104,6 +104,8 @@ from nhl_betting_lab.config import (
     MIN_PROP_EDGE,
     OUTPUTS_DIR,
 )
+from nhl_betting_lab.drought_rule import SECTION_TITLE, fingerprint as drought_fingerprint_of
+from nhl_betting_lab.drought_rule import price_text as drought_price_text
 from nhl_betting_lab.market_eligibility import EligibilityReport
 from nhl_betting_lab.markets import MARKETS_BY_KEY
 from nhl_betting_lab.models.player_props import player_key
@@ -294,6 +296,16 @@ class GamedayCard:
     #: `models.team_ratings`), "goals" (the ratings file was missing or
     #: stale, a degraded run), or "" when no team model was fitted.
     team_ratings: str = ""
+    #: Cooper's drought rule (2026-10-07): an UNSTAKED list he picks from.
+    #: `drought_built` tells a card that built the list (possibly empty) from
+    #: one that never asked, which renders no section. Nothing here is a best
+    #: bet, a lean or a pass, and nothing here is in the selection
+    #: fingerprint, the units or the forward ledger.
+    drought_built: bool = False
+    drought_rows: list[dict[str, Any]] = field(default_factory=list)
+    drought_unresolved: list[str] = field(default_factory=list)
+    drought_notes: list[str] = field(default_factory=list)
+    drought_headline: str = ""
     notes: list[str] = field(default_factory=list)
     safety: dict[str, bool] = field(
         default_factory=lambda: {
@@ -320,6 +332,10 @@ class GamedayCard:
         nobody read them.
         """
         return selection_fingerprint_of(self.best_bets)
+
+    def drought_fingerprint(self) -> str:
+        """Who is on Cooper's drought list tonight, never at what price."""
+        return drought_fingerprint_of(self.drought_rows)
 
     def summary_line(self) -> str:
         if not self.card_generated:
@@ -945,6 +961,43 @@ def _demoted_leans_by_reason(leans: Sequence[Mapping[str, Any]]) -> list[str]:
     return lines
 
 
+def render_drought_section(card: GamedayCard) -> list[str]:
+    """Cooper's drought list: a selection list, not staked bets.
+
+    No units, no tiers, no edge, no model probability: a row is a player in a
+    category on a drought, with the best price staged for him or "not posted".
+    Heavy juice is a flag on the row, never a reason to hide it. The one line
+    under the heading is the backtest's headline, read from its file.
+    """
+    if not card.drought_built:
+        return []
+    lines = [f"## {SECTION_TITLE}", "", card.drought_headline, ""]
+    if card.drought_rows:
+        lines += [
+            "| Player | Team | Opponent | Puck drop | Category | Line | Last season | Drought | Best price | Book | Flag |",
+            "|:--|:--|:--|:--|:--|--:|--:|--:|--:|:--|:--|",
+        ]
+        for row in card.drought_rows:
+            flag = "heavy juice (shorter than -160)" if row.get("heavy_juice") else ""
+            lines.append(
+                f"| {row.get('player')} | {row.get('team')} | {row.get('opponent')} "
+                f"| {_start_eastern(row)} | {row.get('market')} | over {float(row.get('line', 0.5)):g} "
+                f"| {row.get('last_season')} | {row.get('drought')} | {drought_price_text(row)} "
+                f"| {row.get('book') or '-'} | {flag} |"
+            )
+        lines += ["", "A list, not bets: no units, no tiers, and none of it is in the best bets above.", ""]
+    else:
+        lines += ["_Nobody on tonight's slate qualifies._", ""]
+    lines += [f"- {note}" for note in card.drought_notes]
+    if card.drought_unresolved:
+        lines += [
+            f"- Not resolved, so no price is shown for it: {name}" for name in card.drought_unresolved
+        ]
+    if card.drought_notes or card.drought_unresolved:
+        lines.append("")
+    return lines
+
+
 def render_card(card: GamedayCard) -> str:
     lines = [
         "# NHL gameday card",
@@ -1028,6 +1081,8 @@ def render_card(card: GamedayCard) -> str:
             QuarantineResult(playable=[], quarantined=card.quarantined)
         )
     )
+
+    lines.extend(render_drought_section(card))
 
     if card.unresolved_names:
         shown = card.unresolved_names[:20]

@@ -31,38 +31,22 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
+from nhl_betting_lab.drought_rule import (  # noqa: E402,F401
+    MIN_DROUGHT,
+    THRESHOLDS,
+    drought_before,
+    prepare_logs,
+)
 from nhl_betting_lab.models.player_props import player_name_aliases  # noqa: E402
 from nhl_betting_lab.season import game_date  # noqa: E402
 
-THRESHOLDS = {"points": 70, "goals": 30, "assists": 30}
-MIN_DROUGHT = 5
+# The drought logic lives in src/ so the Gameday card and this evidence share one function.
+__all__ = ["MIN_DROUGHT", "THRESHOLDS", "drought_before", "prepare_logs"]
+
 BUCKETS = (("not in drought (0-4)", 0, 4), ("RULE: drought 5+", 5, 10_000),
            ("drought 5-6", 5, 6), ("drought 7-9", 7, 9), ("drought 10+", 10, 10_000))
 GOAL_SWEEP = (30, 35, 40, 45)
 BOOTSTRAPS = 1000
-
-
-def drought_before(values) -> list[int]:
-    """Games in a row without the stat, entering each game (the game itself excluded)."""
-    out, run = [], 0
-    for v in values:
-        out.append(run)
-        run = run + 1 if v == 0 else 0
-    return out
-
-
-def prepare_logs(logs: pd.DataFrame) -> pd.DataFrame:
-    """Skater games with each category's drought entering the game and last season's totals."""
-    logs = logs[(logs.role == "skater") & (logs.game_type == 2)].copy()
-    logs = logs.sort_values(["player_id", "date", "game_id"])
-    logs["season_start"] = logs.season // 10000
-    for market in THRESHOLDS:
-        logs["drought_" + market] = logs.groupby("player_id")[market].transform(
-            lambda s: pd.Series(drought_before(s.values), index=s.index))
-    prior = logs.groupby(["player_id", "season_start"])[list(THRESHOLDS)].sum().reset_index()
-    prior["season_start"] += 1
-    prior = prior.rename(columns={m: "prior_" + m for m in THRESHOLDS})
-    return logs.merge(prior, on=["player_id", "season_start"], how="left")
 
 
 def decimal(odds):

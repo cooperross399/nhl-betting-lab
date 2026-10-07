@@ -260,6 +260,7 @@ def _report(context: dict[str, object], cardfeed: str, tmp_path: Path
         "steps.prices.outputs.empty_slate": "false",
         "steps.cardfeed.outcome": cardfeed,
         "steps.settle.outcome": "success",
+        "steps.drought.outcome": "success",
         "steps.rebuild.outcome": "success",
         "steps.clv.outcome": "success",
         "steps.clv.outputs.store_fault": "",

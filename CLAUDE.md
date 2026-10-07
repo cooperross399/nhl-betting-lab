@@ -2117,6 +2117,67 @@ Re-derive rather than trust if the data has moved.
   (`docs/why_ice_time_gets_its_own_correction.md`); team model overconfident
   on favourites (its docstring's opposite prediction left on the record in
   `models/team_model.py`).
+- **2026-10-07: Cooper's drought rule is an unstaked list on the card, and
+  he picks from it.** Cooper's decision, in his words: "Keep trying with
+  points/goals/assists for player props. Players who scored 70+ points / 30+
+  goals / 30+ assists, and among those, who is on a current 5+ game drought in
+  each respective category. IF they fit that criteria then it's a bet. For the
+  higher-end producers like McDavid there is no value in 1+ point, but goal
+  props for guys like him can be identified with this trend." And, after
+  seeing the backtest: "idc, run the rule and i will pick from your selections
+  based on my NHL knowledge and from watching games every night." The rule,
+  per category: 70+ points, 30+ goals or 30+ assists LAST regular season (the
+  prior completed season), and 5+ straight regular-season games dressed for
+  without one in that category, carried across the season boundary, entering
+  tonight, is the over 0.5 in that category (the anytime scorer folds into
+  `goals`). **The backtest headline, read from
+  `data/outputs/drought_rule_backtest.json` (2024-25 and 2025-26 bought
+  prices, best price, card window, flat stake, 95% interval bootstrapped over
+  game nights): points -15.8% over 69 wagers (-35.9% to +6.9%); goals -4.3%
+  over 971 (-14.6% to +4.9%); assists -10.4% over 1,804 (-17.1% to -4.3%).
+  No category's interval is above zero: no demonstrated edge, and assists is a
+  demonstrated deficit.** Cooper has seen it and decided; the card states it
+  in one line and does not argue it.
+  What shipped: the card's section "Drought rule — Cooper's list", built every
+  game day by `drought_rule.build_drought_list` from the player logs, the
+  current rosters and the schedule alone, so it publishes with "not posted"
+  prices on a night the card is blocked for prices. It is a LIST: no units,
+  no tiers, no edge, nothing in the best bets, leans, passes, selection
+  fingerprint, stakes or frozen snapshot. Each row: player, team (the roster's,
+  not the log's last club), opponent, puck drop, category, line (over 0.5), last
+  season's total, current drought, and the best staged price with its book, or
+  "not posted" (never filled in). A price shorter than -160 is flagged on the
+  row, never hidden. Sorted by category, then longest drought first. The
+  puck-drop guard applies (`apply_puck_drop_guard`): a started game, or one
+  whose start cannot be confirmed, is not listed. A price name two players
+  share resolves to neither and is listed as unresolved. The qualifiers come
+  from `prepare_logs`, **moved from `scripts/run_drought_rule_backtest.py` into
+  `src/nhl_betting_lab/drought_rule.py`** so the card and the evidence are one
+  function (tonight is entered as one more row per player, asked of
+  `prepare_logs` itself). It reaches Cooper through the card markdown, the
+  operating-home comment (a changed list posts, without the marker phrase),
+  `latest_card_comment.md` on card-feed (every run), and the site
+  (`data/outputs/drought_list.json`, carried in `gameday-reports`, restored by
+  Publish Site, written by `web/build_site_json.py` as `games[].drought` and
+  `droughtNote`, the shape `web/SCHEMA.md` names).
+  **Gradeable, apart from the registered test.** Each listed row is recorded
+  with its price to `data/processed/drought_list/<day>.csv` (first price
+  stands; a row listed "not posted" may take one once; a settled day is never
+  reopened), settled by `scripts/run_drought_rule_forward.py` using the forward
+  ledger's own settlement helpers (a player who never entered is void, the
+  14-day patience window, one row per wager at the listed best price) into
+  `data/processed/drought_forward.csv`, and restated in
+  `data/outputs/drought_rule_forward.md` (listed count, hit rate, flat-stake
+  ROI, game-clustered 95% interval, per category and overall, with the
+  backtest headline beside it). A row with no posted price is graded for the
+  hit rate and is not a wager. It records the RULE's results; Cooper's actual
+  picks are his and are not tracked. `tests/test_the_drought_forward_record.py`
+  proves `write_snapshot`'s frozen opinions, `forward_evidence.csv` and
+  `build_forward_report` are byte for byte what they would have been.
+  **Unchanged: the model, the edge bar, the market list, the staking rule
+  (`STAKE_EXCLUDED_MARKETS` included), how the model's own selections are
+  chosen, the provider policy and the registered 2027-04-25 forward test.**
+  This is a list added beside them, not a change to any of them.
 
 ## Contract strings — never change these
 
