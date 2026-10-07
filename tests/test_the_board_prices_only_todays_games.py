@@ -166,7 +166,7 @@ def test_a_late_start_whose_utc_date_is_tomorrow_is_todays_game(tmp_path: Path, 
     assert tor["priced"] is True
     assert tor["moneyline"]["current"] == {"home": 112.0, "away": -130.0}
     assert tor["total"]["current"] == 6.0
-    assert tor["pick"] == {"kind": "bet", "market": "Moneyline", "label": "TOR +112", "price": 112, "edgePct": 11.0}
+    assert tor["pick"] == {"kind": "bet", "market": "Moneyline", "label": "TOR +112", "price": 112, "edgePct": 11.0, "side": "home", "line": None}
     assert board["notice"] is None
 
 

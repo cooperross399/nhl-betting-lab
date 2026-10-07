@@ -1,0 +1,555 @@
+{
+ "generatedAt": "2026-10-07T16:30:00Z",
+ "season": "2026–27",
+ "phase": "regular",
+ "boardDate": "2026-10-07",
+ "cardGeneratedAt": "2026-10-07T16:20:00Z",
+ "ratings": "xg",
+ "unitDollars": 25,
+ "allowlistedMarkets": [
+  "moneyline",
+  "total",
+  "shots_on_goal",
+  "goalie_saves"
+ ],
+ "record": {
+  "straightUp": {
+   "w": 44,
+   "l": 36
+  },
+  "picks": {
+   "w": 6,
+   "l": 5,
+   "p": 0
+  },
+  "leans": {
+   "w": 9,
+   "l": 11,
+   "p": 0
+  },
+  "puckLine": null,
+  "totals": {
+   "w": 37,
+   "l": 40,
+   "p": 3
+  },
+  "season": {
+   "nights": 8,
+   "firstDate": "2026-09-29",
+   "lastDate": "2026-10-06",
+   "missingNights": 0,
+   "straightUp": {
+    "w": 44,
+    "l": 36
+   },
+   "picks": {
+    "w": 6,
+    "l": 5,
+    "p": 0
+   },
+   "leans": {
+    "w": 9,
+    "l": 11,
+    "p": 0
+   },
+   "totals": {
+    "w": 37,
+    "l": 40,
+    "p": 3
+   }
+  }
+ },
+ "teams": {
+  "NYR": {
+   "name": "New York Rangers",
+   "short": "Rangers",
+   "color": "#0038A8",
+   "fg": "#FFFFFF"
+  },
+  "PHI": {
+   "name": "Philadelphia Flyers",
+   "short": "Flyers",
+   "color": "#F74902",
+   "fg": "#FFFFFF"
+  },
+  "TBL": {
+   "name": "Tampa Bay Lightning",
+   "short": "Lightning",
+   "color": "#002868",
+   "fg": "#FFFFFF"
+  },
+  "NJD": {
+   "name": "New Jersey Devils",
+   "short": "Devils",
+   "color": "#CE1126",
+   "fg": "#FFFFFF"
+  },
+  "BOS": {
+   "name": "Boston Bruins",
+   "short": "Bruins",
+   "color": "#FFB81C",
+   "fg": "#000000"
+  },
+  "TOR": {
+   "name": "Toronto Maple Leafs",
+   "short": "Maple Leafs",
+   "color": "#00205B",
+   "fg": "#FFFFFF"
+  },
+  "LAK": {
+   "name": "Los Angeles Kings",
+   "short": "Kings",
+   "color": "#111111",
+   "fg": "#FFFFFF"
+  },
+  "UTA": {
+   "name": "Utah Mammoth",
+   "short": "Mammoth",
+   "color": "#6CACE4",
+   "fg": "#000000"
+  },
+  "SJS": {
+   "name": "San Jose Sharks",
+   "short": "Sharks",
+   "color": "#006D75",
+   "fg": "#FFFFFF"
+  },
+  "VGK": {
+   "name": "Vegas Golden Knights",
+   "short": "Golden Knights",
+   "color": "#B4975A",
+   "fg": "#000000"
+  }
+ },
+ "games": [
+  {
+   "id": "2026020031",
+   "startUtc": "2026-10-07T17:00:00Z",
+   "gameType": 2,
+   "priced": true,
+   "venue": "Wells Fargo Center",
+   "city": "Philadelphia, PA",
+   "tv": "MSG / NBCSP",
+   "away": {
+    "abbr": "NYR",
+    "record": "1-0-0",
+    "projGoals": 2.9,
+    "winProb": 0.5,
+    "goalie": {
+     "name": "Igor Shesterkin",
+     "status": "confirmed"
+    }
+   },
+   "home": {
+    "abbr": "PHI",
+    "record": "0-1-0",
+    "projGoals": 3,
+    "winProb": 0.5,
+    "goalie": {
+     "name": "Samuel Ersson",
+     "status": "confirmed"
+    }
+   },
+   "moneyline": {
+    "open": {
+     "away": -125,
+     "home": 105
+    },
+    "current": {
+     "away": -140,
+     "home": 118
+    },
+    "fair": {
+     "away": -100,
+     "home": 100
+    }
+   },
+   "puckLine": {
+    "favorite": "NYR",
+    "line": -1.5,
+    "price": 195,
+    "coverProb": 0.29
+   },
+   "total": {
+    "open": null,
+    "current": 6,
+    "overPrice": -108,
+    "underPrice": -112,
+    "proj": 5.9,
+    "overProb": 0.47
+   },
+   "regulation": {
+    "away": 0.4,
+    "draw": 0.21,
+    "home": 0.39,
+    "prices": {
+     "away": 150,
+     "draw": 300,
+     "home": 165
+    }
+   },
+   "pick": {
+    "kind": "bet",
+    "market": "Moneyline",
+    "label": "PHI ML",
+    "side": "home",
+    "price": 118,
+    "book": "FanDuel",
+    "modelProb": 0.5,
+    "edgePct": 4.1,
+    "tier": "B",
+    "units": 0.5
+   }
+  },
+  {
+   "id": "2026020032",
+   "startUtc": "2026-10-07T23:00:00Z",
+   "gameType": 2,
+   "priced": true,
+   "venue": "Prudential Center",
+   "city": "Newark, NJ",
+   "tv": "ESPN+",
+   "away": {
+    "abbr": "TBL",
+    "record": "1-0-0",
+    "projGoals": 2.8,
+    "winProb": 0.42,
+    "goalie": {
+     "name": "Andrei Vasilevskiy",
+     "status": "confirmed"
+    }
+   },
+   "home": {
+    "abbr": "NJD",
+    "record": "1-0-0",
+    "projGoals": 3.3,
+    "winProb": 0.58,
+    "goalie": {
+     "name": "Jacob Markstrom",
+     "status": "projected"
+    }
+   },
+   "moneyline": {
+    "open": {
+     "away": -105,
+     "home": -115
+    },
+    "current": {
+     "away": 102,
+     "home": -122
+    },
+    "fair": {
+     "away": 138,
+     "home": -138
+    }
+   },
+   "puckLine": {
+    "favorite": "NJD",
+    "line": -1.5,
+    "price": 175,
+    "coverProb": 0.33
+   },
+   "total": {
+    "open": null,
+    "current": 6,
+    "overPrice": -105,
+    "underPrice": -115,
+    "proj": 6.1,
+    "overProb": 0.51
+   },
+   "regulation": {
+    "away": 0.36,
+    "draw": 0.22,
+    "home": 0.42,
+    "prices": {
+     "away": 175,
+     "draw": 290,
+     "home": 130
+    }
+   },
+   "pick": {
+    "kind": "bet",
+    "market": "Moneyline",
+    "label": "NJD ML",
+    "side": "home",
+    "price": -122,
+    "book": "DraftKings",
+    "modelProb": 0.58,
+    "edgePct": 3,
+    "tier": "A",
+    "units": 1
+   }
+  },
+  {
+   "id": "2026020033",
+   "startUtc": "2026-10-07T23:30:00Z",
+   "gameType": 2,
+   "priced": true,
+   "venue": "Scotiabank Arena",
+   "city": "Toronto, ON",
+   "tv": "Sportsnet / NESN",
+   "away": {
+    "abbr": "BOS",
+    "record": "0-1-0",
+    "projGoals": 2.9,
+    "winProb": 0.45,
+    "goalie": {
+     "name": "Jeremy Swayman",
+     "status": "confirmed"
+    }
+   },
+   "home": {
+    "abbr": "TOR",
+    "record": "1-0-0",
+    "projGoals": 3.2,
+    "winProb": 0.55,
+    "goalie": {
+     "name": "Anthony Stolarz",
+     "status": "confirmed"
+    }
+   },
+   "moneyline": {
+    "open": {
+     "away": 115,
+     "home": -135
+    },
+    "current": {
+     "away": 120,
+     "home": -142
+    },
+    "fair": {
+     "away": 122,
+     "home": -122
+    }
+   },
+   "puckLine": {
+    "favorite": "TOR",
+    "line": -1.5,
+    "price": 165,
+    "coverProb": 0.34
+   },
+   "total": {
+    "open": null,
+    "current": 6.5,
+    "overPrice": -115,
+    "underPrice": -105,
+    "proj": 6.1,
+    "overProb": 0.46
+   },
+   "regulation": {
+    "away": 0.35,
+    "draw": 0.21,
+    "home": 0.44,
+    "prices": {
+     "away": 185,
+     "draw": 300,
+     "home": 120
+    }
+   },
+   "pick": {
+    "kind": "lean",
+    "market": "Total",
+    "label": "Under 6.5",
+    "side": "under",
+    "line": 6.5,
+    "price": -105,
+    "book": "FanDuel",
+    "modelProb": 0.536,
+    "edgePct": 2.4
+   }
+  },
+  {
+   "id": "2026020034",
+   "startUtc": "2026-10-08T01:00:00Z",
+   "gameType": 2,
+   "priced": true,
+   "venue": "Delta Center",
+   "city": "Salt Lake City, UT",
+   "tv": "TNT",
+   "away": {
+    "abbr": "LAK",
+    "record": "0-0-1",
+    "projGoals": 2.7,
+    "winProb": 0.44,
+    "goalie": {
+     "name": "Darcy Kuemper",
+     "status": "confirmed"
+    }
+   },
+   "home": {
+    "abbr": "UTA",
+    "record": "1-0-0",
+    "projGoals": 3.1,
+    "winProb": 0.56,
+    "goalie": {
+     "name": "Karel Vejmelka",
+     "status": "projected"
+    }
+   },
+   "moneyline": {
+    "open": {
+     "away": 110,
+     "home": -130
+    },
+    "current": {
+     "away": 115,
+     "home": -135
+    },
+    "fair": {
+     "away": 127,
+     "home": -127
+    }
+   },
+   "puckLine": {
+    "favorite": "UTA",
+    "line": -1.5,
+    "price": 190,
+    "coverProb": 0.3
+   },
+   "total": {
+    "open": null,
+    "current": 5.5,
+    "overPrice": -110,
+    "underPrice": -110,
+    "proj": 5.8,
+    "overProb": 0.565
+   },
+   "regulation": {
+    "away": 0.33,
+    "draw": 0.22,
+    "home": 0.45,
+    "prices": {
+     "away": 200,
+     "draw": 290,
+     "home": 115
+    }
+   },
+   "pick": {
+    "kind": "bet",
+    "market": "Total",
+    "label": "Over 5.5",
+    "side": "over",
+    "line": 5.5,
+    "price": -110,
+    "book": "DraftKings",
+    "modelProb": 0.565,
+    "edgePct": 4.1,
+    "tier": "B",
+    "units": 0.5
+   }
+  },
+  {
+   "id": "2026020035",
+   "startUtc": "2026-10-08T02:00:00Z",
+   "gameType": 2,
+   "priced": true,
+   "venue": "T-Mobile Arena",
+   "city": "Las Vegas, NV",
+   "tv": "TNT",
+   "away": {
+    "abbr": "SJS",
+    "record": "0-1-0",
+    "projGoals": 2.6,
+    "winProb": 0.36,
+    "goalie": {
+     "name": "Yaroslav Askarov",
+     "status": "projected"
+    }
+   },
+   "home": {
+    "abbr": "VGK",
+    "record": "1-0-0",
+    "projGoals": 3.4,
+    "winProb": 0.64,
+    "goalie": {
+     "name": "Adin Hill",
+     "status": "confirmed"
+    }
+   },
+   "moneyline": {
+    "open": {
+     "away": 180,
+     "home": -218
+    },
+    "current": {
+     "away": 190,
+     "home": -230
+    },
+    "fair": {
+     "away": 178,
+     "home": -178
+    }
+   },
+   "puckLine": {
+    "favorite": "VGK",
+    "line": -1.5,
+    "price": 120,
+    "coverProb": 0.44
+   },
+   "total": {
+    "open": null,
+    "current": 6,
+    "overPrice": -102,
+    "underPrice": -118,
+    "proj": 6,
+    "overProb": 0.48
+   },
+   "regulation": {
+    "away": 0.29,
+    "draw": 0.21,
+    "home": 0.5,
+    "prices": {
+     "away": 260,
+     "draw": 310,
+     "home": -105
+    }
+   },
+   "pick": null
+  }
+ ],
+ "lineHistory": {
+  "2026020032": {
+   "ml_home": [
+    {
+     "t": "2026-10-07T13:00:00Z",
+     "v": -115
+    },
+    {
+     "t": "2026-10-07T15:00:00Z",
+     "v": -118
+    },
+    {
+     "t": "2026-10-07T16:30:00Z",
+     "v": -122
+    }
+   ]
+  },
+  "2026020034": {
+   "total": [
+    {
+     "t": "2026-10-07T13:00:00Z",
+     "v": 6
+    },
+    {
+     "t": "2026-10-07T16:30:00Z",
+     "v": 5.5
+    }
+   ]
+  }
+ },
+ "props": {
+  "status": "no_lines",
+  "note": "No book had posted player props by the 12:15 PM ET build. The 4:30 PM ET refresh looks again.",
+  "marketNotes": {
+   "shots_on_goal": "Unproven — first season of live tracking",
+   "points": "Tested as a loss over two seasons",
+   "goals": "Tested as a loss over two seasons",
+   "assists": "Unproven — first season of live tracking",
+   "blocked_shots": "Unproven — first season of live tracking",
+   "hits": "Unproven — first season of live tracking",
+   "goalie_saves": "Unproven — first season of live tracking",
+   "power_play_points": "Not tested — recorded only"
+  },
+  "rows": []
+ }
+}

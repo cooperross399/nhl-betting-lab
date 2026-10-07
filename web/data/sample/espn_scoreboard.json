@@ -1,0 +1,214 @@
+{
+ "events": [
+  {
+   "id": "401802031",
+   "date": "2026-10-07T17:00Z",
+   "competitions": [
+    {
+     "date": "2026-10-07T17:00Z",
+     "status": {
+      "displayClock": "0:00",
+      "period": 3,
+      "type": {
+       "state": "post",
+       "completed": true,
+       "shortDetail": "Final",
+       "detail": "Final"
+      }
+     },
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": "4",
+       "team": {
+        "abbreviation": "PHI"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": "2",
+       "team": {
+        "abbreviation": "NYR"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "401802032",
+   "date": "2026-10-07T23:00Z",
+   "competitions": [
+    {
+     "date": "2026-10-07T23:00Z",
+     "status": {
+      "displayClock": "12:41",
+      "period": 2,
+      "type": {
+       "state": "in",
+       "completed": false,
+       "shortDetail": "12:41 - 2nd",
+       "detail": "12:41 - 2nd"
+      }
+     },
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": "1",
+       "team": {
+        "abbreviation": "NJ"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": "2",
+       "team": {
+        "abbreviation": "TB"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "401802033",
+   "date": "2026-10-07T23:30Z",
+   "competitions": [
+    {
+     "date": "2026-10-07T23:30Z",
+     "status": {
+      "displayClock": "6:12",
+      "period": 3,
+      "type": {
+       "state": "in",
+       "completed": false,
+       "shortDetail": "6:12 - 3rd",
+       "detail": "6:12 - 3rd"
+      }
+     },
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": "3",
+       "team": {
+        "abbreviation": "TOR"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": "3",
+       "team": {
+        "abbreviation": "BOS"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "401802034",
+   "date": "2026-10-08T01:00Z",
+   "competitions": [
+    {
+     "date": "2026-10-08T01:00Z",
+     "status": {
+      "displayClock": "0:00",
+      "period": 0,
+      "type": {
+       "state": "pre",
+       "completed": false,
+       "shortDetail": "10/7 - 9:00 PM EDT",
+       "detail": "10/7 - 9:00 PM EDT"
+      }
+     },
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": "0",
+       "team": {
+        "abbreviation": "UTAH"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": "0",
+       "team": {
+        "abbreviation": "LA"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "401802035",
+   "date": "2026-10-08T02:00Z",
+   "competitions": [
+    {
+     "date": "2026-10-08T02:00Z",
+     "status": {
+      "displayClock": "0:00",
+      "period": 0,
+      "type": {
+       "state": "pre",
+       "completed": false,
+       "shortDetail": "10/7 - 10:00 PM EDT",
+       "detail": "10/7 - 10:00 PM EDT"
+      }
+     },
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": "0",
+       "team": {
+        "abbreviation": "VGK"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": "0",
+       "team": {
+        "abbreviation": "SJ"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "401802099",
+   "date": "2026-10-08T02:00Z",
+   "competitions": [
+    {
+     "date": "2026-10-08T02:00Z",
+     "status": {
+      "displayClock": "0:00",
+      "period": 0,
+      "type": {
+       "state": "pre",
+       "completed": false,
+       "shortDetail": "10/7 - 10:00 PM EDT",
+       "detail": "10/7 - 10:00 PM EDT"
+      }
+     },
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": "0",
+       "team": {
+        "abbreviation": "VAN"
+       }
+      },
+      {
+       "homeAway": "away",
+       "score": "0",
+       "team": {
+        "abbreviation": "SEA"
+       }
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

@@ -1,0 +1,206 @@
+{
+ "boxscore": {
+  "teams": [
+   {
+    "team": {
+     "abbreviation": "BOS"
+    },
+    "statistics": [
+     {
+      "name": "shotsTotal",
+      "displayValue": "24"
+     }
+    ]
+   },
+   {
+    "team": {
+     "abbreviation": "TOR"
+    },
+    "statistics": [
+     {
+      "name": "shotsTotal",
+      "displayValue": "27"
+     }
+    ]
+   }
+  ],
+  "players": [
+   {
+    "team": {
+     "abbreviation": "BOS"
+    },
+    "statistics": [
+     {
+      "name": "forwards",
+      "keys": [
+       "blockedShots",
+       "hits",
+       "takeaways",
+       "plusMinus",
+       "timeOnIce",
+       "shotsTotal",
+       "goals",
+       "assists"
+      ],
+      "labels": [
+       "BS",
+       "HT",
+       "TK",
+       "+/-",
+       "TOI",
+       "S",
+       "G",
+       "A"
+      ],
+      "athletes": [
+       {
+        "athlete": {
+         "id": "3114",
+         "displayName": "David Pastrňák"
+        },
+        "stats": [
+         "0",
+         "1",
+         "0",
+         "+1",
+         "17:55",
+         "3",
+         "2",
+         "0"
+        ]
+       },
+       {
+        "athlete": {
+         "id": "3900",
+         "displayName": "Charlie McAvoy"
+        },
+        "stats": [
+         "2",
+         "1",
+         "0",
+         "0",
+         "21:30",
+         "1",
+         "0",
+         "1"
+        ]
+       }
+      ]
+     },
+     {
+      "name": "goalies",
+      "keys": [
+       "goalsAgainst",
+       "shotsAgainst",
+       "saves",
+       "savePct",
+       "timeOnIce"
+      ],
+      "labels": [
+       "GA",
+       "SA",
+       "SV",
+       "SV%",
+       "TOI"
+      ],
+      "athletes": [
+       {
+        "athlete": {
+         "id": "3936",
+         "displayName": "Jeremy Swayman"
+        },
+        "stats": [
+         "3",
+         "27",
+         "24",
+         ".889",
+         "53:48"
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "team": {
+     "abbreviation": "TOR"
+    },
+    "statistics": [
+     {
+      "name": "forwards",
+      "keys": [
+       "blockedShots",
+       "hits",
+       "takeaways",
+       "plusMinus",
+       "timeOnIce",
+       "shotsTotal",
+       "goals",
+       "assists"
+      ],
+      "labels": [
+       "BS",
+       "HT",
+       "TK",
+       "+/-",
+       "TOI",
+       "S",
+       "G",
+       "A"
+      ],
+      "athletes": [
+       {
+        "athlete": {
+         "id": "4024200",
+         "displayName": "Auston Matthews"
+        },
+        "stats": [
+         "0",
+         "0",
+         "1",
+         "0",
+         "18:02",
+         "4",
+         "1",
+         "1"
+        ]
+       }
+      ]
+     },
+     {
+      "name": "goalies",
+      "keys": [
+       "goalsAgainst",
+       "shotsAgainst",
+       "saves",
+       "savePct",
+       "timeOnIce"
+      ],
+      "labels": [
+       "GA",
+       "SA",
+       "SV",
+       "SV%",
+       "TOI"
+      ],
+      "athletes": [
+       {
+        "athlete": {
+         "id": "3936100",
+         "displayName": "Anthony Stolarz"
+        },
+        "stats": [
+         "3",
+         "24",
+         "21",
+         ".875",
+         "53:48"
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}
