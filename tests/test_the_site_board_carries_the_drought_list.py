@@ -150,8 +150,8 @@ def test_the_page_calls_it_the_drought_list_and_reads_every_new_field_guarded() 
     page = (ROOT / "web" / "Board.dc.html").read_text(encoding="utf-8")
 
     assert "Drought rule" not in page and "drought rule" not in page
-    for label in ("Drought List · potential bets", "Drought List ×${dr.length}", "Drought List · ${dCount}",
-                  "Drought List starts with the regular season", "Nobody is on the Drought List tonight"):
+    for label in ("Due List · potential bets", "Due List ×${dr.length}", "Due List · ${dCount}",
+                  "Due List starts with the regular season", "Nobody on the Due List tonight"):
         assert label in page, label
     for field in ("tierBar", "surpriseBar", "rarity", "oneIn", "cellRecord", "for him", "no record for this cell",
                   "This cell${DROUGHT_WINDOW}", "data.droughtWindow"):
@@ -322,7 +322,7 @@ def test_the_page_prints_the_cards_rarity_line_for_every_row_and_names_the_measu
 
     shown = next(g for g in page["tonight"]["games"] if g["rows"])
     by = {r["player"]: r for r in shown["rows"]}
-    assert shown["label"] == "Drought List ×5" and list(by) == ["Rarest", "Old Never", "Old Rarer", "Old Plain", "Flat"], (
+    assert shown["label"] == "Due List ×5" and list(by) == ["Rarest", "Old Never", "Old Rarer", "Old Plain", "Flat"], (
         "the card's order is kept and the null row is skipped, not thrown on")
     assert by["Rarest"]["meta"] == "bar 3 · both · 1 in 50,805 for him", "the rarest row carries its line, from oneIn, with a separator"
     assert by["Old Never"]["meta"] == "bar 3 · both · never last season"

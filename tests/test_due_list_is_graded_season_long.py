@@ -252,13 +252,16 @@ def test_one_entry_per_player_and_category_a_night(tmp_path: Path, monkeypatch) 
 
 
 def test_the_rows_are_the_frozen_entries_with_their_grade(tmp_path: Path, monkeypatch) -> None:
-    _, _, _, _, by_night = three_nights(tmp_path, monkeypatch)
+    _, out, _, _, by_night = three_nights(tmp_path, monkeypatch)
 
+    # The row is the FROZEN board's entry, every field as published (the tier
+    # bars, rarity and cell record included), plus the game and its grade.
+    frozen = json.loads((out / "history" / f"{D0.isoformat()}.json").read_text(encoding="utf-8"))
+    published = next(e for g in frozen["games"] for e in (g.get("drought") or []) if e["player"] == "Alpha Points")
     alpha = next(r for r in by_night[D0]["dueList"]["rows"] if r["player"] == "Alpha Points")
     assert set(alpha) == SCHEMA_KEYS | {"gameId", "opp", "actual", "result"}
-    assert alpha == {"gameId": TOR_GAME[D0], "player": "Alpha Points", "playerId": 1, "team": "TOR", "opp": "MTL",
-                     "market": "points", "line": 0.5, "lastSeason": 31, "drought": 6, "price": -150,
-                     "book": "DraftKings", "heavyJuice": False, "actual": 2, "result": "win"}
+    assert alpha == {**published, "gameId": TOR_GAME[D0], "opp": "MTL", "actual": 2, "result": "win"}
+    assert (published["playerId"], published["team"], published["market"], published["price"], published["book"]) == (1, "TOR", "points", -150, "DraftKings")
     bravo = next(r for r in by_night[D0]["dueList"]["rows"] if r["player"] == "Bravo Goals")
     assert (bravo["team"], bravo["opp"], bravo["actual"], bravo["result"]) == ("MTL", "TOR", 0, "loss")
 
