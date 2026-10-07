@@ -338,7 +338,7 @@ class GamedayCard:
         return selection_fingerprint_of(self.best_bets)
 
     def drought_fingerprint(self) -> str:
-        """Who is on Cooper's drought list tonight, never at what price."""
+        """Who is on Cooper's Due List tonight, never at what price."""
         return drought_fingerprint_of(self.drought_rows)
 
     def summary_line(self) -> str:

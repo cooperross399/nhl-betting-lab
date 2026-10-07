@@ -1,6 +1,6 @@
 """The Due List's own forward record: what the list showed, and how it did.
 
-Every night the Gameday card lists the drought rule's qualifiers (Cooper picks
+Every night the Gameday card lists the Due List's qualifiers (Cooper picks
 from them; nothing is staked). This module records each listed row with the
 best price it showed, to a dated file of its own, settles those rows after the
 games with the forward ledger's settlement rules, and restates the results in
@@ -122,7 +122,7 @@ class DroughtSettlement:
     notes: list[str] = field(default_factory=list)
 
     def summary_line(self) -> str:
-        return (f"Drought list: {self.days_settled} day(s) settled ({self.rows_settled} row(s) graded, "
+        return (f"Due List: {self.days_settled} day(s) settled ({self.rows_settled} row(s) graded, "
                 f"{self.rows_void} void, {self.rows_unsettleable} unsettleable), {self.days_waiting} waiting.")
 
 

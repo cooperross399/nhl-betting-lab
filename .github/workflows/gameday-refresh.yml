@@ -759,8 +759,8 @@ jobs:
         run: |
           python scripts/run_forward_evidence.py
 
-      - name: Settle the drought list
-        # Cooper's drought rule (2026-10-07) is an unstaked list he picks from.
+      - name: Settle the Due List
+        # Cooper's Due List (2026-10-07) is an unstaked list he picks from.
         # The card records each row it listed, with the best price it showed,
         # to data/processed/drought_list/<day>.csv, and this settles those
         # files after the games by the forward ledger's rules into its own
@@ -1306,7 +1306,7 @@ jobs:
             failed=1
           fi
           if [ "${{ steps.drought.outcome }}" = "failure" ]; then
-            echo "::error::Settle the drought list failed (its log says why), so Cooper's drought rule has no forward record for finished games yet. It touches nothing of the registered forward test and is not written into the run's health (degraded=${{ steps.final.outputs.degraded }}), so on its own it sends for no backup."
+            echo "::error::Settle the Due List failed (its log says why), so Cooper's Due List has no forward record for finished games yet. It touches nothing of the registered forward test and is not written into the run's health (degraded=${{ steps.final.outputs.degraded }}), so on its own it sends for no backup."
             failed=1
           fi
           if [ "${{ steps.rebuild.outcome }}" = "failure" ]; then
