@@ -449,7 +449,11 @@ class Component extends DCLogic {
     const base = deployed ? "./data/" : cfg.sample.replace(/board\.json$/, "");
     let url = deployed ? "./data/board.json" : cfg.sample;
     // Off the real domain the preview opens on the props fixture; on the domain, the live board.
-    const scenario = this.props.scenario || (this.onSite() ? "Normal" : "Props · live sample");
+    // On the real domain the board is ALWAYS the real one. The preview control
+    // gives `scenario` a default ("Props · live sample"), so `props.scenario ||`
+    // never fell through and nhl.maverickhightower.com served the sample board
+    // on 2026-10-07 (the first deploy of PR #304).
+    const scenario = this.onSite() ? "Normal" : this.props.scenario || "Props · live sample";
     if (scenario === "Leans only" || scenario === "Empty") url = cfg.sample.replace("board.json", scenario === "Leans only" ? "board_leans.json" : "board_empty.json");
     const FIX = { "Props · live sample": "./data/sample/board_props.json", "Props · no lines": "./data/sample/board_props_no_lines.json", "Props · abstain": "./data/sample/board_props_abstain.json" };
     const fixture = sport === "nhl" && FIX[scenario];
