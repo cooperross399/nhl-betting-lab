@@ -202,3 +202,88 @@ export function propProgress(row, v, e) {
   return { target, pct: Math.min(100, Math.round((v / target) * 100)), tone, fin, push, period: fin ? "" : stateLabel(e).top,
     mark: fin ? (push ? "· push" : tone === "win" ? "✓" : "✗") : "" };
 }
+
+// ---------- EPL and CBB (additive; nothing above changes for NHL) ----------
+// The same scoreboard reader for the other two boards. Each sport names its ESPN
+// path, the codes where ESPN and the board differ, and how a period reads. A game
+// matches on both teams (code after mapping, else the team's name) plus a start
+// within the window; anything else stays unmatched and is shown that way.
+const ESPN_BASE = "https://site.api.espn.com/apis/site/v2/sports";
+export const LIVE_SPORTS = {
+  nhl: { path: "hockey/nhl", codes: ESPN_TO_BOARD, windowHours: MATCH_WINDOW_HOURS, extra: "" },
+  epl: { path: "soccer/eng.1", codes: { MNC: "MCI", MAN: "MUN", NOT: "NFO", NFF: "NFO", WHM: "WHU", SPU: "TOT" }, windowHours: 3, extra: "" },
+  cbb: { path: "basketball/mens-college-basketball", codes: { CONN: "UCONN", VILL: "NOVA", KAN: "KU", KY: "UK", GONZ: "GONZ", IAST: "ISU", MSU: "MSU", NDAME: "ND", CREIGH: "CREI" }, windowHours: 3, extra: "&groups=50&limit=500" },
+};
+const ymdOf = (iso) => new Date(iso).toISOString().slice(0, 10).replace(/-/g, "");
+// One request for the board's dates: a single day, or a range for a window (EPL).
+// The range starts a day early because ESPN files a late-UTC start under the US day.
+export function scoreboardUrlFor(sport, startIsos) {
+  const L = LIVE_SPORTS[sport] || LIVE_SPORTS.nhl, ts = (startIsos || []).map((x) => Date.parse(x)).filter(Number.isFinite);
+  if (!ts.length) return null;
+  const lo = Math.min(...ts) - 864e5, hi = Math.max(...ts);
+  const a = ymdOf(lo), b = ymdOf(hi);
+  return `${ESPN_BASE}/${L.path}/scoreboard?dates=${a === b ? a : `${a}-${b}`}${L.extra}`;
+}
+export function parseScoreboardFor(sport, json) {
+  const L = LIVE_SPORTS[sport] || LIVE_SPORTS.nhl, map = (x) => (x && L.codes[x]) || x || "?";
+  return ((json && json.events) || []).map((ev) => {
+    const c = (ev.competitions || [])[0] || {};
+    const st = c.status || ev.status || {}, type = st.type || {};
+    const side = (ha) => {
+      const x = (c.competitors || []).find((k) => k.homeAway === ha) || {}, t = x.team || {};
+      return { espn: t.abbreviation || "?", abbr: map(t.abbreviation), names: [t.displayName, t.shortDisplayName, t.location, t.name].filter(Boolean).map(norm),
+        score: x.score != null && x.score !== "" ? Number(x.score) : null };
+    };
+    return { id: String(ev.id), startUtc: c.date || ev.date, state: type.state || "pre", detail: type.shortDetail || type.detail || "",
+      period: st.period || 0, clock: st.displayClock || "", away: side("away"), home: side("home") };
+  });
+}
+export function stateLabelFor(sport, e) {
+  if (sport === "nhl" || !LIVE_SPORTS[sport]) return stateLabel(e);
+  if (e.state === "pre") return { top: "", sub: "", tone: "pre" };
+  if (e.state === "post") return { top: sport === "epl" ? "FT" : /OT/.test(e.detail) ? e.detail.replace(/^Final\s*\/?\s*/i, "Final ") : "Final", sub: "", tone: "post" };
+  if (sport === "epl") return { top: /HT|half/i.test(e.detail) ? "HT" : e.clock || e.detail, sub: "Live", tone: "in" };
+  const p = e.period <= 2 ? (e.period === 1 ? "1st" : "2nd") : e.period === 3 ? "OT" : `${e.period - 2}OT`;
+  return { top: /halftime/i.test(e.detail) ? "Half" : e.clock && e.clock !== "0:00" ? `${p} ${e.clock}` : `End ${p}`, sub: "Live", tone: "in" };
+}
+// games: [{id, startUtc, away:{abbr}, home:{abbr}}]; teams: the board's teams lookup.
+export function matchEventsFor(sport, events, games, teams) {
+  if (sport === "nhl") return matchEvents(events, games);
+  const L = LIVE_SPORTS[sport] || LIVE_SPORTS.nhl, T = teams || {}, byGame = {}, unmatched = [];
+  const keys = (abbr) => { const t = T[abbr] || {}; return [t.name, t.short].filter(Boolean).map(norm); };
+  const same = (side, abbr) => side.abbr === abbr || keys(abbr).some((k) => k && side.names.includes(k));
+  for (const e of events || []) {
+    const t = Date.parse(e.startUtc);
+    const g = (games || []).find((x) => !byGame[x.id] && same(e.away, x.away.abbr) && same(e.home, x.home.abbr) && Math.abs(Date.parse(x.startUtc) - t) <= L.windowHours * 36e5);
+    if (g) { byGame[g.id] = e; continue; }
+    const known = (side) => (games || []).some((x) => same(side, x.away.abbr) || same(side, x.home.abbr));
+    const unknown = [e.away, e.home].filter((s) => !known(s)).map((s) => s.espn);
+    if (unknown.length === 2) continue; // a game this board never carried: not a mapping gap
+    unmatched.push({ ...e, why: unknown.length ? `no board code for ${unknown[0]}` : "start time differs from the board" });
+  }
+  return { byGame, unmatched };
+}
+// Live status for EPL and CBB picks. Needs pick.side and, where a line applies,
+// pick.line; without them the page shows no live status rather than a guess.
+export function pickStatusFor(sport, pick, e) {
+  if (sport === "nhl") return pickStatus(pick, e);
+  if (!pick || !e || e.state === "pre" || e.away.score == null || e.home.score == null || !pick.side) return null;
+  const a = e.away.score, h = e.home.score, fin = e.state === "post", m = String(pick.market || "").toLowerCase();
+  const sc = sport === "epl" ? `${h}–${a}` : `${a}–${h}`;
+  const out = (d, push) => (d === 0 ? { word: push ? "push" : "level", tone: "flat", detail: sc } : d > 0 ? { word: fin ? "won" : "winning", tone: "win", detail: sc } : { word: fin ? "lost" : "losing", tone: "lose", detail: sc });
+  const mine = pick.side === "home" ? h - a : a - h;
+  if (pick.side === "over" || pick.side === "under") {
+    if (typeof pick.line !== "number" || /corner|card/.test(m)) return null;
+    const tot = a + h; return out(pick.side === "over" ? tot - pick.line : pick.line - tot, true);
+  }
+  if (pick.side === "yes" || pick.side === "no") {
+    if (!/btts|both/.test(m)) return null;
+    const both = a > 0 && h > 0; return pick.side === "yes" ? (both ? out(1) : out(fin ? -1 : 0)) : both ? out(-1) : out(fin ? 1 : 0);
+  }
+  if (pick.side === "draw") return a === h ? out(1) : out(-1);
+  if (pick.side !== "home" && pick.side !== "away") return null;
+  if (/spread|handicap/.test(m)) return typeof pick.line === "number" ? out(mine + pick.line, true) : null;
+  if (/draw.?no.?bet|dnb/.test(m)) return out(mine, true);
+  if (/moneyline|^ml$|match result|1x2/.test(m)) return mine === 0 && sport === "epl" ? out(-1) : out(mine);
+  return null;
+}
