@@ -763,7 +763,7 @@ def cell_record(source: object) -> dict | None:
 
 
 def read_drought_list(lab: Path, day: date) -> dict | None:
-    """The card's drought list for `day`, or None when this build holds none for it.
+    """The card's Due List for `day`, or None when this build holds none for it.
 
     The card writes it (data/outputs/drought_list.json) and Publish Site restores
     it with the rest of `gameday-reports`; the site imports nothing from the card.
