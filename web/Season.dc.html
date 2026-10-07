@@ -14,95 +14,102 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
-    html, body { margin: 0; padding: 0; background: #f4f2ee; color: #14151a; font-family: "IBM Plex Sans", Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+    :root, [data-theme="light"] { color-scheme: light; --paper:#f4f2ee; --ink:#14151a; --ink-2:#2a2d3a; --mute:#6b6e7a; --mute-2:#9a9ca6; --rule:#d6d3cc; --rule-2:#e3e0d8; --on-ink:#d6d3cc; --alert:#b0341f; --on-alert:#f4f2ee; --win:#2c7a5a; --on-win:#f4f2ee; --desk:#e6e3dc; }
+    @media (prefers-color-scheme: dark) { :root { color-scheme: dark; --paper:#14151a; --ink:#f1efe9; --ink-2:#d2d0ca; --mute:#a3a6b1; --mute-2:#80838e; --rule:#3a3d49; --rule-2:#262832; --on-ink:#3a3d49; --alert:#f08a72; --on-alert:#14151a; --win:#5cc196; --on-win:#14151a; --desk:#0d0e12; } }
+    [data-theme="dark"] { color-scheme: dark; --paper:#14151a; --ink:#f1efe9; --ink-2:#d2d0ca; --mute:#a3a6b1; --mute-2:#80838e; --rule:#3a3d49; --rule-2:#262832; --on-ink:#3a3d49; --alert:#f08a72; --on-alert:#14151a; --win:#5cc196; --on-win:#14151a; --desk:#0d0e12; }
+    html, body { margin: 0; padding: 0; background: var(--paper); color: var(--ink); font-family: "IBM Plex Sans", Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; }
     * { box-sizing: border-box; }
-    a { color: #14151a; text-decoration: none; }
-    a:hover { color: #2a2d3a; text-decoration: underline; text-underline-offset: 3px; }
+    a { color: var(--ink); text-decoration: none; }
+    a:hover { color: var(--ink-2); text-decoration: underline; text-underline-offset: 3px; }
     .mono { font-family: "IBM Plex Mono", monospace; font-variant-numeric: tabular-nums; }
     .cond { font-family: "Barlow Condensed", sans-serif; }
     .srow { display: grid; grid-template-columns: 28px minmax(150px, 1.6fr) 64px 150px 82px 74px 96px 56px 64px; gap: 0 10px; align-items: center; padding: 9px 0; font-size: 13px; }
-    .shead { color: #6b6e7a; font-family: "IBM Plex Mono", monospace; font-size: 10px; letter-spacing: .1em; text-transform: uppercase; border-bottom: 1px solid #14151a; }
+    .shead { color: var(--mute); font-family: "IBM Plex Mono", monospace; font-size: 10px; letter-spacing: .1em; text-transform: uppercase; border-bottom: 1px solid var(--ink); }
     .srow > span { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .r { text-align: right; }
     .grow { display: grid; grid-template-columns: 28px minmax(150px, 1.6fr) 60px 60px 150px 60px 70px 90px; gap: 0 10px; align-items: center; padding: 9px 0; font-size: 13px; }
     .grow > span { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .tblwrap { overflow-x: auto; min-width: 0; }
-    .bar { position: relative; height: 10px; background: #e3e0d8; }
-    .bar i { position: absolute; top: 0; height: 10px; background: #b8b4aa; }
-    .bar b { position: absolute; top: -2px; width: 3px; height: 14px; background: #14151a; }
-    .bar em { position: absolute; top: -3px; width: 1px; height: 16px; background: #b0341f; }
+    .bar { position: relative; height: 10px; background: var(--rule-2); }
+    .bar i { position: absolute; top: 0; height: 10px; background: var(--mute-2); }
+    .bar b { position: absolute; top: -2px; width: 3px; height: 14px; background: var(--ink); }
+    .bar em { position: absolute; top: -3px; width: 1px; height: 16px; background: var(--alert); }
     .meter { display: inline-flex; align-items: center; justify-content: flex-end; gap: 6px; white-space: nowrap; }
-    .meter > span:first-child { display: inline-block; width: 40px; height: 6px; background: #e3e0d8; flex: none; }
-    .meter span i { display: block; height: 100%; background: #14151a; }
+    .meter > span:first-child { display: inline-block; width: 40px; height: 6px; background: var(--rule-2); flex: none; }
+    .meter span i { display: block; height: 100%; background: var(--ink); }
     .chip { width: 30px; height: 30px; border-radius: 50%; flex: none; display: grid; place-items: center; font-family: "Barlow Condensed", sans-serif; font-weight: 800; font-size: 11px; letter-spacing: .02em; }
     @media (max-width: 720px) { .srow, .grow { font-size: 12px; } }
   </style>
 </helmet>
-<div data-screen-label="Season" style="min-height:100vh;background:#f4f2ee;color:#14151a;">
+<div data-screen-label="Season" data-theme="{{ themeAttr }}" style="min-height:100vh;background:var(--paper);color:var(--ink);">
   <div style="max-width:1240px;margin:0 auto;padding:0 clamp(16px,3vw,24px) 80px;">
 
-    <header style="border-top:4px solid #14151a;border-bottom:1px solid #14151a;padding:14px 0 12px;display:flex;align-items:center;justify-content:space-between;gap:12px 16px;flex-wrap:wrap;">
+    <header style="border-top:4px solid var(--ink);padding:10px 0 4px;display:flex;align-items:center;justify-content:space-between;gap:12px 16px;flex-wrap:wrap;">
       <a href="https://maverickhightower.com/" style="display:flex;align-items:center;gap:12px;">
-        <span style="width:36px;height:36px;background:#14151a;color:#f4f2ee;display:grid;place-items:center;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:18px;letter-spacing:.04em;">MH</span>
+        <span style="width:36px;height:36px;background:var(--ink);color:var(--paper);display:grid;place-items:center;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:18px;letter-spacing:.04em;">MH</span>
         <span style="display:flex;flex-direction:column;line-height:1.1;">
-          <span style="font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#6b6e7a;">Maverick Hightower</span>
+          <span style="font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute);">Maverick Hightower</span>
           <span style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:22px;letter-spacing:.02em;text-transform:uppercase;">NHL Projections</span>
         </span>
       </a>
-      <nav style="display:flex;gap:14px 22px;font-size:13px;letter-spacing:.1em;text-transform:uppercase;font-weight:500;flex-wrap:wrap;">
-        <a href="Board.dc.html">Board</a>
-        <a href="Results.dc.html">Results</a>
-        <a href="Archive.dc.html">Archive</a>
-        <a href="Graphic.dc.html">Graphic</a>
-        <a href="Season.dc.html" style="border-bottom:2px solid #14151a;padding-bottom:2px;">Season</a>
+      <nav aria-label="Site" style="display:flex;gap:0 18px;font-size:13px;letter-spacing:.1em;text-transform:uppercase;font-weight:500;flex-wrap:wrap;">
+        <a href="https://maverickhightower.com/about.html" style="display:inline-flex;align-items:center;min-height:44px;">About</a>
         <sc-for list="{{ otherSports }}" as="s" hint-placeholder-count="2"><a href="{{ s.href }}" style="{{ s.style }}">{{ s.name }}</a></sc-for>
       </nav>
     </header>
 
-    <section style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:24px 40px;align-items:end;padding:40px 0 28px;border-bottom:1px solid #14151a;">
+    <nav aria-label="Board sections" style="position:sticky;top:0;z-index:5;background:var(--paper);border-bottom:1px solid var(--ink);display:flex;">
+      <a href="Board.dc.html" style="flex:1 1 0;max-width:150px;min-width:0;display:flex;align-items:center;justify-content:center;min-height:48px;padding:0 4px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;font-weight:600;white-space:nowrap;text-decoration:none;box-shadow:none;">Tonight</a>
+      <a href="Board.dc.html#props" style="flex:1 1 0;max-width:150px;min-width:0;display:flex;align-items:center;justify-content:center;min-height:48px;padding:0 4px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;font-weight:600;white-space:nowrap;text-decoration:none;box-shadow:none;">Props</a>
+      <a href="Results.dc.html" style="flex:1 1 0;max-width:150px;min-width:0;display:flex;align-items:center;justify-content:center;min-height:48px;padding:0 4px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;font-weight:600;white-space:nowrap;text-decoration:none;box-shadow:none;">Results</a>
+      <a href="Season.dc.html" aria-current="page" style="flex:1 1 0;max-width:150px;min-width:0;display:flex;align-items:center;justify-content:center;min-height:48px;padding:0 4px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;font-weight:600;white-space:nowrap;text-decoration:none;box-shadow:inset 0 -3px 0 var(--ink);">Season</a>
+      <a href="Archive.dc.html" style="flex:1 1 0;max-width:150px;min-width:0;display:flex;align-items:center;justify-content:center;min-height:48px;padding:0 4px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;font-weight:600;white-space:nowrap;text-decoration:none;box-shadow:none;">Archive</a>
+    </nav>
+
+    <section style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:24px 40px;align-items:end;padding:40px 0 28px;border-bottom:1px solid var(--ink);">
       <div style="min-width:0;grid-column:1 / -1;">
-        <div style="font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:#6b6e7a;margin-bottom:10px;">{{ kicker }}</div>
+        <div style="font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute);margin-bottom:10px;">{{ kicker }}</div>
         <h1 style="margin:0;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:clamp(56px,9vw,112px);line-height:.9;letter-spacing:-.01em;text-transform:uppercase;">{{ title1 }}<br>{{ title2 }}</h1>
-        <p style="margin:18px 0 0;max-width:600px;font-size:17px;line-height:1.5;color:#2a2d3a;text-wrap:pretty;">{{ blurb }}</p>
+        <p style="margin:18px 0 0;max-width:600px;font-size:17px;line-height:1.5;color:var(--ink-2);text-wrap:pretty;">{{ blurb }}</p>
       </div>
-      <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;line-height:1.7;color:#6b6e7a;display:flex;flex-wrap:wrap;gap:4px 24px;align-items:baseline;">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;line-height:1.7;color:var(--mute);display:flex;flex-wrap:wrap;gap:4px 24px;align-items:baseline;">
         <span style="text-transform:uppercase;letter-spacing:.1em;white-space:nowrap;">Updated</span>
-        <span style="color:#14151a;white-space:nowrap;">{{ updated }}</span>
+        <span style="color:var(--ink);white-space:nowrap;">{{ updated }}</span>
         <span style="white-space:nowrap;">{{ progress }}</span>
         <sc-if value="{{ stale }}" hint-placeholder-val="{{ false }}">
-          <span style="background:#b0341f;color:#f4f2ee;padding:2px 8px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;font-size:11px;white-space:nowrap;">{{ staleLabel }}</span>
+          <span style="background:var(--alert);color:var(--paper);padding:2px 8px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;font-size:11px;white-space:nowrap;">{{ staleLabel }}</span>
         </sc-if>
       </div>
     </section>
 
     <sc-if value="{{ hasNotice }}" hint-placeholder-val="{{ false }}">
-      <div style="display:grid;grid-template-columns:auto minmax(0,1fr);gap:20px;align-items:start;padding:18px 0;border-bottom:1px solid #14151a;">
-        <span style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:14px;letter-spacing:.14em;text-transform:uppercase;background:#14151a;color:#f4f2ee;padding:5px 9px;">Note</span>
-        <p style="margin:0;font-size:15px;line-height:1.5;color:#2a2d3a;max-width:760px;text-wrap:pretty;">{{ notice }}</p>
+      <div style="display:grid;grid-template-columns:auto minmax(0,1fr);gap:20px;align-items:start;padding:18px 0;border-bottom:1px solid var(--ink);">
+        <span style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:14px;letter-spacing:.14em;text-transform:uppercase;background:var(--ink);color:var(--paper);padding:5px 9px;">Note</span>
+        <p style="margin:0;font-size:15px;line-height:1.5;color:var(--ink-2);max-width:760px;text-wrap:pretty;">{{ notice }}</p>
       </div>
     </sc-if>
 
-    <section style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr));gap:0 24px;border-bottom:1px solid #14151a;">
+    <section style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr));gap:0 24px;border-bottom:1px solid var(--ink);">
       <sc-for list="{{ strip }}" as="c" hint-placeholder-count="4">
-        <div style="padding:22px 0;border-bottom:1px solid #d6d3cc;">
-          <div style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#6b6e7a;">{{ c.label }}</div>
+        <div style="padding:22px 0;border-bottom:1px solid var(--rule);">
+          <div style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute);">{{ c.label }}</div>
           <div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:44px;line-height:1;margin-top:8px;">{{ c.value }}</div>
-          <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#2a2d3a;margin-top:6px;">{{ c.sub }}</div>
-          <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#6b6e7a;margin-top:4px;text-transform:uppercase;letter-spacing:.08em;">{{ c.fine }}</div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--ink-2);margin-top:6px;">{{ c.sub }}</div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--mute);margin-top:4px;text-transform:uppercase;letter-spacing:.08em;">{{ c.fine }}</div>
         </div>
       </sc-for>
     </section>
 
     <!-- Standings -->
     <section style="padding-top:44px;">
-      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:16px;flex-wrap:wrap;border-bottom:3px solid #14151a;padding-bottom:10px;">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:16px;flex-wrap:wrap;border-bottom:3px solid var(--ink);padding-bottom:10px;">
         <h2 style="margin:0;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:34px;line-height:1;text-transform:uppercase;letter-spacing:.01em;">Projected standings</h2>
-        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#6b6e7a;">{{ standingsNote }}</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--mute);">{{ standingsNote }}</div>
       </div>
       <sc-for list="{{ divisions }}" as="d" hint-placeholder-count="4">
         <div style="display:flex;align-items:baseline;gap:14px;padding:26px 0 6px;">
           <h3 style="margin:0;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:26px;text-transform:uppercase;letter-spacing:.02em;">{{ d.name }}</h3>
-          <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#6b6e7a;">{{ d.conf }}</span>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--mute);">{{ d.conf }}</span>
         </div>
         <div class="tblwrap">
           <div style="min-width:820px;">
@@ -111,10 +118,10 @@
             </div>
             <sc-for list="{{ d.rows }}" as="t" hint-placeholder-count="8">
               <div class="srow" style="{{ t.rowStyle }}">
-                <span class="mono" style="color:#6b6e7a;">{{ t.rank }}</span>
+                <span class="mono" style="color:var(--mute);">{{ t.rank }}</span>
                 <span style="display:flex;align-items:center;gap:10px;">
                   <span class="chip" style="background:{{ t.color }};color:{{ t.fg }};">{{ t.abbr }}</span>
-                  <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;"><span style="font-weight:600;">{{ t.name }}</span> <span class="mono" style="font-size:11px;color:#6b6e7a;">{{ t.record }}</span></span>
+                  <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;"><span style="font-weight:600;">{{ t.name }}</span> <span class="mono" style="font-size:11px;color:var(--mute);">{{ t.record }}</span></span>
                 </span>
                 <span class="cond r" style="font-size:22px;font-weight:700;">{{ t.pts }}</span>
                 <span><span class="bar" style="display:block;" title="{{ t.rangeTitle }}"><i style="left:{{ t.barLeft }}%;width:{{ t.barWidth }}%;"></i><em style="left:{{ t.lastMark }}%;"></em><b style="left:{{ t.meanMark }}%;"></b></span></span>
@@ -128,18 +135,18 @@
           </div>
         </div>
       </sc-for>
-      <div style="display:flex;flex-wrap:wrap;gap:8px 20px;padding-top:14px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:#6b6e7a;align-items:center;">
+      <div style="display:flex;flex-wrap:wrap;gap:8px 20px;padding-top:14px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--mute);align-items:center;">
         <span style="display:inline-flex;align-items:center;gap:8px;"><span class="bar" style="width:60px;"><i style="left:20%;width:50%;"></i><b style="left:44%;"></b></span> 10th–90th percentile, mean marker</span>
-        <span style="display:inline-flex;align-items:center;gap:8px;"><span style="display:inline-block;width:1px;height:14px;background:#b0341f;"></span> last season's pace over {{ games }} games</span>
+        <span style="display:inline-flex;align-items:center;gap:8px;"><span style="display:inline-block;width:1px;height:14px;background:var(--alert);"></span> last season's pace over {{ games }} games</span>
         <span>Dashed rule: the division's three automatic playoff places</span>
       </div>
     </section>
 
     <!-- Playoff odds by conference -->
     <section style="padding-top:44px;">
-      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:16px;flex-wrap:wrap;border-bottom:3px solid #14151a;padding-bottom:10px;">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:16px;flex-wrap:wrap;border-bottom:3px solid var(--ink);padding-bottom:10px;">
         <h2 style="margin:0;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:34px;line-height:1;text-transform:uppercase;letter-spacing:.01em;">Playoff odds</h2>
-        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#6b6e7a;">Share of simulated seasons · three per division plus two wild cards per conference</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--mute);">Share of simulated seasons · three per division plus two wild cards per conference</div>
       </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,460px),1fr));gap:0 40px;">
         <sc-for list="{{ conferences }}" as="c" hint-placeholder-count="2">
@@ -151,7 +158,7 @@
               </div>
               <sc-for list="{{ c.rows }}" as="t" hint-placeholder-count="16">
                 <div style="display:grid;grid-template-columns:28px minmax(120px,1fr) 64px 64px 64px 64px 64px;gap:0 8px;padding:7px 0;font-size:13px;align-items:center;{{ t.rowStyle }}">
-                  <span class="mono" style="color:#6b6e7a;">{{ t.rank }}</span>
+                  <span class="mono" style="color:var(--mute);">{{ t.rank }}</span>
                   <span style="display:flex;align-items:center;gap:8px;min-width:0;"><span class="chip" style="width:24px;height:24px;font-size:9px;background:{{ t.color }};color:{{ t.fg }};">{{ t.abbr }}</span><span style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ t.short }}</span></span>
                   <span class="mono r">{{ t.pts }}</span>
                   <span class="mono r" style="font-weight:600;">{{ t.playoff }}</span>
@@ -168,9 +175,9 @@
 
     <!-- Scorers -->
     <section style="padding-top:44px;">
-      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:16px;flex-wrap:wrap;border-bottom:3px solid #14151a;padding-bottom:10px;">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:16px;flex-wrap:wrap;border-bottom:3px solid var(--ink);padding-bottom:10px;">
         <h2 style="margin:0;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:34px;line-height:1;text-transform:uppercase;letter-spacing:.01em;">Scorers</h2>
-        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#6b6e7a;">{{ scorersNote }}</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--mute);">{{ scorersNote }}</div>
       </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:0 40px;">
         <sc-for list="{{ leaderBoards }}" as="b" hint-placeholder-count="3">
@@ -178,11 +185,11 @@
             <h3 style="margin:26px 0 6px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:22px;text-transform:uppercase;letter-spacing:.02em;">{{ b.title }}</h3>
             <div style="display:grid;grid-template-columns:24px minmax(0,1fr) auto auto;gap:0 10px;padding:6px 0;" class="shead"><span>#</span><span>Player</span><span class="r">{{ b.col }}</span><span class="r">Now</span></div>
             <sc-for list="{{ b.rows }}" as="p" hint-placeholder-count="10">
-              <div style="display:grid;grid-template-columns:24px minmax(0,1fr) auto auto;gap:0 10px;padding:6px 0;border-bottom:1px solid #e3e0d8;font-size:13px;align-items:baseline;">
-                <span class="mono" style="color:#6b6e7a;">{{ p.rank }}</span>
-                <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><span style="font-weight:600;">{{ p.name }}</span> <span class="mono" style="font-size:11px;color:#6b6e7a;">{{ p.meta }}</span></span>
+              <div style="display:grid;grid-template-columns:24px minmax(0,1fr) auto auto;gap:0 10px;padding:6px 0;border-bottom:1px solid var(--rule-2);font-size:13px;align-items:baseline;">
+                <span class="mono" style="color:var(--mute);">{{ p.rank }}</span>
+                <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><span style="font-weight:600;">{{ p.name }}</span> <span class="mono" style="font-size:11px;color:var(--mute);">{{ p.meta }}</span></span>
                 <span class="cond r" style="font-size:20px;font-weight:700;">{{ p.value }}</span>
-                <span class="mono r" style="font-size:11px;color:#6b6e7a;">{{ p.now }}</span>
+                <span class="mono r" style="font-size:11px;color:var(--mute);">{{ p.now }}</span>
               </div>
             </sc-for>
           </div>
@@ -192,16 +199,16 @@
       <h3 style="margin:36px 0 10px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:26px;text-transform:uppercase;letter-spacing:.02em;">Top three, every team</h3>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,290px),1fr));gap:14px;">
         <sc-for list="{{ teamCards }}" as="t" hint-placeholder-count="32">
-          <div style="border:1px solid #d6d3cc;padding:10px 12px;min-width:0;">
+          <div style="border:1px solid var(--rule);padding:10px 12px;min-width:0;">
             <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;">
               <span style="display:flex;align-items:center;gap:8px;min-width:0;"><span class="chip" style="width:24px;height:24px;font-size:9px;background:{{ t.color }};color:{{ t.fg }};">{{ t.abbr }}</span><span class="cond" style="font-size:18px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ t.name }}</span></span>
-              <span class="mono" style="font-size:11px;color:#6b6e7a;white-space:nowrap;">{{ t.ptsLabel }}</span>
+              <span class="mono" style="font-size:11px;color:var(--mute);white-space:nowrap;">{{ t.ptsLabel }}</span>
             </div>
             <sc-for list="{{ t.scorers }}" as="p" hint-placeholder-count="3">
-              <div style="display:grid;grid-template-columns:16px minmax(0,1fr) auto;gap:8px;align-items:baseline;padding:5px 0;border-top:1px solid #e3e0d8;font-size:13px;">
-                <span class="mono" style="font-size:11px;color:#6b6e7a;">{{ p.rank }}</span>
-                <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ p.name }} <span class="mono" style="font-size:11px;color:#6b6e7a;">{{ p.meta }}</span></span>
-                <span class="mono" style="font-size:12px;color:#2a2d3a;white-space:nowrap;">{{ p.line }} <span class="cond" style="font-size:18px;font-weight:700;color:#14151a;margin-left:4px;">{{ p.value }}</span></span>
+              <div style="display:grid;grid-template-columns:16px minmax(0,1fr) auto;gap:8px;align-items:baseline;padding:5px 0;border-top:1px solid var(--rule-2);font-size:13px;">
+                <span class="mono" style="font-size:11px;color:var(--mute);">{{ p.rank }}</span>
+                <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ p.name }} <span class="mono" style="font-size:11px;color:var(--mute);">{{ p.meta }}</span></span>
+                <span class="mono" style="font-size:12px;color:var(--ink-2);white-space:nowrap;">{{ p.line }} <span class="cond" style="font-size:18px;font-weight:700;color:var(--ink);margin-left:4px;">{{ p.value }}</span></span>
               </div>
             </sc-for>
           </div>
@@ -211,22 +218,22 @@
 
     <!-- Goalie wins -->
     <section style="padding-top:44px;">
-      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:16px;flex-wrap:wrap;border-bottom:3px solid #14151a;padding-bottom:10px;">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:16px;flex-wrap:wrap;border-bottom:3px solid var(--ink);padding-bottom:10px;">
         <h2 style="margin:0;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:34px;line-height:1;text-transform:uppercase;letter-spacing:.01em;">Goalie wins</h2>
-        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#6b6e7a;">{{ goaliesNote }}</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--mute);">{{ goaliesNote }}</div>
       </div>
       <div class="tblwrap"><div style="min-width:760px;">
         <div class="grow shead"><span>#</span><span>Goalie</span><span class="r">Starts</span><span class="r">Wins</span><span>10th–90th</span><span class="r">30+</span><span class="r">GSAx/60</span><span class="r">Last season</span></div>
         <sc-for list="{{ goalies }}" as="g" hint-placeholder-count="20">
-          <div class="grow" style="border-bottom:1px solid #e3e0d8;">
-            <span class="mono" style="color:#6b6e7a;">{{ g.rank }}</span>
+          <div class="grow" style="border-bottom:1px solid var(--rule-2);">
+            <span class="mono" style="color:var(--mute);">{{ g.rank }}</span>
             <span style="display:flex;align-items:center;gap:8px;min-width:0;"><span class="chip" style="width:24px;height:24px;font-size:9px;background:{{ g.color }};color:{{ g.fg }};">{{ g.team }}</span><span style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ g.name }}</span></span>
             <span class="mono r">{{ g.starts }}</span>
             <span class="cond r" style="font-size:22px;font-weight:700;">{{ g.wins }}</span>
             <span><span class="bar" style="display:block;" title="{{ g.rangeTitle }}"><i style="left:{{ g.barLeft }}%;width:{{ g.barWidth }}%;"></i><b style="left:{{ g.meanMark }}%;"></b></span></span>
             <span class="mono r">{{ g.p30 }}</span>
             <span class="mono r">{{ g.gsax }}</span>
-            <span class="mono r" style="color:#6b6e7a;">{{ g.last }}</span>
+            <span class="mono r" style="color:var(--mute);">{{ g.last }}</span>
           </div>
         </sc-for>
       </div></div>
@@ -235,31 +242,31 @@
     <!-- Method -->
     <section style="padding-top:44px;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,380px),1fr));gap:24px 48px;">
       <div style="min-width:0;">
-        <h2 style="margin:0 0 12px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:26px;text-transform:uppercase;letter-spacing:.02em;border-bottom:3px solid #14151a;padding-bottom:8px;">How the season is simulated</h2>
+        <h2 style="margin:0 0 12px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:26px;text-transform:uppercase;letter-spacing:.02em;border-bottom:3px solid var(--ink);padding-bottom:8px;">How the season is simulated</h2>
         <sc-for list="{{ method }}" as="m" hint-placeholder-count="5">
-          <p style="margin:0 0 10px;font-size:14px;line-height:1.55;color:#2a2d3a;text-wrap:pretty;"><b>{{ m.head }}</b> {{ m.body }}</p>
+          <p style="margin:0 0 10px;font-size:14px;line-height:1.55;color:var(--ink-2);text-wrap:pretty;"><b>{{ m.head }}</b> {{ m.body }}</p>
         </sc-for>
       </div>
       <div style="min-width:0;">
-        <h2 style="margin:0 0 12px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:26px;text-transform:uppercase;letter-spacing:.02em;border-bottom:3px solid #14151a;padding-bottom:8px;">Availability assumed</h2>
-        <p style="margin:0 0 10px;font-family:'IBM Plex Mono',monospace;font-size:12px;color:#6b6e7a;">{{ notesLabel }}</p>
+        <h2 style="margin:0 0 12px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:26px;text-transform:uppercase;letter-spacing:.02em;border-bottom:3px solid var(--ink);padding-bottom:8px;">Availability assumed</h2>
+        <p style="margin:0 0 10px;font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--mute);">{{ notesLabel }}</p>
         <sc-for list="{{ injuries }}" as="i" hint-placeholder-count="12">
-          <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:0 12px;padding:5px 0;border-bottom:1px solid #e3e0d8;font-size:13px;">
-            <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><span style="font-weight:600;">{{ i.name }}</span> <span class="mono" style="font-size:11px;color:#6b6e7a;">{{ i.team }} · {{ i.note }}</span></span>
+          <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:0 12px;padding:5px 0;border-bottom:1px solid var(--rule-2);font-size:13px;">
+            <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><span style="font-weight:600;">{{ i.name }}</span> <span class="mono" style="font-size:11px;color:var(--mute);">{{ i.team }} · {{ i.note }}</span></span>
             <span class="mono" style="font-size:12px;white-space:nowrap;">{{ i.back }}</span>
           </div>
         </sc-for>
       </div>
     </section>
 
-    <footer style="margin-top:56px;border-top:1px solid #14151a;padding-top:16px;display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;font-family:'IBM Plex Mono',monospace;font-size:12px;color:#6b6e7a;">
+    <footer style="margin-top:56px;border-top:1px solid var(--ink);padding-top:16px;display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--mute);">
       <span>© 2026 Maverick Hightower</span>
       <span>Every number is a model projection. No edge here is a demonstrated edge, and no bet is ever placed.</span>
     </footer>
   </div>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props="{}">
+<script type="text/x-dc" data-dc-script data-props="{&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Auto&quot;,&quot;Light&quot;,&quot;Dark&quot;],&quot;default&quot;:&quot;Auto&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Preview&quot;}}">
 class Component extends DCLogic {
   state = { vm: null, loadedFor: null };
   async load() {
@@ -271,7 +278,7 @@ class Component extends DCLogic {
     let data = null, notice = null;
     try { const r = await fetch("./data/season.json", { cache: "no-store" }); if (!r.ok) throw new Error(`HTTP ${r.status}`); data = await r.json(); }
     catch (e) { notice = `The season simulation is not reachable (${e.message}).`; }
-    const otherSports = S.ORDER.filter((k) => k !== sport).map((k, i) => ({ name: S.SPORTS[k].name, href: S.SPORTS[k].host, style: i === 0 ? "margin-left:10px;padding-left:22px;border-left:1px solid #d6d3cc;" : "" }));
+    const otherSports = S.ORDER.filter((k) => k !== sport).map((k, i) => ({ name: S.SPORTS[k].name, href: S.SPORTS[k].host, style: `display:inline-flex;align-items:center;min-height:44px;${i === 0 ? "margin-left:6px;padding-left:18px;border-left:1px solid var(--rule);" : ""}` }));
     this.setState({ vm: data ? this.build(data, S) : null, notice, otherSports });
   }
   build(d, S) {
@@ -282,8 +289,8 @@ class Component extends DCLogic {
     const G = d.games;
     const inSeason = d.phase !== "preseason";
     const dash = "—";
-    const cutStyle = "border-bottom:2px dashed #14151a;";
-    const rowStyle = "border-bottom:1px solid #e3e0d8;";
+    const cutStyle = "border-bottom:2px dashed var(--ink);";
+    const rowStyle = "border-bottom:1px solid var(--rule-2);";
     const teamRow = (t, rank, cut) => {
       const lastPace = t.lastSeason ? (t.lastSeason.pts * G) / t.lastSeason.gp : null;
       const delta = lastPace == null ? null : Math.round(t.proj.pts - lastPace);
@@ -297,7 +304,7 @@ class Component extends DCLogic {
         rangeTitle: `10th ${t.proj.p10} · mean ${t.proj.pts} · 90th ${t.proj.p90}`,
         playoff: pct(t.odds.playoff), playoffWidth: Math.round(t.odds.playoff * 100), div: pct(t.odds.div), conf1: pct(t.odds.conf1), pres: pct(t.odds.pres),
         delta: delta == null ? dash : delta > 0 ? `+${delta}` : delta < 0 ? `−${Math.abs(delta)}` : "±0",
-        deltaColor: delta == null || delta === 0 ? "#6b6e7a" : delta > 0 ? "#2b6b3c" : "#b0341f",
+        deltaColor: delta == null || delta === 0 ? "var(--mute)" : delta > 0 ? "var(--win)" : "var(--alert)",
         rowStyle: cut ? cutStyle : rowStyle,
       };
     };
@@ -322,7 +329,7 @@ class Component extends DCLogic {
     const WMAX = 50, wscale = (v) => Math.max(0, Math.min(100, (v / WMAX) * 100));
     const byAb = Object.fromEntries(d.teams.map((t) => [t.abbr, t]));
     const goalies = d.leaders.wins.slice(0, 20).map((g, i) => ({
-      rank: i + 1, name: g.name, team: g.team, color: byAb[g.team] ? byAb[g.team].color : "#14151a", fg: byAb[g.team] ? byAb[g.team].fg : "#f4f2ee",
+      rank: i + 1, name: g.name, team: g.team, color: byAb[g.team] ? byAb[g.team].color : "var(--ink)", fg: byAb[g.team] ? byAb[g.team].fg : "var(--paper)",
       starts: g.starts, wins: f1(g.wins), barLeft: wscale(g.p10).toFixed(1), barWidth: (wscale(g.p90) - wscale(g.p10)).toFixed(1), meanMark: wscale(g.wins).toFixed(1),
       rangeTitle: `10th ${g.p10} · mean ${g.wins} · 90th ${g.p90}`, p30: pct(g.p30), gsax: `${g.gsax60 > 0 ? "+" : ""}${g.gsax60.toFixed(2)}`,
       last: g.last ? `${g.last.w} W / ${g.last.gs} GS · .${String(Math.round(g.last.sv * 1000)).padStart(3, "0")}` : "no NHL starts",
@@ -368,7 +375,8 @@ class Component extends DCLogic {
   componentDidUpdate() { this.load(); }
   renderVals() {
     const vm = this.state.vm;
-    const base = { otherSports: this.state.otherSports || [], hasNotice: !!this.state.notice, notice: this.state.notice || "" };
+    const themeAttr = { Light: "light", Dark: "dark" }[this.props.theme] || "auto";
+    const base = { themeAttr, otherSports: this.state.otherSports || [], hasNotice: !!this.state.notice, notice: this.state.notice || "" };
     if (!vm) return { ...base, kicker: "Season simulation", title1: "The whole", title2: "season.", blurb: "", updated: "—", progress: "", stale: false, staleLabel: "", strip: [], divisions: [], conferences: [], leaderBoards: [], teamCards: [], goalies: [], method: [], injuries: [], games: 84, standingsNote: "", scorersNote: "", goaliesNote: "", notesLabel: "" };
     return { ...base, ...vm };
   }

@@ -478,7 +478,20 @@
     "tier": "B",
     "units": 0.5
    },
-   "drought": []
+   "drought": [
+    {
+     "player": "Clayton Keller",
+     "playerId": 8479343,
+     "team": "UTA",
+     "market": "assists",
+     "line": 0.5,
+     "lastSeason": 47,
+     "drought": 5,
+     "price": -125,
+     "book": "FanDuel",
+     "heavyJuice": false
+    }
+   ]
   },
   {
    "id": "2026020035",
