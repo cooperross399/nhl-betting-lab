@@ -1113,9 +1113,10 @@ def grade_due_list(board: dict, finals: dict, processed: Path | None) -> dict:
     count, in neither tally. A game not final, or final but not yet in the
     logs (its box score arrives with the next Gameday Refresh), is result
     null, not counted and not voided, and season_record keeps re-settling
-    that night rather than keeping it (due_list_tallies' `pending`). One
-    entry per (player, category) a night, however many times the board lists
-    it. Nothing here is a stake: no units, no profit, in any row or tally.
+    that night rather than keeping it (due_list_tallies' `pending`), for up
+    to DUE_LIST_PATIENCE_DAYS. One entry per (player, category) a night,
+    however many times the board lists it. Nothing here is a stake: no
+    units, no profit, in any row or tally.
     """
     games = [g for g in board.get("games") or [] if isinstance(g, dict) and "drought" in g]
     by_id, by_name, boxed = read_player_counts(processed, {str(g.get("id")) for g in games if str(g.get("id")) in finals})
@@ -1161,12 +1162,21 @@ def _is_number(value: object) -> bool:
     return isinstance(value, (int, float)) and not isinstance(value, bool)
 
 
-def due_list_tallies(rows: list[dict], settled_ids: set[str]) -> dict:
+def due_list_tallies(rows: list[dict]) -> dict:
     """One night's Due List, summed for the season: w, l, p, the split by
     category, the implied probability of every graded entry's posted price
     (summed, with its count, so nights average correctly), and `pending`,
-    the entries still unread on a game the night did settle: a box score
-    the logs do not hold yet. The night is kept only once that is zero."""
+    every entry still unread (result null): its game not final, or final
+    with a box score the logs do not hold yet. The night is kept only once
+    that is zero, or once DUE_LIST_PATIENCE_DAYS have passed (season_record).
+
+    Until 2026-10-07 `pending` counted only entries on a game in
+    results["games"], the team games the night settled. That is empty on a
+    schedule-only board (settle grades no team game there) and never holds
+    a game that is not yet final, so on both an ungraded entry held nothing:
+    the night was kept two days on with it unread, and read back from the
+    cache ever after. An entry is pending by its own result, not by its
+    game's place in another tally."""
     out = {"w": 0, "l": 0, "p": 0, "byMarket": {m: {"w": 0, "l": 0} for m in DUE_LIST_MARKETS},
            "impliedSum": 0.0, "impliedCount": 0, "pending": 0}
     for r in rows:
@@ -1180,7 +1190,7 @@ def due_list_tallies(rows: list[dict], settled_ids: set[str]) -> dict:
             if _is_number(r.get("price")):
                 out["impliedSum"] += implied(float(r["price"]))
                 out["impliedCount"] += 1
-        elif result is None and str(r.get("gameId")) in settled_ids:
+        elif result is None:
             out["pending"] += 1
     return out
 
@@ -1213,7 +1223,7 @@ def night_record(results: dict) -> dict:
     night = {"games": len(games), "summary": results.get("summary") or {}}
     due = results.get("dueList")
     if isinstance(due, dict):
-        night["dueList"] = due_list_tallies(due.get("rows") or [], {str(g.get("id")) for g in games if isinstance(g, dict)})
+        night["dueList"] = due_list_tallies(due.get("rows") or [])
     props = results.get("props")
     if isinstance(props, dict) and props.get("status", "ok") == "ok" and isinstance(props.get("rows"), list):
         night["props"] = props_tallies(props["rows"])
@@ -1228,6 +1238,49 @@ SETTLED_DIR = "settled"
 FROZEN_BOARD = re.compile(r"^(\d{4}-\d{2}-\d{2})\.json$")
 
 SEASON_KEYS = ("straightUp", "picks", "leans", "totals")
+
+#: How long a night with a Due List entry still unread (result null) is
+#: settled again each run rather than kept: the forward ledger's rule for a
+#: game with no result (`nhl_betting_lab.forward_evidence.PATIENCE_DAYS`,
+#: spelled out here for the reason USER_AGENT gives). Past it the night is
+#: kept with the entry uncounted, in neither tally, as a void is; so a
+#: postponed game, a box score build_datasets dropped, or a category the
+#: list does not grade can hold a night out of the cache for two weeks and
+#: no longer. While a night is held it is settled through the live schedule,
+#: and a day that schedule cannot answer for is that run's `missingNights`,
+#: as every night under two days old already is.
+DUE_LIST_PATIENCE_DAYS = 14
+
+
+def _kept_night(path: Path) -> dict | None:
+    """A night read from history/settled, or None when none is kept or the file cannot be read."""
+    if not path.is_file():
+        return None
+    try:
+        night = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    return night if isinstance(night, dict) else None
+
+
+def _kept_before_the_list_was_graded(night: dict, frozen: Path) -> bool:
+    """A night kept without a `dueList` while its frozen board carries the list.
+
+    season_record wrote `{resultsDate, games, summary}` until 2026-10-07, and
+    boards have carried `games[].drought` since #307 merged that morning, so
+    a night cached between the two holds no Due List tallies and, read back
+    as is, would keep every entry its board published out of the season for
+    good. Such a night is settled again and the cache rewritten.
+    """
+    if "dueList" in night:
+        return False
+    try:
+        board = json.loads(frozen.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return False
+    if not isinstance(board, dict):
+        return False
+    return any(isinstance(g, dict) and "drought" in g for g in board.get("games") or [])
 
 
 def season_record(today: date, history_dir: Path, latest: dict, *, processed: Path | None = None) -> dict:
@@ -1253,8 +1306,13 @@ def season_record(today: date, history_dir: Path, latest: dict, *, processed: Pa
     takes the first four): no units, because nothing on it is staked. A
     night counts toward it when its board carried the list and the night
     settled (a game graded, or an entry graded); a night with an entry still
-    waiting for a box score on a game that is final is settled again next
-    run and kept only once nothing waits. `props` and `propLeans` sum each
+    unread (its game not final, or final with no box score in the logs yet)
+    is settled again next run and kept only once nothing waits, or once it
+    is DUE_LIST_PATIENCE_DAYS old, whichever is first. A night kept before
+    the list was graded (no `dueList` in the cache, `drought` on its frozen
+    board) is settled again once and the cache rewritten, so no night the
+    boards have carried the list on is read back without it; a kept night
+    that cannot be read is settled again the same way. `props` and `propLeans` sum each
     settled night's published props rows, best bets with their units and
     leans without (`props {w, l, p, units, nights}`, `propLeans {w, l, p,
     nights}`), and a lean is never in `props`. All three are absent until a
@@ -1276,10 +1334,13 @@ def season_record(today: date, history_dir: Path, latest: dict, *, processed: Pa
         if day >= today:
             continue
         cached = kept / path.name
+        kept_night = _kept_night(cached)
+        if kept_night is not None and _kept_before_the_list_was_graded(kept_night, path):
+            kept_night = None
         if day.isoformat() == latest.get("resultsDate"):
             night = night_record(latest)
-        elif cached.is_file():
-            night = json.loads(cached.read_text(encoding="utf-8"))
+        elif kept_night is not None:
+            night = kept_night
         else:
             try:
                 settled = settle(day, history_dir, processed=processed)
@@ -1288,8 +1349,8 @@ def season_record(today: date, history_dir: Path, latest: dict, *, processed: Pa
                 continue
             night = night_record(settled)
         night_due = night.get("dueList") if isinstance(night.get("dueList"), dict) else None
-        waiting = bool(night_due and night_due.get("pending"))
-        if day <= today - timedelta(days=2) and not cached.is_file() and not waiting:
+        waiting = bool(night_due and night_due.get("pending")) and day > today - timedelta(days=DUE_LIST_PATIENCE_DAYS)
+        if day <= today - timedelta(days=2) and kept_night is None and not waiting:
             kept.mkdir(parents=True, exist_ok=True)
             cached.write_text(json.dumps({"resultsDate": day.isoformat(), **night}, indent=1), encoding="utf-8")
         graded_due = bool(night_due) and sum(int(night_due.get(k) or 0) for k in ("w", "l", "p")) > 0
