@@ -85,7 +85,7 @@ def test_a_card_with_no_prices_still_publishes_the_list_with_not_posted(tmp_path
     assert row["cell_record"] == {k: bucket[k] for k in ("wagers", "roi", "ci_low", "ci_high")}, (
         "the band's record is read from the committed backtest through the card's own main()")
     markdown = (tmp_path / "outputs" / "gameday_card.md").read_text(encoding="utf-8")
-    section = markdown[markdown.index("## Drought List"):]
+    section = markdown[markdown.index("## Due List"):]
     assert "Skater 1" in section and "not posted" in section and "over 0.5" in section
     assert "| 5 (both) | tier 5 / surprise 5 | 1 in 32 for him | band 30-44 @5: " in section
     assert "Backtest" in section.splitlines()[2], "one headline line under the heading"

@@ -43,6 +43,10 @@ Sources, in order of trust:
   * history/settled/YYYY-MM-DD.json: each night's settlement, kept so the
     season record sums every frozen board without re-fetching old finals
     (season_record).
+  * data/processed/player_game_logs.csv: the box-score logs, one row per
+    player per game, read for the Due List alone (grade_due_list): each
+    listed player's goals and assists in the game the frozen board listed
+    him for. Never a price, never a stake.
 
 Preseason (gameType 1) is published as schedule only. The models are fitted
 on regular-season games and the card excludes exhibitions, so no projection
@@ -688,7 +692,7 @@ def build_board(day: date, lab: Path, history_dir: Path) -> dict:
 
 #: The rule in one sentence (Cooper, 2026-10-07 evening; it replaces the flat
 #: 5-game rule shipped in #307). Two bars, and a drought at EITHER lists him.
-DROUGHT_RULE_SENTENCE = ("Cooper's Drought List, an unstaked list he picks from: a skater with 70+ points, 30+ goals or 30+ assists "
+DROUGHT_RULE_SENTENCE = ("Cooper's Due List, an unstaked list he picks from: a skater with 70+ points, 30+ goals or 30+ assists "
                          "last regular season whose drought in that category has reached either bar, the tier bar his total sets "
                          "(points 100+ → 3, 85-99 → 4, 70-84 → 5; goals 40+ → 3, 35-39 → 4, 30-34 → 5; assists 60+ → 3, 45-59 → 4, "
                          "30-44 → 5) or his own equal-surprise bar, the shortest drought with no more than a 5% chance at his "
@@ -1029,7 +1033,13 @@ def load_record(path: Path) -> dict:
     return empty
 
 
-def settle(day: date, history_dir: Path) -> dict:
+def settle(day: date, history_dir: Path, *, processed: Path | None = None) -> dict:
+    """Yesterday's frozen board, graded: results.json.
+
+    `processed` is the lab's data/processed, read only for the Due List's
+    box-score counts (grade_due_list); without it every listed player waits
+    for a box score, and none is voided.
+    """
     now = datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
     frozen = history_dir / f"{day.isoformat()}.json"
     base = {"generatedAt": now, "season": "2026–27", "resultsDate": day.isoformat(), "teams": {}, "games": [],
@@ -1044,7 +1054,11 @@ def settle(day: date, history_dir: Path) -> dict:
                     "The first results page lands the morning after opening night, September 30.")
         return base
     shown = board.get("games") or []
-    if shown and not any("projGoals" in (g.get("home") or {}) for g in shown):
+    schedule_only = bool(shown) and not any("projGoals" in (g.get("home") or {}) for g in shown)
+    # The Due List needs the card's list and nothing of the model, so a board
+    # that carried it is graded on it even where the model projected nothing.
+    carries_list = any("drought" in g for g in shown if isinstance(g, dict))
+    if schedule_only:
         # A regular-season board frozen without the model (build_board's
         # schedule-only notice) grades nothing below, and this set no notice,
         # so the page fell back to "No games were settled for this date."
@@ -1054,8 +1068,13 @@ def settle(day: date, history_dir: Path) -> dict:
         # published had nothing to settle, and that is what the page says.
         base["notice"] = ("The board published for this date showed the schedule only, with no projection, "
                           "so there is nothing to settle.")
-        return base
+        if not carries_list:
+            return base
     finals = {str(g["id"]): g for g in schedule_for(day) if g.get("gameState") in {"OFF", "FINAL"}}
+    if carries_list:
+        base["dueList"] = grade_due_list(board, finals, processed)
+    if schedule_only:
+        return base
     s = base["summary"]
     for g in board["games"]:
         f = finals.get(g["id"])
@@ -1115,6 +1134,203 @@ def settle(day: date, history_dir: Path) -> dict:
     return base
 
 
+#: The box-score table `build_datasets` writes, one row per player per game
+#: (`PLAYER_LOGS_FILENAME` there, spelled out for the reason USER_AGENT
+#: gives). Publish Site restores it with the rest of data/processed in
+#: gameday-state. Read for the Due List alone.
+PLAYER_LOGS_FILENAME = "player_game_logs.csv"
+
+#: The Due List's categories, every one over 0.5 (web/SCHEMA.md, games[].drought).
+#: Points are goals plus assists.
+DUE_LIST_MARKETS = ("points", "goals", "assists")
+
+#: The line a Due List entry is graded against when the frozen entry carries
+#: none: the rule's own, over 0.5.
+DUE_LIST_LINE = 0.5
+
+
+def _count(value: object) -> int:
+    """A box-score count as the logs spell it; a blank is nothing scored."""
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return 0
+
+
+def read_player_counts(processed: Path | None, game_ids: set[str]) -> tuple[dict, dict, set[str]]:
+    """Each player's goals, assists and points in the games named, from the box-score logs.
+
+    Returns (by_id, by_name, boxed): `by_id` maps (game id, player id) and
+    `by_name` (game id, lowercased player name, team) to the player's counts,
+    and `boxed` is the set of game ids the logs hold at least one row for. A
+    missing or unreadable file holds no game, which grade_due_list reads as a
+    box score that has not arrived, never as a scratch.
+    """
+    by_id: dict[tuple[str, str], dict] = {}
+    by_name: dict[tuple[str, str, str], dict] = {}
+    boxed: set[str] = set()
+    if processed is None or not game_ids:
+        return by_id, by_name, boxed
+    path = Path(processed) / PLAYER_LOGS_FILENAME
+    if not path.is_file():
+        return by_id, by_name, boxed
+    try:
+        with path.open(newline="", encoding="utf-8") as fh:
+            for r in csv.DictReader(fh):
+                game_id = str(r.get("game_id") or "").strip()
+                if game_id not in game_ids:
+                    continue
+                boxed.add(game_id)
+                goals, assists = _count(r.get("goals")), _count(r.get("assists"))
+                counts = {"goals": goals, "assists": assists, "points": goals + assists}
+                player_id = str(r.get("player_id") or "").strip()
+                if player_id:
+                    by_id[(game_id, player_id)] = counts
+                name = str(r.get("player") or "").strip().lower()
+                if name:
+                    by_name[(game_id, name, str(r.get("team") or "").strip().upper())] = counts
+    except (OSError, UnicodeDecodeError, csv.Error):
+        return {}, {}, set()
+    return by_id, by_name, boxed
+
+
+def _due_list_key(entry: dict) -> tuple:
+    """One entry per (player, category) a night: the player by id, or by name when the card had none."""
+    player_id = entry.get("playerId")
+    who = str(player_id) if player_id not in (None, "") else f"name:{str(entry.get('player') or '').strip().lower()}"
+    return who, entry.get("market")
+
+
+def grade_due_list(board: dict, finals: dict, processed: Path | None) -> dict:
+    """results.json's `dueList` (its `summary` and `rows`) for one frozen board.
+
+    Every entry the frozen board published is graded, priced or not, against
+    the player's final count in his category from the box-score logs: one or
+    more over 0.5 wins, none loses (a push cannot happen at 0.5; `p` is kept
+    at 0 for shape). The frozen entry is passed through as published, with
+    the game's id and the opponent beside it.
+
+    A player with no row in a game the logs hold did not dress: void, no
+    count, in neither tally. A game not final, or final but not yet in the
+    logs (its box score arrives with the next Gameday Refresh), is result
+    null, not counted and not voided, and season_record keeps re-settling
+    that night rather than keeping it (due_list_tallies' `pending`), for up
+    to DUE_LIST_PATIENCE_DAYS. One entry per (player, category) a night,
+    however many times the board lists it. Nothing here is a stake: no
+    units, no profit, in any row or tally.
+    """
+    games = [g for g in board.get("games") or [] if isinstance(g, dict) and "drought" in g]
+    by_id, by_name, boxed = read_player_counts(processed, {str(g.get("id")) for g in games if str(g.get("id")) in finals})
+    tally = {"w": 0, "l": 0, "p": 0}
+    rows: list[dict] = []
+    seen: set[tuple] = set()
+    for g in games:
+        game_id = str(g.get("id"))
+        home, away = (g.get("home") or {}).get("abbr"), (g.get("away") or {}).get("abbr")
+        for entry in g.get("drought") or []:
+            if not isinstance(entry, dict):
+                continue
+            key = _due_list_key(entry)
+            if key in seen:
+                continue
+            seen.add(key)
+            row = {"gameId": game_id, **entry}
+            if "opp" not in row:
+                team = entry.get("team")
+                row["opp"] = away if team == home else home if team == away else None
+            row.update(actual=None, result=None)
+            if game_id in finals and game_id in boxed:
+                counts = by_id.get((game_id, str(entry.get("playerId"))))
+                if counts is None:
+                    counts = by_name.get((game_id, str(entry.get("player") or "").strip().lower(),
+                                          str(entry.get("team") or "").strip().upper()))
+                if counts is None:
+                    row["result"] = "void"
+                elif entry.get("market") in DUE_LIST_MARKETS:
+                    actual = counts[entry["market"]]
+                    try:
+                        line = float(entry.get("line") if entry.get("line") is not None else DUE_LIST_LINE)
+                    except (TypeError, ValueError):
+                        line = DUE_LIST_LINE
+                    result = "push" if actual == line else "win" if actual > line else "loss"
+                    tally["w" if result == "win" else "l" if result == "loss" else "p"] += 1
+                    row.update(actual=actual, result=result)
+            rows.append(row)
+    return {"summary": tally, "rows": rows}
+
+
+def _is_number(value: object) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def due_list_tallies(rows: list[dict]) -> dict:
+    """One night's Due List, summed for the season: w, l, p, the split by
+    category, the implied probability of every graded entry's posted price
+    (summed, with its count, so nights average correctly), and `pending`,
+    every entry still unread (result null): its game not final, or final
+    with a box score the logs do not hold yet. The night is kept only once
+    that is zero, or once DUE_LIST_PATIENCE_DAYS have passed (season_record).
+
+    Until 2026-10-07 `pending` counted only entries on a game in
+    results["games"], the team games the night settled. That is empty on a
+    schedule-only board (settle grades no team game there) and never holds
+    a game that is not yet final, so on both an ungraded entry held nothing:
+    the night was kept two days on with it unread, and read back from the
+    cache ever after. An entry is pending by its own result, not by its
+    game's place in another tally."""
+    out = {"w": 0, "l": 0, "p": 0, "byMarket": {m: {"w": 0, "l": 0} for m in DUE_LIST_MARKETS},
+           "impliedSum": 0.0, "impliedCount": 0, "pending": 0}
+    for r in rows:
+        if not isinstance(r, dict):
+            continue
+        result = r.get("result")
+        if result in ("win", "loss", "push"):
+            out["w" if result == "win" else "l" if result == "loss" else "p"] += 1
+            if result != "push" and r.get("market") in out["byMarket"]:
+                out["byMarket"][r["market"]]["w" if result == "win" else "l"] += 1
+            if _is_number(r.get("price")):
+                out["impliedSum"] += implied(float(r["price"]))
+                out["impliedCount"] += 1
+        elif result is None:
+            out["pending"] += 1
+    return out
+
+
+def props_tallies(rows: list[dict]) -> dict:
+    """One night's props, summed for the season, by the row shape web/SCHEMA.md
+    names (`props.rows[]`: kind, units, result, profitUnits): best bets with
+    their profit in units, and leans apart, with none. A void or ungraded row
+    is in neither; a pass is never a record."""
+    out = {"bets": {"w": 0, "l": 0, "p": 0, "units": 0.0}, "leans": {"w": 0, "l": 0, "p": 0}}
+    for r in rows:
+        if not isinstance(r, dict) or r.get("result") not in ("win", "loss", "push"):
+            continue
+        kind = r.get("kind")
+        if kind not in ("bet", "lean"):
+            continue
+        tally = out["bets"] if kind == "bet" else out["leans"]
+        tally["w" if r["result"] == "win" else "l" if r["result"] == "loss" else "p"] += 1
+        if kind == "bet" and _is_number(r.get("profitUnits")):
+            tally["units"] += float(r["profitUnits"])
+    return out
+
+
+def night_record(results: dict) -> dict:
+    """What the season keeps of one settled night: its settled game count and
+    summary, the Due List's tallies when the frozen board carried the list,
+    and the props tallies when the night's props block was published (status
+    "ok", as the page reads a block without one)."""
+    games = results.get("games") or []
+    night = {"games": len(games), "summary": results.get("summary") or {}}
+    due = results.get("dueList")
+    if isinstance(due, dict):
+        night["dueList"] = due_list_tallies(due.get("rows") or [])
+    props = results.get("props")
+    if isinstance(props, dict) and props.get("status", "ok") == "ok" and isinstance(props.get("rows"), list):
+        night["props"] = props_tallies(props["rows"])
+    return night
+
+
 #: Where each night's settlement is kept, inside the history Publish Site
 #: restores and uploads, so the season record reads an old night once.
 SETTLED_DIR = "settled"
@@ -1124,8 +1340,51 @@ FROZEN_BOARD = re.compile(r"^(\d{4}-\d{2}-\d{2})\.json$")
 
 SEASON_KEYS = ("straightUp", "picks", "leans", "totals")
 
+#: How long a night with a Due List entry still unread (result null) is
+#: settled again each run rather than kept: the forward ledger's rule for a
+#: game with no result (`nhl_betting_lab.forward_evidence.PATIENCE_DAYS`,
+#: spelled out here for the reason USER_AGENT gives). Past it the night is
+#: kept with the entry uncounted, in neither tally, as a void is; so a
+#: postponed game, a box score build_datasets dropped, or a category the
+#: list does not grade can hold a night out of the cache for two weeks and
+#: no longer. While a night is held it is settled through the live schedule,
+#: and a day that schedule cannot answer for is that run's `missingNights`,
+#: as every night under two days old already is.
+DUE_LIST_PATIENCE_DAYS = 14
 
-def season_record(today: date, history_dir: Path, latest: dict) -> dict:
+
+def _kept_night(path: Path) -> dict | None:
+    """A night read from history/settled, or None when none is kept or the file cannot be read."""
+    if not path.is_file():
+        return None
+    try:
+        night = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    return night if isinstance(night, dict) else None
+
+
+def _kept_before_the_list_was_graded(night: dict, frozen: Path) -> bool:
+    """A night kept without a `dueList` while its frozen board carries the list.
+
+    season_record wrote `{resultsDate, games, summary}` until 2026-10-07, and
+    boards have carried `games[].drought` since #307 merged that morning, so
+    a night cached between the two holds no Due List tallies and, read back
+    as is, would keep every entry its board published out of the season for
+    good. Such a night is settled again and the cache rewritten.
+    """
+    if "dueList" in night:
+        return False
+    try:
+        board = json.loads(frozen.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return False
+    if not isinstance(board, dict):
+        return False
+    return any(isinstance(g, dict) and "drought" in g for g in board.get("games") or [])
+
+
+def season_record(today: date, history_dir: Path, latest: dict, *, processed: Path | None = None) -> dict:
     """The season so far: every frozen board before `today`, settled and summed.
 
     `latest` is the night this run just settled (yesterday), used as is. Any
@@ -1139,9 +1398,33 @@ def season_record(today: date, history_dir: Path, latest: dict) -> dict:
     published as 0–0. results.json carries this object as `seasonRecord`,
     and on opening morning it read `picks {w:0, l:0, p:0}` with `nights: 0`:
     a record nobody had counted, which the page happened not to show.
+
+    ## The Due List and the props, kept apart and never staked
+
+    Each night is kept as `night_record` shapes it. `dueList` sums every
+    graded Due List entry on every frozen board that carried the list
+    (`dueList {w, l, p, nights, byMarket, impliedPct}`; the board's record
+    takes the first four): no units, because nothing on it is staked. A
+    night counts toward it when its board carried the list and the night
+    settled (a game graded, or an entry graded); a night with an entry still
+    unread (its game not final, or final with no box score in the logs yet)
+    is settled again next run and kept only once nothing waits, or once it
+    is DUE_LIST_PATIENCE_DAYS old, whichever is first. A night kept before
+    the list was graded (no `dueList` in the cache, `drought` on its frozen
+    board) is settled again once and the cache rewritten, so no night the
+    boards have carried the list on is read back without it; a kept night
+    that cannot be read is settled again the same way. `props` and `propLeans` sum each
+    settled night's published props rows, best bets with their units and
+    leans without (`props {w, l, p, units, nights}`, `propLeans {w, l, p,
+    nights}`), and a lean is never in `props`. All three are absent until a
+    night that carried them has settled, as the four tallies are.
     """
     tally = {key: {"w": 0, "l": 0} if key == "straightUp" else {"w": 0, "l": 0, "p": 0}
              for key in SEASON_KEYS}
+    due = {"w": 0, "l": 0, "p": 0, "nights": 0, "byMarket": {m: {"w": 0, "l": 0} for m in DUE_LIST_MARKETS},
+           "impliedSum": 0.0, "impliedCount": 0}
+    props = {"w": 0, "l": 0, "p": 0, "units": 0.0, "nights": 0}
+    prop_leans = {"w": 0, "l": 0, "p": 0, "nights": 0}
     kept = history_dir / SETTLED_DIR
     nights, missing, first, last = 0, 0, None, None
     for path in sorted(history_dir.glob("*.json")):
@@ -1152,20 +1435,44 @@ def season_record(today: date, history_dir: Path, latest: dict) -> dict:
         if day >= today:
             continue
         cached = kept / path.name
+        kept_night = _kept_night(cached)
+        if kept_night is not None and _kept_before_the_list_was_graded(kept_night, path):
+            kept_night = None
         if day.isoformat() == latest.get("resultsDate"):
-            night = {"games": len(latest.get("games") or []), "summary": latest.get("summary") or {}}
-        elif cached.is_file():
-            night = json.loads(cached.read_text(encoding="utf-8"))
+            night = night_record(latest)
+        elif kept_night is not None:
+            night = kept_night
         else:
             try:
-                settled = settle(day, history_dir)
+                settled = settle(day, history_dir, processed=processed)
             except (OSError, ValueError, KeyError):
                 missing += 1
                 continue
-            night = {"games": len(settled["games"]), "summary": settled["summary"]}
-        if day <= today - timedelta(days=2) and not cached.is_file():
+            night = night_record(settled)
+        night_due = night.get("dueList") if isinstance(night.get("dueList"), dict) else None
+        waiting = bool(night_due and night_due.get("pending")) and day > today - timedelta(days=DUE_LIST_PATIENCE_DAYS)
+        if day <= today - timedelta(days=2) and kept_night is None and not waiting:
             kept.mkdir(parents=True, exist_ok=True)
             cached.write_text(json.dumps({"resultsDate": day.isoformat(), **night}, indent=1), encoding="utf-8")
+        graded_due = bool(night_due) and sum(int(night_due.get(k) or 0) for k in ("w", "l", "p")) > 0
+        if night_due and (night["games"] or graded_due):
+            due["nights"] += 1
+            for k in ("w", "l", "p"):
+                due[k] += int(night_due.get(k) or 0)
+            for market, split in (night_due.get("byMarket") or {}).items():
+                if market in due["byMarket"] and isinstance(split, dict):
+                    for k in ("w", "l"):
+                        due["byMarket"][market][k] += int(split.get(k) or 0)
+            due["impliedSum"] += float(night_due.get("impliedSum") or 0.0)
+            due["impliedCount"] += int(night_due.get("impliedCount") or 0)
+        night_props = night.get("props") if isinstance(night.get("props"), dict) else None
+        if night_props:
+            props["nights"] += 1
+            prop_leans["nights"] += 1
+            for k in ("w", "l", "p"):
+                props[k] += int((night_props.get("bets") or {}).get(k) or 0)
+                prop_leans[k] += int((night_props.get("leans") or {}).get(k) or 0)
+            props["units"] += float((night_props.get("bets") or {}).get("units") or 0.0)
         if not night["games"]:
             continue
         nights += 1
@@ -1176,7 +1483,15 @@ def season_record(today: date, history_dir: Path, latest: dict) -> dict:
                 if k in tally[key]:
                     tally[key][k] += int(v)
     span = {"nights": nights, "firstDate": first, "lastDate": last, "missingNights": missing}
-    return {**tally, **span} if nights else span
+    season = {**tally, **span} if nights else span
+    if due["nights"]:
+        season["dueList"] = {"w": due["w"], "l": due["l"], "p": due["p"], "nights": due["nights"], "byMarket": due["byMarket"]}
+        if due["impliedCount"]:
+            season["dueList"]["impliedPct"] = round(100 * due["impliedSum"] / due["impliedCount"], 1)
+    if props["nights"]:
+        season["props"] = {**props, "units": round(props["units"], 2)}
+        season["propLeans"] = prop_leans
+    return season
 
 
 def grade_pick(pick: dict, home: str, away: str, hs: int, as_: int, finish: str) -> str:
@@ -1212,13 +1527,27 @@ def main(argv: list[str] | None = None) -> int:
     history = out / "history"
     out.mkdir(parents=True, exist_ok=True)
     board = build_board(today, Path(args.lab), history)
-    results = settle(today - timedelta(days=1), history)
-    season = season_record(today, history, results)
+    processed = Path(args.lab) / "data" / "processed"
+    results = settle(today - timedelta(days=1), history, processed=processed)
+    season = season_record(today, history, results, processed=processed)
     results["seasonRecord"] = season
     # The board's record is the season's. Untallied (no settled night yet)
     # stays None, which the page renders as an absence, never 0–0.
     if season["nights"]:
         board["record"].update({key: season[key] for key in SEASON_KEYS}, season=season)
+    # The Due List's and the props' season lines, absent until a night that
+    # carried them has settled (season_record). The Due List's record is a
+    # count and nothing else: no units, on the board or on the page.
+    if "dueList" in season:
+        board["record"]["dueList"] = {k: season["dueList"][k] for k in ("w", "l", "p", "nights")}
+        if isinstance(results.get("dueList"), dict):
+            results["dueList"]["season"] = season["dueList"]
+    if "props" in season:
+        board["record"]["props"] = season["props"]
+        board["record"]["propLeans"] = season["propLeans"]
+        if isinstance(results.get("props"), dict):
+            results["props"]["seasonLeans"] = season["propLeans"]
+            results["props"].setdefault("season", season["props"])
     (out / "board.json").write_text(json.dumps(board, indent=1, ensure_ascii=False), encoding="utf-8")
     (out / "results.json").write_text(json.dumps(results, indent=1, ensure_ascii=False), encoding="utf-8")
     print(f"board {today}: {len(board['games'])} games ({board['phase']}); results {today - timedelta(days=1)}: {len(results['games'])} settled.")

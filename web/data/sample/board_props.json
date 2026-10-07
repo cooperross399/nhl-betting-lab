@@ -57,6 +57,25 @@
     "l": 40,
     "p": 3
    }
+  },
+  "props": {
+   "w": 9,
+   "l": 11,
+   "p": 1,
+   "units": -2.64,
+   "nights": 8
+  },
+  "propLeans": {
+   "w": 14,
+   "l": 17,
+   "p": 2,
+   "nights": 8
+  },
+  "dueList": {
+   "w": 13,
+   "l": 29,
+   "p": 0,
+   "nights": 8
   }
  },
  "teams": {
@@ -1028,5 +1047,5 @@
    }
   ]
  },
- "droughtNote": "SAMPLE · Drought List: 70+ points, 30+ goals or 30+ assists last season and a drought at the tier bar his total sets or at his own equal-surprise bar. Backtest 2024-26: no category shows an edge."
+ "droughtNote": "SAMPLE · Due List: 70+ points, 30+ goals or 30+ assists last season and a drought at the tier bar his total sets or at his own equal-surprise bar. Backtest 2024-26: no category shows an edge."
 }

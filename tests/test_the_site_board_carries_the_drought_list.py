@@ -1,6 +1,6 @@
 """`games[].drought` and `droughtNote`: the shape web/SCHEMA.md names, written by the site builder.
 
-The Board's game cards render Cooper's Drought List (2026-10-07; that evening the tier and
+The Board's game cards render Cooper's Due List (2026-10-07; that evening the tier and
 equal-surprise bars replaced the flat 5-game rule of #307). The site reads a file and
 imports nothing from the card: the card writes `data/outputs/drought_list.json`, Publish
 Site restores it with `gameday-reports`, and `web/build_site_json.py` turns it into
@@ -138,7 +138,7 @@ def test_a_row_without_the_bars_publishes_with_nulls_not_a_crash(lab, tmp_path, 
 def test_the_sentence_names_the_drought_list_and_both_bars(lab, tmp_path, monkeypatch) -> None:
     sentence = site_module().DROUGHT_RULE_SENTENCE
 
-    assert "Drought List" in sentence and "unstaked" in sentence
+    assert "Due List" in sentence and "unstaked" in sentence
     assert "tier bar" in sentence and "equal-surprise bar" in sentence and "either bar" in sentence
     assert "5+ straight" not in sentence, "the flat rule of #307 is gone"
     assert sentence.count(". ") == 0 and sentence.endswith("."), "one sentence"
@@ -150,8 +150,8 @@ def test_the_page_calls_it_the_drought_list_and_reads_every_new_field_guarded() 
     page = (ROOT / "web" / "Board.dc.html").read_text(encoding="utf-8")
 
     assert "Drought rule" not in page and "drought rule" not in page
-    for label in ("Drought List · potential bets", "Drought List ×${dr.length}", "Drought List · ${dCount}",
-                  "Drought List starts with the regular season", "Nobody is on the Drought List tonight"):
+    for label in ("Due List · potential bets", "Due List ×${dr.length}", "Due List · ${dCount}",
+                  "Due List starts with the regular season", "Nobody on the Due List tonight"):
         assert label in page, label
     for field in ("tierBar", "surpriseBar", "rarity", "oneIn", "cellRecord", "for him", "no record for this cell",
                   "This cell${DROUGHT_WINDOW}", "data.droughtWindow"):
@@ -176,7 +176,7 @@ def test_the_note_is_the_rule_and_the_backtest_headline_read_from_its_file(lab, 
     board = build(lab, tmp_path / "out", monkeypatch)
     note = board["droughtNote"]
 
-    assert "70+ points, 30+ goals or 30+ assists" in note and "unstaked" in note and "Drought List" in note
+    assert "70+ points, 30+ goals or 30+ assists" in note and "unstaked" in note and "Due List" in note
     # The shipped rule's card-window headline (either bar), as the committed backtest JSON states it.
     assert "points -1.6% over 311 wagers" in note and "goals -7.0% over 1355" in note and "assists -8.4% over 2135" in note
     assert "no category's interval sits above zero" in note
@@ -322,7 +322,7 @@ def test_the_page_prints_the_cards_rarity_line_for_every_row_and_names_the_measu
 
     shown = next(g for g in page["tonight"]["games"] if g["rows"])
     by = {r["player"]: r for r in shown["rows"]}
-    assert shown["label"] == "Drought List ×5" and list(by) == ["Rarest", "Old Never", "Old Rarer", "Old Plain", "Flat"], (
+    assert shown["label"] == "Due List ×5" and list(by) == ["Rarest", "Old Never", "Old Rarer", "Old Plain", "Flat"], (
         "the card's order is kept and the null row is skipped, not thrown on")
     assert by["Rarest"]["meta"] == "bar 3 · both · 1 in 50,805 for him", "the rarest row carries its line, from oneIn, with a separator"
     assert by["Old Never"]["meta"] == "bar 3 · both · never last season"

@@ -1,4 +1,4 @@
-"""Measure the Drought List rule against bought prop prices.
+"""Measure the Due List rule against bought prop prices.
 
 The rule (Cooper, 2026-10-07 evening): a skater who produced 70+ points, 30+
 goals or 30+ assists LAST regular season is listed in that category when his
@@ -190,7 +190,7 @@ def _tiers_sentence() -> str:
 
 def render(result: dict, counts: dict, generated_at: str) -> str:
     L = [
-        "# Drought List backtest",
+        "# Due List backtest",
         "",
         f"Generated {generated_at} by `scripts/run_drought_rule_backtest.py`. Every figure below comes from that script.",
         "",
