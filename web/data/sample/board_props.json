@@ -202,6 +202,30 @@
    },
    "drought": [
     {
+     "player": "Travis Konecny",
+     "playerId": 8478439,
+     "team": "PHI",
+     "market": "points",
+     "line": 0.5,
+     "lastSeason": 88,
+     "drought": 3,
+     "price": -135,
+     "book": "BetMGM",
+     "heavyJuice": false,
+     "tierBar": 4,
+     "surpriseBar": 3,
+     "hitRate": 0.66,
+     "rarity": 0.0393,
+     "rule": "surprise",
+     "band": "85-99",
+     "cellRecord": {
+      "wagers": 241,
+      "returnPct": 2.4,
+      "lowPct": -9.8,
+      "highPct": 14.6
+     }
+    },
+    {
      "player": "Artemi Panarin",
      "playerId": 8478550,
      "team": "NYR",
@@ -211,7 +235,19 @@
      "drought": 6,
      "price": 175,
      "book": "DraftKings",
-     "heavyJuice": false
+     "heavyJuice": false,
+     "tierBar": 5,
+     "surpriseBar": 10,
+     "hitRate": 0.278,
+     "rarity": 0.1417,
+     "rule": "tier",
+     "band": "30-34",
+     "cellRecord": {
+      "wagers": 612,
+      "returnPct": -3.8,
+      "lowPct": -14.2,
+      "highPct": 6.9
+     }
     }
    ]
   },
@@ -383,7 +419,19 @@
      "drought": 5,
      "price": -190,
      "book": "FanDuel",
-     "heavyJuice": true
+     "heavyJuice": true,
+     "tierBar": 5,
+     "surpriseBar": 3,
+     "hitRate": 0.68,
+     "rarity": 0.0034,
+     "rule": "both",
+     "band": "70-84",
+     "cellRecord": {
+      "wagers": 184,
+      "returnPct": 10.5,
+      "lowPct": -1.7,
+      "highPct": 23.9
+     }
     },
     {
      "player": "William Nylander",
@@ -395,7 +443,14 @@
      "drought": 7,
      "price": null,
      "book": null,
-     "heavyJuice": false
+     "heavyJuice": false,
+     "tierBar": 5,
+     "surpriseBar": 7,
+     "hitRate": 0.35,
+     "rarity": 0.049,
+     "rule": "both",
+     "band": "30-44",
+     "cellRecord": null
     }
    ]
   },
@@ -489,7 +544,19 @@
      "drought": 5,
      "price": -125,
      "book": "FanDuel",
-     "heavyJuice": false
+     "heavyJuice": false,
+     "tierBar": 4,
+     "surpriseBar": null,
+     "hitRate": null,
+     "rarity": null,
+     "rule": "tier",
+     "band": "45-59",
+     "cellRecord": {
+      "wagers": 97,
+      "returnPct": -7.1,
+      "lowPct": -24.3,
+      "highPct": 10.1
+     }
     }
    ]
   },
@@ -961,5 +1028,5 @@
    }
   ]
  },
- "droughtNote": "SAMPLE · 70+ points, 30+ goals or 30+ assists last season and 5+ straight games without one. Backtest 2024-26: no category shows an edge."
+ "droughtNote": "SAMPLE · Drought List: 70+ points, 30+ goals or 30+ assists last season and a drought at the tier bar his total sets or at his own equal-surprise bar. Backtest 2024-26: no category shows an edge."
 }

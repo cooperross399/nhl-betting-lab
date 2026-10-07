@@ -31,6 +31,7 @@ from nhl_betting_lab.drought_rule import (
     SITE_LIST_FILENAME,
     backtest_headline,
     build_drought_list,
+    cell_records,
     save_site_list,
     site_payload,
 )
@@ -723,10 +724,11 @@ def main(argv: list[str] | None = None) -> int:
             "Team markets were priced on the goals ratings: the xG ratings "
             "file was missing or not built through the latest game."
         )
-    # Cooper's drought rule: an unstaked list he picks from, built every game
+    # Cooper's Drought List: an unstaked list he picks from, built every game
     # day from the logs, the rosters and the schedule alone, so it publishes
     # with "not posted" prices on a night the card is blocked for prices. It
-    # touches no best bet, stake, verdict or frozen opinion above.
+    # touches no best bet, stake, verdict or frozen opinion above. Each row
+    # carries its band's measured record, read from the committed backtest.
     card.drought_built = True
     card.drought_headline = backtest_headline(outputs, fallback=OUTPUTS_DIR)
     try:
@@ -738,6 +740,7 @@ def main(argv: list[str] | None = None) -> int:
             team_names=team_names,
             day=snapshot_day,
             now=moment,
+            records=cell_records(outputs, fallback=OUTPUTS_DIR),
         )
     except (KeyError, ValueError) as exc:
         from nhl_betting_lab.drought_rule import DroughtList
