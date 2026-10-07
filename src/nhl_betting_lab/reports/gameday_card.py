@@ -105,7 +105,11 @@ from nhl_betting_lab.config import (
     OUTPUTS_DIR,
 )
 from nhl_betting_lab.drought_rule import SECTION_TITLE, fingerprint as drought_fingerprint_of
+from nhl_betting_lab.drought_rule import bar_text as drought_bar_text
+from nhl_betting_lab.drought_rule import bars_text as drought_bars_text
 from nhl_betting_lab.drought_rule import price_text as drought_price_text
+from nhl_betting_lab.drought_rule import rarity_text as drought_rarity_text
+from nhl_betting_lab.drought_rule import record_text as drought_record_text
 from nhl_betting_lab.market_eligibility import EligibilityReport
 from nhl_betting_lab.markets import MARKETS_BY_KEY
 from nhl_betting_lab.models.player_props import player_key
@@ -296,7 +300,7 @@ class GamedayCard:
     #: `models.team_ratings`), "goals" (the ratings file was missing or
     #: stale, a degraded run), or "" when no team model was fitted.
     team_ratings: str = ""
-    #: Cooper's drought rule (2026-10-07): an UNSTAKED list he picks from.
+    #: Cooper's Drought List (2026-10-07): an UNSTAKED list he picks from.
     #: `drought_built` tells a card that built the list (possibly empty) from
     #: one that never asked, which renders no section. Nothing here is a best
     #: bet, a lean or a pass, and nothing here is in the selection
@@ -962,30 +966,36 @@ def _demoted_leans_by_reason(leans: Sequence[Mapping[str, Any]]) -> list[str]:
 
 
 def render_drought_section(card: GamedayCard) -> list[str]:
-    """Cooper's drought list: a selection list, not staked bets.
+    """Cooper's Drought List: a selection list, not staked bets.
 
-    No units, no tiers, no edge, no model probability: a row is a player in a
-    category on a drought, with the best price staged for him or "not posted".
-    Heavy juice is a flag on the row, never a reason to hide it. The one line
-    under the heading is the backtest's headline, read from its file.
+    No units, no stakes, no edge, no model probability: a row is a player in a
+    category on a drought that has reached a bar, with the bar he reached and
+    which rule set it ("3 (tier)", "4 (both)"), both bars as set for him, how
+    unlikely a streak this long is for him ("1 in N for him"), the band's
+    measured record from the committed backtest or "no record", and the best
+    price staged for him or "not posted". Heavy juice is a flag on the row,
+    never a reason to hide it. The one line under the heading is the
+    backtest's headline, read from its file.
     """
     if not card.drought_built:
         return []
     lines = [f"## {SECTION_TITLE}", "", card.drought_headline, ""]
     if card.drought_rows:
         lines += [
-            "| Player | Team | Opponent | Puck drop | Category | Line | Last season | Drought | Best price | Book | Flag |",
-            "|:--|:--|:--|:--|:--|--:|--:|--:|--:|:--|:--|",
+            "| Player | Team | Opponent | Puck drop | Category | Line | Last season | Drought | Bar reached "
+            "| Bars (tier / surprise) | Rarity | Band record | Best price | Book | Flag |",
+            "|:--|:--|:--|:--|:--|--:|--:|--:|:--|:--|:--|:--|--:|:--|:--|",
         ]
         for row in card.drought_rows:
             flag = "heavy juice (shorter than -160)" if row.get("heavy_juice") else ""
             lines.append(
                 f"| {row.get('player')} | {row.get('team')} | {row.get('opponent')} "
                 f"| {_start_eastern(row)} | {row.get('market')} | over {float(row.get('line', 0.5)):g} "
-                f"| {row.get('last_season')} | {row.get('drought')} | {drought_price_text(row)} "
-                f"| {row.get('book') or '-'} | {flag} |"
+                f"| {row.get('last_season')} | {row.get('drought')} | {drought_bar_text(row)} "
+                f"| {drought_bars_text(row)} | {drought_rarity_text(row)} | {drought_record_text(row)} "
+                f"| {drought_price_text(row)} | {row.get('book') or '-'} | {flag} |"
             )
-        lines += ["", "A list, not bets: no units, no tiers, and none of it is in the best bets above.", ""]
+        lines += ["", "A list, not bets: no units, no stakes, and none of it is in the best bets above.", ""]
     else:
         lines += ["_Nobody on tonight's slate qualifies._", ""]
     lines += [f"- {note}" for note in card.drought_notes]
