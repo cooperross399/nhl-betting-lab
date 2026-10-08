@@ -371,6 +371,33 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+      - name: Send the line units to The Lineup
+        # Cooper's DFS lineup builder (a separate app on a Cloudflare Worker)
+        # stacks linemates and power-play mates. This sends it each team's
+        # newest snapshot from today's line capture: forward lines L1-L4 and
+        # PP1/PP2 by player name, with the snapshot's source and timestamps.
+        # Never the capture history, player ids or any other group; the
+        # worker expires each date after three days, so it holds no archive.
+        #
+        # After the round is home (or sealed), so it can never delay the
+        # chain. Not evidence: nothing in the lab reads it back. A failed send
+        # costs the app one round of fresher lines and never turns a capture
+        # run red; a refusal is named in the run summary below. Only from the
+        # default branch, like the private push: a feature branch's dispatch
+        # must not overwrite tonight's lines.
+        id: lineup_lines
+        if: always() && (github.event_name == 'schedule' || github.ref == format('refs/heads/{0}', github.event.repository.default_branch))
+        timeout-minutes: 2
+        continue-on-error: true
+        env:
+          LINEUP_INGEST_TOKEN: ${{ secrets.LINEUP_INGEST_TOKEN }}
+          PYTHONPATH: src
+        run: |
+          python scripts/publish_lineup_lines.py --processed-dir data/processed || {
+            echo "The Lineup did not get this round's line units; the app keeps the previous round's." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          }
+
       - name: Scan the captured ladders
         # The 2026-10-15 checkpoint in docs/pre_registered_ladder_coherence.md
         # reads rung DEPTH, and this puts that number in every run summary

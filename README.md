@@ -228,6 +228,12 @@ PYTHONPATH=src .venv/bin/python scripts/capture_deployment.py
 # game days only, polite delay. CANNOT be collected retroactively.
 PYTHONPATH=src .venv/bin/python scripts/capture_line_combinations.py
 
+# Send each team's newest forward lines (L1-L4) and power-play units (PP1/PP2)
+# from today's capture to The Lineup, Cooper's DFS lineup builder, by player
+# name only. Nothing older, no ids, no other group. Not evidence; nothing in the
+# lab reads it back. Needs LINEUP_INGEST_TOKEN; without it, sends nothing.
+PYTHONPATH=src .venv/bin/python scripts/publish_lineup_lines.py
+
 # Scan the captured ladders for a book contradicting ITSELF: quoting a harder
 # threshold as likelier than an easier one, which no view about hockey is
 # needed to see. Free, reads only what is already captured. Counts occurrences
