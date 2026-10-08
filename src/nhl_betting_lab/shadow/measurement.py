@@ -66,6 +66,11 @@ class TeamVariant:
     stat_against: str
     recent: bool = False
     luck: bool = False
+    #: The xG a goaltending factor compares goals against with.
+    goalie_xga: str = "goalie_xga"
+    #: The xG a finishing factor compares goals for with; None when the
+    #: stat already carries finishing (shooter-adjusted xG).
+    finishing_xgf: str | None = "xgf"
 
 
 TEAM_VARIANTS: tuple[TeamVariant, ...] = (
@@ -83,7 +88,31 @@ TEAM_VARIANTS: tuple[TeamVariant, ...] = (
         recent=True,
         luck=True,
     ),
+    TeamVariant(
+        "xg_context_luck",
+        "Context xG (prior event, rush, score), recent, plus GSAx and finishing",
+        "xgf_ctx",
+        "xga_ctx",
+        recent=True,
+        luck=True,
+        goalie_xga="goalie_xga_ctx",
+        finishing_xgf="xgf_ctx",
+    ),
+    TeamVariant(
+        "xg_shooter_gsax",
+        "Shooter-adjusted xG (PostHockey's xGF/xGA), recent, plus GSAx(sh)",
+        "xgf_adj",
+        "xga_adj",
+        recent=True,
+        luck=True,
+        goalie_xga="goalie_xga_adj",
+        finishing_xgf=None,
+    ),
 )
+
+#: Variants that read the context and talent columns, which only a full run
+#: builds; a table without them scores none of these.
+POSTHOCKEY_VARIANT_KEYS = frozenset({"xg_context_luck", "xg_shooter_gsax"})
 
 #: The variant the public site rates teams on: the one that forecast best on
 #: every column in the first measurement (2026-10-05, moneyline +7.58 per
@@ -122,6 +151,15 @@ def _shrunk_ratio(numerator: float, denominator: float, games: float, k: float) 
     return 1.0 + weight * (numerator / denominator - 1.0)
 
 
+def _has_columns(metrics: pd.DataFrame, variant: TeamVariant) -> bool:
+    needed = [variant.stat_for, variant.stat_against]
+    if variant.luck:
+        needed.append(variant.goalie_xga)
+        if variant.finishing_xgf is not None:
+            needed.append(variant.finishing_xgf)
+    return all(c in metrics and metrics[c].notna().any() for c in needed)
+
+
 def shadow_factors(
     history: pd.DataFrame, variant: TeamVariant, home_advantage: float
 ) -> dict[str, dict[str, float]]:
@@ -153,16 +191,17 @@ def shadow_factors(
         if variant.luck:
             factors["goalie"] = _shrunk_ratio(
                 float((w * rows["goalie_ga"]).sum()),
-                float((w * rows["goalie_xga"]).sum()),
+                float((w * rows[variant.goalie_xga]).sum()),
                 games,
                 LUCK_SHRINKAGE_GAMES,
             )
-            factors["finishing"] = _shrunk_ratio(
-                float((w * rows["gf"]).sum()),
-                float((w * rows["xgf"]).sum()),
-                games,
-                LUCK_SHRINKAGE_GAMES,
-            )
+            if variant.finishing_xgf is not None:
+                factors["finishing"] = _shrunk_ratio(
+                    float((w * rows["gf"]).sum()),
+                    float((w * rows[variant.finishing_xgf]).sum()),
+                    games,
+                    LUCK_SHRINKAGE_GAMES,
+                )
         out[str(team)] = factors
     return out
 
@@ -237,6 +276,7 @@ def compare_team_models(
         games[["game_id", "_date"]], on="game_id", how="inner"
     )
 
+    variants = [v for v in TEAM_VARIANTS if _has_columns(team_metrics, v)]
     rows: list[dict] = []
     if games.empty:
         return pd.DataFrame(rows), []
@@ -253,7 +293,7 @@ def compare_team_models(
         shadow_history = metrics[metrics["_date"] < window["_date"].min()]
         fitted = {
             v.key: shadow_factors(shadow_history, v, current.home_advantage)
-            for v in TEAM_VARIANTS
+            for v in variants
         }
         half = current.league_goals_per_game / 2.0
         for game in window.itertuples():
@@ -274,7 +314,7 @@ def compare_team_models(
                 "season": season,
             }
             rows.append({**base, "variant": "current", **score_game(rested[0], rested[1], hg, ag)})
-            for variant in TEAM_VARIANTS:
+            for variant in variants:
                 factors = fitted[variant.key]
                 default = {"attack": 1.0, "defence": 1.0, "goalie": 1.0, "finishing": 1.0}
                 h = factors.get(home, default)
@@ -291,7 +331,7 @@ def compare_team_models(
                     {**base, "variant": variant.key, **score_game(home_rate, away_rate, hg, ag)}
                 )
     frame = pd.DataFrame(rows)
-    return frame, summarise(frame, [(v.key, v.label) for v in TEAM_VARIANTS],
+    return frame, summarise(frame, [(v.key, v.label) for v in variants],
                             ("goals_ll", "moneyline_ll", "total_ll"), id_column="game_id")
 
 
@@ -333,8 +373,12 @@ PROP_VARIANTS: dict[str, list[tuple[str, str]]] = {
     "goals": [
         ("ixg_finishing", "ixG/60 x shrunk finishing"),
         ("ixg", "ixG/60 x league finishing"),
+        ("ixg_context_finishing", "Context ixG/60 x shrunk finishing"),
+        ("ixg_talent", "Context ixG/60 x Bayesian shooter talent (PostHockey)"),
     ],
 }
+#: Prop variants that need the context and talent columns.
+POSTHOCKEY_PROP_VARIANTS = frozenset({"ixg_context_finishing", "ixg_talent"})
 
 
 def compare_prop_rates(
@@ -351,16 +395,24 @@ def compare_prop_rates(
     logs["toi_seconds"] = pd.to_numeric(logs["toi_seconds"], errors="coerce").fillna(0)
     logs = logs[logs["toi_seconds"] > 0]
     logs = logs[logs["game_id"].astype(int).isin(covered_games)]
-    pm = player_metrics[["game_id", "player_id", "icf", "iff", "ixg"]].copy()
+    posthockey = all(
+        c in player_metrics and player_metrics[c].notna().any() for c in ("ixg_ctx", "mu_after")
+    )
+    wanted = ["icf", "iff", "ixg"] + (["ixg_ctx", "mu_after"] if posthockey else [])
+    pm = player_metrics[["game_id", "player_id", *wanted]].copy()
     logs = logs.merge(pm, on=["game_id", "player_id"], how="left")
-    for column in ("icf", "iff", "ixg"):
-        logs[column] = logs[column].fillna(0.0)
+    for column in ("icf", "iff", "ixg", "ixg_ctx"):
+        logs[column] = logs[column].fillna(0.0) if column in logs else 0.0
+    if "mu_after" not in logs:
+        logs["mu_after"] = np.nan
     logs["group"] = np.where(logs["position"].astype(str).str.upper().str[0] == "D", "D", "F")
     logs["_date"] = logs["date"].map(_as_date)
     logs = logs.dropna(subset=["_date"]).sort_values(["_date", "game_id"])
 
-    stats = ("toi_seconds", "shots_on_goal", "goals", "icf", "iff", "ixg")
-    player: dict[int, dict[str, float]] = defaultdict(lambda: dict.fromkeys(stats + ("games",), 0.0))
+    stats = ("toi_seconds", "shots_on_goal", "goals", "icf", "iff", "ixg", "ixg_ctx")
+    player: dict[int, dict[str, float]] = defaultdict(
+        lambda: dict.fromkeys(stats + ("games", "mu"), 0.0)
+    )
     recent: dict[int, deque] = defaultdict(lambda: deque(maxlen=PROP_RECENT_GAMES))
     league: dict[str, dict[str, float]] = defaultdict(lambda: dict.fromkeys(stats, 0.0))
 
@@ -396,6 +448,17 @@ def compare_prop_rates(
                     ("goals", "ixg"): per60(own, base, "ixg")
                     * (base["goals"] / base["ixg"] if base["ixg"] else 1.0),
                 }  # type: ignore[dict-item]
+                if posthockey:
+                    rates[("goals", "ixg_context_finishing")] = per60(own, base, "ixg_ctx") * share(
+                        own["goals"], own["ixg_ctx"], base["goals"], base["ixg_ctx"], FINISHING_PRIOR_XG
+                    )
+                    # Talent is a logit shift; for chances this small, exp(mu)
+                    # is the multiplier it makes on the scoring rate.
+                    rates[("goals", "ixg_talent")] = (
+                        per60(own, base, "ixg_ctx")
+                        * (base["goals"] / base["ixg_ctx"] if base["ixg_ctx"] else 1.0)
+                        * math.exp(own["mu"])
+                    )
                 for (stat, variant), rate in rates.items():
                     mean = max(rate * hours, 1e-6)
                     actual = int(getattr(row, stat))
@@ -415,13 +478,16 @@ def compare_prop_rates(
                 player[pid][stat] += value
                 league[row.group][stat] += value
             player[pid]["games"] += 1
+            if row.mu_after == row.mu_after:
+                player[pid]["mu"] = float(row.mu_after)
             recent[pid].append(float(row.toi_seconds))
 
     frame = pd.DataFrame(rows)
     summaries: dict[str, list[dict]] = {}
     for stat, variants in PROP_VARIANTS.items():
         part = frame[frame["stat"] == stat] if not frame.empty else frame
-        summaries[stat] = summarise(part, variants, ("ll",), id_column="key")
+        chosen = [v for v in variants if posthockey or v[0] not in POSTHOCKEY_PROP_VARIANTS]
+        summaries[stat] = summarise(part, chosen, ("ll",), id_column="key")
     return frame, summaries
 
 

@@ -27,19 +27,27 @@ TEAM_COLUMNS: tuple[str, ...] = (
     "en_gf", "en_ga",
     "goalie_fa", "goalie_xga", "goalie_ga",
     "pen_taken", "pen_drawn",
+    # Context xG and shooter-adjusted xG (PostHockey's flagship xGF/xGA;
+    # `_adj`, because `_sh` already means shorthanded here). NaN when the run
+    # did not build them (`--tables-only`).
+    "xgf_ctx", "xga_ctx", "xgf_adj", "xga_adj", "goalie_xga_ctx", "goalie_xga_adj",
 )
 
 PLAYER_COLUMNS: tuple[str, ...] = (
     "game_id", "season", "player_id", "team",
     "icf", "iff", "isf", "ixg", "igoals", "ihdff", "icf_pp", "ixg_pp",
+    "ixg_ctx", "ixg_adj", "mu_after",
 )
 
 GOALIE_COLUMNS: tuple[str, ...] = (
     "game_id", "season", "goalie_id", "team", "fa", "sa", "ga", "xga", "hd_fa", "hd_ga",
+    "xga_ctx", "xga_adj",
 )
 
 
 def _sum(rows: pd.DataFrame, column: str) -> float:
+    if column not in rows:
+        return float("nan")
     return float(rows[column].sum()) if not rows.empty else 0.0
 
 
@@ -100,6 +108,10 @@ def team_game_rows(events: GameEvents, shots: pd.DataFrame) -> list[dict]:
         row["goalie_fa"] = len(faced)
         row["goalie_xga"] = _sum(faced, "xg")
         row["goalie_ga"] = int(faced["goal"].sum())
+        for suffix, shot_column in (("ctx", "xg_ctx"), ("adj", "xg_sh")):
+            row[f"xgf_{suffix}"] = _sum(own, shot_column)
+            row[f"xga_{suffix}"] = _sum(opp, shot_column)
+            row[f"goalie_xga_{suffix}"] = _sum(faced, shot_column)
         out.append(row)
     return out
 
@@ -124,6 +136,14 @@ def player_game_rows(shots: pd.DataFrame) -> list[dict]:
                 "ihdff": int((mine["unblocked"] & mine["hd"]).sum()),
                 "icf_pp": len(pp),
                 "ixg_pp": float(pp["xg"].sum()),
+                "ixg_ctx": _sum(mine, "xg_ctx"),
+                "ixg_adj": _sum(mine, "xg_sh"),
+                # Talent once this game's shots are counted: what the next
+                # game may read.
+                "mu_after": (
+                    float(mine.sort_values("game_seconds")["mu_shooter_after"].iat[-1])
+                    if "mu_shooter_after" in mine else float("nan")
+                ),
             }
         )
     return rows
@@ -151,6 +171,8 @@ def goalie_game_rows(shots: pd.DataFrame) -> list[dict]:
                 "xga": float(against["xg"].sum()),
                 "hd_fa": len(hd),
                 "hd_ga": int(hd["goal"].sum()),
+                "xga_ctx": _sum(against, "xg_ctx"),
+                "xga_adj": _sum(against, "xg_sh"),
             }
         )
     return rows

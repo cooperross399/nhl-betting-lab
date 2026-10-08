@@ -12,6 +12,14 @@ play-by-play feed, builds a team model and a props rate model on them, and
 measures both walk-forward against the model the card runs. It reports to
 `data/outputs/shadow_stats.md` and nowhere else.
 
+On 2026-10-08 Cooper asked for the knowledge of PostHockey's glossary
+(posthockey.com/glossary) to go in too. What the free play-by-play supports is
+here: an expected-goals model with prior-event context (`xg.context_design_matrix`),
+shooter and goalie talent updated shot by shot (`talent`), shooter-adjusted
+xGF/xGA, GSAx(sh), GSAx+ and the A-F goalie tiers. The full measurement builds
+them; `--tables-only`, whose ratings the site and the card's team markets
+read, does not, so they cannot move those ratings.
+
 **Nothing on the card's path may import this package.** The forward ledger
 is written from the card's probability map before any gate, so a shadow
 number reaching that map would contaminate the 2027-04-25 measurement with
