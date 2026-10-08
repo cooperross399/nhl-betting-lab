@@ -1040,6 +1040,28 @@ Re-derive rather than trust if the data has moved.
   log-loss per 1,000 games [+3.46, +12.15] over 2,603 games); the price
   backtest against the bought team markets is
   `run_shadow_stats.py --price-backtest` (Shadow Stats, `price_backtest`).
+- **2026-10-08: PostHockey's glossary is in the shadow model, not the
+  card's.** Cooper asked for the knowledge of posthockey.com/glossary to go
+  into the model. Built the same way as the 2026-10-05 modern stats, beside
+  the card and measured before anything moves: a context expected-goals
+  model (`xg.context_design_matrix`, column `xg_ctx`: the play before the
+  attempt, its owner, how long ago and how far away, a rush flag, the score
+  state), Bayesian shooter and goalie talent updated shot by shot exactly as
+  the glossary's section 4 states (`shadow/talent.py`; no age drift and no
+  league-environment term, and the random-walk variances are this lab's
+  choice), shooter-adjusted xGF/xGA (`xgf_adj`/`xga_adj`, since `_sh` already
+  means shorthanded), GSAx(sh), GSAx+ and the A-F tiers. Two team variants
+  (`xg_context_luck`, `xg_shooter_gsax`) and two goals-prop variants
+  (`ixg_context_finishing`, `ixg_talent`) join the Shadow Stats
+  measurement. Only the full measurement builds them; `--tables-only`, which
+  writes the ratings the site and the card read, does not, and
+  `tests/test_shadow_posthockey.py` checks the plain columns and the ratings
+  file are unchanged. Not built: Net Rating's on-ice half, QoC/QoT, Implied
+  Purpose, xGAx, WPAx and iWPA (shift charts and a win-probability model;
+  linemates from shift charts already failed against prices here), badges
+  (a display), All Three Zones microstats (licensed to PostHockey's
+  patrons). Moving any of it onto the card is Cooper's call, after a price
+  backtest.
 - **This lab has an end date, decided before the data existed: 2027-04-25.**
   Everything measurable on bought history has been measured and comes back
   null. The single open question is whether the model beats prices on data

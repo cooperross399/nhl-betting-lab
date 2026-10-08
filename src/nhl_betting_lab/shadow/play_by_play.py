@@ -67,6 +67,23 @@ HIGH_DANGER_DEGREES = 45.0
 
 STRENGTHS = ("5v5", "PP", "SH", "EV", "EA")
 
+#: The previous event before an attempt, as the context expected-goals model
+#: reads it (PostHockey's "prior-event context"). Every other play type is
+#: "other"; an attempt with nothing earlier in its period reads "none".
+PRIOR_EVENTS: dict[str, str] = {
+    "faceoff": "faceoff",
+    "hit": "hit",
+    "giveaway": "giveaway",
+    "takeaway": "takeaway",
+    "goal": "attempt",
+    "shot-on-goal": "attempt",
+    "missed-shot": "attempt",
+    "blocked-shot": "block",
+}
+
+#: An attempt this soon after a play outside the attacking zone is a rush.
+RUSH_SECONDS = 4
+
 
 def fetch_play_by_play(
     game_id: int,
@@ -220,12 +237,29 @@ def game_events(payload: Mapping[str, Any]) -> GameEvents:
         return number, kind
 
     last_attempt: dict[str, tuple[int, int]] = {}
+    score: dict[str, int] = {home: 0, away: 0}
+    #: The play before this one in the same period: (period, clock, kind,
+    #: owner, x, y, zone). Stamped on every attempt as its context.
+    prior: tuple[int, int, str, str | None, float | None, float | None, str] | None = None
     for index, play in enumerate(plays):
         period, kind = period_of(play)
         if kind == "SO":
             continue
         clock = clock_seconds(play.get("timeInPeriod"))
         situation = parse_situation(play.get("situationCode"))
+        before = prior if prior is not None and prior[0] == period else None
+        if clock is not None:
+            prior_details = play.get("details") or {}
+            owner_id = _int_or_none(prior_details.get("eventOwnerTeamId"))
+            prior = (
+                period,
+                clock,
+                PRIOR_EVENTS.get(str(play.get("typeDescKey") or ""), "other"),
+                teams.get(owner_id) if owner_id is not None else None,
+                _float_or_none(prior_details.get("xCoord")),
+                _float_or_none(prior_details.get("yCoord")),
+                str(prior_details.get("zoneCode") or "").upper(),
+            )
 
         # Ice time: the gap to the next event in the same period belongs to
         # this event's situation.
@@ -292,6 +326,10 @@ def game_events(payload: Mapping[str, Any]) -> GameEvents:
         )
         if event != "block":
             last_attempt[team] = (period, clock)
+        context = prior_context(before, team=team, clock=clock, x=_float_or_none(x), y=_float_or_none(y))
+        score_diff = score[team] - score[opponent]
+        if event == "goal":
+            score[team] += 1
         result.shots.append(
             {
                 "game_id": result.game_id,
@@ -312,9 +350,49 @@ def game_events(payload: Mapping[str, Any]) -> GameEvents:
                 "strength": strength_for(situation, home=is_home),
                 "empty_net": net_empty,
                 "rebound": bool(rebound),
+                "score_diff": score_diff,
+                **context,
             }
         )
     return result
+
+
+def _float_or_none(value: object) -> float | None:
+    try:
+        number = float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+    return number if number == number else None
+
+
+def prior_context(
+    before: tuple | None, *, team: str, clock: int, x: float | None, y: float | None
+) -> dict[str, Any]:
+    """What happened just before an attempt, from the shooting side's view.
+
+    `prior_event` is the previous play in the period ("none" when there is
+    none), `prior_same_team` whether the shooting side owned it, and
+    `prior_seconds` and `prior_feet` how long ago and how far away it was
+    (NaN when a clock or a location is missing). `rush` is an attempt within
+    `RUSH_SECONDS` of a play in the neutral zone or the shooting side's own
+    end; zone codes are from the owner's point of view, so an opponent's
+    offensive-zone play is the shooter's own end.
+    """
+    if before is None:
+        return {"prior_event": "none", "prior_same_team": False,
+                "prior_seconds": float("nan"), "prior_feet": float("nan"), "rush": False}
+    _, prior_clock, kind, owner, px, py, zone = before
+    seconds = float(clock - prior_clock) if clock >= prior_clock else float("nan")
+    feet = (
+        math.hypot(x - px, y - py)
+        if None not in (x, y, px, py)
+        else float("nan")
+    )
+    same = owner == team
+    outside = zone == "N" or (same and zone == "D") or (owner is not None and not same and zone == "O")
+    rush = bool(outside and seconds == seconds and seconds <= RUSH_SECONDS)
+    return {"prior_event": kind, "prior_same_team": bool(same), "prior_seconds": seconds,
+            "prior_feet": feet, "rush": rush}
 
 
 def is_high_danger(distance: float, angle: float) -> bool:

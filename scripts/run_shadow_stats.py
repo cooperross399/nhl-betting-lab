@@ -48,7 +48,8 @@ from nhl_betting_lab.verdicts import ships
 from nhl_betting_lab.shadow import measurement
 from nhl_betting_lab.shadow.metrics import build_tables
 from nhl_betting_lab.shadow.play_by_play import fetch_play_by_play, game_events
-from nhl_betting_lab.shadow.xg import add_expected_goals
+from nhl_betting_lab.shadow.talent import add_talent, goalie_tier, gsax_plus
+from nhl_betting_lab.shadow.xg import add_expected_goals, context_design_matrix
 
 #: The team ratings the public site's board is rated on (`--tables-only`).
 RATINGS_FILE = "shadow_team_ratings.json"
@@ -67,7 +68,76 @@ def _fmt(cell: dict) -> str:
     return f"{cell['per_1000']:+.2f} [{cell['low']:+.2f}, {cell['high']:+.2f}]"
 
 
-def render(payload: dict, table: pd.DataFrame, goalies: pd.DataFrame, shooters: pd.DataFrame) -> str:
+def posthockey_tables(
+    goalie_table: pd.DataFrame,
+    latest: int,
+    goalies_after: dict,
+    shooters_after: dict,
+    names: dict,
+    player_table: pd.DataFrame,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """The latest season's goalies and shooters as PostHockey reports them.
+
+    Goalies (10 or more games): GSAx(sh) against shooter-adjusted xG,
+    GSAx+ (mean 100, SD 15 across them), Fenwick save percentage against
+    its expectation (dFsv%), and the save-talent posterior with its A-F tier.
+    Shooters: the ten highest finishing-talent posteriors among those with
+    150 or more unblocked attempts counted, beside their goals above ixG.
+    Empty when the run built no talent.
+    """
+    if not goalies_after or "xga_adj" not in goalie_table or goalie_table["xga_adj"].isna().all():
+        return pd.DataFrame(), pd.DataFrame()
+    regular = goalie_table[
+        (goalie_table["season"] == latest) & (goalie_table["game_id"].astype(str).str[4:6] == "02")
+    ]
+    g = regular.groupby("goalie_id").agg(
+        GP=("game_id", "nunique"), FA=("fa", "sum"), GA=("ga", "sum"), xGA_sh=("xga_adj", "sum")
+    )
+    g = g[g["GP"] >= 10]
+    if g.empty:
+        goalies = pd.DataFrame()
+    else:
+        g["GSAx(sh)"] = g["xGA_sh"] - g["GA"]
+        g["GSAx+"] = gsax_plus(g["GSAx(sh)"])
+        g["dFsv%"] = 100 * ((1 - g["GA"] / g["FA"]) - (1 - g["xGA_sh"] / g["FA"]))
+        post = [goalies_after.get(i) for i in g.index]
+        g["Save talent"] = [p.mean if p else float("nan") for p in post]
+        g["Tier"] = [goalie_tier(p.mean, p.variance**0.5) if p else "" for p in post]
+        g.insert(0, "Goalie", [names.get(i, str(i)) for i in g.index])
+        g = g.sort_values("GSAx(sh)", ascending=False)
+        g = g if len(g) <= 10 else pd.concat([g.head(5), g.tail(5)])
+        goalies = g.drop(columns=["FA", "xGA_sh"]).round(3)
+    rows = []
+    for pid, post in shooters_after.items():
+        mine = player_table[player_table["player_id"] == pid]
+        attempts = int(mine["iff"].sum()) if not mine.empty else 0
+        if attempts < 150:
+            continue
+        rows.append(
+            {
+                "Player": names.get(pid, str(pid)),
+                "Unblocked attempts": attempts,
+                "Goals": int(mine["igoals"].sum()),
+                "GAx (context xG)": round(float(mine["igoals"].sum() - mine["ixg_ctx"].sum()), 1),
+                "Finishing talent": round(post.mean, 3),
+                "Talent SD": round(post.variance**0.5, 3),
+            }
+        )
+    shooters = (
+        pd.DataFrame(rows).sort_values("Finishing talent", ascending=False).head(10)
+        if rows else pd.DataFrame()
+    )
+    return goalies, shooters
+
+
+def render(
+    payload: dict,
+    table: pd.DataFrame,
+    goalies: pd.DataFrame,
+    shooters: pd.DataFrame,
+    talent_goalies: pd.DataFrame | None = None,
+    talent_shooters: pd.DataFrame | None = None,
+) -> str:
     v = payload["validation"]
     lines = [
         "# Shadow model: modern stats against the card's model",
@@ -101,6 +171,21 @@ def render(payload: dict, table: pd.DataFrame, goalies: pd.DataFrame, shooters: 
             f"| {s['season']} | {', '.join(map(str, s['fitted_on']))} | {s['attempts']:,} | "
             f"{s['goals']:,} | {s['expected']:,.0f} | {'no (not compared)' if s['in_sample'] else 'yes'} |"
         )
+    if payload.get("context_xg_seasons"):
+        lines += [
+            "",
+            "Context expected goals (PostHockey's prior-event context: the play "
+            "before the attempt, how long ago and how far away, a rush flag, the "
+            "score), each season fitted only on earlier seasons:",
+            "",
+            "| Season | Fitted on | Unblocked attempts | Goals | Context xG | Out of sample |",
+            "|:--|:--|--:|--:|--:|:--|",
+        ]
+        for s in payload["context_xg_seasons"]:
+            lines.append(
+                f"| {s['season']} | {', '.join(map(str, s['fitted_on']))} | {s['attempts']:,} | "
+                f"{s['goals']:,} | {s['expected']:,.0f} | {'no (not compared)' if s['in_sample'] else 'yes'} |"
+            )
     lines += [
         "",
         "## Team strength: rated on each stat instead of goals",
@@ -153,6 +238,30 @@ def render(payload: dict, table: pd.DataFrame, goalies: pd.DataFrame, shooters: 
         lines += ["", "## Goals saved above expected, latest season (min. 20 games)", "", goalies.to_markdown(index=False)]
     if not shooters.empty:
         lines += ["", "## Individual expected goals per 60, latest season (min. 500 minutes)", "", shooters.to_markdown(index=False)]
+    if talent_goalies is not None and not talent_goalies.empty:
+        lines += [
+            "",
+            "## Goalies as PostHockey rates them, latest season (min. 10 games)",
+            "",
+            "GSAx(sh) is goals saved above shooter-adjusted xG; GSAx+ rescales it "
+            "to mean 100, SD 15 across these goalies; dFsv% is Fenwick save "
+            "percentage minus its expectation; save talent is the posterior on "
+            "the logit scale (positive saves more), and the tier says where its "
+            "one-sigma band sits against average (A wholly above, F wholly below).",
+            "",
+            talent_goalies.to_markdown(index=False),
+        ]
+    if talent_shooters is not None and not talent_shooters.empty:
+        lines += [
+            "",
+            "## Finishing talent, highest posteriors (min. 150 unblocked attempts)",
+            "",
+            "Logit-scale shift on context xG, updated shot by shot from the "
+            "earliest season on disk and re-centred each season. A small SD "
+            "means many shots; zero is league average.",
+            "",
+            talent_shooters.to_markdown(index=False),
+        ]
     lines += [
         "",
         "## Not built, and why",
@@ -165,6 +274,15 @@ def render(payload: dict, table: pd.DataFrame, goalies: pd.DataFrame, shooters: 
         "goaltending here is the team's goalies together.",
         "- Score-adjusted 5v5 and a separate 5v5-plus-special-teams scoreline: not "
         "built yet; all-situations xG already carries the power play.",
+        "- From PostHockey's glossary: Net Rating's on-ice half, Quality of "
+        "Competition and Teammates, Implied Purpose, xGAx, WPAx and iWPA all "
+        "need shift charts and a win-probability model; linemates from shift "
+        "charts were already tested here against prices and did not beat them. "
+        "Badges are a display of the same numbers. All Three Zones microstats "
+        "are licensed to PostHockey's Patreon patrons.",
+        "- Talent here has no age drift (no birth dates on the shot table) and "
+        "no league scoring-environment term (each season's base model carries "
+        "its own intercept).",
     ]
     return "\n".join(lines) + "\n"
 
@@ -243,6 +361,20 @@ def main(argv: list[str] | None = None) -> int:
         print("No play-by-play on disk; run with --fetch.", file=sys.stderr)
         return 1
     scored, seasons = add_expected_goals(shots)
+    shooters_after: dict = {}
+    goalies_after: dict = {}
+    context_seasons: list = []
+    if not (args.tables_only or args.price_backtest):
+        # PostHockey's glossary (posthockey.com/glossary): context xG, then
+        # shooter and goalie talent updated shot by shot. Only the full
+        # measurement builds them; the ratings the site and the card read come
+        # from `xg` alone and do not move.
+        scored, context_seasons = add_expected_goals(
+            scored, column="xg_ctx", design=context_design_matrix
+        )
+        dates = team_games.drop_duplicates("game_id").set_index("game_id")["date"].astype(str)
+        scored["date"] = scored["game_id"].map(dates).fillna("")
+        scored, shooters_after, goalies_after = add_talent(scored, base="xg_ctx", order="date")
     team_table, player_table, goalie_table = build_tables(events, scored)
     validation = measurement.validate_against_boxscores(team_games, team_table)
     if (args.tables_only or args.price_backtest) and not _agrees(validation):
@@ -301,6 +433,9 @@ def main(argv: list[str] | None = None) -> int:
     g["GSAx"] = g["xGA"] - g["GA"]
     g.insert(0, "Goalie", [names.get(i, str(i)) for i in g.index])
     goalies = pd.concat([g.nlargest(5, "GSAx"), g.nsmallest(5, "GSAx")]).round(1)
+    talent_goalies, talent_shooters = posthockey_tables(
+        goalie_table, latest, goalies_after, shooters_after, names, player_table
+    )
     toi = regular(logs[pd.to_numeric(logs["season"], errors="coerce") == latest]) if not logs.empty else logs
     p = regular(player_table[player_table["season"] == latest]).groupby("player_id")[["ixg", "igoals", "icf"]].sum()
     if not toi.empty:
@@ -321,6 +456,7 @@ def main(argv: list[str] | None = None) -> int:
         "unattributed": int(sum(e.unattributed for e in events)),
         "validation": validation,
         "xg_seasons": [s.__dict__ for s in seasons],
+        "context_xg_seasons": [s.__dict__ for s in context_seasons],
         "team_games_scored": int(team_rows["game_id"].nunique()) if not team_rows.empty else 0,
         "team": team_summary,
         "props": prop_summary,
@@ -331,7 +467,7 @@ def main(argv: list[str] | None = None) -> int:
     (args.output_dir / "shadow_stats.json").write_text(
         json.dumps(payload, indent=2, default=str) + "\n", encoding="utf-8"
     )
-    report = render(payload, table, goalies, shooters)
+    report = render(payload, table, goalies, shooters, talent_goalies, talent_shooters)
     (args.output_dir / "shadow_stats.md").write_text(report, encoding="utf-8")
     print(report)
 

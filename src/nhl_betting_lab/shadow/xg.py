@@ -6,6 +6,13 @@ distance, angle, shot type, rebound, strength and an empty net. The public
 models (Evolving-Hockey, MoneyPuck, HockeyViz) use the same core features and
 agree that distance and angle carry most of the signal.
 
+`context_design_matrix` adds what PostHockey's glossary
+(posthockey.com/glossary, section 3) names "prior-event context": what the
+play before the attempt was, whether the shooting side owned it, how long ago
+and how far away it was, a rush flag, and the score. It feeds the `xg_ctx`
+column; `xg` stays the plain model, because the site's and the card's team
+ratings are built on it and a shadow change must not move them.
+
 **A season's xG comes from a model fitted on the seasons before it.** The
 earliest season has no earlier season, so it is fitted on itself and every
 figure built on it is marked in-sample and kept out of the walk-forward
@@ -14,7 +21,7 @@ comparison.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 import numpy as np
@@ -63,19 +70,68 @@ def design_matrix(shots: pd.DataFrame) -> np.ndarray:
     return np.column_stack([np.asarray(c, dtype=float) for c in columns])
 
 
+PRIOR_TERMS: tuple[str, ...] = ("faceoff", "hit", "giveaway", "takeaway", "block", "none")
+
+
+def _column(shots: pd.DataFrame, name: str, default: object) -> pd.Series:
+    if name in shots:
+        return shots[name]
+    return pd.Series(default, index=shots.index)
+
+
+def context_design_matrix(shots: pd.DataFrame) -> np.ndarray:
+    """`design_matrix` plus the prior event, rush, and score state.
+
+    A shot whose prior play was another attempt is the reference; an attempt
+    by the same side that soon after its own is already the rebound term.
+    Missing context (a synthetic frame, an old feed) reads as no context.
+    """
+    base = design_matrix(shots)
+    kind = _column(shots, "prior_event", "none").astype(str)
+    same = _column(shots, "prior_same_team", False).fillna(False).astype(float)
+    seconds = pd.to_numeric(_column(shots, "prior_seconds", np.nan), errors="coerce")
+    feet = pd.to_numeric(_column(shots, "prior_feet", np.nan), errors="coerce")
+    known = (seconds.notna() & feet.notna()).astype(float)
+    seconds = seconds.fillna(30.0).clip(0.0, 120.0)
+    feet = feet.fillna(0.0).clip(0.0, 200.0)
+    speed = (feet / seconds.clip(lower=1.0)).clip(0.0, 100.0)
+    diff = pd.to_numeric(_column(shots, "score_diff", 0), errors="coerce").fillna(0)
+    period = pd.to_numeric(_column(shots, "period", 1), errors="coerce").fillna(1)
+    columns = [(kind == term).astype(float) for term in PRIOR_TERMS]
+    columns += [
+        same,
+        np.log1p(seconds),
+        feet / 50.0,
+        speed / 20.0 * known,
+        known,
+        _column(shots, "rush", False).fillna(False).astype(float),
+        (diff > 0).astype(float),
+        (diff < 0).astype(float),
+        (period >= 3).astype(float) * diff.clip(-2, 2),
+    ]
+    extra = np.column_stack([np.asarray(c, dtype=float) for c in columns])
+    return np.column_stack([base, extra])
+
+
+Design = Callable[[pd.DataFrame], np.ndarray]
+
+
 @dataclass
 class XgModel:
     coefficients: np.ndarray
     attempts: int
     goals: int
+    design: Design = design_matrix
 
     @classmethod
-    def fit(cls, shots: pd.DataFrame, *, iterations: int = 50) -> "XgModel":
+    def fit(
+        cls, shots: pd.DataFrame, *, iterations: int = 50, design: Design = design_matrix
+    ) -> "XgModel":
         """Logistic regression by Newton's method on unblocked attempts."""
         unblocked = shots[shots["unblocked"].astype(bool)]
         if unblocked.empty:
             raise ValueError("No unblocked attempts to fit expected goals on.")
-        x = design_matrix(unblocked)
+        x = design(unblocked)
         y = unblocked["goal"].astype(float).to_numpy()
         beta = np.zeros(x.shape[1])
         rate = min(max(y.mean(), 1e-4), 1 - 1e-4)
@@ -91,13 +147,13 @@ class XgModel:
             beta = beta + step
             if np.max(np.abs(step)) < 1e-8:
                 break
-        return cls(coefficients=beta, attempts=len(unblocked), goals=int(y.sum()))
+        return cls(coefficients=beta, attempts=len(unblocked), goals=int(y.sum()), design=design)
 
     def predict(self, shots: pd.DataFrame) -> np.ndarray:
         """Goal probability per attempt; zero for a blocked one."""
         if shots.empty:
             return np.zeros(0)
-        p = 1.0 / (1.0 + np.exp(-(design_matrix(shots) @ self.coefficients)))
+        p = 1.0 / (1.0 + np.exp(-(self.design(shots) @ self.coefficients)))
         return np.where(shots["unblocked"].astype(bool).to_numpy(), p, 0.0)
 
 
@@ -111,20 +167,22 @@ class SeasonXg:
     expected: float
 
 
-def add_expected_goals(shots: pd.DataFrame) -> tuple[pd.DataFrame, list[SeasonXg]]:
-    """`shots` with `xg` and `season` columns, each season scored out of sample."""
+def add_expected_goals(
+    shots: pd.DataFrame, *, column: str = "xg", design: Design = design_matrix
+) -> tuple[pd.DataFrame, list[SeasonXg]]:
+    """`shots` with `column` and `season` columns, each season scored out of sample."""
     frame = shots.copy()
     frame["season"] = frame["game_id"].map(season_of)
-    frame["xg"] = 0.0
+    frame[column] = 0.0
     record: list[SeasonXg] = []
     seasons: Sequence[int] = sorted(frame["season"].unique())
     for season in seasons:
         earlier = [s for s in seasons if s < season]
         in_sample = not earlier
         training = frame[frame["season"].isin(earlier or [season])]
-        model = XgModel.fit(training)
+        model = XgModel.fit(training, design=design)
         mask = frame["season"] == season
-        frame.loc[mask, "xg"] = model.predict(frame[mask])
+        frame.loc[mask, column] = model.predict(frame[mask])
         rows = frame[mask & frame["unblocked"].astype(bool)]
         record.append(
             SeasonXg(
@@ -133,7 +191,7 @@ def add_expected_goals(shots: pd.DataFrame) -> tuple[pd.DataFrame, list[SeasonXg
                 in_sample=in_sample,
                 attempts=len(rows),
                 goals=int(rows["goal"].sum()),
-                expected=float(rows["xg"].sum()),
+                expected=float(rows[column].sum()),
             )
         )
     return frame, record
