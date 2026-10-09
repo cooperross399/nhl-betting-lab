@@ -177,6 +177,14 @@ props            {status, note, marketNotes, rows[]} | absent (absent renders "P
                  allowlisted (bool), starterConfirmed (true|false|null — null: not a goalie market),
                  espnId (optional — ESPN athlete id; the live tracker matches on it before falling back to name + team)
                  A row with starterConfirmed false is never written as kind "bet".
+                 Written by build_site_json.py::build_props (2026-10-09) from gameday_card.json's best bets and leans
+                 in the seven prop markets, for the board's own league day, joined to a game through the same provider
+                 team names as `pick`. Every figure is the card's: price = american_odds, book, modelProb =
+                 model_probability, fairPrice = fair_american, edgePct = edge x 100, tier and units (best bets only;
+                 null on a lean). projection is null (the card carries no projected count). playerId, team, opp and
+                 position come from the player's newest row in data/processed/player_game_logs.csv, and are null
+                 (position "") when the logs name no one player on either club. Passes are never listed; the note
+                 counts them. A market the card excluded is named in marketNotes as excluded, never as a pass.
 ```
 
 ### results.json
@@ -189,6 +197,10 @@ props            {status, note, summary, season, rows[]} | absent
                  result ("win"|"loss"|"push"|"void"|null), profitUnits (number, best bets only)
 ```
 Props are never counted in `summary.picks` or `record`; team picks are never counted in `props.summary`.
+Graded by build_site_json.py::grade_props on the frozen board's rows and the box-score logs, by the forward
+ledger's rules: a player with no row in a game the logs hold is void; a saves prop on a goalie under 2,400 seconds
+of ice time is void; a game not final or not yet in the logs is result null (ungraded, and the night is settled
+again); profitUnits = units x the published price's profit per unit on a win, -units on a loss, 0 on a push or void.
 
 ### Live scores (browser only, not written by the pipeline)
 The Board reads ESPN's public scoreboard (`site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard?dates=YYYYMMDD`, from `boardDate`) and, for open live games, the game summary (`.../summary?event=ID`). Mapping tables live in `lib/live.js`: `ESPN_TO_BOARD` (team codes) and `PROP_STATS` (prop market → box-score column).

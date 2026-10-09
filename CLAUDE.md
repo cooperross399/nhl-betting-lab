@@ -2292,6 +2292,24 @@ Re-derive rather than trust if the data has moved.
   2026-10-07 (later): renamed to Due List, Cooper's name for it, on every
   page and the card; identifiers keep `drought`.
 
+- **2026-10-09: the card's player props are on the public site.** Cooper:
+  "player props need to be posting to the website". The pages had rendered a
+  `props` block since the 2026-10-07 drop, and `season_record` summed one,
+  but nothing wrote it, so every board read "Props are not on this board".
+  `web/build_site_json.py::build_props` now writes the card's prop best bets
+  and leans for the board's league day, every figure the card's own (price,
+  book, model probability, edge, tier, units), joined to a game through the
+  provider names the team pick uses; passes are counted in the note, never
+  listed; an excluded market is named as excluded. `grade_props` settles the
+  frozen rows the next morning on the box-score logs by the forward ledger's
+  rules (no row in a boxed game is void, a goalie under 2,400 seconds is
+  void, no box score yet waits). Site only: the card, the snapshot, the
+  forward ledger, the model, the edge bar, the market list and the staking
+  rule are untouched. It publishes the card's best price and book per prop,
+  as the board already did for team picks and the Due List; no capture
+  store, line history or closing price reaches the site.
+  `tests/test_the_site_publishes_the_cards_props.py`.
+
 ## Contract strings — never change these
 
 Cooper's local scheduled tasks hard-code these. Renaming any of them silently
