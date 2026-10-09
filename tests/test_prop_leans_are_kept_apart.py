@@ -8,9 +8,11 @@ on board.json. `season_record` sums each settled night's published props rows
 none; a pass, a void or an ungraded row into neither. A lean is never in
 `props`, `props.season`, `summary.picks` or `record.picks`.
 
-The builder publishes no props block yet, so these tests attach one to each
-settled night's results in the shape SCHEMA.md gives, around the real
-`settle()`, and drive the real `main()` over three nights.
+These tests attach a props block to each settled night's results in the
+shape SCHEMA.md gives, around the real `settle()` (which since 2026-10-09
+grades the builder's own block, tests/test_the_site_publishes_the_cards_props.py),
+and drive the real `main()` over three nights. A night whose block holds no
+row is not a night of props.
 """
 
 from __future__ import annotations
@@ -88,10 +90,14 @@ def test_the_season_sums_every_night_that_carried_props_and_no_other(tmp_path: P
     assert board["record"]["propLeans"] == {"w": 2, "l": 2, "p": 0, "nights": 2}
     assert results["seasonRecord"]["props"] == board["record"]["props"]
     assert results["seasonRecord"]["propLeans"] == board["record"]["propLeans"]
-    # D2's results carry no props block, so no season line is written into one.
-    assert "props" not in results
-    kept = json.loads((out / "history" / "settled" / f"{D0.isoformat()}.json").read_text(encoding="utf-8"))
-    assert kept["props"] == {"bets": {"w": 1, "l": 1, "p": 1, "units": 0.37}, "leans": {"w": 2, "l": 1, "p": 0}}
+    # D2's block holds no row: it carries the season line and adds no night.
+    assert results["props"]["rows"] == []
+    assert results["props"]["season"] == board["record"]["props"]
+    # D0 holds an ungraded bet (its box score not yet in the logs), so the
+    # night is settled again each run rather than kept, as the Due List's is.
+    assert not (out / "history" / "settled" / f"{D0.isoformat()}.json").exists()
+    kept = json.loads((out / "history" / "settled" / f"{D1.isoformat()}.json").read_text(encoding="utf-8"))
+    assert kept["props"] == {"bets": {"w": 1, "l": 0, "p": 0, "units": 0.5}, "leans": {"w": 0, "l": 1, "p": 0}, "pending": 0}
 
 
 def test_leans_are_never_in_the_picks_record(tmp_path: Path, monkeypatch) -> None:

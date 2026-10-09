@@ -256,13 +256,157 @@ def _verdict(low: float, high: float) -> str:
     return "no demonstrated difference"
 
 
+#: Tonight's starter instead of the team's goalies together (asked by Cooper
+#: on 2026-10-09). Both keep `xg_luck`'s attack, defence and finishing and
+#: swap only the goaltending factor, so the difference is the goalie.
+STARTER_VARIANTS: tuple[tuple[str, str], ...] = (
+    (
+        "xg_starter_actual",
+        "xG, recent, finishing, plus the actual starter's own GSAx (a ceiling)",
+    ),
+    (
+        "xg_starter_projected",
+        "xG, recent, finishing, plus the projected starter's own GSAx",
+    ),
+)
+#: The variant the starter variants are also scored against: the ratings the
+#: card's team markets run on since 2026-10-06.
+STARTER_REFERENCE = SITE_VARIANT_KEY
+#: How far back a back-to-back projection looks for the team's other goalie.
+STARTER_LOOKBACK_GAMES = 20
+#: A goalie's appearance counts as at most this many full games of evidence,
+#: on unblocked attempts faced against the league's per-game mean.
+MAX_GAME_FRACTION = 1.5
+
+
+def game_starters(goalie_games: pd.DataFrame) -> pd.DataFrame:
+    """The goalie who started for each side: game_id, team, goalie_id.
+
+    The play-by-play names the goalie in net for every attempt; the starter
+    is taken as the one who faced the most unblocked attempts for his team
+    (ties to the one who faced more shots on goal). A starter pulled early
+    behind a reliever who then faced more is mislabelled; that is rare and
+    is the same for both starter variants.
+    """
+    if goalie_games.empty:
+        return pd.DataFrame(columns=["game_id", "team", "goalie_id"])
+    frame = goalie_games.copy()
+    frame["game_id"] = pd.to_numeric(frame["game_id"], errors="coerce")
+    frame = frame.dropna(subset=["game_id", "goalie_id"])
+    frame = frame.sort_values(["game_id", "team", "fa", "sa"], ascending=[True, True, False, False])
+    first = frame.drop_duplicates(["game_id", "team"], keep="first")
+    out = first[["game_id", "team", "goalie_id"]].copy()
+    out["game_id"] = out["game_id"].astype(int)
+    out["goalie_id"] = out["goalie_id"].astype(int)
+    out["team"] = out["team"].astype(str)
+    return out.reset_index(drop=True)
+
+
+def project_starters(starters: pd.DataFrame, games: pd.DataFrame) -> dict[tuple[int, str], int]:
+    """The starter a card could name before puck drop, per (game_id, team).
+
+    Last game's starter; on the second night of a back-to-back, the goalie
+    who made the most of the team's other starts over its last
+    `STARTER_LOOKBACK_GAMES` games (the latest of them on a tie), or last
+    game's starter when there is none. Reads only games dated before the
+    one projected. `games` carries `game_id`, `date`, `home_team`,
+    `away_team`, `home_b2b` and `away_b2b`.
+    """
+    started = {(int(r.game_id), str(r.team)): int(r.goalie_id) for r in starters.itertuples()}
+    sides: list[tuple[str, str, int, str, bool]] = []
+    for row in games.itertuples():
+        day = str(row.date)[:10]
+        sides.append((day, str(row.home_team), int(row.game_id), "home", bool(row.home_b2b)))
+        sides.append((day, str(row.away_team), int(row.game_id), "away", bool(row.away_b2b)))
+    sides.sort()
+    history: dict[str, list[tuple[str, int]]] = defaultdict(list)
+    projected: dict[tuple[int, str], int] = {}
+    pending: list[tuple[str, int, str]] = []
+    current_day = None
+    for day, team, gid, _, b2b in sides:
+        if day != current_day:
+            # Starters of a day become history only once the day is over.
+            for t, g, d in pending:
+                if (g, t) in started:
+                    history[t].append((d, started[(g, t)]))
+            pending = []
+            current_day = day
+        past = history[team]
+        if past:
+            last = past[-1][1]
+            choice = last
+            if b2b:
+                recent = [goalie for _, goalie in past[-STARTER_LOOKBACK_GAMES:]]
+                others = [goalie for goalie in recent if goalie != last]
+                if others:
+                    counts: dict[int, int] = defaultdict(int)
+                    for goalie in others:
+                        counts[goalie] += 1
+                    top = max(counts.values())
+                    choice = next(g for g in reversed(others) if counts[g] == top)
+            projected[(gid, team)] = choice
+        pending.append((team, gid, day))
+    return projected
+
+
+def goalie_factors(goalie_history: pd.DataFrame) -> dict[int, float]:
+    """Each goalie's goals against over his expected, regressed toward 1.0.
+
+    Built like the team goaltending factor in `shadow_factors` (a game's
+    weight halves every `HALF_LIFE_GAMES` of his appearances, an earlier
+    season's again, and `LUCK_SHRINKAGE_GAMES` of regression), but over the
+    goalie's own appearances on any team, so it follows him through a trade.
+    A relief appearance counts as the fraction of a game he faced.
+    """
+    if goalie_history.empty:
+        return {}
+    frame = goalie_history.dropna(subset=["goalie_id"]).copy()
+    frame["fa"] = pd.to_numeric(frame["fa"], errors="coerce").fillna(0.0)
+    per_game = float(frame.groupby(["game_id", "team"])["fa"].sum().mean() or 0.0)
+    if per_game <= 0:
+        return {}
+    frame = frame.sort_values(["goalie_id", "_date"], ascending=[True, False])
+    rank = frame.groupby("goalie_id").cumcount()
+    latest = frame.groupby("goalie_id")["season"].transform("max")
+    frame["_f"] = np.minimum(frame["fa"].to_numpy(dtype=float) / per_game, MAX_GAME_FRACTION)
+    frame["_d"] = np.power(0.5, rank / HALF_LIFE_GAMES) * np.where(
+        frame["season"] < latest, 0.5, 1.0
+    )
+    out: dict[int, float] = {}
+    for goalie, rows in frame.groupby("goalie_id"):
+        decay = rows["_d"].to_numpy(dtype=float)
+        fraction = rows["_f"].to_numpy(dtype=float)
+        squares = float((decay**2).sum())
+        if squares <= 0 or decay.sum() <= 0:
+            continue
+        # The team factor's effective games, scaled by the share of a game
+        # his appearances amounted to (an effective-n alone ignores scale).
+        games = float(decay.sum()) ** 2 / squares * float(
+            (decay * fraction).sum() / decay.sum()
+        )
+        w = decay * fraction
+        out[int(goalie)] = _shrunk_ratio(
+            float((w * rows["ga"].astype(float)).sum()),
+            float((w * rows["xga"].astype(float)).sum()),
+            games,
+            LUCK_SHRINKAGE_GAMES,
+        )
+    return out
+
+
 def compare_team_models(
     team_games: pd.DataFrame,
     team_metrics: pd.DataFrame,
     *,
     scored_seasons: set[int],
+    goalie_games: pd.DataFrame | None = None,
 ) -> tuple[pd.DataFrame, list[dict]]:
-    """Per-game log-likelihoods for the card's model and every shadow variant."""
+    """Per-game log-likelihoods for the card's model and every shadow variant.
+
+    With `goalie_games` (the play-by-play goalie table), the starter variants
+    are scored too, and `frame.attrs["starter_projection"]` says how often the
+    projected starter was the actual one on the games scored.
+    """
     games = team_games.copy()
     games = games[pd.to_numeric(games["game_type"], errors="coerce") == 2]
     for column in ("home_goals", "away_goals"):
@@ -280,6 +424,22 @@ def compare_team_models(
     rows: list[dict] = []
     if games.empty:
         return pd.DataFrame(rows), []
+    starter_on = (
+        goalie_games is not None
+        and not goalie_games.empty
+        and any(v.key == STARTER_REFERENCE for v in variants)
+    )
+    actual: dict[tuple[int, str], int] = {}
+    projected: dict[tuple[int, str], int] = {}
+    goalie_frame = pd.DataFrame()
+    projection_hits = projection_known = 0
+    if starter_on:
+        goalie_frame = goalie_games.copy()
+        goalie_frame["game_id"] = pd.to_numeric(goalie_frame["game_id"], errors="coerce")
+        goalie_frame = goalie_frame.merge(games[["game_id", "_date"]], on="game_id", how="inner")
+        starters = game_starters(goalie_frame)
+        actual = {(int(r.game_id), str(r.team)): int(r.goalie_id) for r in starters.itertuples()}
+        projected = project_starters(starters, games)
     window_start = games["_date"].min()
     last = games["_date"].max()
     while window_start <= last:
@@ -295,6 +455,11 @@ def compare_team_models(
             v.key: shadow_factors(shadow_history, v, current.home_advantage)
             for v in variants
         }
+        own_goalie = (
+            goalie_factors(goalie_frame[goalie_frame["_date"] < window["_date"].min()])
+            if starter_on
+            else {}
+        )
         half = current.league_goals_per_game / 2.0
         for game in window.itertuples():
             gid = int(game.game_id)
@@ -330,9 +495,58 @@ def compare_team_models(
                 rows.append(
                     {**base, "variant": variant.key, **score_game(home_rate, away_rate, hg, ag)}
                 )
+            if not starter_on:
+                continue
+            default = {"attack": 1.0, "defence": 1.0, "goalie": 1.0, "finishing": 1.0}
+            h = fitted[STARTER_REFERENCE].get(home, default)
+            a = fitted[STARTER_REFERENCE].get(away, default)
+            for key, source in (("xg_starter_actual", actual), ("xg_starter_projected", projected)):
+                # A side whose starter cannot be named keeps the team factor.
+                hg_f = own_goalie.get(source.get((gid, home), -1), None)
+                ag_f = own_goalie.get(source.get((gid, away), -1), None)
+                if (gid, home) in source and hg_f is None:
+                    hg_f = 1.0  # a goalie with no history is league average
+                if (gid, away) in source and ag_f is None:
+                    ag_f = 1.0
+                home_goalie = h["goalie"] if hg_f is None else hg_f
+                away_goalie = a["goalie"] if ag_f is None else ag_f
+                home_rate = (
+                    half * current.home_advantage * h["attack"] * a["defence"]
+                    * h["finishing"] * away_goalie * home_mult
+                )
+                away_rate = (
+                    half / current.home_advantage * a["attack"] * h["defence"]
+                    * a["finishing"] * home_goalie * away_mult
+                )
+                rows.append({**base, "variant": key, **score_game(home_rate, away_rate, hg, ag)})
+            for side in (home, away):
+                if (gid, side) in actual and (gid, side) in projected:
+                    projection_known += 1
+                    projection_hits += int(actual[(gid, side)] == projected[(gid, side)])
     frame = pd.DataFrame(rows)
-    return frame, summarise(frame, [(v.key, v.label) for v in variants],
+    labelled = [(v.key, v.label) for v in variants]
+    if starter_on:
+        labelled += list(STARTER_VARIANTS)
+        frame.attrs["starter_projection"] = {
+            "sides": projection_known,
+            "correct": projection_hits,
+            "rate": projection_hits / projection_known if projection_known else float("nan"),
+        }
+    return frame, summarise(frame, labelled,
                             ("goals_ll", "moneyline_ll", "total_ll"), id_column="game_id")
+
+
+def starter_against_card(frame: pd.DataFrame) -> list[dict]:
+    """The starter variants against the ratings the card runs on now."""
+    if frame.empty or not set(k for k, _ in STARTER_VARIANTS) & set(frame["variant"]):
+        return []
+    return summarise(
+        frame,
+        list(STARTER_VARIANTS),
+        ("goals_ll", "moneyline_ll", "total_ll"),
+        id_column="game_id",
+        reference=STARTER_REFERENCE,
+    )
 
 
 def summarise(
@@ -365,18 +579,34 @@ def summarise(
     return out
 
 
+#: Recent form (Cooper, 2026-10-09: "how individual players are playing"):
+#: a player's rate over his recent games, a game's weight halving every this
+#: many of his games, regressed toward his own long-run rate.
+PROP_FORM_HALF_LIFE_GAMES = 10
+#: Seconds of recent ice time at which form keeps half its departure from
+#: his long-run rate: the long-run rate's own shrinkage constant. Fixed in
+#: advance, not tuned.
+PROP_FORM_SHRINKAGE_SECONDS = PROP_SHRINKAGE_SECONDS
+FORM_LABEL = "Recent form (10-game half-life), regressed to his own rate"
+
 PROP_VARIANTS: dict[str, list[tuple[str, str]]] = {
     "shots_on_goal": [
         ("fenwick", "Unblocked attempts (iFF/60) x on-net share"),
         ("corsi", "All attempts (iCF/60) x on-net share"),
+        ("form", FORM_LABEL),
     ],
     "goals": [
         ("ixg_finishing", "ixG/60 x shrunk finishing"),
         ("ixg", "ixG/60 x league finishing"),
         ("ixg_context_finishing", "Context ixG/60 x shrunk finishing"),
         ("ixg_talent", "Context ixG/60 x Bayesian shooter talent (PostHockey)"),
+        ("form", FORM_LABEL),
+        ("ixg_form", "Recent-form ixG/60 x shrunk finishing"),
     ],
+    "assists": [("form", FORM_LABEL)],
+    "points": [("form", FORM_LABEL)],
 }
+FORM_STATS = ("toi_seconds", "shots_on_goal", "goals", "assists", "points", "ixg")
 #: Prop variants that need the context and talent columns.
 POSTHOCKEY_PROP_VARIANTS = frozenset({"ixg_context_finishing", "ixg_talent"})
 
@@ -409,10 +639,26 @@ def compare_prop_rates(
     logs["_date"] = logs["date"].map(_as_date)
     logs = logs.dropna(subset=["_date"]).sort_values(["_date", "game_id"])
 
-    stats = ("toi_seconds", "shots_on_goal", "goals", "icf", "iff", "ixg", "ixg_ctx")
+    for column in ("assists", "points"):
+        logs[column] = pd.to_numeric(logs[column], errors="coerce").fillna(0) if column in logs else 0
+    stats = (
+        "toi_seconds", "shots_on_goal", "goals", "assists", "points",
+        "icf", "iff", "ixg", "ixg_ctx",
+    )
     player: dict[int, dict[str, float]] = defaultdict(
         lambda: dict.fromkeys(stats + ("games", "mu"), 0.0)
     )
+    form: dict[int, dict[str, float]] = defaultdict(lambda: dict.fromkeys(FORM_STATS, 0.0))
+    form_decay = 0.5 ** (1.0 / PROP_FORM_HALF_LIFE_GAMES)
+
+    def form_rate(pid: int, long_run: float, stat: str) -> float:
+        recent_form = form[pid]
+        seconds = recent_form["toi_seconds"]
+        if seconds <= 0:
+            return long_run
+        raw = recent_form[stat] / seconds * 3600
+        weight = seconds / (seconds + PROP_FORM_SHRINKAGE_SECONDS)
+        return long_run + weight * (raw - long_run)
     recent: dict[int, deque] = defaultdict(lambda: deque(maxlen=PROP_RECENT_GAMES))
     league: dict[str, dict[str, float]] = defaultdict(lambda: dict.fromkeys(stats, 0.0))
 
@@ -448,6 +694,13 @@ def compare_prop_rates(
                     ("goals", "ixg"): per60(own, base, "ixg")
                     * (base["goals"] / base["ixg"] if base["ixg"] else 1.0),
                 }  # type: ignore[dict-item]
+                for stat in ("shots_on_goal", "goals", "assists", "points"):
+                    long_run = per60(own, base, stat)
+                    rates[(stat, "current")] = long_run
+                    rates[(stat, "form")] = form_rate(pid, long_run, stat)
+                rates[("goals", "ixg_form")] = form_rate(pid, per60(own, base, "ixg"), "ixg") * share(
+                    own["goals"], own["ixg"], base["goals"], base["ixg"], FINISHING_PRIOR_XG
+                )
                 if posthockey:
                     rates[("goals", "ixg_context_finishing")] = per60(own, base, "ixg_ctx") * share(
                         own["goals"], own["ixg_ctx"], base["goals"], base["ixg_ctx"], FINISHING_PRIOR_XG
@@ -478,6 +731,9 @@ def compare_prop_rates(
                 player[pid][stat] += value
                 league[row.group][stat] += value
             player[pid]["games"] += 1
+            recent_form = form[pid]
+            for stat in FORM_STATS:
+                recent_form[stat] = recent_form[stat] * form_decay + float(getattr(row, stat))
             if row.mu_after == row.mu_after:
                 player[pid]["mu"] = float(row.mu_after)
             recent[pid].append(float(row.toi_seconds))
