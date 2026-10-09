@@ -1,9 +1,9 @@
-**Selections changed** since the previous card — 7 best bet(s), 2.25 unit(s) staked.
+**Selections changed** since the previous card — 9 best bet(s), 2.75 unit(s) staked.
 
 # NHL gameday card
 
-- Generated: 2026-10-09T13:44:37+00:00
-- 7 best bet(s), 57 lean(s), 2009 pass(es) across 4 game(s); 2.25 unit(s) staked.
+- Generated: 2026-10-09T13:54:33+00:00
+- 9 best bet(s), 58 lean(s), 2027 pass(es) across 4 game(s); 2.75 unit(s) staked.
 - Included markets: **assists, goals, moneyline, points, puck_line, regulation_3_way, shots_on_goal, team_total, total_goals**
 - Unit size: $25
 
@@ -13,10 +13,12 @@
 |:-----|:-------|:-------|:----------|------:|-----:|------:|:-----|------:|
 | Anaheim Ducks @ Winnipeg Jets | Oct 9, 8:10 PM ET | `shots_on_goal` | Cutter Gauthier under 3.5 | 69.0% | +20.2% | +105 | Bovada | 0.5 |
 | Anaheim Ducks @ Winnipeg Jets | Oct 9, 8:10 PM ET | `assists` | Jackson LaCombe under 0.5 | 71.7% | +18.8% | -112 | Bally Bet | 0.5 |
+| Pittsburgh Penguins @ Columbus Blue Jackets | Oct 9, 7:10 PM ET | `shots_on_goal` | Dmitri Voronkov under 1.5 | 65.5% | +16.7% | +105 | Hard Rock Bet | 0.25 |
 | New York Rangers @ Washington Capitals | Oct 9, 7:10 PM ET | `shots_on_goal` | Cole Hutson under 1.5 | 60.7% | +14.2% | +115 | Bally Bet | 0.25 |
 | Seattle Kraken @ Detroit Red Wings | Oct 9, 7:10 PM ET | `shots_on_goal` | Viktor Arvidsson under 2.5 | 57.9% | +13.4% | +125 | Bovada | 0.25 |
 | Anaheim Ducks @ Winnipeg Jets | Oct 9, 8:10 PM ET | `goals` | Cutter Gauthier under 0.5 | 73.3% | +13.3% | -150 | theScore Bet | 0.25 |
 | Seattle Kraken @ Detroit Red Wings | Oct 9, 7:10 PM ET | `shots_on_goal` | Michael Brandsegg-Nygard under 1.5 | 57.9% | +13.1% | +123 | Bally Bet | 0.25 |
+| Seattle Kraken @ Detroit Red Wings | Oct 9, 7:10 PM ET | `shots_on_goal` | Shane Wright under 1.5 | 64.7% | +12.3% | -110 | Hard Rock Bet | 0.25 |
 | Anaheim Ducks @ Winnipeg Jets | Oct 9, 8:10 PM ET | `assists` | Neal Pionk under 0.5 | 70.6% | +12.3% | -140 | Courtside | 0.25 |
 
 ## Leans
@@ -35,32 +37,33 @@
 | Seattle Kraken @ Detroit Red Wings | Oct 9, 7:10 PM ET | `shots_on_goal` | Dylan Larkin under 3.5 | 67.7% | +11.2% | -130 | Bovada |
 | New York Rangers @ Washington Capitals | Oct 9, 7:10 PM ET | `shots_on_goal` | Sean Durzi under 1.5 | 64.9% | +11.0% | -117 | Bally Bet |
 | Seattle Kraken @ Detroit Red Wings | Oct 9, 7:10 PM ET | `points` | Viktor Arvidsson under 0.5 | 56.0% | +10.5% | +120 | BetMGM |
-| Pittsburgh Penguins @ Columbus Blue Jackets | Oct 9, 7:10 PM ET | `points` | Kent Johnson under 0.5 | 66.4% | +9.9% | -130 | Bally Bet |
-| Pittsburgh Penguins @ Columbus Blue Jackets | Oct 9, 7:10 PM ET | `shots_on_goal` | Denton Mateychuk under 1.5 | 61.8% | +9.6% | -109 | Bally Bet |
+| Seattle Kraken @ Detroit Red Wings | Oct 9, 7:10 PM ET | `shots_on_goal` | Berkly Catton under 1.5 | 59.1% | +10.3% | +105 | Hard Rock Bet |
+| Pittsburgh Penguins @ Columbus Blue Jackets | Oct 9, 7:10 PM ET | `points` | Kent Johnson under 0.5 | 66.4% | +9.9% | -130 | Courtside |
 | Anaheim Ducks @ Winnipeg Jets | Oct 9, 8:10 PM ET | `shots_on_goal` | Leo Carlsson under 2.5 | 64.4% | +9.4% | -122 | Bally Bet |
-| Anaheim Ducks @ Winnipeg Jets | Oct 9, 8:10 PM ET | `points` | Alex Killorn under 0.5 | 69.3% | +9.3% | -150 | theScore Bet |
 | Anaheim Ducks @ Winnipeg Jets | Oct 9, 8:10 PM ET | `points` | Alex Iafallo over 0.5 | 36.6% | +8.9% | +260 | Bally Bet |
 | New York Rangers @ Washington Capitals | Oct 9, 7:10 PM ET | `shots_on_goal` | Will Cuylle under 1.5 | 51.3% | +8.7% | +135 | Bovada |
 | Anaheim Ducks @ Winnipeg Jets | Oct 9, 8:10 PM ET | `shots_on_goal` | Tristan Luneau under 1.5 | 67.1% | +8.5% | -141 | Bally Bet |
 | Seattle Kraken @ Detroit Red Wings | Oct 9, 7:10 PM ET | `points` | Moritz Seider under 0.5 | 57.3% | +8.5% | +105 | BetMGM |
+| Pittsburgh Penguins @ Columbus Blue Jackets | Oct 9, 7:10 PM ET | `shots_on_goal` | Denton Mateychuk under 1.5 | 61.8% | +8.5% | -114 | Bally Bet |
 | Seattle Kraken @ Detroit Red Wings | Oct 9, 7:10 PM ET | `shots_on_goal` | Justin Faulk under 1.5 | 53.9% | +8.5% | +120 | BetMGM |
 | New York Rangers @ Washington Capitals | Oct 9, 7:10 PM ET | `shots_on_goal` | Pavel Dorofeyev under 2.5 | 56.1% | +8.4% | +110 | Bovada |
 | New York Rangers @ Washington Capitals | Oct 9, 7:10 PM ET | `points` | Pierre-Luc Dubois under 0.5 | 56.8% | +8.0% | +105 | theScore Bet |
 | Anaheim Ducks @ Winnipeg Jets | Oct 9, 8:10 PM ET | `shots_on_goal` | Adam Lowry over 1.5 | 42.7% | +8.0% | +188 | Bally Bet |
 | Seattle Kraken @ Detroit Red Wings | Oct 9, 7:10 PM ET | `assists` | Moritz Seider under 0.5 | 63.5% | +7.9% | -125 | BetMGM |
 | Pittsburgh Penguins @ Columbus Blue Jackets | Oct 9, 7:10 PM ET | `points` | Erik Karlsson under 0.5 | 55.4% | +7.8% | +110 | BetMGM |
+| Anaheim Ducks @ Winnipeg Jets | Oct 9, 8:10 PM ET | `points` | Alex Killorn under 0.5 | 69.3% | +7.8% | -160 | Courtside |
 | New York Rangers @ Washington Capitals | Oct 9, 7:10 PM ET | `assists` | Jakob Chychrun under 0.5 | 68.4% | +7.6% | -155 | Hard Rock Bet |
 | New York Rangers @ Washington Capitals | Oct 9, 7:10 PM ET | `points` | Aliaksei Protas over 0.5 | 41.4% | +7.5% | +195 | Bally Bet |
 | Anaheim Ducks @ Winnipeg Jets | Oct 9, 8:10 PM ET | `shots_on_goal` | Jackson LaCombe under 1.5 | 53.9% | +7.4% | +115 | Hard Rock Bet |
-| Seattle Kraken @ Detroit Red Wings | Oct 9, 7:10 PM ET | `shots_on_goal` | Berkly Catton under 1.5 | 59.1% | +7.4% | -107 | Bally Bet |
+| Pittsburgh Penguins @ Columbus Blue Jackets | Oct 9, 7:10 PM ET | `shots_on_goal` | Bryan Rust over 3.5 | 29.4% | +7.2% | +350 | Fanatics |
 | Seattle Kraken @ Detroit Red Wings | Oct 9, 7:10 PM ET | `shots_on_goal` | Dylan Larkin under 2.5 | 50.7% | +7.2% | +130 | BetMGM |
 | Pittsburgh Penguins @ Columbus Blue Jackets | Oct 9, 7:10 PM ET | `goals` | Valeri Nichushkin over 0.5 | 30.4% | +7.1% | +330 | Courtside |
 | Anaheim Ducks @ Winnipeg Jets | Oct 9, 8:10 PM ET | `shots_on_goal` | Ryan Poehling under 1.5 | 62.6% | +7.0% | -125 | Bally Bet |
 | Anaheim Ducks @ Winnipeg Jets | Oct 9, 8:10 PM ET | `shots_on_goal` | Cole Perfetti under 2.5 | 62.5% | +7.0% | -125 | Bally Bet |
-| Pittsburgh Penguins @ Columbus Blue Jackets | Oct 9, 7:10 PM ET | `shots_on_goal` | Sidney Crosby over 3.5 | 29.2% | +6.9% | +350 | Courtside |
-| Pittsburgh Penguins @ Columbus Blue Jackets | Oct 9, 7:10 PM ET | `shots_on_goal` | Bryan Rust over 3.5 | 29.4% | +6.7% | +340 | Fanatics |
 | Pittsburgh Penguins @ Columbus Blue Jackets | Oct 9, 7:10 PM ET | `total_goals` | over 7 | 44.3% | +6.6% | +165 | Bovada |
 | Pittsburgh Penguins @ Columbus Blue Jackets | Oct 9, 7:10 PM ET | `assists` | Adam Fantilli under 0.5 | 68.0% | +6.4% | -160 | Hard Rock Bet |
+| Pittsburgh Penguins @ Columbus Blue Jackets | Oct 9, 7:10 PM ET | `shots_on_goal` | Sidney Crosby over 3.5 | 29.2% | +6.4% | +340 | FanDuel |
+| Pittsburgh Penguins @ Columbus Blue Jackets | Oct 9, 7:10 PM ET | `points` | Bryan Rust over 0.5 | 56.4% | +6.4% | +100 | Fanatics |
 | Pittsburgh Penguins @ Columbus Blue Jackets | Oct 9, 7:10 PM ET | `points` | Valeri Nichushkin over 0.5 | 54.0% | +6.4% | +110 | BetOnline.ag |
 | Anaheim Ducks @ Winnipeg Jets | Oct 9, 8:10 PM ET | `goals` | Gabriel Vilardi over 0.5 | 34.9% | +6.3% | +250 | theScore Bet |
 | Seattle Kraken @ Detroit Red Wings | Oct 9, 7:10 PM ET | `shots_on_goal` | Moritz Seider under 2.5 | 67.0% | +6.2% | -155 | Hard Rock Bet |
@@ -68,16 +71,16 @@
 | Pittsburgh Penguins @ Columbus Blue Jackets | Oct 9, 7:10 PM ET | `assists` | Erik Karlsson under 0.5 | 62.6% | +6.1% | -130 | BetMGM |
 | New York Rangers @ Washington Capitals | Oct 9, 7:10 PM ET | `shots_on_goal` | Jakob Chychrun under 2.5 | 58.4% | +6.0% | -110 | BetMGM |
 | Pittsburgh Penguins @ Columbus Blue Jackets | Oct 9, 7:10 PM ET | `regulation_3_way` | away | 44.1% | +5.7% | +160 | Bally Bet |
+| Pittsburgh Penguins @ Columbus Blue Jackets | Oct 9, 7:10 PM ET | `team_total` | away_over 3 | 59.6% | +5.5% | -118 | BetMGM |
 | Pittsburgh Penguins @ Columbus Blue Jackets | Oct 9, 7:10 PM ET | `total_goals` | over 6 | 61.8% | +5.3% | -130 | Bovada |
 | Pittsburgh Penguins @ Columbus Blue Jackets | Oct 9, 7:10 PM ET | `total_goals` | over 6.5 | 55.3% | +4.5% | -103 | Courtside |
-| New York Rangers @ Washington Capitals | Oct 9, 7:10 PM ET | `regulation_3_way` | away | 38.3% | +4.4% | +195 | FanDuel |
 | New York Rangers @ Washington Capitals | Oct 9, 7:10 PM ET | `total_goals` | over 6 | 53.2% | +4.4% | +105 | Bovada |
 | Pittsburgh Penguins @ Columbus Blue Jackets | Oct 9, 7:10 PM ET | `total_goals` | over 7.5 | 35.6% | +4.4% | +220 | Bovada |
 | Pittsburgh Penguins @ Columbus Blue Jackets | Oct 9, 7:10 PM ET | `team_total` | away_over 3.5 | 46.9% | +4.4% | +135 | Bovada |
-| Pittsburgh Penguins @ Columbus Blue Jackets | Oct 9, 7:10 PM ET | `team_total` | away_over 3 | 59.6% | +4.1% | -125 | BetMGM |
 | New York Rangers @ Washington Capitals | Oct 9, 7:10 PM ET | `team_total` | away_over 2.5 | 59.6% | +4.1% | -125 | BetOnline.ag |
 | Pittsburgh Penguins @ Columbus Blue Jackets | Oct 9, 7:10 PM ET | `total_goals` | over 8.5 | 26.6% | +3.9% | +340 | FanDuel |
 | New York Rangers @ Washington Capitals | Oct 9, 7:10 PM ET | `total_goals` | over 6.5 | 47.3% | +3.9% | +130 | Bally Bet |
+| New York Rangers @ Washington Capitals | Oct 9, 7:10 PM ET | `regulation_3_way` | away | 38.3% | +3.9% | +190 | Bally Bet |
 | New York Rangers @ Washington Capitals | Oct 9, 7:10 PM ET | `total_goals` | over 5.5 | 58.4% | +3.8% | -120 | Bally Bet |
 | Pittsburgh Penguins @ Columbus Blue Jackets | Oct 9, 7:10 PM ET | `team_total` | away_over 4.5 | 27.6% | +3.7% | +320 | FanDuel |
 
@@ -100,29 +103,29 @@ Leans are recorded and not staked.
 | Anaheim Ducks @ Winnipeg Jets | Oct 9, 8:10 PM ET | `points` | Cutter Gauthier under 1.5 | 87.5% | +11.6% | -315 | Bally Bet |
 | Anaheim Ducks @ Winnipeg Jets | Oct 9, 8:10 PM ET | `points` | Leo Carlsson under 1.5 | 87.2% | +10.2% | -335 | Bally Bet |
 | Anaheim Ducks @ Winnipeg Jets | Oct 9, 8:10 PM ET | `assists` | Cutter Gauthier under 0.5 | 74.1% | +9.5% | -182 | Bally Bet |
+| Anaheim Ducks @ Winnipeg Jets | Oct 9, 8:10 PM ET | `points` | Tristan Luneau under 0.5 | 78.8% | +9.1% | -230 | theScore Bet |
 | Anaheim Ducks @ Winnipeg Jets | Oct 9, 8:10 PM ET | `assists` | Beckett Sennecke under 0.5 | 72.6% | +8.9% | -175 | BetMGM |
 | Seattle Kraken @ Detroit Red Wings | Oct 9, 7:10 PM ET | `shots_on_goal` | Viktor Arvidsson under 3.5 | 74.4% | +8.9% | -190 | Bally Bet |
 | Anaheim Ducks @ Winnipeg Jets | Oct 9, 8:10 PM ET | `points` | A.J. Greer under 0.5 | 73.0% | +8.5% | -182 | Bally Bet |
+| Anaheim Ducks @ Winnipeg Jets | Oct 9, 8:10 PM ET | `points` | Pavel Mintyukov under 0.5 | 78.0% | +8.3% | -230 | Hard Rock Bet |
 | Anaheim Ducks @ Winnipeg Jets | Oct 9, 8:10 PM ET | `assists` | A.J. Greer under 0.5 | 84.2% | +8.3% | -315 | Bally Bet |
 | Anaheim Ducks @ Winnipeg Jets | Oct 9, 8:10 PM ET | `goals` | Beckett Sennecke under 0.5 | 79.7% | +8.2% | -250 | theScore Bet |
 | Seattle Kraken @ Detroit Red Wings | Oct 9, 7:10 PM ET | `shots_on_goal` | Axel Sandin Pellikka under 1.5 | 74.7% | +8.0% | -200 | Bally Bet |
 | Seattle Kraken @ Detroit Red Wings | Oct 9, 7:10 PM ET | `shots_on_goal` | Vince Dunn under 2.5 | 70.8% | +7.8% | -170 | Bovada |
-| Anaheim Ducks @ Winnipeg Jets | Oct 9, 8:10 PM ET | `points` | Tristan Luneau under 0.5 | 78.8% | +7.8% | -245 | Bally Bet |
-| Pittsburgh Penguins @ Columbus Blue Jackets | Oct 9, 7:10 PM ET | `shots_on_goal` | Sidney Crosby over 4.5 | 17.3% | +6.8% | +850 | Courtside |
-| Anaheim Ducks @ Winnipeg Jets | Oct 9, 8:10 PM ET | `assists` | Tristan Luneau under 0.5 | 83.7% | +6.7% | -335 | Bally Bet |
+| Pittsburgh Penguins @ Columbus Blue Jackets | Oct 9, 7:10 PM ET | `shots_on_goal` | Bryan Rust over 4.5 | 17.5% | +7.5% | +900 | Fanatics |
+| Anaheim Ducks @ Winnipeg Jets | Oct 9, 8:10 PM ET | `assists` | Tristan Luneau under 0.5 | 83.7% | +7.2% | -325 | Hard Rock Bet |
 | Seattle Kraken @ Detroit Red Wings | Oct 9, 7:10 PM ET | `assists` | Viktor Arvidsson under 0.5 | 73.4% | +6.7% | -200 | BetMGM |
 | Anaheim Ducks @ Winnipeg Jets | Oct 9, 8:10 PM ET | `points` | Neal Pionk under 1.5 | 92.9% | +6.7% | -625 | Bally Bet |
+| Anaheim Ducks @ Winnipeg Jets | Oct 9, 8:10 PM ET | `points` | Dylan Samberg under 0.5 | 72.1% | +6.5% | -190 | theScore Bet |
+| Pittsburgh Penguins @ Columbus Blue Jackets | Oct 9, 7:10 PM ET | `points` | Hendrix Lapierre under 0.5 | 70.8% | +6.5% | -180 | theScore Bet |
 | Anaheim Ducks @ Winnipeg Jets | Oct 9, 8:10 PM ET | `points` | Ryan Poehling under 0.5 | 71.4% | +6.5% | -185 | BetMGM |
+| Seattle Kraken @ Detroit Red Wings | Oct 9, 7:10 PM ET | `points` | Berkly Catton under 0.5 | 70.8% | +6.5% | -180 | theScore Bet |
 | Anaheim Ducks @ Winnipeg Jets | Oct 9, 8:10 PM ET | `shots_on_goal` | Pavel Mintyukov under 1.5 | 68.7% | +6.5% | -165 | Bally Bet |
-| Pittsburgh Penguins @ Columbus Blue Jackets | Oct 9, 7:10 PM ET | `shots_on_goal` | Bryan Rust over 4.5 | 17.5% | +6.4% | +800 | Fanatics |
 | Anaheim Ducks @ Winnipeg Jets | Oct 9, 8:10 PM ET | `goals` | Leo Carlsson under 0.5 | 77.0% | +6.4% | -240 | theScore Bet |
 | Pittsburgh Penguins @ Columbus Blue Jackets | Oct 9, 7:10 PM ET | `assists` | Kent Johnson under 0.5 | 78.2% | +6.4% | -255 | Courtside |
-| Seattle Kraken @ Detroit Red Wings | Oct 9, 7:10 PM ET | `points` | Albert Johansson under 0.5 | 85.7% | +6.3% | -385 | Bally Bet |
-| New York Rangers @ Washington Capitals | Oct 9, 7:10 PM ET | `goals` | Boone Jenner over 0.5 | 19.5% | +6.2% | +650 | Courtside |
-| New York Rangers @ Washington Capitals | Oct 9, 7:10 PM ET | `shots_on_goal` | Pierre-Luc Dubois under 1.5 | 53.6% | +5.9% | +110 | Bovada |
-| Anaheim Ducks @ Winnipeg Jets | Oct 9, 8:10 PM ET | `shots_on_goal` | Neal Pionk under 1.5 | 46.8% | +5.9% | +145 | Bovada |
+| Anaheim Ducks @ Winnipeg Jets | Oct 9, 8:10 PM ET | `assists` | Pavel Mintyukov under 0.5 | 82.8% | +6.4% | -325 | Hard Rock Bet |
 
-_1984 further passes not listed._
+_2002 further passes not listed._
 
 These are genuine model judgements about markets that were priced and modelled. They are **not** the same thing as the excluded markets below.
 
@@ -193,6 +196,6 @@ What the evidence actually supports:
 - `data/outputs/props_calibration.md`
 - `data/outputs/what_we_can_claim.md`
 
-Run: https://github.com/cooperross399/nhl-betting-lab/actions/runs/37927138806
+Run: https://github.com/cooperross399/nhl-betting-lab/actions/runs/37938689457
 
 Recommendations only. No bet was placed, no policy was edited, and no market was allowlisted by this run.
