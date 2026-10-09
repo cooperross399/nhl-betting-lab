@@ -229,6 +229,8 @@ def test_the_whole_run_measures_and_validates(tmp_path) -> None:
     assert result["validation"]["goals_match"] == 1.0
     assert result["team_games_scored"] > 0
     assert {e["variant"] for e in result["team"]} >= {"corsi", "xg", "xg_luck"}
+    assert {e["variant"] for e in result["starter"]} == {"xg_starter_actual", "xg_starter_projected"}
+    assert result["starter_projection"]["sides"] > 0
     assert result["props"]["shots_on_goal"][0]["rows"] > 0
     report = (outputs / "shadow_stats.md").read_text()
     assert "never on it" in report and "price backtest" in report
