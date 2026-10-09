@@ -199,7 +199,7 @@
     <section id="due" aria-labelledby="due-h" style="padding-top:48px;">
       <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px 16px;flex-wrap:wrap;border-bottom:3px solid var(--ink);padding-bottom:10px;">
         <h2 id="due-h" style="margin:0;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:34px;line-height:1;text-transform:uppercase;letter-spacing:.01em;">Due List</h2>
-        <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--mute);border:1px solid var(--rule);padding:2px 6px;">Not model bets · no stake</span>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--mute);border:1px solid var(--rule);padding:2px 6px;">Not model bets · tracked at 0.25u each</span>
       </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,160px),1fr));gap:0 24px;border-bottom:1px solid var(--ink);">
         <sc-for list="{{ dl.strip }}" as="c" hint-placeholder-count="5">
@@ -210,6 +210,9 @@
           </div>
         </sc-for>
       </div>
+      <sc-if value="{{ dl.hasNotes }}" hint-placeholder-val="{{ false }}">
+        <p style="margin:0;padding:12px 0;border-bottom:1px solid var(--rule);font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--mute);">{{ dl.notes }}</p>
+      </sc-if>
       <sc-if value="{{ dl.empty }}" hint-placeholder-val="{{ false }}">
         <p style="margin:0;padding:18px 0;border-bottom:1px solid var(--rule);font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--mute);">{{ dl.empty }}</p>
       </sc-if>
@@ -281,25 +284,32 @@ class Component extends DCLogic {
     const rec = (r) => `${r.w || 0}–${r.l || 0}${r.p != null ? `–${r.p}` : ""}`;
     const rate = (r) => { const n = (r.w || 0) + (r.l || 0); return n ? `${Math.round(((r.w || 0) / n) * 100)}% hit` : "—"; };
     if (pr.strip && RP.seasonLeans) pr.strip = [...pr.strip, { label: "Props · leans · season", value: RP.seasonLeans.nights ? rec(RP.seasonLeans) : "—", sub: RP.seasonLeans.nights ? rate(RP.seasonLeans) : "No night settled yet" }];
-    // Due List (results.json dueList): Cooper's list, graded like a prop, never staked, so no units.
+    // Due List (results.json dueList): Cooper's list, graded like a prop and tracked as if 0.25u were bet on every priced entry (nothing is bet).
     const D = raw.dueList, T = raw.teams || {};
     const CAT = { points: ["1+ point", "point", "points"], goals: ["Anytime goal", "goal", "goals"], assists: ["1+ assist", "assist", "assists"] };
     const GW = { win: ["Hit", "var(--win)"], loss: ["Miss", "var(--alert)"], push: ["Push", "var(--ink)"], void: ["Void", "var(--mute)"] };
     const dl = !D ? { show: false, rows: [], strip: [] } : (() => {
       const se = D.season || {}, bm = se.byMarket || {}, su = D.summary;
+      const u = (x) => `${x > 0 ? "+" : x < 0 ? "−" : ""}${Math.abs(x).toFixed(2)} u`;
+      const night = (D.rows || []).reduce((a, x) => (typeof x.units === "number" ? { units: a.units + x.units, n: a.n + 1 } : a), { units: 0, n: 0 });
       const strip = [
-        { label: "Last night", value: su ? rec(su) : "—", sub: su ? rate(su) : "Nothing graded" },
+        { label: "Last night", value: su ? rec(su) : "—", sub: su ? `${rate(su)}${night.n ? ` · ${u(night.units)}` : ""}` : "Nothing graded" },
         { label: "Season", value: se.nights ? rec(se) : "—", sub: se.nights ? `${rate(se)}${typeof se.impliedPct === "number" ? ` · prices implied ${Math.round(se.impliedPct)}%` : ""}` : "No night settled yet" },
-        ...["points", "goals", "assists"].map((k) => ({ label: `${CAT[k][0]} · season`, value: bm[k] ? rec(bm[k]) : "—", sub: bm[k] ? rate(bm[k]) : "" })),
+        { label: `Units · season · ${se.stake || 0.25}u each`, value: se.nights && typeof se.units === "number" ? u(se.units) : "—",
+          sub: se.nights && typeof se.staked === "number" ? `${se.staked.toFixed(2)} u staked${typeof se.returnPct === "number" ? ` · ${se.returnPct > 0 ? "+" : ""}${se.returnPct}%` : ""}${se.unpriced ? ` · ${se.unpriced} unpriced, not counted` : ""}` : "No night settled yet" },
+        ...["points", "goals", "assists"].map((k) => ({ label: `${CAT[k][0]} · season`, value: bm[k] ? rec(bm[k]) : "—", sub: bm[k] ? `${rate(bm[k])}${typeof bm[k].units === "number" ? ` · ${u(bm[k].units)}` : ""}` : "" })),
       ];
+      const notes = [];
+      if ((se.backfilledNights || []).length) notes.push(`Rebuilt after the fact, before the list was first published: ${se.backfilledNights.join(", ")}.`);
+      if (se.cardPriced) notes.push(`${se.cardPriced} entr${se.cardPriced === 1 ? "y was" : "ies were"} listed with no price and graded at the card's price from that morning.`);
       const rows = (D.rows || []).map((x) => {
         const c = CAT[x.market] || [x.market, x.market, x.market], t = T[x.team] || {}, g = GW[x.result] || ["Not graded", "var(--mute)"];
         const fin = typeof x.actual === "number" ? `finished with ${x.actual}` : x.result === "void" ? "did not play" : "no final stat yet";
         return { player: x.player, team: x.team || "", color: t.color || "var(--ink)", fg: t.fg || "var(--paper)", meta: [x.opp ? `vs ${x.opp}` : "", x.drought != null ? `${x.drought} games without` : ""].filter(Boolean).join(" · "),
-          line: `${c[0]} — ${fin}`, priceLine: typeof x.price === "number" ? `${x.price > 0 ? "+" : "−"}${Math.abs(x.price)}${x.book ? ` at ${x.book}` : ""}${x.heavyJuice ? " · heavy juice" : ""}` : "price not posted",
+          line: `${c[0]} — ${fin}`, priceLine: typeof x.price === "number" ? `${x.price > 0 ? "+" : "−"}${Math.abs(x.price)}${x.priceSource === "card" ? " (card's morning price)" : x.book ? ` at ${x.book}` : ""}${x.heavyJuice ? " · heavy juice" : ""}${typeof x.units === "number" ? ` · ${u(x.units)}` : ""}` : "price not posted · not counted in units",
           result: g[0], resultColor: g[1], aria: `${x.player}, ${c[0]}, ${g[0]}` };
       });
-      return { show: true, strip, rows, empty: rows.length ? "" : "Nobody on the Due List for this date." };
+      return { show: true, strip, rows, notes: notes.join(" "), hasNotes: notes.length > 0, empty: rows.length ? "" : "Nobody on the Due List for this date." };
     })();
     return { ...vm, games, tabs, themeAttr, pr, dl, hasProps: !!P, sportLong: vm.sport.longName, hasFeedNotice: !!this.state.feedNotice, feedNotice: this.state.feedNotice || "" };
   }

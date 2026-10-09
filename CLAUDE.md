@@ -2291,6 +2291,29 @@ Re-derive rather than trust if the data has moved.
   through its own component under node on the builder's output.
   2026-10-07 (later): renamed to Due List, Cooper's name for it, on every
   page and the card; identifiers keep `drought`.
+- **2026-10-09: the Due List is tracked season long as if 0.25u were bet on
+  every entry, every night.** Cooper: "I would like for the due list to be
+  tracked season long on the website as if we bet .25u on each one every
+  night." Nothing is bet, and none of it reaches the card's selections,
+  stakes, the props tallies, `forward_evidence` or the registered test. What
+  changed: every graded Due List row on results.json carries `units` (0.25u
+  at its price; a push 0; a void, an ungraded row or one with no price at all
+  None), and `record.dueList` / `dueList.season` carry `stake`, `units`,
+  `staked` (and `returnPct`). The season record is read from the lab's own
+  ledger (`data/processed/drought_forward.csv`, restored by Publish Site)
+  when present, else summed from the frozen boards. Two additions in the lab
+  (`drought_forward`, run by `run_drought_rule_forward.py` in Gameday
+  Refresh's Due List step): `backfill_lists` rebuilds every regular-season
+  night of this season before the first recorded list (2026-10-07) with
+  `build_drought_list`, TODAY's either-bar rule, the logs of games before
+  that night, and the prices the card froze that morning
+  (`priced_snapshots/<day>.csv`, read only); `fill_prices` gives an entry
+  recorded with no price the card's frozen price for that morning, in the
+  list file and, if the night has settled, in the ledger. Both are named in
+  `data/processed/drought_list/sources.json` and on the Results page. An
+  entry no frozen price covers stays "not posted": graded for the hit rate,
+  no units. `tests/test_due_list_is_never_staked.py` became
+  `tests/test_due_list_is_tracked_at_a_quarter_unit.py`, by Cooper's request.
 
 ## Contract strings — never change these
 

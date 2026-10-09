@@ -200,16 +200,25 @@ board.json
 ```
 record.props       {w, l, p, units, nights}  — prop best bets, the season so far
 record.propLeans   {w, l, p, nights}         — prop leans, the season so far (no units)
-record.dueList     {w, l, p, nights}         — the Due List (games[].drought), the season so far (never units)
+record.dueList     {w, l, p, nights, stake, units, staked} — the Due List (games[].drought), the season so far, tracked as if `stake` (0.25u) were bet on every priced entry (nothing is bet)
 ```
 results.json
 ```
 props.seasonLeans  {w, l, p, nights}
 dueList            {summary, season, rows[]} | absent (absent hides the section)
   summary          {w, l, p}  — this date
-  season           {w, l, p, nights, impliedPct, byMarket: {points|goals|assists: {w, l}}}
+  season           {w, l, p, nights, impliedPct, stake, units, staked, returnPct, byMarket: {points|goals|assists: {w, l, units?}},
+                    source ("ledger"|"boards"), and from the ledger: firstDate, lastDate, wagers, unpriced, void,
+                    backfilledNights[], cardPriced}
                    impliedPct = mean implied probability of the posted prices graded (optional)
+                   units = profit as if `stake` (0.25u) were bet on every priced entry; staked = stake × priced entries
+                   source "ledger": read from data/processed/drought_forward.csv (the lab's Due List ledger) and
+                   data/processed/drought_list/sources.json; source "boards": summed from the frozen boards
   rows[]           the board's drought entry (player, team, opp, market, line, lastSeason, drought, price, book, heavyJuice)
-                   + actual (number | null) and result ("win"|"loss"|"push"|"void"|null)
+                   + actual (number | null), result ("win"|"loss"|"push"|"void"|null), units (number | null),
+                   priceSource ("card" when the entry was published with no price and takes the card's frozen
+                   price from that morning, as the lab's ledger settled it; absent otherwise)
 ```
-Every entry on a frozen board's Due List is graded, whether or not it was bet. An entry with no posted price is graded and counted; it shows "price not posted".
+Every entry on a frozen board's Due List is graded, whether or not it had a price. An entry with no price at all is graded and counted in w/l but carries no units; it shows "price not posted". Units are notional: nothing on the Due List is bet, and none of it is in `summary.picks`, `record.picks` or the props tallies.
+
+`backfilledNights` are nights of the season before the list was first recorded (2026-10-07), rebuilt by the lab (`drought_forward.backfill_lists`) with today's rule from the games before each night and priced at the card's frozen prices that morning. `cardPriced` counts entries recorded with no price that the lab graded at the card's frozen price (`drought_forward.fill_prices`).

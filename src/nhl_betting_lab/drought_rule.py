@@ -334,6 +334,38 @@ def build_drought_list(
     result.removed_by_guard = len(guarded.quarantined)
     rows = [{k: v for k, v in row.items() if not k.startswith("puck_drop_")} for row in guarded.playable]
 
+    best, unresolved = best_over_prices(rows, prices=prices, logs=logs, team_of=team_of,
+                                        playing=playing, team_names=team_names, day=day)
+    for row in rows:
+        priced = best.get((row["player_id"], row["market"]))
+        if priced:
+            row["american_odds"], row["book"] = priced
+            row["heavy_juice"] = priced[0] < HEAVY_JUICE
+    order = {m: i for i, m in enumerate(THRESHOLDS)}
+    rows.sort(key=lambda r: (order[r["market"]], r["rarity"], -r["drought"], r["player"]))
+    result.rows = rows
+    result.unresolved = sorted(unresolved)
+    return result
+
+
+def best_over_prices(
+    rows: list[Mapping[str, Any]],
+    *,
+    prices: pd.DataFrame,
+    logs: pd.DataFrame,
+    team_of: Mapping[int, str],
+    playing: Mapping[str, tuple[str, str]],
+    team_names: Mapping[str, str],
+    day: str,
+) -> tuple[dict[tuple[int, str], tuple[float, str]], set[str]]:
+    """The best over 0.5 price any book in `prices` quoted for each listed row.
+
+    Returns ({(player id, market): (American odds, book)}, unresolved names).
+    `team_of` is {player id: club} and `playing` {club: (home, away)} for the
+    day's games. A price name that matches two players on its game resolves
+    to neither and is named in the second element. Never filled in: a row
+    no book quoted is absent from the first.
+    """
     # Every skater on a tonight club, for telling a shared name apart.
     known = (logs[(logs.role == "skater")].sort_values(["date", "game_id"])
              .groupby("player_id").player.last() if "role" in logs.columns and not logs.empty else pd.Series(dtype=object))
@@ -345,7 +377,7 @@ def build_drought_list(
     best: dict[tuple[int, str], tuple[float, str]] = {}
     unresolved: set[str] = set()
     wanted = {(r["player_id"], r["market"]) for r in rows}
-    if not prices.empty and rows:
+    if prices is not None and not prices.empty and rows:
         quotes = prices[prices["market"].astype(str).str.strip().isin(THRESHOLDS)
                         & (prices["selection"].astype(str).str.strip().str.lower() == "over")
                         & (pd.to_numeric(prices["line"], errors="coerce") == LINE)]
@@ -369,16 +401,7 @@ def build_drought_list(
             key = (next(iter(hit)), market)
             if key not in best or _decimal(float(odds)) > _decimal(best[key][0]):
                 best[key] = (float(odds), clean_text(p.book))
-    for row in rows:
-        priced = best.get((row["player_id"], row["market"]))
-        if priced:
-            row["american_odds"], row["book"] = priced
-            row["heavy_juice"] = priced[0] < HEAVY_JUICE
-    order = {m: i for i, m in enumerate(THRESHOLDS)}
-    rows.sort(key=lambda r: (order[r["market"]], r["rarity"], -r["drought"], r["player"]))
-    result.rows = rows
-    result.unresolved = sorted(unresolved)
-    return result
+    return best, unresolved
 
 
 def _decimal(american: float) -> float:

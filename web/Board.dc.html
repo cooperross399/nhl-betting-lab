@@ -314,7 +314,7 @@
                       <div style="border-top:2px solid var(--ink);padding-top:4px;">
                         <div style="display:flex;justify-content:space-between;align-items:center;gap:4px 12px;flex-wrap:wrap;">
                           <span style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute);min-height:44px;display:inline-flex;align-items:center;">Due List · potential bets</span>
-                          <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--mute);border:1px solid var(--rule);padding:2px 6px;">Not model bets · no stake</span>
+                          <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--mute);border:1px solid var(--rule);padding:2px 6px;">Not model bets · tracked at 0.25u each</span>
                         </div>
                         <sc-for list="{{ g.drought.rows }}" as="r" hint-placeholder-count="0">
                           <article aria-label="{{ r.aria }}" style="display:grid;grid-template-columns:52px minmax(0,1fr) auto;gap:4px 12px;padding:12px 0;border-top:1px solid var(--rule-2);align-items:start;">
@@ -847,7 +847,7 @@ class Component extends DCLogic {
         return [
           { label: "Props best bets · season", value: ok(R.props) ? rec(R.props) + u(R.props.units) : "—" },
           { label: "Props leans · season", value: ok(R.propLeans) ? rec(R.propLeans) + hit(R.propLeans) : "—" },
-          { label: "Due List · season", value: ok(R.dueList) ? rec(R.dueList) + hit(R.dueList) : "—" },
+          { label: `Due List · season · ${(R.dueList && R.dueList.stake) || 0.25}u each`, value: ok(R.dueList) ? rec(R.dueList) + hit(R.dueList) + u(R.dueList.units) : "—" },
         ];
       })(),
       propViews: [viewBtn("model", pv && pv.status === "ok" ? `Model props · ${pv.counts.total}` : "Model props"), viewBtn("drought", `Due List · ${dCount}`)],

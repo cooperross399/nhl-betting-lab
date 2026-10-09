@@ -185,7 +185,7 @@ def test_the_drought_modules_write_none_of_the_registered_files() -> None:
     import ast
 
     root = Path(__file__).resolve().parents[1]
-    reads_only = {"PATIENCE_DAYS", "_player_index", "_replace_whole", "_settle_prop_row"}
+    reads_only = {"PATIENCE_DAYS", "_player_index", "_replace_whole", "_settle_prop_row", "snapshots_dir"}
     for module in ("src/nhl_betting_lab/drought_forward.py", "src/nhl_betting_lab/drought_rule.py",
                    "scripts/run_drought_rule_forward.py"):
         tree = ast.parse((root / module).read_text(encoding="utf-8"))
