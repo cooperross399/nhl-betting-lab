@@ -204,13 +204,50 @@ def render(
             f"| {e['label']} | {_fmt(e['goals_ll'])} | {_fmt(e['moneyline_ll'])} | "
             f"{_fmt(e['total_ll'])} | {e['moneyline_ll']['verdict']} |"
         )
+    if payload.get("starter"):
+        proj = payload.get("starter_projection") or {}
+        lines += [
+            "",
+            "## Tonight's starting goalie against the team's goalies together",
+            "",
+            "The card's team markets rate goaltending on the team's goalies "
+            "together (`xg_luck`). These keep its attack, defence and finishing "
+            "and swap only the goaltending factor for the starter's own GSAx, "
+            "built the same way over his own appearances on any team. Difference "
+            "in log-likelihood per 1,000 games against `xg_luck`, the ratings the "
+            "card runs on; positive is better.",
+            "",
+            "The actual starter is known only after puck drop, so that row is a "
+            "ceiling. The projected starter is what a card could name before it: "
+            "last game's starter, or on the second night of a back-to-back the "
+            "goalie who made most of the team's other recent starts.",
+            "",
+        ]
+        if proj.get("sides"):
+            lines += [
+                f"Projected starter was the actual one for {proj['correct']:,} of "
+                f"{proj['sides']:,} sides ({100 * proj['rate']:.1f}%).",
+                "",
+            ]
+        lines += [
+            "| Goaltending factor | Games | Goals scored | Moneyline | Total 5.5 | Verdict (moneyline) |",
+            "|:--|--:|--:|--:|--:|:--|",
+        ]
+        for e in payload["starter"]:
+            lines.append(
+                f"| {e['label']} | {e['rows']:,} | {_fmt(e['goals_ll'])} | {_fmt(e['moneyline_ll'])} | "
+                f"{_fmt(e['total_ll'])} | {e['moneyline_ll']['verdict']} |"
+            )
     lines += [
         "",
-        "## Prop rates: shot attempts and ixG instead of box-score counts",
+        "## Prop rates: shot attempts, ixG and recent form instead of box-score counts",
         "",
         "Difference in Poisson log-likelihood per 1,000 player-games against the "
-        "card's construction (shrunk box-score rate per 60 times trailing-10 ice "
-        "time). Positive is better.",
+        "card's construction (shrunk box-score rate per 60 over every game on "
+        "disk, times trailing-10 ice time). Positive is better. Recent form is "
+        "how a player is playing now: his rate with a game's weight halving every "
+        f"{measurement.PROP_FORM_HALF_LIFE_GAMES} of his games, regressed toward "
+        "his own long-run rate, set in advance and not tuned.",
         "",
         "| Market | Rate built on | Player-games | Difference | Verdict |",
         "|:--|:--|--:|--:|:--|",
@@ -270,8 +307,9 @@ def render(
         "- Zone entries, exits, forecheck and passing microstats: All Three Zones, paid.",
         "- MoneyPuck's xG, flurry adjustment and deserve-to-win: licence required.",
         "- NHL EDGE skating and shot speed: no per-game archive to fit on game by game.",
-        "- Confirmed-starter GSAx: the card runs before starters are confirmed, so "
-        "goaltending here is the team's goalies together.",
+        "- A confirmed-starter feed: the card runs before starters are confirmed. "
+        "The starter section above measures the actual starter as a ceiling and "
+        "a rule a card could follow before puck drop.",
         "- Score-adjusted 5v5 and a separate 5v5-plus-special-teams scoreline: not "
         "built yet; all-situations xG already carries the power play.",
         "- From PostHockey's glossary: Net Rating's on-ice half, Quality of "
@@ -287,7 +325,9 @@ def render(
     return "\n".join(lines) + "\n"
 
 
-def findings(team: list[dict], props: dict[str, list[dict]]) -> list[str]:
+def findings(
+    team: list[dict], props: dict[str, list[dict]], starter: list[dict] | None = None
+) -> list[str]:
     out: list[str] = []
     better = [e["label"] for e in team if e["moneyline_ll"]["verdict"].startswith("better")]
     worse = [e["label"] for e in team if e["moneyline_ll"]["verdict"].startswith("worse")]
@@ -301,6 +341,11 @@ def findings(team: list[dict], props: dict[str, list[dict]]) -> list[str]:
         out.append(
             f"{stat}: " + (f"better than the box-score rate with {', '.join(wins)}." if wins
                            else "no shadow rate beat the box-score rate.")
+        )
+    for e in starter or []:
+        out.append(
+            f"{e['label']}: {e['moneyline_ll']['verdict']} on the moneyline against "
+            f"the card's team-goalie ratings ({_fmt(e['moneyline_ll'])} per 1,000 games)."
         )
     out.append(
         "Anything better here is a candidate for a price backtest, and any change "
@@ -410,8 +455,9 @@ def main(argv: list[str] | None = None) -> int:
 
     out_of_sample = {s.season for s in seasons if not s.in_sample}
     team_rows, team_summary = measurement.compare_team_models(
-        team_games, team_table, scored_seasons=out_of_sample
+        team_games, team_table, scored_seasons=out_of_sample, goalie_games=goalie_table
     )
+    starter_summary = measurement.starter_against_card(team_rows)
     logs = load_player_logs(args.processed_dir)
     _, prop_summary = measurement.compare_prop_rates(
         logs,
@@ -459,8 +505,10 @@ def main(argv: list[str] | None = None) -> int:
         "context_xg_seasons": [s.__dict__ for s in context_seasons],
         "team_games_scored": int(team_rows["game_id"].nunique()) if not team_rows.empty else 0,
         "team": team_summary,
+        "starter": starter_summary,
+        "starter_projection": team_rows.attrs.get("starter_projection"),
         "props": prop_summary,
-        "findings": findings(team_summary, prop_summary),
+        "findings": findings(team_summary, prop_summary, starter_summary),
     }
     table = measurement.latest_season_table(team_table)
     args.output_dir.mkdir(parents=True, exist_ok=True)
