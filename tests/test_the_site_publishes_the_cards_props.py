@@ -6,8 +6,8 @@ live scores)"), and `season_record` already summed one, but nothing wrote it:
 every board read "Props are not on this board" while the card staked props
 every night.
 
-`build_board` now writes `props` from the card's own best bets and leans
-(price, book, model probability, edge, tier, units — nothing priced again),
+`build_board` now writes `props` from the card's own best bets (price, book, model probability, edge, tier, units — nothing priced again; leans are counted, not listed, by
+Cooper's 2026-10-09 call "Only show the best bets"),
 joined to a game through the same provider names the team pick uses, and
 `settle` grades the frozen rows the next morning on the box-score logs by the
 forward ledger's rules. Driven through the real `main()` with only the NHL
@@ -52,6 +52,9 @@ def _add_props(lab: Path) -> None:
     card = json.loads(path.read_text(encoding="utf-8"))
     card["best_bets"].append(_prop("Auston Matthews", "shots_on_goal", "under", 3.5, 105, 0.202,
                                    "Best bets", units=0.5, tier="A"))
+    # Scratched tonight: on the board, then void the next morning.
+    card["best_bets"].append(_prop("John Tavares", "shots_on_goal", "over", 2.5, 110, 0.13,
+                                   "Best bets", units=0.25, tier="B"))
     card["leans"] = [
         _prop("Nick Suzuki", "points", "under", 0.5, 123, 0.15, "Leans", reason="points is never staked"),
         _prop("Sam Montembeault", "goalie_saves", "over", 24.5, -110, 0.09, "Leans"),
@@ -71,6 +74,7 @@ def _logs(lab: Path, *, tonight: bool) -> None:
     rows = [
         ["2026020001", "2026-10-01", "8479318", "Auston Matthews", "C", "TOR", 1200, 4, 1, 0, 1, 0, 1, 0],
         ["2026020002", "2026-10-01", "8480018", "Nick Suzuki", "C", "MTL", 1200, 2, 0, 1, 1, 0, 0, 0],
+        ["2026020001", "2026-10-01", "8475166", "John Tavares", "C", "TOR", 1100, 3, 0, 1, 1, 0, 0, 0],
         ["2026020002", "2026-10-01", "8477492", "Sam Montembeault", "G", "MTL", 3600, 0, 0, 0, 0, 0, 0, 30],
         # Another Nick Suzuki on a club not in the game: never this game's player.
         ["2026020003", "2026-10-01", "9999999", "Nick Suzuki", "R", "BOS", 900, 1, 0, 0, 0, 0, 0, 0],
@@ -129,9 +133,8 @@ def test_tonights_props_are_on_the_board(tmp_path, monkeypatch):
     rows = props["rows"]
     assert [(r["player"], r["market"], r["kind"]) for r in rows] == [
         ("Auston Matthews", "shots_on_goal", "bet"),
-        ("Nick Suzuki", "points", "lean"),
-        ("Sam Montembeault", "goalie_saves", "lean"),
-    ], "the card's bets and leans for tonight, bet first; the pass and tomorrow's row are not listed"
+        ("John Tavares", "shots_on_goal", "bet"),
+    ], "the card's best bets for tonight only; leans, the pass and tomorrow's row are not listed (Cooper, 2026-10-09)"
     bet = rows[0]
     assert bet == {
         "gameId": GAME, "player": "Auston Matthews", "playerId": "8479318", "team": "TOR", "opp": "MTL",
@@ -139,15 +142,12 @@ def test_tonights_props_are_on_the_board(tmp_path, monkeypatch):
         "projection": None, "modelProb": 0.69, "fairPrice": -222, "edgePct": 20.2, "kind": "bet", "tier": "A",
         "units": 0.5, "allowlisted": False, "starterConfirmed": None,
     }
-    suzuki = rows[1]
-    assert (suzuki["team"], suzuki["opp"], suzuki["playerId"], suzuki["units"]) == ("MTL", "TOR", "8480018", None)
-    assert rows[2]["starterConfirmed"] is False
-    assert "1 other priced prop" in props["note"]
+    assert "Only best bets are listed; 3 other priced props (leans and passes) are not." in props["note"]
     assert props["marketNotes"]["hits"].startswith("Excluded tonight, not a pass")
     assert "points" in props["marketNotes"]
 
     page = _render("board", board, tmp_path)
-    assert page["counts"] == {"bets": 1, "leans": 2, "total": 3}
+    assert page["counts"] == {"bets": 2, "leans": 0, "total": 2}
     assert page["rows"][0]["stake"] == "Tier A · 0.5 units · $12.50"
 
 
@@ -162,16 +162,15 @@ def test_the_next_morning_grades_the_props(tmp_path, monkeypatch):
     graded = {r["player"]: r for r in props["rows"]}
     assert (graded["Auston Matthews"]["actual"], graded["Auston Matthews"]["result"]) == (2, "win")
     assert graded["Auston Matthews"]["profitUnits"] == 0.53  # 0.5 units at +105
-    assert (graded["Nick Suzuki"]["actual"], graded["Nick Suzuki"]["result"]) == (1, "loss")
-    assert "profitUnits" not in graded["Nick Suzuki"], "a lean carries no stake"
-    assert graded["Sam Montembeault"]["result"] == "void"
+    assert graded["John Tavares"]["result"] == "void", "a best bet on a player who did not dress is void"
+    assert set(graded) == {"Auston Matthews", "John Tavares"}, "no lean was published, so none is graded"
     assert props["summary"] == {"w": 1, "l": 0, "p": 0, "units": 0.53, "ungraded": 0}
-    assert props["season"]["w"] == 1 and props["seasonLeans"]["l"] == 1
+    assert props["season"]["w"] == 1 and props["seasonLeans"]["l"] == 0
     assert board["record"]["props"]["w"] == 1, "the board's season line counts the props"
     assert results["summary"]["picks"] == {"w": 1, "l": 0, "p": 0}, "props never reach the team record"
 
     page = _render("results", results, tmp_path)
-    assert page["summaryLine"] == "1 best bet · 2 leans settled"
+    assert page["summaryLine"] == "2 best bets settled", "no leans line when no lean was published"
 
 
 def test_a_prop_whose_box_score_has_not_arrived_waits(tmp_path, monkeypatch):
@@ -181,4 +180,4 @@ def test_a_prop_whose_box_score_has_not_arrived_waits(tmp_path, monkeypatch):
     _, results = build(lab, out, monkeypatch, day=NEXT_DAY, finals=True)
     props = results["props"]
     assert all(r["result"] is None for r in props["rows"]), "no box score is not a scratch"
-    assert props["summary"]["ungraded"] == 1
+    assert props["summary"]["ungraded"] == 2

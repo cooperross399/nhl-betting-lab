@@ -2309,6 +2309,10 @@ Re-derive rather than trust if the data has moved.
   as the board already did for team picks and the Due List; no capture
   store, line history or closing price reaches the site.
   `tests/test_the_site_publishes_the_cards_props.py`.
+  Later the same day, Cooper: "Only show the best bets, not the leans for
+  player props". `build_props` now lists prop best bets only; leans are
+  counted with the passes in the note. Boards frozen before this carry lean
+  rows and are graded as before.
 
 ## Contract strings — never change these
 
