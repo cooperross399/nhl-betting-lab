@@ -302,6 +302,11 @@ PYTHONPATH=src .venv/bin/python scripts/run_rest_experiment.py
 # The same decision for the props side of rest.
 PYTHONPATH=src .venv/bin/python scripts/run_props_rest_experiment.py
 
+# Does a player's recent form make better prop bets? Prices the card's
+# long-run rates and recent form on the same bought prices. Records no verdict
+# the card reads (Props Form Test workflow runs it in CI).
+PYTHONPATH=src .venv/bin/python scripts/run_props_form_experiment.py
+
 # The provider policy PR gate. Exits non-zero when the paperwork does not hold.
 PYTHONPATH=src .venv/bin/python scripts/run_policy_pr_gate.py
 

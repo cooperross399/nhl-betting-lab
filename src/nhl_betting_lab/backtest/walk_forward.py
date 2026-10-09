@@ -20,9 +20,10 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, timedelta
 
+import numpy as np
 import pandas as pd
 
 from nhl_betting_lab.rest import played_previous_day
@@ -176,6 +177,60 @@ def _team_b2b_flags(logs: pd.DataFrame) -> dict[tuple[int, str], bool]:
     return flags
 
 
+#: Recent form (Cooper, 2026-10-09: "how individual players are playing"),
+#: as the shadow measurement scores it: a game's weight halves every this many
+#: of the player's games, and the recent rate is regressed toward the model's
+#: own long-run rate with the model's own shrinkage constant. Fixed before the
+#: price test, not tuned on it.
+FORM_HALF_LIFE_GAMES = 10
+FORM_SHRINKAGE_SECONDS = PlayerPropsModel.SHRINKAGE_SECONDS
+#: The markets whose form beat the long-run rate on outcomes
+#: (Shadow Stats, 2026-10-09). The others keep the long-run rate.
+FORM_STATS = ("shots_on_goal", "goals", "assists", "points")
+
+
+def apply_recent_form(model: PlayerPropsModel, history: pd.DataFrame) -> int:
+    """Move each fitted skater's rate toward his recent form, in place.
+
+    Reads only `history`, the games the model was fitted on. Returns how many
+    skaters moved. Off by default everywhere: only the form experiment
+    (`scripts/run_props_form_experiment.py`) turns it on, and nothing on the
+    card's path calls it.
+    """
+    skaters = history[history["role"].astype(str) == "skater"].copy()
+    skaters["toi_seconds"] = pd.to_numeric(skaters["toi_seconds"], errors="coerce").fillna(0)
+    skaters = skaters[skaters["toi_seconds"] > 0]
+    if skaters.empty:
+        return 0
+    for stat in FORM_STATS:
+        skaters[stat] = pd.to_numeric(skaters[stat], errors="coerce").fillna(0)
+    skaters = skaters.sort_values(["player_id", "_date", "game_id"], ascending=[True, False, False])
+    ago = skaters.groupby("player_id").cumcount().to_numpy(dtype=float)
+    skaters["_w"] = np.power(0.5, ago / FORM_HALF_LIFE_GAMES)
+    weighted = skaters[["toi_seconds", *FORM_STATS]].multiply(skaters["_w"], axis=0)
+    weighted["player_id"] = skaters["player_id"].astype(int)
+    sums = weighted.groupby("player_id").sum()
+    moved = 0
+    for player_id, rates in list(model.skaters.items()):
+        if player_id not in sums.index:
+            continue
+        own = sums.loc[player_id]
+        seconds = float(own["toi_seconds"])
+        if seconds <= 0:
+            continue
+        weight = seconds / (seconds + FORM_SHRINKAGE_SECONDS)
+        per60 = dict(rates.per60)
+        for stat in FORM_STATS:
+            long_run = per60.get(stat)
+            if long_run is None:
+                continue
+            raw = float(own[stat]) / seconds * 3600.0
+            per60[stat] = long_run + weight * (raw - long_run)
+        model.skaters[player_id] = replace(rates, per60=per60)
+        moved += 1
+    return moved
+
+
 def generate_prop_samples(
     logs: pd.DataFrame,
     *,
@@ -185,12 +240,15 @@ def generate_prop_samples(
     start_date: str = "",
     end_date: str = "",
     use_rest: bool = True,
+    recent_form: bool = False,
 ) -> tuple[pd.DataFrame, WalkForwardReport]:
     """Price every player-game in the log with a model that could not see it.
 
     `use_rest=False` prices with the schedule ignored, which exists so the two
     policies can be compared on identical prices — the comparison that decides
-    whether the props rest adjustment ships.
+    whether the props rest adjustment ships. `recent_form=True` moves each
+    refit's skater rates toward recent form (`apply_recent_form`), for the
+    form experiment only.
     """
     wanted = {
         key: tuple(float(line) for line in values)
@@ -237,6 +295,8 @@ def generate_prop_samples(
             report.windows_skipped_for_history += 1
             window_start = window_end + timedelta(days=1)
             continue
+        if recent_form:
+            apply_recent_form(model, history)
         report.refits += 1
 
         window = frame[
