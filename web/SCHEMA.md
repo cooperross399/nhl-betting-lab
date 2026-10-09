@@ -177,7 +177,9 @@ props            {status, note, marketNotes, rows[]} | absent (absent renders "P
                  allowlisted (bool), starterConfirmed (true|false|null — null: not a goalie market),
                  espnId (optional — ESPN athlete id; the live tracker matches on it before falling back to name + team)
                  A row with starterConfirmed false is never written as kind "bet".
-                 Written by build_site_json.py::build_props (2026-10-09) from gameday_card.json's best bets and leans
+                 Written by build_site_json.py::build_props (2026-10-09) from gameday_card.json's best bets only
+                 (Cooper, 2026-10-09: leans and passes are counted in `note`, never listed; boards frozen before
+                 that may still carry lean rows, which are graded as before)
                  in the seven prop markets, for the board's own league day, joined to a game through the same provider
                  team names as `pick`. Every figure is the card's: price = american_odds, book, modelProb =
                  model_probability, fairPrice = fair_american, edgePct = edge x 100, tier and units (best bets only;

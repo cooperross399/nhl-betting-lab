@@ -988,15 +988,15 @@ def _int_price(value: object) -> int | None:
 
 def build_props(day: date, card: dict, matched: dict, lab: Path, allowlisted: list[str], *,
                 preseason: bool, priced_any: bool) -> dict:
-    """board.json's `props`: tonight's player props from the card, the same
-    best bets and leans the card publishes (web/SCHEMA.md, props.rows[]).
+    """board.json's `props`: tonight's player-prop best bets from the card
+    (web/SCHEMA.md, props.rows[]). Leans and passes are counted, not listed.
 
     Read straight off `gameday_card.json`, as the team pick is: the card's
     own price, book, model probability, edge, fair price, tier and units.
     Nothing is priced here. A row joins a game through the same provider
     team names the team pick joins through (`matched`), and only on the
-    board's own league day. Passes are counted in the note, never listed:
-    the card prices thousands of rungs a night and a pass is not a play.
+    board's own league day. Leans and passes are counted in the note, never
+    listed (Cooper, 2026-10-09: best bets only).
     A market the card excluded (priced for fewer than every game, not
     allowlisted) is named as excluded, never as a pass.
     """
@@ -1019,14 +1019,16 @@ def build_props(day: date, card: dict, matched: dict, lab: Path, allowlisted: li
             game = matched.get((c.get("home_team"), c.get("away_team")))
             if game is None:
                 continue
-            if kind == "pass":
+            market = c["market"]
+            goalie = market == "goalie_saves"
+            bet = kind == "bet" and not goalie
+            # Cooper, 2026-10-09: "Only show the best bets, not the leans for
+            # player props". A lean is counted with the passes, never listed.
+            if not bet:
                 passes += 1
                 continue
             game_id, home, away = game
             pid, team, position = _prop_player(directory, str(c["player"]), home, away, aliases)
-            market = c["market"]
-            goalie = market == "goalie_saves"
-            bet = kind == "bet" and not goalie
             edge = _real(c.get("edge"))
             prob = _real(c.get("model_probability"))
             rows.append({
@@ -1051,10 +1053,10 @@ def build_props(day: date, card: dict, matched: dict, lab: Path, allowlisted: li
     if not priced_any:
         parts.append("No market price for this league day reached this build, so no player prop is shown.")
     elif not rows:
-        parts.append("No player prop cleared the card's bar tonight." if not excluded or len(excluded) < len(PROP_MARKETS)
+        parts.append("No player prop was a best bet tonight." if not excluded or len(excluded) < len(PROP_MARKETS)
                      else "Player props were left off tonight's card.")
     if passes:
-        parts.append(f"{passes:,} other priced prop{'s' if passes != 1 else ''} did not clear the bar and {'are' if passes != 1 else 'is'} not listed.")
+        parts.append(f"Only best bets are listed; {passes:,} other priced prop{'s' if passes != 1 else ''} (leans and passes) {'are' if passes != 1 else 'is'} not.")
     for market, why in sorted(excluded.items()):
         notes[market] = f"Excluded tonight, not a pass: {why}"
     return {"status": "ok", "note": " ".join(parts), "marketNotes": notes, "rows": rows}
