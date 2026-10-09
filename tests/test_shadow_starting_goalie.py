@@ -162,3 +162,30 @@ def test_recent_form_is_scored_for_every_skater_market_and_reads_no_later_game()
     current = frame[(frame["variant"] == "current") & (frame["stat"] == "points")].iloc[0]
     # The first hot game is forecast from quiet games only.
     assert first["ll"] == pytest.approx(current["ll"], abs=1e-9)
+
+
+def test_recent_form_moves_a_fitted_rate_toward_his_recent_games_only() -> None:
+    from dataclasses import dataclass
+
+    from nhl_betting_lab.backtest.walk_forward import apply_recent_form
+
+    @dataclass(frozen=True)
+    class Rates:
+        per60: dict
+
+    class Model:
+        skaters = {7: Rates(per60={"shots_on_goal": 3.0, "hits": 1.0}), 8: Rates(per60={"shots_on_goal": 3.0})}
+
+    history = pd.DataFrame(
+        [
+            {"player_id": 7, "role": "skater", "toi_seconds": 1200, "game_id": i,
+             "_date": date(2025, 10, 1 + i), "shots_on_goal": 4, "goals": 0, "assists": 0, "points": 0}
+            for i in range(20)
+        ]
+    )
+    model = Model()
+    assert apply_recent_form(model, history) == 1
+    # 12 shots per 60 recently against 3.0 long-run: moved up, not all the way.
+    assert 3.0 < model.skaters[7].per60["shots_on_goal"] < 12.0
+    assert model.skaters[7].per60["hits"] == 1.0  # not a form market
+    assert model.skaters[8].per60["shots_on_goal"] == 3.0  # no recent games
