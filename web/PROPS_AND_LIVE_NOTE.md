@@ -36,5 +36,7 @@ Full shapes: SCHEMA.md → "Additions (props and live scores)".
 - `pick.side` / `pick.line` are now written by `web/build_site_json.py::pick_side_and_line` (tests/test_a_pick_carries_its_side_and_line.py).
 - Added: each game card lists Cooper's Drought List players (`games[].drought`, `droughtNote`, `droughtWindow`; see SCHEMA.md). The collapsed card shows "Drought List ×N", and the expanded card shows the list with price, heavy-juice flag and the live tracker. The pipeline half is a separate PR.
 
+- `props` on board.json and results.json are now written by `web/build_site_json.py::build_props` and `grade_props` (2026-10-09, tests/test_the_site_publishes_the_cards_props.py). `unitDollars` is still not written (the page defaults to 25, the card's unit).
+
 ## Still not verified
 - Season, Archive and Graphic pages keep their light-only styling and old nav.

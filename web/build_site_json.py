@@ -44,9 +44,14 @@ Sources, in order of trust:
     season record sums every frozen board without re-fetching old finals
     (season_record).
   * data/processed/player_game_logs.csv: the box-score logs, one row per
-    player per game, read for the Due List alone (grade_due_list): each
-    listed player's goals and assists in the game the frozen board listed
-    him for. Never a price, never a stake.
+    player per game. Read for the Due List (grade_due_list): each listed
+    player's goals and assists in the game the frozen board listed him for;
+    and for the player props (build_props, grade_props): each card player's
+    id, club and position from his newest row, and the next morning his
+    line in the game the frozen board published him for. Never a price.
+  * The card's player props (gameday_card.json's prop best bets and leans)
+    are published as `props` exactly as the card priced them (build_props):
+    price, book, model probability, edge, tier and units are the card's.
 
 Preseason (gameType 1) is published as schedule only. The models are fitted
 on regular-season games and the card excludes exhibitions, so no projection
@@ -484,6 +489,10 @@ def build_board(day: date, lab: Path, history_dir: Path) -> dict:
     preseason = all(int(g.get("gameType", 1)) == 1 for g in games) if games else day < SEASON_OPENS
     teams: dict[str, dict] = {}
     out_games: list[dict] = []
+    #: (provider home, provider away) -> (game id, home abbr, away abbr), for
+    #: every game this build matched to the staged prices. The props join
+    #: through it exactly as the team pick does (build_props).
+    matched: dict[tuple[str, str], tuple[str, str, str]] = {}
 
     card = {}
     card_path = lab / "data" / "outputs" / "gameday_card.json"
@@ -566,6 +575,7 @@ def build_board(day: date, lab: Path, history_dir: Path) -> dict:
             provider_away = next((r["away_team"] for r in prices if lab_model["resolve"](r.get("away_team", "")) == away_key), None)
             if provider_home and provider_away:
                 row["priced"] = True
+                matched[(provider_home, provider_away)] = (row["id"], h, a)
                 cur, opn = ml_pair(prices, provider_home, provider_away), ml_pair(opens, provider_home, provider_away)
                 # The open is the game's first line-movement capture
                 # (earliest_capture), or it is missing. It used to fall back
@@ -679,6 +689,7 @@ def build_board(day: date, lab: Path, history_dir: Path) -> dict:
         # when no card was restored. A board built on an earlier day's card is
         # shown but not frozen (web/site_history.py::built_on_stale_state).
         "cardGeneratedAt": card.get("generated_at") or None,
+        "props": build_props(day, card, matched, lab, allowlisted, preseason=preseason, priced_any=bool(matched)),
     }
     history_dir.mkdir(parents=True, exist_ok=True)
     frozen = history_dir / f"{day.isoformat()}.json"
@@ -888,6 +899,277 @@ def pick_label(c: dict, home: str, away: str) -> str:
 FORWARD_DECISION_DATE = "2027-04-25"
 
 
+#: The player-prop markets the card prices, each with the box-score column
+#: it settles on (`nhl_betting_lab.markets`' `settles_on`, spelled out for the
+#: reason USER_AGENT gives). Points are goals plus assists in the logs too.
+PROP_MARKETS = {
+    "shots_on_goal": "shots_on_goal",
+    "points": "points",
+    "goals": "goals",
+    "assists": "assists",
+    "goalie_saves": "saves",
+    "blocked_shots": "blocked_shots",
+    "hits": "hits",
+}
+
+#: A saves prop on a goalie under this much ice time is void, the forward
+#: ledger's and the backtest's rule (`walk_forward.GOALIE_START_SECONDS`).
+GOALIE_START_SECONDS = 2400
+
+#: One short line per market whose card row the visitor should read with a
+#: caveat. Each is the card's own rule restated, never a new judgement:
+#: `points` is in STAKE_EXCLUDED_MARKETS (measured as a loss that survives
+#: correction, so the card records it as a lean and never stakes it), and
+#: `goalie_saves` is in HARD_GATED_MARKETS (no confirmed-starter source).
+PROP_MARKET_NOTES = {
+    "points": "Never staked: measured as a loss over two seasons, so the card records it as a lean only",
+    "goalie_saves": "Never staked: no confirmed-starter source when the card is built",
+}
+
+#: The card's sections, as gameday_card writes them, and the page's kind.
+PROP_KINDS = (("Best bets", "bet"), ("Leans", "lean"))
+
+
+def _aliases():
+    """The lab's player-name aliases (the forward ledger's join), or a plain
+    lowercase match when the lab cannot be imported."""
+    try:
+        from nhl_betting_lab.models.player_props import player_name_aliases
+    except ImportError:
+        return lambda name: (" ".join(str(name or "").lower().split()),)
+    return player_name_aliases
+
+
+def read_player_directory(processed: Path) -> dict:
+    """alias -> {player id: (team, position, last date)} from the box-score
+    logs, each player's newest row. Empty when the logs are missing."""
+    path = Path(processed) / PLAYER_LOGS_FILENAME
+    latest: dict[str, tuple[str, str, str, str]] = {}
+    if not path.is_file():
+        return {}
+    try:
+        with path.open(newline="", encoding="utf-8") as fh:
+            for r in csv.DictReader(fh):
+                pid = str(r.get("player_id") or "").strip()
+                when = str(r.get("date") or "")
+                if not pid or (pid in latest and latest[pid][3] >= when):
+                    continue
+                latest[pid] = (str(r.get("player") or ""), str(r.get("team") or "").strip().upper(),
+                               str(r.get("position") or "").strip(), when)
+    except (OSError, UnicodeDecodeError, csv.Error):
+        return {}
+    aliases = _aliases()
+    directory: dict[str, dict] = {}
+    for pid, (name, team, position, when) in latest.items():
+        for alias in aliases(name):
+            directory.setdefault(alias, {})[pid] = (team, position, when)
+    return directory
+
+
+def _prop_player(directory: dict, name: str, home: str, away: str, aliases) -> tuple[str | None, str | None, str]:
+    """(player id, team, position) for a card's player on this game, or
+    (None, None, "") when the logs name no one player on either club. A
+    player whose newest log is for another club (a move, before his first
+    game for the new one) is left without a team rather than guessed."""
+    found: dict[str, tuple] = {}
+    for alias in aliases(name):
+        found.update(directory.get(alias, {}))
+    here = {pid: entry for pid, entry in found.items() if entry[0] in (home, away)}
+    if len(here) == 1:
+        pid, (team, position, _) = next(iter(here.items()))
+        return pid, team, position
+    return None, None, ""
+
+
+def _int_price(value: object) -> int | None:
+    number = _real(value)
+    return None if number is None else int(number)
+
+
+def build_props(day: date, card: dict, matched: dict, lab: Path, allowlisted: list[str], *,
+                preseason: bool, priced_any: bool) -> dict:
+    """board.json's `props`: tonight's player props from the card, the same
+    best bets and leans the card publishes (web/SCHEMA.md, props.rows[]).
+
+    Read straight off `gameday_card.json`, as the team pick is: the card's
+    own price, book, model probability, edge, fair price, tier and units.
+    Nothing is priced here. A row joins a game through the same provider
+    team names the team pick joins through (`matched`), and only on the
+    board's own league day. Passes are counted in the note, never listed:
+    the card prices thousands of rungs a night and a pass is not a play.
+    A market the card excluded (priced for fewer than every game, not
+    allowlisted) is named as excluded, never as a pass.
+    """
+    if preseason:
+        return {"status": "abstain", "note": "The props model prices regular-season games only.", "marketNotes": {}, "rows": []}
+    notes = {m: t for m, t in PROP_MARKET_NOTES.items()}
+    if not card:
+        return {"status": "ok", "note": "No card for this day reached this build, so no player prop is shown.",
+                "marketNotes": notes, "rows": []}
+    directory = read_player_directory(lab / "data" / "processed")
+    aliases = _aliases()
+    rows: list[dict] = []
+    passes = 0
+    for section_rows, kind in ((card.get("best_bets") or [], "bet"), (card.get("leans") or [], "lean"), (card.get("passes") or [], "pass")):
+        for c in section_rows:
+            if not isinstance(c, dict) or c.get("market") not in PROP_MARKETS or not c.get("player"):
+                continue
+            if league_day(c.get("commence_time")) != day.isoformat():
+                continue
+            game = matched.get((c.get("home_team"), c.get("away_team")))
+            if game is None:
+                continue
+            if kind == "pass":
+                passes += 1
+                continue
+            game_id, home, away = game
+            pid, team, position = _prop_player(directory, str(c["player"]), home, away, aliases)
+            market = c["market"]
+            goalie = market == "goalie_saves"
+            bet = kind == "bet" and not goalie
+            edge = _real(c.get("edge"))
+            prob = _real(c.get("model_probability"))
+            rows.append({
+                "gameId": game_id, "player": str(c["player"]), "playerId": pid, "team": team,
+                "opp": (away if team == home else home) if team else None, "position": position,
+                "market": market, "line": _real(c.get("line")), "side": str(c.get("selection") or "").lower(),
+                "price": _int_price(c.get("american_odds")), "book": c.get("book") or None,
+                "projection": None, "modelProb": round(prob, 4) if prob is not None else None,
+                "fairPrice": _int_price(c.get("fair_american")),
+                "edgePct": round(edge * 100, 1) if edge is not None else None,
+                "kind": "bet" if bet else "lean",
+                "tier": (c.get("tier") if c.get("tier") in ("A", "B") else None) if bet else None,
+                "units": (_real(c.get("suggested_units")) if bet else None),
+                "allowlisted": market in allowlisted,
+                # The card never stakes a saves prop (HARD_GATED_MARKETS), and
+                # the page never shows one as a bet without a confirmed starter.
+                "starterConfirmed": False if goalie else None,
+            })
+    rows.sort(key=lambda r: (r["kind"] != "bet", -(r["edgePct"] or 0)))
+    excluded = {m: why for m, why in (card.get("excluded_markets") or {}).items() if m in PROP_MARKETS}
+    parts = []
+    if not priced_any:
+        parts.append("No market price for this league day reached this build, so no player prop is shown.")
+    elif not rows:
+        parts.append("No player prop cleared the card's bar tonight." if not excluded or len(excluded) < len(PROP_MARKETS)
+                     else "Player props were left off tonight's card.")
+    if passes:
+        parts.append(f"{passes:,} other priced prop{'s' if passes != 1 else ''} did not clear the bar and {'are' if passes != 1 else 'is'} not listed.")
+    for market, why in sorted(excluded.items()):
+        notes[market] = f"Excluded tonight, not a pass: {why}"
+    return {"status": "ok", "note": " ".join(parts), "marketNotes": notes, "rows": rows}
+
+
+def read_box_scores(processed: Path | None, game_ids: set[str]) -> tuple[dict, dict, set[str]]:
+    """Every player row of the named games in the box-score logs.
+
+    Returns (by_id, by_alias, boxed): `by_id` maps (game id, player id) to the
+    row, `by_alias` (game id, alias) to the player ids it can name, and
+    `boxed` the game ids the logs hold. Missing logs hold no game, which
+    grade_props reads as a box score that has not arrived, never a scratch.
+    """
+    by_id: dict[tuple[str, str], dict] = {}
+    by_alias: dict[tuple[str, str], set[str]] = {}
+    boxed: set[str] = set()
+    if processed is None or not game_ids:
+        return by_id, by_alias, boxed
+    path = Path(processed) / PLAYER_LOGS_FILENAME
+    if not path.is_file():
+        return by_id, by_alias, boxed
+    aliases = _aliases()
+    try:
+        with path.open(newline="", encoding="utf-8") as fh:
+            for r in csv.DictReader(fh):
+                game_id = str(r.get("game_id") or "").strip()
+                if game_id not in game_ids:
+                    continue
+                boxed.add(game_id)
+                pid = str(r.get("player_id") or "").strip()
+                if not pid:
+                    continue
+                by_id[(game_id, pid)] = r
+                for alias in aliases(r.get("player")):
+                    by_alias.setdefault((game_id, alias), set()).add(pid)
+    except (OSError, UnicodeDecodeError, csv.Error):
+        return {}, {}, set()
+    return by_id, by_alias, boxed
+
+
+def _profit_per_unit(price: float) -> float:
+    return price / 100.0 if price > 0 else 100.0 / abs(price)
+
+
+def grade_props(board: dict, finals: dict, processed: Path | None) -> dict:
+    """results.json's `props` for one frozen board: each published prop row
+    graded on the player's box-score line, by the forward ledger's rules.
+
+    Over wins above the line, under below it, level is a push. A player with
+    no row in a game the logs hold did not play: void, stake returned. A
+    saves prop on a goalie under GOALIE_START_SECONDS is void. A game not
+    final, or final with no box score in the logs yet, is ungraded (result
+    null) and season_record settles the night again (props_tallies'
+    `pending`). A name that matches two players in the game is ungraded,
+    never guessed. Only best bets carry profit, in units at the published
+    price; leans are graded and kept out of the record.
+    """
+    props = board.get("props")
+    out = {"status": props.get("status", "ok"), "note": props.get("note") or ""}
+    rows_in = [r for r in props.get("rows") or [] if isinstance(r, dict)]
+    game_ids = {str(r.get("gameId")) for r in rows_in if str(r.get("gameId")) in finals}
+    by_id, by_alias, boxed = read_box_scores(processed, game_ids)
+    aliases = _aliases()
+    summary = {"w": 0, "l": 0, "p": 0, "units": 0.0, "ungraded": 0}
+    rows: list[dict] = []
+    for entry in rows_in:
+        game_id = str(entry.get("gameId"))
+        row = {k: entry.get(k) for k in ("gameId", "player", "playerId", "team", "opp", "position", "market", "line",
+                                         "side", "price", "book", "kind", "tier", "units")}
+        row.update(actual=None, result=None)
+        column = PROP_MARKETS.get(entry.get("market"))
+        if game_id in finals and game_id in boxed and column:
+            box = by_id.get((game_id, str(entry.get("playerId")))) if entry.get("playerId") else None
+            if box is None:
+                ids: set[str] = set()
+                for alias in aliases(entry.get("player")):
+                    ids |= by_alias.get((game_id, alias), set())
+                team = str(entry.get("team") or "").upper()
+                if team:
+                    ids = {pid for pid in ids if str(by_id[(game_id, pid)].get("team") or "").upper() == team}
+                if len(ids) == 1:
+                    box = by_id[(game_id, next(iter(ids)))]
+                elif not ids:
+                    row["result"] = "void"
+            if box is not None:
+                toi = _real(box.get("toi_seconds"))
+                line = _real(entry.get("line"))
+                side = entry.get("side")
+                if column == "saves" and (toi is None or toi < GOALIE_START_SECONDS):
+                    row["result"] = "void" if toi is not None else None
+                elif line is not None and side in ("over", "under"):
+                    actual = _count(box.get(column)) if column != "points" else _count(box.get("goals")) + _count(box.get("assists"))
+                    result = "push" if actual == line else "win" if (actual > line) == (side == "over") else "loss"
+                    row.update(actual=actual, result=result)
+        if row["kind"] == "bet":
+            units = _real(row.get("units")) or 0.0
+            price = _real(row.get("price"))
+            result = row["result"]
+            if result == "win" and price:
+                row["profitUnits"] = round(units * _profit_per_unit(price), 2)
+            elif result == "loss":
+                row["profitUnits"] = round(-units, 2)
+            elif result in ("push", "void"):
+                row["profitUnits"] = 0.0
+            if result in ("win", "loss", "push"):
+                summary["w" if result == "win" else "l" if result == "loss" else "p"] += 1
+                summary["units"] += row.get("profitUnits") or 0.0
+            elif result is None:
+                summary["ungraded"] += 1
+        rows.append(row)
+    summary["units"] = round(summary["units"], 2)
+    out.update(summary=summary, rows=rows)
+    return out
+
+
 def allowlisted_markets(lab: Path) -> list[str]:
     """What the card may actually select from, read rather than asserted.
 
@@ -1073,6 +1355,8 @@ def settle(day: date, history_dir: Path, *, processed: Path | None = None) -> di
     finals = {str(g["id"]): g for g in schedule_for(day) if g.get("gameState") in {"OFF", "FINAL"}}
     if carries_list:
         base["dueList"] = grade_due_list(board, finals, processed)
+    if isinstance(board.get("props"), dict):
+        base["props"] = grade_props(board, finals, processed)
     if schedule_only:
         return base
     s = base["summary"]
@@ -1137,7 +1421,7 @@ def settle(day: date, history_dir: Path, *, processed: Path | None = None) -> di
 #: The box-score table `build_datasets` writes, one row per player per game
 #: (`PLAYER_LOGS_FILENAME` there, spelled out for the reason USER_AGENT
 #: gives). Publish Site restores it with the rest of data/processed in
-#: gameday-state. Read for the Due List alone.
+#: gameday-state. Read for the Due List and the player props.
 PLAYER_LOGS_FILENAME = "player_game_logs.csv"
 
 #: The Due List's categories, every one over 0.5 (web/SCHEMA.md, games[].drought).
@@ -1301,8 +1585,10 @@ def props_tallies(rows: list[dict]) -> dict:
     names (`props.rows[]`: kind, units, result, profitUnits): best bets with
     their profit in units, and leans apart, with none. A void or ungraded row
     is in neither; a pass is never a record."""
-    out = {"bets": {"w": 0, "l": 0, "p": 0, "units": 0.0}, "leans": {"w": 0, "l": 0, "p": 0}}
+    out = {"bets": {"w": 0, "l": 0, "p": 0, "units": 0.0}, "leans": {"w": 0, "l": 0, "p": 0}, "pending": 0}
     for r in rows:
+        if isinstance(r, dict) and r.get("kind") in ("bet", "lean") and r.get("result") is None:
+            out["pending"] += 1
         if not isinstance(r, dict) or r.get("result") not in ("win", "loss", "push"):
             continue
         kind = r.get("kind")
@@ -1326,7 +1612,11 @@ def night_record(results: dict) -> dict:
     if isinstance(due, dict):
         night["dueList"] = due_list_tallies(due.get("rows") or [])
     props = results.get("props")
-    if isinstance(props, dict) and props.get("status", "ok") == "ok" and isinstance(props.get("rows"), list):
+    # A night counts toward the props season only when it published a row:
+    # since 2026-10-09 every regular-season board carries a props block,
+    # empty on a night the card listed none, and an empty block is not a
+    # night of props.
+    if isinstance(props, dict) and props.get("status", "ok") == "ok" and isinstance(props.get("rows"), list) and props["rows"]:
         night["props"] = props_tallies(props["rows"])
     return night
 
@@ -1450,7 +1740,10 @@ def season_record(today: date, history_dir: Path, latest: dict, *, processed: Pa
                 continue
             night = night_record(settled)
         night_due = night.get("dueList") if isinstance(night.get("dueList"), dict) else None
-        waiting = bool(night_due and night_due.get("pending")) and day > today - timedelta(days=DUE_LIST_PATIENCE_DAYS)
+        night_waiting = night_due and night_due.get("pending")
+        if isinstance(night.get("props"), dict) and night["props"].get("pending"):
+            night_waiting = True
+        waiting = bool(night_waiting) and day > today - timedelta(days=DUE_LIST_PATIENCE_DAYS)
         if day <= today - timedelta(days=2) and kept_night is None and not waiting:
             kept.mkdir(parents=True, exist_ok=True)
             cached.write_text(json.dumps({"resultsDate": day.isoformat(), **night}, indent=1), encoding="utf-8")
