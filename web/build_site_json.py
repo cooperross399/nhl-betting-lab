@@ -1354,7 +1354,7 @@ def settle(day: date, history_dir: Path, *, processed: Path | None = None) -> di
             return base
     finals = {str(g["id"]): g for g in schedule_for(day) if g.get("gameState") in {"OFF", "FINAL"}}
     if carries_list:
-        base["dueList"] = grade_due_list(board, finals, processed)
+        base["dueList"] = grade_due_list(board, finals, processed, due_ledger_prices(read_due_ledger(processed)[0], day))
     if isinstance(board.get("props"), dict):
         base["props"] = grade_props(board, finals, processed)
     if schedule_only:
@@ -1432,6 +1432,131 @@ DUE_LIST_MARKETS = ("points", "goals", "assists")
 #: none: the rule's own, over 0.5.
 DUE_LIST_LINE = 0.5
 
+#: The Due List is tracked as if this were bet on every priced entry, every
+#: night (Cooper, 2026-10-09: "as if we bet .25u on each one every night").
+#: Nothing is bet. It is the lab's `drought_forward.TRACKED_STAKE`, spelled
+#: out here for the reason USER_AGENT gives.
+DUE_LIST_STAKE = 0.25
+
+#: The lab's own Due List ledger and its sources (nhl_betting_lab.drought_forward:
+#: LEDGER_FILENAME, LIST_DIRNAME/SOURCES_FILENAME), restored with the rest of
+#: data/processed in gameday-state.
+DUE_LEDGER_FILENAME = "drought_forward.csv"
+DUE_SOURCES_PATH = ("drought_list", "sources.json")
+
+
+def win_profit(american: float) -> float:
+    """Profit on one unit won at an American price."""
+    return american / 100.0 if american > 0 else 100.0 / -american
+
+
+def due_units(result: str | None, price: object) -> float | None:
+    """One entry's profit at DUE_LIST_STAKE, or None when it was not a wager
+    (no price, a void, or not graded yet). A push returns the stake: 0."""
+    if result not in ("win", "loss", "push") or not _is_number(price) or float(price) == 0:
+        return None
+    if result == "push":
+        return 0.0
+    return round(DUE_LIST_STAKE * (win_profit(float(price)) if result == "win" else -1.0), 4)
+
+
+def read_due_ledger(processed: Path | None) -> tuple[list[dict], dict]:
+    """The lab's settled Due List rows and its sources.json, or ([], {}) without them."""
+    if processed is None:
+        return [], {}
+    rows: list[dict] = []
+    path = Path(processed) / DUE_LEDGER_FILENAME
+    if path.is_file():
+        try:
+            with path.open(newline="", encoding="utf-8") as fh:
+                rows = [r for r in csv.DictReader(fh)]
+        except (OSError, UnicodeDecodeError, csv.Error):
+            rows = []
+    try:
+        sources = json.loads((Path(processed).joinpath(*DUE_SOURCES_PATH)).read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        sources = {}
+    return rows, sources if isinstance(sources, dict) else {}
+
+
+def _price(value: object) -> float | None:
+    try:
+        x = float(value)
+    except (TypeError, ValueError):
+        return None
+    return x if math.isfinite(x) and x != 0 else None
+
+
+def due_ledger_prices(rows: list[dict], day: date) -> dict[tuple[str, str], float]:
+    """{(player id, market): price} the lab's ledger settled `day`'s entries at."""
+    out: dict[tuple[str, str], float] = {}
+    for r in rows:
+        if str(r.get("date") or "")[:10] != day.isoformat():
+            continue
+        price = _price(r.get("american_odds"))
+        pid = str(r.get("player_id") or "").strip()
+        if price is not None and pid:
+            out[(pid.split(".")[0], str(r.get("market") or ""))] = price
+    return out
+
+
+def due_ledger_season(rows: list[dict], sources: dict) -> dict | None:
+    """The Due List's season record from the lab's ledger, at DUE_LIST_STAKE an entry.
+
+    w/l/p count every graded entry (priced or not), as the nightly grading
+    does; `units` and `staked` count only entries with a price, since one
+    with none could not have been bet. `unpriced` is how many graded entries
+    that leaves out. `backfilledNights` are the nights rebuilt after the fact,
+    before the list was first recorded, and `cardPriced` the entries listed
+    with no price and graded at the card's frozen price from that morning.
+    None when the ledger holds no graded entry.
+    """
+    out = {"w": 0, "l": 0, "p": 0, "byMarket": {m: {"w": 0, "l": 0, "units": 0.0} for m in DUE_LIST_MARKETS},
+           "units": 0.0, "staked": 0.0, "wagers": 0, "unpriced": 0, "void": 0, "impliedSum": 0.0}
+    nights: set[str] = set()
+    to_result = {"won": "win", "lost": "loss", "push": "push"}
+    for r in rows:
+        outcome = str(r.get("outcome") or "")
+        day = str(r.get("date") or "")[:10]
+        if outcome == "void":
+            out["void"] += 1
+            continue
+        result = to_result.get(outcome)
+        if result is None:
+            continue
+        nights.add(day)
+        out["w" if result == "win" else "l" if result == "loss" else "p"] += 1
+        market = str(r.get("market") or "")
+        if result != "push" and market in out["byMarket"]:
+            out["byMarket"][market]["w" if result == "win" else "l"] += 1
+        price = _price(r.get("american_odds"))
+        if price is None:
+            out["unpriced"] += 1
+            continue
+        units = due_units(result, price) or 0.0
+        out["units"] += units
+        out["staked"] += DUE_LIST_STAKE
+        out["wagers"] += 1
+        out["impliedSum"] += implied(price)
+        if market in out["byMarket"]:
+            out["byMarket"][market]["units"] += units
+    if not nights:
+        return None
+    season = {k: out[k] for k in ("w", "l", "p")}
+    season.update(
+        nights=len(nights), firstDate=min(nights), lastDate=max(nights), stake=DUE_LIST_STAKE,
+        units=round(out["units"], 2), staked=round(out["staked"], 2), wagers=out["wagers"],
+        unpriced=out["unpriced"], void=out["void"],
+        byMarket={m: {**v, "units": round(v["units"], 2)} for m, v in out["byMarket"].items()},
+        backfilledNights=sorted((sources.get("backfilled") or {}).keys()),
+        cardPriced=sum(len(v) for v in (sources.get("filled") or {}).values() if isinstance(v, list)),
+        source="ledger",
+    )
+    if out["wagers"]:
+        season["impliedPct"] = round(100 * out["impliedSum"] / out["wagers"], 1)
+        season["returnPct"] = round(100 * out["units"] / out["staked"], 1)
+    return season
+
 
 def _count(value: object) -> int:
     """A box-score count as the logs spell it; a blank is nothing scored."""
@@ -1485,7 +1610,8 @@ def _due_list_key(entry: dict) -> tuple:
     return who, entry.get("market")
 
 
-def grade_due_list(board: dict, finals: dict, processed: Path | None) -> dict:
+def grade_due_list(board: dict, finals: dict, processed: Path | None,
+                   ledger_prices: dict[tuple[str, str], float] | None = None) -> dict:
     """results.json's `dueList` (its `summary` and `rows`) for one frozen board.
 
     Every entry the frozen board published is graded, priced or not, against
@@ -1500,8 +1626,14 @@ def grade_due_list(board: dict, finals: dict, processed: Path | None) -> dict:
     null, not counted and not voided, and season_record keeps re-settling
     that night rather than keeping it (due_list_tallies' `pending`), for up
     to DUE_LIST_PATIENCE_DAYS. One entry per (player, category) a night,
-    however many times the board lists it. Nothing here is a stake: no
-    units, no profit, in any row or tally.
+    however many times the board lists it.
+
+    Each graded entry carries `units`: its result as if DUE_LIST_STAKE had
+    been bet at its price (due_units), None when it was not a wager. An
+    entry published with no price takes the price the lab's ledger settled
+    it at (`ledger_prices`, the card's frozen price that morning), marked
+    `priceSource: "card"`; with neither it is graded and carries no units.
+    Nothing is bet.
     """
     games = [g for g in board.get("games") or [] if isinstance(g, dict) and "drought" in g]
     by_id, by_name, boxed = read_player_counts(processed, {str(g.get("id")) for g in games if str(g.get("id")) in finals})
@@ -1522,7 +1654,11 @@ def grade_due_list(board: dict, finals: dict, processed: Path | None) -> dict:
             if "opp" not in row:
                 team = entry.get("team")
                 row["opp"] = away if team == home else home if team == away else None
-            row.update(actual=None, result=None)
+            row.update(actual=None, result=None, units=None)
+            if not _is_number(row.get("price")) and ledger_prices:
+                borrowed = ledger_prices.get((str(entry.get("playerId")), str(entry.get("market"))))
+                if borrowed is not None:
+                    row.update(price=int(borrowed) if float(borrowed).is_integer() else borrowed, priceSource="card")
             if game_id in finals and game_id in boxed:
                 counts = by_id.get((game_id, str(entry.get("playerId"))))
                 if counts is None:
@@ -1538,7 +1674,7 @@ def grade_due_list(board: dict, finals: dict, processed: Path | None) -> dict:
                         line = DUE_LIST_LINE
                     result = "push" if actual == line else "win" if actual > line else "loss"
                     tally["w" if result == "win" else "l" if result == "loss" else "p"] += 1
-                    row.update(actual=actual, result=result)
+                    row.update(actual=actual, result=result, units=due_units(result, row.get("price")))
             rows.append(row)
     return {"summary": tally, "rows": rows}
 
@@ -1563,7 +1699,7 @@ def due_list_tallies(rows: list[dict]) -> dict:
     cache ever after. An entry is pending by its own result, not by its
     game's place in another tally."""
     out = {"w": 0, "l": 0, "p": 0, "byMarket": {m: {"w": 0, "l": 0} for m in DUE_LIST_MARKETS},
-           "impliedSum": 0.0, "impliedCount": 0, "pending": 0}
+           "impliedSum": 0.0, "impliedCount": 0, "pending": 0, "units": 0.0, "staked": 0.0}
     for r in rows:
         if not isinstance(r, dict):
             continue
@@ -1575,6 +1711,9 @@ def due_list_tallies(rows: list[dict]) -> dict:
             if _is_number(r.get("price")):
                 out["impliedSum"] += implied(float(r["price"]))
                 out["impliedCount"] += 1
+            if _is_number(r.get("units")):
+                out["units"] += float(r["units"])
+                out["staked"] += DUE_LIST_STAKE
         elif result is None:
             out["pending"] += 1
     return out
@@ -1664,7 +1803,9 @@ def _kept_before_the_list_was_graded(night: dict, frozen: Path) -> bool:
     good. Such a night is settled again and the cache rewritten.
     """
     if "dueList" in night:
-        return False
+        # Kept before the list was tracked at DUE_LIST_STAKE (2026-10-09):
+        # settled again once so its units are counted.
+        return not (isinstance(night["dueList"], dict) and "units" in night["dueList"])
     try:
         board = json.loads(frozen.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError):
@@ -1689,12 +1830,16 @@ def season_record(today: date, history_dir: Path, latest: dict, *, processed: Pa
     and on opening morning it read `picks {w:0, l:0, p:0}` with `nights: 0`:
     a record nobody had counted, which the page happened not to show.
 
-    ## The Due List and the props, kept apart and never staked
+    ## The Due List and the props, kept apart
 
     Each night is kept as `night_record` shapes it. `dueList` sums every
     graded Due List entry on every frozen board that carried the list
-    (`dueList {w, l, p, nights, byMarket, impliedPct}`; the board's record
-    takes the first four): no units, because nothing on it is staked. A
+    (`dueList {w, l, p, nights, byMarket, impliedPct, stake, units, staked,
+    returnPct}`), its units as if DUE_LIST_STAKE had been bet on every priced
+    entry (Cooper, 2026-10-09); nothing is bet, and none of it is in the
+    picks or props tallies. When Publish Site restored the lab's own Due
+    List ledger, that ledger's record (due_ledger_season) replaces it, since
+    it also holds the nights before the list was first recorded. A
     night counts toward it when its board carried the list and the night
     settled (a game graded, or an entry graded); a night with an entry still
     unread (its game not final, or final with no box score in the logs yet)
@@ -1712,7 +1857,7 @@ def season_record(today: date, history_dir: Path, latest: dict, *, processed: Pa
     tally = {key: {"w": 0, "l": 0} if key == "straightUp" else {"w": 0, "l": 0, "p": 0}
              for key in SEASON_KEYS}
     due = {"w": 0, "l": 0, "p": 0, "nights": 0, "byMarket": {m: {"w": 0, "l": 0} for m in DUE_LIST_MARKETS},
-           "impliedSum": 0.0, "impliedCount": 0}
+           "impliedSum": 0.0, "impliedCount": 0, "units": 0.0, "staked": 0.0}
     props = {"w": 0, "l": 0, "p": 0, "units": 0.0, "nights": 0}
     prop_leans = {"w": 0, "l": 0, "p": 0, "nights": 0}
     kept = history_dir / SETTLED_DIR
@@ -1758,6 +1903,8 @@ def season_record(today: date, history_dir: Path, latest: dict, *, processed: Pa
                         due["byMarket"][market][k] += int(split.get(k) or 0)
             due["impliedSum"] += float(night_due.get("impliedSum") or 0.0)
             due["impliedCount"] += int(night_due.get("impliedCount") or 0)
+            due["units"] += float(night_due.get("units") or 0.0)
+            due["staked"] += float(night_due.get("staked") or 0.0)
         night_props = night.get("props") if isinstance(night.get("props"), dict) else None
         if night_props:
             props["nights"] += 1
@@ -1778,9 +1925,20 @@ def season_record(today: date, history_dir: Path, latest: dict, *, processed: Pa
     span = {"nights": nights, "firstDate": first, "lastDate": last, "missingNights": missing}
     season = {**tally, **span} if nights else span
     if due["nights"]:
-        season["dueList"] = {"w": due["w"], "l": due["l"], "p": due["p"], "nights": due["nights"], "byMarket": due["byMarket"]}
+        season["dueList"] = {"w": due["w"], "l": due["l"], "p": due["p"], "nights": due["nights"], "byMarket": due["byMarket"],
+                             "stake": DUE_LIST_STAKE, "units": round(due["units"], 2), "staked": round(due["staked"], 2),
+                             "source": "boards"}
         if due["impliedCount"]:
             season["dueList"]["impliedPct"] = round(100 * due["impliedSum"] / due["impliedCount"], 1)
+        if due["staked"]:
+            season["dueList"]["returnPct"] = round(100 * due["units"] / due["staked"], 1)
+    # The lab's own ledger, when Publish Site restored it, is the season
+    # record: it holds every night from opening night (the nights before the
+    # list was first recorded rebuilt by the lab, and named), where the
+    # frozen boards hold only the nights the site published the list on.
+    ledger_season = due_ledger_season(*read_due_ledger(processed))
+    if ledger_season is not None:
+        season["dueList"] = ledger_season
     if props["nights"]:
         season["props"] = {**props, "units": round(props["units"], 2)}
         season["propLeans"] = prop_leans
@@ -1829,10 +1987,11 @@ def main(argv: list[str] | None = None) -> int:
     if season["nights"]:
         board["record"].update({key: season[key] for key in SEASON_KEYS}, season=season)
     # The Due List's and the props' season lines, absent until a night that
-    # carried them has settled (season_record). The Due List's record is a
-    # count and nothing else: no units, on the board or on the page.
+    # carried them has settled (season_record). The Due List's units are
+    # notional, DUE_LIST_STAKE on every priced entry; nothing is bet.
     if "dueList" in season:
-        board["record"]["dueList"] = {k: season["dueList"][k] for k in ("w", "l", "p", "nights")}
+        board["record"]["dueList"] = {k: season["dueList"][k] for k in ("w", "l", "p", "nights", "stake", "units", "staked")
+                                      if k in season["dueList"]}
         if isinstance(results.get("dueList"), dict):
             results["dueList"]["season"] = season["dueList"]
     if "props" in season:

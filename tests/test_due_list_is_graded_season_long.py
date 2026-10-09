@@ -113,6 +113,15 @@ LOG_COLUMNS = ("game_id", "season", "game_type", "date", "start_time_utc", "play
                "team", "opponent", "goals", "assists", "points")
 
 
+#: The notional 0.25u track's keys on a season record (Cooper, 2026-10-09).
+TRACKING_KEYS = {"stake", "units", "staked", "returnPct", "source"}
+
+
+def _count(record: dict) -> dict:
+    """A Due List record's count, without the notional 0.25u track beside it."""
+    return {k: record[k] for k in ("w", "l", "p", "nights")}
+
+
 def write_logs(lab: Path, rows: list[tuple[str, int, str, str, int, int]]) -> None:
     """player_game_logs.csv as build_datasets writes it: (game id, player id, player, team, goals, assists)."""
     path = lab / "data" / "processed" / "player_game_logs.csv"
@@ -190,15 +199,18 @@ def three_nights(tmp_path: Path, monkeypatch) -> tuple[Path, Path, dict, dict, d
 def test_three_frozen_nights_sum_into_the_season_record(tmp_path: Path, monkeypatch) -> None:
     _, _, board, results, _ = three_nights(tmp_path, monkeypatch)
 
-    assert board["record"]["dueList"] == {"w": 4, "l": 2, "p": 0, "nights": 3}
+    count = {k: board["record"]["dueList"][k] for k in ("w", "l", "p", "nights")}
+    assert count == {"w": 4, "l": 2, "p": 0, "nights": 3}
     season = results["dueList"]["season"]
     assert season["byMarket"] == {"points": {"w": 1, "l": 1}, "goals": {"w": 1, "l": 1}, "assists": {"w": 2, "l": 0}}
-    assert {k: season[k] for k in ("w", "l", "p", "nights")} == board["record"]["dueList"]
+    assert {k: season[k] for k in ("w", "l", "p", "nights")} == count
     assert results["seasonRecord"]["dueList"] == season
-    # The record on the board is a count and nothing else: the page's own
-    # keys, no category split and no price figure.
-    assert set(board["record"]["dueList"]) == {"w", "l", "p", "nights"}
-    assert set(season) == {"w", "l", "p", "nights", "impliedPct", "byMarket"}
+    # The record on the board is the page's own keys: the count and the
+    # notional 0.25u track (Cooper, 2026-10-09), no category split.
+    assert set(board["record"]["dueList"]) == {"w", "l", "p", "nights", "stake", "units", "staked"}
+    assert board["record"]["dueList"]["stake"] == 0.25
+    assert {k: season[k] for k in ("units", "staked")} == {k: board["record"]["dueList"][k] for k in ("units", "staked")}
+    assert set(season) == {"w", "l", "p", "nights", "impliedPct", "byMarket"} | TRACKING_KEYS
 
 
 def test_an_unpriced_entry_is_counted_and_left_out_of_the_implied_rate(tmp_path: Path, monkeypatch) -> None:
@@ -259,8 +271,9 @@ def test_the_rows_are_the_frozen_entries_with_their_grade(tmp_path: Path, monkey
     frozen = json.loads((out / "history" / f"{D0.isoformat()}.json").read_text(encoding="utf-8"))
     published = next(e for g in frozen["games"] for e in (g.get("drought") or []) if e["player"] == "Alpha Points")
     alpha = next(r for r in by_night[D0]["dueList"]["rows"] if r["player"] == "Alpha Points")
-    assert set(alpha) == SCHEMA_KEYS | {"gameId", "opp", "actual", "result"}
-    assert alpha == {**published, "gameId": TOR_GAME[D0], "opp": "MTL", "actual": 2, "result": "win"}
+    assert set(alpha) == SCHEMA_KEYS | {"gameId", "opp", "actual", "result", "units"}
+    # -150 won at the notional 0.25u (Cooper, 2026-10-09): 0.25 x 100/150.
+    assert alpha == {**published, "gameId": TOR_GAME[D0], "opp": "MTL", "actual": 2, "result": "win", "units": 0.1667}
     assert (published["playerId"], published["team"], published["market"], published["price"], published["book"]) == (1, "TOR", "points", -150, "DraftKings")
     bravo = next(r for r in by_night[D0]["dueList"]["rows"] if r["player"] == "Bravo Goals")
     assert (bravo["team"], bravo["opp"], bravo["actual"], bravo["result"]) == ("MTL", "TOR", 0, "loss")
@@ -287,7 +300,7 @@ def test_old_nights_are_kept_with_their_tallies_and_read_back(tmp_path: Path, mo
     # network; D0 and D1 are read from what was kept.
     season = module.season_record(D3 + timedelta(days=1), out / "history", yesterday)
     assert season["missingNights"] == 1
-    assert season["dueList"] == {"w": 3, "l": 2, "p": 0, "nights": 2,
+    assert {k: v for k, v in season["dueList"].items() if k not in TRACKING_KEYS} == {"w": 3, "l": 2, "p": 0, "nights": 2,
                                  "byMarket": {"points": {"w": 1, "l": 1}, "goals": {"w": 0, "l": 1}, "assists": {"w": 2, "l": 0}},
                                  "impliedPct": round(100 * sum(_implied(p) for p in (-150, 140, -200, 120)) / 4, 1)}
     assert board["record"]["dueList"]["nights"] == 3, "the live build, with the network, counted all three"
@@ -308,7 +321,7 @@ def test_a_final_game_whose_box_score_has_not_reached_the_logs_waits_rather_than
     assert [(r["actual"], r["result"]) for r in results["dueList"]["rows"]] == [(None, None)] * 4
     assert "void" not in {r["result"] for r in results["dueList"]["rows"]}
     assert results["dueList"]["summary"] == {"w": 0, "l": 0, "p": 0}
-    assert board["record"]["dueList"] == {"w": 0, "l": 0, "p": 0, "nights": 1}, "the night settled; nothing on the list has"
+    assert _count(board["record"]["dueList"]) == {"w": 0, "l": 0, "p": 0, "nights": 1}, "the night settled; nothing on the list has"
 
     build_night(lab, out, monkeypatch, D2)
     assert not (out / "history" / "settled" / f"{D0.isoformat()}.json").exists(), "a night still waiting is not kept"
@@ -317,7 +330,7 @@ def test_a_final_game_whose_box_score_has_not_reached_the_logs_waits_rather_than
     board, _ = build_night(lab, out, monkeypatch, D3)
     # D1 and D2 carried the list too (empty: nobody qualified) and settled,
     # so the record spans three nights; the grades are D0's alone.
-    assert board["record"]["dueList"] == {"w": 2, "l": 1, "p": 0, "nights": 3}
+    assert _count(board["record"]["dueList"]) == {"w": 2, "l": 1, "p": 0, "nights": 3}
     kept = json.loads((out / "history" / "settled" / f"{D0.isoformat()}.json").read_text(encoding="utf-8"))
     assert kept["dueList"]["w"] == 2 and kept["dueList"]["pending"] == 0
 
@@ -352,13 +365,13 @@ def test_a_game_not_final_for_two_days_is_graded_once_it_is_final(tmp_path: Path
     board, results = build_night(lab, out, monkeypatch, D1, not_final=(NYI_GAME[D0],))
     graded = {r["player"]: (r["actual"], r["result"]) for r in results["dueList"]["rows"]}
     assert graded == {"Alpha Points": (2, "win"), "Hotel Points": (None, None)}
-    assert board["record"]["dueList"] == {"w": 1, "l": 0, "p": 0, "nights": 1}, "TOR's game settled; Hotel waits"
+    assert _count(board["record"]["dueList"]) == {"w": 1, "l": 0, "p": 0, "nights": 1}, "TOR's game settled; Hotel waits"
 
     build_night(lab, out, monkeypatch, D2, not_final=(NYI_GAME[D0],))
     assert _kept(out, D0) is None, "a night with an entry on a game not yet final is not kept"
 
     board, results = build_night(lab, out, monkeypatch, D3)
-    assert board["record"]["dueList"] == {"w": 2, "l": 0, "p": 0, "nights": 3}, "Hotel's six points were graded"
+    assert _count(board["record"]["dueList"]) == {"w": 2, "l": 0, "p": 0, "nights": 3}, "Hotel's six points were graded"
     assert results["seasonRecord"]["dueList"]["impliedPct"] == round(100 * (_implied(-150) + _implied(-110)) / 2, 1)
     kept = _kept(out, D0)
     assert kept["dueList"]["w"] == 2 and kept["dueList"]["pending"] == 0 and kept["dueList"]["impliedCount"] == 2
@@ -382,7 +395,7 @@ def test_a_night_with_no_final_at_all_waits_and_keeps_its_team_record(tmp_path: 
     assert _kept(out, D0) is None, "a night with nothing final is not kept with 0 games"
 
     board, results = build_night(lab, out, monkeypatch, D3)
-    assert board["record"]["dueList"] == {"w": 2, "l": 0, "p": 0, "nights": 3}
+    assert _count(board["record"]["dueList"]) == {"w": 2, "l": 0, "p": 0, "nights": 3}
     season = results["seasonRecord"]
     assert season["nights"] == 3 and season["missingNights"] == 0
     assert season["straightUp"]["w"] + season["straightUp"]["l"] == 3 * len(SLATE), "D0's team games count too"
@@ -412,7 +425,7 @@ def test_a_schedule_only_board_that_carried_the_list_waits_for_the_logs_too(tmp_
 
     write_logs(lab, TWO_PLAYER_LOGS)
     board, results = build_night(lab, out, monkeypatch, D3)
-    assert board["record"]["dueList"] == {"w": 2, "l": 0, "p": 0, "nights": 1}
+    assert _count(board["record"]["dueList"]) == {"w": 2, "l": 0, "p": 0, "nights": 1}
     assert results["seasonRecord"]["dueList"]["byMarket"]["points"] == {"w": 2, "l": 0}
     kept = _kept(out, D0)
     assert kept["games"] == 0 and kept["dueList"]["w"] == 2 and kept["dueList"]["pending"] == 0
@@ -429,7 +442,7 @@ def test_a_night_kept_before_the_list_was_graded_is_settled_again(tmp_path: Path
     build_night(lab, out, monkeypatch, D0)
     write_list(lab, [row("TOR", "MTL", player="Echo Points", player_id=5, market="points", american_odds=-200.0)], day=D1)
     board, results = build_night(lab, out, monkeypatch, D1)
-    assert board["record"]["dueList"] == {"w": 1, "l": 0, "p": 0, "nights": 1}
+    assert _count(board["record"]["dueList"]) == {"w": 1, "l": 0, "p": 0, "nights": 1}
 
     kept_dir = out / "history" / "settled"
     kept_dir.mkdir(parents=True)
@@ -437,7 +450,7 @@ def test_a_night_kept_before_the_list_was_graded_is_settled_again(tmp_path: Path
     (kept_dir / f"{D0.isoformat()}.json").write_text(json.dumps(old_shape), encoding="utf-8")
 
     board, results = build_night(lab, out, monkeypatch, D2)
-    assert board["record"]["dueList"] == {"w": 1, "l": 1, "p": 0, "nights": 2}, "D0's win is back in the record"
+    assert _count(board["record"]["dueList"]) == {"w": 1, "l": 1, "p": 0, "nights": 2}, "D0's win is back in the record"
     kept = _kept(out, D0)
     assert kept["dueList"]["w"] == 1 and kept["dueList"]["pending"] == 0
     assert kept["games"] == old_shape["games"] and kept["summary"] == old_shape["summary"], "the team record is as it was"
@@ -445,7 +458,7 @@ def test_a_night_kept_before_the_list_was_graded_is_settled_again(tmp_path: Path
     # Settled again once: the next run reads the rewritten cache without the network.
     board, results = build_night(lab, out, monkeypatch, D3, unreachable=(D0,))
     assert results["seasonRecord"]["missingNights"] == 0
-    assert board["record"]["dueList"] == {"w": 1, "l": 1, "p": 0, "nights": 3}
+    assert _count(board["record"]["dueList"]) == {"w": 1, "l": 1, "p": 0, "nights": 3}
 
 
 def test_a_night_kept_for_a_board_without_the_list_is_read_as_kept(tmp_path: Path, monkeypatch) -> None:
@@ -470,7 +483,7 @@ def test_a_night_kept_for_a_board_without_the_list_is_read_as_kept(tmp_path: Pat
     assert results["seasonRecord"]["missingNights"] == 0, "read from what was kept"
     assert results["seasonRecord"]["straightUp"]["w"] + results["seasonRecord"]["straightUp"]["l"] == 2 * len(SLATE)
     # D1's board carried the list (empty); D0's carried none, so it is one night of it, not two.
-    assert board["record"]["dueList"] == {"w": 0, "l": 0, "p": 0, "nights": 1}
+    assert _count(board["record"]["dueList"]) == {"w": 0, "l": 0, "p": 0, "nights": 1}
     assert _kept(out, D0) == old_shape
 
 
@@ -489,7 +502,7 @@ def test_an_entry_that_never_grades_holds_its_night_no_longer_than_the_patience_
     write_list(lab, TWO_PLAYER_LIST, day=D0)
     for day in (D0, D1, D2, D3):
         board, results = build_night(lab, out, monkeypatch, day)
-    assert board["record"]["dueList"] == {"w": 1, "l": 0, "p": 0, "nights": 3}
+    assert _count(board["record"]["dueList"]) == {"w": 1, "l": 0, "p": 0, "nights": 3}
     assert _kept(out, D0) is None, "Hotel is unread, so the night waits"
     processed = lab / "data" / "processed"
 
@@ -537,5 +550,5 @@ def test_a_kept_night_that_cannot_be_read_is_settled_again(tmp_path: Path, monke
 
     board, results = build_night(lab, out, monkeypatch, D2)
     assert results["seasonRecord"]["missingNights"] == 0
-    assert board["record"]["dueList"] == {"w": 2, "l": 0, "p": 0, "nights": 2}
+    assert _count(board["record"]["dueList"]) == {"w": 2, "l": 0, "p": 0, "nights": 2}
     assert _kept(out, D0)["dueList"]["w"] == 2, "rewritten whole"
