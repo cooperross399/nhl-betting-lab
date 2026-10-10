@@ -569,6 +569,8 @@ def build_candidates(
             candidate.demotion_reason = STAKE_EXCLUDED_MARKETS[market_key]
         if candidate.section == BEST_BETS_SECTION:
             against = stat_side_reason(key, probabilities)
+            if not against and market.is_prop:
+                against = prop_confidence_reason(price, float(probability))
             if against:
                 candidate.section = LEANS_SECTION
                 candidate.demotion_reason = against
@@ -956,6 +958,78 @@ def stat_side_reason(key: tuple, probabilities: Mapping[tuple, float]) -> str:
     )
 
 
+#: Cooper, 2026-10-10, on the stats check above: "i still want that to
+#: apply for props. i want you the model to [be] confident in them hitting
+#: relative to their odds bracket". A prop best bet is staked only when the
+#: model's hit chance clears what the SHORTEST price in its odds bracket
+#: would need for a best bet: that price's break-even plus
+#: `BEST_BET_PROP_EDGE`. So a +135 prop is held to the +111 standard and a
+#: -121 prop to the -135 standard; a price at the short end of its bracket
+#: is held to exactly the bar it already cleared. The brackets are the
+#: default picked that day, each about eight points of break-even wide;
+#: Cooper can move them. A prop that fails keeps its opinion as a lean at
+#: zero units. Like the team check, this changes stakes and nothing the
+#: forward ledger scores, and it is not measured against real prices.
+#: (shortest, longest) American price of each bracket.
+PROP_ODDS_BRACKETS: tuple[tuple[float, float], ...] = (
+    (-160.0, -136.0),
+    (-135.0, -111.0),
+    (-110.0, 110.0),
+    (111.0, 150.0),
+    (151.0, 200.0),
+    (201.0, 300.0),
+    (301.0, 400.0),
+    (401.0, 600.0),
+)
+PROP_CONFIDENCE_PREFIX = "Not confident enough for its odds:"
+
+
+def _american_label(price: float) -> str:
+    return f"{int(price):+d}" if float(price).is_integer() else f"{price:+.1f}"
+
+
+def prop_bracket(price: float) -> tuple[float, float] | None:
+    """The odds bracket a prop price sits in, or None outside every bracket.
+
+    Judged on break-even probability, so the brackets meet with no gap: a
+    price belongs to the longest bracket whose shortest price it is not
+    shorter than.
+    """
+    implied = american_to_implied(price)
+    longest_first = sorted(
+        PROP_ODDS_BRACKETS, key=lambda bracket: american_to_implied(bracket[0])
+    )
+    if implied < american_to_implied(longest_first[0][1]) - 1e-12:
+        return None
+    for short, long in longest_first:
+        if implied <= american_to_implied(short) + 1e-12:
+            return short, long
+    return None
+
+
+def prop_confidence_floor(price: float) -> float | None:
+    """The least model hit chance the card stakes a prop at this price."""
+    bracket = prop_bracket(price)
+    if bracket is None:
+        return None
+    return american_to_implied(bracket[0]) + BEST_BET_PROP_EDGE
+
+
+def prop_confidence_reason(price: float, probability: float) -> str:
+    """Why a prop stake is withheld, or "" when the model is confident enough."""
+    floor = prop_confidence_floor(price)
+    if floor is None or probability >= floor - 1e-12:
+        return ""
+    short, long = prop_bracket(price)
+    return (
+        f"{PROP_CONFIDENCE_PREFIX} the model gives it a {probability:.1%} "
+        f"chance to hit; props priced {_american_label(short)} to "
+        f"{_american_label(long)} need {floor:.1%}. The price clears the edge "
+        "bar, but the model is not confident enough for its odds bracket. "
+        "Recorded as a lean and staked at zero."
+    )
+
+
 def _demoted_leans_by_reason(leans: Sequence[Mapping[str, Any]]) -> list[str]:
     """Every lean that was good enough to stake, listed under WHY it was not.
 
@@ -976,6 +1050,7 @@ def _demoted_leans_by_reason(leans: Sequence[Mapping[str, Any]]) -> list[str]:
     """
     ladder: list[Mapping[str, Any]] = []
     against: list[Mapping[str, Any]] = []
+    unconfident: list[Mapping[str, Any]] = []
     excluded: dict[tuple[str, str], list[Mapping[str, Any]]] = {}
     other: list[Mapping[str, Any]] = []
     for row in leans:
@@ -987,6 +1062,8 @@ def _demoted_leans_by_reason(leans: Sequence[Mapping[str, Any]]) -> list[str]:
             ladder.append(row)
         elif reason.startswith(STAT_SIDE_PREFIX):
             against.append(row)
+        elif reason.startswith(PROP_CONFIDENCE_PREFIX):
+            unconfident.append(row)
         elif reason == str(STAKE_EXCLUDED_MARKETS.get(market, "")).strip():
             excluded.setdefault((market, reason), []).append(row)
         else:
@@ -1023,6 +1100,22 @@ def _demoted_leans_by_reason(leans: Sequence[Mapping[str, Any]]) -> list[str]:
             f"- {_label(row)} (`{row.get('market', '-')}`): "
             f"{row.get('demotion_reason')}"
             for row in against
+        )
+        lines.append("")
+    if unconfident:
+        lines.extend(
+            [
+                "Stats check, props: a prop is staked only when the model's "
+                "hit chance clears what the shortest price in its odds "
+                "bracket would need. These cleared the edge bar without it "
+                "and are recorded here.",
+                "",
+            ]
+        )
+        lines.extend(
+            f"- {_label(row)} (`{row.get('market', '-')}`): "
+            f"{row.get('demotion_reason')}"
+            for row in unconfident
         )
         lines.append("")
     for (market, reason), rows in excluded.items():
