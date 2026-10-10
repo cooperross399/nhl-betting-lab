@@ -60,6 +60,7 @@ from nhl_betting_lab.reports.card_pricing import (
     selection_key,
 )
 from nhl_betting_lab.reports.gameday_card import build_card, save_card
+from nhl_betting_lab.stat_sides import build_stat_sides
 from nhl_betting_lab.forward_evidence import write_snapshot
 from nhl_betting_lab.season import (
     EXPECTED_CLUBS,
@@ -724,6 +725,21 @@ def main(argv: list[str] | None = None) -> int:
             "Team markets were priced on the goals ratings: the xG ratings "
             "file was missing or not built through the latest game."
         )
+    # Stat sides (Cooper, 2026-10-10): who the model expects to win each
+    # game, read off the same probability map the card priced from. A list
+    # beside the card, never a selection: nothing above is touched by it.
+    sides = build_stat_sides(
+        priceable, probabilities, now=moment, best_bets=card.best_bets, day=snapshot_day,
+    )
+    card.stat_sides_built = True
+    card.stat_sides = sides.rows
+    card.stat_sides_removed_by_guard = sides.removed_by_guard
+    card.stat_sides_without_opinion = sides.without_opinion
+    print(
+        f"Stat sides for {snapshot_day}: {len(sides.rows)} game(s), "
+        f"{sides.removed_by_guard} under way or unconfirmed, "
+        f"{sides.without_opinion} without a two-sided opinion."
+    )
     # Cooper's Due List: an unstaked list he picks from, built every game
     # day from the logs, the rosters and the schedule alone, so it publishes
     # with "not posted" prices on a night the card is blocked for prices. It
