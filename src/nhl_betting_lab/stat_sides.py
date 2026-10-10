@@ -165,9 +165,10 @@ def render_section(sides: StatSides | None, start_text) -> list[str]:
         f"## {SECTION_TITLE}",
         "",
         "Who the model expects to win each game, from the same team ratings "
-        "the card prices on. A side is a bet only when its chance beats the "
-        "price, which is what the best bets above are; the last column says "
-        "how this side's chance compares with its best price.",
+        "the card prices on. The card stakes a team bet (moneyline, puck "
+        "line, regulation) only on this side, and only when its chance also "
+        "beats the price; the last column says how this side's chance "
+        "compares with its best moneyline price.",
         "",
     ]
     if sides.rows:

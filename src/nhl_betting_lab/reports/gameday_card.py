@@ -568,6 +568,11 @@ def build_candidates(
             candidate.section = LEANS_SECTION
             candidate.demotion_reason = STAKE_EXCLUDED_MARKETS[market_key]
         if candidate.section == BEST_BETS_SECTION:
+            against = stat_side_reason(key, probabilities)
+            if against:
+                candidate.section = LEANS_SECTION
+                candidate.demotion_reason = against
+        if candidate.section == BEST_BETS_SECTION:
             candidate.suggested_units = TIER_UNITS.get(candidate.tier, 0.1)
             staked.append((key, candidate))
         selections.append(candidate)
@@ -906,6 +911,51 @@ def _rows_table(rows: Sequence[Mapping[str, Any]], *, staked: bool) -> list[str]
     return lines
 
 
+#: The team markets whose `home`/`away` selection is a side to win.
+#: Cooper, 2026-10-10: "I want the stats combined into the model": a team
+#: best bet must be on the side the stats say wins, as well as clear the
+#: edge bar. A side the model's moneyline win chance does not favour keeps
+#: its opinion as a lean at zero units, never a pass and never deleted. The
+#: frozen snapshot is written from the unfiltered prices before the card is
+#: built, so this changes stakes and nothing the forward ledger scores.
+#: Totals, team totals, the regulation draw and props are not sides and are
+#: untouched.
+STAT_SIDE_MARKETS: frozenset[str] = frozenset({"moneyline", "puck_line", "regulation_3_way"})
+STAT_SIDE_PREFIX = "Against the stats:"
+
+
+def stat_side_reason(key: tuple, probabilities: Mapping[tuple, float]) -> str:
+    """Why a team-side stake is withheld, or "" when the stats favour it.
+
+    The side is the one with the larger moneyline win chance on the same
+    game, read from the same map the card priced from, as
+    `stat_sides.build_stat_sides` reads it (a tie goes home).
+    """
+    market, _player, home, away, selection, _line, day = key
+    if market not in STAT_SIDE_MARKETS or selection not in ("home", "away"):
+        return ""
+    chance = {
+        side: probabilities.get(("moneyline", "", home, away, side, None, day))
+        for side in ("home", "away")
+    }
+    if any(value is None for value in chance.values()):
+        return (
+            f"{STAT_SIDE_PREFIX} the model holds no moneyline win chance for both "
+            "sides of this game, so it cannot confirm this side is the one the "
+            "stats say wins. Recorded as a lean and staked at zero."
+        )
+    favoured = "home" if float(chance["home"]) >= float(chance["away"]) else "away"
+    if selection == favoured:
+        return ""
+    team = home if selection == "home" else away
+    return (
+        f"{STAT_SIDE_PREFIX} the model gives {team} a "
+        f"{float(chance[selection]):.1%} chance to win, so the stats favour the "
+        "other side. The price is long enough to clear the bar, but the card "
+        "stakes only the side the stats say wins. Recorded as a lean and "
+        "staked at zero."
+    )
+
 def _demoted_leans_by_reason(leans: Sequence[Mapping[str, Any]]) -> list[str]:
     """Every lean that was good enough to stake, listed under WHY it was not.
 
@@ -925,6 +975,7 @@ def _demoted_leans_by_reason(leans: Sequence[Mapping[str, Any]]) -> list[str]:
     exists to avoid.
     """
     ladder: list[Mapping[str, Any]] = []
+    against: list[Mapping[str, Any]] = []
     excluded: dict[tuple[str, str], list[Mapping[str, Any]]] = {}
     other: list[Mapping[str, Any]] = []
     for row in leans:
@@ -934,6 +985,8 @@ def _demoted_leans_by_reason(leans: Sequence[Mapping[str, Any]]) -> list[str]:
         market = str(row.get("market", ""))
         if reason.startswith(LADDER_DEMOTION_PREFIX):
             ladder.append(row)
+        elif reason.startswith(STAT_SIDE_PREFIX):
+            against.append(row)
         elif reason == str(STAKE_EXCLUDED_MARKETS.get(market, "")).strip():
             excluded.setdefault((market, reason), []).append(row)
         else:
@@ -955,6 +1008,21 @@ def _demoted_leans_by_reason(leans: Sequence[Mapping[str, Any]]) -> list[str]:
             f"- {_label(row)} (`{row.get('market', '-')}`): "
             f"{row.get('demotion_reason')}"
             for row in ladder
+        )
+        lines.append("")
+    if against:
+        lines.extend(
+            [
+                "Stats side: a team bet is staked only on the side the model "
+                "says wins. These cleared the edge bar on the other side and "
+                "are recorded here.",
+                "",
+            ]
+        )
+        lines.extend(
+            f"- {_label(row)} (`{row.get('market', '-')}`): "
+            f"{row.get('demotion_reason')}"
+            for row in against
         )
         lines.append("")
     for (market, reason), rows in excluded.items():

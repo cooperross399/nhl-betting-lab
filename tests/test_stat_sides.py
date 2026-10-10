@@ -134,3 +134,63 @@ def test_the_section_survives_the_cards_json(tmp_path) -> None:
     payload = json.loads(open(paths["json"], encoding="utf-8").read())
     assert payload["stat_sides_built"] is True
     assert payload["stat_sides"][0]["team"] == "Toronto Maple Leafs"
+
+
+# -- the stats' side decides which team bets are staked (Cooper, 2026-10-10) --
+
+def _team_row(market: str, selection: str, price: float, line=None) -> dict:
+    return {**ml(selection, price), "market": market, "line": line}
+
+
+def _pkey(row: dict) -> tuple:
+    return selection_key(SimpleNamespace(**row), market=row["market"], selection=row["selection"], line=row["line"])
+
+
+def _built(rows: list[dict], p: dict) -> card_module.GamedayCard:
+    markets = sorted({r["market"] for r in rows})
+    eligibility = EligibilityReport(provider_name="the_odds_api", games_in_slate=1, markets=[
+        MarketEligibility(market=m, state=ELIGIBLE, reason="Allowlisted and complete.") for m in markets])
+    return card_module.build_card(pd.DataFrame(rows), p, eligibility=eligibility, now=NOW)
+
+
+def test_an_underdog_with_an_edge_is_a_lean_not_a_stake() -> None:
+    # Home 40% at +250 is an 11.4-point edge, a best bet by price; the stats favour Boston.
+    rows = [ml("home", 250), ml("away", -300)]
+    card = _built(rows, probs(rows, 0.40))
+    assert card.best_bets == []
+    lean = next(r for r in card.leans if r["selection"] == "home")
+    assert lean["demotion_reason"].startswith(card_module.STAT_SIDE_PREFIX)
+    assert lean["suggested_units"] == 0.0
+    text = card_module.render_card(card)
+    assert "a team bet is staked only on the side the model says wins" in text
+
+
+def test_the_stats_side_with_an_edge_is_still_staked() -> None:
+    rows = [ml("home", -110), ml("away", -110)]
+    card = _built(rows, probs(rows, 0.62))
+    assert [r["selection"] for r in card.best_bets] == ["home"]
+
+
+def test_a_puck_line_on_the_side_the_stats_say_loses_is_not_staked() -> None:
+    mls = [ml("home", 150), ml("away", -170)]
+    pl = [_team_row("puck_line", "home", 120, 1.5), _team_row("puck_line", "away", -140, -1.5)]
+    p = {**probs(mls, 0.42), _pkey(pl[0]): 0.62, _pkey(pl[1]): 0.38}
+    card = _built(mls + pl, p)
+    staked = {(r["market"], r["selection"]) for r in card.best_bets}
+    assert ("puck_line", "home") not in staked
+    assert any(r["market"] == "puck_line" and r["selection"] == "home" for r in card.leans)
+
+
+def test_totals_are_not_sides_and_are_untouched() -> None:
+    mls = [ml("home", -110), ml("away", -110)]
+    tot = [_team_row("total_goals", "over", 120, 6.5), _team_row("total_goals", "under", -140, 6.5)]
+    p = {**probs(mls, 0.5), _pkey(tot[0]): 0.60, _pkey(tot[1]): 0.40}
+    card = _built(mls + tot, p)
+    assert ("total_goals", "over") in {(r["market"], r["selection"]) for r in card.best_bets}
+
+
+def test_a_side_with_no_moneyline_opinion_is_not_staked() -> None:
+    pl = [_team_row("puck_line", "home", 120, 1.5)]
+    card = _built(pl, {_pkey(pl[0]): 0.62})
+    assert card.best_bets == []
+    assert "cannot confirm" in card.leans[0]["demotion_reason"]

@@ -2349,12 +2349,22 @@ Re-derive rather than trust if the data has moved.
   opinion on both sides is counted, never guessed. The site already showed
   each team's win % inside the expanded game; each game's row now reads
   "Stats: TOR 58%" too (`web/Board.dc.html`, from `winProb`), and the
-  Results strip's "Straight up" record already grades that side. **A LIST,
-  not bets: no units, nothing in the best bets, leans, passes, fingerprint,
-  snapshot, forward ledger or its report.** No measurement here shows that
-  backing the stats' side at the market's price makes money, and the
-  section says so. Unchanged: the model, the edge bar, the market list, the
-  staking rule and the registered 2027-04-25 test.
+  Results strip's "Straight up" record already grades that side. The
+  section itself stakes nothing and adds nothing to the snapshot, the
+  forward ledger or its report. No measurement here shows that backing the
+  stats' side at the market's price makes money, and the section says so.
+  **Then, the same day, NOT a defect fix: Cooper changed the staking rule
+  before the decision date** ("I want the stats combined into the model").
+  A team best bet in `moneyline`, `puck_line` or `regulation_3_way` is
+  staked only when it is on the side the model's moneyline win chance
+  favours as well as clearing the edge bar (`STAT_SIDE_MARKETS`,
+  `stat_side_reason`); an edge on the other side, or on a game with no
+  two-sided moneyline opinion, becomes a lean at zero units naming why,
+  under its own heading. Totals, team totals, the regulation draw and props
+  are untouched. As with the `points` exclusion, `write_snapshot` freezes
+  the unfiltered priced frame before `build_card`, so the forward ledger and
+  the registered test score the same opinions; only stakes move. Unmeasured
+  against real prices: whether it helps is for the team-markets backtest.
 
 ## Contract strings — never change these
 
