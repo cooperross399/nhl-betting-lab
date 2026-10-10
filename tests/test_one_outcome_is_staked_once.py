@@ -104,6 +104,17 @@ def _ladder_tests_do_not_depend_on_the_stake_exclusion_list(monkeypatch):
     monkeypatch.delitem(STAKE_EXCLUDED_MARKETS, "points", raising=False)
 
 
+@pytest.fixture(autouse=True)
+def _ladder_tests_do_not_depend_on_the_prop_confidence_check(monkeypatch):
+    """The same reasoning for the 2026-10-10 bracket check: these fixtures
+    price props at +150 with chances under the bracket's 59.4%, so the check
+    would demote every rung before the collapse ran. It has its own tests in
+    test_stat_sides.py."""
+    from nhl_betting_lab.reports import gameday_card
+
+    monkeypatch.setattr(gameday_card, "prop_confidence_reason", lambda price, probability: "")
+
+
 def _at(hours: float) -> str:
     return (NOW + timedelta(hours=hours)).isoformat().replace("+00:00", "Z")
 

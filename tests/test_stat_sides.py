@@ -200,3 +200,50 @@ def test_a_side_with_no_moneyline_opinion_is_not_staked() -> None:
     card = _built(pl, {_pkey(pl[0]): 0.62})
     assert card.best_bets == []
     assert "cannot confirm" in card.leans[0]["demotion_reason"]
+
+
+# -- props: confident for their odds bracket (Cooper, 2026-10-10) --
+
+def _prop(price: float, *, player="Auston Matthews", line=2.5, selection="under") -> dict:
+    return {**ml(selection, price), "market": "shots_on_goal", "player": player, "line": line}
+
+
+def test_a_prop_the_model_is_confident_in_for_its_bracket_is_staked() -> None:
+    # +135 sits in the +111 .. +150 bracket, which asks 47.4% + 12 = 59.4%.
+    row = _prop(135)
+    card = _built([row], {_pkey(row): 0.62})
+    assert [r["player"] for r in card.best_bets] == ["Auston Matthews"]
+
+
+def test_a_prop_that_clears_the_edge_bar_but_not_its_bracket_is_a_lean() -> None:
+    # +135 at 56.7% is a 14.2-point edge (a best bet by price) but under 59.4%.
+    row = _prop(135)
+    card = _built([row], {_pkey(row): 0.567})
+    assert card.best_bets == []
+    lean = card.leans[0]
+    assert lean["demotion_reason"].startswith(card_module.PROP_CONFIDENCE_PREFIX)
+    assert "56.7% chance to hit; props priced +111 to +150 need 59.4%" in lean["demotion_reason"]
+    assert lean["suggested_units"] == 0.0
+    assert "Stats check, props:" in card_module.render_card(card)
+
+
+def test_a_price_at_the_short_end_of_its_bracket_is_held_to_the_bar_it_cleared() -> None:
+    row = _prop(111)
+    p = card_module.american_to_implied(111) + card_module.BEST_BET_PROP_EDGE
+    assert card_module.prop_confidence_reason(111, p) == ""
+    card = _built([row], {_pkey(row): p + 0.001})
+    assert len(card.best_bets) == 1
+
+
+def test_the_brackets_meet_with_no_gap_and_end_where_the_card_ends() -> None:
+    assert card_module.prop_bracket(-135.5) == (-160.0, -136.0)
+    assert card_module.prop_bracket(110.5) == (-110.0, 110.0)
+    assert card_module.prop_bracket(240) == (201.0, 300.0)
+    assert card_module.prop_bracket(-170) is None
+    assert card_module.prop_bracket(650) is None
+
+
+def test_the_prop_check_leaves_team_markets_alone() -> None:
+    rows = [ml("home", -110), ml("away", -110)]
+    card = _built(rows, probs(rows, 0.62))
+    assert [r["selection"] for r in card.best_bets] == ["home"]

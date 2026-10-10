@@ -27,6 +27,7 @@ from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 import pandas as pd
+import pytest
 
 from nhl_betting_lab.market_eligibility import (
     ELIGIBLE,
@@ -42,6 +43,14 @@ from nhl_betting_lab.reports.gameday_card import (
 )
 
 NOW = datetime(2026, 10, 8, 18, 0, tzinfo=timezone.utc)
+
+
+@pytest.fixture(autouse=True)
+def _grouping_tests_do_not_depend_on_the_prop_confidence_check(monkeypatch):
+    """These fixtures price props at +150 under the bracket's 59.4% (the
+    2026-10-10 check, tested in test_stat_sides.py); left on, it would demote
+    every rung before the ladder and exclusion passes these tests are about."""
+    monkeypatch.setattr(card_module, "prop_confidence_reason", lambda price, probability: "")
 
 #: The opening words of the ladder heading, as the card printed them before
 #: this fix and still prints them for a collapsed ladder.

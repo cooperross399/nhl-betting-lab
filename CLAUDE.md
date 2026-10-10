@@ -2368,6 +2368,22 @@ Re-derive rather than trust if the data has moved.
   priced frame before `build_card`, so the forward ledger and the registered
   test score the same opinions; only stakes move. Unmeasured against real
   prices: whether it helps is for the team-markets backtest.
+  **Then props, the same day and on the same footing** (Cooper: "well i
+  still want that to apply for props. i want you the model to [be]
+  confident in them hitting relative to their odds bracket"). A prop best
+  bet is staked only when the model's hit chance clears what the SHORTEST
+  price in its odds bracket would need for a best bet: that price's
+  break-even plus `BEST_BET_PROP_EDGE` (`gameday_card.PROP_ODDS_BRACKETS`,
+  `prop_confidence_reason`). Brackets, the default picked that day, about
+  eight points of break-even wide: -160..-136 needs 73.5%, -135..-111
+  69.4%, -110..+110 64.4%, +111..+150 59.4%, +151..+200 51.8%, +201..+300
+  45.2%, +301..+400 36.9%, +401..+600 31.9%. A price at the short end of its
+  bracket is held to the bar it already cleared; a longer one inside it is
+  held to more. One that fails is a zero-unit lean under "Stats check,
+  props". On the 2026-10-10 card it would have kept 8 of the 20 prop best
+  bets. Snapshot and ledger unchanged, as above. Not measured against real
+  prices, and the record says a higher flat bar did not help (the threshold
+  sweep is flat); whether a bracket-relative one does is a backtest away.
 
 ## Contract strings — never change these
 
