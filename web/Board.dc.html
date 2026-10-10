@@ -660,7 +660,7 @@ class Component extends DCLogic {
 
     // Cooper's Due List (board.json games[].drought): an unstaked list he picks from. Never styled as a pick, never given units.
     const DROUGHT_UNITS = { points: ["point", "points", "1+ point", "a point"], goals: ["goal", "goals", "Anytime goal", "a goal"], assists: ["assist", "assists", "1+ assist", "an assist"] };
-    const DROUGHT_NOTE = data.droughtNote || "70+ points, 30+ goals or 30+ assists last season, and a drought in that category at the tier bar his total sets or at his own equal-surprise bar.";
+    const DROUGHT_NOTE = data.droughtNote || "70+ points, 25+ goals or 30+ assists last season, and a drought in that category at the tier bar his total sets or, for points and assists, at his own equal-surprise bar.";
     // The seasons the cell records were measured on ("2024-26"), read from the board (SCHEMA.md droughtWindow); a board
     // without it names no window rather than one the record was not measured on.
     const DROUGHT_WINDOW = typeof data.droughtWindow === "string" && data.droughtWindow ? ` ${data.droughtWindow}` : "";

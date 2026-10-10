@@ -1,12 +1,13 @@
 """Measure the Due List rule against bought prop prices.
 
-The rule (Cooper, 2026-10-07 evening): a skater who produced 70+ points, 30+
-goals or 30+ assists LAST regular season is listed in that category when his
-current drought (straight regular-season games dressed without one in it)
-reaches EITHER bar: the TIER bar from last season's total (points 100+ -> 3,
-85-99 -> 4, 70-84 -> 5; goals 40+ -> 3, 35-39 -> 4, 30-34 -> 5; assists
-60+ -> 3, 45-59 -> 4, 30-44 -> 5) or the SURPRISE bar from his own prior-
-season hit rate p (the smallest n with (1 - p)^n <= 0.05). The wager measured
+The rule (Cooper, 2026-10-07 evening; goals changed 2026-10-10): a skater who
+produced 70+ points, 25+ goals or 30+ assists LAST regular season is listed in
+that category when his current drought (straight regular-season games dressed
+without one in it) reaches EITHER bar: the TIER bar from last season's total
+(points 100+ -> 3, 85-99 -> 4, 70-84 -> 5; goals 40+ -> 5, 25-39 -> 10;
+assists 60+ -> 3, 45-59 -> 4, 30-44 -> 5) or, for points and assists only,
+the SURPRISE bar from his own prior-season hit rate p (the smallest n with
+(1 - p)^n <= 0.05). The wager measured
 is the over 0.5 in that category (1+ point, anytime goal, 1+ assist). The flat
 5-game rule it replaced (#307, the same morning) is kept as its own buckets so
 history reads the same.
@@ -40,6 +41,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from nhl_betting_lab.drought_rule import (  # noqa: E402,F401
     SHIPPED_BUCKET,
     SURPRISE_LEVEL,
+    SURPRISE_MARKETS,
     THRESHOLDS,
     TIERS,
     band_label,
@@ -66,10 +68,11 @@ SURPRISE_ONLY_BUCKET = f"SURPRISE {SURPRISE_LEVEL:.0%} only"
 GOAL_SWEEP = (30, 35, 40, 45)
 BOOTSTRAPS = 1000
 RULE_SENTENCE = (
-    "A skater with 70+ points, 30+ goals or 30+ assists last regular season is listed in that category when "
+    "A skater with 70+ points, 25+ goals or 30+ assists last regular season is listed in that category when "
     "his drought reaches either the tier bar from last season's total (points 100+ -> 3, 85-99 -> 4, 70-84 -> 5; "
-    "goals 40+ -> 3, 35-39 -> 4, 30-34 -> 5; assists 60+ -> 3, 45-59 -> 4, 30-44 -> 5) or the surprise bar from "
-    f"his own prior-season hit rate p, the smallest n with (1 - p)^n <= {SURPRISE_LEVEL}; the wager is the over 0.5."
+    "goals 40+ -> 5, 25-39 -> 10; assists 60+ -> 3, 45-59 -> 4, 30-44 -> 5) or, for points and assists, the "
+    f"surprise bar from his own prior-season hit rate p, the smallest n with (1 - p)^n <= {SURPRISE_LEVEL}; "
+    "the wager is the over 0.5."
 )
 
 
@@ -122,7 +125,8 @@ def label_bars(w: pd.DataFrame) -> pd.DataFrame:
     w["hit_rate"] = pd.to_numeric(w.prior_hits, errors="coerce") / gp.where(gp > 0)
     w["band"] = [band_label(m, t) for m, t in zip(w.market, w.prior)]
     w["tier_bar"] = pd.to_numeric(pd.Series([tier_bar(m, t) for m, t in zip(w.market, w.prior)], index=w.index), errors="coerce")
-    w["surprise_bar"] = pd.to_numeric(pd.Series([surprise_bar(p) for p in w.hit_rate], index=w.index), errors="coerce")
+    w["surprise_bar"] = pd.to_numeric(pd.Series([surprise_bar(p) if m in SURPRISE_MARKETS else None
+                                                 for m, p in zip(w.market, w.hit_rate)], index=w.index), errors="coerce")
     w["either_bar"] = w[["tier_bar", "surprise_bar"]].min(axis=1)
     return w
 

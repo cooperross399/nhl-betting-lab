@@ -53,7 +53,7 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from nhl_betting_lab.drought_rule import THRESHOLDS, prepare_logs, surprise_bar, tier_bar  # noqa: E402
+from nhl_betting_lab.drought_rule import SURPRISE_MARKETS, THRESHOLDS, prepare_logs, surprise_bar, tier_bar  # noqa: E402
 from nhl_betting_lab.models.player_props import player_name_aliases  # noqa: E402
 from nhl_betting_lab.season import game_date  # noqa: E402
 
@@ -118,7 +118,8 @@ def build(prices: pd.DataFrame, logs: pd.DataFrame) -> pd.DataFrame:
     w = pd.DataFrame(rows)
     w["profit"] = np.where(w.won, w.dec - 1, -1.0)
     w["implied"] = 1 / w.dec
-    w["shipped_bar"] = [min(b for b in (tier_bar(m, t), surprise_bar(h)) if b is not None)
+    w["shipped_bar"] = [min(b for b in (tier_bar(m, t), surprise_bar(h) if m in SURPRISE_MARKETS else None)
+                            if b is not None)
                         if tier_bar(m, t) is not None else np.nan
                         for m, t, h in zip(w.market, w.prior, w.hit_rate)]
     return w
