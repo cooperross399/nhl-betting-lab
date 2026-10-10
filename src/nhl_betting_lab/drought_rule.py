@@ -1,16 +1,18 @@
 """Cooper's Due List, in one place, for the evidence and for the card.
 
 The rule (Cooper, 2026-10-07 evening; it replaces the flat 5-game rule shipped
-that morning in #307): a skater with 70+ points, 30+ goals or 30+ assists LAST
+that morning in #307): a skater with 70+ points, 25+ goals or 30+ assists LAST
 regular season is listed in that category when his current drought (regular-
 season games he dressed for without one in that category, carried across the
 season boundary) reaches EITHER of two bars. The better the player, the
 shorter the drought:
 
 1. The TIER bar, from last season's total in the category (`TIERS`):
-   points 100+ -> 3, 85-99 -> 4, 70-84 -> 5; goals 40+ -> 3, 35-39 -> 4,
-   30-34 -> 5; assists 60+ -> 3, 45-59 -> 4, 30-44 -> 5.
-2. The SURPRISE bar (equal surprise), from his own prior-season hit rate
+   points 100+ -> 3, 85-99 -> 4, 70-84 -> 5; goals 40+ -> 5, 25-39 -> 10;
+   assists 60+ -> 3, 45-59 -> 4, 30-44 -> 5. (Goals until 2026-10-10:
+   30+ to qualify, 40+ -> 3, 35-39 -> 4, 30-34 -> 5, plus the surprise bar.)
+2. The SURPRISE bar (equal surprise, points and assists only:
+   `SURPRISE_MARKETS`), from his own prior-season hit rate
    p = (prior-season regular-season games with one or more in the category)
    / (prior-season regular-season games dressed): the smallest n >= 1 with
    (1 - p)^n <= `SURPRISE_LEVEL` (0.05). Undefined when p == 0 (he never
@@ -53,16 +55,20 @@ from nhl_betting_lab.puck_drop import apply_puck_drop_guard
 from nhl_betting_lab.season import clean_text, row_game_date, season_id
 
 #: The base qualifier: last regular season's total in the category.
-THRESHOLDS = {"points": 70, "goals": 30, "assists": 30}
+THRESHOLDS = {"points": 70, "goals": 25, "assists": 30}
 #: The tier bar: (floor of last season's total, drought that lists him), best
 #: band first. The last floor of each category is the base qualifier.
 TIERS: dict[str, tuple[tuple[int, int], ...]] = {
     "points": ((100, 3), (85, 4), (70, 5)),
-    "goals": ((40, 3), (35, 4), (30, 5)),
+    "goals": ((40, 5), (25, 10)),
     "assists": ((60, 3), (45, 4), (30, 5)),
 }
 #: The surprise bar's level: the smallest drought with (1 - p)^n <= this.
 SURPRISE_LEVEL = 0.05
+#: The categories the surprise bar lists in. Goals left it on 2026-10-10
+#: (Cooper, after `scripts/run_due_list_tuning.py`): 25+ goals at a 10-game
+#: drought was the one setting both bought seasons chose, and he kept 40+ at 5.
+SURPRISE_MARKETS = ("points", "assists")
 LINE = 0.5
 BACKTEST_JSON = "drought_rule_backtest.json"
 SECTION_TITLE = "Due List"
@@ -143,7 +149,8 @@ def bars_reached(market: str, prior_total, hit_rate, drought: int) -> dict[str, 
 
     None when he is not listed: below the base qualifier, or a drought that
     has reached neither bar. Otherwise the row's own fields: `tier_bar`,
-    `surprise_bar` (None when undefined), `hit_rate` (p, 3 dp), `rarity`
+    `surprise_bar` (None when undefined, or for a category outside
+    `SURPRISE_MARKETS`), `hit_rate` (p, 3 dp), `rarity`
     ((1 - p)^drought, 4 dp: how unlikely a streak this long is for HIM),
     `one_in` (N in "1 in N for him" from the unrounded figure; None when it
     is 0), `rule` ("tier", "surprise" or "both": the bars the drought has
@@ -153,7 +160,7 @@ def bars_reached(market: str, prior_total, hit_rate, drought: int) -> dict[str, 
     if tier is None:
         return None
     p = 0.0 if hit_rate is None or pd.isna(hit_rate) else float(hit_rate)
-    surprise = surprise_bar(p)
+    surprise = surprise_bar(p) if market in SURPRISE_MARKETS else None
     reached = [name for name, bar in (("tier", tier), ("surprise", surprise)) if bar is not None and drought >= bar]
     if not reached:
         return None

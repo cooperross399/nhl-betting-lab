@@ -9,12 +9,14 @@ name: Due List Tuning
 # It fetches no odds, spends no credit, places no bet, pushes nothing, uploads nothing,
 # edits no policy and records no verdict the card reads. The bought prices
 # are restored onto the runner and never leave it; the result is aggregate
-# (bets, units, ROI, intervals) and goes to the run summary only.
+# (bets, units, ROI, intervals) and goes to the run summary and the log only.
 on:
   workflow_dispatch:
   pull_request:
     paths:
       - "scripts/run_due_list_tuning.py"
+      - "scripts/run_drought_rule_backtest.py"
+      - "src/nhl_betting_lab/drought_rule.py"
       - ".github/workflows/due-list-tuning.yml"
 
 permissions:
@@ -80,6 +82,16 @@ jobs:
           python scripts/run_due_list_tuning.py || status=$?
           if [ -s data/outputs/due_list_tuning.md ]; then
             cat data/outputs/due_list_tuning.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+          # The Due List backtest of the rule as it stands, so a rule change can be
+          # re-measured without a local copy of the prices. Its JSON is the
+          # aggregate data/outputs/drought_rule_backtest.json the card reads its
+          # cell records from; it is printed between markers for committing.
+          python scripts/run_drought_rule_backtest.py > /dev/null || status=$?
+          if [ -s data/outputs/drought_rule_backtest.json ]; then
+            echo "----- drought_rule_backtest.json -----"
+            cat data/outputs/drought_rule_backtest.json
+            echo "----- end drought_rule_backtest.json -----"
           fi
           # The bought prices leave the workspace before the job ends.
           rm -f data/processed/historical_prop_prices.csv

@@ -176,7 +176,7 @@ def test_the_note_is_the_rule_and_the_backtest_headline_read_from_its_file(lab, 
     board = build(lab, tmp_path / "out", monkeypatch)
     note = board["droughtNote"]
 
-    assert "70+ points, 30+ goals or 30+ assists" in note and "unstaked" in note and "Due List" in note
+    assert "70+ points, 25+ goals or 30+ assists" in note and "unstaked" in note and "Due List" in note
     # The shipped rule's card-window headline (either bar), as the committed backtest JSON states it.
     assert "points -1.6% over 311 wagers" in note and "goals -7.0% over 1355" in note and "assists -8.4% over 2135" in note
     assert "no category's interval sits above zero" in note

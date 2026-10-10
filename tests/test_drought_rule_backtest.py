@@ -32,9 +32,10 @@ def test_drought_carries_across_the_season_boundary_and_uses_last_seasons_record
 
 
 def test_qualifying_bars_are_the_ones_cooper_set():
-    assert drb.THRESHOLDS == {"points": 70, "goals": 30, "assists": 30}
-    assert drb.TIERS == {"points": ((100, 3), (85, 4), (70, 5)), "goals": ((40, 3), (35, 4), (30, 5)),
+    assert drb.THRESHOLDS == {"points": 70, "goals": 25, "assists": 30}
+    assert drb.TIERS == {"points": ((100, 3), (85, 4), (70, 5)), "goals": ((40, 5), (25, 10)),
                          "assists": ((60, 3), (45, 4), (30, 5))}
+    assert drb.SURPRISE_MARKETS == ("points", "assists"), "goals left the surprise bar on 2026-10-10"
     assert drb.SURPRISE_LEVEL == 0.05
     assert drb.FLAT_DROUGHT == 5, "the #307 rule's bar, kept so the history buckets read the same"
     assert drb.SHIPPED_BUCKET == "SHIPPED: either bar" and drb.TIER_ONLY_BUCKET == "TIER bars only"
@@ -76,6 +77,24 @@ def test_each_wager_is_labelled_with_its_band_and_both_bars():
     assert w.qualifies.tolist() == [True] * 7 + [False, True]
 
 
+def test_a_goals_wager_has_no_surprise_bar_and_lists_on_its_tier_bar_alone():
+    goals = pd.DataFrame([
+        _wager("2024-12-01", 45, 70, 4, market="goals"),   # 40+ (tier 5), p .875: no surprise bar, so not listed at 4
+        _wager("2024-12-02", 45, 70, 5, market="goals"),   # listed at 5
+        _wager("2024-12-03", 30, 40, 9, market="goals"),   # 25-39 (tier 10): not listed at 9
+        _wager("2024-12-04", 30, 40, 10, market="goals"),  # listed at 10
+        _wager("2024-12-05", 24, 40, 30, market="goals"),  # under 25: never
+    ])
+    w = drb.label_bars(goals).set_index("date")
+
+    assert w.surprise_bar.isna().all(), "goals left the surprise bar on 2026-10-10"
+    assert w.tier_bar.tolist()[:4] == [5, 5, 10, 10] and w.band.tolist()[:4] == ["40+", "40+", "25-39", "25-39"]
+    assert w.qualifies.tolist() == [True, True, True, True, False]
+    assert w.either_bar.tolist()[:4] == w.tier_bar.tolist()[:4]
+    listed = [b for b in drb.measure(drb.label_bars(goals))["buckets"] if b["bucket"] == "SHIPPED: either bar" and b["season"] == "both"]
+    assert [b["wagers"] for b in listed] == [2]
+
+
 def test_the_buckets_count_the_wagers_each_bar_lists():
     result = drb.measure(drb.label_bars(_wagers()))
     wagers = {b["bucket"]: b["wagers"] for b in result["buckets"] if b["window"] == "card" and b["season"] == "both"}
@@ -102,7 +121,7 @@ def test_the_json_keeps_its_keys_and_names_the_tiers_the_level_and_the_rule():
 
     assert set(payload) == {"generated_at", "thresholds", "min_drought", "tiers", "surprise_level", "rule",
                             "accounting", "buckets", "goal_sweep"}
-    assert payload["tiers"] == {"points": [[100, 3], [85, 4], [70, 5]], "goals": [[40, 3], [35, 4], [30, 5]],
+    assert payload["tiers"] == {"points": [[100, 3], [85, 4], [70, 5]], "goals": [[40, 5], [25, 10]],
                                 "assists": [[60, 3], [45, 4], [30, 5]]}
     assert payload["surprise_level"] == 0.05 and payload["min_drought"] == 5
     assert "either" in payload["rule"] and "(1 - p)^n <= 0.05" in payload["rule"] and "100+ -> 3" in payload["rule"]

@@ -2314,6 +2314,25 @@ Re-derive rather than trust if the data has moved.
   entry no frozen price covers stays "not posted": graded for the hit rate,
   no units. `tests/test_due_list_is_never_staked.py` became
   `tests/test_due_list_is_tracked_at_a_quarter_unit.py`, by Cooper's request.
+- **2026-10-10: the Due List's goals rule changed, on Cooper's word, after
+  the tuning research.** Cooper: "leave assists and move goals to 25+ with a
+  10-game drought, i still want the 40+ goals at 5-game drought too tho".
+  Goals now qualify at 25+ goals last season (`THRESHOLDS`), listed at a
+  drought of 10 (25-39) or 5 (40+) (`TIERS`), and no longer on the surprise
+  bar (`SURPRISE_MARKETS` is points and assists). Points and assists are
+  unchanged. The research (`scripts/run_due_list_tuning.py`, Due List Tuning
+  workflow run 38069590532, two seasons of bought prices, best card-window
+  over 0.5): no setting held up on the season it was not picked on; a drought
+  does not make the over better value, and for assists makes it worse
+  (-0.415 logit per 5 games [-0.616, -0.217] beyond the price); 25+ goals at
+  10+ was the one setting both seasons picked, +7.9% over 207 (2024-25) and
+  +12.4% over 147 (2025-26), intervals spanning zero, and the same search on
+  random data finds one that good about a third of the time: **no
+  demonstrated edge.** The committed backtest was regenerated on the new rule
+  (HEADLINE_PLACEHOLDER). Still an UNSTAKED list: the model, the edge bar, the
+  market list, the staking rule and the registered 2027-04-25 test are
+  unchanged, and recorded lists and their forward record keep their columns
+  (nights already recorded are not rebuilt).
 
 - **2026-10-09: the card's player props are on the public site.** Cooper:
   "player props need to be posting to the website". The pages had rendered a

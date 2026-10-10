@@ -126,7 +126,7 @@ games[].pick     + side   "away" | "home" | "over" | "under"  — which side the
                  + line   number | null — the total's or puck line's number; null for moneyline and regulation
                  Written by build_site_json.py::pick_side_and_line from the card candidate's own selection and line.
 games[].drought  [] on every regular-season game — Cooper's Due List (2026-10-07; that evening the two bars below replaced
-                 the flat 5-game rule of #307), an unstaked list he picks from: 70+ points, 30+ goals or 30+ assists last regular
+                 the flat 5-game rule of #307), an unstaked list he picks from: 70+ points, 25+ goals or 30+ assists last regular
                  season, and a drought in that category (games dressed without one, carried across the season boundary) that
                  has reached EITHER bar. Rows come in the card's order: points, goals, assists; then rarity ascending (rarest
                  first); then drought descending; then name.
@@ -134,9 +134,10 @@ games[].drought  [] on every regular-season game — Cooper's Due List (2026-10-
                  drought (games in a row without one, entering tonight), price (best American odds | null: not posted),
                  book (string | null), heavyJuice (bool: shorter than -160),
                  tierBar      int | null — the bar his last-season total sets: points 100+ 3, 85-99 4, 70-84 5;
-                              goals 40+ 3, 35-39 4, 30-34 5; assists 60+ 3, 45-59 4, 30-44 5
+                              goals 40+ 5, 25-39 10; assists 60+ 3, 45-59 4, 30-44 5
                  surpriseBar  int | null — his own equal-surprise bar, the smallest n >= 1 with (1 - hitRate)^n <= 0.05;
-                              null when hitRate is 0 (that bar never lists him; 1 when hitRate is 1)
+                              null when hitRate is 0 (that bar never lists him; 1 when hitRate is 1), and on every
+                              goals row (goals left the surprise bar on 2026-10-10)
                  hitRate      float | null — prior-season regular-season games with one in the category over games dressed
                  rarity       float | null — (1 - hitRate)^drought, rounded to 4 dp: how unlikely a drought this long is for HIM
                  oneIn        int | null — N in "1 in N for him", round(1 / (1 - hitRate)^drought) from the UNROUNDED figure
