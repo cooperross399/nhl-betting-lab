@@ -1,0 +1,86 @@
+name: Due List Tuning
+
+# Which Due List settings are best, checked on a season they were not chosen
+# on? (Cooper, 2026-10-10.) Searches the qualifier, the drought bar and a price
+# window on the bought prop prices, scores each season's winner on the other
+# season, and runs the same search on simulated no-edge seasons.
+# See scripts/run_due_list_tuning.py.
+#
+# It fetches no odds, spends no credit, places no bet, pushes nothing, uploads nothing,
+# edits no policy and records no verdict the card reads. The bought prices
+# are restored onto the runner and never leave it; the result is aggregate
+# (bets, units, ROI, intervals) and goes to the run summary only.
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "scripts/run_due_list_tuning.py"
+      - ".github/workflows/due-list-tuning.yml"
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: due-list-tuning
+  cancel-in-progress: false
+
+jobs:
+  measure:
+    name: Due List Tuning
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install project
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install -e .
+
+      - name: Restore the boxscores and the bought prices
+        # As Experiment Refresh restores them. Bought prices cannot be
+        # regenerated, so their absence stops the run.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -u
+          for wf in gameday-refresh.yml historical-props-purchase.yml; do
+            for name in gameday-state historical-props; do
+              python scripts/restore_state.py --artifact "$name" --dest data \
+                --workflow "$wf" --no-merge --refuse-unreachable --attempts 3 || {
+                echo "::error::GitHub could not be reached to restore $name from $wf."
+                exit 1
+              }
+            done
+          done
+          if [ ! -s data/processed/historical_prop_prices.csv ]; then
+            echo "::error::The bought prop prices did not restore (they expire from CI on 2026-11-29), so there is nothing to price against."
+            exit 1
+          fi
+          PYTHONPATH=src python scripts/build_datasets.py || true
+
+      - name: Search the settings
+        env:
+          PYTHONPATH: src
+        run: |
+          set -u
+          status=0
+          python scripts/run_due_list_tuning.py || status=$?
+          if [ -s data/outputs/due_list_tuning.md ]; then
+            cat data/outputs/due_list_tuning.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+          # The bought prices leave the workspace before the job ends.
+          rm -f data/processed/historical_prop_prices.csv
+          exit "$status"
