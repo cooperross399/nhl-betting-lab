@@ -115,6 +115,7 @@ from nhl_betting_lab.markets import MARKETS_BY_KEY
 from nhl_betting_lab.models.player_props import player_key
 from nhl_betting_lab.reports.card_pricing import selection_key
 from nhl_betting_lab.season import clean_text
+from nhl_betting_lab.stat_sides import StatSides, render_section as render_stat_sides
 from nhl_betting_lab.models.value import (
     OddsError,
     american_to_implied,
@@ -310,6 +311,15 @@ class GamedayCard:
     drought_unresolved: list[str] = field(default_factory=list)
     drought_notes: list[str] = field(default_factory=list)
     drought_headline: str = ""
+    #: Stat sides (Cooper, 2026-10-10): each priced game's model-favoured
+    #: moneyline side and its win chance (`nhl_betting_lab.stat_sides`). A
+    #: LIST like the Due List: nothing here is a best bet, a lean, a pass, a
+    #: stake, or in the fingerprint or the forward ledger. `stat_sides_built`
+    #: tells a card that built it (possibly empty) from one that never asked.
+    stat_sides_built: bool = False
+    stat_sides: list[dict[str, Any]] = field(default_factory=list)
+    stat_sides_removed_by_guard: int = 0
+    stat_sides_without_opinion: int = 0
     notes: list[str] = field(default_factory=list)
     safety: dict[str, bool] = field(
         default_factory=lambda: {
@@ -1091,6 +1101,18 @@ def render_card(card: GamedayCard) -> str:
             QuarantineResult(playable=[], quarantined=card.quarantined)
         )
     )
+
+    if card.stat_sides_built:
+        lines.extend(
+            render_stat_sides(
+                StatSides(
+                    rows=card.stat_sides,
+                    removed_by_guard=card.stat_sides_removed_by_guard,
+                    without_opinion=card.stat_sides_without_opinion,
+                ),
+                _start_eastern,
+            )
+        )
 
     lines.extend(render_drought_section(card))
 

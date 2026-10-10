@@ -2336,6 +2336,25 @@ Re-derive rather than trust if the data has moved.
   player props". `build_props` now lists prop best bets only; leans are
   counted with the passes in the note. Boards frozen before this carry lean
   rows and are graded as before.
+- **2026-10-10: stat sides, on the card and the board.** Cooper: "I want to
+  make sure were not only looking for edges but looking for sides that the
+  stats say should win." The card's best bets are where the model's chance
+  beats the price, so a game whose favourite is priced right never said who
+  the stats favour. The card now carries a "Stat sides" section
+  (`nhl_betting_lab.stat_sides`): every priced game tonight, the moneyline
+  side with the larger model win chance (the same xG ratings the card prices
+  on), its fair price, the best staged price and book, and how the chance
+  compares with that price ("best bet on the card", "N pts long, under the
+  bar", "N pts short"). The puck-drop guard applies; a game without an
+  opinion on both sides is counted, never guessed. The site already showed
+  each team's win % inside the expanded game; each game's row now reads
+  "Stats: TOR 58%" too (`web/Board.dc.html`, from `winProb`), and the
+  Results strip's "Straight up" record already grades that side. **A LIST,
+  not bets: no units, nothing in the best bets, leans, passes, fingerprint,
+  snapshot, forward ledger or its report.** No measurement here shows that
+  backing the stats' side at the market's price makes money, and the
+  section says so. Unchanged: the model, the edge bar, the market list, the
+  staking rule and the registered 2027-04-25 test.
 
 ## Contract strings — never change these
 

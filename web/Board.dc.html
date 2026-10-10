@@ -182,6 +182,7 @@
                   <span style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;min-width:0;">
                     <span style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:17px;line-height:1;text-transform:uppercase;letter-spacing:.02em;white-space:nowrap;color:{{ g.sum.tagColor }};">{{ g.sum.tag }}</span>
                     <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;color:{{ g.sum.kindColor }};">{{ g.sum.kind }}</span>
+                    <sc-if value="{{ g.sum.statSide }}" hint-placeholder-val="{{ false }}"><span title="The side the model's win chance favours. Not a pick." style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;color:var(--ink-2);">{{ g.sum.statSide }}</span></sc-if>
                     <sc-if value="{{ g.sum.drought }}" hint-placeholder-val="{{ false }}"><span style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;color:var(--ink-2);border:1px solid var(--rule);padding:1px 4px;">{{ g.sum.drought }}</span></sc-if>
                   </span>
                   <span aria-hidden="true" style="font-family:'IBM Plex Mono',monospace;font-size:16px;color:var(--mute);text-align:right;">{{ g.sum.chev }}</span>
@@ -737,6 +738,16 @@ class Component extends DCLogic {
       return { ...c, rows: [{ label: "Line", value: line, bold: false }, { label: "Over", value: o(t.overPrice), bold: false }, { label: "Under", value: o(t.underPrice), bold: false }, { label: "Proj", value: proj, bold: true }] };
     };
     const splitNotice = (t) => { const m = /^(.+?[.!?])\s+(\S[\s\S]*)$/.exec(t || ""); return m ? { noticeHead: m[1], noticeRest: m[2], noticeShort: false } : { noticeHead: t || "", noticeRest: "", noticeShort: !!t }; };
+    // Stat side (Cooper, 2026-10-10: "not only looking for edges but looking
+    // for sides that the stats say should win"): the team the model gives the
+    // larger win chance, from the board's own winProb, on the game's row so it
+    // reads without opening the game. Not a pick: the pick tag beside it is.
+    const statSide = (r) => {
+      const hp = r.home && r.home.winProb, ap = r.away && r.away.winProb;
+      if (typeof hp !== "number" || typeof ap !== "number" || !Number.isFinite(hp) || !Number.isFinite(ap)) return "";
+      const home = hp >= ap;
+      return `Stats: ${home ? r.home.abbr : r.away.abbr} ${Math.round((home ? hp : ap) * 100)}%`;
+    };
     const shortNone = (label) => /^Not priced/.test(label) ? "Not priced" : /^Exhibition|^Not a regular/.test(label) ? "Abstains" : "No play";
     const groups = vm.groups.map((d) => ({ ...d, games: d.games.map((g) => {
       const r = raw[g.id] || { away: {}, home: {} }, e = M.byGame[g.id], open = this.isOpen(g.id), a = r.away.abbr, h = r.home.abbr;
@@ -761,6 +772,7 @@ class Component extends DCLogic {
           awayWeight: scored && e[p1].score > e[p2].score ? 700 : 400, homeWeight: scored && e[p2].score > e[p1].score ? 700 : 400,
           tag: g.pick.kind === "none" ? shortNone(g.pick.label) : g.pick.label, tagColor: g.pick.kind === "none" ? "var(--mute)" : "var(--ink)",
           drought: dr.length ? `Due List ×${dr.length}` : "",
+          statSide: nhl ? statSide(r) : "",
           kind: liveV.has ? [kindShort, liveV.word].filter(Boolean).join(" · ") : kindShort, kindColor: liveV.has ? liveV.color : "var(--mute)", chev: open ? "−" : "+" },
         box: scored || (e && e.state !== "pre") ? { show: true, title: st.tone === "in" ? `Live · ${st.top}` : st.top, titleColor: st.tone === "in" ? "var(--alert)" : "var(--ink)",
           score: `${r[p1].abbr} ${scored ? e[p1].score : "–"} – ${scored ? e[p2].score : "–"} ${r[p2].abbr}`, shots,
