@@ -489,6 +489,6 @@ def test_the_headline_is_read_from_the_shipped_bucket_of_the_backtest_json(tmp_p
 def test_the_committed_backtest_headline_reads_its_file():
     line = dr.backtest_headline(dr.Path(__file__).resolve().parents[1] / "data" / "outputs")
 
-    # The committed JSON's SHIPPED bucket (either bar), card window, both seasons. The flat rule read 69 / 971 / 1804.
-    assert "points -1.6% over 311 wagers" in line and "goals -7.0% over 1355 wagers" in line and "assists -8.4% over 2135 wagers" in line
+    # The committed JSON's SHIPPED bucket (either bar), card window, both seasons. The flat rule read 69 / 971 / 1804; the either-bar rule with the old goals tiers 311 / 1355 / 2135.
+    assert "points -1.6% over 311 wagers" in line and "goals +3.6% over 537 wagers" in line and "assists -8.6% over 2157 wagers" in line
     assert "unavailable" not in line and "no category's interval sits above zero" in line

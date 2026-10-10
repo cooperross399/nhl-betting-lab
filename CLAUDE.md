@@ -2329,7 +2329,17 @@ Re-derive rather than trust if the data has moved.
   +12.4% over 147 (2025-26), intervals spanning zero, and the same search on
   random data finds one that good about a third of the time: **no
   demonstrated edge.** The committed backtest was regenerated on the new rule
-  (HEADLINE_PLACEHOLDER). Still an UNSTAKED list: the model, the edge bar, the
+  (Due List Tuning run 38072353385; card window, either bar, best price,
+  flat stake, 95% interval bootstrapped over nights): points -1.6% over 311
+  (-10.8% to +7.1%), goals +3.6% over 537 (-9.3% to +19.2%), assists -8.6%
+  over 2,157 (-14.6% to -2.3%). No category's interval sits above zero: no
+  demonstrated edge, and assists is a demonstrated deficit. Goals by band:
+  25-39 @10 +10.8% over 325 (-10.3% to +31.4%), 40+ @5 -7.4% over 212
+  (-24.8% to +11.2%). The regenerating run graded 678 more card-window
+  selections than the committed run it replaced (2025-26 games it could
+  match), which moves assists from 2,135 to 2,157 with its rule unchanged,
+  and restored a thinner `late` window (74,966 selections against 111,546),
+  which the headline does not read. Still an UNSTAKED list: the model, the edge bar, the
   market list, the staking rule and the registered 2027-04-25 test are
   unchanged, and recorded lists and their forward record keep their columns
   (nights already recorded are not rebuilt).
