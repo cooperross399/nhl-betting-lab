@@ -153,31 +153,37 @@ def _built(rows: list[dict], p: dict) -> card_module.GamedayCard:
     return card_module.build_card(pd.DataFrame(rows), p, eligibility=eligibility, now=NOW)
 
 
-def test_an_underdog_with_an_edge_is_a_lean_not_a_stake() -> None:
-    # Home 40% at +250 is an 11.4-point edge, a best bet by price; the stats favour Boston.
-    rows = [ml("home", 250), ml("away", -300)]
-    card = _built(rows, probs(rows, 0.40))
+def test_an_underdog_the_stats_give_a_real_chance_is_still_staked() -> None:
+    # Home 42% at +200: an 8.7-point edge, under the best-bet bar; at +225, 11.2 points.
+    rows = [ml("home", 225), ml("away", -270)]
+    card = _built(rows, probs(rows, 0.42))
+    assert [r["selection"] for r in card.best_bets] == ["home"], "42% is a real chance: still a bet"
+
+
+def test_a_longshot_the_stats_do_not_back_is_a_lean_not_a_stake() -> None:
+    # Home 30% at +400 is a 10-point edge by price; the stats give it under 40%.
+    rows = [ml("home", 400), ml("away", -550)]
+    card = _built(rows, probs(rows, 0.30))
     assert card.best_bets == []
     lean = next(r for r in card.leans if r["selection"] == "home")
     assert lean["demotion_reason"].startswith(card_module.STAT_SIDE_PREFIX)
+    assert "30.0% chance to win, under the 40%" in lean["demotion_reason"]
     assert lean["suggested_units"] == 0.0
-    text = card_module.render_card(card)
-    assert "a team bet is staked only on the side the model says wins" in text
+    assert "a team bet is staked only when the model gives that team at least a 40% chance" in card_module.render_card(card)
 
 
-def test_the_stats_side_with_an_edge_is_still_staked() -> None:
+def test_the_favourite_with_an_edge_is_still_staked() -> None:
     rows = [ml("home", -110), ml("away", -110)]
     card = _built(rows, probs(rows, 0.62))
     assert [r["selection"] for r in card.best_bets] == ["home"]
 
 
-def test_a_puck_line_on_the_side_the_stats_say_loses_is_not_staked() -> None:
-    mls = [ml("home", 150), ml("away", -170)]
+def test_a_puck_line_on_a_team_the_stats_do_not_back_is_not_staked() -> None:
+    mls = [ml("home", 260), ml("away", -320)]
     pl = [_team_row("puck_line", "home", 120, 1.5), _team_row("puck_line", "away", -140, -1.5)]
-    p = {**probs(mls, 0.42), _pkey(pl[0]): 0.62, _pkey(pl[1]): 0.38}
+    p = {**probs(mls, 0.33), _pkey(pl[0]): 0.62, _pkey(pl[1]): 0.38}
     card = _built(mls + pl, p)
-    staked = {(r["market"], r["selection"]) for r in card.best_bets}
-    assert ("puck_line", "home") not in staked
+    assert ("puck_line", "home") not in {(r["market"], r["selection"]) for r in card.best_bets}
     assert any(r["market"] == "puck_line" and r["selection"] == "home" for r in card.leans)
 
 

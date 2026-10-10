@@ -2354,17 +2354,20 @@ Re-derive rather than trust if the data has moved.
   forward ledger or its report. No measurement here shows that backing the
   stats' side at the market's price makes money, and the section says so.
   **Then, the same day, NOT a defect fix: Cooper changed the staking rule
-  before the decision date** ("I want the stats combined into the model").
-  A team best bet in `moneyline`, `puck_line` or `regulation_3_way` is
-  staked only when it is on the side the model's moneyline win chance
-  favours as well as clearing the edge bar (`STAT_SIDE_MARKETS`,
-  `stat_side_reason`); an edge on the other side, or on a game with no
-  two-sided moneyline opinion, becomes a lean at zero units naming why,
-  under its own heading. Totals, team totals, the regulation draw and props
-  are untouched. As with the `points` exclusion, `write_snapshot` freezes
-  the unfiltered priced frame before `build_card`, so the forward ledger and
-  the registered test score the same opinions; only stakes move. Unmeasured
-  against real prices: whether it helps is for the team-markets backtest.
+  before the decision date** ("I want the stats combined into the model",
+  then "I still want to bet underdogs but only if the model actually says
+  it has a good shot of winning ... via the stats"). A team best bet in
+  `moneyline`, `puck_line` or `regulation_3_way` is staked only when it
+  clears the edge bar AND the model's moneyline win chance for that team is
+  at least `stat_sides.STAT_SIDE_MIN_WIN` (40%, the default picked that day;
+  Cooper's to move). A favourite always clears it; an underdog only with a
+  real chance. One that fails, or a side with no moneyline opinion, becomes
+  a lean at zero units naming why (`stat_side_reason`), under its own
+  heading. Totals, team totals, the regulation draw and props are untouched.
+  As with the `points` exclusion, `write_snapshot` freezes the unfiltered
+  priced frame before `build_card`, so the forward ledger and the registered
+  test score the same opinions; only stakes move. Unmeasured against real
+  prices: whether it helps is for the team-markets backtest.
 
 ## Contract strings — never change these
 

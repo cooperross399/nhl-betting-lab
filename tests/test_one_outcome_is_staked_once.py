@@ -163,6 +163,21 @@ def _eligibility(markets: list[str], *, games: int = 1) -> EligibilityReport:
     )
 
 
+def _with_win_chances(rows: list[dict], probabilities: dict, home: float = 0.5) -> dict:
+    """The moneyline win chances the stats check reads (2026-10-10).
+
+    A team side is staked only when the model gives that team a real chance
+    to win (`gameday_card.stat_side_reason`). These tests are about one stake
+    per outcome, so both sides get an even chance and the check stays out of
+    the way.
+    """
+    out = dict(probabilities)
+    for row in rows:
+        for side, chance in (("home", home), ("away", 1 - home)):
+            out[_key({**row, "market": "moneyline", "player": "", "selection": side, "line": None})] = chance
+    return out
+
+
 def _staked(rows: list[dict], probabilities: dict) -> list:
     selections, _passes = build_candidates(pd.DataFrame(rows), probabilities)
     return [item for item in selections if item.section == BEST_BETS_SECTION]
@@ -270,7 +285,7 @@ def test_the_two_sides_of_a_puck_line_stay_two_outcomes() -> None:
         _row(market="puck_line", player="", selection="home", line=-1.5),
         _row(market="puck_line", player="", selection="away", line=1.5),
     ]
-    probabilities = {_key(row): 0.58 for row in rows}
+    probabilities = _with_win_chances(rows, {_key(row): 0.58 for row in rows})
 
     assert len(_staked(rows, probabilities)) == 2
 
@@ -594,7 +609,7 @@ def test_the_demotion_sentence_names_a_signed_handicap():
         _row(market="puck_line", player="", selection="home", line=-1.5, price=150),
         _row(market="puck_line", player="", selection="home", line=1.5, price=-110),
     ]
-    probabilities = {_key(row): 0.90 for row in rows}
+    probabilities = _with_win_chances(rows, {_key(row): 0.90 for row in rows})
     leans = _leans(rows, probabilities)
     assert len(leans) == 1
     assert "home -1.5" in leans[0].demotion_reason

@@ -115,7 +115,7 @@ from nhl_betting_lab.markets import MARKETS_BY_KEY
 from nhl_betting_lab.models.player_props import player_key
 from nhl_betting_lab.reports.card_pricing import selection_key
 from nhl_betting_lab.season import clean_text
-from nhl_betting_lab.stat_sides import StatSides, render_section as render_stat_sides
+from nhl_betting_lab.stat_sides import STAT_SIDE_MIN_WIN, StatSides, render_section as render_stat_sides
 from nhl_betting_lab.models.value import (
     OddsError,
     american_to_implied,
@@ -912,49 +912,49 @@ def _rows_table(rows: Sequence[Mapping[str, Any]], *, staked: bool) -> list[str]
 
 
 #: The team markets whose `home`/`away` selection is a side to win.
-#: Cooper, 2026-10-10: "I want the stats combined into the model": a team
-#: best bet must be on the side the stats say wins, as well as clear the
-#: edge bar. A side the model's moneyline win chance does not favour keeps
-#: its opinion as a lean at zero units, never a pass and never deleted. The
-#: frozen snapshot is written from the unfiltered prices before the card is
-#: built, so this changes stakes and nothing the forward ledger scores.
-#: Totals, team totals, the regulation draw and props are not sides and are
+#: Cooper, 2026-10-10: "I want the stats combined into the model", then "I
+#: still want to bet underdogs but only if the model actually says it has a
+#: good shot of winning ... via the stats". A team best bet must clear the
+#: edge bar AND the model's moneyline win chance for that team must be at
+#: least `STAT_SIDE_MIN_WIN`. A favourite always clears it; an underdog only
+#: when the stats give it a real chance. One that does not keeps its opinion
+#: as a lean at zero units, never a pass and never deleted. The frozen
+#: snapshot is written from the unfiltered prices before the card is built,
+#: so this changes stakes and nothing the forward ledger scores. Totals,
+#: team totals, the regulation draw and props are not sides and are
 #: untouched.
 STAT_SIDE_MARKETS: frozenset[str] = frozenset({"moneyline", "puck_line", "regulation_3_way"})
 STAT_SIDE_PREFIX = "Against the stats:"
 
 
 def stat_side_reason(key: tuple, probabilities: Mapping[tuple, float]) -> str:
-    """Why a team-side stake is withheld, or "" when the stats favour it.
+    """Why a team-side stake is withheld, or "" when the stats back it.
 
-    The side is the one with the larger moneyline win chance on the same
-    game, read from the same map the card priced from, as
-    `stat_sides.build_stat_sides` reads it (a tie goes home).
+    The team's chance is the model's moneyline win probability on the same
+    game, read from the same map the card priced from, whatever the market:
+    a puck line or regulation bet on a team is a bet that team plays well,
+    and the win chance is the stats' read on that.
     """
     market, _player, home, away, selection, _line, day = key
     if market not in STAT_SIDE_MARKETS or selection not in ("home", "away"):
         return ""
-    chance = {
-        side: probabilities.get(("moneyline", "", home, away, side, None, day))
-        for side in ("home", "away")
-    }
-    if any(value is None for value in chance.values()):
+    chance = probabilities.get(("moneyline", "", home, away, selection, None, day))
+    if chance is None:
         return (
-            f"{STAT_SIDE_PREFIX} the model holds no moneyline win chance for both "
-            "sides of this game, so it cannot confirm this side is the one the "
-            "stats say wins. Recorded as a lean and staked at zero."
+            f"{STAT_SIDE_PREFIX} the model holds no moneyline win chance for "
+            "this side, so it cannot confirm the stats give it a real chance. "
+            "Recorded as a lean and staked at zero."
         )
-    favoured = "home" if float(chance["home"]) >= float(chance["away"]) else "away"
-    if selection == favoured:
+    if float(chance) >= STAT_SIDE_MIN_WIN:
         return ""
     team = home if selection == "home" else away
     return (
-        f"{STAT_SIDE_PREFIX} the model gives {team} a "
-        f"{float(chance[selection]):.1%} chance to win, so the stats favour the "
-        "other side. The price is long enough to clear the bar, but the card "
-        "stakes only the side the stats say wins. Recorded as a lean and "
-        "staked at zero."
+        f"{STAT_SIDE_PREFIX} the model gives {team} a {float(chance):.1%} "
+        f"chance to win, under the {STAT_SIDE_MIN_WIN:.0%} the card asks of a "
+        "side. The price is long enough to clear the bar, but the stats do "
+        "not give it a real chance. Recorded as a lean and staked at zero."
     )
+
 
 def _demoted_leans_by_reason(leans: Sequence[Mapping[str, Any]]) -> list[str]:
     """Every lean that was good enough to stake, listed under WHY it was not.
@@ -1013,9 +1013,9 @@ def _demoted_leans_by_reason(leans: Sequence[Mapping[str, Any]]) -> list[str]:
     if against:
         lines.extend(
             [
-                "Stats side: a team bet is staked only on the side the model "
-                "says wins. These cleared the edge bar on the other side and "
-                "are recorded here.",
+                "Stats check: a team bet is staked only when the model gives "
+                f"that team at least a {STAT_SIDE_MIN_WIN:.0%} chance to win. "
+                "These cleared the edge bar without it and are recorded here.",
                 "",
             ]
         )

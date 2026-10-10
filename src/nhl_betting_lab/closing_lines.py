@@ -967,6 +967,7 @@ def measurement_bar_note() -> str:
         HARD_GATED_MARKETS,
         STAKE_EXCLUDED_MARKETS,
     )
+    from nhl_betting_lab.stat_sides import STAT_SIDE_MIN_WIN
 
     excluded = ", ".join(f"`{m}`" for m in sorted(STAKE_EXCLUDED_MARKETS))
     gated = ", ".join(f"`{m}`" for m in sorted(HARD_GATED_MARKETS))
@@ -982,8 +983,8 @@ def measurement_bar_note() -> str:
         f"nothing priced shorter than {MAX_DEFAULT_JUICE} or longer than "
         f"+{MAX_DEFAULT_PRICE}, nothing in a stake-excluded market "
         f"({excluded}), nothing in a hard-gated market ({gated}), and no "
-        "moneyline, puck line or regulation side the model's win chance does "
-        "not favour, "
+        "moneyline, puck line or regulation side the model gives under a "
+        f"{STAT_SIDE_MIN_WIN:.0%} chance to win, "
         "whatever the edge. Some reasons are not about the price at all: "
         "the snapshot is frozen from the unfiltered prices before the card "
         "is built, so this also counts every rung of a ladder after the one "

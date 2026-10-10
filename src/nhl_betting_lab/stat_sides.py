@@ -37,6 +37,11 @@ from nhl_betting_lab.puck_drop import apply_puck_drop_guard
 from nhl_betting_lab.reports.card_pricing import _line, selection_key
 
 SECTION_TITLE = "Stat sides"
+#: "A good shot of winning" (Cooper, 2026-10-10): the least moneyline win
+#: chance the card asks of a team it stakes (`gameday_card.stat_side_reason`).
+#: 40% is the default picked that day, about a +150 underdog at a fair price;
+#: Cooper can move it.
+STAT_SIDE_MIN_WIN = 0.40
 MARKET = "moneyline"
 SIDES = ("home", "away")
 
@@ -166,8 +171,9 @@ def render_section(sides: StatSides | None, start_text) -> list[str]:
         "",
         "Who the model expects to win each game, from the same team ratings "
         "the card prices on. The card stakes a team bet (moneyline, puck "
-        "line, regulation) only on this side, and only when its chance also "
-        "beats the price; the last column says how this side's chance "
+        "line, regulation) only when it beats the price and the model gives "
+        f"that team at least a {STAT_SIDE_MIN_WIN:.0%} chance, so an underdog with a real chance "
+        "can still be a bet; the last column says how this side's chance "
         "compares with its best moneyline price.",
         "",
     ]
