@@ -3,9 +3,9 @@
 `scripts/publish_lineup_lines.py` sends Cooper's DFS app each team's newest
 snapshot of its forward lines and power-play units. The capture it reads is the
 lab's own record, kept privately and out of this repository, so what may leave
-is pinned here: names in L1-L4 and PP1/PP2 from each team's latest read, never
-an older read, a player id, a defence pair, a penalty-kill unit, a goalie or
-the injured-reserve group. The workflow step that runs it is pinned too: after
+is pinned here: names in L1-L4 and PP1/PP2 from each team's latest read, the
+defence pairs and goalies in their own keys (since 2026-10-11), and never an
+older read, a player id, a penalty-kill unit or the injured-reserve group. The workflow step that runs it is pinned too: after
 the round is home, never able to fail the capture run, default branch only.
 
 Offline, like the rest of the suite: the sender is injected, and the real one
@@ -74,11 +74,25 @@ def test_only_lines_and_power_play_units_leave_in_slot_order() -> None:
 
 
 def test_no_player_id_or_withheld_group_reaches_the_payload() -> None:
-    text = json.dumps(pll.lineup_payload(_vgk()))
-    assert "Carter Hart" not in text, "a goalie group left the lab"
+    payload = pll.lineup_payload(_vgk())
+    text = json.dumps(payload)
     assert "Alex Pietrangelo" not in text, "the injured-reserve group left the lab"
     assert "player_id" not in text and "playerId" not in text
     assert set(pll.UNITS) == {"f1", "f2", "f3", "f4", "pp1", "pp2"}
+    assert all(unit["kind"] in {"line", "pp"} for unit in payload["lines"])
+
+
+def test_pairs_and_goalies_travel_beside_the_lines_not_in_them() -> None:
+    rows = _vgk() + [
+        _row("VGK", "8", "Brayden McNabb", "d1", "ld"),
+        _row("VGK", "15", "Adin Hill", "g", "g2"),
+    ]
+    payload = pll.lineup_payload(rows)
+    assert payload["pairs"] == [
+        {"team": "VGK", "kind": "pair", "label": "D1", "players": ["Brayden McNabb", "Shea Theodore"]},
+    ]
+    assert payload["goalies"] == [{"team": "VGK", "players": ["Carter Hart", "Adin Hill"]}]
+    assert not any(name in json.dumps(payload["lines"]) for name in ("Carter Hart", "Brayden McNabb"))
 
 
 def test_each_team_sends_only_its_newest_snapshot() -> None:
@@ -123,7 +137,7 @@ def test_no_capture_today_sends_nothing_and_stays_green(tmp_path, monkeypatch) -
 
 def test_a_capture_with_no_units_sends_nothing(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv(pll.TOKEN_ENV, "t")
-    _write(tmp_path, "2026-10-08", [_row("VGK", "5", "Carter Hart", "g", "g1")])
+    _write(tmp_path, "2026-10-08", [_row("VGK", "7", "Alex Pietrangelo", "ir", "ir1")])
     sent = []
     code = pll.main(["--processed-dir", str(tmp_path), "--date", "2026-10-08"], send=lambda *a: sent.append(a))
     assert code == 0 and sent == []

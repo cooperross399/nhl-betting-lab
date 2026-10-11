@@ -12,8 +12,11 @@ once per Line Movement round.
 **What leaves, and what never does.** For each team it sends only the most
 recent snapshot in today's file: the four forward lines as `L1`-`L4` and the
 two power-play units as `PP1`/`PP2`, by player name, plus that snapshot's
-source name and timestamps. It never sends earlier snapshots, player ids,
-defence pairs, penalty-kill units, goalies or the injured-reserve group. The
+source name and timestamps. Since 2026-10-11 it also sends the defence pairs
+as `pairs` (`D1`-`D3`) and the goalies as `goalies` (the source's order, its
+expected starter first), in their own keys so an app that reads only `lines`
+never mistakes a pair or a goalie for a stack. It never sends earlier
+snapshots, player ids, penalty-kill units or the injured-reserve group. The
 capture history stays where it lives, in the private movement chain; this
 repository stays free of it (`.gitignore` keeps `line_combinations/` out),
 and the worker expires each date after three days so it never accumulates an
@@ -59,7 +62,12 @@ UNITS = {
 }
 
 #: Within a unit, players in the order the source places them.
-SLOT_ORDER = {"lw": 0, "c": 1, "rw": 2, "sk1": 0, "sk2": 1, "sk3": 2, "sk4": 3, "sk5": 4}
+#: Defence pairs and goalies, sent beside `lines` rather than in it.
+PAIRS = {"d1": "D1", "d2": "D2", "d3": "D3"}
+GOALIE_GROUP = "g"
+
+SLOT_ORDER = {"lw": 0, "c": 1, "rw": 2, "sk1": 0, "sk2": 1, "sk3": 2, "sk4": 3, "sk5": 4,
+              "ld": 0, "rd": 1, "g1": 0, "g2": 1, "g3": 2}
 
 EXIT_REFUSED = 1
 
@@ -99,24 +107,25 @@ def lineup_payload(rows: Iterable[dict[str, str]]) -> dict[str, Any]:
         })
         group = row.get("group_identifier", "")
         player = (row.get("player") or "").strip()
-        if group not in UNITS or not player:
+        if not player or (group not in UNITS and group not in PAIRS and group != GOALIE_GROUP):
             continue
         slot = SLOT_ORDER.get(row.get("position_identifier", ""), 9)
         members = units.setdefault((team, group), [])
         if player not in (name for _, name in members):
             members.append((slot, player))
 
-    order = list(UNITS)
-    lines = []
+    order = list(UNITS) + list(PAIRS) + [GOALIE_GROUP]
+    lines, pairs, goalies = [], [], []
     for team, group in sorted(units, key=lambda key: (key[0], order.index(key[1]))):
-        kind, label = UNITS[group]
-        lines.append({
-            "team": team,
-            "kind": kind,
-            "label": label,
-            "players": [name for _, name in sorted(units[(team, group)])],
-        })
-    return {"lines": lines, "sources": dict(sorted(sources.items()))}
+        players = [name for _, name in sorted(units[(team, group)])]
+        if group in UNITS:
+            kind, label = UNITS[group]
+            lines.append({"team": team, "kind": kind, "label": label, "players": players})
+        elif group in PAIRS:
+            pairs.append({"team": team, "kind": "pair", "label": PAIRS[group], "players": players})
+        else:
+            goalies.append({"team": team, "players": players})
+    return {"lines": lines, "pairs": pairs, "goalies": goalies, "sources": dict(sorted(sources.items()))}
 
 
 def post(url: str, token: str, body: dict[str, Any], *, timeout: float = 20.0) -> tuple[int, str]:

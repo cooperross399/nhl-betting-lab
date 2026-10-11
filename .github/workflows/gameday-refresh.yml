@@ -779,6 +779,26 @@ jobs:
         run: |
           python scripts/run_drought_rule_forward.py
 
+      - name: Send player projections to The Lineup
+        # Cooper's DFS app (2026-10-11): every modelled player on tonight's
+        # slate as expected DraftKings points, a p10/p90 range and the bonus
+        # chances, with the books' de-vigged means in place of the model's
+        # where a prop is staged (scripts/publish_lineup_projections.py).
+        # Only derived numbers leave: no price, line, book or id. It reads the
+        # prices this run already staged, spends no credit, freezes nothing
+        # and touches no card. Soft and short, and never read by "Report the
+        # outcome": a failed send costs the app one night of lab projections
+        # and nothing else. Default branch only, like the card's publishing,
+        # so a branch rehearsal never overwrites tonight's projections.
+        if: always() && (github.event_name == 'schedule' || github.ref == format('refs/heads/{0}', github.event.repository.default_branch))
+        continue-on-error: true
+        timeout-minutes: 10
+        env:
+          PYTHONPATH: src
+          LINEUP_INGEST_TOKEN: ${{ secrets.LINEUP_INGEST_TOKEN }}
+        run: |
+          python scripts/publish_lineup_projections.py
+
       - name: Report closing-line value
         # Scores every frozen opinion against the market's last word, from
         # the union of two PRIVATE sources in cooperross399/nhl-closing-lines:

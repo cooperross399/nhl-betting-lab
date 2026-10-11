@@ -230,9 +230,15 @@ PYTHONPATH=src .venv/bin/python scripts/capture_line_combinations.py
 
 # Send each team's newest forward lines (L1-L4) and power-play units (PP1/PP2)
 # from today's capture to The Lineup, Cooper's DFS lineup builder, by player
-# name only. Nothing older, no ids, no other group. Not evidence; nothing in the
-# lab reads it back. Needs LINEUP_INGEST_TOKEN; without it, sends nothing.
+# name only, with D pairs and goalies in their own keys. Nothing older, no ids,
+# no PK or IR group. Not evidence; nothing in the lab reads it back. Needs
+# LINEUP_INGEST_TOKEN; without it, sends nothing.
 PYTHONPATH=src .venv/bin/python scripts/publish_lineup_lines.py
+
+# Send tonight's expected DraftKings points, p10/p90 and bonus chances to The
+# Lineup, books' de-vigged means replacing the model's where a prop is staged.
+# Derived means only: no price, line, book or id leaves. Touches no card.
+PYTHONPATH=src .venv/bin/python scripts/publish_lineup_projections.py
 
 # Scan the captured ladders for a book contradicting ITSELF: quoting a harder
 # threshold as likelier than an easier one, which no view about hockey is
@@ -312,6 +318,11 @@ PYTHONPATH=src .venv/bin/python scripts/run_props_form_experiment.py
 # same search on no-edge simulations. Changes no setting (Due List Tuning
 # workflow runs it in CI on the bought prices).
 PYTHONPATH=src .venv/bin/python scripts/run_due_list_tuning.py
+
+# How good are the DFS projections? Walk-forward MAE, rank and ceiling coverage
+# of the lab's DraftKings projection against DK averages and the app's old
+# formula (DFS Projection Test workflow runs it in CI on the bought prices).
+PYTHONPATH=src .venv/bin/python scripts/run_dfs_projection_test.py
 
 # The provider policy PR gate. Exits non-zero when the paperwork does not hold.
 PYTHONPATH=src .venv/bin/python scripts/run_policy_pr_gate.py
