@@ -162,7 +162,7 @@ def market_anchors(prices: pd.DataFrame, frame: pd.DataFrame, team_names, r: dic
     if prices.empty:
         return {}
     commence = pd.to_datetime(prices["commence_time"], errors="coerce", utc=True)
-    prices = prices.assign(_day=commence.dt.tz_convert("America/New_York").dt.strftime("%Y-%m-%d"))
+    prices = prices.assign(league_day=commence.dt.tz_convert("America/New_York").dt.strftime("%Y-%m-%d"))
     labels = set(prices["home_team"].astype(str)) | set(prices["away_team"].astype(str))
     teams = {label: resolve_team(label, team_names) for label in labels}
     who: dict[tuple[str, str], dict[int, tuple[str, int]]] = {}
@@ -177,7 +177,7 @@ def market_anchors(prices: pd.DataFrame, frame: pd.DataFrame, team_names, r: dic
         home, away = teams.get(str(row.home_team)), teams.get(str(row.away_team))
         found: dict[int, tuple[str, int]] = {}
         for alias in aliases:
-            for pid, (team, game_id) in who.get((row._day, alias), {}).items():
+            for pid, (team, game_id) in who.get((row.league_day, alias), {}).items():
                 if team in (home, away):
                     found[pid] = (team, game_id)
         if len(found) != 1:

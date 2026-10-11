@@ -280,3 +280,27 @@ def test_the_measurement_runs_and_compares_three_projections(tmp_path) -> None:
     assert set(overall) == {"dk_average", "app_today", "lab_model"}
     assert overall["lab_model"]["n"] == overall["dk_average"]["n"] > 0
     assert 0 <= payload["results"]["spread"]["above_p90"] <= 1
+
+
+def test_the_measurement_reads_bought_prices_into_anchors() -> None:
+    test = _load("run_dfs_projection_test")
+    from nhl_betting_lab.providers.team_names import normalize_team_name
+
+    frame = pd.DataFrame([
+        {"date": "2025-01-10", "player": "Auston Matthews", "player_id": 8479318, "team": "TOR", "game_id": 7},
+        {"date": "2025-01-10", "player": "Auston Matthews", "player_id": 8479318, "team": "TOR", "game_id": 7},
+    ])
+    base = {
+        "player": "Auston Matthews", "market": "shots_on_goal", "line": 3.5,
+        "home_team": "Toronto Maple Leafs", "away_team": "Boston Bruins",
+        "commence_time": "2025-01-11T00:00:00Z", "snapshot": "2025-01-10T14:30:00Z",
+    }
+    prices = pd.DataFrame([
+        {**base, "book": "a", "selection": "Over", "american_odds": -120},
+        {**base, "book": "a", "selection": "Under", "american_odds": 100},
+        {**base, "book": "b", "selection": "Over", "american_odds": 110},
+    ])
+    names = {normalize_team_name("Toronto Maple Leafs"): "TOR", normalize_team_name("Boston Bruins"): "BOS"}
+    anchors = test.market_anchors(prices, frame, names, {"shots_on_goal": None})
+    assert set(anchors) == {(7, 8479318)}
+    assert 3.0 < anchors[(7, 8479318)]["shots_on_goal"] < 5.0
