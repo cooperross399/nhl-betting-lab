@@ -2,41 +2,41 @@
 
 The opinion the live card actually held, written down before puck drop, settled against the boxscore after, never revised. This is the only possible price evidence for the regulation three-way, which has never been bought historically (it is per-event only and was never requested), and the accumulating out-of-sample test for everything else.
 
-- Generated: 2026-10-10T13:44:34+00:00
-- Ledger rows: 178,488 — one per book — on 32,779 wager(s), each counted once at the best price the card could have taken (486 void, 0 unsettleable)
+- Generated: 2026-10-11T13:44:23+00:00
+- Ledger rows: 220,337 — one per book — on 40,002 wager(s), each counted once at the best price the card could have taken (643 void, 0 unsettleable)
 - Set aside: 17,306 team-market ledger row(s) frozen before 2026-10-06, priced on the goals ratings. From that day the team markets are priced on the xG ratings, and only those are measured here (Cooper's decision, 2026-10-05).
 
 ## Accumulated so far, at the shipped edge bars
 
-**What the Bets column counts.** A bet here is an opinion whose edge clears the measurement bar (6% for a prop, 3.5% for a team market — the bar the historical backtest measures at). These are not the card's staked bets, and they are not what a bankroll following the card would have done. The card stakes only best bets, at an edge of 12% for a prop or 9% for a team market; an edge between the two bars is a lean, recorded and not staked. It also stakes nothing priced shorter than -160 or longer than +600, nothing in a stake-excluded market (`points`) and nothing in a hard-gated market (`goalie_saves`), whatever the edge. Some reasons are not about the price at all: the snapshot is frozen from the unfiltered prices before the card is built, so this also counts every rung of a ladder after the one that took the outcome's single stake (one stake per outcome), markets the card could not use that day (not allowlisted, or incomplete on a night the per-event fetch was capped), and the opinions of a day whose card was blocked. Every such opinion is still counted here. A game that had already started, or whose start cannot be confirmed, when the snapshot was frozen is the other way round: it is withheld from the snapshot by the same puck-drop rule the card's guard applies, so it appears in neither population — not among the opinions and not among these bets.
+**What the Bets column counts.** A bet here is an opinion whose edge clears the measurement bar (6% for a prop, 3.5% for a team market — the bar the historical backtest measures at). These are not the card's staked bets, and they are not what a bankroll following the card would have done. The card stakes only best bets, at an edge of 12% for a prop or 9% for a team market; an edge between the two bars is a lean, recorded and not staked. It also stakes nothing priced shorter than -160 or longer than +600, nothing in a stake-excluded market (`points`), nothing in a hard-gated market (`goalie_saves`), and no moneyline, puck line or regulation side the model gives under a 40% chance to win, and no prop whose model hit chance falls short of what the shortest price in its odds bracket would need, whatever the edge. Some reasons are not about the price at all: the snapshot is frozen from the unfiltered prices before the card is built, so this also counts every rung of a ladder after the one that took the outcome's single stake (one stake per outcome), markets the card could not use that day (not allowlisted, or incomplete on a night the per-event fetch was capped), and the opinions of a day whose card was blocked. Every such opinion is still counted here. A game that had already started, or whose start cannot be confirmed, when the snapshot was frozen is the other way round: it is withheld from the snapshot by the same puck-drop rule the card's guard applies, so it appears in neither population — not among the opinions and not among these bets.
 
 | Market | Opinions | Bets | Profit | ROI | 95% interval, uncorrected | Corrected interval | Survives correction |
 |:-------|---------:|-----:|-------:|----:|:--|:--|:--|
-| `assists` | 3,778 | 176 | -21.0u | -11.9% | -24.0% .. +0.1% | -29.4% .. +5.6% | no |
-| `blocked_shots` | 34 | 4 | +1.4u | +35.9% | -52.9% .. +124.7% | -92.7% .. +164.5% | too few (<30) |
+| `assists` | 4,555 | 210 | -22.2u | -10.6% | -21.6% .. +0.4% | -26.5% .. +5.3% | no |
+| `blocked_shots` | 42 | 5 | +2.3u | +45.4% | -25.9% .. +116.7% | -57.8% .. +148.6% | too few (<30) |
 | `goalie_saves` | 112 | 13 | +2.0u | +15.6% | -49.9% .. +81.0% | -79.2% .. +110.4% | too few (<30) |
-| `goals` | 8,034 | 70 | +7.0u | +10.1% | -47.2% .. +67.3% | -72.8% .. +93.0% | no |
-| `moneyline` | 52 | 10 | -2.0u | -20.0% | -85.8% .. +45.9% | -115.3% .. +75.4% | too few (<30) |
-| `points` | 6,891 | 354 | -15.9u | -4.5% | -15.9% .. +6.9% | -21.0% .. +12.0% | no |
-| `puck_line` | 513 | 25 | -8.7u | -34.8% | -65.3% .. -4.4% | -78.9% .. +9.2% | too few (<30) |
-| `regulation_3_way` | 75 | 20 | -3.6u | -18.0% | -76.6% .. +40.7% | -102.9% .. +67.0% | too few (<30) |
-| `shots_on_goal` | 7,177 | 500 | -9.6u | -1.9% | -19.0% .. +15.1% | -26.6% .. +22.8% | no |
-| `team_total` | 1,192 | 54 | +5.2u | +9.6% | -40.7% .. +59.9% | -63.2% .. +82.4% | no |
-| `total_goals` | 637 | 53 | +33.1u | +62.5% | -17.6% .. +142.5% | -53.4% .. +178.3% | no |
+| `goals` | 9,818 | 80 | +7.2u | +9.0% | -41.5% .. +59.6% | -64.2% .. +82.2% | no |
+| `moneyline` | 80 | 15 | -4.7u | -31.0% | -83.3% .. +21.2% | -106.7% .. +44.6% | too few (<30) |
+| `points` | 8,393 | 414 | -10.5u | -2.5% | -12.9% .. +7.8% | -17.5% .. +12.5% | no |
+| `puck_line` | 789 | 38 | -10.7u | -28.2% | -53.3% .. -3.1% | -64.5% .. +8.2% | no |
+| `regulation_3_way` | 117 | 31 | -7.7u | -24.7% | -68.6% .. +19.2% | -88.2% .. +38.9% | no |
+| `shots_on_goal` | 8,818 | 627 | +12.6u | +2.0% | -14.1% .. +18.1% | -21.3% .. +25.3% | no |
+| `team_total` | 1,853 | 79 | -10.5u | -13.3% | -55.7% .. +29.0% | -74.6% .. +48.0% | no |
+| `total_goals` | 984 | 75 | +26.7u | +35.6% | -28.4% .. +99.5% | -57.0% .. +128.1% | no |
 
 The corrected interval is the 95% interval widened (Bonferroni) for the 11 markets measured on the same data — the interval docs/when_this_ends.md registers the decision on. "Survives correction" reads it: yes when it excludes zero, no when it spans zero, and too few below 30 bets, where nothing survives whatever the interval says. The uncorrected interval is shown beside it for reference only. Both are clustered on the game: the rungs, sides and players of one game settle on one boxscore, so they count as one draw, never as independent bets.
 
-- `assists`: -11.9% over 176 bets, 95% interval -24.0% to +0.1%. The interval includes zero, which means **no demonstrated edge**.
-- `blocked_shots`: 4 bets is far too few to measure anything. The point estimate is +35.9% and it means nothing yet: no demonstrated edge.
+- `assists`: -10.6% over 210 bets, 95% interval -21.6% to +0.4%. The interval includes zero, which means **no demonstrated edge**.
+- `blocked_shots`: 5 bets is far too few to measure anything. The point estimate is +45.4% and it means nothing yet: no demonstrated edge.
 - `goalie_saves`: 13 bets is far too few to measure anything. The point estimate is +15.6% and it means nothing yet: no demonstrated edge.
-- `goals`: +10.1% over 70 bets, 95% interval -47.2% to +67.3%. The interval includes zero, which means **no demonstrated edge**.
-- `moneyline`: 10 bets is far too few to measure anything. The point estimate is -20.0% and it means nothing yet: no demonstrated edge.
-- `points`: -4.5% over 354 bets, 95% interval -15.9% to +6.9%. The interval includes zero, which means **no demonstrated edge**.
-- `puck_line`: 25 bets is far too few to measure anything. The point estimate is -34.8% and it means nothing yet: no demonstrated edge.
-- `regulation_3_way`: 20 bets is far too few to measure anything. The point estimate is -18.0% and it means nothing yet: no demonstrated edge.
-- `shots_on_goal`: -1.9% over 500 bets, 95% interval -19.0% to +15.1%. The interval includes zero, which means **no demonstrated edge**.
-- `team_total`: +9.6% over 54 bets, 95% interval -40.7% to +59.9%. The interval includes zero, which means **no demonstrated edge**.
-- `total_goals`: +62.5% over 53 bets, 95% interval -17.6% to +142.5%. The interval includes zero, which means **no demonstrated edge**.
+- `goals`: +9.0% over 80 bets, 95% interval -41.5% to +59.6%. The interval includes zero, which means **no demonstrated edge**.
+- `moneyline`: 15 bets is far too few to measure anything. The point estimate is -31.0% and it means nothing yet: no demonstrated edge.
+- `points`: -2.5% over 414 bets, 95% interval -12.9% to +7.8%. The interval includes zero, which means **no demonstrated edge**.
+- `puck_line`: -28.2% over 38 bets, 95% interval -53.3% to -3.1%. The interval excludes zero, so this sample is losing beyond chance — at this sample size and on this data, which is not the same as an edge that will persist. But correcting for the 11 markets measured on the same data widens it to -64.5% to +8.2%, which includes zero — so on the family of tests actually run, **no demonstrated edge**.
+- `regulation_3_way`: -24.7% over 31 bets, 95% interval -68.6% to +19.2%. The interval includes zero, which means **no demonstrated edge**.
+- `shots_on_goal`: +2.0% over 627 bets, 95% interval -14.1% to +18.1%. The interval includes zero, which means **no demonstrated edge**.
+- `team_total`: -13.3% over 79 bets, 95% interval -55.7% to +29.0%. The interval includes zero, which means **no demonstrated edge**.
+- `total_goals`: +35.6% over 75 bets, 95% interval -28.4% to +99.5%. The interval includes zero, which means **no demonstrated edge**.
 
 ## Registered decision statistic
 
@@ -46,13 +46,13 @@ docs/when_this_ends.md registers the stop/continue decision on "the forward ledg
 
 | Population | Settled opinions | Pooled return | 95% interval, uncorrected | Corrected interval | Against zero |
 |:--|:--|:--|:--|:--|:--|
-| A. Every settled opinion | 28,495, against the floor of 3,000 — floor met | -21.2% (-6047.5u) | -27.2% .. -15.2% | -29.9% .. -12.5% | excludes zero, negative |
-| B. Opinions clearing the edge bar | 1,279, against the floor of 3,000 — below the floor | Not printed: below the floor. Do not read the number. | — | — | — |
+| A. Every settled opinion | 35,561, against the floor of 3,000 — floor met | -21.6% (-7689.2u) | -26.7% .. -16.5% | -29.0% .. -14.3% | excludes zero, negative |
+| B. Opinions clearing the edge bar | 1,587, against the floor of 3,000 — below the floor | Not printed: below the floor. Do not read the number. | — | — | — |
 
 - **A. Every settled opinion**: every settled opinion in every market, whatever its edge.
 - **B. Opinions clearing the edge bar**: the settled opinions whose edge clears the measurement bar for their market — 6% for a prop, 3.5% for a team market, the bar the historical backtest measures at and the same filter as the per-market Bets column. These are not the card's staked bets; the note below says how they differ.
 
-**What population B counts.** A bet here is an opinion whose edge clears the measurement bar (6% for a prop, 3.5% for a team market — the bar the historical backtest measures at). These are not the card's staked bets, and they are not what a bankroll following the card would have done. The card stakes only best bets, at an edge of 12% for a prop or 9% for a team market; an edge between the two bars is a lean, recorded and not staked. It also stakes nothing priced shorter than -160 or longer than +600, nothing in a stake-excluded market (`points`) and nothing in a hard-gated market (`goalie_saves`), whatever the edge. Some reasons are not about the price at all: the snapshot is frozen from the unfiltered prices before the card is built, so this also counts every rung of a ladder after the one that took the outcome's single stake (one stake per outcome), markets the card could not use that day (not allowlisted, or incomplete on a night the per-event fetch was capped), and the opinions of a day whose card was blocked. Every such opinion is still counted here. A game that had already started, or whose start cannot be confirmed, when the snapshot was frozen is the other way round: it is withheld from the snapshot by the same puck-drop rule the card's guard applies, so it appears in neither population — not among the opinions and not among these bets.
+**What population B counts.** A bet here is an opinion whose edge clears the measurement bar (6% for a prop, 3.5% for a team market — the bar the historical backtest measures at). These are not the card's staked bets, and they are not what a bankroll following the card would have done. The card stakes only best bets, at an edge of 12% for a prop or 9% for a team market; an edge between the two bars is a lean, recorded and not staked. It also stakes nothing priced shorter than -160 or longer than +600, nothing in a stake-excluded market (`points`), nothing in a hard-gated market (`goalie_saves`), and no moneyline, puck line or regulation side the model gives under a 40% chance to win, and no prop whose model hit chance falls short of what the shortest price in its odds bracket would need, whatever the edge. Some reasons are not about the price at all: the snapshot is frozen from the unfiltered prices before the card is built, so this also counts every rung of a ladder after the one that took the outcome's single stake (one stake per outcome), markets the card could not use that day (not allowlisted, or incomplete on a night the per-event fetch was capped), and the opinions of a day whose card was blocked. Every such opinion is still counted here. A game that had already started, or whose start cannot be confirmed, when the snapshot was frozen is the other way round: it is withheld from the snapshot by the same puck-drop rule the card's guard applies, so it appears in neither population — not among the opinions and not among these bets.
 
 ## How far along the road this is
 
