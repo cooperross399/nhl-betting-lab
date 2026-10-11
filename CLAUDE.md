@@ -2413,6 +2413,22 @@ Re-derive rather than trust if the data has moved.
   bets. Snapshot and ledger unchanged, as above. Not measured against real
   prices, and the record says a higher flat bar did not help (the threshold
   sweep is flat); whether a bracket-relative one does is a backtest away.
+- **2026-10-11: The Lineup gets the lab's DraftKings projections.** Cooper:
+  "Yes do all of that" (five improvements to how the model feeds his DFS app).
+  `nhl_betting_lab.dfs_projections` turns the props model's expected counts
+  into expected DraftKings points, p10/p90 and the four bonus chances, and
+  replaces a stat's mean with the books' de-vigged one wherever a two-sided
+  prop is staged. Goalies are projected as if they start (win chance from the
+  xG team ratings). Gameday Refresh sends them with
+  `scripts/publish_lineup_projections.py` (default branch only,
+  `continue-on-error`, token `LINEUP_INGEST_TOKEN`) to the worker's
+  `/projections`. Only derived means leave: no price, line, book, player id or
+  capture time. `publish_lineup_lines.py` now also sends D pairs and goalies,
+  in their own keys beside the lines. The **DFS Projection Test** workflow
+  measures the projection walk-forward against DraftKings averages and the
+  app's old formula (`data/outputs/dfs_projection_test.md`). Site/app only:
+  the card, snapshot, forward ledger, model, edge bar, market list and staking
+  rule are untouched.
 
 ## Contract strings — never change these
 

@@ -61,6 +61,8 @@ BRANCH = "refs/heads/fix/some-unreviewed-change"
 
 POST = "Post the card to the operating home"
 PUBLISH = "Publish the card to the card-feed branch"
+# Sends tonight's projections to Cooper's DFS app, which a person sees.
+LINEUP = "Send player projections to The Lineup"
 REPORT = "Report the outcome"
 
 # Anything in a run block that writes somewhere a later run, or a person,
@@ -68,6 +70,7 @@ REPORT = "Report the outcome"
 # (scripts/restore_state.py), so upload-artifact is not on this list.
 OUTWARD = re.compile(
     r"\bgit\s+push\b"
+    r"|\bpublish_lineup_projections\.py\b"
     r"|\bgh\s+issue\s+(?:comment|create|pin|edit|close|reopen|delete)\b"
     r"|\bgh\s+pr\s+(?:create|comment|edit|merge|close|review)\b"
     r"|\bgh\s+release\b"
@@ -190,10 +193,10 @@ def _writers() -> dict[str, dict]:
 def test_the_steps_that_write_outside_the_run_are_the_ones_named() -> None:
     """The detector below is not vacuous: it finds both known writers and
     nothing it has not been told about."""
-    assert sorted(_writers()) == sorted([POST, PUBLISH])
+    assert sorted(_writers()) == sorted([POST, PUBLISH, LINEUP])
 
 
-@pytest.mark.parametrize("name", [POST, PUBLISH])
+@pytest.mark.parametrize("name", [POST, PUBLISH, LINEUP])
 def test_a_branch_run_skips_every_outward_write(name: str) -> None:
     step = _writers()[name]
     assert evaluate(_condition(step), _context(BRANCH)) is False, (
