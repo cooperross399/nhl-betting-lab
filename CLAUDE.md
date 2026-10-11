@@ -2416,9 +2416,8 @@ Re-derive rather than trust if the data has moved.
 - **2026-10-11: The Lineup gets the lab's DraftKings projections.** Cooper:
   "Yes do all of that" (five improvements to how the model feeds his DFS app).
   `nhl_betting_lab.dfs_projections` turns the props model's expected counts
-  into expected DraftKings points, p10/p90 and the four bonus chances, and
-  replaces a stat's mean with the books' de-vigged one wherever a two-sided
-  prop is staged. Goalies are projected as if they start (win chance from the
+  into expected DraftKings points, p10/p90 and the four bonus chances.
+  Goalies are projected as if they start (win chance from the
   xG team ratings). Gameday Refresh sends them with
   `scripts/publish_lineup_projections.py` (default branch only,
   `continue-on-error`, token `LINEUP_INGEST_TOKEN`) to the worker's
@@ -2426,7 +2425,16 @@ Re-derive rather than trust if the data has moved.
   capture time. `publish_lineup_lines.py` now also sends D pairs and goalies,
   in their own keys beside the lines. The **DFS Projection Test** workflow
   measures the projection walk-forward against DraftKings averages and the
-  app's old formula (`data/outputs/dfs_projection_test.md`). Site/app only:
+  app's old formula (`data/outputs/dfs_projection_test.md`). First run (CI
+  run 38183419740, 133,435 player-games, 2023-24 to 2026-27): MAE 4.790
+  against 4.824 for DraftKings' average and 4.833 for the app's formula,
+  paired against the average -0.033 [-0.059, -0.012]: measurably closer,
+  by a small margin. The books' de-vigged means were measured WORSE than the
+  model's on the 83,183 player-games carrying a card-window prop (MAE 4.785
+  against 4.665, paired +0.120 [+0.111, +0.129], bias +0.818: a proportional
+  de-vig keeps the over's shading), so the send leaves them out unless run
+  with `--anchor-on-books`. p90 was beaten 9.8% and p10 undercut 5.2% of the
+  time (10% each if right). Site/app only:
   the card, snapshot, forward ledger, model, edge bar, market list and staking
   rule are untouched.
 

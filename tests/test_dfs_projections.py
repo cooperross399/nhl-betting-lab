@@ -200,7 +200,8 @@ def _processed(tmp_path: Path) -> Path:
     return processed
 
 
-def test_the_send_carries_no_price_line_or_book(tmp_path, monkeypatch) -> None:
+@pytest.mark.parametrize("anchor", [False, True])
+def test_the_send_carries_no_price_line_or_book(tmp_path, monkeypatch, anchor) -> None:
     pub = _load("publish_lineup_projections")
     processed = _processed(tmp_path)
     monkeypatch.setattr(pub, "scheduled_regular_season_starts",
@@ -222,14 +223,16 @@ def test_the_send_carries_no_price_line_or_book(tmp_path, monkeypatch) -> None:
 
     code = pub.main(["--processed-dir", str(processed), "--raw-dir", str(tmp_path / "raw"),
                      "--staging-dir", str(staging), "--output-dir", str(tmp_path / "out"),
-                     "--date", "2026-10-11", "--url", "https://example.test"], send=accept)
+                     "--date", "2026-10-11", "--url", "https://example.test",
+                     *(["--anchor-on-books"] if anchor else [])], send=accept)
     assert code == 0
     (url, body), = sent
     assert url == "https://example.test/projections?sport=NHL&date=2026-10-11"
     text = json.dumps(body)
     for leaked in ("SecretBook", "-137", "113", "american_odds", "player_id", "playerId"):
         assert leaked not in text
-    assert any(row["source"] == "market" for row in body["rows"])
+    # The books' means are measured worse than the model's, so they ride only when asked for.
+    assert any(row["source"] == "market" for row in body["rows"]) is anchor
 
 
 def test_no_token_sends_nothing(tmp_path, monkeypatch) -> None:

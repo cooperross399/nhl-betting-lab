@@ -7,8 +7,14 @@ The Lineup is Cooper's DFS lineup builder, a separate app on a Cloudflare
 Worker. Its projection used to be DraftKings' season average nudged by the
 website board's team numbers; this sends it the lab's own: every modelled
 player on tonight's slate, his expected DraftKings points, a p10/p90 range and
-the four bonus chances (`nhl_betting_lab.dfs_projections`), with the books'
-de-vigged numbers in place of the model's wherever a prop is posted.
+the four bonus chances (`nhl_betting_lab.dfs_projections`).
+
+**The books' numbers stay off by default, measured.** The DFS Projection Test
+(2026-10-11, 83,183 player-games with a card-window prop) found the model's
+own means closer than the books' de-vigged ones: MAE 4.665 against 4.785,
+paired +0.120 [+0.111, +0.129] in the model's favour, because a proportional
+de-vig leaves the over's shading in, so the books' means run high (bias
++0.818 against +0.180). `--anchor-on-books` sends them anyway.
 
 **What leaves, and what never does.** Names, teams, expected counts and
 DraftKings points. Never a price, a line, a book, a player id or a capture
@@ -83,7 +89,9 @@ def staged_props(staging_dir: Path) -> pd.DataFrame:
         return pd.DataFrame()
 
 
-def build_payload(day: str, *, processed: Path, raw: Path, staging: Path, outputs: Path) -> dict | None:
+def build_payload(
+    day: str, *, processed: Path, raw: Path, staging: Path, outputs: Path, anchor: bool = False,
+) -> dict | None:
     games_today = {
         (home, away): start
         for (date, home, away), start in scheduled_regular_season_starts(raw_dir=raw).items()
@@ -110,7 +118,10 @@ def build_payload(day: str, *, processed: Path, raw: Path, staging: Path, output
                 b2b[team] = played_previous_day(last, team, day)
 
     team_names = load_team_name_map(processed_dir=processed, raw_dir=raw)
-    quotes = staged_quotes(staged_props(staging), model, set(games_today), team_names=team_names)
+    quotes = (
+        staged_quotes(staged_props(staging), model, set(games_today), team_names=team_names)
+        if anchor else []
+    )
     rows = project_slate(
         model, team_model, games_today,
         rosters=current_rosters(raw_dir=raw), b2b=b2b, quotes=quotes,
@@ -118,17 +129,18 @@ def build_payload(day: str, *, processed: Path, raw: Path, staging: Path, output
     anchored = sum(1 for row in rows if row["source"] == "market")
     print(
         f"Projected {len(rows)} player(s) across {len(games_today)} game(s); "
-        f"{anchored} carry at least one stat from the books' de-vigged prices "
-        f"({len(quotes)} two-sided quotes read)."
+        + (f"{anchored} carry at least one stat from the books' de-vigged prices "
+           f"({len(quotes)} two-sided quotes read)." if anchor else "the books' numbers were not used.")
     )
     return {
         "model": "nhl-betting-lab dfs v1",
         "scoring": "DraftKings classic NHL (short-handed and shootout bonuses not modelled)",
         "teamRatings": ratings,
         "note": (
-            "Expected DraftKings points from the lab's player model; where books post a prop, "
-            "the de-vigged price sets that stat's mean. p10/p90 simulate the night with stats "
-            "drawn independently, so the ceiling is conservative. Goalies are projected as if they start."
+            "Expected DraftKings points from the lab's player model"
+            + ("; where books post a prop, the de-vigged price sets that stat's mean. " if anchor else ". ")
+            + "p10/p90 simulate the night with stats drawn independently. "
+            "Goalies are projected as if they start."
         ),
         "rows": rows,
     }
@@ -142,6 +154,8 @@ def main(argv: list[str] | None = None, *, send=post) -> int:
     parser.add_argument("--output-dir", default=str(OUTPUTS_DIR))
     parser.add_argument("--date", default="", help="League date; blank is today in New York.")
     parser.add_argument("--url", default=os.environ.get("LINEUP_WORKER_URL", DEFAULT_URL))
+    parser.add_argument("--anchor-on-books", action="store_true",
+                        help="Replace the model's means with the books' de-vigged ones (measured worse).")
     args = parser.parse_args(argv)
 
     day = args.date or datetime.now(LEAGUE_TIMEZONE).date().isoformat()
@@ -151,7 +165,7 @@ def main(argv: list[str] | None = None, *, send=post) -> int:
         return 0
     payload = build_payload(
         day, processed=Path(args.processed_dir), raw=Path(args.raw_dir),
-        staging=Path(args.staging_dir), outputs=Path(args.output_dir),
+        staging=Path(args.staging_dir), outputs=Path(args.output_dir), anchor=args.anchor_on_books,
     )
     if not payload or not payload["rows"]:
         return 0
