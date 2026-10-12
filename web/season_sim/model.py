@@ -147,6 +147,36 @@ def _games_before(games: list[dict], until: str | None) -> int:
     return sum(1 for g in games if g["date"] < until)
 
 
+def _fit_on(until: str | None, day: str) -> bool:
+    """Whether a player listed as out until ``until`` can play on ``day``."""
+    if until is None:
+        return True
+    if until == "season":
+        return False
+    return day >= until
+
+
+def _remaining_starts(weights: dict, returns: dict, games: list[dict]) -> dict:
+    """Expected starts per goalie over ``games``.
+
+    Each game is split by ``weights`` among the goalies fit to play it, so an
+    injured goalie starts nothing until his return date and nothing at all when
+    he is out for the season. A night with no fit goalie falls back to the
+    plain weights.
+    """
+    starts = dict.fromkeys(weights, 0.0)
+    for g in games:
+        fit = {k: w for k, w in weights.items() if _fit_on(returns.get(k), g["date"])}
+        tot = sum(fit.values())
+        if tot <= 0:
+            fit, tot = weights, sum(weights.values())
+        if tot <= 0:
+            continue
+        for k, w in fit.items():
+            starts[k] += w / tot
+    return starts
+
+
 # ----------------------------------------------------------------------
 # the model
 # ----------------------------------------------------------------------
@@ -354,6 +384,7 @@ def build_model(bundle: dict, injuries: dict, *, starter_shares: dict) -> dict:
     mu_off = sum(o for o, _ in raw.values()) / 32
     mu_xga = sum(x for _, x in raw.values()) / 32
 
+    now_rows = {t["teamAbbrev"]["default"]: t for t in bundle["standings_now"]["standings"]}
     teams: dict[str, dict] = {}
     players: dict[str, list[dict]] = {}
     goalies: dict[str, list[dict]] = {}
@@ -400,9 +431,22 @@ def build_model(bundle: dict, injuries: dict, *, starter_shares: dict) -> dict:
             shares = {n: w / sum(weights_g.values()) for n, w in weights_g.items()}
         tot = sum(shares.values())
         shares = {n: v / tot for n, v in shares.items()}
+        # lean the depth chart toward the starts actually made this season, then
+        # hand each remaining game only to the goalies fit to play it
+        gp_now = now_rows[ab]["gamesPlayed"]
+        weights = {g["id"]: shares.get(g["name"], 0.0) for g in gps}
+        if gp_now > 0:
+            weights = {g["id"]: (weights[g["id"]] * 20 + g["now"]["gs"]) / (20 + gp_now) for g in gps}
+        team_left = remaining_by_team.get(ab, [])
+        if team_left:
+            starts = _remaining_starts(weights, {g["id"]: returns.get((ab, g["id"])) for g in gps}, team_left)
+            weights = {k: v / len(team_left) for k, v in starts.items()}
+        else:
+            tot = sum(weights.values())
+            weights = {k: v / tot for k, v in weights.items()} if tot else weights
         g_eff = 0.0
         for g in gps:
-            g["share"] = shares.get(g["name"], 0.0)
+            g["share"] = weights[g["id"]]
             g_eff += g["share"] * g["gsax60"]
         teams[ab] = dict(td_off=td_off, td_xga=td_xga, d_xgf=d_xgf, d_xga=d_xga, goalie_gsax=g_eff)
         players[ab] = projs
@@ -416,7 +460,6 @@ def build_model(bundle: dict, injuries: dict, *, starter_shares: dict) -> dict:
         t["ga"] = t["td_xga"] + SHRINK_ONICE * t["d_xga"] - t["goalie_gsax"]
 
     # ---------------- in-season update toward the season to date
-    now_rows = {t["teamAbbrev"]["default"]: t for t in bundle["standings_now"]["standings"]}
     mp_now = mp_teams.get(season, {})
     for ab, t in teams.items():
         row = now_rows[ab]
@@ -454,16 +497,6 @@ def build_model(bundle: dict, injuries: dict, *, starter_shares: dict) -> dict:
             q["proj_g"] = q["now"]["g"] + q["ros_g"]
             q["proj_a"] = q["now"]["a"] + q["ros_a"]
             q["proj_p"] = q["proj_g"] + q["proj_a"]
-        # goalie start shares drift toward the starts actually made this season
-        gp = t["gp"]
-        if gp > 0:
-            tot = 0.0
-            for g in goalies[ab]:
-                g["share"] = (g["share"] * 20 + g["now"]["gs"]) / (20 + gp)
-                tot += g["share"]
-            for g in goalies[ab]:
-                g["share"] = g["share"] / tot if tot else g["share"]
-            t["goalie_gsax"] = sum(g["share"] * g["gsax60"] for g in goalies[ab])
 
     # standings rows for the site and the sim
     prior_rows = {t["teamAbbrev"]["default"]: t for t in bundle["standings_prior"]["standings"]}
