@@ -434,19 +434,19 @@ def build_model(bundle: dict, injuries: dict, *, starter_shares: dict) -> dict:
         # lean the depth chart toward the starts actually made this season, then
         # hand each remaining game only to the goalies fit to play it
         gp_now = now_rows[ab]["gamesPlayed"]
-        weights = {g["id"]: shares.get(g["name"], 0.0) for g in gps}
+        start_w = {g["id"]: shares.get(g["name"], 0.0) for g in gps}
         if gp_now > 0:
-            weights = {g["id"]: (weights[g["id"]] * 20 + g["now"]["gs"]) / (20 + gp_now) for g in gps}
+            start_w = {g["id"]: (start_w[g["id"]] * 20 + g["now"]["gs"]) / (20 + gp_now) for g in gps}
         team_left = remaining_by_team.get(ab, [])
         if team_left:
-            starts = _remaining_starts(weights, {g["id"]: returns.get((ab, g["id"])) for g in gps}, team_left)
-            weights = {k: v / len(team_left) for k, v in starts.items()}
+            starts = _remaining_starts(start_w, {g["id"]: returns.get((ab, g["id"])) for g in gps}, team_left)
+            start_w = {k: v / len(team_left) for k, v in starts.items()}
         else:
-            tot = sum(weights.values())
-            weights = {k: v / tot for k, v in weights.items()} if tot else weights
+            tot = sum(start_w.values())
+            start_w = {k: v / tot for k, v in start_w.items()} if tot else start_w
         g_eff = 0.0
         for g in gps:
-            g["share"] = weights[g["id"]]
+            g["share"] = start_w[g["id"]]
             g_eff += g["share"] * g["gsax60"]
         teams[ab] = dict(td_off=td_off, td_xga=td_xga, d_xgf=d_xgf, d_xga=d_xga, goalie_gsax=g_eff)
         players[ab] = projs
