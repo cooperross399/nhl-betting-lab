@@ -67,3 +67,20 @@ def test_a_healthy_room_splits_by_the_weights() -> None:
     starts = _remaining_starts(weights, {}, SCHEDULE)
     assert starts["a"] == pytest.approx(0.75 * len(SCHEDULE))
     assert starts["b"] == pytest.approx(0.25 * len(SCHEDULE))
+
+
+def test_the_season_weights_are_bound_once_in_build_model() -> None:
+    # The projections read ``weights`` (season -> weight) from closures inside
+    # build_model. Rebinding the name in the team loop (2026-10-12) zeroed every
+    # team's skater and goalie inputs after the first, and Anaheim projected
+    # 122 points.
+    import ast
+
+    source = (WEB / "season_sim" / "model.py").read_text(encoding="utf-8")
+    fn = next(n for n in ast.walk(ast.parse(source)) if isinstance(n, ast.FunctionDef) and n.name == "build_model")
+    bound = [
+        t for n in ast.walk(fn) if isinstance(n, (ast.Assign, ast.AugAssign, ast.AnnAssign))
+        for t in (n.targets if isinstance(n, ast.Assign) else [n.target])
+        if isinstance(t, ast.Name) and t.id == "weights"
+    ]
+    assert len(bound) == 1
