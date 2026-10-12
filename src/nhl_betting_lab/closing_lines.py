@@ -982,7 +982,9 @@ def measurement_bar_note() -> str:
         "two bars is a lean, recorded and not staked. It also stakes "
         f"nothing priced shorter than {MAX_DEFAULT_JUICE} or longer than "
         f"+{MAX_DEFAULT_PRICE}, nothing in a stake-excluded market "
-        f"({excluded}), nothing in a hard-gated market ({gated}), and no "
+        f"({excluded}), "
+        + (f"nothing in a hard-gated market ({gated}), " if gated else "")
+        + "and no "
         "moneyline, puck line or regulation side the model gives under a "
         f"{STAT_SIDE_MIN_WIN:.0%} chance to win, and no prop whose model hit "
         "chance falls short of what the shortest price in its odds bracket "

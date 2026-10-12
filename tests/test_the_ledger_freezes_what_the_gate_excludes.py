@@ -45,8 +45,9 @@ every way the card can exclude a priced market in front of the snapshot:
   `required_markets`, so NOT_ALLOWLISTED.
 * `shots_on_goal`: allowlisted and quoted for one game of two, so INCOMPLETE.
 * `goalie_saves`: allowlisted and quoted for both games, so ELIGIBLE to the
-  gate, and then kept off the card by `HARD_GATED_MARKETS` (no confirmed
-  starter).
+  gate, and then kept off the card by `HARD_GATED_MARKETS`. That dict is
+  empty since 2026-10-12 (Cooper put saves on the card), so the test gates
+  the market itself, to keep the hard-gate path in front of the snapshot.
 * Every market dark: the policy allowlists nothing, as the withdrawn policy
   did, or the policy file is missing and nothing is allowed.
 
@@ -482,9 +483,12 @@ def _assert_snapshot_holds_every_priced_row(
 
 
 def test_the_snapshot_holds_every_market_the_card_excluded(
-    world: dict[str, Path],
+    world: dict[str, Path], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """One market on the card, three kept off it, all four in the ledger."""
+    monkeypatch.setitem(
+        HARD_GATED_MARKETS, "goalie_saves", "Gated by this test: no confirmed starter."
+    )
     _write_policy(world["policy_root"], APPROVED)
     reference = _reference(world)
 

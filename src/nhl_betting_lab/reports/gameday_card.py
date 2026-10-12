@@ -8,12 +8,15 @@ the thing with the most gates in front of it. In order:
    card produces nothing — and says so, rather than producing something.
 2. **Eligibility.** A market must be priced for the whole slate. An
    `incomplete` market is excluded rather than half-used: picking only where
-   prices happen to exist is a selection effect, not an edge.
+   prices happen to exist is a selection effect, not an edge. The three
+   props in `GAME_BY_GAME_MARKETS` are the exception, by Cooper's decision
+   of 2026-10-12: they are picked in the games a book has posted them.
 3. **Model opinion.** No opinion, no selection. There is no fallback to a
    league-average price.
-4. **Market-specific gates.** `goalie_saves` needs a confirmed starter, which
-   this lab has no source for — see
-   `docs/goalie_props_need_a_confirmed_starter.md`.
+4. **Market-specific gates.** `HARD_GATED_MARKETS`, empty since 2026-10-12.
+   `goalie_saves` was gated there for want of a confirmed starter; it is now
+   priced on the goalie the books post (see the dict's comment and
+   `docs/goalie_props_need_a_confirmed_starter.md`).
 5. **Edge and juice.** A prop must clear a higher edge bar than a team market,
    and nothing worse than the configured juice limit is selected.
 6. **The puck-drop guard.** Anything whose game has started, or whose start
@@ -157,15 +160,29 @@ TIER_UNITS = {"A": 0.5, "B": 0.25, "C": 0.1}
 #: Markets that cannot produce a selection without information this lab does
 #: not have, whatever the policy says. Stated as data so the card can name the
 #: reason rather than silently dropping the market.
-HARD_GATED_MARKETS: dict[str, str] = {
-    "goalie_saves": (
-        "A saves prop is only bettable on the confirmed starter, and starters "
-        "are confirmed close to puck drop, after this card is built. This lab "
-        "has no confirmed-starter source, so goalie saves cannot produce a "
-        "selection. See docs/goalie_props_need_a_confirmed_starter.md. This is "
-        "not a judgement that the market has no value."
-    )
-}
+#:
+#: Empty since 2026-10-12. `goalie_saves` sat here because the card is built
+#: before starters are confirmed. Cooper asked for saves on the card, and the
+#: gate is lifted on the reasoning CLAUDE.md already records: books post a
+#: saves line only for the goalie they expect to start, so a priced goalie is
+#: the books' starter, and a goalie who does not play has his saves bet voided
+#: by the book. The model prices him as the walk-forward backtest did, which
+#: measured only real starts (`walk_forward.GOALIE_START_SECONDS`). What is
+#: still not known is a late switch the books have not yet repriced; a
+#: confirmed-starter feed would close that and does not exist here.
+HARD_GATED_MARKETS: dict[str, str] = {}
+
+
+#: Props judged game by game rather than against the whole slate (Cooper,
+#: 2026-10-12). Books post these three late: on the 9:40 AM ET card they were
+#: priced for 0-3 games of most slates (the operating-home cards of
+#: 2026-09-29 to 2026-10-12), so `require_full_slate` kept all three off every
+#: card. Each is picked only in the games a book has posted it, and the card
+#: names the games it is missing. Whether the posted games differ from the
+#: rest has not been measured; this is Cooper's call, not a finding.
+GAME_BY_GAME_MARKETS: frozenset[str] = frozenset(
+    {"blocked_shots", "goalie_saves", "hits"}
+)
 
 
 #: Markets the CARD does not stake, on measured return, whatever the policy
@@ -283,6 +300,11 @@ class GamedayCard:
     slate_games: int = 0
     included_markets: tuple[str, ...] = ()
     excluded_markets: dict[str, str] = field(default_factory=dict)
+    #: Included markets priced for only some of the slate, judged game by
+    #: game (`GAME_BY_GAME_MARKETS`), each with the reason naming the games
+    #: it is missing in. Shown on the card so a missing game is never read
+    #: as a pass.
+    partial_markets: dict[str, str] = field(default_factory=dict)
     best_bets: list[dict[str, Any]] = field(default_factory=list)
     leans: list[dict[str, Any]] = field(default_factory=list)
     passes: list[dict[str, Any]] = field(default_factory=list)
@@ -692,6 +714,11 @@ def build_card(
         if market in eligibility.eligible_markets:
             card.excluded_markets[market] = reason
     card.included_markets = tuple(eligible)
+    card.partial_markets = {
+        item.market: item.reason
+        for item in eligibility.markets
+        if item.usable_for_picks and item.missing_games and item.market in eligible
+    }
 
     if not eligible:
         card.blockers.append(
@@ -1304,6 +1331,12 @@ def render_card(card: GamedayCard) -> str:
                     "",
                 ]
             )
+
+    if card.partial_markets:
+        lines.extend(["## Priced game by game", ""])
+        for market, reason in sorted(card.partial_markets.items()):
+            lines.append(f"- `{market}`: {reason}")
+        lines.append("")
 
     lines.extend(["## Excluded markets", ""])
     if card.excluded_markets:

@@ -658,9 +658,13 @@ def test_a_fault_the_caller_names_is_always_a_fault() -> None:
     assert card.nothing_to_card == ""
 
 
-def test_a_hard_gated_market_alone_leaves_nothing_to_pick() -> None:
-    """goalie_saves cannot produce a selection even when allowlisted, so a
-    policy that allowlists only it allows the card nothing."""
+def test_a_hard_gated_market_alone_leaves_nothing_to_pick(monkeypatch) -> None:
+    """A hard-gated market cannot produce a selection even when allowlisted,
+    so a policy that allowlists only it allows the card nothing. No market
+    is gated since 2026-10-12, so the test gates one itself."""
+    from nhl_betting_lab.reports import gameday_card
+
+    monkeypatch.setitem(gameday_card.HARD_GATED_MARKETS, "goalie_saves", "gated")
     card = build_card(
         pd.DataFrame(), {}, eligibility=_nothing_eligible(8),
         allowlisted_markets=("goalie_saves",), scheduled_games=8,

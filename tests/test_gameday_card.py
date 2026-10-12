@@ -289,8 +289,17 @@ def test_the_best_available_price_is_used_and_the_book_named() -> None:
 # -- hard gates --------------------------------------------------------
 
 
-def test_goalie_saves_cannot_produce_a_selection_even_when_allowlisted() -> None:
-    """Starters are confirmed after the card is built; this lab has no feed."""
+GATE_REASON = (
+    "Gated by this test. This is not a judgement that the market has no value."
+)
+
+
+def test_a_hard_gated_market_cannot_produce_a_selection_even_when_allowlisted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The gate's mechanism, kept tested now that no market is gated: goalie
+    saves left it on 2026-10-12, when Cooper put saves on the card."""
+    monkeypatch.setitem(card_module.HARD_GATED_MARKETS, "goalie_saves", GATE_REASON)
     rows = [_price_row(market="goalie_saves", player="Joseph Woll", line=27.5)]
 
     card = card_module.build_card(
@@ -301,21 +310,22 @@ def test_goalie_saves_cannot_produce_a_selection_even_when_allowlisted() -> None
     )
 
     assert card.best_bets == []
-    assert "goalie_saves" in card.excluded_markets
+    assert card.excluded_markets["goalie_saves"] == GATE_REASON
 
 
-def test_the_goalie_gate_says_it_is_not_a_no_value_judgement() -> None:
+def test_goalie_saves_is_no_longer_hard_gated() -> None:
+    rows = [_price_row(market="goalie_saves", player="Joseph Woll", line=27.5)]
+
     card = card_module.build_card(
-        _prices([_price_row(market="goalie_saves", line=27.5)]),
-        {},
+        _prices(rows),
+        {_key(rows[0]): 0.80},
         eligibility=_eligibility(["goalie_saves"]),
         now=NOW,
     )
 
-    assert "not a judgement that the market has no value" in (
-        card.excluded_markets["goalie_saves"]
-    )
-    assert "confirmed_starter" in card.excluded_markets["goalie_saves"]
+    assert card_module.HARD_GATED_MARKETS == {}
+    assert "goalie_saves" not in card.excluded_markets
+    assert [row["market"] for row in card.best_bets] == ["goalie_saves"]
 
 
 # -- the puck-drop guard -----------------------------------------------

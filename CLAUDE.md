@@ -2437,6 +2437,40 @@ Re-derive rather than trust if the data has moved.
   time (10% each if right). Site/app only:
   the card, snapshot, forward ledger, model, edge bar, market list and staking
   rule are untouched.
+- **2026-10-12, NOT a defect fix: blocked shots, hits and goalie saves can
+  reach the card.** Cooper: "How do we get blocked shots, goalie saves, and
+  hits on the card". All three were allowlisted and priced and never once
+  reached a card. Books post them late: on every 9:40 AM ET card from
+  2026-09-29 to 2026-10-12, blocks were priced for 0-3 games of the slate,
+  hits for none until 1 of 3 on 2026-10-12, saves for 0-2 (the 18:29 UTC
+  dispatch of 2026-10-06 had saves for 8 of 9 and blocks for 6 of 9), so
+  `require_full_slate` excluded them every day. And `goalie_saves` was in
+  `HARD_GATED_MARKETS` for want of a confirmed starter. Three changes, the
+  first two gate changes Cooper made, recorded as his:
+  1. **Game by game** (`gameday_card.GAME_BY_GAME_MARKETS`,
+     `assess_markets(game_by_game=...)`): the three are eligible for the
+     games a book has posted them in, and the card names the games they are
+     missing under "Priced game by game". Every other market stays strict.
+     Whether the posted games differ from the rest, the measurement
+     `market_eligibility`'s docstring asks for, has not been made.
+  2. **Saves on the books' goalie.** `HARD_GATED_MARKETS` is empty. Books
+     post a saves line only for the goalie they expect to start, and void it
+     if he does not play; the model prices him as the backtest did, on real
+     starts. A late switch the books have not yet repriced is the risk left.
+  3. **An afternoon update.** Gameday Refresh gains a third cron, `30 12 *
+     1-4,10-12 *`, held to 20:30 UTC (4:30 PM EDT, 3:30 PM EST), which the
+     precheck never stands down. It re-prices the slate at the 640 cap (up to
+     646 credits a run, about 52,000 a season against 3.6M remaining) and
+     posts the card again when the selections changed. The day's first
+     snapshot still stands, so **the forward ledger and the 2027-04-25 test
+     are unchanged**: they score the morning's frozen opinions, which already
+     carried every one of these markets a book had posted. Only the card's
+     selections and stakes move.
+  Measured on bought prices, card window: `blocked_shots` +7.9% over 3,026,
+  surviving correction; `hits` −1.3% over 5,178 and `goalie_saves` −5.5% over
+  114, both spanning zero: no demonstrated edge on either. The model, the
+  edge bars, the bracket rule, the market list and the staking rule are
+  unchanged.
 
 ## Contract strings — never change these
 
