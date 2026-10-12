@@ -55,6 +55,16 @@ on:
     # moving its cron to eight hours before it.
     - cron: "30 5 * 1-4,10-12 *"
     - cron: "0 7 * 1-4,10-12 *"
+    # 20:30 UTC (4:30 PM EDT, 3:30 PM EST): the afternoon update. Books post
+    # blocked shots, hits and goalie saves late in the day; at the 13:30 card
+    # they were priced for 0-3 games of most slates, and on the one afternoon
+    # run (2026-10-06, 18:29 UTC) saves were up for 8 of 9 games and blocks
+    # for 6 of 9. Cooper asked for the three on the card (2026-10-12), so this
+    # run re-prices the slate and posts the card again when its selections
+    # changed. It is never stood down by the morning card (see the precheck),
+    # and the day's first frozen snapshot still stands, so the forward ledger
+    # is the morning's. Up to 646 credits a run at the 640 cap.
+    - cron: "30 12 * 1-4,10-12 *"
     # The season does not wait for October: 2026-27 opens September 29 with a
     # five-game slate the month filter above would silently skip. These two
     # days and no others, because a daily September schedule would spend real
@@ -176,11 +186,19 @@ jobs:
       - id: feed
         env:
           GH_TOKEN: ${{ github.token }}
+          SCHEDULE: ${{ github.event.schedule }}
         run: |
           set -u
           if [ "${{ github.event_name }}" != "schedule" ]; then
             echo "already=false" >> "$GITHUB_OUTPUT"
             echo "Manual run: never skipped."
+            exit 0
+          fi
+          # The afternoon update exists to re-price a slate whose morning
+          # card is already out, so a clean morning card never stands it down.
+          if [ "${SCHEDULE:-}" = "30 12 * 1-4,10-12 *" ]; then
+            echo "already=false" >> "$GITHUB_OUTPUT"
+            echo "Afternoon update: never skipped."
             exit 0
           fi
           DAY=$(TZ=America/New_York date +%F)

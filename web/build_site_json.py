@@ -920,10 +920,11 @@ GOALIE_START_SECONDS = 2400
 #: caveat. Each is the card's own rule restated, never a new judgement:
 #: `points` is in STAKE_EXCLUDED_MARKETS (measured as a loss that survives
 #: correction, so the card records it as a lean and never stakes it), and
-#: `goalie_saves` is in HARD_GATED_MARKETS (no confirmed-starter source).
+#: `goalie_saves` is priced on the goalie the books post (no confirmed
+#: starter when the card is built; a goalie who does not play is void).
 PROP_MARKET_NOTES = {
     "points": "Never staked: measured as a loss over two seasons, so the card records it as a lean only",
-    "goalie_saves": "Never staked: no confirmed-starter source when the card is built",
+    "goalie_saves": "Priced on the goalie the books post; no confirmed starter when the card is built, and a goalie who does not play is void",
 }
 
 #: The card's sections, as gameday_card writes them, and the page's kind.
@@ -1021,7 +1022,7 @@ def build_props(day: date, card: dict, matched: dict, lab: Path, allowlisted: li
                 continue
             market = c["market"]
             goalie = market == "goalie_saves"
-            bet = kind == "bet" and not goalie
+            bet = kind == "bet"
             # Cooper, 2026-10-09: "Only show the best bets, not the leans for
             # player props". A lean is counted with the passes, never listed.
             if not bet:
@@ -1043,8 +1044,8 @@ def build_props(day: date, card: dict, matched: dict, lab: Path, allowlisted: li
                 "tier": (c.get("tier") if c.get("tier") in ("A", "B") else None) if bet else None,
                 "units": (_real(c.get("suggested_units")) if bet else None),
                 "allowlisted": market in allowlisted,
-                # The card never stakes a saves prop (HARD_GATED_MARKETS), and
-                # the page never shows one as a bet without a confirmed starter.
+                # Since 2026-10-12 the card stakes a saves prop on the goalie
+                # the books post; nothing here confirms he starts.
                 "starterConfirmed": False if goalie else None,
             })
     rows.sort(key=lambda r: (r["kind"] != "bet", -(r["edgePct"] or 0)))

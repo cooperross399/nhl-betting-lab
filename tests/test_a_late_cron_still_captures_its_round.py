@@ -151,7 +151,9 @@ GAMEDAY = PROJECT_ROOT / ".github" / "workflows" / "gameday-refresh.yml"
 
 def test_the_card_crons_land_on_the_slots_the_routines_read() -> None:
     """13:30 UTC card and 15:00 backup; the routines that read card-feed
-    (NHL LAB BRIEF 19:30 UTC, relays 19:45 and 21:45) are timed off these."""
+    (NHL LAB BRIEF 19:30 UTC, relays 19:45 and 21:45) are timed off these.
+    And the 20:30 UTC afternoon update (2026-10-12), which re-prices the
+    props books post late."""
     document = yaml.safe_load(GAMEDAY.read_text(encoding="utf-8"))
     triggers = document.get("on", document.get(True))
     lead = int(wfr.ROUND_LEAD.total_seconds() // 60)
@@ -160,7 +162,7 @@ def test_the_card_crons_land_on_the_slots_the_routines_read() -> None:
         minute, hour = entry["cron"].split()[:2]
         assert minute.isdigit() and hour.isdigit(), entry["cron"]
         slots.add((int(hour) * 60 + int(minute) + lead) % (24 * 60))
-    assert slots == {13 * 60 + 30, 15 * 60}
+    assert slots == {13 * 60 + 30, 15 * 60, 20 * 60 + 30}
 
 
 def test_the_card_waits_before_it_asks_whether_it_is_already_published() -> None:

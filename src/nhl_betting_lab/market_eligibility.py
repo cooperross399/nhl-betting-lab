@@ -66,6 +66,15 @@ systematically incomplete, the honest response is to **measure whether the
 covered subset differs from the rest** — not to loosen the gate because the
 gate is inconvenient. Loosening it without that measurement would be exactly
 the move this repository exists to not make.
+
+**2026-10-12: Cooper resolved it for three markets.** Blocked shots, hits
+and goalie saves are posted late in the day: on the 9:40 AM ET card they
+were priced for 0-3 games of most slates, so the strict reading kept all
+three off every card all season. Cooper asked for them on the card, and
+they are judged game by game (`assess_markets(game_by_game=...)`), picked
+only in the games a book has posted. The covered-subset measurement this
+paragraph asks for has not been made; that is recorded as his call, not
+as a finding. Every other market stays strict.
 """
 
 from __future__ import annotations
@@ -268,6 +277,7 @@ def assess_markets(
     require_full_slate: bool = True,
     requested: Iterable[str] | None = None,
     failed_events: Iterable[Mapping[str, object]] | None = None,
+    game_by_game: Iterable[str] = (),
 ) -> EligibilityReport:
     """Decide each market's state for one slate.
 
@@ -297,6 +307,13 @@ def assess_markets(
     for word what a run whose books posted nothing publishes, and the card's
     excluded markets said the same under a note that the fetch had failed.
     None means no failure is known, and every market is judged as before.
+
+    `game_by_game` names markets judged game by game rather than against
+    the whole slate: one priced for some games is eligible for the games it
+    is priced in, and its reason and `missing_games` name the rest. Cooper's
+    decision of 2026-10-12, for the three props books post late in the day
+    (`gameday_card.GAME_BY_GAME_MARKETS` says why). Every other market keeps
+    `require_full_slate`.
     """
     keys = tuple(str(market) for market in (markets or MARKETS_BY_KEY))
     turned_off = {str(item).strip() for item in disabled}
@@ -305,6 +322,7 @@ def assess_markets(
     )
     unanswered = unanswered_games(failed_requests(failed_events, prices))
     slate = tuple(dict.fromkeys(str(game) for game in slate_games))
+    partial_ok = {str(item).strip() for item in game_by_game}
     report = EligibilityReport(
         provider_name=str(provider_name), games_in_slate=len(slate)
     )
@@ -446,7 +464,7 @@ def assess_markets(
             )
             continue
 
-        if require_full_slate and missing:
+        if require_full_slate and missing and key not in partial_ok:
             report.markets.append(
                 MarketEligibility(
                     market=key,
@@ -488,18 +506,29 @@ def assess_markets(
             )
             continue
 
+        if missing:
+            reason = (
+                f"Allowlisted, and judged game by game: priced for "
+                f"{len(covered)} of {len(slate)} game(s), and picked only in "
+                f"those. Not priced in {name_games(missing)}, so nothing in "
+                "this market is carded for them; that is an absence, not a "
+                "pass or a no-value call."
+            )
+        else:
+            reason = (
+                f"Allowlisted, and priced for all {len(slate)} game(s) in "
+                "the slate."
+            )
         report.markets.append(
             MarketEligibility(
                 market=key,
                 state=ELIGIBLE,
-                reason=(
-                    f"Allowlisted, and priced for all {len(slate)} game(s) in "
-                    "the slate."
-                ),
+                reason=reason,
                 games_in_slate=len(slate),
                 games_priced=len(covered),
                 rows=rows,
                 covered_games=tuple(sorted(covered)),
+                missing_games=missing,
             )
         )
 

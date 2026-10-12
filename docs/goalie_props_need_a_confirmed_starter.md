@@ -103,3 +103,26 @@ measured, and it did produce fourteen bets in the first purchase — far too few
 to mean anything, and the report says so. But it still cannot produce a
 selection, because nothing here knows who starts, and that is a question about
 lineups rather than about data retention.
+
+## 2026-10-12: the card-level gate is lifted, on Cooper's decision
+
+Cooper asked for goalie saves on the card, and `goalie_saves` is no longer in
+`gameday_card.HARD_GATED_MARKETS`. The reasoning, which is a judgement and not
+a measurement:
+
+- **Books post a saves line only for the goalie they expect to start.** A
+  priced goalie is therefore the books' starter, not the lab's guess, which
+  is the heuristic "Why not just guess the starter" above rejects.
+- **A goalie who does not play is void at the book.** The case this document
+  was written about, a saves prop on a backup who never enters, returns the
+  stake rather than losing it.
+- **The model prices him as the backtest measured him**, on real starts
+  (`walk_forward.GOALIE_START_SECONDS`), so the card and the measurement ask
+  the same question.
+
+What is still not known is a switch the books have not repriced by the time
+the card is built: a goalie announced late, after the line went up. The
+afternoon card (20:30 UTC) narrows that window; a confirmed-starter feed
+would close it, and the lab has none. Measured on bought prices, the market
+shows no demonstrated edge (card window −5.5% over 114 wagers, late window
+−2.5% over 1,727, both spanning zero).

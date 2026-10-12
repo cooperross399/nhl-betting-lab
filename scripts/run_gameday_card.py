@@ -59,7 +59,11 @@ from nhl_betting_lab.reports.card_pricing import (
     price_team_markets,
     selection_key,
 )
-from nhl_betting_lab.reports.gameday_card import build_card, save_card
+from nhl_betting_lab.reports.gameday_card import (
+    GAME_BY_GAME_MARKETS,
+    build_card,
+    save_card,
+)
 from nhl_betting_lab.stat_sides import build_stat_sides
 from nhl_betting_lab.forward_evidence import write_snapshot
 from nhl_betting_lab.season import (
@@ -426,6 +430,7 @@ def main(argv: list[str] | None = None) -> int:
         policy=policy,
         provider_name=odds_api.PROVIDER_NAME,
         failed_events=failed_events,
+        game_by_game=GAME_BY_GAME_MARKETS,
     )
     print(eligibility.summary_line())
 
