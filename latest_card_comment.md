@@ -1,9 +1,9 @@
-Selections are unchanged since the previous card; this comment was posted on request, and the run was clean.
+**Selections changed** since the previous card — 1 best bet(s), 0.25 unit(s) staked.
 
 # NHL gameday card
 
-- Generated: 2026-10-11T13:57:13+00:00
-- 2 best bet(s), 46 lean(s), 1647 pass(es) across 3 game(s); 0.5 unit(s) staked.
+- Generated: 2026-10-12T13:38:27+00:00
+- 1 best bet(s), 31 lean(s), 1571 pass(es) across 3 game(s); 0.25 unit(s) staked.
 - Included markets: **assists, goals, moneyline, points, puck_line, regulation_3_way, shots_on_goal, team_total, total_goals**
 - Unit size: $25
 
@@ -11,63 +11,43 @@ Selections are unchanged since the previous card; this comment was posted on req
 
 | Game | Starts | Market | Selection | Model | Edge | Price | Book | Units |
 |:-----|:-------|:-------|:----------|------:|-----:|------:|:-----|------:|
-| Carolina Hurricanes @ Philadelphia Flyers | Oct 11, 7:10 PM ET | `shots_on_goal` | Andrei Svechnikov under 2.5 | 64.8% | +14.8% | +100 | Bally Bet | 0.25 |
-| Carolina Hurricanes @ Philadelphia Flyers | Oct 11, 7:10 PM ET | `shots_on_goal` | Jordan Staal under 1.5 | 59.9% | +12.7% | +112 | Bally Bet | 0.25 |
+| Ottawa Senators @ New Jersey Devils | Oct 12, 7:10 PM ET | `regulation_3_way` | away | 45.6% | +10.5% | +185 | Bally Bet | 0.25 |
 
 ## Leans
 
 | Game | Starts | Market | Selection | Model | Edge | Price | Book |
 |:-----|:-------|:-------|:----------|------:|-----:|------:|:-----|
-| Seattle Kraken @ Washington Capitals | Oct 11, 5:10 PM ET | `shots_on_goal` | Cole Hutson under 1.5 | 60.8% | +13.2% | +110 | Bally Bet |
-| Seattle Kraken @ Washington Capitals | Oct 11, 5:10 PM ET | `shots_on_goal` | Jakob Chychrun under 1.5 | 36.6% | +11.6% | +300 | theScore Bet |
-| Seattle Kraken @ Washington Capitals | Oct 11, 5:10 PM ET | `shots_on_goal` | Cole Hutson under 0.5 | 29.4% | +11.2% | +450 | theScore Bet |
-| Vancouver Canucks @ New York Rangers | Oct 11, 6:10 PM ET | `shots_on_goal` | Pavel Dorofeyev under 2.5 | 52.5% | +10.1% | +136 | FanDuel |
-| Seattle Kraken @ Washington Capitals | Oct 11, 5:10 PM ET | `shots_on_goal` | Jakob Chychrun under 2.5 | 58.2% | +9.5% | +105 | Hard Rock Bet |
-| Carolina Hurricanes @ Philadelphia Flyers | Oct 11, 7:10 PM ET | `shots_on_goal` | Sebastian Aho under 2.5 | 62.6% | +9.3% | -114 | FanDuel |
-| Carolina Hurricanes @ Philadelphia Flyers | Oct 11, 7:10 PM ET | `shots_on_goal` | Porter Martone under 1.5 | 54.8% | +8.9% | +118 | Bally Bet |
-| Seattle Kraken @ Washington Capitals | Oct 11, 5:10 PM ET | `assists` | Jakob Chychrun under 0.5 | 67.4% | +8.9% | -141 | Bally Bet |
-| Vancouver Canucks @ New York Rangers | Oct 11, 6:10 PM ET | `points` | Filip Hronek under 0.5 | 63.4% | +8.8% | -120 | BetMGM |
-| Seattle Kraken @ Washington Capitals | Oct 11, 5:10 PM ET | `shots_on_goal` | Vince Dunn under 1.5 | 49.8% | +8.5% | +142 | FanDuel |
-| Seattle Kraken @ Washington Capitals | Oct 11, 5:10 PM ET | `points` | Boone Jenner over 0.5 | 39.6% | +8.4% | +220 | Bally Bet |
-| Carolina Hurricanes @ Philadelphia Flyers | Oct 11, 7:10 PM ET | `shots_on_goal` | Taylor Hall under 1.5 | 53.7% | +8.3% | +120 | Bovada |
-| Seattle Kraken @ Washington Capitals | Oct 11, 5:10 PM ET | `puck_line` | away +1.5 | 65.7% | +8.2% | -135 | BetMGM |
-| Seattle Kraken @ Washington Capitals | Oct 11, 5:10 PM ET | `points` | Cole Hutson under 0.5 | 69.0% | +8.2% | -155 | BetMGM |
-| Seattle Kraken @ Washington Capitals | Oct 11, 5:10 PM ET | `points` | Pierre-Luc Dubois under 0.5 | 55.3% | +8.2% | +112 | Bally Bet |
-| Seattle Kraken @ Washington Capitals | Oct 11, 5:10 PM ET | `regulation_3_way` | away | 33.8% | +8.2% | +290 | Bally Bet |
-| Seattle Kraken @ Washington Capitals | Oct 11, 5:10 PM ET | `shots_on_goal` | Dylan Strome under 1.5 | 51.5% | +8.1% | +130 | Bally Bet |
-| Carolina Hurricanes @ Philadelphia Flyers | Oct 11, 7:10 PM ET | `shots_on_goal` | William Carrier under 1.5 | 69.1% | +8.0% | -157 | Bally Bet |
-| Vancouver Canucks @ New York Rangers | Oct 11, 6:10 PM ET | `assists` | Filip Hronek under 0.5 | 67.6% | +7.6% | -150 | BetMGM |
-| Seattle Kraken @ Washington Capitals | Oct 11, 5:10 PM ET | `shots_on_goal` | Alex Ovechkin under 2.5 | 53.8% | +7.3% | +115 | Bally Bet |
-| Vancouver Canucks @ New York Rangers | Oct 11, 6:10 PM ET | `shots_on_goal` | Mika Zibanejad under 2.5 | 54.4% | +6.8% | +110 | Bovada |
-| Seattle Kraken @ Washington Capitals | Oct 11, 5:10 PM ET | `shots_on_goal` | Pierre-Luc Dubois under 1.5 | 53.2% | +6.6% | +115 | Hard Rock Bet |
-| Seattle Kraken @ Washington Capitals | Oct 11, 5:10 PM ET | `shots_on_goal` | Ryan Leonard under 1.5 | 48.3% | +6.6% | +140 | Bovada |
-| Seattle Kraken @ Washington Capitals | Oct 11, 5:10 PM ET | `moneyline` | away | 41.8% | +6.6% | +184 | Courtside |
-| Vancouver Canucks @ New York Rangers | Oct 11, 6:10 PM ET | `shots_on_goal` | Jake DeBrusk under 2.5 | 62.1% | +6.6% | -125 | FanDuel |
-| Seattle Kraken @ Washington Capitals | Oct 11, 5:10 PM ET | `shots_on_goal` | Shane Wright under 1.5 | 66.2% | +6.5% | -148 | Bally Bet |
-| Carolina Hurricanes @ Philadelphia Flyers | Oct 11, 7:10 PM ET | `shots_on_goal` | Tyson Foerster under 1.5 | 50.0% | +6.5% | +130 | Hard Rock Bet |
-| Carolina Hurricanes @ Philadelphia Flyers | Oct 11, 7:10 PM ET | `shots_on_goal` | Shayne Gostisbehere under 1.5 | 56.5% | +6.5% | +100 | Bovada |
-| Seattle Kraken @ Washington Capitals | Oct 11, 5:10 PM ET | `points` | Jakob Chychrun under 0.5 | 52.9% | +6.4% | +115 | Bally Bet |
-| Vancouver Canucks @ New York Rangers | Oct 11, 6:10 PM ET | `shots_on_goal` | Jonathan Lekkerimäki under 1.5 | 63.8% | +6.2% | -136 | Bally Bet |
-| Seattle Kraken @ Washington Capitals | Oct 11, 5:10 PM ET | `shots_on_goal` | Berkly Catton under 1.5 | 59.4% | +6.2% | -114 | Bally Bet |
-| Carolina Hurricanes @ Philadelphia Flyers | Oct 11, 7:10 PM ET | `shots_on_goal` | Noah Cates under 1.5 | 67.4% | +6.0% | -159 | Bally Bet |
-| Seattle Kraken @ Washington Capitals | Oct 11, 5:10 PM ET | `team_total` | home_under 4 | 66.4% | +4.9% | -160 | BetMGM |
-| Carolina Hurricanes @ Philadelphia Flyers | Oct 11, 7:10 PM ET | `total_goals` | over 5.5 | 59.4% | +4.9% | -120 | BetAnything |
-| Carolina Hurricanes @ Philadelphia Flyers | Oct 11, 7:10 PM ET | `total_goals` | over 6.5 | 48.3% | +4.8% | +130 | Hard Rock Bet |
-| Seattle Kraken @ Washington Capitals | Oct 11, 5:10 PM ET | `team_total` | away_over 3 | 44.7% | +4.7% | +150 | BetMGM |
-| Seattle Kraken @ Washington Capitals | Oct 11, 5:10 PM ET | `team_total` | away_over 2.5 | 56.9% | +4.5% | -110 | BetMGM |
-| Carolina Hurricanes @ Philadelphia Flyers | Oct 11, 7:10 PM ET | `team_total` | home_over 3 | 43.6% | +4.4% | +155 | BetMGM |
-| Carolina Hurricanes @ Philadelphia Flyers | Oct 11, 7:10 PM ET | `total_goals` | over 6 | 54.4% | +4.4% | +100 | Bovada |
-| Carolina Hurricanes @ Philadelphia Flyers | Oct 11, 7:10 PM ET | `regulation_3_way` | home | 32.9% | +4.3% | +250 | Bally Bet |
-| Carolina Hurricanes @ Philadelphia Flyers | Oct 11, 7:10 PM ET | `total_goals` | over 7.5 | 29.2% | +4.2% | +300 | Bovada |
-| Carolina Hurricanes @ Philadelphia Flyers | Oct 11, 7:10 PM ET | `team_total` | home_over 2.5 | 56.1% | +4.1% | -108 | FanDuel |
-| Carolina Hurricanes @ Philadelphia Flyers | Oct 11, 7:10 PM ET | `team_total` | home_over 3.5 | 33.9% | +4.1% | +235 | FanDuel |
-| Seattle Kraken @ Washington Capitals | Oct 11, 5:10 PM ET | `team_total` | home_under 3.5 | 53.5% | +4.0% | +102 | FanDuel |
-| Carolina Hurricanes @ Philadelphia Flyers | Oct 11, 7:10 PM ET | `total_goals` | over 8.5 | 21.0% | +3.7% | +480 | FanDuel |
-| Seattle Kraken @ Washington Capitals | Oct 11, 5:10 PM ET | `team_total` | away_over 3.5 | 34.8% | +3.5% | +220 | Bovada |
-
-Stats check, props: a prop is staked only when the model's hit chance clears what the shortest price in its odds bracket would need. These cleared the edge bar without it and are recorded here.
-
-- Cole Hutson under 1.5 (`shots_on_goal`): Not confident enough for its odds: the model gives it a 60.8% chance to hit; props priced -110 to +110 need 64.4%. The price clears the edge bar, but the model is not confident enough for its odds bracket. Recorded as a lean and staked at zero.
+| Florida Panthers @ Buffalo Sabres | Oct 12, 1:10 PM ET | `shots_on_goal` | Jack Quinn under 1.5 | 40.9% | +10.6% | +230 | theScore Bet |
+| Florida Panthers @ Buffalo Sabres | Oct 12, 1:10 PM ET | `shots_on_goal` | Seth Jones over 2.5 | 35.2% | +9.6% | +290 | Courtside |
+| Florida Panthers @ Buffalo Sabres | Oct 12, 1:10 PM ET | `goals` | Sam Reinhart over 0.5 | 44.2% | +8.5% | +180 | Bally Bet |
+| Florida Panthers @ Buffalo Sabres | Oct 12, 1:10 PM ET | `shots_on_goal` | Jack Quinn under 2.5 | 63.0% | +8.4% | -120 | Hard Rock Bet |
+| Florida Panthers @ Buffalo Sabres | Oct 12, 1:10 PM ET | `shots_on_goal` | Tage Thompson under 2.5 | 46.6% | +8.1% | +160 | theScore Bet |
+| Ottawa Senators @ New Jersey Devils | Oct 12, 7:10 PM ET | `moneyline` | away | 53.9% | +7.8% | +117 | Bally Bet |
+| Florida Panthers @ Buffalo Sabres | Oct 12, 1:10 PM ET | `points` | Sam Reinhart over 0.5 | 67.7% | +7.7% | -150 | Bally Bet |
+| Florida Panthers @ Buffalo Sabres | Oct 12, 1:10 PM ET | `shots_on_goal` | Sam Bennett over 3.5 | 32.2% | +7.5% | +305 | FanDuel |
+| Vegas Golden Knights @ Minnesota Wild | Oct 12, 8:10 PM ET | `shots_on_goal` | Matt Boldy under 3.5 | 66.7% | +7.5% | -145 | Bovada |
+| Florida Panthers @ Buffalo Sabres | Oct 12, 1:10 PM ET | `shots_on_goal` | Seth Jones over 1.5 | 57.4% | +7.4% | +100 | Hard Rock Bet |
+| Florida Panthers @ Buffalo Sabres | Oct 12, 1:10 PM ET | `points` | Sam Reinhart over 1.5 | 31.2% | +7.4% | +320 | Bally Bet |
+| Florida Panthers @ Buffalo Sabres | Oct 12, 1:10 PM ET | `shots_on_goal` | Tage Thompson under 3.5 | 63.7% | +7.1% | -130 | Bally Bet |
+| Florida Panthers @ Buffalo Sabres | Oct 12, 1:10 PM ET | `shots_on_goal` | Anton Lundell over 2.5 | 38.3% | +7.0% | +220 | theScore Bet |
+| Florida Panthers @ Buffalo Sabres | Oct 12, 1:10 PM ET | `regulation_3_way` | home | 46.9% | +6.9% | +150 | Courtside |
+| Florida Panthers @ Buffalo Sabres | Oct 12, 1:10 PM ET | `assists` | Seth Jones under 0.5 | 68.3% | +6.8% | -160 | BetMGM |
+| Florida Panthers @ Buffalo Sabres | Oct 12, 1:10 PM ET | `points` | Zach Benson under 0.5 | 61.3% | +6.7% | -120 | BetMGM |
+| Ottawa Senators @ New Jersey Devils | Oct 12, 7:10 PM ET | `shots_on_goal` | Dougie Hamilton over 3.5 | 24.8% | +6.6% | +450 | FanDuel |
+| Ottawa Senators @ New Jersey Devils | Oct 12, 7:10 PM ET | `points` | Thomas Chabot under 0.5 | 61.5% | +6.5% | -122 | Bally Bet |
+| Florida Panthers @ Buffalo Sabres | Oct 12, 1:10 PM ET | `points` | Josh Doan under 0.5 | 60.8% | +6.3% | -120 | BetMGM |
+| Florida Panthers @ Buffalo Sabres | Oct 12, 1:10 PM ET | `shots_on_goal` | Anton Lundell over 3.5 | 22.2% | +6.2% | +525 | Fanatics |
+| Florida Panthers @ Buffalo Sabres | Oct 12, 1:10 PM ET | `shots_on_goal` | Carter Verhaeghe over 3.5 | 31.8% | +6.2% | +290 | Courtside |
+| Florida Panthers @ Buffalo Sabres | Oct 12, 1:10 PM ET | `shots_on_goal` | Rasmus Dahlin under 1.5 | 37.3% | +6.0% | +220 | theScore Bet |
+| Ottawa Senators @ New Jersey Devils | Oct 12, 7:10 PM ET | `team_total` | away_over 2.5 | 63.2% | +4.9% | -140 | BetOnline.ag |
+| Florida Panthers @ Buffalo Sabres | Oct 12, 1:10 PM ET | `team_total` | home_over 2.5 | 66.1% | +4.6% | -160 | Courtside |
+| Ottawa Senators @ New Jersey Devils | Oct 12, 7:10 PM ET | `team_total` | away_over 3.5 | 40.9% | +4.5% | +175 | Bally Bet |
+| Florida Panthers @ Buffalo Sabres | Oct 12, 1:10 PM ET | `team_total` | home_over 3.5 | 44.2% | +4.2% | +150 | Courtside |
+| Vegas Golden Knights @ Minnesota Wild | Oct 12, 8:10 PM ET | `regulation_3_way` | away | 43.2% | +4.0% | +155 | Bally Bet |
+| Florida Panthers @ Buffalo Sabres | Oct 12, 1:10 PM ET | `total_goals` | over 7 | 36.1% | +3.9% | +210 | Bovada |
+| Ottawa Senators @ New Jersey Devils | Oct 12, 7:10 PM ET | `team_total` | away_over 3 | 52.6% | +3.8% | +105 | BetMGM |
+| Ottawa Senators @ New Jersey Devils | Oct 12, 7:10 PM ET | `team_total` | home_under 3.5 | 64.6% | +3.8% | -155 | BetOnline.ag |
+| Florida Panthers @ Buffalo Sabres | Oct 12, 1:10 PM ET | `moneyline` | home | 55.0% | +3.8% | -105 | Caesars |
 
 Leans are recorded and not staked.
 
@@ -75,33 +55,33 @@ Leans are recorded and not staked.
 
 | Game | Starts | Market | Selection | Model | Edge | Price | Book |
 |:-----|:-------|:-------|:----------|------:|-----:|------:|:-----|
-| Carolina Hurricanes @ Philadelphia Flyers | Oct 11, 7:10 PM ET | `points` | David Jiricek under 0.5 | 84.6% | +17.1% | -208 | BetOnline.ag |
-| Carolina Hurricanes @ Philadelphia Flyers | Oct 11, 7:10 PM ET | `assists` | David Jiricek under 0.5 | 87.3% | +12.6% | -295 | Fliff |
-| Seattle Kraken @ Washington Capitals | Oct 11, 5:10 PM ET | `puck_line` | away +2.5 | 79.0% | +9.8% | -225 | FanDuel |
-| Carolina Hurricanes @ Philadelphia Flyers | Oct 11, 7:10 PM ET | `points` | Jamie Drysdale under 0.5 | 75.3% | +9.6% | -192 | BetOnline.ag |
-| Carolina Hurricanes @ Philadelphia Flyers | Oct 11, 7:10 PM ET | `points` | William Carrier under 0.5 | 77.4% | +9.2% | -215 | Bally Bet |
-| Seattle Kraken @ Washington Capitals | Oct 11, 5:10 PM ET | `points` | Vincent Desharnais under 0.5 | 82.8% | +7.8% | -300 | Hard Rock Bet |
-| Seattle Kraken @ Washington Capitals | Oct 11, 5:10 PM ET | `points` | Timothy Liljegren under 0.5 | 77.5% | +7.4% | -235 | BetMGM |
-| Carolina Hurricanes @ Philadelphia Flyers | Oct 11, 7:10 PM ET | `assists` | Jamie Drysdale under 0.5 | 81.4% | +7.3% | -285 | BetMGM |
-| Seattle Kraken @ Washington Capitals | Oct 11, 5:10 PM ET | `assists` | Timothy Liljegren under 0.5 | 81.8% | +7.1% | -295 | BetMGM |
-| Seattle Kraken @ Washington Capitals | Oct 11, 5:10 PM ET | `points` | Anthony Beauvillier under 0.5 | 71.9% | +6.9% | -186 | Bally Bet |
-| Seattle Kraken @ Washington Capitals | Oct 11, 5:10 PM ET | `shots_on_goal` | Cole Hutson under 2.5 | 81.4% | +6.4% | -300 | theScore Bet |
-| Seattle Kraken @ Washington Capitals | Oct 11, 5:10 PM ET | `team_total` | away_over 2 | 73.0% | +6.3% | -200 | BetMGM |
-| Vancouver Canucks @ New York Rangers | Oct 11, 6:10 PM ET | `shots_on_goal` | Pavel Dorofeyev under 3.5 | 69.5% | +6.3% | -172 | BetOnline.ag |
-| Seattle Kraken @ Washington Capitals | Oct 11, 5:10 PM ET | `assists` | Pierre-Luc Dubois under 0.5 | 68.0% | +6.1% | -162 | Bally Bet |
-| Vancouver Canucks @ New York Rangers | Oct 11, 6:10 PM ET | `goals` | Max Sasson over 0.5 | 13.6% | +5.9% | +1200 | Courtside |
-| Carolina Hurricanes @ Philadelphia Flyers | Oct 11, 7:10 PM ET | `shots_on_goal` | Jackson Blake under 2.5 | 67.3% | +5.9% | -159 | BetOnline.ag |
-| Seattle Kraken @ Washington Capitals | Oct 11, 5:10 PM ET | `goals` | Justin Sourdif over 0.5 | 17.0% | +5.9% | +800 | Bally Bet |
-| Seattle Kraken @ Washington Capitals | Oct 11, 5:10 PM ET | `assists` | Anthony Beauvillier under 0.5 | 84.1% | +5.9% | -360 | Bally Bet |
-| Seattle Kraken @ Washington Capitals | Oct 11, 5:10 PM ET | `shots_on_goal` | Alex Ovechkin under 1.5 | 32.9% | +5.9% | +270 | theScore Bet |
-| Carolina Hurricanes @ Philadelphia Flyers | Oct 11, 7:10 PM ET | `assists` | Trevor Zegras under 0.5 | 69.5% | +5.8% | -175 | BetMGM |
-| Vancouver Canucks @ New York Rangers | Oct 11, 6:10 PM ET | `shots_on_goal` | Adam Fox under 1.5 | 51.9% | +5.8% | +117 | Bally Bet |
-| Seattle Kraken @ Washington Capitals | Oct 11, 5:10 PM ET | `shots_on_goal` | Pierre-Luc Dubois under 0.5 | 24.0% | +5.8% | +450 | theScore Bet |
-| Seattle Kraken @ Washington Capitals | Oct 11, 5:10 PM ET | `assists` | Cole Hutson under 0.5 | 75.9% | +5.8% | -235 | Courtside |
-| Vancouver Canucks @ New York Rangers | Oct 11, 6:10 PM ET | `points` | Gabe Perreault under 0.5 | 59.8% | +5.7% | -118 | BetOnline.ag |
-| Seattle Kraken @ Washington Capitals | Oct 11, 5:10 PM ET | `shots_on_goal` | Jordan Eberle over 3.5 | 15.2% | +5.6% | +950 | BetOnline.ag |
+| Florida Panthers @ Buffalo Sabres | Oct 12, 1:10 PM ET | `shots_on_goal` | Seth Jones over 3.5 | 19.7% | +8.6% | +800 | Courtside |
+| Ottawa Senators @ New Jersey Devils | Oct 12, 7:10 PM ET | `puck_line` | away +1.5 | 76.7% | +7.9% | -220 | BetMGM |
+| Florida Panthers @ Buffalo Sabres | Oct 12, 1:10 PM ET | `shots_on_goal` | Matthew Tkachuk over 5.5 | 12.5% | +6.5% | +1550 | BetOnline.ag |
+| Ottawa Senators @ New Jersey Devils | Oct 12, 7:10 PM ET | `goals` | Luke Evangelista under 0.5 | 82.7% | +6.5% | -320 | theScore Bet |
+| Florida Panthers @ Buffalo Sabres | Oct 12, 1:10 PM ET | `shots_on_goal` | Sam Bennett over 4.5 | 19.8% | +6.4% | +650 | Fanatics |
+| Florida Panthers @ Buffalo Sabres | Oct 12, 1:10 PM ET | `shots_on_goal` | Carter Verhaeghe over 4.5 | 19.5% | +6.1% | +650 | Courtside |
+| Ottawa Senators @ New Jersey Devils | Oct 12, 7:10 PM ET | `shots_on_goal` | Jack Hughes over 5.5 | 20.7% | +5.9% | +575 | Fanatics |
+| Ottawa Senators @ New Jersey Devils | Oct 12, 7:10 PM ET | `shots_on_goal` | Cody Glass over 1.5 | 40.3% | +5.8% | +190 | Bally Bet |
+| Florida Panthers @ Buffalo Sabres | Oct 12, 1:10 PM ET | `points` | Seth Jones under 0.5 | 60.3% | +5.8% | -120 | BetMGM |
+| Florida Panthers @ Buffalo Sabres | Oct 12, 1:10 PM ET | `assists` | Rasmus Dahlin under 0.5 | 57.7% | +5.8% | -108 | Bally Bet |
+| Florida Panthers @ Buffalo Sabres | Oct 12, 1:10 PM ET | `shots_on_goal` | Matthew Tkachuk over 4.5 | 21.1% | +5.7% | +550 | BetOnline.ag |
+| Ottawa Senators @ New Jersey Devils | Oct 12, 7:10 PM ET | `points` | Luke Hughes under 0.5 | 58.0% | +5.7% | -110 | BetMGM |
+| Ottawa Senators @ New Jersey Devils | Oct 12, 7:10 PM ET | `shots_on_goal` | Dougie Hamilton over 4.5 | 13.9% | +5.6% | +1100 | Fanatics |
+| Vegas Golden Knights @ Minnesota Wild | Oct 12, 8:10 PM ET | `points` | William Karlsson over 0.5 | 40.6% | +5.5% | +185 | Bally Bet |
+| Ottawa Senators @ New Jersey Devils | Oct 12, 7:10 PM ET | `assists` | Thomas Chabot under 0.5 | 69.1% | +5.5% | -175 | Bally Bet |
+| Ottawa Senators @ New Jersey Devils | Oct 12, 7:10 PM ET | `puck_line` | away +2.5 | 87.3% | +5.5% | -450 | Hard Rock Bet |
+| Florida Panthers @ Buffalo Sabres | Oct 12, 1:10 PM ET | `shots_on_goal` | Carter Verhaeghe over 5.5 | 11.3% | +5.4% | +1600 | Courtside |
+| Florida Panthers @ Buffalo Sabres | Oct 12, 1:10 PM ET | `assists` | Zach Benson under 0.5 | 73.2% | +5.4% | -210 | BetMGM |
+| Ottawa Senators @ New Jersey Devils | Oct 12, 7:10 PM ET | `shots_on_goal` | Warren Foegele over 1.5 | 43.1% | +5.4% | +165 | Bally Bet |
+| Florida Panthers @ Buffalo Sabres | Oct 12, 1:10 PM ET | `shots_on_goal` | Sam Bennett over 5.5 | 11.6% | +5.3% | +1500 | Fanatics |
+| Florida Panthers @ Buffalo Sabres | Oct 12, 1:10 PM ET | `shots_on_goal` | Seth Jones over 4.5 | 10.3% | +5.3% | +1900 | Fanatics |
+| Florida Panthers @ Buffalo Sabres | Oct 12, 1:10 PM ET | `points` | Jack Quinn under 0.5 | 55.3% | +5.3% | +100 | BetMGM |
+| Florida Panthers @ Buffalo Sabres | Oct 12, 1:10 PM ET | `shots_on_goal` | Josh Doan under 1.5 | 49.7% | +5.2% | +125 | Bovada |
+| Florida Panthers @ Buffalo Sabres | Oct 12, 1:10 PM ET | `assists` | Jiri Kulich under 0.5 | 83.4% | +5.2% | -360 | Bally Bet |
+| Ottawa Senators @ New Jersey Devils | Oct 12, 7:10 PM ET | `points` | Luke Evangelista under 0.5 | 56.4% | +5.2% | -105 | Hard Rock Bet |
 
-_1622 further passes not listed._
+_1546 further passes not listed._
 
 These are genuine model judgements about markets that were priced and modelled. They are **not** the same thing as the excluded markets below.
 
@@ -111,9 +91,9 @@ Who the model expects to win each game, from the same team ratings the card pric
 
 | Game | Puck drop | Stats' side | Win chance | Fair | Best price | Book | Against the price |
 |:--|:--|:--|--:|--:|--:|:--|:--|
-| Seattle Kraken @ Washington Capitals | Oct 11, 5:10 PM ET | **Washington Capitals** | 58.2% | -139 | -200 | Hard Rock Bet | price is 8.5 pts short |
-| Vancouver Canucks @ New York Rangers | Oct 11, 6:10 PM ET | **New York Rangers** | 69.5% | -228 | -258 | Courtside | price is 2.6 pts short |
-| Carolina Hurricanes @ Philadelphia Flyers | Oct 11, 7:10 PM ET | **Carolina Hurricanes** | 59.2% | -145 | -175 | Hard Rock Bet | price is 4.5 pts short |
+| Florida Panthers @ Buffalo Sabres | Oct 12, 1:10 PM ET | **Buffalo Sabres** | 55.0% | -122 | -105 | Caesars | price is 3.8 pts long, under the bar |
+| Ottawa Senators @ New Jersey Devils | Oct 12, 7:10 PM ET | **Ottawa Senators** | 53.9% | -117 | +117 | Bally Bet | price is 7.8 pts long, under the bar |
+| Vegas Golden Knights @ Minnesota Wild | Oct 12, 8:10 PM ET | **Vegas Golden Knights** | 51.5% | -106 | +100 | Courtside | price is 1.5 pts long, under the bar |
 
 A list, not bets: no units, no stakes, nothing frozen into the forward ledger. The lab has no measurement showing that backing the stats' side at the market's price makes money.
 
@@ -123,9 +103,9 @@ Backtest of the shipped rule (either bar) on 2024-25 and 2025-26 bought prices, 
 
 | Player | Team | Opponent | Puck drop | Category | Line | Last season | Drought | Bar reached | Bars (tier / surprise) | Rarity | Band record | Best price | Book | Flag |
 |:--|:--|:--|:--|:--|--:|--:|--:|:--|:--|:--|:--|--:|:--|:--|
-| Travis Konecny | PHI | CAR | Oct 11, 7:00 PM ET | goals | over 0.5 | 27 | 11 | 10 (tier) | tier 10 / surprise - | 1 in 61 for him | band 25-39 @10: +10.8% over 325 (95% -10.3% to +31.4%) | +275 | BetOnline.ag |  |
-| Alex Tuch | WSH | SEA | Oct 11, 5:00 PM ET | assists | over 0.5 | 33 | 5 | 5 (tier) | tier 5 / surprise 7 | 1 in 9 for him | band 30-44 @5: -11.7% over 1558 (95% -19.1% to -4.7%) | +176 | FanDuel |  |
-| Matvei Michkov | PHI | CAR | Oct 11, 7:00 PM ET | assists | over 0.5 | 31 | 6 | 5 (tier) | tier 5 / surprise 9 | 1 in 8 for him | band 30-44 @5: -11.7% over 1558 (95% -19.1% to -4.7%) | +205 | Courtside |  |
+| Jack Quinn | BUF | FLA | Oct 12, 1:00 PM ET | assists | over 0.5 | 31 | 12 | 8 (both) | tier 5 / surprise 8 | 1 in 121 for him | band 30-44 @5: -11.7% over 1558 (95% -19.1% to -4.7%) | +185 | Bovada |  |
+| Brady Tkachuk | FLA | BUF | Oct 12, 1:00 PM ET | assists | over 0.5 | 37 | 6 | 6 (both) | tier 5 / surprise 6 | 1 in 30 for him | band 30-44 @5: -11.7% over 1558 (95% -19.1% to -4.7%) | +155 | Hard Rock Bet |  |
+| Sam Reinhart | FLA | BUF | Oct 12, 1:00 PM ET | assists | over 0.5 | 32 | 5 | 5 (tier) | tier 5 / surprise 7 | 1 in 9 for him | band 30-44 @5: -11.7% over 1558 (95% -19.1% to -4.7%) | +150 | Bally Bet |  |
 
 A list, not bets: no units, no stakes, and none of it is in the best bets above.
 
@@ -133,19 +113,17 @@ A list, not bets: no units, no stakes, and none of it is in the best bets above.
 
 These appeared in the provider's prices and could not be matched to a modelled team or player, so they produced **no selection**. That is not a judgement about them — it is a join that did not land. A fuzzy match would produce a confident price for a bet nobody placed, on a row that looks exactly like a correct one.
 
-- Alberts Smits
-- Elias Pettersson
-- Elias Pettersson (2004)
-- Frederick Gaudreau
-- Helge Grans
-- Ilya Protas
-- Ville Ottavainen
+- Amadeus Lombardi
+- Carter Yakemchuk
+- David Spacek
+- Konsta Helenius
+- Trevor Connelly
 
 ## Excluded markets
 
 - `blocked_shots`: The provider returned no rows for this market. That is an absence, not a price of zero and not a no-value call. Check per-bookmaker coverage including alternate lines before concluding it is not offered.
 - `goalie_saves`: The provider returned no rows for this market. That is an absence, not a price of zero and not a no-value call. Check per-bookmaker coverage including alternate lines before concluding it is not offered.
-- `hits`: The provider returned no rows for this market. That is an absence, not a price of zero and not a no-value call. Check per-bookmaker coverage including alternate lines before concluding it is not offered.
+- `hits`: Priced for 1 of 3 games. Picking only where prices happen to exist is a selection effect, not an edge, so the market is excluded rather than half-used.
 
 An excluded market is **not** a pass, an avoid, or a no-value call, and no price was invented for it.
 
@@ -176,6 +154,6 @@ What the evidence actually supports:
 - `data/outputs/props_calibration.md`
 - `data/outputs/what_we_can_claim.md`
 
-Run: https://github.com/cooperross399/nhl-betting-lab/actions/runs/38144158576
+Run: https://github.com/cooperross399/nhl-betting-lab/actions/runs/38254995513
 
 Recommendations only. No bet was placed, no policy was edited, and no market was allowlisted by this run.
