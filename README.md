@@ -136,6 +136,14 @@ PYTHONPATH=src .venv/bin/python scripts/run_player_extras.py --fetch
 # walk-forward on outcomes -> data/outputs/scorer_markets.md. --fetch
 # downloads free NHL play-by-play; no odds, no credit.
 PYTHONPATH=src .venv/bin/python scripts/run_scorer_markets.py --fetch
+
+# The three shadow models above against prices that were for sale: one bet per
+# wager at the best price, flat stake, the card's measurement bars (3.5% period
+# markets, 6% player markets), game-clustered intervals corrected across every
+# figure -> data/outputs/new_market_backtest.md (aggregates only, no price,
+# line or book). Reads the bought responses (data/raw/new_market_prices, never
+# committed; in CI pulled from the private repository). No credit.
+PYTHONPATH=src .venv/bin/python scripts/run_new_market_backtest.py --fetch
 ```
 
 ### The card — offline, gated
@@ -296,6 +304,30 @@ PYTHONPATH=src .venv/bin/python scripts/probe_low_vig_venues.py \
 # Team markets, from the bulk endpoint — far cheaper, per snapshot not per event
 PYTHONPATH=src .venv/bin/python scripts/buy_historical_team_prices.py \
     --from 2024-10-08 --to 2026-04-15
+
+# The new markets (period markets, power-play points, faceoffs won, player
+# shots, first and last scorer; 17 keys). Free dry run: 10 x markets x regions
+# x events from the local tables (340 an event at worst at us,us2).
+PYTHONPATH=src .venv/bin/python scripts/buy_new_market_prices.py \
+    --from 2024-10-04 --to 2026-04-16
+
+# Measure the real per-event charge on 20 events spread across the window and
+# project the full buy from it -> data/outputs/new_market_probe.md. Spends up
+# to the cap, listings included. Then the buy itself drops --probe-events.
+PYTHONPATH=src .venv/bin/python scripts/buy_new_market_prices.py \
+    --from 2024-10-04 --to 2026-04-16 --probe-events 20 --live --credit-cap 4000
+
+# Tonight's unstarted regular-season games, live: 1 credit per market returned
+# per region, 34 an event at worst. The New Market Prices workflow runs it daily.
+PYTHONPATH=src .venv/bin/python scripts/capture_new_market_prices.py --live --credit-cap 640
+
+# The responses live only in the PRIVATE repository (branch `new-markets` of
+# cooperross399/nhl-closing-lines), gzip, one file per response, add-only.
+# The pull refuses a folder inside the CI workspace.
+NHL_CLOSING_LINES_TOKEN=... PYTHONPATH=src .venv/bin/python \
+    scripts/private_new_market_store.py pull --prices-dir /tmp/new-market-prices
+NHL_CLOSING_LINES_TOKEN=... PYTHONPATH=src .venv/bin/python \
+    scripts/private_new_market_store.py push --prices-dir /tmp/new-market-prices
 ```
 
 Props: between one and ten credits per market per event, per region, and the
@@ -487,6 +519,7 @@ bought the window again and uploaded a thin copy as the newest carrier.
 | Publish Site | daily, and after each Gameday Refresh | no |
 | Season Sim | daily at 13:05 UTC, before the site builds; on demand | no |
 | Shadow Stats | on demand, and on PRs that change `src/nhl_betting_lab/shadow/` | no |
+| New Market Prices | daily in season (cron 10:00 UTC, which lands near the card's window): tonight's new-market prices, cap 640; on demand: probe, buy or backtest a past window. Prices go only to the private repository; the artifact is aggregate | yes, capped, required cap |
 
 The site's **Season** page (`web/Season.dc.html`) is fed by **Season Sim**, which plays the rest of the regular season 10,000 times every morning from public data only — the NHL API for standings, rosters, club schedules and season-to-date skater and goalie stats, MoneyPuck for expected goals — plus the hand-kept availability list in `data/season_sim/roster_notes.json` (injured regulars expected back, opening goalie depth charts, rookies' ice time). `python web/build_season_json.py --out DIR` builds it locally (`--cache` keeps the fetched inputs, `--sims` sets the count); the model is under `web/season_sim/` and the file it writes is described in `web/SCHEMA.md` under `season.json`. The workflow uploads that file as the `season-sim` artifact, and Publish Site lays the newest successful run's copy over the committed baseline at `web/data/season.json`; when none can be restored the page keeps the baseline and labels its age, and the board is published regardless. It is a projection of the standings, published as one: no price is read, no credit is spent, and nothing on it is a pick.
 

@@ -292,6 +292,18 @@ def test_the_walk_forward_scores_only_after_the_minimum_history() -> None:
     leaders = result.players[result.players["player_id"] % 100 == 0]["p"].mean()
     others = result.players[result.players["player_id"] % 100 != 0]["p"].mean()
     assert leaders > others
+    # Asked for, every candidate's opinion is kept for the price backtest:
+    # each dressed skater and "no scorer", summing to one, exactly one
+    # winner per scored game and market. Not asked for, nothing is kept.
+    assert result.selections.empty
+    with_rows = scorers.measure(team_games, logs, orders, minimum_history=60, selections=True)
+    chosen = with_rows.selections
+    assert not chosen.empty
+    for (gid, market), rows in chosen.groupby(["game_id", "market"]):
+        assert rows["p"].sum() == pytest.approx(1.0)
+        assert scorers.NO_SCORER in set(rows["selection"])
+    scored = chosen.merge(first[["game_id"]].drop_duplicates(), on="game_id")
+    assert (scored[scored["market"] == "first"].groupby("game_id")["won"].sum() == 1).all()
     summary = scorers.summarise(result)
     assert set(summary["markets"]) == {"first", "last"}
     for entry in summary["markets"].values():

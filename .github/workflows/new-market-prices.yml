@@ -1,0 +1,300 @@
+name: New Market Prices
+
+# Prices the markets the 2026-10-13 shadow models cover (period markets,
+# power-play points, faceoffs won, player shots, first and last goalscorer;
+# src/nhl_betting_lab/new_markets), so they can be measured against real odds.
+# Cooper approved both the daily capture and the historical buy on
+# 2026-10-13 ("do it all").
+#
+# SCOPE: it places no bet, publishes no card, edits no policy and allowlists
+# nothing. Nothing it writes is read by the card, the frozen snapshot or the
+# forward ledger. Every price it buys or captures goes to branch
+# `new-markets` of the PRIVATE repository cooperross399/nhl-closing-lines and
+# sits on the runner only in its temp directory: this repository is public
+# and the provider's terms forbid redistributing its data as files, so no
+# step uploads a price. The one artifact holds aggregate reports (counts,
+# credits, returns and intervals; no price, line or book).
+#
+# MODES:
+#   capture  (the schedule) tonight's unstarted regular-season games, live,
+#            1 credit per market returned per region: at most 17 x 2 = 34
+#            an event, and the scheduled cap of 640 covers a 16-game night.
+#   probe    a sample of a past window spread across it, bought at 10
+#            credits per market returned per region, and a projection of
+#            the full buy from the MEASURED charges.
+#   buy      the past window, at the same rate. Worst case 340 an event.
+#   backtest no credit: the bought prices against the shadow models.
+# Every spending mode takes a hard credit cap, enforced against measured
+# spend before each event, and checks the quota before it spends.
+on:
+  schedule:
+    # 10:00 UTC fires about 13:30-16:00 UTC (scheduled runs here start 3.5-6
+    # hours late), so the round lands near the card's own window, hours
+    # before a 19:00 ET face-off. A game already under way is never bought.
+    - cron: "0 10 * 1-4,10-12 *"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "capture tonight, probe a past window, buy it, or backtest what is held"
+        type: choice
+        required: true
+        options: [backtest, probe, buy, capture]
+        default: backtest
+      credit_cap:
+        description: "Hard cap on credits for this run. Required; read only by the spending modes."
+        type: string
+        required: true
+        default: "4000"
+      start_date:
+        description: "First league day of the past window (probe, buy)"
+        type: string
+        required: false
+        default: "2024-10-04"
+      end_date:
+        description: "Last league day of the past window (probe, buy)"
+        type: string
+        required: false
+        default: "2026-04-16"
+      probe_events:
+        description: "Events a probe buys, spread across the window"
+        type: string
+        required: false
+        default: "20"
+      hours_before:
+        description: "Hours before face-off to price at (probe, buy, backtest)"
+        type: string
+        required: false
+        default: "9.5"
+      seed_branch:
+        description: "Create the private new-markets branch on this run's push (the first run only)"
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: read
+  # Read-only, to restore Gameday Refresh's processed tables.
+  actions: read
+
+concurrency:
+  # Two runs racing would each push to the private branch; serialised, never
+  # cancelled, because a run that has spent credits must keep what it bought.
+  group: new-market-prices
+  cancel-in-progress: false
+
+jobs:
+  prices:
+    name: New market prices
+    # Default branch only: unreviewed code never spends a credit here.
+    if: >-
+      github.event_name == 'schedule'
+      || github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install project
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install -e .
+
+      - name: Decide the mode and the cap
+        id: plan
+        env:
+          EVENT: ${{ github.event_name }}
+          MODE_IN: ${{ inputs.mode }}
+          CAP_IN: ${{ inputs.credit_cap }}
+        run: |
+          set -u
+          if [ "$EVENT" = "schedule" ]; then
+            mode=capture
+            cap=640
+          else
+            mode="$MODE_IN"
+            cap="$CAP_IN"
+          fi
+          spends=false
+          case "$mode" in
+            capture|probe|buy) spends=true ;;
+            backtest) ;;
+            *) echo "::error::Unknown mode '$mode'."; exit 1 ;;
+          esac
+          if [ "$spends" = "true" ] && ! [[ "$cap" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::A spending mode needs a positive whole-number credit cap; got '$cap'."
+            exit 1
+          fi
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+          echo "cap=$cap" >> "$GITHUB_OUTPUT"
+          echo "spends=$spends" >> "$GITHUB_OUTPUT"
+          echo "Mode: $mode. Spends credits: $spends. Hard cap: $cap." | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Restore the processed tables
+        # team_games.csv, player_game_logs.csv and the team-name map, as the
+        # card last built them. Read here and never uploaded.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -u
+          python scripts/restore_state.py --artifact gameday-state --dest data \
+            --workflow gameday-refresh.yml --no-merge --refuse-unreachable --attempts 3
+
+      - name: Cache this season's club schedules
+        # Free. The preseason screen reads them, so an exhibition never takes
+        # a place under the cap; without them the screen abstains and says so.
+        if: ${{ steps.plan.outputs.mode == 'capture' }}
+        continue-on-error: true
+        timeout-minutes: 3
+        env:
+          PYTHONPATH: src
+        run: |
+          python scripts/fetch_nhl_data.py --schedules-only --polite-seconds 0.25
+
+      - name: Pull the bought prices from the private repository
+        # Into the runner's temp directory, outside the workspace, so no
+        # upload can sweep them up. A spending run needs the private store:
+        # without it, what it bought would be lost when the runner ends.
+        id: pull
+        env:
+          NHL_CLOSING_LINES_TOKEN: ${{ secrets.NHL_CLOSING_LINES_TOKEN }}
+          PYTHONPATH: src
+        run: |
+          set -u
+          status=0
+          python scripts/private_new_market_store.py pull \
+            --prices-dir "$RUNNER_TEMP/private-new-markets" || status=$?
+          case "$status" in
+            0) ;;
+            4) echo "The private new-markets branch does not exist yet: nothing held." ;;
+            *) echo "::error::The private new-market store could not be read (exit $status); nothing is spent or measured."
+               exit 1 ;;
+          esac
+
+      - name: Check the provider credential
+        if: ${{ steps.plan.outputs.spends == 'true' }}
+        env:
+          NHL_ODDS_API_KEY: ${{ secrets.NHL_ODDS_API_KEY }}
+          PYTHONPATH: src
+        run: |
+          python scripts/check_provider_credential.py
+
+      - name: Report the quota before spending any of it
+        if: ${{ steps.plan.outputs.spends == 'true' }}
+        env:
+          NHL_ODDS_API_KEY: ${{ secrets.NHL_ODDS_API_KEY }}
+          PYTHONPATH: src
+          CAP: ${{ steps.plan.outputs.cap }}
+        run: |
+          python scripts/check_provider_quota.py --fail-under "$CAP"
+
+      - name: Buy or capture prices
+        id: spend
+        if: ${{ steps.plan.outputs.spends == 'true' }}
+        env:
+          NHL_ODDS_API_KEY: ${{ secrets.NHL_ODDS_API_KEY }}
+          PYTHONPATH: src
+          MODE: ${{ steps.plan.outputs.mode }}
+          CAP: ${{ steps.plan.outputs.cap }}
+          START: ${{ inputs.start_date || '2024-10-04' }}
+          END: ${{ inputs.end_date || '2026-04-16' }}
+          PROBE_EVENTS: ${{ inputs.probe_events || '20' }}
+          HOURS: ${{ inputs.hours_before || '9.5' }}
+        run: |
+          set -u
+          prices="$RUNNER_TEMP/private-new-markets"
+          case "$MODE" in
+            capture)
+              python scripts/capture_new_market_prices.py --live \
+                --credit-cap "$CAP" --prices-dir "$prices" ;;
+            probe)
+              python scripts/buy_new_market_prices.py --live --credit-cap "$CAP" \
+                --from "$START" --to "$END" --hours-before "$HOURS" \
+                --probe-events "$PROBE_EVENTS" --prices-dir "$prices"
+              if [ -s data/outputs/new_market_probe.md ]; then
+                cat data/outputs/new_market_probe.md >> "$GITHUB_STEP_SUMMARY"
+              fi ;;
+            buy)
+              python scripts/buy_new_market_prices.py --live --credit-cap "$CAP" \
+                --from "$START" --to "$END" --hours-before "$HOURS" \
+                --prices-dir "$prices" ;;
+          esac
+
+      - name: Keep the prices privately
+        # Whatever the spend step did: a response it paid for is pushed even
+        # when a later event failed. Adds files only; never rewrites one.
+        if: ${{ always() && steps.plan.outputs.spends == 'true' && steps.pull.outcome == 'success' }}
+        env:
+          NHL_CLOSING_LINES_TOKEN: ${{ secrets.NHL_CLOSING_LINES_TOKEN }}
+          PYTHONPATH: src
+          SEED: ${{ inputs.seed_branch && 'true' || 'false' }}
+        run: |
+          set -u
+          if [ "$SEED" = "true" ]; then
+            python scripts/private_new_market_store.py push \
+              --prices-dir "$RUNNER_TEMP/private-new-markets" --allow-new-branch
+          else
+            python scripts/private_new_market_store.py push \
+              --prices-dir "$RUNNER_TEMP/private-new-markets"
+          fi
+
+      - name: Restore cached play-by-play
+        if: ${{ steps.plan.outputs.mode == 'backtest' }}
+        uses: actions/cache/restore@v4
+        with:
+          path: data/raw/nhl/play_by_play
+          key: shadow-play-by-play-${{ github.run_id }}
+          restore-keys: shadow-play-by-play-
+
+      - name: Backtest the shadow models against the bought prices
+        # No credit: the NHL's play-by-play is free. The report is aggregate.
+        if: ${{ steps.plan.outputs.mode == 'backtest' }}
+        env:
+          PYTHONPATH: src
+          HOURS: ${{ inputs.hours_before || '9.5' }}
+        run: |
+          set -u
+          python scripts/run_shadow_stats.py --fetch --tables-only \
+            || echo "::warning::The xG tables were not built; the period markets are priced on goals only."
+          status=0
+          python scripts/run_new_market_backtest.py --fetch --hours-before "$HOURS" \
+            --prices-dir "$RUNNER_TEMP/private-new-markets" || status=$?
+          if [ -s data/outputs/new_market_backtest.md ]; then
+            cat data/outputs/new_market_backtest.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit "$status"
+
+      - name: Keep the play-by-play for the next run
+        if: ${{ always() && steps.plan.outputs.mode == 'backtest' }}
+        uses: actions/cache/save@v4
+        with:
+          path: data/raw/nhl/play_by_play
+          key: shadow-play-by-play-${{ github.run_id }}
+
+      - name: Remove the prices from the runner
+        if: always()
+        run: |
+          rm -rf "$RUNNER_TEMP/private-new-markets"
+
+      - name: Upload the aggregate reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: new-market-prices
+          path: |
+            data/outputs/new_market_probe.md
+            data/outputs/new_market_probe.json
+            data/outputs/new_market_backtest.md
+            data/outputs/new_market_backtest.json
+          if-no-files-found: ignore
+          retention-days: 30
