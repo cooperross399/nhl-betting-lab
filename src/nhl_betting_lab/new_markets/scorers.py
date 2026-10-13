@@ -572,6 +572,12 @@ class Measurement:
     windows: int = 0
     fallback_weights: int = 0
     weights: int = 0
+    #: Only with `measure(selections=True)`: one row per (game, market,
+    #: selection) the model prices, every dressed skater and `NO_SCORER`,
+    #: with its probability and whether it won. Unlike `players`, a game is
+    #: kept whoever scored (a goalie's goal, a scorer the logs miss), so the
+    #: price backtest never chooses its games by their outcome.
+    selections: pd.DataFrame = field(default_factory=pd.DataFrame)
 
 
 BASELINES = ("uniform", "position", "naive")
@@ -584,6 +590,7 @@ def measure(
     *,
     refit_days: int = REFIT_DAYS,
     minimum_history: int = MINIMUM_HISTORY_GAMES,
+    selections: bool = False,
 ) -> Measurement:
     """Score every regular-season game walk-forward, refitting every `refit_days`.
 
@@ -619,6 +626,7 @@ def measure(
 
     game_rows: list[dict[str, Any]] = []
     player_rows: list[dict[str, Any]] = []
+    selection_rows: list[dict[str, Any]] = []
     out = Measurement(games=pd.DataFrame(), players=pd.DataFrame(), skipped=skipped)
     if regular.empty:
         out.games, out.players = pd.DataFrame(game_rows), pd.DataFrame(player_rows)
@@ -685,6 +693,18 @@ def measure(
                 position_w[pid] = (side, window.group_per_game.get(group if group in {"F", "D"} else "F", 0.0))
             for market in MARKETS:
                 winner = order.scorer(market)
+                if selections and winner is not None:
+                    for selection, p in player_probabilities(sides[market], model_w).items():
+                        selection_rows.append(
+                            {
+                                "game_id": gid,
+                                "date": game["_date"].isoformat(),
+                                "market": market,
+                                "selection": str(selection),
+                                "p": float(p),
+                                "won": winner == selection,
+                            }
+                        )
                 if winner != NO_SCORER and winner not in model_w:
                     skipped["scorer_not_a_listed_skater"] += 1
                     continue
@@ -726,6 +746,10 @@ def measure(
                     )
     out.games = pd.DataFrame(game_rows)
     out.players = pd.DataFrame(player_rows)
+    if selections:
+        out.selections = pd.DataFrame(
+            selection_rows, columns=["game_id", "date", "market", "selection", "p", "won"]
+        )
     return out
 
 

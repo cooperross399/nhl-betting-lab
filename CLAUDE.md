@@ -2493,6 +2493,45 @@ Re-derive rather than trust if the data has moved.
   and buying history, spend credits and are Cooper's call. The model, the edge
   bar, the market list, the staking rule and the registered test are
   unchanged.
+- **2026-10-13: those markets are priced, privately, and nothing reaches the
+  card.** Cooper approved both the daily fetch and the historical buy ("do it
+  all"). The 17 keys (`new_markets.prices.CORE_KEYS`: the 12 period markets,
+  `player_power_play_points`, `player_faceoffs_won`, `player_shots`, first and
+  last scorer) are a separate fetch, NOT added to `odds_api`'s lists or
+  `markets.py`, so the card, the snapshot, the forward ledger and the
+  allowlist never see them. `scripts/capture_new_market_prices.py` asks
+  tonight's unstarted regular-season games (the preseason screen and the
+  started-game drop before the cap) at 1 credit per market returned per
+  region, gated at 17 x 2 = 34 an event; `scripts/buy_new_market_prices.py`
+  buys a past window at 10 per market returned per region, gated at 340 an
+  event, dry-run by default, with `--probe-events N` to measure the real
+  charge on a spread sample and project the full buy. Both enforce the cap on
+  measured spend projected one event ahead at the dearest charge seen (#234,
+  `prices.gated_buy`), refuse a missing or zero cap, never re-buy a cached
+  response, and fall back once to the core keys on a 422 (the alternate
+  spellings, `--with-alternates`, have never been seen served for NHL).
+  **Budget:** the daily capture runs from the **New Market Prices** workflow
+  (cron 10:00 UTC, months 1-4 and 10-12, default branch only) with a cap of
+  640, which covers a 16-game night (16 x 34 = 544); at 7.3 games a night
+  that is at most about 46,000 credits a season, less whatever is not
+  served. A full two-season buy (about 2,700 events at 9.5 hours) is at
+  worst 918,000 credits; the probe measures the real figure before any buy,
+  and the buy itself is a dispatch with Cooper's cap. **The prices live only
+  on branch `new-markets` of the PRIVATE repository
+  `cooperross399/nhl-closing-lines`** (`scripts/private_new_market_store.py`,
+  gzip, one file per response, add-only; it refuses the public lab, wants
+  `"private": true`, and pulls only outside the workspace), and on a runner
+  only in `$RUNNER_TEMP/private-new-markets`; no step uploads them.
+  `scripts/run_new_market_backtest.py` joins them to the shadow models'
+  walk-forward opinions (one bet per wager at the best price, flat stake,
+  bars 3.5% period / 6% player, game-clustered intervals corrected across
+  every figure, `player_shots` settled as attempts and as unblocked attempts
+  with the mean posted line printed beside both) and writes aggregates only
+  to `data/outputs/new_market_backtest.md`. The first workflow push needs
+  `seed_branch` ticked to create the branch. Moving any market onto the card
+  still needs a backtest, an allowlisting receipt and Cooper's decision. The
+  model, the edge bar, the market list, the staking rule and the registered
+  test are unchanged.
 
 ## Contract strings — never change these
 

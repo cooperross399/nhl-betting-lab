@@ -416,11 +416,20 @@ def _python_files():
             yield from root.rglob("*.py")
 
 
+#: 2026-10-13: the price backtest of the new markets reads this model's
+#: walk-forward opinions, and nothing else may. Both are shadow code that the
+#: card cannot import (`test_the_shadow_model_cannot_reach_the_card.py`).
+PRICE_BACKTEST = {
+    PACKAGE / "backtest.py",
+    PROJECT_ROOT / "scripts" / "run_new_market_backtest.py",
+}
+
+
 def test_nothing_outside_its_runner_imports_this_model() -> None:
     offenders = [
         str(path.relative_to(PROJECT_ROOT))
         for path in _python_files()
-        if path != SCRIPT and _imports(path, MODULE)
+        if path != SCRIPT and path not in PRICE_BACKTEST and _imports(path, MODULE)
     ]
     assert offenders == []
 

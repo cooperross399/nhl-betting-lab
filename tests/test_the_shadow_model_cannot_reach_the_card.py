@@ -24,6 +24,12 @@ ALLOWED = {
     PROJECT_ROOT / "scripts" / "run_period_markets.py",
     PROJECT_ROOT / "scripts" / "run_player_extras.py",
     PROJECT_ROOT / "scripts" / "run_scorer_markets.py",
+    # 2026-10-13: the new markets' price buy, daily capture and backtest.
+    # They write the private price cache and an aggregate report, never a
+    # file the card, the snapshot or the forward ledger reads.
+    PROJECT_ROOT / "scripts" / "buy_new_market_prices.py",
+    PROJECT_ROOT / "scripts" / "capture_new_market_prices.py",
+    PROJECT_ROOT / "scripts" / "run_new_market_backtest.py",
 }
 
 

@@ -371,7 +371,11 @@ def _xg_factors(metrics: pd.DataFrame, home_advantage: float) -> dict[str, dict[
     return measurement.shadow_factors(metrics, variant, home_advantage)
 
 
-def walk_forward(
+RATE_COLUMNS = ["game_id", "date", "season", "home_team", "away_team", "model", "period",
+                "home_rate", "away_rate"]
+
+
+def walk_forward_rates(
     team_games: pd.DataFrame,
     periods: pd.DataFrame,
     *,
@@ -380,24 +384,27 @@ def walk_forward(
     minimum_history: int = MINIMUM_HISTORY_GAMES,
     minimum_period_history: int = MINIMUM_PERIOD_GAMES,
 ) -> pd.DataFrame:
-    """Score every regular-season game with period goals, refitting every window.
+    """Each side's Poisson rate in each period, per game and model, walk-forward.
 
     Each window of `refit_days` is priced on a `TeamModel` and period shares
     fitted only on games dated before the window. With `xg_metrics` (the
-    shadow play-by-play team table), the xG ratings are scored too. Returns
-    one row per (game, model, period, market, line).
+    shadow play-by-play team table), the xG ratings are priced too. One row
+    per (game, period, model), in the order `walk_forward` scores them: a
+    game's periods in turn, and inside a period `baseline`, `goals`, `xg`.
+
+    The rates are all a price needs: `period_probabilities(home_rate,
+    away_rate)` gives every line of every period market, and the price
+    backtest (`new_markets.backtest`) reads lines the measurement's fixed
+    grid does not carry from the same matrix (`period_matrix`).
     """
     games = _regular_finals(team_games)
-    columns = ["game_id", "date", "season", "model", "period", "market", "line",
-               "p", "y", "log_loss", "brier", "void"]
     if games.empty or periods.empty:
-        return pd.DataFrame(columns=columns)
+        return pd.DataFrame(columns=RATE_COLUMNS)
     table = periods.drop(columns=[c for c in ("home_team", "away_team") if c in periods]).copy()
     table["game_id"] = pd.to_numeric(table["game_id"], errors="coerce")
     table = table.dropna(subset=["game_id"]).drop_duplicates("game_id")
     table["game_id"] = table["game_id"].astype(int)
     period_frame = games.merge(table, on="game_id", how="inner")
-    by_game = period_frame.set_index("game_id")
     metrics = pd.DataFrame()
     if xg_metrics is not None and not xg_metrics.empty:
         metrics = xg_metrics.copy()
@@ -437,11 +444,9 @@ def walk_forward(
                     half * model.home_advantage * h["attack"] * a["defence"] * h["finishing"] * a["goalie"] * home_mult,
                     half / model.home_advantage * a["attack"] * h["defence"] * a["finishing"] * h["goalie"] * away_mult,
                 )
-            record = by_game.loc[gid]
-            base = {"game_id": gid, "date": str(game.date)[:10], "season": getattr(game, "season", "")}
+            base = {"game_id": gid, "date": str(game.date)[:10], "season": getattr(game, "season", ""),
+                    "home_team": home, "away_team": away}
             for period in PERIODS:
-                hg = int(record[f"home_p{period}"])
-                ag = int(record[f"away_p{period}"])
                 rates = {"baseline": (shares.rates[("home", period)], shares.rates[("away", period)])}
                 for key, (home_full, away_full) in full.items():
                     rates[key] = (
@@ -449,9 +454,56 @@ def walk_forward(
                         away_full * shares.shares[("away", period)],
                     )
                 for key, (home_rate, away_rate) in rates.items():
-                    probabilities = period_probabilities(home_rate, away_rate)
-                    for row in score_period(probabilities, period, hg, ag):
-                        rows.append({**base, "model": key, **row})
+                    rows.append({**base, "model": key, "period": period,
+                                 "home_rate": float(home_rate), "away_rate": float(away_rate)})
+    return pd.DataFrame(rows, columns=RATE_COLUMNS)
+
+
+def walk_forward(
+    team_games: pd.DataFrame,
+    periods: pd.DataFrame,
+    *,
+    xg_metrics: pd.DataFrame | None = None,
+    refit_days: int = REFIT_DAYS,
+    minimum_history: int = MINIMUM_HISTORY_GAMES,
+    minimum_period_history: int = MINIMUM_PERIOD_GAMES,
+) -> pd.DataFrame:
+    """Score every regular-season game with period goals, refitting every window.
+
+    The rates come from `walk_forward_rates` (each window priced on a
+    `TeamModel` and period shares fitted only on games dated before it; with
+    `xg_metrics`, the xG ratings too). Returns one row per (game, model,
+    period, market, line).
+    """
+    columns = ["game_id", "date", "season", "model", "period", "market", "line",
+               "p", "y", "log_loss", "brier", "void"]
+    rates = walk_forward_rates(
+        team_games,
+        periods,
+        xg_metrics=xg_metrics,
+        refit_days=refit_days,
+        minimum_history=minimum_history,
+        minimum_period_history=minimum_period_history,
+    )
+    if rates.empty:
+        return pd.DataFrame(columns=columns)
+    table = periods.drop(columns=[c for c in ("home_team", "away_team") if c in periods]).copy()
+    table["game_id"] = pd.to_numeric(table["game_id"], errors="coerce")
+    table = table.dropna(subset=["game_id"]).drop_duplicates("game_id")
+    table["game_id"] = table["game_id"].astype(int)
+    by_game = table.set_index("game_id")
+
+    rows: list[dict] = []
+    for rate in rates.itertuples(index=False):
+        gid = int(rate.game_id)
+        period = int(rate.period)
+        record = by_game.loc[gid]
+        hg = int(record[f"home_p{period}"])
+        ag = int(record[f"away_p{period}"])
+        base = {"game_id": gid, "date": rate.date, "season": rate.season}
+        probabilities = period_probabilities(rate.home_rate, rate.away_rate)
+        for row in score_period(probabilities, period, hg, ag):
+            rows.append({**base, "model": rate.model, **row})
     return pd.DataFrame(rows, columns=columns)
 
 

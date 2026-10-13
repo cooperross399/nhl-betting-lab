@@ -166,7 +166,10 @@ def _is_upload(step: dict) -> bool:
 TEMP_SPELLINGS = re.compile(r"\$\{\{\s*runner\s*\.\s*temp\s*\}\}|\$\{\s*RUNNER_TEMP\s*\}", re.IGNORECASE)
 
 #: The folders the private sources are pulled into, on any runner.
-PRIVATE_FOLDERS = ("closing_line_captures", "private-closing-store", "private-movement-chain")
+#: `private-new-markets` (2026-10-13): the new markets' bought and captured
+#: prices, pulled from branch `new-markets` of the private repository.
+PRIVATE_FOLDERS = ("closing_line_captures", "private-closing-store", "private-movement-chain",
+                   "private-new-markets")
 
 #: The one upload from the runner's temp directory: Line Movement's
 #: encrypted seal, which nobody without NHL_CHAIN_FALLBACK_KEY can read.
@@ -325,6 +328,7 @@ PRICE_PATHS = (
     "data/staging",
     "data/raw/historical_props",
     "data/raw/historical_team_prices",
+    "data/raw/new_market_prices",
     "data/processed/historical_",
 )
 WORKSPACE_PREFIXES = ("${{ github.workspace }}/", "$GITHUB_WORKSPACE/", "${GITHUB_WORKSPACE}/")
@@ -456,6 +460,10 @@ TOKEN_HOLDERS = {
     ("line-movement.yml", "Keep the captures privately"),
     ("line-movement.yml", "Check the private chain holds this round"),
     ("line-movement.yml", "Seal this round when the private chain did not take it"),
+    # 2026-10-13: the new markets' prices live on branch `new-markets` of the
+    # same private repository; only the pull and the push read the token.
+    ("new-market-prices.yml", "Pull the bought prices from the private repository"),
+    ("new-market-prices.yml", "Keep the prices privately"),
 }
 
 
@@ -573,6 +581,7 @@ def test_no_other_workflow_that_uploads_data_processed_writes_the_store() -> Non
     text = (WORKFLOWS / "historical-props-purchase.yml").read_text(encoding="utf-8")
     assert "closing_line_captures" not in text
     assert "private_closing_store" not in text
+    assert "private_new_market_store" not in text
     assert "NHL_CLOSING_LINES_TOKEN" not in text
 
 
