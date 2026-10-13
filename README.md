@@ -119,6 +119,23 @@ PYTHONPATH=src .venv/bin/python scripts/run_what_we_can_claim.py
 # never on the card -> data/outputs/shadow_stats.md. --fetch downloads the
 # free NHL play-by-play for every game not yet cached.
 PYTHONPATH=src .venv/bin/python scripts/run_shadow_stats.py --fetch
+
+# Period markets (h2h, three-way, spreads, totals for periods 1-3) as a
+# shadow model, never on the card: walk-forward log loss and Brier against
+# league period rates -> data/outputs/period_markets.md. Reads the same
+# play-by-play cache; --fetch fills it (free, no odds credits).
+PYTHONPATH=src .venv/bin/python scripts/run_period_markets.py
+
+# Shadow models for power-play points, faceoffs won and shot attempts
+# (player_shots, ASSUMED to be attempts until a posted line is checked),
+# never on the card -> data/outputs/player_extras.md. Outcomes only, no odds;
+# reads the same play-by-play cache, --fetch fills it.
+PYTHONPATH=src .venv/bin/python scripts/run_player_extras.py --fetch
+
+# First and last goal scorer as a shadow model, never on the card, scored
+# walk-forward on outcomes -> data/outputs/scorer_markets.md. --fetch
+# downloads free NHL play-by-play; no odds, no credit.
+PYTHONPATH=src .venv/bin/python scripts/run_scorer_markets.py --fetch
 ```
 
 ### The card — offline, gated
