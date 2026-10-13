@@ -125,6 +125,12 @@ PYTHONPATH=src .venv/bin/python scripts/run_shadow_stats.py --fetch
 # league period rates -> data/outputs/period_markets.md. Reads the same
 # play-by-play cache; --fetch fills it (free, no odds credits).
 PYTHONPATH=src .venv/bin/python scripts/run_period_markets.py
+
+# Shadow models for power-play points, faceoffs won and shot attempts
+# (player_shots, ASSUMED to be attempts until a posted line is checked),
+# never on the card -> data/outputs/player_extras.md. Outcomes only, no odds;
+# reads the same play-by-play cache, --fetch fills it.
+PYTHONPATH=src .venv/bin/python scripts/run_player_extras.py --fetch
 ```
 
 ### The card — offline, gated
