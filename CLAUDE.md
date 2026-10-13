@@ -2471,6 +2471,28 @@ Re-derive rather than trust if the data has moved.
   114, both spanning zero: no demonstrated edge on either. The model, the
   edge bars, the bracket rule, the market list and the staking rule are
   unchanged.
+- **2026-10-13: period, extra-prop and scorer markets are shadow models,
+  not the card's.** Cooper asked for three groups ("Do 1, 2, and 3"): period
+  markets (`h2h_p1..p3`, `h2h_3_way_p1..p3`, `spreads_p1..p3`,
+  `totals_p1..p3`), `player_power_play_points`, `player_faceoffs_won` and
+  `player_shots`, and `player_goal_scorer_first` / `_last`. Each is built in
+  `nhl_betting_lab.new_markets` (`periods.py`, `player_extras.py`,
+  `scorers.py`) from the NHL's free play-by-play, which carries what the
+  boxscore lacks (goals by period, PP assists, faceoff counts, missed and
+  blocked attempts, goal order), and measured walk-forward on outcomes only by
+  `scripts/run_period_markets.py`, `run_player_extras.py` and
+  `run_scorer_markets.py`, which the **Shadow Stats** workflow now runs (no
+  credit). Outcomes can rule a model out and never in. Nothing on the card's
+  path may import the package (`tests/test_the_shadow_model_cannot_reach_the_card.py`).
+  Stated assumptions to check against a book's rules before any price
+  backtest: a tied period grades `h2h_pN` as a push; `player_shots` is shot
+  attempts (unblocked attempts are measured too); scorer markets count
+  overtime, never the shootout, a player who did not dress is void. None of
+  these markets is in the fetch list or has price history, so none can be
+  priced, backtested or allowlisted yet; asking for them in the daily fetch,
+  and buying history, spend credits and are Cooper's call. The model, the edge
+  bar, the market list, the staking rule and the registered test are
+  unchanged.
 
 ## Contract strings — never change these
 

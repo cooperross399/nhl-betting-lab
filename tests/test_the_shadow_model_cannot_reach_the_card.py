@@ -22,6 +22,8 @@ SHADOW_MODULES = ("nhl_betting_lab.shadow", "nhl_betting_lab.new_markets")
 ALLOWED = {
     PROJECT_ROOT / "scripts" / "run_shadow_stats.py",
     PROJECT_ROOT / "scripts" / "run_period_markets.py",
+    PROJECT_ROOT / "scripts" / "run_player_extras.py",
+    PROJECT_ROOT / "scripts" / "run_scorer_markets.py",
 }
 
 

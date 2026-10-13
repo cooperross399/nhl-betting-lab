@@ -24,6 +24,10 @@ on:
     paths:
       - "src/nhl_betting_lab/shadow/**"
       - "scripts/run_shadow_stats.py"
+      - "src/nhl_betting_lab/new_markets/**"
+      - "scripts/run_period_markets.py"
+      - "scripts/run_player_extras.py"
+      - "scripts/run_scorer_markets.py"
       - ".github/workflows/shadow-stats.yml"
 
 permissions:
@@ -38,7 +42,7 @@ jobs:
   measure:
     name: Shadow Stats
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 180
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -115,6 +119,28 @@ jobs:
           rm -f data/processed/historical_team_prices.csv
           exit "$status"
 
+      - name: Measure the new-market shadow models
+        # Period markets, power-play points / faceoffs / shot attempts, and
+        # first / last goal scorer (nhl_betting_lab.new_markets), each scored
+        # walk-forward on outcomes from the play-by-play the step above
+        # cached. Outcomes only: no odds, no credit, nothing the card reads.
+        # Each runs even when another fails; any failure fails the step.
+        if: ${{ !inputs.price_backtest }}
+        env:
+          PYTHONPATH: src
+        run: |
+          set -u
+          status=0
+          for name in period_markets player_extras scorer_markets; do
+            echo "::group::$name"
+            python "scripts/run_${name}.py" --fetch || { echo "::error::run_${name}.py exited $?"; status=1; }
+            echo "::endgroup::"
+            if [ -s "data/outputs/${name}.md" ]; then
+              cat "data/outputs/${name}.md" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
+          exit "$status"
+
       - name: Keep the play-by-play for the next run
         if: always()
         uses: actions/cache/save@v4
@@ -135,5 +161,11 @@ jobs:
             data/processed/shadow_team_games.csv
             data/processed/shadow_player_games.csv
             data/processed/shadow_goalie_games.csv
+            data/outputs/period_markets.md
+            data/outputs/period_markets.json
+            data/outputs/player_extras.md
+            data/outputs/player_extras.json
+            data/outputs/scorer_markets.md
+            data/outputs/scorer_markets.json
           if-no-files-found: warn
           retention-days: 30

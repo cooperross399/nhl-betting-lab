@@ -169,3 +169,17 @@ have to be fitted walk-forward, calibrated, and measured against prices
 before it could honestly appear anywhere.
 
 Recorded here so the next revisit starts from what is true.
+
+## 2026-10-13: three deferred groups now have shadow models
+
+Cooper asked for period markets, the three extra player props
+(`player_power_play_points`, `player_faceoffs_won`, `player_shots`) and
+first / last goal scorer. Each now has a model in `nhl_betting_lab.new_markets`,
+built from the NHL's free play-by-play (which carries goals by period, PP
+assists, faceoff counts, every shot attempt and the order of goals) and
+measured walk-forward on outcomes in the Shadow Stats workflow. That retires
+"no period model exists" and "settlement needs the order of goals" as reasons.
+What still stands between these markets and the card: none is in the daily
+fetch list, none has bought price history, and none has a receipt. Each of
+those is the same step every approved market walked, and the first two spend
+credits, so they are Cooper's call.
