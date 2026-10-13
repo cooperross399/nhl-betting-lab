@@ -131,6 +131,11 @@ PYTHONPATH=src .venv/bin/python scripts/run_period_markets.py
 # never on the card -> data/outputs/player_extras.md. Outcomes only, no odds;
 # reads the same play-by-play cache, --fetch fills it.
 PYTHONPATH=src .venv/bin/python scripts/run_player_extras.py --fetch
+
+# First and last goal scorer as a shadow model, never on the card, scored
+# walk-forward on outcomes -> data/outputs/scorer_markets.md. --fetch
+# downloads free NHL play-by-play; no odds, no credit.
+PYTHONPATH=src .venv/bin/python scripts/run_scorer_markets.py --fetch
 ```
 
 ### The card — offline, gated
