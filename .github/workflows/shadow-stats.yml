@@ -136,7 +136,7 @@ jobs:
             python "scripts/run_${name}.py" --fetch || { echo "::error::run_${name}.py exited $?"; status=1; }
             echo "::endgroup::"
             if [ -s "data/outputs/${name}.md" ]; then
-              cat "data/outputs/${name}.md" >> "$GITHUB_STEP_SUMMARY"
+              tee -a "$GITHUB_STEP_SUMMARY" < "data/outputs/${name}.md"
             fi
           done
           exit "$status"
