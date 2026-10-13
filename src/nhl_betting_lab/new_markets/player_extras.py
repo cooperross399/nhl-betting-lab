@@ -54,8 +54,9 @@ For each player-game, from games strictly before its date only:
    player's position group (centre, wing, defence: the roster's
    `positionCode`) in proportion to the ice time behind them, as
    `PlayerPropsModel` shrinks its rates (`SHRINKAGE_SECONDS`).
-2. **Faceoffs won** = faceoffs taken per sixty (shrunk) x a win rate shrunk
-   toward the group's on faceoffs taken (`FACEOFF_WIN_SHRINKAGE`).
+2. **Faceoffs won** = faceoffs taken per sixty over the last ten games (the
+   player's current role, not shrunk) x a win rate over his whole history,
+   shrunk toward the group's on faceoffs taken (`FACEOFF_WIN_SHRINKAGE`).
 3. **Times expected ice time**, the mean of the last ten games, as the prop
    model does (`RECENT_GAMES`).
 4. **A count distribution**: Poisson, or a negative binomial whose
@@ -512,9 +513,17 @@ def walk_forward(table: pd.DataFrame, *, min_games: int = MIN_GAMES) -> pd.DataF
     for column in ("ppp", "shot_attempts", "unblocked_attempts"):
         rate = _shrunk_rate(frame[f"prior_{column}"], prior_toi, frame[f"base_{column}"], base_toi, SHRINKAGE_SECONDS[column])
         frame[f"mu_{column}"] = rate * scale
-    taken = _shrunk_rate(
+    # Faceoffs taken follow the player's current role (who takes the draws
+    # on his line), not his career: a career rate shrunk toward the group
+    # under-forecast takers by 0.5 a game (Shadow Stats run 38460470412,
+    # model mean 5.385 against 5.891 observed, and the trailing mean beat
+    # it). So the workload is his last ten games' rate per sixty, and only
+    # the win rate is shrunk on his whole history.
+    career_taken = _shrunk_rate(
         frame["prior_faceoffs_taken"], prior_toi, frame["base_faceoffs_taken"], base_toi, SHRINKAGE_SECONDS["faceoffs_taken"]
     )
+    recent_taken = (frame["trail_faceoffs_taken"] * 3600.0 / frame["trail_toi_seconds"].where(frame["trail_toi_seconds"] > 0))
+    taken = recent_taken.fillna(career_taken)
     base_win = (frame["base_faceoffs_won"] / frame["base_faceoffs_taken"].where(frame["base_faceoffs_taken"] > 0)).fillna(0.5)
     raw_win = (frame["prior_faceoffs_won"] / frame["prior_faceoffs_taken"].where(frame["prior_faceoffs_taken"] > 0)).fillna(base_win)
     win_weight = frame["prior_faceoffs_taken"] / (frame["prior_faceoffs_taken"] + FACEOFF_WIN_SHRINKAGE)
