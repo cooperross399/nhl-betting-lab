@@ -457,3 +457,20 @@ def test_the_import_check_would_see_an_import(tmp_path: Path) -> None:
     assert _imports(sample, MODULE)
     sample.write_text("from nhl_betting_lab.new_markets import player_extras\n", encoding="utf-8")
     assert _imports(sample, MODULE)
+
+
+def test_faceoffs_taken_follow_the_last_ten_games_not_the_career() -> None:
+    # A winger who took no draws for 30 games, then 16 a game for the last
+    # ten, is forecast at his new role (Shadow Stats run 38460470412: the
+    # career rate under-forecast takers and lost to the trailing mean).
+    table = _synthetic_table(players=8, dates=40)
+    mover = 2
+    dates = sorted(table["date"].unique())
+    early = (table["player_id"] == mover) & (table["date"] < dates[-11])
+    late = (table["player_id"] == mover) & (table["date"] >= dates[-11])
+    table.loc[early, ["faceoffs_taken", "faceoffs_won"]] = 0
+    table.loc[late, "faceoffs_taken"] = 16
+    table.loc[late, "faceoffs_won"] = 8
+    predictions = px.walk_forward(table)
+    row = predictions[(predictions["player_id"] == mover) & (predictions["date"] == dates[-1])].iloc[0]
+    assert row["mu_faceoffs_taken"] == pytest.approx(16, rel=0.15)
