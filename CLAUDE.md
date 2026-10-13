@@ -2532,6 +2532,18 @@ Re-derive rather than trust if the data has moved.
   still needs a backtest, an allowlisting receipt and Cooper's decision. The
   model, the edge bar, the market list, the staking rule and the registered
   test are unchanged.
+  **Same day, the probe changed the plan.** New Market Prices run
+  38470625496 (probe, cap 4,000) bought 11 past events for 2,940 credits,
+  **267 an event measured**, projecting about 494,000 for the full buy; its
+  quota check read **85,422 remaining of 100,000** before the probe and
+  82,462 after, not the 3,635,739 of 5,000,000 the quota bullet above
+  records (read 2026-09-02). Cooper then chose **"Daily only"** on a
+  decision card: the nightly capture runs (about 27 credits an event
+  measured live, roughly 200 a night) and **no historical buy is made**; the
+  backtest runs once enough captured games accumulate. The 11 probe events
+  are held on the private branch. Every credit figure in this file that
+  says a spend "fits the quota" was written against the larger plan; check
+  `scripts/check_provider_quota.py` in the latest run before any new spend.
 
 ## Contract strings — never change these
 
