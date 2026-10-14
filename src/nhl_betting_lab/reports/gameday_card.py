@@ -14,9 +14,10 @@ the thing with the most gates in front of it. In order:
 3. **Model opinion.** No opinion, no selection. There is no fallback to a
    league-average price.
 4. **Market-specific gates.** `HARD_GATED_MARKETS`, empty since 2026-10-12.
-   `goalie_saves` was gated there for want of a confirmed starter; it is now
-   priced on the goalie the books post (see the dict's comment and
-   `docs/goalie_props_need_a_confirmed_starter.md`).
+   `goalie_saves` was gated there for want of a confirmed starter; since
+   2026-10-14 a saves stake needs the goalie Daily Faceoff lists as tonight's
+   confirmed or likely starter (`data.starting_goalies`; see the dict's
+   comment and `docs/goalie_props_need_a_confirmed_starter.md`).
 5. **Edge and juice.** A prop must clear a higher edge bar than a team market,
    and nothing worse than the configured juice limit is selected.
 6. **The puck-drop guard.** Anything whose game has started, or whose start
@@ -107,6 +108,8 @@ from nhl_betting_lab.config import (
     MIN_PROP_EDGE,
     OUTPUTS_DIR,
 )
+from nhl_betting_lab.data.starting_goalies import GoalieStarters
+from nhl_betting_lab.data.starting_goalies import PREFIX as STARTER_PREFIX
 from nhl_betting_lab.drought_rule import SECTION_TITLE, fingerprint as drought_fingerprint_of
 from nhl_betting_lab.drought_rule import bar_text as drought_bar_text
 from nhl_betting_lab.drought_rule import bars_text as drought_bars_text
@@ -167,9 +170,14 @@ TIER_UNITS = {"A": 0.5, "B": 0.25, "C": 0.1}
 #: saves line only for the goalie they expect to start, so a priced goalie is
 #: the books' starter, and a goalie who does not play has his saves bet voided
 #: by the book. The model prices him as the walk-forward backtest did, which
-#: measured only real starts (`walk_forward.GOALIE_START_SECONDS`). What is
-#: still not known is a late switch the books have not yet repriced; a
-#: confirmed-starter feed would close that and does not exist here.
+#: measured only real starts (`walk_forward.GOALIE_START_SECONDS`).
+#:
+#: 2026-10-14: "books post only the starter" was wrong. The card staked Jake
+#: Oettinger over 24.5 saves the night Casey DeSmith had been confirmed two
+#: hours before it, and the same card priced both Colorado goalies. So a saves
+#: stake now needs Daily Faceoff's listed starter, confirmed or likely
+#: (`data.starting_goalies`, `build_candidates(goalie_starters=...)`); any
+#: other saves best bet is a lean at zero units naming why.
 HARD_GATED_MARKETS: dict[str, str] = {}
 
 
@@ -475,6 +483,7 @@ def build_candidates(
     min_prop_edge: float = MIN_PROP_EDGE,
     juice_limit: int = MAX_DEFAULT_JUICE,
     max_price: int = MAX_DEFAULT_PRICE,
+    goalie_starters: GoalieStarters | None = None,
 ) -> tuple[list[Candidate], list[Candidate]]:
     """Split priced rows into `(selections, passes)`.
 
@@ -489,7 +498,14 @@ def build_candidates(
     the module docstring. Every candidate is still returned; nothing is
     dropped, and the probability map this reads is untouched, so the forward
     snapshot is unaffected.
+
+    A `goalie_saves` best bet is staked only on the goalie `goalie_starters`
+    names as tonight's starter (`data.starting_goalies`). None means nothing
+    is known about starters, and every saves stake is withheld.
     """
+    starters = goalie_starters if goalie_starters is not None else GoalieStarters(
+        unknown="No starting-goalie listing was given to the card."
+    )
     selections: list[Candidate] = []
     passes: list[Candidate] = []
     #: The staked rungs, each beside the `selection_key` it was priced under,
@@ -593,6 +609,10 @@ def build_candidates(
             against = stat_side_reason(key, probabilities)
             if not against and market.is_prop:
                 against = prop_confidence_reason(price, float(probability))
+            if not against and market_key == "goalie_saves":
+                against = starters.reason(
+                    player=candidate.player, home=home, away=away, day=_day
+                )
             if against:
                 candidate.section = LEANS_SECTION
                 candidate.demotion_reason = against
@@ -687,6 +707,7 @@ def build_card(
     unresolved_names: Sequence[str] = (),
     allowlisted_markets: Sequence[str] | None = None,
     scheduled_games: int | None = None,
+    goalie_starters: GoalieStarters | None = None,
 ) -> GamedayCard:
     """Assemble the card, or explain why there is not one.
 
@@ -743,7 +764,8 @@ def build_card(
         prices["market"].astype(str).str.strip().isin(eligible)
     ].copy()
     selections, passes = build_candidates(
-        usable, probabilities, juice_limit=juice_limit
+        usable, probabilities, juice_limit=juice_limit,
+        goalie_starters=goalie_starters,
     )
 
     guarded = apply_puck_drop_guard(
@@ -1078,6 +1100,7 @@ def _demoted_leans_by_reason(leans: Sequence[Mapping[str, Any]]) -> list[str]:
     ladder: list[Mapping[str, Any]] = []
     against: list[Mapping[str, Any]] = []
     unconfident: list[Mapping[str, Any]] = []
+    not_starting: list[Mapping[str, Any]] = []
     excluded: dict[tuple[str, str], list[Mapping[str, Any]]] = {}
     other: list[Mapping[str, Any]] = []
     for row in leans:
@@ -1091,6 +1114,8 @@ def _demoted_leans_by_reason(leans: Sequence[Mapping[str, Any]]) -> list[str]:
             against.append(row)
         elif reason.startswith(PROP_CONFIDENCE_PREFIX):
             unconfident.append(row)
+        elif reason.startswith(STARTER_PREFIX):
+            not_starting.append(row)
         elif reason == str(STAKE_EXCLUDED_MARKETS.get(market, "")).strip():
             excluded.setdefault((market, reason), []).append(row)
         else:
@@ -1143,6 +1168,22 @@ def _demoted_leans_by_reason(leans: Sequence[Mapping[str, Any]]) -> list[str]:
             f"- {_label(row)} (`{row.get('market', '-')}`): "
             f"{row.get('demotion_reason')}"
             for row in unconfident
+        )
+        lines.append("")
+    if not_starting:
+        lines.extend(
+            [
+                "Saves, starter check: a saves prop is staked only on the "
+                "goalie Daily Faceoff lists as tonight's confirmed or likely "
+                "starter. These cleared the edge bar without it and are "
+                "recorded here.",
+                "",
+            ]
+        )
+        lines.extend(
+            f"- {_label(row)} (`{row.get('market', '-')}`): "
+            f"{row.get('demotion_reason')}"
+            for row in not_starting
         )
         lines.append("")
     for (market, reason), rows in excluded.items():

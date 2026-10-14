@@ -149,6 +149,10 @@ PYTHONPATH=src .venv/bin/python scripts/run_new_market_backtest.py --fetch
 ### The card — offline, gated
 
 ```bash
+# Tonight's starting goalies from Daily Faceoff (free). A saves stake goes
+# only on a goalie listed as confirmed or likely; run it before the card.
+PYTHONPATH=src .venv/bin/python scripts/fetch_starting_goalies.py
+
 # Prices whatever the policy allows and recommends only where the measured
 # bars clear; a slate with no qualifying edge yields a card with no
 # selections that says why. Every priced opinion is also frozen into

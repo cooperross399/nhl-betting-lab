@@ -2471,6 +2471,26 @@ Re-derive rather than trust if the data has moved.
   114, both spanning zero: no demonstrated edge on either. The model, the
   edge bars, the bracket rule, the market list and the staking rule are
   unchanged.
+- **2026-10-14, a defect fix: a saves stake needs tonight's listed
+  starter.** The card staked Jake Oettinger over 24.5 saves (-110, Fliff,
+  0.25u) in DAL @ COL; Daily Faceoff had confirmed Casey DeSmith at 11:46
+  UTC, two hours before the card, and Oettinger did not play. The
+  2026-10-12 premise that "books post a saves line only for the goalie they
+  expect to start" was false: a book still quoted Oettinger at 20:41 UTC, and
+  the same card priced both Colorado goalies. Gameday Refresh now runs
+  `scripts/fetch_starting_goalies.py` (free, soft, 2 minutes) before the
+  card, writing `data/processed/starting_goalies.csv` (date, teams, goalie,
+  strength label, the source's news time, `retrieved_at`; no price). A
+  `goalie_saves` best bet is staked only when Daily Faceoff lists that goalie
+  as his team's starter marked Confirmed, Likely or Expected
+  (`data.starting_goalies.STAKEABLE_STRENGTHS`); otherwise it is a lean at
+  zero units under "Saves, starter check" naming who is listed. No listing,
+  "Unconfirmed", a file over 12 hours old, or a failed fetch withholds every
+  saves stake. Like the stats checks, it changes stakes only: the snapshot is
+  frozen before `build_card`, so the forward ledger and the 2027-04-25 test
+  are unchanged. The model, the edge bar, the market list and the allowlist
+  are unchanged. `tests/test_a_saves_stake_needs_the_listed_starter.py`
+  replays the night.
 - **2026-10-13: period, extra-prop and scorer markets are shadow models,
   not the card's.** Cooper asked for three groups ("Do 1, 2, and 3"): period
   markets (`h2h_p1..p3`, `h2h_3_way_p1..p3`, `spreads_p1..p3`,

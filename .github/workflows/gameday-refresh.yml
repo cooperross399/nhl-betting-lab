@@ -703,6 +703,18 @@ jobs:
           # a measurement it does not have as no measurement.
           python scripts/run_allowlist_evidence.py
 
+      - name: Fetch tonight's starting goalies
+        # A saves stake goes only on the goalie Daily Faceoff lists as the
+        # confirmed or likely starter. Free, and soft: a failed fetch leaves
+        # no file, and the card then withholds every saves stake and says so.
+        if: always()
+        continue-on-error: true
+        timeout-minutes: 2
+        env:
+          PYTHONPATH: src
+        run: |
+          python scripts/fetch_starting_goalies.py
+
       - name: Render the card
         id: card
         if: always()
