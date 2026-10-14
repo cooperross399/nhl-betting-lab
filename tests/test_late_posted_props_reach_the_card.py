@@ -28,6 +28,8 @@ import pandas as pd
 import yaml
 
 from nhl_betting_lab import market_eligibility as elig
+from nhl_betting_lab.data.starting_goalies import GoalieStarters
+from nhl_betting_lab.providers.team_names import normalize_team_name
 from nhl_betting_lab.reports import gameday_card as card_module
 from nhl_betting_lab.reports.card_pricing import selection_key
 from nhl_betting_lab.staging_provider_policy import load_policy
@@ -187,8 +189,14 @@ def test_the_card_stakes_a_saves_bet_and_names_the_missing_games(
     )
 
     # +110 is in the -110..+110 bracket, which needs 64.4%.
+    # Gustavsson is Minnesota's listed starter: since 2026-10-14 a saves
+    # stake needs one (tests/test_a_saves_stake_needs_the_listed_starter.py).
+    starters = GoalieStarters(
+        listings={(_key(saves)[6], normalize_team_name("MIN")): ("Filip Gustavsson", "Confirmed")}
+    )
     card = card_module.build_card(
-        prices, {_key(saves): 0.70}, eligibility=report, now=NOW
+        prices, {_key(saves): 0.70}, eligibility=report, now=NOW,
+        goalie_starters=starters,
     )
     rendered = card_module.render_card(card)
 

@@ -126,3 +126,24 @@ afternoon card (20:30 UTC) narrows that window; a confirmed-starter feed
 would close it, and the lab has none. Measured on bought prices, the market
 shows no demonstrated edge (card window −5.5% over 114 wagers, late window
 −2.5% over 1,727, both spanning zero).
+
+## 2026-10-14: the gate came back as a starter check
+
+On 2026-10-12 the hard gate was lifted on the reasoning that books post a
+saves line only for the goalie they expect to start. Two days later the card
+staked Jake Oettinger over 24.5 saves in DAL @ COL. Casey DeSmith had been
+confirmed as Dallas's starter at 11:46 UTC, two hours before the card, and a
+book was still quoting Oettinger at 20:41 UTC. The same card priced both
+Colorado goalies. A posted line is not a starter.
+
+A saves stake now needs the goalie Daily Faceoff lists as his team's starter
+for that game, marked confirmed or likely
+(`nhl_betting_lab.data.starting_goalies`, fetched by
+`scripts/fetch_starting_goalies.py` in Gameday Refresh just before the card,
+and re-fetched by the afternoon run). Any other saves best bet stays on the
+card as a lean at zero units, under "Saves, starter check", naming the goalie
+who is listed instead. No listing, an "Unconfirmed" listing, a stale file or
+a failed fetch all withhold the stake: the site's own unconfirmed pick is the
+rotation guess this document refuses. The forward ledger is unaffected,
+because the snapshot is frozen from the priced frame before the card is
+built.

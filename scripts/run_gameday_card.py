@@ -26,6 +26,7 @@ import pandas as pd
 from nhl_betting_lab.config import OUTPUTS_DIR, PROCESSED_DIR, STAGING_DIR
 from nhl_betting_lab.data.build_datasets import load_player_logs, load_team_games
 from nhl_betting_lab.data.nhl_api import current_rosters
+from nhl_betting_lab.data.starting_goalies import load_starters
 from nhl_betting_lab.drought_forward import record_list
 from nhl_betting_lab.drought_rule import (
     SITE_LIST_FILENAME,
@@ -712,6 +713,16 @@ def main(argv: list[str] | None = None) -> int:
             for (day, _home, _away), start in starts.items()
             if day == snapshot_day and not _under_way(start, moment)
         )
+    # A saves stake goes only on tonight's listed starter (2026-10-14: the
+    # card staked Jake Oettinger the night Casey DeSmith was confirmed).
+    starters = load_starters(processed, now=moment)
+    if starters.unknown:
+        print(f"Starting goalies: {starters.unknown} Every saves stake is withheld.")
+    else:
+        print(
+            f"Starting goalies: {len(starters.listings)} team listing(s), "
+            f"fetched {starters.retrieved_at}."
+        )
     card = build_card(
         prices,
         probabilities,
@@ -721,6 +732,7 @@ def main(argv: list[str] | None = None) -> int:
         unresolved_names=sorted(unresolved_names),
         allowlisted_markets=allowlisted,
         scheduled_games=still_to_play,
+        goalie_starters=starters,
     )
     card.team_ratings = team_ratings
     if team_ratings == "goals":

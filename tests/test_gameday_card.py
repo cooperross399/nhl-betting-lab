@@ -314,13 +314,20 @@ def test_a_hard_gated_market_cannot_produce_a_selection_even_when_allowlisted(
 
 
 def test_goalie_saves_is_no_longer_hard_gated() -> None:
+    from nhl_betting_lab.data.starting_goalies import GoalieStarters
+    from nhl_betting_lab.providers.team_names import normalize_team_name
+
     rows = [_price_row(market="goalie_saves", player="Joseph Woll", line=27.5)]
+    starters = GoalieStarters(
+        listings={(_key(rows[0])[6], normalize_team_name("TOR")): ("Joseph Woll", "Confirmed")}
+    )
 
     card = card_module.build_card(
         _prices(rows),
         {_key(rows[0]): 0.80},
         eligibility=_eligibility(["goalie_saves"]),
         now=NOW,
+        goalie_starters=starters,
     )
 
     assert card_module.HARD_GATED_MARKETS == {}
