@@ -2,7 +2,7 @@
 
 The opinion the live card actually held, written down before puck drop, settled against the boxscore after, never revised. This is the only possible price evidence for the regulation three-way, which has never been bought historically (it is per-event only and was never requested), and the accumulating out-of-sample test for everything else.
 
-- Generated: 2026-10-17T13:45:03+00:00
+- Generated: 2026-10-17T19:51:23+00:00
 - Ledger rows: 332,146 — one per book — on 59,559 wager(s), each counted once at the best price the card could have taken (1,104 void, 0 unsettleable)
 - Set aside: 17,306 team-market ledger row(s) frozen before 2026-10-06, priced on the goals ratings. From that day the team markets are priced on the xG ratings, and only those are measured here (Cooper's decision, 2026-10-05).
 
