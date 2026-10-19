@@ -1,9 +1,9 @@
-**Selections changed** since the previous card — 5 best bet(s), 2 unit(s) staked.
+Selections are unchanged since the previous card; this comment was posted on request, and the run was clean.
 
 # NHL gameday card
 
-- Generated: 2026-10-19T13:44:32+00:00
-- 5 best bet(s), 52 lean(s), 2096 pass(es) across 4 game(s); 2 unit(s) staked.
+- Generated: 2026-10-19T13:58:37+00:00
+- 5 best bet(s), 51 lean(s), 2097 pass(es) across 4 game(s); 2 unit(s) staked.
 - Included markets: **assists, goals, hits, moneyline, points, puck_line, regulation_3_way, shots_on_goal, team_total, total_goals**
 - Unit size: $25
 
@@ -61,7 +61,6 @@
 | Colorado Avalanche @ Philadelphia Flyers | Oct 19, 7:10 PM ET | `shots_on_goal` | Michael Bunting under 1.5 | 62.2% | +6.6% | -125 | Bovada |
 | Colorado Avalanche @ Philadelphia Flyers | Oct 19, 7:10 PM ET | `regulation_3_way` | home | 29.8% | +6.5% | +330 | Bally Bet |
 | Pittsburgh Penguins @ Utah Mammoth | Oct 19, 9:10 PM ET | `shots_on_goal` | Dylan Guenther under 2.5 | 53.0% | +6.5% | +115 | theScore Bet |
-| San Jose Sharks @ Toronto Maple Leafs | Oct 19, 7:40 PM ET | `shots_on_goal` | Will Smith under 2.5 | 60.9% | +6.3% | -120 | FanDuel |
 | Anaheim Ducks @ New York Rangers | Oct 19, 7:10 PM ET | `points` | J.T. Miller over 0.5 | 65.4% | +6.2% | -145 | Fanatics |
 | Anaheim Ducks @ New York Rangers | Oct 19, 7:10 PM ET | `shots_on_goal` | Sean Durzi over 1.5 | 44.7% | +6.2% | +160 | Bally Bet |
 | Anaheim Ducks @ New York Rangers | Oct 19, 7:10 PM ET | `assists` | J.T. Miller over 0.5 | 50.6% | +6.2% | +125 | BetOnline.ag |
@@ -70,7 +69,7 @@
 | Colorado Avalanche @ Philadelphia Flyers | Oct 19, 7:10 PM ET | `moneyline` | home | 37.8% | +5.1% | +206 | BetOnline.ag |
 | Colorado Avalanche @ Philadelphia Flyers | Oct 19, 7:10 PM ET | `team_total` | away_under 3.5 | 54.1% | +4.6% | +102 | FanDuel |
 | Pittsburgh Penguins @ Utah Mammoth | Oct 19, 9:10 PM ET | `team_total` | away_over 2.5 | 63.3% | +4.6% | -142 | FanDuel |
-| Pittsburgh Penguins @ Utah Mammoth | Oct 19, 9:10 PM ET | `moneyline` | away | 43.0% | +4.3% | +158 | BetOnline.ag |
+| Pittsburgh Penguins @ Utah Mammoth | Oct 19, 9:10 PM ET | `moneyline` | away | 43.0% | +4.4% | +159 | BetUS |
 | Pittsburgh Penguins @ Utah Mammoth | Oct 19, 9:10 PM ET | `team_total` | away_over 3 | 53.0% | +4.2% | +105 | BetMGM |
 | Pittsburgh Penguins @ Utah Mammoth | Oct 19, 9:10 PM ET | `team_total` | away_over 3.5 | 41.5% | +4.2% | +168 | FanDuel |
 
@@ -106,7 +105,6 @@ Leans are recorded and not staked.
 | San Jose Sharks @ Toronto Maple Leafs | Oct 19, 7:40 PM ET | `shots_on_goal` | Nick Paul over 3.5 | 16.9% | +7.8% | +1000 | BetOnline.ag |
 | Colorado Avalanche @ Philadelphia Flyers | Oct 19, 7:10 PM ET | `shots_on_goal` | Martin Necas over 4.5 | 17.7% | +7.7% | +900 | Fanatics |
 | San Jose Sharks @ Toronto Maple Leafs | Oct 19, 7:40 PM ET | `goals` | Auston Matthews over 1.5 | 18.7% | +7.6% | +800 | Courtside |
-| San Jose Sharks @ Toronto Maple Leafs | Oct 19, 7:40 PM ET | `points` | William Nylander over 2.5 | 19.9% | +7.4% | +700 | FanDuel |
 | Pittsburgh Penguins @ Utah Mammoth | Oct 19, 9:10 PM ET | `puck_line` | away +2.5 | 78.7% | +7.3% | -250 | FanDuel |
 | San Jose Sharks @ Toronto Maple Leafs | Oct 19, 7:40 PM ET | `shots_on_goal` | Auston Matthews over 6.5 | 19.0% | +7.2% | +750 | FanDuel |
 | San Jose Sharks @ Toronto Maple Leafs | Oct 19, 7:40 PM ET | `points` | Auston Matthews over 0.5 | 78.1% | +7.1% | -245 | Courtside |
@@ -114,11 +112,12 @@ Leans are recorded and not staked.
 | Pittsburgh Penguins @ Utah Mammoth | Oct 19, 9:10 PM ET | `shots_on_goal` | MacKenzie Weegar over 3.5 | 16.4% | +6.9% | +950 | BetOnline.ag |
 | Colorado Avalanche @ Philadelphia Flyers | Oct 19, 7:10 PM ET | `points` | Nathan MacKinnon over 0.5 | 78.3% | +6.9% | -250 | BetOnline.ag |
 | Colorado Avalanche @ Philadelphia Flyers | Oct 19, 7:10 PM ET | `assists` | David Jiricek under 0.5 | 85.8% | +6.8% | -375 | Bally Bet |
+| San Jose Sharks @ Toronto Maple Leafs | Oct 19, 7:40 PM ET | `points` | William Nylander over 2.5 | 19.9% | +6.6% | +650 | Fanatics |
 | Pittsburgh Penguins @ Utah Mammoth | Oct 19, 9:10 PM ET | `points` | Mikhail Sergachev under 1.5 | 87.1% | +6.3% | -420 | Bally Bet |
 | San Jose Sharks @ Toronto Maple Leafs | Oct 19, 7:40 PM ET | `points` | Auston Matthews over 2.5 | 19.6% | +6.3% | +650 | Courtside |
 | Pittsburgh Penguins @ Utah Mammoth | Oct 19, 9:10 PM ET | `shots_on_goal` | Dylan Guenther under 3.5 | 70.0% | +6.1% | -177 | Bally Bet |
 
-_2071 further passes not listed._
+_2072 further passes not listed._
 
 These are genuine model judgements about markets that were priced and modelled. They are **not** the same thing as the excluded markets below.
 
@@ -207,6 +206,6 @@ What the evidence actually supports:
 - `data/outputs/props_calibration.md`
 - `data/outputs/what_we_can_claim.md`
 
-Run: https://github.com/cooperross399/nhl-betting-lab/actions/runs/39241327199
+Run: https://github.com/cooperross399/nhl-betting-lab/actions/runs/39262283263
 
 Recommendations only. No bet was placed, no policy was edited, and no market was allowlisted by this run.
