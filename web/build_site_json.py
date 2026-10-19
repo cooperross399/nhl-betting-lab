@@ -121,9 +121,16 @@ TEAMS = {
 MARKET_LABEL = {"moneyline": "Moneyline", "puck_line": "Puck line", "total_goals": "Total", "regulation_3_way": "Regulation"}
 
 
+#: Team logos filled by web/fetch_logos.py; `logo` is written only for a file that exists at build time.
+LOGOS = Path(__file__).resolve().with_name("logos")
+
+
 def team_entry(abbr: str) -> dict:
     name, short, color, fg = TEAMS.get(abbr, (abbr, abbr, "#14151a", "#FFFFFF"))
-    return {"name": name, "short": short, "color": color, "fg": fg}
+    entry = {"name": name, "short": short, "color": color, "fg": fg}
+    if (LOGOS / f"{abbr}.png").is_file():
+        entry["logo"] = f"./logos/{abbr}.png"
+    return entry
 
 
 #: api-web.nhle.com answers `User-Agent: Python-urllib/3.12` with **403

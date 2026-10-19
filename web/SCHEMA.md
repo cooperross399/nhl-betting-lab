@@ -40,7 +40,8 @@ record
                  rows = ledger rows, one per book quote, not rendered. The return (ROI, interval, CLV) is
                  sealed until the decision date and is never in this file. The page does not show this
                  block (owner's call, 2026-10-05).
-teams[ABBR]      {name, short, color, fg}
+teams[ABBR]      {name, short, color, fg, logo?}  — logo "./logos/<ABBR>.png", written only when web/logos/<ABBR>.png exists at build time
+                 (web/fetch_logos.py fills the folder); absent otherwise, and the page falls back to that path, then to the abbreviation
 games[]
   id, startUtc, venue, city, tv
   gameType       the NHL API's game type (1 preseason, 2 regular season, 3 playoffs). Anything but 2 is published as
@@ -72,7 +73,7 @@ resultsDate      "YYYY-MM-DD"
 summary          {straightUp:{w,l}, picks:{w,l,p}, leans:{w,l,p}, totals:{w,l,p}}   ← picks counts best bets only; leans are tallied apart
 seasonRecord     the same object as board.json's record.season: every frozen board before today, settled and summed.
                  Before a night has settled it is {nights: 0, firstDate: null, lastDate: null, missingNights} with no tallies
-teams[ABBR]      {name, short, color, fg}
+teams[ABBR]      {name, short, color, fg, logo?}  — as board.json
 games[]
   id, startUtc
   away | home    {abbr, projGoals, final}
