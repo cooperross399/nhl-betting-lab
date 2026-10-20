@@ -51,7 +51,12 @@ games[]
   away | home    {abbr, record, projGoals, winProb, b2b, goalie:{name, status:"confirmed"|"projected"}}  — everything after abbr optional;
                  b2b is the schedule fact (played the previous league day) and is published under either
                  verdict; projGoals, winProb and the market figures below include the back-to-back
-                 adjustment only while the recorded team_b2b verdict ships it
+                 adjustment only while the recorded team_b2b verdict ships it.
+                 goalie is tonight's starter from Daily Faceoff (data/processed/starting_goalies.csv,
+                 fetched by every Gameday Refresh pass and re-read on every build): status "confirmed"
+                 for the site's Confirmed label, "projected" for Likely, Expected, Unconfirmed or any
+                 other label on a named goalie. Absent when the file is missing, lists another date,
+                 or names no goalie for that team — never guessed, never yesterday's
   moneyline      {open:{away,home} | null, current:{away,home}, fair:{away,home}}  — open is the game's moneyline at the first capture in
                  line_movement/<day>.csv that held it (one capture, never the day pooled); null when none was captured (a day
                  captured before the capture asked the bulk h2h, or a build with no line_movement restored)

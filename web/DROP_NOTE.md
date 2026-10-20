@@ -25,6 +25,8 @@ Base: nhl-betting-lab main as of 2026-10-19 (stat-side tag, Due List tracked at 
 
 - Team logos (Board, Results, Graphic): every team circle shows `teams[abbr].logo`, else `./logos/<ABBR>.png`, over the coloured abbreviation (shown when the image is missing). Collapsed rows get 18px logos instead of colour dots. Builder + fetch script in the drop prompt (Part 1b)
 
+- Starting goalies (NHL Board): a "G  Name  confirmed|projected" line under each team, read from `away/home.goalie` (SCHEMA.md). Shows in preview from the sample feed; live needs the builder to write the key (drop prompt Part 1c)
+
 ## Not touched
 - lib/sports.js, lib/format.js, lib/live.js
 - web/SCHEMA.md (props.note and PROPS_DISCLOSURE still exist, just not rendered)

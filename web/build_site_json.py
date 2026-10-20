@@ -133,6 +133,61 @@ def team_entry(abbr: str) -> dict:
     return entry
 
 
+#: Daily Faceoff's starting-goalies file, which Gameday Refresh writes on
+#: every pass (`scripts/fetch_starting_goalies.py`, columns in
+#: `nhl_betting_lab.data.starting_goalies.COLUMNS`) and which reaches Publish
+#: Site in the `gameday-state` artifact. The fetch deletes the file when it
+#: fails, so a missing file is "no listing", never yesterday's.
+STARTING_GOALIES = "starting_goalies.csv"
+
+
+def _team_key(name: object) -> str:
+    """A team name with accents, case and punctuation folded away."""
+    import unicodedata
+
+    text = unicodedata.normalize("NFKD", str(name or "")).encode("ascii", "ignore").decode("ascii")
+    return re.sub(r"[^a-z0-9]+", "", text.casefold())
+
+
+def goalie_status(strength: object) -> str:
+    """Daily Faceoff's strength label as the board's two words.
+
+    "Confirmed" is "confirmed"; every other label on a named goalie (Likely,
+    Expected, Unconfirmed, a label the site adds later) is "projected".
+    """
+    return "confirmed" if str(strength or "").strip().casefold() == "confirmed" else "projected"
+
+
+def read_starting_goalies(processed: Path, day: date) -> dict[str, dict]:
+    """`{board abbreviation: {name, status}}` for the slate day, from the file
+    Gameday Refresh fetched; `{}` when there is no file, it cannot be read, or
+    it lists another date. Never a guess: a team with no named goalie on the
+    slate day's listing is simply absent, and its key is left off the board.
+    """
+    path = Path(processed) / STARTING_GOALIES
+    if not path.is_file():
+        return {}
+    try:
+        with path.open(newline="", encoding="utf-8") as handle:
+            rows = list(csv.DictReader(handle))
+    except (OSError, UnicodeDecodeError, csv.Error):
+        return {}
+    by_name: dict[str, str] = {_team_key("Utah Hockey Club"): "UTA"}
+    for abbr, (full, short, *_rest) in TEAMS.items():
+        by_name[_team_key(full)] = abbr
+        by_name.setdefault(_team_key(short), abbr)
+    out: dict[str, dict] = {}
+    for row in rows:
+        if str(row.get("date") or "").strip() != day.isoformat():
+            continue
+        name = str(row.get("goalie") or "").strip()
+        abbr = by_name.get(_team_key(row.get("team")))
+        if not name or not abbr:
+            continue
+        out[abbr] = {"name": name, "status": goalie_status(row.get("strength"))}
+    return out
+
+
 #: api-web.nhle.com answers `User-Agent: Python-urllib/3.12` with **403
 #: Forbidden**. Any other agent gets a 200 — this is not authentication, a
 #: rate limit, or an outage, and the first deployment failed on it with a
@@ -510,6 +565,9 @@ def build_board(day: date, lab: Path, history_dir: Path) -> dict:
     prices = todays_rows(read_prices(lab / "data" / "staging"), day) if not preseason else []
     featured = todays_rows(read_prices(lab / "data" / "staging", featured_only=True), day) if not preseason else []
     opens = earliest_capture(lab / "data" / "processed", day) if not preseason else []
+    # Tonight's starters as Daily Faceoff lists them, re-read on every build so
+    # an afternoon confirmation replaces the morning's projection.
+    starters = read_starting_goalies(lab / "data" / "processed", day)
     lab_model, thin = None, False
     if not preseason:
         try:
@@ -636,6 +694,9 @@ def build_board(day: date, lab: Path, history_dir: Path) -> dict:
                             **pick_side_and_line(top),
                         }
                         break
+        for side, abbr in (("away", a), ("home", h)):
+            if abbr in starters:
+                row[side]["goalie"] = dict(starters[abbr])
         out_games.append(row)
 
     record = load_record(lab / "data" / "outputs" / "forward_evidence.json")
