@@ -23,7 +23,7 @@ cardGeneratedAt  ISO instant the Gameday card this board was built from was gene
                  A regular-season board with games whose card was generated on an earlier New York day is shown but
                  never frozen into history/ (web/site_history.py::built_on_stale_state)
 ratings          "xg" | "goals" | null — what every projection below is rated on. "xg": recent shooter-adjusted expected
-                 goals with a goaltending (GSAx(sh)) factor and each team's own home ice (since 2026-10-21), from data/processed/shadow_team_ratings.json, which Publish
+                 goals with a goaltending (GSAx(sh)) factor, each team's own home ice (since 2026-10-21) and its last-five form (from 2026-10-22), from data/processed/shadow_team_ratings.json, which Publish
                  Site builds from the NHL play-by-play (web/build_site_json.py::rate_on_xg). "goals": that file was
                  missing or stale and the card's goals ratings were used. null: nothing was projected. The pick is
                  always the card's, whose team markets are priced on the same xG ratings (models/team_ratings.py).
