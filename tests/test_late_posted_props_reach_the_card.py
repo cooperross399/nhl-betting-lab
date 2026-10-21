@@ -25,6 +25,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pandas as pd
+import pytest
 import yaml
 
 from nhl_betting_lab import market_eligibility as elig
@@ -37,6 +38,8 @@ from nhl_betting_lab.staging_provider_policy import load_policy
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github" / "workflows" / "gameday-refresh.yml"
 AFTERNOON = "30 12 * 1-4,10-12 *"
+#: The pre-game update (Cooper, 2026-10-21): 22:30 UTC, never stood down.
+PREGAME = "30 14 * 1-4,10-12 *"
 NOW = datetime(2026, 10, 12, 20, 30, tzinfo=timezone.utc)
 
 
@@ -226,10 +229,16 @@ def test_gameday_refresh_has_an_afternoon_run() -> None:
     triggers = workflow.get("on") or workflow.get(True)
     crons = [entry["cron"] for entry in triggers["schedule"]]
     assert AFTERNOON in crons
+    assert PREGAME in crons
 
 
+@pytest.mark.parametrize(
+    ("schedule", "says"),
+    [(AFTERNOON, "Afternoon update"), (PREGAME, "Pre-game update")],
+    ids=["afternoon", "pre-game"],
+)
 def test_a_clean_morning_card_never_stands_the_afternoon_run_down(
-    tmp_path: Path,
+    tmp_path: Path, schedule: str, says: str
 ) -> None:
     """The precheck returns before it reads card-feed at all, so no git, no
     network: a git that would fail the run is put first on PATH to prove it."""
@@ -244,7 +253,7 @@ def test_a_clean_morning_card_never_stands_the_afternoon_run_down(
             **os.environ,
             "PATH": f"{stub}:{os.environ['PATH']}",
             "GITHUB_OUTPUT": str(output),
-            "SCHEDULE": AFTERNOON,
+            "SCHEDULE": schedule,
             "GH_TOKEN": "x",
         },
         capture_output=True,
@@ -253,7 +262,7 @@ def test_a_clean_morning_card_never_stands_the_afternoon_run_down(
 
     assert result.returncode == 0, result.stderr
     assert output.read_text(encoding="utf-8").strip() == "already=false"
-    assert "Afternoon update" in result.stdout
+    assert says in result.stdout
 
 
 def test_the_morning_triggers_still_read_card_feed(tmp_path: Path) -> None:

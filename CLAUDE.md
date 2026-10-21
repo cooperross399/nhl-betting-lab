@@ -2740,6 +2740,15 @@ Re-derive rather than trust if the data has moved.
   goals, assists and points in that game. Penalties are read through goals
   because goals are what the bets settle on. A game with no crew posted
   when the card runs moves nothing; the public board does not read crews.
+  **The pre-game update** (same request): a fourth Gameday Refresh cron,
+  `30 14 * 1-4,10-12 *`, held to 22:30 UTC (6:30 PM EDT, 5:30 PM EST),
+  which the precheck never stands down. It re-captures the posted lines,
+  crews and starting goalies, re-prices the slate (moved with the books
+  since the morning card) and posts the card again when its selections
+  changed; games under way are pulled by the puck-drop guard, and the
+  day's first snapshot still stands. About 290 credits on an average night
+  (up to 646 at the 640 cap), about 9,000 a month; the run of 2026-10-21
+  read 61,239 credits remaining.
 
 ## Contract strings — never change these
 
