@@ -376,9 +376,9 @@ jobs:
             # forward_evidence.csv.
             if git fetch "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}" \
                  +refs/heads/card-feed:refs/card-feed-tip 2>/dev/null \
-               && git cat-file -e refs/card-feed-tip:forward_evidence 2>/dev/null; then
-              LEDGER_DAYS="$RUNNER_TEMP/forward-evidence-restore"
-              rm -rf "$LEDGER_DAYS" && mkdir -p "$LEDGER_DAYS" data/processed
+               && [ -n "$(git ls-tree --name-only refs/card-feed-tip forward_evidence/ 2>/dev/null)" ]; then
+              LEDGER_DAYS=$(mktemp -d)
+              mkdir -p data/processed
               git archive refs/card-feed-tip forward_evidence | tar -x -C "$LEDGER_DAYS"
               python scripts/split_forward_ledger.py join \
                 "$LEDGER_DAYS/forward_evidence" data/processed/forward_evidence.csv
@@ -1264,7 +1264,7 @@ jobs:
           # reached card-feed. scripts/split_forward_ledger.py joins it back
           # byte for byte.
           if [ -f data/processed/forward_evidence.csv ]; then
-            LEDGER_DAYS="$RUNNER_TEMP/forward-evidence-days"
+            LEDGER_DAYS="$(mktemp -d)/days"
             rm -rf "$LEDGER_DAYS"
             # A split that fails leaves the ledger off this commit rather
             # than costing the day's status and card; the run still uploads
@@ -1274,7 +1274,7 @@ jobs:
               echo "::warning::Could not split the forward ledger; card-feed is published without its ledger backup this run."
               rm -rf "$LEDGER_DAYS"
             fi
-            DAY_ENTRIES="$RUNNER_TEMP/forward-evidence-tree.txt"
+            DAY_ENTRIES=$(mktemp)
             : > "$DAY_ENTRIES"
             for f in "$LEDGER_DAYS"/*.csv; do
               [ -e "$f" ] || continue

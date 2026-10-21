@@ -139,7 +139,7 @@ def test_the_publish_step_puts_day_files_on_card_feed(tmp_path):
 
 def test_the_restore_fallback_reads_the_day_files_and_the_old_single_file():
     block = _step(name="Restore the previous state")["run"]
-    assert "refs/card-feed-tip:forward_evidence " in block
+    assert "refs/card-feed-tip forward_evidence/" in block
     assert "split_forward_ledger.py join" in block
     assert "refs/card-feed-tip:forward_evidence.csv" in block
     assert block.index("split_forward_ledger.py join") < block.index(
