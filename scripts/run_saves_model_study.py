@@ -255,6 +255,7 @@ def main(argv=None) -> int:
             "current": float(preds["A_current"][0][m].mean()) if m.any() else None,
             "E_favourite_home": float(preds["E_favourite_home"][0][m].mean()) if m.any() else None,
             "F_full_context": float(preds["F_full_context"][0][m].mean()) if m.any() else None,
+            "G_context_no_market": float(preds["G_context_no_market"][0][m].mean()) if m.any() else None,
         }
 
     prop_prices = pd.read_csv(prop_path)
@@ -342,11 +343,11 @@ def main(argv=None) -> int:
             f"{s} {v['delta']:+.4f} [{v['low']:+.4f}, {v['high']:+.4f}] over {v['starts']:,}"
             for s, v in o["by_season"].items()))
     lines += ["", "## Where the current model misses (mean saves)", "",
-              "| Split | Starts | Actual | Current | E | F |", "|:--|--:|--:|--:|--:|--:|"]
+              "| Split | Starts | Actual | Current | E | F | G |", "|:--|--:|--:|--:|--:|--:|--:|"]
     for label, s in splits.items():
         if s["starts"]:
             lines.append(f"| {label} | {s['starts']:,} | {s['actual']:.2f} | {s['current']:.2f} | "
-                         f"{s['E_favourite_home']:.2f} | {s['F_full_context']:.2f} |")
+                         f"{s['E_favourite_home']:.2f} | {s['F_full_context']:.2f} | {s['G_context_no_market']:.2f} |")
     lines += ["", "## Bought goalie-saves prices (card's prop bar, one bet per wager)", "",
               "| Variant | late | card | log loss, every priced outcome (late / card) |",
               "|:--|:--|:--|:--|"]

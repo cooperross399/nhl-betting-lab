@@ -366,6 +366,11 @@ PYTHONPATH=src .venv/bin/python scripts/run_props_rest_experiment.py
 # the card reads (Props Form Test workflow runs it in CI).
 PYTHONPATH=src .venv/bin/python scripts/run_props_form_experiment.py
 
+# Does the favourite, home ice and tonight's two teams improve the goalie
+# saves projection? Walk-forward on outcomes and on the bought saves prices,
+# against the current model (Saves Model Study workflow runs it in CI).
+PYTHONPATH=src .venv/bin/python scripts/run_saves_model_study.py
+
 # Which Due List settings are best? Searches the qualifier, drought bar and
 # price window, scores each season's winner on the other season, and runs the
 # same search on no-edge simulations. Changes no setting (Due List Tuning

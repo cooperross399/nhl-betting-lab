@@ -25,6 +25,7 @@ import pandas as pd
 
 from nhl_betting_lab.config import OUTPUTS_DIR, PROCESSED_DIR, STAGING_DIR
 from nhl_betting_lab.data.build_datasets import load_player_logs, load_team_games
+from nhl_betting_lab.models.saves_context import SavesInputs
 from nhl_betting_lab.data.nhl_api import current_rosters
 from nhl_betting_lab.data.starting_goalies import load_starters
 from nhl_betting_lab.drought_forward import record_list
@@ -585,6 +586,14 @@ def main(argv: list[str] | None = None) -> int:
                     "club for everyone who moved, and those props produce no "
                     "opinion. Run scripts/fetch_nhl_data.py."
                 )
+            # Goalie saves on the game-context model (Cooper, 2026-10-20):
+            # tonight's two teams' shot rates, home ice and the rink, read
+            # from the completed games.
+            saves_inputs = SavesInputs.from_tables(games, logs)
+            print(
+                "Goalie saves: priced on the game-context model "
+                f"({len(saves_inputs.rates.shots_against)} teams' shot rates)."
+            )
             prop_probabilities, unresolved = price_props(
                 priceable,
                 props_model,
@@ -592,6 +601,7 @@ def main(argv: list[str] | None = None) -> int:
                 team_names=team_names,
                 history=props_history,
                 rosters=rosters,
+                saves=saves_inputs,
             )
             probabilities.update(prop_probabilities)
             unresolved_names.update(unresolved)

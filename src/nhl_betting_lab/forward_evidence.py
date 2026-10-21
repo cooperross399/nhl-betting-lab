@@ -66,6 +66,7 @@ from nhl_betting_lab.backtest.team_walk_forward import (
 from nhl_betting_lab.config import DATA_DIR, MIN_EDGE, MIN_PROP_EDGE, OUTPUTS_DIR
 from nhl_betting_lab.markets import MARKETS_BY_KEY, team_market_keys
 from nhl_betting_lab.models.player_props import player_name_aliases
+from nhl_betting_lab.models.saves_context import SAVES_CONTEXT_FROM
 from nhl_betting_lab.models.team_ratings import XG_RATINGS_FROM
 from nhl_betting_lab.models.value import OddsError, american_to_implied, profit_on_win
 from nhl_betting_lab.puck_drop import check_commence_time
@@ -1302,6 +1303,7 @@ def build_forward_report(
         "unsettleable": 0,
         "void": 0,
         "superseded_team_rows": 0,
+        "superseded_saves_rows": 0,
     }
     # Cooper's "full switch" of 2026-10-05: from XG_RATINGS_FROM the team
     # markets are priced on the xG ratings (models/team_ratings.py), and the
@@ -1319,7 +1321,14 @@ def build_forward_report(
             ledger["snapshot_date"].astype(str) < XG_RATINGS_FROM
         )
         payload["superseded_team_rows"] = int(superseded.sum())
-        ledger = ledger[~superseded]
+        # Cooper's saves change of 2026-10-20, the same way: from
+        # SAVES_CONTEXT_FROM goalie saves are priced on the game-context
+        # model (models/saves_context.py), and only those rows are measured.
+        old_saves = (ledger["market"].astype(str) == "goalie_saves") & (
+            ledger["snapshot_date"].astype(str) < SAVES_CONTEXT_FROM
+        )
+        payload["superseded_saves_rows"] = int(old_saves.sum())
+        ledger = ledger[~superseded & ~old_saves]
     if ledger.empty:
         payload["registered_statistic"] = registered_statistic(
             ledger, [], now=moment
@@ -1579,6 +1588,14 @@ def render_forward_report(payload: dict) -> str:
             f"row(s) frozen before {XG_RATINGS_FROM}, priced on the goals ratings. "
             "From that day the team markets are priced on the xG ratings, and "
             "only those are measured here (Cooper's decision, 2026-10-05)."
+        )
+    if payload.get("superseded_saves_rows"):
+        lines.append(
+            f"- Set aside: {payload['superseded_saves_rows']:,} goalie-saves "
+            f"ledger row(s) frozen before {SAVES_CONTEXT_FROM}, priced on the "
+            "props model's own saves mean. From that day saves are priced on "
+            "the game-context model, and only those are measured here "
+            "(Cooper's decision, 2026-10-20)."
         )
     lines.append("")
     if not payload["markets"] and not payload["rows"]:

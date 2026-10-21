@@ -29,7 +29,12 @@ from collections.abc import Mapping
 import pandas as pd
 
 from nhl_betting_lab.markets import MARKETS_BY_KEY
-from nhl_betting_lab.models.player_props import PlayerPropsModel, player_key
+from nhl_betting_lab.models.player_props import (
+    GOALIE_STAT,
+    PlayerPropsModel,
+    player_key,
+)
+from nhl_betting_lab.models.saves_context import SavesInputs
 from nhl_betting_lab.models.toi_corrections import CurrentCorrections
 from nhl_betting_lab.models.team_model import TeamModel
 from nhl_betting_lab.providers.team_names import resolve_team
@@ -91,8 +96,14 @@ def price_props(
     team_names: Mapping[str, str] | None = None,
     history: pd.DataFrame | None = None,
     rosters: Mapping[int, str] | None = None,
+    saves: SavesInputs | None = None,
 ) -> tuple[ProbabilityMap, list[str]]:
     """Model probabilities for every prop row the model has an opinion on.
+
+    `saves`, when given, prices goalie saves on the game-context model
+    (`saves_context.SHIPPED`: tonight's two teams' shot rates, home ice, the
+    rink and start minutes) over the props model's own mean. Cooper's
+    decision of 2026-10-20, after it beat the props model out of sample.
 
     Returns `(map, unresolved)`. An unresolved player or team is reported, not
     guessed at: a fuzzy name match produces a confident price for a bet nobody
@@ -199,15 +210,32 @@ def price_props(
             continue
 
         day = row_game_date(row)
-        over = model.over_probability(
-            player_id,
-            market_key,
-            line,
-            opponent=opponent,
-            venue=venue,
-            own_b2b=played_previous_day(last_played, team, day),
-            opp_b2b=played_previous_day(last_played, opponent, day),
-        )
+        rest = {
+            "own_b2b": played_previous_day(last_played, team, day),
+            "opp_b2b": played_previous_day(last_played, opponent, day),
+        }
+        if market_key == GOALIE_STAT and saves is not None:
+            base = model.expected_count(
+                player_id, market_key, opponent=opponent, venue=venue, **rest
+            )
+            if base is None or base <= 0:
+                continue
+            over = saves.distribution(
+                base,
+                venue=venue,
+                team=team,
+                opponent=opponent,
+                expected_toi_seconds=rates.expected_toi_seconds if rates else None,
+            ).over_probability(line)
+        else:
+            over = model.over_probability(
+                player_id,
+                market_key,
+                line,
+                opponent=opponent,
+                venue=venue,
+                **rest,
+            )
         if over is None:
             continue
         if corrections is not None:

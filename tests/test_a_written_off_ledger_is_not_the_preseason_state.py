@@ -422,12 +422,14 @@ def test_the_runner_publishes_a_written_off_day_without_the_preseason_text(
     # tests/test_the_forward_report_computes_the_registered_statistic.py
     # holds that it publishes no return. `superseded_team_rows` came with the
     # 2026-10-05 switch of the team markets to the xG ratings: a count of
-    # goals-priced team rows set aside, never a return.
+    # goals-priced team rows set aside, never a return; and
+    # `superseded_saves_rows` with the 2026-10-20 saves change, the same kind
+    # of count.
     published = json.loads(
         (tmp_path / "outputs" / fe.REPORT_JSON_FILENAME).read_text(encoding="utf-8")
     )
     assert set(published) == {
         "generated_at", "rows", "wagers", "markets", "unsettleable", "void",
-        "registered_statistic", "superseded_team_rows",
+        "registered_statistic", "superseded_team_rows", "superseded_saves_rows",
     }
     assert (published["rows"], published["unsettleable"], published["markets"]) == (2, 2, {})

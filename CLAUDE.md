@@ -2565,6 +2565,34 @@ Re-derive rather than trust if the data has moved.
   says a spend "fits the quota" was written against the larger plan; check
   `scripts/check_provider_quota.py` in the latest run before any new spend.
 
+- **2026-10-21, NOT a defect fix: goalie saves are priced on tonight's
+  game (Cooper, 2026-10-20: "Re-evaluate and fine-tune the goalie saves
+  portion of the model. Factor in the team that is favored to win and home
+  ice advantage.").** The old mean was the goalie's career shots against
+  per sixty, which follows him across clubs and moves about twice as much
+  as saves do; it projected heavy favourites' goalies (65%+) at 23.46 saves
+  where they made 22.46 (326 starts), big underdogs' (35% or less) at 25.93
+  where they made 27.83 (309). `models/saves_context.py` recalibrates it on
+  tonight's two teams' recent shot rates, home ice, the rink's counting
+  bias and start minutes (`SHIPPED`, variant `G`); the favourite enters
+  through the two teams' shot rates. Measured walk-forward by
+  `scripts/run_saves_model_study.py` (Saves Model Study run 39536283289)
+  under a rule fixed before the run: out of sample +0.0510 log-likelihood
+  per start [+0.0417, +0.0604] over 4,024 starts (both seasons alone
+  exclude zero), MAE 4.998 against 5.266; on the bought saves prices at the
+  6% bar +52.0u over 668 against -47.3u over 1,703 (`late`), -4.2u over 44
+  against -6.3u over 114 (`card`). Variants adding the market moneyline
+  scored as well on outcomes but lost more than the old model on the
+  `card`-window prices, so under the rule they did not ship. No edge is
+  claimed: the `late` figure is uncorrected and chosen among seven.
+  `docs/goalie_saves_context.md`. **This changes what the forward test
+  scores for `goalie_saves`**, as the xG switch did for team markets: saves
+  rows frozen before `SAVES_CONTEXT_FROM` (2026-10-21) are set aside
+  (`superseded_saves_rows`), and the 2027-04-25 verdict on saves covers the
+  new model only (192 saves rows were in the ledger). Every other market,
+  the edge bars, the bracket and starter checks, the market list and the
+  staking rule are unchanged. The DFS projections still read the old mean.
+
 ## Contract strings — never change these
 
 Cooper's local scheduled tasks hard-code these. Renaming any of them silently

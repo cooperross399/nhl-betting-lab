@@ -26,6 +26,22 @@ a game carries are invisible to that:
 (log-linear, so each enters as a multiplier). The coefficients the card uses
 are fitted by `scripts/run_saves_model_study.py` on two seasons of starts and
 written into `SHIPPED`; nothing here is fitted on the card's own night.
+
+**What the study found (Saves Model Study run 39536283289, 4,024 starts
+scored out of sample, 2024-25 and 2025-26).** The current model's mean
+moves about twice as much as saves do (refitted, its own log mean carries a
+coefficient of 0.45 alone), because the goalie's career shots against is the
+wrong unit: it is his history, not tonight's two teams. It misses the
+favourite exactly the way Cooper suspected: heavy favourites' goalies (65%
+or more) made 22.46 saves where it projected 23.46, big underdogs' (35% or
+less) 27.83 where it projected 25.93. The shipped variant (`G` in the study)
+uses tonight's two teams' shot rates, home ice and the rink's counting bias
+and start minutes, and carries the favourite through the teams' shot rates:
+the better side is the one that outshoots. It projects 22.85 and 27.39 on
+those two groups. Adding the market moneyline on top (`F`) moved its
+coefficient to -0.04 and lost 9.8u against 6.3u for the current model on the
+46 `card`-window bets, so under the rule fixed before the run it did not
+ship. Numbers: `docs/goalie_saves_context.md`.
 """
 
 from __future__ import annotations
@@ -37,6 +53,7 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
+from nhl_betting_lab.models.counts import NegativeBinomial
 from nhl_betting_lab.models.value import american_to_implied
 from nhl_betting_lab.season import game_date
 
@@ -300,3 +317,71 @@ class SavesContext:
             for name, coef in self.coefficients.items()
         )
         return math.exp(eta)
+
+
+#: The first league day whose frozen saves opinions are priced on `SHIPPED`
+#: (Cooper's decision, 2026-10-20). Saves rows frozen earlier stay in the
+#: forward ledger and are set aside from its report, as the team markets'
+#: goals-priced rows were at the xG switch.
+SAVES_CONTEXT_FROM = "2026-10-21"
+
+#: Variant `G_context_no_market` of `scripts/run_saves_model_study.py`,
+#: fitted on its 4,942 starts with a market moneyline (2024-25, 2025-26).
+SHIPPED = SavesContext(
+    intercept=2.888369912059821,
+    coefficients={
+        "log_base": 0.1175256637970092,
+        "home": -0.02909372918460373,
+        "log_team_sa": 0.8757503548237969,
+        "log_opp_sf": 0.9524912814617719,
+        "log_arena": 0.26629707580986234,
+        "log_toi_ratio": 0.138551570931118,
+    },
+    dispersion_r=45.21287585539188,
+)
+
+
+def league_start_seconds(logs: pd.DataFrame, minimum: int = 2400) -> float:
+    """Mean ice time of a goalie appearance of `minimum` seconds or more."""
+    if logs is None or logs.empty or "role" not in logs.columns:
+        return 3600.0
+    goalies = logs[logs["role"].astype(str) == "goalie"]
+    toi = pd.to_numeric(goalies["toi_seconds"], errors="coerce")
+    starts = toi[toi >= minimum]
+    return float(starts.mean()) if len(starts) else 3600.0
+
+
+@dataclass(frozen=True)
+class SavesInputs:
+    """What the card needs beyond the props model to price a saves line."""
+
+    rates: TeamShotRates
+    start_seconds: float
+
+    @classmethod
+    def from_tables(cls, games: pd.DataFrame, logs: pd.DataFrame) -> "SavesInputs":
+        return cls(team_shot_rates(games), league_start_seconds(logs))
+
+    def distribution(
+        self,
+        base_mean: float,
+        *,
+        venue: str,
+        team: str,
+        opponent: str,
+        expected_toi_seconds: float | None,
+        context: SavesContext = SHIPPED,
+    ) -> NegativeBinomial:
+        expected = float(expected_toi_seconds or 0.0) or self.start_seconds
+        features = feature_row(
+            base_mean=base_mean,
+            venue=venue,
+            win_probability=None,
+            team=team,
+            opponent=opponent,
+            rates=self.rates,
+            toi_ratio=self.start_seconds / expected,
+        )
+        return NegativeBinomial(
+            mean=context.mean(features), r=float(context.dispersion_r or 1e6)
+        )
