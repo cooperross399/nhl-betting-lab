@@ -62,6 +62,7 @@ from nhl_betting_lab.dfs_projections import (
     skater_spread,
 )
 from nhl_betting_lab.models.player_props import player_name_aliases
+from nhl_betting_lab.models.saves_context import walk_forward_means
 from nhl_betting_lab.models.team_model import TeamModel
 from nhl_betting_lab.providers.team_names import load_team_name_map, resolve_team
 from nhl_betting_lab.stores import label_phases
@@ -291,6 +292,29 @@ def main(argv: list[str] | None = None) -> int:
         exp = goalie_expected_points(gk[GOALIE_STAT], gk["opp_goals"], gk["win"], gk["otl"], saves_r=r.get(GOALIE_STAT, math.nan))
         wide.loc[gk.index, "lab_model"] = exp["dk"]
 
+    # Goalies on the card's saves model (`saves_context`, 2026-10-21), its
+    # coefficients refitted walk-forward: the column The Lineup's goalie
+    # projections move to only if it is at least as close.
+    wide["lab_saves_ctx"] = np.nan
+    ctx_r = math.nan
+    if not gk.empty:
+        gs = samples[samples["market"] == GOALIE_STAT]
+        walked = walk_forward_means(gs, logs, games)
+        by_start = {
+            (int(g), int(p)): (m, rr)
+            for g, p, m, rr in zip(gs["game_id"], gs["player_id"], walked["mean"], walked["r"])
+            if np.isfinite(m)
+        }
+        rs = [rr for _, rr in by_start.values() if np.isfinite(rr)]
+        ctx_r = float(np.median(rs)) if rs else math.nan
+        hit = [(i, by_start[(int(row.game_id), int(row.player_id))][0]) for i, row in gk.iterrows()
+               if (int(row.game_id), int(row.player_id)) in by_start]
+        if hit:
+            idx = [i for i, _ in hit]
+            sub = gk.loc[idx]
+            exp = goalie_expected_points([m for _, m in hit], sub["opp_goals"], sub["win"], sub["otl"], saves_r=ctx_r)
+            wide.loc[idx, "lab_saves_ctx"] = exp["dk"]
+
     prices_path = processed / "historical_prop_prices.csv"
     anchored_note = "No bought prop prices on disk, so the market-anchored projection was not measured."
     wide["lab_market"] = np.nan
@@ -330,6 +354,15 @@ def main(argv: list[str] | None = None) -> int:
         results["by_season"][season] = {c: _metrics(rows, c, rng) for c in columns}
     results["lab_vs_average"] = _paired(wide, "lab_model", "dk_average", rng)
     results["lab_vs_app"] = _paired(wide, "lab_model", "app_today", rng)
+    both = wide[wide["lab_saves_ctx"].notna()]
+    if len(both):
+        results["goalie_saves_ctx"] = {
+            "lab_model": _metrics(both, "lab_model", rng),
+            "lab_saves_ctx": _metrics(both, "lab_saves_ctx", rng),
+            "dk_average": _metrics(both, "dk_average", rng),
+            "paired": _paired(both, "lab_saves_ctx", "lab_model", rng),
+            "saves_r": ctx_r,
+        }
     anchored = wide[wide["lab_market"].notna()]
     if len(anchored) >= 500:
         results["anchored"] = {c: _metrics(anchored, c, rng) for c in columns + ["lab_market"]}
@@ -385,6 +418,15 @@ def main(argv: list[str] | None = None) -> int:
             lines += [f"## {label}", "", *head, *[line(names[c], results["by_group"][group][c]) for c in columns], ""]
     for season, block in results["by_season"].items():
         lines += [f"## {season}", "", *head, *[line(names[c], block[c]) for c in columns], ""]
+    if "goalie_saves_ctx" in results:
+        g = results["goalie_saves_ctx"]
+        names["lab_saves_ctx"] = "Lab, game-context saves"
+        lines += ["## Goalies on the card's saves model", "",
+                  "Starts the walk-forward could fit the game-context saves model for "
+                  "(`saves_context`, refitted on earlier starts only).", "", *head,
+                  *[line(names[c], g[c]) for c in ("dk_average", "lab_model", "lab_saves_ctx")], "",
+                  f"Game-context minus the old saves mean, MAE: {g['paired']['delta']:+.3f} "
+                  f"[{g['paired']['low']:+.3f}, {g['paired']['high']:+.3f}]. Negative is the new model closer.", ""]
     lines += ["## With the books' numbers", "", anchored_note, ""]
     if "anchored" in results:
         mv = results["market_vs_model"]

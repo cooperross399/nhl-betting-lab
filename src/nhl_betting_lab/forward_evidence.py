@@ -40,6 +40,7 @@ is.
 
 from __future__ import annotations
 
+import csv
 import json
 import math
 import os
@@ -162,6 +163,7 @@ def write_snapshot(
     now: datetime,
     archive_dir: Path | None = None,
     tally: dict[str, object] | None = None,
+    late_markets: frozenset[str] = frozenset(),
 ) -> Path | None:
     """Freeze today's priced opinions. Returns the file, or None when nothing
     was written — because one already stands, or because the slate has
@@ -196,9 +198,25 @@ def write_snapshot(
     day that the next run restored and could not replace. A day with no
     games has nothing to settle, so it loses nothing by leaving no file.
 
-    `tally`, when given, receives "state" ("frozen", "exists" or
+    ## A market posted after the freeze is frozen when it is posted
+
+    Books post blocked shots, hits and goalie saves late, and the card picks
+    them game by game (`gameday_card.GAME_BY_GAME_MARKETS`). The morning
+    snapshot held them for the few games already posted, and the afternoon
+    re-price that staked the rest froze nothing, because the day's file
+    stood: on 2026-10-19 the card staked 13 saves bets and 5 blocks the
+    ledger never saw. So for a market in `late_markets` a later run adds the
+    rows of every game the snapshot holds NO row of that market for. That is
+    the first opinion on that market in that game, so nothing is repriced: a
+    (game, market) pair already frozen keeps every row it had, and no row
+    already written is touched. The new rows are appended to the file's
+    bytes, so the earlier snapshot stays a byte-for-byte prefix of the later
+    one (scripts/restore_state.py reads it that way). A settled day takes no
+    rows. Every other market keeps the first-snapshot rule.
+
+    `tally`, when given, receives "state" ("frozen", "added", "exists" or
     "nothing_to_freeze") and the counts "frozen", "started" and
-    "unconfirmed".
+    "unconfirmed"; after "added", "frozen" counts the rows added.
     """
     counts: dict[str, object] = {"frozen": 0, "started": 0, "unconfirmed": 0}
     if tally is not None:
@@ -206,7 +224,9 @@ def write_snapshot(
     directory = snapshots_dir(archive_dir)
     directory.mkdir(parents=True, exist_ok=True)
     target = directory / f"{snapshot_date}.csv"
-    if target.exists():
+    if target.exists() and (
+        not late_markets or (directory / f"{snapshot_date}.settled").exists()
+    ):
         # The first opinion of the day stands. A repriced snapshot is not the
         # card's opinion any more, and two snapshots for one day would let
         # the flattering one be the one that settles.
@@ -258,6 +278,8 @@ def write_snapshot(
                 "verdicts_in_force": verdicts_line,
             }
         )
+    if target.exists():
+        return _add_late_markets(target, rows, late_markets, counts, tally)
     counts["frozen"] = len(rows)
     if tally is not None:
         tally.update(counts)
@@ -274,6 +296,57 @@ def write_snapshot(
         return None
     if tally is not None:
         tally["state"] = "frozen"
+    return target
+
+
+def _add_late_markets(
+    target: Path,
+    rows: list[dict[str, object]],
+    late_markets: frozenset[str],
+    counts: dict[str, object],
+    tally: dict[str, object] | None,
+) -> Path | None:
+    """Append to the standing snapshot `target` the rows of each late market
+    in each game it holds no row of that market for (`write_snapshot`)."""
+    standing = target.read_bytes()
+    with target.open(newline="", encoding="utf-8") as handle:
+        frozen = {
+            (row.get("home_team") or "", row.get("away_team") or "",
+             row.get("market") or "")
+            for row in csv.DictReader(handle)
+        }
+    added = [
+        row for row in rows
+        if row["market"] in late_markets
+        and (row["home_team"], row["away_team"], row["market"]) not in frozen
+    ]
+    counts["frozen"] = len(added)
+    if tally is not None:
+        tally.update(counts)
+        tally["state"] = "added" if added else "exists"
+    if not added:
+        return None
+    if standing and not standing.endswith(b"\n"):
+        # Not a file this module wrote whole; leave it as it stands.
+        if tally is not None:
+            tally["state"] = "exists"
+            tally["frozen"] = 0
+        return None
+    body = pd.DataFrame(added, columns=list(SNAPSHOT_COLUMNS)).to_csv(
+        index=False, header=False, lineterminator="\n"
+    )
+    temporary = target.with_name(
+        f".{target.name}.{os.getpid()}.{secrets.token_hex(4)}{PARTIAL_SUFFIX}"
+    )
+    try:
+        with temporary.open("xb") as stream:
+            stream.write(standing + body.encode("utf-8"))
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, target)
+    finally:
+        temporary.unlink(missing_ok=True)
+    _fsync_directory(target.parent)
     return target
 
 

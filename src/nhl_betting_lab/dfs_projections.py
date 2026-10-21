@@ -411,6 +411,7 @@ def project_slate(
     rosters: Mapping[int, str] | None = None,
     b2b: Mapping[str, bool] | None = None,
     quotes: Iterable[tuple[int, str, float, float]] = (),
+    saves_inputs=None,
 ) -> list[dict]:
     """One projection row per modelled player on tonight's slate.
 
@@ -419,6 +420,10 @@ def project_slate(
     club's roster is held and leaves him off (the card's rule in
     `card_pricing.price_props`, for the same reason: in October the logs point
     at the club a mover left).
+
+    `saves_inputs`, a `saves_context.SavesInputs`, prices a goalie's saves on
+    tonight's game as the card does (2026-10-21); without it, on the props
+    model's own saves mean.
     """
     rosters = dict(rosters or {})
     b2b = dict(b2b or {})
@@ -430,6 +435,10 @@ def project_slate(
 
     r = {stat: _dispersion_r(model, stat) for stat in SKATER_STATS}
     saves_r = _dispersion_r(model, GOALIE_STAT)
+    if saves_inputs is not None:
+        from nhl_betting_lab.models.saves_context import SHIPPED
+
+        saves_r = float(SHIPPED.dispersion_r or saves_r)
     anchors = market_means(quotes, {**r, GOALIE_STAT: saves_r})
 
     def team_of(player_id: int, logged: str) -> str:
@@ -496,6 +505,11 @@ def project_slate(
             opponent, venue, _ = side[team]
             own, opp = bool(b2b.get(team)), bool(b2b.get(opponent))
             model_saves = float(model.expected_saves(player_id, opponent=opponent, venue=venue, own_b2b=own, opp_b2b=opp) or 0.0)
+            if saves_inputs is not None and model_saves > 0:
+                model_saves = float(saves_inputs.distribution(
+                    model_saves, venue=venue, team=team, opponent=opponent,
+                    expected_toi_seconds=rates.expected_toi_seconds,
+                ).mean)
             anchored = anchors.get((player_id, GOALIE_STAT))
             saves.append(anchored[0] if anchored else model_saves)
             src.append("market" if anchored else "model")

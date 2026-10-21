@@ -307,3 +307,47 @@ def test_the_measurement_reads_bought_prices_into_anchors() -> None:
     anchors = test.market_anchors(prices, frame, names, {"shots_on_goal": None})
     assert set(anchors) == {(7, 8479318)}
     assert 3.0 < anchors[(7, 8479318)]["shots_on_goal"] < 5.0
+
+
+def test_goalie_saves_follow_the_cards_saves_model_when_given(fitted) -> None:
+    """The Lineup's goalie saves come from the card's game-context model
+    (2026-10-21) when its inputs are passed; skaters are untouched."""
+    from nhl_betting_lab.models.saves_context import SHIPPED, SavesInputs
+
+    model, team_model = fitted
+    _, games = synthetic(days=200)
+    games = games.copy()
+    # BOS outshoots everyone: TOR's goalie should face more against BOS.
+    games.loc[games["home_team"] == "BOS", "home_shots"] = 40
+    games.loc[games["away_team"] == "BOS", "away_shots"] = 40
+    inputs = SavesInputs.from_tables(games, pd.DataFrame())
+    slate = {("TOR", "BOS"): ""}
+    plain = {r["name"]: r for r in dfs.project_slate(model, team_model, slate)}
+    ctx = {r["name"]: r for r in dfs.project_slate(model, team_model, slate, saves_inputs=inputs)}
+
+    goalie = model.resolve_player("TOR Goalie")
+    base = model.expected_saves(goalie, opponent="BOS", venue="home", own_b2b=False, opp_b2b=False)
+    want = inputs.distribution(base, venue="home", team="TOR", opponent="BOS",
+                               expected_toi_seconds=model.goalies[goalie].expected_toi_seconds).mean
+    assert ctx["TOR Goalie"]["saves"] == pytest.approx(want, abs=0.01)
+    assert ctx["TOR Goalie"]["saves"] > ctx["BOS Goalie"]["saves"]
+    assert SHIPPED.dispersion_r
+    for name, row in plain.items():
+        if row["pos"] != "G":
+            assert ctx[name]["dk"] == row["dk"]
+
+
+def test_the_saves_walk_forward_only_fits_on_earlier_starts() -> None:
+    from nhl_betting_lab.backtest.walk_forward import generate_prop_samples
+    from nhl_betting_lab.models.saves_context import walk_forward_means
+
+    logs, games = synthetic(days=330)
+    samples, _ = generate_prop_samples(logs, use_rest=False)
+    gs = samples[samples["market"] == "goalie_saves"]
+    walked = walk_forward_means(gs, logs, games, min_training=200)
+    assert walked.index.equals(gs.index)
+    first = pd.to_datetime(gs["date"]).min()
+    early = pd.to_datetime(gs["date"]) < first + pd.Timedelta(days=14)
+    assert walked.loc[early, "mean"].isna().all()
+    assert walked["mean"].notna().any()
+    assert (walked["mean"].dropna() > 0).all()
