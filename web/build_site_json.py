@@ -475,7 +475,12 @@ def load_model(processed: Path, outputs: Path):
         from nhl_betting_lab.data.build_datasets import load_team_games
         from nhl_betting_lab.models.team_model import TeamModel
         from nhl_betting_lab.providers.team_names import build_team_name_map, resolve_team
-        from nhl_betting_lab.rest import last_played_dates, played_previous_day
+        from nhl_betting_lab.rest import (
+            last_played_dates,
+            last_played_rinks,
+            played_previous_day,
+            schedule_state,
+        )
         from nhl_betting_lab.verdicts import ships, source
     except ImportError:
         return None
@@ -493,6 +498,7 @@ def load_model(processed: Path, outputs: Path):
     ratings = rate_on_xg(model, games, processed)
     names = build_team_name_map()
     last = last_played_dates(games)
+    rinks = last_played_rinks(games)
     rest = ships("team_b2b", output_dir=outputs)
     print(
         f"Back-to-back adjustment on the board: team_b2b={'in force' if rest else 'off'} "
@@ -502,6 +508,10 @@ def load_model(processed: Path, outputs: Path):
         "model": model,
         "resolve": lambda label: resolve_team(label, names),
         "b2b": lambda team, day: played_previous_day(last, team, day),
+        # Rest and travel, as the card prices them (Cooper, 2026-10-21).
+        "schedule": lambda home, away, day: {
+            team: schedule_state(rinks.get(team), day, home) for team in (home, away)
+        },
         "rest": rest,
         "ratings": ratings,
     }
@@ -630,6 +640,8 @@ def build_board(day: date, lab: Path, history_dir: Path) -> dict:
             # every figure below.
             rest = {"home_b2b": hb and lab_model["rest"], "away_b2b": ab and lab_model["rest"]}
             m = lab_model["model"]
+            if "schedule" in lab_model:
+                m.schedule_state = lab_model["schedule"](home_key, away_key, day.isoformat())
             eh, ea = m.expected_goals(home_key, away_key, **rest)
             ml = m.moneyline_probabilities(home_key, away_key, **rest)
             reg = m.regulation_3_way_probabilities(home_key, away_key, **rest)

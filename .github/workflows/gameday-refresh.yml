@@ -717,6 +717,18 @@ jobs:
         run: |
           python scripts/fetch_starting_goalies.py
 
+      - name: Capture tonight's posted lines
+        # Who is out and each skater's line and power-play unit (Cooper,
+        # 2026-10-21), from Daily Faceoff's team pages. Free, and soft: with
+        # no capture the card prices every club as before and says so.
+        if: always()
+        continue-on-error: true
+        timeout-minutes: 3
+        env:
+          PYTHONPATH: src
+        run: |
+          python scripts/capture_line_combinations.py
+
       - name: Render the card
         id: card
         if: always()

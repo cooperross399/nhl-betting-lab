@@ -38,7 +38,13 @@ from nhl_betting_lab.models.saves_context import SavesInputs
 from nhl_betting_lab.models.toi_corrections import CurrentCorrections
 from nhl_betting_lab.models.team_model import TeamModel
 from nhl_betting_lab.providers.team_names import resolve_team
-from nhl_betting_lab.rest import last_played_dates, played_previous_day
+from nhl_betting_lab.lineups import TonightLineups
+from nhl_betting_lab.rest import (
+    last_played_dates,
+    last_played_rinks,
+    played_previous_day,
+    schedule_state,
+)
 from nhl_betting_lab.season import clean_text, row_game_date
 
 
@@ -97,8 +103,15 @@ def price_props(
     history: pd.DataFrame | None = None,
     rosters: Mapping[int, str] | None = None,
     saves: SavesInputs | None = None,
+    lineups: TonightLineups | None = None,
 ) -> tuple[ProbabilityMap, list[str]]:
     """Model probabilities for every prop row the model has an opinion on.
+
+    `lineups`, when given (Cooper, 2026-10-21), reads tonight's posted lines:
+    a skater whose club posted lines without him is out and gets no opinion
+    (recorded in `lineups.out_tonight`), and every other
+    skater on a posted club is priced on his line's and unit's ice time
+    blended with his own (`lineups.TonightLineups.expected_toi`).
 
     `saves`, when given, prices goalie saves on the game-context model
     (`saves_context.SHIPPED`: tonight's two teams' shot rates, home ice, the
@@ -228,6 +241,14 @@ def price_props(
                 expected_toi_seconds=rates.expected_toi_seconds if rates else None,
             ).over_probability(line)
         else:
+            toi = None
+            skater = model.skaters.get(player_id)
+            if lineups is not None and skater is not None and lineups.posted(team):
+                role = lineups.role(team, player, skater.player)
+                if role is None:
+                    lineups.out_tonight.add(f"{player} ({team})")
+                    continue
+                toi = lineups.expected_toi(role[0], role[1], skater.expected_toi_seconds)
             over = model.over_probability(
                 player_id,
                 market_key,
@@ -235,6 +256,7 @@ def price_props(
                 opponent=opponent,
                 venue=venue,
                 team=team,
+                expected_toi_seconds=toi,
                 **rest,
             )
         if over is None:
@@ -265,8 +287,13 @@ def price_team_markets(
     *,
     team_names: Mapping[str, str] | None = None,
     history: pd.DataFrame | None = None,
+    schedule_history: pd.DataFrame | None = None,
 ) -> tuple[ProbabilityMap, list[str]]:
     """Model probabilities for the team markets, and the names that did not map.
+
+    `schedule_history`, when given, sets rest and travel (Cooper, 2026-10-21)
+    from the completed games whatever the back-to-back verdict says; without
+    it they are read from `history`.
 
     `history` is the completed-games table, used for one thing: whether each
     side played yesterday. The back-to-back adjustment shipped because it won
@@ -284,6 +311,9 @@ def price_team_markets(
     last_played = (
         last_played_dates(history) if history is not None else {}
     )
+    # Rest and travel (Cooper, 2026-10-21) read the same schedule.
+    schedule_games = schedule_history if schedule_history is not None else history
+    rinks = last_played_rinks(schedule_games) if schedule_games is not None else {}
 
     for row in prices.itertuples():
         market_key = str(getattr(row, "market", "")).strip()
@@ -309,6 +339,9 @@ def price_team_markets(
         rest = {
             "home_b2b": played_previous_day(last_played, home, day),
             "away_b2b": played_previous_day(last_played, away, day),
+        }
+        model.schedule_state = {
+            team: schedule_state(rinks.get(team), day, home) for team in (home, away)
         }
 
         # An unrecognised selection produces *no* entry, never a default. The
@@ -356,4 +389,5 @@ def price_team_markets(
             if selection in totals:
                 probabilities[key] = totals[selection]
 
+    model.schedule_state = {}
     return probabilities, sorted(unresolved)

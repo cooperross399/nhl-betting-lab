@@ -2690,6 +2690,38 @@ Re-derive rather than trust if the data has moved.
   discard every prop opinion so far, and whether to is Cooper's call. The
   edge bars, the bracket and starter checks, the market list and the staking
   rule are unchanged.
+- **2026-10-21, NOT a defect fix: rest and travel, the opponent's matchup by
+  position, and tonight's posted lines are on the card (Cooper: "Okay do all
+  of that and add it n", after a list of factors that included these).** All
+  three are live from the 2026-10-22 card; constants are this lab's choice.
+  **Rest and travel** (`rest.schedule_state`): a club with 3-10 days off is
+  rested, one that crossed two or more time zones since its last rink
+  travelled (`RINK_UTC_OFFSET`); `TeamModel` fits a for/against factor for
+  each from its training games, shrunk as back-to-backs are, and applies it
+  total-preserving, so it moves who scores and never the expected total;
+  each factor is clamped to 0.9-1.1, and it applies whatever the
+  back-to-back verdict says. The public board prices it the same way.
+  **Matchup by position** (`PlayerPropsModel.opponent_group_factors`): a
+  prop reads what tonight's opponent allows forwards or defencemen in that
+  stat, falling back to the all-skater table, shrunk the same way. **Posted
+  lines** (`lineups.tonight_lineups`): Gameday Refresh captures Daily
+  Faceoff's lines before the card ("Capture tonight's posted lines",
+  soft). For a club with at least 16 skaters posted, a skater not on its
+  lines gets no opinion and is named on the card's log; everyone else's
+  expected ice time comes from his line and power-play unit through
+  `models.role_minutes`, blended with his own last ten, so a promoted player
+  takes the higher line's minutes; and half the share of the club's last-20
+  points held by recent regulars missing tonight comes off its attack,
+  floored at 0.85. A club with no posted lines prices as before. The
+  walk-forwards price rest/travel and position only when asked
+  (`schedule=True`, `position_matchup=True`), so every committed measurement
+  is unchanged; Shadow Stats prices `xg_shooter_home_form_schedule` and
+  Props Form Test `--test position_matchup`, for information. The lines
+  have no history before 2026-09-29 and are measured forward. The snapshot
+  freezes whatever the card priced, so these change what the forward test
+  scores from 2026-10-22, as last-five form does; prop rows before then are
+  not set aside (Cooper's call). The edge bars, the bracket and starter
+  checks, the market list and the staking rule are unchanged.
 
 ## Contract strings — never change these
 
