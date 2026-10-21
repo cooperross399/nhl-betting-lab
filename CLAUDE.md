@@ -2598,7 +2598,10 @@ Re-derive rather than trust if the data has moved.
   saves_inputs=)`) read the same model from 2026-10-21, on the DFS
   Projection Test's walk-forward goalie comparison
   (`saves_context.walk_forward_means`, the "Goalies on the card's saves
-  model" section of `dfs_projection_test.md`).
+  model" section of `dfs_projection_test.md`): on 6,187 starts (DFS
+  Projection Test run 39549990121) DraftKings-points MAE 7.807 against
+  7.871 on the old saves mean, paired -0.065 [-0.100, -0.024], and bias
+  -1.012 against -1.239; DraftKings' own average 8.122.
 - **2026-10-21, a defect fix recorded as `docs/when_this_ends.md` requires:
   a late market reaches the ledger.** Books post blocked shots, hits and
   goalie saves after the 9:40 AM ET freeze, the card picks them game by game
