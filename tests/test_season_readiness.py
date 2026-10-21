@@ -323,8 +323,8 @@ def test_the_forward_ledger_survives_a_broken_artifact_chain() -> None:
     text = _workflow("gameday-refresh.yml")
 
     assert "forward_evidence.csv" in text
-    publish = text.index("BLOB_LEDGER")
-    restore = text.index("refs/card-feed-tip:forward_evidence.csv")
+    publish = text.index("split_forward_ledger.py split")
+    restore = text.index("split_forward_ledger.py join")
     assert restore < publish, "the restore reads what an earlier run published"
 
 

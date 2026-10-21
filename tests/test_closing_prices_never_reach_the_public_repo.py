@@ -136,8 +136,10 @@ def test_no_push_to_this_repository_carries_a_capture_store(path: Path) -> None:
             "latest_status.json",
             "latest_forward_evidence.md",
             "latest_closing_line_value.md",
-            "forward_evidence.csv",
         }
+        # The ledger itself goes up as one file per snapshot day, in a
+        # `forward_evidence` subtree built by split_forward_ledger.py.
+        assert "040000 tree %s\\tforward_evidence'" in text
 
 
 # --- An artifact ---------------------------------------------------------

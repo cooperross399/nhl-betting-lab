@@ -494,6 +494,13 @@ Only runs on the default branch post to the operating home or publish to
 as a rehearsal and publishes nothing, and the status line names the ref that
 wrote it so the backup's precheck counts only a card `main` published.
 
+The forward ledger is also backed up on the `card-feed` branch as one file per
+snapshot day, `forward_evidence/<day>.csv` (a single file passed GitHub's 100 MB
+limit on 2026-10-21). `scripts/split_forward_ledger.py split LEDGER DIR` writes
+them and `scripts/split_forward_ledger.py join DIR LEDGER` puts the ledger back
+together byte for byte; the restore uses the join when the state artifact
+carries no ledger.
+
 Each run starts from the previous run's state, restored by
 `scripts/restore_state.py` from the newest run on `main` that actually carries
 the `gameday-state` artifact — whatever its conclusion, with the newest

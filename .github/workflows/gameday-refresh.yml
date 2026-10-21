@@ -384,9 +384,22 @@ jobs:
           # keyed by snapshot date, so it simply re-settles what it must —
           # while starting empty destroys evidence that cannot be rebuilt.
           if [ ! -f data/processed/forward_evidence.csv ]; then
+            # Since 2026-10-21 card-feed carries the ledger as one file per
+            # snapshot day under forward_evidence/ (the single file passed
+            # GitHub's 100 MB limit); a tip from before that carries
+            # forward_evidence.csv.
             if git fetch "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}" \
                  +refs/heads/card-feed:refs/card-feed-tip 2>/dev/null \
-               && git cat-file -e refs/card-feed-tip:forward_evidence.csv 2>/dev/null; then
+               && [ -n "$(git ls-tree --name-only refs/card-feed-tip forward_evidence/ 2>/dev/null)" ]; then
+              LEDGER_DAYS=$(mktemp -d)
+              mkdir -p data/processed
+              git archive refs/card-feed-tip forward_evidence | tar -x -C "$LEDGER_DAYS"
+              python scripts/split_forward_ledger.py join \
+                "$LEDGER_DAYS/forward_evidence" data/processed/forward_evidence.csv
+              echo "::warning::The state artifact carried no forward ledger; restored it from the card-feed branch. The artifact chain broke somewhere."
+              wc -l < data/processed/forward_evidence.csv \
+                | xargs echo "Ledger rows restored from card-feed:"
+            elif git cat-file -e refs/card-feed-tip:forward_evidence.csv 2>/dev/null; then
               mkdir -p data/processed
               git show refs/card-feed-tip:forward_evidence.csv \
                 > data/processed/forward_evidence.csv
@@ -1284,10 +1297,34 @@ jobs:
             ENTRIES=$(printf '%s\n100644 blob %s\tlatest_closing_line_value.md' \
               "$ENTRIES" "$BLOB_CLV")
           fi
+          # One file per snapshot day under forward_evidence/, not one
+          # forward_evidence.csv: on 2026-10-21 the single file reached
+          # 100.66 MB, GitHub refused the push, and the day's card never
+          # reached card-feed. scripts/split_forward_ledger.py joins it back
+          # byte for byte.
           if [ -f data/processed/forward_evidence.csv ]; then
-            BLOB_LEDGER=$(git hash-object -w data/processed/forward_evidence.csv)
-            ENTRIES=$(printf '%s\n100644 blob %s\tforward_evidence.csv' \
-              "$ENTRIES" "$BLOB_LEDGER")
+            LEDGER_DAYS="$(mktemp -d)/days"
+            rm -rf "$LEDGER_DAYS"
+            # A split that fails leaves the ledger off this commit rather
+            # than costing the day's status and card; the run still uploads
+            # the ledger in gameday-state.
+            if ! python scripts/split_forward_ledger.py split \
+                data/processed/forward_evidence.csv "$LEDGER_DAYS"; then
+              echo "::warning::Could not split the forward ledger; card-feed is published without its ledger backup this run."
+              rm -rf "$LEDGER_DAYS"
+            fi
+            DAY_ENTRIES=$(mktemp)
+            : > "$DAY_ENTRIES"
+            for f in "$LEDGER_DAYS"/*.csv; do
+              [ -e "$f" ] || continue
+              printf '100644 blob %s\t%s\n' "$(git hash-object -w "$f")" \
+                "$(basename "$f")" >> "$DAY_ENTRIES"
+            done
+            if [ -s "$DAY_ENTRIES" ]; then
+              LEDGER_TREE=$(git mktree < "$DAY_ENTRIES")
+              ENTRIES=$(printf '%s\n040000 tree %s\tforward_evidence' \
+                "$ENTRIES" "$LEDGER_TREE")
+            fi
           fi
           TREE=$(printf '%s\n' "$ENTRIES" | git mktree)
           PARENT=""
