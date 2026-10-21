@@ -293,6 +293,15 @@ class PlayerPropsModel:
     #: 1.0 and grow with evidence, the same shape the team model uses.
     B2B_SHRINKAGE_APPEARANCES = 1500
 
+    #: Last-five team form (Cooper, 2026-10-21): how a club's skaters have
+    #: produced, and what its opponents have produced against it, over its
+    #: last `TEAM_FORM_GAMES` games, against its own longer record. Shrunk by
+    #: games / (games + `TEAM_FORM_SHRINKAGE_GAMES`), so five games keep a
+    #: quarter of their deviation, and clamped to `TEAM_FORM_RANGE`.
+    TEAM_FORM_GAMES = 5
+    TEAM_FORM_SHRINKAGE_GAMES = 15
+    TEAM_FORM_RANGE = (0.85, 1.18)
+
     def __init__(self) -> None:
         self.skaters: dict[int, SkaterRates] = {}
         self.goalies: dict[int, GoalieRates] = {}
@@ -307,6 +316,12 @@ class PlayerPropsModel:
         self.league_shots_against_per60: float = 30.0
         self.report = PropsModelReport()
         self.opponent_shot_factors: dict[str, float] = {}
+        #: Per team, per skater stat: {"for": own skaters' last-five
+        #: production, "against": opponents' last-five production against
+        #: it}, each a shrunk multiplier on its own longer record. Set by
+        #: `fit` from the logs it saw; `team_form_factors` rebuilds it for
+        #: any night.
+        self.team_form: dict[str, dict[str, dict[str, float]]] = {}
         #: Names two priced players share, which resolve to neither on their
         #: own. Some are recoverable with a team; see `_index_names`.
         self.ambiguous_names: tuple[str, ...] = ()
@@ -370,6 +385,7 @@ class PlayerPropsModel:
         self._fit_skaters(skaters)
         self._fit_goalies(goalies)
         self.opponent_shot_factors = fit_opponent_shot_factors(frame)
+        self.team_form = team_form_factors(team_game_totals(frame))
         self.report.dispersion = dict(self.dispersion)
         self._index_names()
         return self
@@ -747,6 +763,7 @@ class PlayerPropsModel:
         expected_toi_seconds: float | None = None,
         own_b2b: bool = False,
         opp_b2b: bool = False,
+        team: str | None = None,
     ) -> float | None:
         """The distribution's mean, or None when there is no modelled opinion.
 
@@ -785,7 +802,19 @@ class PlayerPropsModel:
             * venue_factor
             * self.pp_multiplier(rates, stat)
             * self.b2b_multiplier(stat, own_b2b=own_b2b, opp_b2b=opp_b2b)
+            * self.team_form_multiplier(
+                stat, team=team if team else rates.team, opponent=str(opponent)
+            )
         )
+
+    def team_form_multiplier(self, stat: str, *, team: str, opponent: str) -> float:
+        """Own club's last-five production times the opponent's last-five
+        concession, each against its longer record; 1.0 for a club with no
+        form. Goalie saves are not touched here: the saves context model
+        reads both clubs' recent shot rates itself."""
+        own = self.team_form.get(str(team), {}).get(stat, {}).get("for", 1.0)
+        opp = self.team_form.get(str(opponent), {}).get(stat, {}).get("against", 1.0)
+        return float(own) * float(opp)
 
     def expected_saves(
         self,
@@ -851,6 +880,7 @@ class PlayerPropsModel:
         expected_toi_seconds: float | None = None,
         own_b2b: bool = False,
         opp_b2b: bool = False,
+        team: str | None = None,
     ) -> CountDistribution | None:
         mean = self.expected_count(
             player_id,
@@ -860,6 +890,7 @@ class PlayerPropsModel:
             expected_toi_seconds=expected_toi_seconds,
             own_b2b=own_b2b,
             opp_b2b=opp_b2b,
+            team=team,
         )
         if mean is None or mean <= 0:
             return None
@@ -876,6 +907,7 @@ class PlayerPropsModel:
         expected_toi_seconds: float | None = None,
         own_b2b: bool = False,
         opp_b2b: bool = False,
+        team: str | None = None,
     ) -> float | None:
         """P(count beats `line`), or None when there is no modelled opinion."""
         shape = self.distribution(
@@ -886,6 +918,7 @@ class PlayerPropsModel:
             expected_toi_seconds=expected_toi_seconds,
             own_b2b=own_b2b,
             opp_b2b=opp_b2b,
+            team=team,
         )
         if shape is None:
             return None
@@ -932,3 +965,69 @@ def fit_opponent_shot_factors(logs: pd.DataFrame) -> dict[str, float]:
             float(rows["shots_on_goal"].mean()) / league - 1.0
         )
     return factors
+
+
+def team_game_totals(logs: pd.DataFrame) -> pd.DataFrame:
+    """One row per (team, game): its skaters' totals of every skater stat and
+    what its opponents' skaters totalled against it, with the game's date.
+
+    Built once so a walk-forward can ask `team_form_factors` for any night
+    without re-aggregating the logs.
+    """
+    columns = ["team", "game_id", "date", *(f"for_{s}" for s in SKATER_STATS),
+               *(f"against_{s}" for s in SKATER_STATS)]
+    skaters = logs[logs["role"].astype(str) == "skater"].copy()
+    if skaters.empty:
+        return pd.DataFrame(columns=columns)
+    for stat in SKATER_STATS:
+        skaters[stat] = pd.to_numeric(skaters[stat], errors="coerce").fillna(0)
+    skaters["date"] = skaters["date"].astype(str).str[:10]
+    made = (
+        skaters.groupby(["team", "game_id", "date"])[list(SKATER_STATS)].sum()
+        .rename(columns={s: f"for_{s}" for s in SKATER_STATS})
+    )
+    allowed = (
+        skaters.groupby(["opponent", "game_id", "date"])[list(SKATER_STATS)].sum()
+        .rename(columns={s: f"against_{s}" for s in SKATER_STATS})
+    )
+    allowed.index = allowed.index.set_names(["team", "game_id", "date"])
+    out = made.join(allowed, how="inner").reset_index()
+    out["team"] = out["team"].astype(str)
+    return out[columns].sort_values(["date", "game_id"]).reset_index(drop=True)
+
+
+def team_form_factors(
+    totals: pd.DataFrame, before: str | None = None
+) -> dict[str, dict[str, dict[str, float]]]:
+    """Each club's last-five form per skater stat, from games before `before`.
+
+    `for` is its skaters' production over its last
+    `PlayerPropsModel.TEAM_FORM_GAMES` games over their production in every
+    game the logs hold for it; `against` the same for what opponents produced
+    against it. Each is shrunk by games / (games + TEAM_FORM_SHRINKAGE_GAMES)
+    and clamped to TEAM_FORM_RANGE. A ratio with a zero denominator is 1.0.
+    """
+    if totals is None or totals.empty:
+        return {}
+    frame = totals if before is None else totals[totals["date"] < str(before)[:10]]
+    if frame.empty:
+        return {}
+    n_last = PlayerPropsModel.TEAM_FORM_GAMES
+    low, high = PlayerPropsModel.TEAM_FORM_RANGE
+    out: dict[str, dict[str, dict[str, float]]] = {}
+    for team, rows in frame.groupby("team"):
+        last = rows.tail(n_last)
+        n = len(last)
+        weight = n / (n + PlayerPropsModel.TEAM_FORM_SHRINKAGE_GAMES)
+        stats: dict[str, dict[str, float]] = {}
+        for stat in SKATER_STATS:
+            entry = {}
+            for side in ("for", "against"):
+                column = f"{side}_{stat}"
+                level = float(rows[column].mean())
+                recent = float(last[column].mean())
+                ratio = recent / level if level > 0 else 1.0
+                entry[side] = min(max(1.0 + weight * (ratio - 1.0), low), high)
+            stats[stat] = entry
+        out[str(team)] = stats
+    return out

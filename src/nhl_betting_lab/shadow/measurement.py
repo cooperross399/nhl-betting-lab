@@ -130,6 +130,14 @@ RATINGS_VARIANT_KEY = "xg_shooter_gsax"
 #: ratings date, shrunk toward the league's by games / (games + this).
 TEAM_HOME_DAYS = 730
 TEAM_HOME_SHRINKAGE_GAMES = 150
+#: Last-five team form (Cooper, 2026-10-21: "factored in", not relied on): a
+#: club's attack and defence over its last `TEAM_FORM_GAMES` games against
+#: its own recent-weighted level, shrunk by games / (games +
+#: `TEAM_FORM_SHRINKAGE_GAMES`) (five games keep a quarter) and clamped to
+#: `TEAM_FORM_RANGE`, multiplied onto the ratings.
+TEAM_FORM_GAMES = 5
+TEAM_FORM_SHRINKAGE_GAMES = 15
+TEAM_FORM_RANGE = (0.9, 1.1)
 #: A shadow table covering less of the model's regular-season games than this
 #: is not used: the ratings would describe a different set of games from the
 #: rest of the model.
@@ -215,6 +223,38 @@ def shadow_factors(
                     LUCK_SHRINKAGE_GAMES,
                 )
         out[str(team)] = factors
+    return out
+
+
+def team_form(
+    history: pd.DataFrame, variant: TeamVariant, home_advantage: float
+) -> dict[str, dict[str, float]]:
+    """Each club's last-five attack and defence multipliers on its rating.
+
+    The same venue-adjusted per-game xG for and against `shadow_factors`
+    rates on: the mean over the club's last `TEAM_FORM_GAMES` games over its
+    recent-weighted mean, shrunk and clamped (`TEAM_FORM_*`). A club with no
+    games, or a zero level, keeps 1.0.
+    """
+    frame = history.copy()
+    frame["_w"] = _weights(frame, variant.recent)
+    venue = np.where(frame["is_home"].astype(bool), 1.0 / home_advantage, home_advantage)
+    frame["_for"] = frame[variant.stat_for].astype(float) * venue
+    frame["_against"] = frame[variant.stat_against].astype(float) / venue
+    low, high = TEAM_FORM_RANGE
+    out: dict[str, dict[str, float]] = {}
+    for team, rows in frame.sort_values("_date").groupby("team"):
+        w = rows["_w"].to_numpy()
+        if w.sum() <= 0:
+            continue
+        last = rows.tail(TEAM_FORM_GAMES)
+        weight = len(last) / (len(last) + TEAM_FORM_SHRINKAGE_GAMES)
+        entry = {}
+        for side, column in (("attack", "_for"), ("defence", "_against")):
+            level = float((w * rows[column]).sum() / w.sum())
+            ratio = float(last[column].mean()) / level if level > 0 else 1.0
+            entry[side] = min(max(1.0 + weight * (ratio - 1.0), low), high)
+        out[str(team)] = entry
     return out
 
 
@@ -868,7 +908,8 @@ def xg_team_ratings(
     Built exactly as the measurement builds them: recent-weighted
     shooter-adjusted xGF/xGA, times a goaltending (GSAx(sh)) factor on
     defence, regressed toward average; the shooter adjustment already carries
-    finishing. `home_ice` is each team's own home edge (`recent_home_ice`),
+    finishing, times last-five form (`team_form`, already multiplied in and
+    also published as `form`). `home_ice` is each team's own home edge (`recent_home_ice`),
     which `TeamModel.home_ice` applies. A `TeamModel` fitted with this
     `home_advantage` that takes these as its teams' attack and defence prices
     every market off them, as the measurement scored them.
@@ -902,6 +943,7 @@ def xg_team_ratings(
             "(context xG and shooter talent were not built)."
         )
     factors = shadow_factors(metrics, variant, home_advantage)
+    form = team_form(metrics, variant, home_advantage)
     last = games["_date"].max()
     home_ice = recent_home_ice(team_games, home_advantage, last + timedelta(days=1))
     return {
@@ -912,10 +954,14 @@ def xg_team_ratings(
         "last_game_date": str(games["_date"].max()),
         "teams": {
             team: {
-                "attack": f["attack"] * f["finishing"],
-                "defence": f["defence"] * f["goalie"],
+                "attack": f["attack"] * f["finishing"]
+                * form.get(team, {}).get("attack", 1.0),
+                "defence": f["defence"] * f["goalie"]
+                * form.get(team, {}).get("defence", 1.0),
             }
             for team, f in sorted(factors.items())
         },
+        "form_games": TEAM_FORM_GAMES,
+        "form": {team: form[team] for team in sorted(form)},
         "home_ice": {team: home_ice[team] for team in sorted(home_ice)},
     }

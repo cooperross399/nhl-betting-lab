@@ -539,6 +539,7 @@ def xg_rater(
     variant_key: str = measurement.SITE_VARIANT_KEY,
     *,
     home_ice: bool = False,
+    form: bool = False,
 ):
     """A `generate_team_samples` hook rating teams as the site does.
 
@@ -548,7 +549,8 @@ def xg_rater(
     the board would have shown that day. A window with no prior play-by-play
     is refused. `variant_key` names another shadow variant to rate on
     instead; `home_ice` also gives each team its own home edge
-    (`team_home_ice`), from games before the window only.
+    (`team_home_ice`), from games before the window only; `form` multiplies
+    in last-five form (`team_form`), likewise.
     """
     games = team_games[pd.to_numeric(team_games["game_type"], errors="coerce") == 2].copy()
     games["game_id"] = pd.to_numeric(games["game_id"], errors="coerce")
@@ -565,13 +567,17 @@ def xg_rater(
         history = metrics[metrics["_date"] < start]
         if history.empty:
             raise ValueError("no play-by-play before this window")
+        recent_form = (
+            measurement.team_form(history, variant, model.home_advantage) if form else {}
+        )
         for team, f in measurement.shadow_factors(history, variant, model.home_advantage).items():
             current = model.teams.get(team)
+            shift = recent_form.get(team, {})
             model.teams[team] = TeamRates(
                 team=team,
                 games=current.games if current else 0,
-                attack=f["attack"] * f["finishing"],
-                defence=f["defence"] * f["goalie"],
+                attack=f["attack"] * f["finishing"] * shift.get("attack", 1.0),
+                defence=f["defence"] * f["goalie"] * shift.get("defence", 1.0),
             )
         if not home_ice:
             return
@@ -588,17 +594,37 @@ def xg_rater(
 #: ratings, the xG ratings the card priced on from 2026-10-06, the two
 #: PostHockey variants, those xG ratings with per-team home ice, and what the
 #: card prices on from 2026-10-22 (shooter-adjusted xG with per-team home
-#: ice). (column key, label, variant, home_ice)
+#: ice and last-five form, re-rated every night as the card is, beside the
+#: same re-rated nightly without form). (column key, label, variant,
+#: home_ice, form, refit_days)
 PRICE_VARIANTS = (
-    ("xg", "xG ratings (card, 2026-10-06 to 10-21)", measurement.SITE_VARIANT_KEY, False),
-    ("xg_context_luck", "Context xG (PostHockey)", "xg_context_luck", False),
-    ("xg_shooter_gsax", "Shooter-adjusted xG (PostHockey)", "xg_shooter_gsax", False),
-    ("xg_team_home", "xG ratings + per-team home ice", measurement.SITE_VARIANT_KEY, True),
+    ("xg", "xG ratings (card, 2026-10-06 to 10-21)", measurement.SITE_VARIANT_KEY, False, False, 14),
+    ("xg_context_luck", "Context xG (PostHockey)", "xg_context_luck", False, False, 14),
+    ("xg_shooter_gsax", "Shooter-adjusted xG (PostHockey)", "xg_shooter_gsax", False, False, 14),
+    ("xg_team_home", "xG ratings + per-team home ice", measurement.SITE_VARIANT_KEY, True, False, 14),
     (
         "xg_shooter_home",
-        "Shooter-adjusted xG + per-team home ice (card from 2026-10-22)",
+        "Shooter-adjusted xG + per-team home ice (card 2026-10-22, no form)",
         measurement.RATINGS_VARIANT_KEY,
         True,
+        False,
+        14,
+    ),
+    (
+        "xg_shooter_home_daily",
+        "The same, re-rated every night",
+        measurement.RATINGS_VARIANT_KEY,
+        True,
+        False,
+        1,
+    ),
+    (
+        "xg_shooter_home_form",
+        "The same, re-rated every night, with last-five form (card from 2026-10-22)",
+        measurement.RATINGS_VARIANT_KEY,
+        True,
+        True,
+        1,
     ),
 )
 
@@ -619,7 +645,7 @@ def price_backtest(team_games, team_table, prices, args) -> int:
     print(f"Goals ratings: {goals_walk.summary_line()}")
     samples = {"goals": goals}
     labels = {"goals": "Goals ratings (pre-2026-10-06 card)"}
-    for key, label, variant_key, home_ice in PRICE_VARIANTS:
+    for key, label, variant_key, home_ice, form, refit_days in PRICE_VARIANTS:
         variant = next(v for v in measurement.TEAM_VARIANTS if v.key == variant_key)
         if not measurement._has_columns(team_table, variant):
             print(f"{label}: the tables carry no {variant_key} columns; not priced.")
@@ -627,7 +653,8 @@ def price_backtest(team_games, team_table, prices, args) -> int:
         frame, walk = generate_team_samples(
             team_games,
             use_rest=use_rest,
-            rate=xg_rater(team_games, team_table, variant_key, home_ice=home_ice),
+            refit_days=refit_days,
+            rate=xg_rater(team_games, team_table, variant_key, home_ice=home_ice, form=form),
         )
         print(f"{label}: {walk.summary_line()}")
         samples[key], labels[key] = frame, label
@@ -648,7 +675,11 @@ def price_backtest(team_games, team_table, prices, args) -> int:
         "goaltending/GSAx factor). The PostHockey columns rate on context xG and "
         "on shooter-adjusted xG instead; the home-ice columns add each team's own "
         f"home ice (two years of goals, shrunk at {measurement.TEAM_HOME_SHRINKAGE_GAMES} "
-        "games), and the last of them is what the card prices on from 2026-10-22. "
+        "games). The last two re-rate every night; the last of all adds each "
+        f"team's last-{measurement.TEAM_FORM_GAMES} form (shrunk at "
+        f"{measurement.TEAM_FORM_SHRINKAGE_GAMES} games, clamped to "
+        f"{measurement.TEAM_FORM_RANGE[0]:.2f}-{measurement.TEAM_FORM_RANGE[1]:.2f}) "
+        "and is what the card prices on from 2026-10-22. "
         "One bet per wager at the best price, flat stakes, at the measurement's "
         "edge bar. An interval that includes zero means no demonstrated edge.",
         "",

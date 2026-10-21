@@ -11,6 +11,16 @@ name: Props Form Test
 # (bets, units, ROI, intervals) and goes to the run summary only.
 on:
   workflow_dispatch:
+    inputs:
+      team_form:
+        description: "Price last-five team form instead of player recent form"
+        type: boolean
+        default: false
+      phase:
+        description: "Price window (late is the day-of window)"
+        type: choice
+        options: [card, late, early]
+        default: card
   pull_request:
     paths:
       - "scripts/run_props_form_experiment.py"
@@ -73,10 +83,12 @@ jobs:
       - name: Price both variants
         env:
           PYTHONPATH: src
+          TEAM_FORM: ${{ inputs.team_form && '--team-form' || '' }}
+          PHASE: ${{ inputs.phase || 'card' }}
         run: |
           set -u
           status=0
-          python scripts/run_props_form_experiment.py || status=$?
+          python scripts/run_props_form_experiment.py --phase "$PHASE" $TEAM_FORM || status=$?
           if [ -s data/outputs/props_form_test.md ]; then
             cat data/outputs/props_form_test.md >> "$GITHUB_STEP_SUMMARY"
           fi

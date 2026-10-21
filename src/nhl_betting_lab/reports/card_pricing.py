@@ -234,6 +234,7 @@ def price_props(
                 line,
                 opponent=opponent,
                 venue=venue,
+                team=team,
                 **rest,
             )
         if over is None:
