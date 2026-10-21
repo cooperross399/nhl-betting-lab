@@ -37,8 +37,9 @@ or more) made 22.46 saves where it projected 23.46, big underdogs' (35% or
 less) 27.83 where it projected 25.93. The shipped variant (`G` in the study)
 uses tonight's two teams' shot rates, home ice and the rink's counting bias
 and start minutes, and carries the favourite through the teams' shot rates:
-the better side is the one that outshoots. It projects 22.85 and 27.39 on
-those two groups. Adding the market moneyline on top (`F`) moved its
+the better side is the one that outshoots. It projects 23.17 and 26.94 on
+those two groups. Adding the market moneyline on top (`F`, 22.85 and 27.39)
+moved its
 coefficient to -0.04 and lost 9.8u against 6.3u for the current model on the
 46 `card`-window bets, so under the rule fixed before the run it did not
 ship. Numbers: `docs/goalie_saves_context.md`.
@@ -361,6 +362,17 @@ class SavesInputs:
     @classmethod
     def from_tables(cls, games: pd.DataFrame, logs: pd.DataFrame) -> "SavesInputs":
         return cls(team_shot_rates(games), league_start_seconds(logs))
+
+    @classmethod
+    def for_card(cls, games: pd.DataFrame, logs: pd.DataFrame) -> "SavesInputs | None":
+        """The card's inputs, or None when the games carry no shot counts.
+
+        Without shot counts every feature reads league average and the
+        shipped coefficients would price every goalie as the same goalie, so
+        the card falls back to the props model's own saves mean instead.
+        """
+        inputs = cls.from_tables(games, logs)
+        return inputs if inputs.rates.shots_against else None
 
     def distribution(
         self,

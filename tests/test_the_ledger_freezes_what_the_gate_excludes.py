@@ -73,6 +73,7 @@ import pytest
 from conftest import boxscore_payload
 from test_scripts import load_script
 from test_no_test_reads_the_checkouts_data import point_default_data_dirs_at
+from nhl_betting_lab.models.saves_context import SavesInputs
 from nhl_betting_lab import config
 from nhl_betting_lab import staging_provider_policy
 from nhl_betting_lab.data import nhl_api
@@ -406,6 +407,9 @@ def _reference(world: dict[str, Path]) -> dict[tuple, float]:
         PlayerPropsModel().fit(logs),
         team_names=team_names,
         rosters=nhl_api.current_rosters(raw_dir=world["raw"]),
+        # The card prices saves on the game-context model when the games
+        # carry shot counts, through this same door.
+        saves=SavesInputs.for_card(games, logs),
     )
     team, unresolved_teams = price_team_markets(
         prices, TeamModel().fit(games), team_names=team_names

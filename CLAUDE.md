@@ -2575,7 +2575,9 @@ Re-derive rather than trust if the data has moved.
   where they made 27.83 (309). `models/saves_context.py` recalibrates it on
   tonight's two teams' recent shot rates, home ice, the rink's counting
   bias and start minutes (`SHIPPED`, variant `G`); the favourite enters
-  through the two teams' shot rates. Measured walk-forward by
+  through the two teams' shot rates (it projects those two groups at 23.17
+  and 26.94). With no shot counts in the games table the card falls back
+  to the old mean (`SavesInputs.for_card`). Measured walk-forward by
   `scripts/run_saves_model_study.py` (Saves Model Study run 39536283289)
   under a rule fixed before the run: out of sample +0.0510 log-likelihood
   per start [+0.0417, +0.0604] over 4,024 starts (both seasons alone

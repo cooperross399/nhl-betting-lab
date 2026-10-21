@@ -589,11 +589,17 @@ def main(argv: list[str] | None = None) -> int:
             # Goalie saves on the game-context model (Cooper, 2026-10-20):
             # tonight's two teams' shot rates, home ice and the rink, read
             # from the completed games.
-            saves_inputs = SavesInputs.from_tables(games, logs)
-            print(
-                "Goalie saves: priced on the game-context model "
-                f"({len(saves_inputs.rates.shots_against)} teams' shot rates)."
-            )
+            saves_inputs = SavesInputs.for_card(games, logs)
+            if saves_inputs is None:
+                print(
+                    "::warning::The completed games carry no shot counts, so "
+                    "goalie saves are priced on the props model's own mean."
+                )
+            else:
+                print(
+                    "Goalie saves: priced on the game-context model "
+                    f"({len(saves_inputs.rates.shots_against)} teams' shot rates)."
+                )
             prop_probabilities, unresolved = price_props(
                 priceable,
                 props_model,

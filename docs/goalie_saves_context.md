@@ -15,21 +15,24 @@ teams he used to play behind rather than tonight's. Refitted on outcomes,
 its own log mean earns a coefficient of 0.45: it moves about twice as much
 as saves do. It also ignored who is favoured:
 
-| Starts (out of sample, 2024-25 and 2025-26) | Starts | Actual saves | Old model | New model |
-|:--|--:|--:|--:|--:|
-| Goalie's team favoured | 1,967 | 23.55 | 24.43 | (see run) |
-| Goalie's team the underdog | 2,057 | 25.91 | 25.50 | |
-| Heavy favourite (65% or more) | 326 | 22.46 | 23.46 | 22.85 |
-| Big underdog (35% or less) | 309 | 27.83 | 25.93 | 27.39 |
+| Starts (out of sample, 2024-25 and 2025-26) | Starts | Actual saves | Old model | Shipped (`G`) | With market line (`F`) |
+|:--|--:|--:|--:|--:|--:|
+| Goalie's team favoured | 1,967 | 23.55 | 24.43 | 24.05 | 23.94 |
+| Goalie's team the underdog | 2,057 | 25.91 | 25.50 | 25.70 | 25.91 |
+| Home goalie | 2,013 | 24.38 | 24.98 | 24.57 | 24.61 |
+| Away goalie | 2,011 | 25.13 | 24.98 | 25.22 | 25.28 |
+| Heavy favourite (65% or more) | 326 | 22.46 | 23.46 | 23.17 | 22.85 |
+| Big underdog (35% or less) | 309 | 27.83 | 25.93 | 26.94 | 27.39 |
 
-(The new model's column is variant `F` in the run's split table, which
-carries the market line; the shipped `G` reads the same teams' shot rates
-and lands within a few tenths of it on the outcome measures below.)
+The shipped model closes about a third of the miss on heavy favourites and
+about half on big underdogs; the variant carrying the market line closes
+more, and did not ship for the reason below.
 
 ## The measurement
 
-`scripts/run_saves_model_study.py`, Saves Model Study run 39536283289
-(2026-10-21). Walk-forward: the props model refitted every 14 days on
+`scripts/run_saves_model_study.py`, Saves Model Study runs 39536283289 and
+39537121367 (2026-10-21, identical figures; the second added `G` to the
+split table). Walk-forward: the props model refitted every 14 days on
 earlier games only; each variant's coefficients fitted only on starts in
 earlier windows; 4,024 starts scored. The rule was fixed in the script
 before the run: ship only if out-of-sample log-likelihood beats the old
