@@ -2722,6 +2722,13 @@ Re-derive rather than trust if the data has moved.
   scores from 2026-10-22, as last-five form does; prop rows before then are
   not set aside (Cooper's call). The edge bars, the bracket and starter
   checks, the market list and the staking rule are unchanged.
+  **Line movement since the first card** (`price_movement`, same request):
+  a later run that day (the 20:30 UTC re-price, a backup) reads the day's
+  first priced snapshot as the open and moves each opinion half the median
+  change in implied probability over books quoting it both times, at most
+  five points. The first card of a day sees none, and the private movement
+  chain is not read (no new token holder). Late-market rows the re-price
+  adds to the snapshot carry the moved probability.
 
 ## Contract strings — never change these
 

@@ -70,6 +70,7 @@ from nhl_betting_lab.reports.gameday_card import (
 )
 from nhl_betting_lab.stat_sides import build_stat_sides
 from nhl_betting_lab.forward_evidence import write_snapshot
+from nhl_betting_lab.price_movement import apply_movement, movement, opening_snapshot
 from nhl_betting_lab.season import (
     EXPECTED_CLUBS,
     LEAGUE_TIMEZONE,
@@ -702,6 +703,12 @@ def main(argv: list[str] | None = None) -> int:
     # snapshot that already exists for today stands untouched, because the
     # card's first opinion of the day is the one that counts.
     snapshot_day = moment.astimezone(LEAGUE_TIMEZONE).date().isoformat()
+    # Line movement since the day's first card (Cooper, 2026-10-21): a
+    # later run moves each opinion half way with the books, at most five
+    # points. The first card of the day has nothing to compare with.
+    moves = movement(opening_snapshot(archive_dir, snapshot_day), prices, selection_key)
+    probabilities, moved = apply_movement(probabilities, moves)
+    print(f"Line movement since the first card: {moved} opinion(s) moved with the books.")
     frozen: dict[str, object] = {}
     written = write_snapshot(
         prices,
