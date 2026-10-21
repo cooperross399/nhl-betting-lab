@@ -244,12 +244,16 @@ def generate_prop_samples(
     use_rest: bool = True,
     recent_form: bool = False,
     team_form: bool = False,
+    position_matchup: bool = False,
 ) -> tuple[pd.DataFrame, WalkForwardReport]:
     """Price every player-game in the log with a model that could not see it.
 
     `team_form=True` prices each night with every club's last-five form from
     games before that night (`team_form_factors`), as the card does from
     2026-10-22; False prices without it, as every committed measurement did.
+    `position_matchup=True` keeps the opponent concession split by position
+    group (`opponent_group_factors`); False prices on the all-skater table,
+    as every committed measurement did.
 
     `use_rest=False` prices with the schedule ignored, which exists so the two
     policies can be compared on identical prices — the comparison that decides
@@ -306,6 +310,8 @@ def generate_prop_samples(
         if recent_form:
             apply_recent_form(model, history)
         model.team_form = {}
+        if not position_matchup:
+            model.opponent_group_factors = {}
         form_night = None
         report.refits += 1
 

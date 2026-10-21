@@ -596,12 +596,12 @@ def xg_rater(
 #: card prices on from 2026-10-22 (shooter-adjusted xG with per-team home
 #: ice and last-five form, re-rated every night as the card is, beside the
 #: same re-rated nightly without form). (column key, label, variant,
-#: home_ice, form, refit_days)
+#: home_ice, form, refit_days, schedule: rest and travel)
 PRICE_VARIANTS = (
-    ("xg", "xG ratings (card, 2026-10-06 to 10-21)", measurement.SITE_VARIANT_KEY, False, False, 14),
-    ("xg_context_luck", "Context xG (PostHockey)", "xg_context_luck", False, False, 14),
-    ("xg_shooter_gsax", "Shooter-adjusted xG (PostHockey)", "xg_shooter_gsax", False, False, 14),
-    ("xg_team_home", "xG ratings + per-team home ice", measurement.SITE_VARIANT_KEY, True, False, 14),
+    ("xg", "xG ratings (card, 2026-10-06 to 10-21)", measurement.SITE_VARIANT_KEY, False, False, 14, False),
+    ("xg_context_luck", "Context xG (PostHockey)", "xg_context_luck", False, False, 14, False),
+    ("xg_shooter_gsax", "Shooter-adjusted xG (PostHockey)", "xg_shooter_gsax", False, False, 14, False),
+    ("xg_team_home", "xG ratings + per-team home ice", measurement.SITE_VARIANT_KEY, True, False, 14, False),
     (
         "xg_shooter_home",
         "Shooter-adjusted xG + per-team home ice (card 2026-10-22, no form)",
@@ -609,6 +609,7 @@ PRICE_VARIANTS = (
         True,
         False,
         14,
+        False,
     ),
     (
         "xg_shooter_home_daily",
@@ -617,14 +618,25 @@ PRICE_VARIANTS = (
         True,
         False,
         1,
+        False,
     ),
     (
         "xg_shooter_home_form",
-        "The same, re-rated every night, with last-five form (card from 2026-10-22)",
+        "The same, re-rated every night, with last-five form",
         measurement.RATINGS_VARIANT_KEY,
         True,
         True,
         1,
+        False,
+    ),
+    (
+        "xg_shooter_home_form_schedule",
+        "The same with rest and travel (card from 2026-10-22)",
+        measurement.RATINGS_VARIANT_KEY,
+        True,
+        True,
+        1,
+        True,
     ),
 )
 
@@ -645,7 +657,7 @@ def price_backtest(team_games, team_table, prices, args) -> int:
     print(f"Goals ratings: {goals_walk.summary_line()}")
     samples = {"goals": goals}
     labels = {"goals": "Goals ratings (pre-2026-10-06 card)"}
-    for key, label, variant_key, home_ice, form, refit_days in PRICE_VARIANTS:
+    for key, label, variant_key, home_ice, form, refit_days, schedule in PRICE_VARIANTS:
         variant = next(v for v in measurement.TEAM_VARIANTS if v.key == variant_key)
         if not measurement._has_columns(team_table, variant):
             print(f"{label}: the tables carry no {variant_key} columns; not priced.")
@@ -654,6 +666,7 @@ def price_backtest(team_games, team_table, prices, args) -> int:
             team_games,
             use_rest=use_rest,
             refit_days=refit_days,
+            schedule=schedule,
             rate=xg_rater(team_games, team_table, variant_key, home_ice=home_ice, form=form),
         )
         print(f"{label}: {walk.summary_line()}")
@@ -675,11 +688,12 @@ def price_backtest(team_games, team_table, prices, args) -> int:
         "goaltending/GSAx factor). The PostHockey columns rate on context xG and "
         "on shooter-adjusted xG instead; the home-ice columns add each team's own "
         f"home ice (two years of goals, shrunk at {measurement.TEAM_HOME_SHRINKAGE_GAMES} "
-        "games). The last two re-rate every night; the last of all adds each "
+        "games). The last three re-rate every night; the second-last adds each "
         f"team's last-{measurement.TEAM_FORM_GAMES} form (shrunk at "
         f"{measurement.TEAM_FORM_SHRINKAGE_GAMES} games, clamped to "
-        f"{measurement.TEAM_FORM_RANGE[0]:.2f}-{measurement.TEAM_FORM_RANGE[1]:.2f}) "
-        "and is what the card prices on from 2026-10-22. "
+        f"{measurement.TEAM_FORM_RANGE[0]:.2f}-{measurement.TEAM_FORM_RANGE[1]:.2f}), "
+        "and the last adds rest and travel and is what the card prices on "
+        "from 2026-10-22. "
         "One bet per wager at the best price, flat stakes, at the measurement's "
         "edge bar. An interval that includes zero means no demonstrated edge.",
         "",

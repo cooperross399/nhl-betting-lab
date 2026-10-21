@@ -2690,6 +2690,65 @@ Re-derive rather than trust if the data has moved.
   discard every prop opinion so far, and whether to is Cooper's call. The
   edge bars, the bracket and starter checks, the market list and the staking
   rule are unchanged.
+- **2026-10-21, NOT a defect fix: rest and travel, the opponent's matchup by
+  position, and tonight's posted lines are on the card (Cooper: "Okay do all
+  of that and add it n", after a list of factors that included these).** All
+  three are live from the 2026-10-22 card; constants are this lab's choice.
+  **Rest and travel** (`rest.schedule_state`): a club with 3-10 days off is
+  rested, one that crossed two or more time zones since its last rink
+  travelled (`RINK_UTC_OFFSET`); `TeamModel` fits a for/against factor for
+  each from its training games, shrunk as back-to-backs are, and applies it
+  total-preserving, so it moves who scores and never the expected total;
+  each factor is clamped to 0.9-1.1, and it applies whatever the
+  back-to-back verdict says. The public board prices it the same way.
+  **Matchup by position** (`PlayerPropsModel.opponent_group_factors`): a
+  prop reads what tonight's opponent allows forwards or defencemen in that
+  stat, falling back to the all-skater table, shrunk the same way. **Posted
+  lines** (`lineups.tonight_lineups`): Gameday Refresh captures Daily
+  Faceoff's lines before the card ("Capture tonight's posted lines",
+  soft). For a club with at least 16 skaters posted, a skater not on its
+  lines gets no opinion and is named on the card's log; everyone else's
+  expected ice time comes from his line and power-play unit through
+  `models.role_minutes`, blended with his own last ten, so a promoted player
+  takes the higher line's minutes; and half the share of the club's last-20
+  points held by recent regulars missing tonight comes off its attack,
+  floored at 0.85. A club with no posted lines prices as before. The
+  walk-forwards price rest/travel and position only when asked
+  (`schedule=True`, `position_matchup=True`), so every committed measurement
+  is unchanged; Shadow Stats prices `xg_shooter_home_form_schedule` and
+  Props Form Test `--test position_matchup`, for information. The lines
+  have no history before 2026-09-29 and are measured forward. The snapshot
+  freezes whatever the card priced, so these change what the forward test
+  scores from 2026-10-22, as last-five form does; prop rows before then are
+  not set aside (Cooper's call). The edge bars, the bracket and starter
+  checks, the market list and the staking rule are unchanged.
+  **Line movement since the first card** (`price_movement`, same request):
+  a later run that day (the 20:30 UTC re-price, a backup) reads the day's
+  first priced snapshot as the open and moves each opinion half the median
+  change in implied probability over books quoting it both times, at most
+  five points. The first card of a day sees none, and the private movement
+  chain is not read (no new token holder). Late-market rows the re-price
+  adds to the snapshot carry the moved probability.
+  **Referee crews** (`referees`, same request): Gameday Refresh's "Record
+  tonight's referee crews" (`scripts/fetch_referees.py`, free, soft) reads
+  tonight's crews from the NHL right-rail and adds past regular-season games'
+  crews to `data/processed/referee_games.csv`, 300 a run newest first, so
+  the history fills over the first few days. A referee's factor is his
+  games' total goals over the league's, shrunk at 120 games; a crew is the
+  mean of its known referees, clamped to 0.95-1.05, and scales both clubs'
+  expected goals (the total moves, the split does not) and every skater's
+  goals, assists and points in that game. Penalties are read through goals
+  because goals are what the bets settle on. A game with no crew posted
+  when the card runs moves nothing; the public board does not read crews.
+  **The pre-game update** (same request): a fourth Gameday Refresh cron,
+  `30 14 * 1-4,10-12 *`, held to 22:30 UTC (6:30 PM EDT, 5:30 PM EST),
+  which the precheck never stands down. It re-captures the posted lines,
+  crews and starting goalies, re-prices the slate (moved with the books
+  since the morning card) and posts the card again when its selections
+  changed; games under way are pulled by the puck-drop guard, and the
+  day's first snapshot still stands. About 290 credits on an average night
+  (up to 646 at the 640 cap), about 9,000 a month; the run of 2026-10-21
+  read 61,239 credits remaining.
 
 ## Contract strings — never change these
 

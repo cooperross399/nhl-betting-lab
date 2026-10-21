@@ -29,7 +29,7 @@ from datetime import date, timedelta
 import pandas as pd
 
 from nhl_betting_lab.models.team_model import TeamModel
-from nhl_betting_lab.rest import played_previous_day
+from nhl_betting_lab.rest import played_previous_day, schedule_state
 
 
 #: Total lines the calibration sweep prices. 5.5 is where the NHL headline
@@ -218,18 +218,29 @@ def _with_back_to_backs(games: pd.DataFrame) -> pd.DataFrame:
     """
     ordered = games.sort_values("date").copy()
     last_played: dict[str, str] = {}
+    last_rink: dict[str, tuple[str, str]] = {}
     home_flags: list[bool] = []
     away_flags: list[bool] = []
+    states: dict[str, list[bool]] = {
+        f"{side}_{flag}": [] for side in ("home", "away") for flag in ("long_rest", "travelled")
+    }
     for row in ordered.itertuples():
         day = str(row.date)[:10]
-        for team, flags in (
-            (str(row.home_team), home_flags),
-            (str(row.away_team), away_flags),
+        rink = str(row.home_team)
+        for side, team, flags in (
+            ("home", str(row.home_team), home_flags),
+            ("away", str(row.away_team), away_flags),
         ):
             flags.append(played_previous_day(last_played, team, day))
+            state = schedule_state(last_rink.get(team), day, rink)
+            for flag, value in state.items():
+                states[f"{side}_{flag}"].append(value)
             last_played[team] = day
+            last_rink[team] = (day, rink)
     ordered["home_b2b"] = home_flags
     ordered["away_b2b"] = away_flags
+    for column, values in states.items():
+        ordered[column] = values
     return ordered
 
 
@@ -243,6 +254,7 @@ def generate_team_samples(
     end_date: str = "",
     use_rest: bool = True,
     rate: Callable[[TeamModel, date], None] | None = None,
+    schedule: bool = False,
 ) -> tuple[pd.DataFrame, TeamWalkForwardReport]:
     """Price every game with a model that could not see it.
 
@@ -256,6 +268,10 @@ def generate_team_samples(
     priced on identical games and settlement (the modern-stats price
     backtest, `scripts/run_shadow_stats.py --price-backtest`). A window it
     refuses with ValueError is skipped and counted.
+
+    `schedule=True` also prices rest and travel (`TeamModel.schedule_state`,
+    Cooper 2026-10-21) as the card does; False prices without them, as every
+    committed measurement did.
     """
     report = TeamWalkForwardReport()
     if games.empty:
@@ -310,6 +326,17 @@ def generate_team_samples(
         for game in window.itertuples():
             home = str(game.home_team)
             away = str(game.away_team)
+            model.schedule_state = (
+                {
+                    team: {
+                        flag: bool(getattr(game, f"{side}_{flag}", False))
+                        for flag in ("long_rest", "travelled")
+                    }
+                    for side, team in (("home", home), ("away", away))
+                }
+                if schedule
+                else {}
+            )
             rest_kwargs = (
                 {
                     "home_b2b": bool(getattr(game, "home_b2b", False)),

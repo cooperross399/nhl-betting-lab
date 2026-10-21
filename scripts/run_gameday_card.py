@@ -17,6 +17,7 @@ shipped in.
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import json
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -56,6 +57,7 @@ from nhl_betting_lab.providers.team_names import (
     saved_team_name_map,
 )
 from nhl_betting_lab.puck_drop import parse_commence_time
+from nhl_betting_lab.lineups import TonightLineups, tonight_lineups
 from nhl_betting_lab.reports.card_pricing import (
     price_props,
     price_team_markets,
@@ -68,6 +70,8 @@ from nhl_betting_lab.reports.gameday_card import (
 )
 from nhl_betting_lab.stat_sides import build_stat_sides
 from nhl_betting_lab.forward_evidence import write_snapshot
+from nhl_betting_lab.price_movement import apply_movement, movement, opening_snapshot
+from nhl_betting_lab.referees import tonight_factors
 from nhl_betting_lab.season import (
     EXPECTED_CLUBS,
     LEAGUE_TIMEZONE,
@@ -444,6 +448,7 @@ def main(argv: list[str] | None = None) -> int:
     priceable = prices.iloc[0:0] if stale else prices
     probabilities: dict[tuple, float] = {}
     unresolved_names: set[str] = set()
+    lineups = TonightLineups()
 
     # Not `if not team_names`: the builder always adds the Utah and Arizona
     # aliases, so with no boxscores it returns six entries and that check
@@ -540,6 +545,12 @@ def main(argv: list[str] | None = None) -> int:
             "back-to-back history read only games dated before it, which is "
             f"what a run that morning could have seen: {'; '.join(read)}."
         )
+    # Tonight's referee crews (Cooper, 2026-10-21), from
+    # scripts/fetch_referees.py; a game with no crew posted moves nothing.
+    crews = tonight_factors(
+        processed, moment.astimezone(LEAGUE_TIMEZONE).date().isoformat(), games
+    )
+    print(f"Referee crews: {len(crews)} game(s) moved by tonight's crew.")
     if logs.empty:
         blockers.append(
             "No player logs on disk, so no prop can be priced. Run "
@@ -600,6 +611,13 @@ def main(argv: list[str] | None = None) -> int:
                     "Goalie saves: priced on the game-context model "
                     f"({len(saves_inputs.rates.shots_against)} teams' shot rates)."
                 )
+            # Tonight's posted lines (Cooper, 2026-10-21): who is out, each
+            # skater's line and unit, and the hole an absence leaves.
+            lineups = tonight_lineups(
+                processed, moment.astimezone(LEAGUE_TIMEZONE).date().isoformat(), logs
+            )
+            print(f"Lineups: {lineups.describe()}.")
+            props_model.game_factors = crews
             prop_probabilities, unresolved = price_props(
                 priceable,
                 props_model,
@@ -608,9 +626,17 @@ def main(argv: list[str] | None = None) -> int:
                 history=props_history,
                 rosters=rosters,
                 saves=saves_inputs,
+                lineups=lineups,
             )
             probabilities.update(prop_probabilities)
             unresolved_names.update(unresolved)
+            if lineups.out_tonight:
+                preview = ", ".join(sorted(lineups.out_tonight)[:12])
+                print(
+                    f"{len(lineups.out_tonight)} priced player(s) are not in "
+                    f"their club's posted lines tonight and get no opinion: {preview}"
+                    + (" ..." if len(lineups.out_tonight) > 12 else "")
+                )
             if props_model.ambiguous_names:
                 print(
                     f"{len(props_model.ambiguous_names)} name(s) are shared by "
@@ -627,6 +653,7 @@ def main(argv: list[str] | None = None) -> int:
     else:
         try:
             team_model = TeamModel().fit(games)
+            team_model_games = games
             print(team_model.report.summary_line())
             # Cooper's decision of 2026-10-05: the team markets are priced on
             # the site's xG ratings. A missing or stale ratings file falls
@@ -644,9 +671,24 @@ def main(argv: list[str] | None = None) -> int:
             team_history = (
                 games if ships("team_b2b", output_dir=outputs) else None
             )
+            # A club missing recent regulars tonight loses part of their
+            # share of its points from its attack (`lineups`).
+            for club, factor in sorted(lineups.attack_factors.items()):
+                rate = team_model.teams.get(club)
+                if rate is None or factor >= 1.0:
+                    continue
+                team_model.teams[club] = dataclasses.replace(rate, attack=rate.attack * factor)
+                print(
+                    f"{club}: attack x{factor:.3f} for "
+                    f"{', '.join(lineups.absent.get(club, []))} out tonight."
+                )
+            team_model.game_factors = crews
             team_probabilities, unresolved = price_team_markets(
                 priceable, team_model, team_names=team_names,
                 history=team_history,
+                # Rest and travel are not the back-to-back verdict's: they
+                # read every completed game (Cooper, 2026-10-21).
+                schedule_history=team_model_games,
             )
             probabilities.update(team_probabilities)
             unresolved_names.update(unresolved)
@@ -670,6 +712,12 @@ def main(argv: list[str] | None = None) -> int:
     # snapshot that already exists for today stands untouched, because the
     # card's first opinion of the day is the one that counts.
     snapshot_day = moment.astimezone(LEAGUE_TIMEZONE).date().isoformat()
+    # Line movement since the day's first card (Cooper, 2026-10-21): a
+    # later run moves each opinion half way with the books, at most five
+    # points. The first card of the day has nothing to compare with.
+    moves = movement(opening_snapshot(archive_dir, snapshot_day), prices, selection_key)
+    probabilities, moved = apply_movement(probabilities, moves)
+    print(f"Line movement since the first card: {moved} opinion(s) moved with the books.")
     frozen: dict[str, object] = {}
     written = write_snapshot(
         prices,

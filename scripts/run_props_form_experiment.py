@@ -53,6 +53,31 @@ VARIANTS = (("long_run", {}), ("recent_form", {"recent_form": True}))
 #: `--team-form`: the card's model without and with last-five team form
 #: (`PlayerPropsModel.team_form`, Cooper 2026-10-21), priced night by night.
 TEAM_FORM_VARIANTS = (("long_run", {}), ("team_form", {"team_form": True}))
+#: What `--test` can price against the card's committed model. Each later
+#: factor Cooper asked for on 2026-10-21 is priced alone against the same
+#: baseline.
+TESTS = {
+    "recent_form": (VARIANTS, "Recent form"),
+    "team_form": (TEAM_FORM_VARIANTS, "Last-five team form"),
+    "position_matchup": (
+        (("long_run", {}), ("position_matchup", {"position_matchup": True})),
+        "Opponent matchup by position",
+    ),
+}
+
+
+DESCRIPTIONS = {
+    "recent_form": "with shots, goals, assists and points moved toward each "
+    "player's recent form (a game's weight halving every "
+    f"{FORM_HALF_LIFE_GAMES} of his games, regressed toward his long-run "
+    "rate, fixed in advance).",
+    "team_form": "with each club's last-five form (its skaters' production "
+    "and its opponents' production against it over its last five games, "
+    "against its own record, shrunk and clamped), night by night.",
+    "position_matchup": "with each opponent's concession split by the "
+    "player's position group (what it allows forwards, and what it allows "
+    "defencemen), shrunk as the all-skater table is.",
+}
 
 
 def _interval(interval) -> dict:
@@ -85,8 +110,11 @@ def main(argv: list[str] | None = None) -> int:
         help="Price last-five team form against the card's model instead of "
         "player recent form.",
     )
+    parser.add_argument("--test", choices=sorted(TESTS), default="recent_form")
     args = parser.parse_args(argv)
-    variants = TEAM_FORM_VARIANTS if args.team_form else VARIANTS
+    if args.team_form:
+        args.test = "team_form"
+    variants, what = TESTS[args.test]
     tested = variants[1][0]
 
     processed = Path(args.processed_dir)
@@ -136,7 +164,6 @@ def main(argv: list[str] | None = None) -> int:
         if m in FORM_STATS
     )
     zero = form["overall"]["low"] <= 0 <= form["overall"]["high"]
-    what = "Last-five team form" if args.team_form else "Recent form"
     verdict = (
         f"{what} finishes {delta:+.1f}u against the long-run rates "
         f"({form_delta:+.1f}u of it in shots, goals, assists and points). With it the "
@@ -172,16 +199,7 @@ def main(argv: list[str] | None = None) -> int:
         "",
         "The identical policy priced twice on identical bought prices: the "
         "card's long-run player rates, and the same model "
-        + (
-            "with each club's last-five form (its skaters' production and its "
-            "opponents' production against it over its last five games, "
-            "against its own record, shrunk and clamped), night by night."
-            if args.team_form
-            else "with shots, goals, assists and points moved toward each "
-            "player's recent form (a game's weight halving every "
-            f"{FORM_HALF_LIFE_GAMES} of his games, regressed toward his "
-            "long-run rate, fixed in advance)."
-        )
+        + DESCRIPTIONS[args.test]
         + " One bet per wager at the best price, flat stakes, at the card's "
         "edge bar.",
         "",
@@ -206,12 +224,12 @@ def main(argv: list[str] | None = None) -> int:
         verdict,
         "",
         (
-            "Last-five team form is on the card from 2026-10-22 (Cooper's "
-            "decision, 2026-10-21); this measures it, it does not gate it."
-            if args.team_form
-            else "Nothing here reaches the card. Moving the card onto recent "
+            "Nothing here reaches the card. Moving the card onto recent "
             "form is Cooper's decision (the model is frozen until 2027-04-25, "
             "`docs/when_this_ends.md`)."
+            if args.test == "recent_form"
+            else f"{what} is on the card from 2026-10-22 (Cooper's decision, "
+            "2026-10-21); this measures it, it does not gate it."
         ),
         "",
     ]

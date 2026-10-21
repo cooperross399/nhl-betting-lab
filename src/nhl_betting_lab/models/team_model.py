@@ -72,6 +72,7 @@ from dataclasses import dataclass
 import pandas as pd
 
 from nhl_betting_lab.models.counts import Poisson
+from nhl_betting_lab.rest import schedule_state
 
 
 #: League-average total goals per game. Only a fallback for a team with no
@@ -131,6 +132,8 @@ class TeamModel:
     #: the factors stabilise within the first fitted season and an early
     #: outlier cannot become a standing opinion.
     B2B_SHRINKAGE_GAMES = 150
+    #: Rest and travel move a side's scoring by at most this much either way.
+    SCHEDULE_FACTOR_RANGE = (0.9, 1.1)
 
     def __init__(self) -> None:
         self.teams: dict[str, TeamRates] = {}
@@ -155,6 +158,24 @@ class TeamModel:
         #: it, away goals down. Set from the ratings file
         #: (`models.team_ratings`), never fitted here.
         self.home_ice: dict[str, float] = {}
+        #: Rest and travel (Cooper, 2026-10-21): multipliers on a side's
+        #: goals for and against when it has `rest.LONG_REST_DAYS`+ days off
+        #: ("rest_*") or crossed `rest.TRAVEL_ZONES`+ time zones since its
+        #: last game ("travel_*"), fitted like the back-to-back factors.
+        self.schedule_factors: dict[str, float] = {
+            "rest_for": 1.0,
+            "rest_against": 1.0,
+            "travel_for": 1.0,
+            "travel_against": 1.0,
+        }
+        #: Tonight's schedule state per team ({"long_rest", "travelled"}), set
+        #: by the caller that knows tonight's slate (`rest.schedule_state`);
+        #: empty prices every side as neither, as before.
+        self.schedule_state: dict[str, dict[str, bool]] = {}
+        #: Tonight's referee crew per game, {frozenset({home, away}): factor},
+        #: set by the card (`referees.tonight_factors`); it scales both
+        #: sides, so the total moves and the split does not.
+        self.game_factors: dict[frozenset, float] = {}
         self.report = TeamModelReport()
 
     def fit(self, games: pd.DataFrame) -> "TeamModel":
@@ -241,6 +262,7 @@ class TeamModel:
             )
 
         self._fit_b2b_factors(frame)
+        self._fit_schedule_factors(frame)
         self.report = TeamModelReport(
             games=len(frame),
             teams=len(self.teams),
@@ -314,6 +336,43 @@ class TeamModel:
             ),
         }
 
+    def _fit_schedule_factors(self, frame: pd.DataFrame) -> None:
+        """Rest and travel, as `_fit_b2b_factors` fits back-to-backs: goals a
+        rested (or travelled) side scored and conceded against sides that
+        were neither, pooled over venue, shrunk by B2B_SHRINKAGE_GAMES."""
+        if "date" not in frame.columns:
+            return
+        last: dict[str, tuple[str, str]] = {}
+        rows = []
+        for row in frame.sort_values("date").itertuples():
+            day = str(row.date)[:10]
+            home, away = str(row.home_team), str(row.away_team)
+            for team, scored, conceded in (
+                (home, row.home_goals, row.away_goals),
+                (away, row.away_goals, row.home_goals),
+            ):
+                state = schedule_state(last.get(team), day, home)
+                rows.append((state["long_rest"], state["travelled"], float(scored), float(conceded)))
+            last[home] = (day, home)
+            last[away] = (day, home)
+        sides = pd.DataFrame(rows, columns=["rest", "travel", "scored", "conceded"])
+        plain = sides[~sides["rest"] & ~sides["travel"]]
+
+        def ratio(flagged: pd.Series, base: pd.Series) -> float:
+            if not len(flagged) or not len(base) or base.mean() <= 0:
+                return 1.0
+            weight = len(flagged) / (len(flagged) + self.B2B_SHRINKAGE_GAMES)
+            value = 1.0 + weight * (float(flagged.mean()) / float(base.mean()) - 1.0)
+            low, high = self.SCHEDULE_FACTOR_RANGE
+            return min(high, max(low, value))
+
+        for name in ("rest", "travel"):
+            flagged = sides[sides[name]]
+            self.schedule_factors[f"{name}_for"] = ratio(flagged["scored"], plain["scored"])
+            self.schedule_factors[f"{name}_against"] = ratio(
+                flagged["conceded"], plain["conceded"]
+            )
+
     # -- rates -----------------------------------------------------------
 
     def expected_goals(
@@ -361,6 +420,25 @@ class TeamModel:
                 scale = original_total / adjusted_total
                 home_goals *= scale
                 away_goals *= scale
+        if self.schedule_state:
+            original_total = home_goals + away_goals
+            for team, ours in ((home_team, "home"), (away_team, "away")):
+                state = self.schedule_state.get(str(team), {})
+                for name, flag in (("rest", "long_rest"), ("travel", "travelled")):
+                    if not state.get(flag):
+                        continue
+                    if ours == "home":
+                        home_goals *= self.schedule_factors[f"{name}_for"]
+                        away_goals *= self.schedule_factors[f"{name}_against"]
+                    else:
+                        away_goals *= self.schedule_factors[f"{name}_for"]
+                        home_goals *= self.schedule_factors[f"{name}_against"]
+            # As with back-to-backs: who scores moves, the total does not.
+            adjusted_total = home_goals + away_goals
+            if adjusted_total > 0:
+                scale = original_total / adjusted_total
+                home_goals *= scale
+                away_goals *= scale
         if self.home_ice:
             shift = math.exp(
                 (
@@ -371,7 +449,8 @@ class TeamModel:
             )
             home_goals *= shift
             away_goals /= shift
-        return home_goals, away_goals
+        crew = self.game_factors.get(frozenset({str(home_team), str(away_team)}), 1.0)
+        return home_goals * crew, away_goals * crew
 
     def scoreline_matrix(
         self,

@@ -65,6 +65,15 @@ on:
     # and the day's first frozen snapshot still stands, so the forward ledger
     # is the morning's. Up to 646 credits a run at the 640 cap.
     - cron: "30 12 * 1-4,10-12 *"
+    # 22:30 UTC (6:30 PM EDT, 5:30 PM EST): the pre-game update (Cooper,
+    # 2026-10-21, "a re-price closer to puck drop"). Morning skates are over,
+    # most starting goalies are confirmed and the posted lines are final, so
+    # it re-captures them, re-prices the slate and posts the card again when
+    # its selections changed, like the afternoon update. Games already under
+    # way are pulled by the puck-drop guard. Never stood down by the morning
+    # card; the day's first frozen snapshot still stands. About 290 credits
+    # on an average night, up to 646 at the 640 cap.
+    - cron: "30 14 * 1-4,10-12 *"
     # The season does not wait for October: 2026-27 opens September 29 with a
     # five-game slate the month filter above would silently skip. These two
     # days and no others, because a daily September schedule would spend real
@@ -199,6 +208,11 @@ jobs:
           if [ "${SCHEDULE:-}" = "30 12 * 1-4,10-12 *" ]; then
             echo "already=false" >> "$GITHUB_OUTPUT"
             echo "Afternoon update: never skipped."
+            exit 0
+          fi
+          if [ "${SCHEDULE:-}" = "30 14 * 1-4,10-12 *" ]; then
+            echo "already=false" >> "$GITHUB_OUTPUT"
+            echo "Pre-game update: never skipped."
             exit 0
           fi
           DAY=$(TZ=America/New_York date +%F)
@@ -716,6 +730,31 @@ jobs:
           PYTHONPATH: src
         run: |
           python scripts/fetch_starting_goalies.py
+
+      - name: Capture tonight's posted lines
+        # Who is out and each skater's line and power-play unit (Cooper,
+        # 2026-10-21), from Daily Faceoff's team pages. Free, and soft: with
+        # no capture the card prices every club as before and says so.
+        if: always()
+        continue-on-error: true
+        timeout-minutes: 3
+        env:
+          PYTHONPATH: src
+        run: |
+          python scripts/capture_line_combinations.py
+
+      - name: Record tonight's referee crews
+        # Who referees tonight, and who refereed the games already played,
+        # from the NHL's free right-rail (Cooper, 2026-10-21). Soft: a game
+        # with no crew posted, or a referee with no history, moves nothing.
+        # Past games are added a budget a run and kept in data/processed.
+        if: always()
+        continue-on-error: true
+        timeout-minutes: 6
+        env:
+          PYTHONPATH: src
+        run: |
+          python scripts/fetch_referees.py --budget 300
 
       - name: Render the card
         id: card

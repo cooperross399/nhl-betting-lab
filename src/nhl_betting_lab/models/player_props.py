@@ -307,6 +307,12 @@ class PlayerPropsModel:
         self.goalies: dict[int, GoalieRates] = {}
         self.baselines: dict[str, dict[str, float]] = {}
         self.opponent_factors: dict[str, dict[str, float]] = {}
+        #: The same concession table split by the scorer's position group
+        #: (forwards, defencemen): what each club allows opposing forwards and
+        #: opposing defencemen, each against the league's figure for that
+        #: group (Cooper, 2026-10-21: opponent matchup by position). Used in
+        #: place of `opponent_factors` where it holds the player's group.
+        self.opponent_group_factors: dict[str, dict[str, dict[str, float]]] = {}
         self.venue_factors: dict[str, dict[str, float]] = {}
         self.dispersion: dict[str, Dispersion] = {}
         #: Per-market production multipliers when a side played yesterday,
@@ -322,6 +328,10 @@ class PlayerPropsModel:
         #: `fit` from the logs it saw; `team_form_factors` rebuilds it for
         #: any night.
         self.team_form: dict[str, dict[str, dict[str, float]]] = {}
+        #: Tonight's referee crew per game, {frozenset({team, opponent}):
+        #: factor}, set by the card (`referees.tonight_factors`); it scales
+        #: goals, assists and points. Empty moves nothing.
+        self.game_factors: dict[frozenset, float] = {}
         #: Names two priced players share, which resolve to neither on their
         #: own. Some are recoverable with a team; see `_index_names`.
         self.ambiguous_names: tuple[str, ...] = ()
@@ -381,6 +391,7 @@ class PlayerPropsModel:
         self._fit_dispersion(skaters, goalies)
         self._fit_baselines(skaters)
         self._fit_opponent_factors(skaters)
+        self._fit_opponent_group_factors(skaters)
         self._fit_venue_factors(skaters)
         self._fit_skaters(skaters)
         self._fit_goalies(goalies)
@@ -563,6 +574,34 @@ class PlayerPropsModel:
                 )
                 for stat in SKATER_STATS
             }
+
+    def _fit_opponent_group_factors(self, skaters: pd.DataFrame) -> None:
+        """`_fit_opponent_factors` per position group: per game, what each
+        club allowed opposing forwards and opposing defencemen, against the
+        league's per-game figure for that group, shrunk the same way."""
+        self.opponent_group_factors = {}
+        rows = skaters[skaters["group"].isin(["F", "D"])]
+        per_game = (
+            rows.groupby(["opponent", "game_id", "group"])[list(SKATER_STATS)]
+            .sum()
+            .reset_index()
+        )
+        if per_game.empty:
+            return
+        for group, by_group in per_game.groupby("group"):
+            league = {stat: float(by_group[stat].mean()) for stat in SKATER_STATS}
+            for team, team_rows in by_group.groupby("opponent"):
+                played = len(team_rows)
+                weight = played / (played + self.OPPONENT_SHRINKAGE_GAMES)
+                self.opponent_group_factors.setdefault(str(team), {})[str(group)] = {
+                    stat: 1.0
+                    + weight
+                    * (
+                        (float(team_rows[stat].mean()) / league[stat] if league[stat] else 1.0)
+                        - 1.0
+                    )
+                    for stat in SKATER_STATS
+                }
 
     def _fit_venue_factors(self, skaters: pd.DataFrame) -> None:
         self.venue_factors = {}
@@ -793,7 +832,7 @@ class PlayerPropsModel:
         )
         if toi <= 0:
             return None
-        opponent_factor = self.opponent_factors.get(str(opponent), {}).get(stat, 1.0)
+        opponent_factor = self.opponent_factor(str(opponent), rates.group, stat)
         venue_factor = self.venue_factors.get(str(venue), {}).get(stat, 1.0)
         return (
             rates.per60[stat]
@@ -805,7 +844,22 @@ class PlayerPropsModel:
             * self.team_form_multiplier(
                 stat, team=team if team else rates.team, opponent=str(opponent)
             )
+            * self.crew_multiplier(stat, team if team else rates.team, opponent)
         )
+
+    def crew_multiplier(self, stat: str, team: object, opponent: object) -> float:
+        """Tonight's referee crew, on the scoring stats only."""
+        if not self.game_factors or stat not in ("goals", "assists", "points"):
+            return 1.0
+        return float(self.game_factors.get(frozenset({str(team), str(opponent)}), 1.0))
+
+    def opponent_factor(self, opponent: str, group: str, stat: str) -> float:
+        """What `opponent` allows this player's position group in `stat`,
+        against the league; the all-skater figure where the group has none."""
+        by_group = self.opponent_group_factors.get(str(opponent), {}).get(str(group))
+        if by_group and stat in by_group:
+            return float(by_group[stat])
+        return float(self.opponent_factors.get(str(opponent), {}).get(stat, 1.0))
 
     def team_form_multiplier(self, stat: str, *, team: str, opponent: str) -> float:
         """Own club's last-five production times the opponent's last-five

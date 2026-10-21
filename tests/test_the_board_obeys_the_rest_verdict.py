@@ -72,6 +72,7 @@ from nhl_betting_lab.data.build_datasets import TEAM_GAME_COLUMNS, load_team_gam
 from nhl_betting_lab.models.team_model import TeamModel
 from nhl_betting_lab.providers import team_names
 from nhl_betting_lab.reports.card_pricing import price_team_markets, selection_key
+from nhl_betting_lab.rest import last_played_rinks, schedule_state
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 BUILD_SCRIPT = PROJECT_ROOT / "web" / "build_site_json.py"
@@ -274,9 +275,17 @@ def model_figures(world: dict[str, Path], module: ModuleType, *, rest: bool) -> 
     """What the real TeamModel says for each game, with the schedule's rest
     flags applied (`rest=True`) or every side priced as rested. The flags
     come from the fixture's own schedule, not from the builder."""
-    model = TeamModel().fit(load_team_games(world["lab"] / "data" / "processed"))
+    games = load_team_games(world["lab"] / "data" / "processed")
+    model = TeamModel().fit(games)
+    rinks = last_played_rinks(games)
     figures: dict[str, dict] = {}
     for away, home, _ in SLATE:
+        # Rest and travel are not the verdict's; the card and the board both
+        # price them (Cooper, 2026-10-21).
+        model.schedule_state = {
+            team: schedule_state(rinks.get(team), BOARD_DAY.isoformat(), home)
+            for team in (home, away)
+        }
         flags = {"home_b2b": rest and home in TIRED, "away_b2b": rest and away in TIRED}
         eh, ea = model.expected_goals(home, away, **flags)
         ml = model.moneyline_probabilities(home, away, **flags)
@@ -325,6 +334,7 @@ def card_probabilities(world: dict[str, Path]) -> dict[tuple, float]:
         team_names=team_names.build_team_name_map(world["raw"]),
         # scripts/run_gameday_card.py, verbatim.
         history=(games if verdicts.ships("team_b2b", output_dir=outputs) else None),
+        schedule_history=games,
     )
     assert unresolved == []
     by_name = {full: abbrev for abbrev, (_, _, full) in CLUBS.items()}
