@@ -680,6 +680,7 @@ def main(argv: list[str] | None = None) -> int:
         now=moment,
         archive_dir=archive_dir,
         tally=frozen,
+        late_markets=GAME_BY_GAME_MARKETS,
     )
     withheld = (
         f"{frozen['started']} priced row(s) for games already under way and "
@@ -687,6 +688,13 @@ def main(argv: list[str] | None = None) -> int:
     )
     if frozen.get("state") == "frozen":
         print(f"Priced snapshot frozen: {written} ({frozen['frozen']} row(s)); {withheld}.")
+    elif frozen.get("state") == "added":
+        print(
+            f"A priced snapshot for {snapshot_day} already stands; "
+            f"{frozen['frozen']} row(s) added to it for late markets "
+            f"({', '.join(sorted(GAME_BY_GAME_MARKETS))}) in games it held "
+            f"none of that market for; {withheld}."
+        )
     elif frozen.get("state") == "nothing_to_freeze" and stale:
         print(
             f"No snapshot was frozen for {snapshot_day}: the staged prices "

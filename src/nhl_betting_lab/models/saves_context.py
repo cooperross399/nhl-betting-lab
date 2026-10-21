@@ -50,6 +50,7 @@ from __future__ import annotations
 import math
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+from datetime import timedelta
 
 import numpy as np
 import pandas as pd
@@ -397,3 +398,66 @@ class SavesInputs:
         return NegativeBinomial(
             mean=context.mean(features), r=float(context.dispersion_r or 1e6)
         )
+
+
+def walk_forward_means(
+    samples: pd.DataFrame,
+    logs: pd.DataFrame,
+    games: pd.DataFrame,
+    *,
+    refit_days: int = 14,
+    min_training: int = 800,
+) -> pd.DataFrame:
+    """`SHIPPED`'s form refitted walk-forward over goalie-saves samples.
+
+    `samples` are `generate_prop_samples` rows for `goalie_saves` (`date`,
+    `team`, `opponent`, `venue`, `mean`, `actual`, `expected_toi_seconds`).
+    Each refit window's features read only games before it, and its
+    coefficients are fitted only on starts in earlier windows, as the Saves
+    Model Study does. Returns `mean` and `r` on the samples' index, NaN where
+    there was not yet `min_training` starts to fit on.
+    """
+    out = pd.DataFrame({"mean": np.nan, "r": np.nan}, index=samples.index)
+    if samples.empty:
+        return out
+    days = pd.to_datetime(samples["date"].astype(str).str[:10], errors="coerce").dt.date
+    log_days = pd.to_datetime(logs["date"].astype(str).str[:10], errors="coerce").dt.date
+    first = log_days.min()
+    played = games.copy()
+    played["_d"] = pd.to_datetime(played["date"].astype(str).str[:10], errors="coerce").dt.date
+    goalies = logs[logs["role"].astype(str) == "goalie"].copy()
+    goalies["_d"] = log_days[goalies.index]
+    goalies["toi_seconds"] = pd.to_numeric(goalies["toi_seconds"], errors="coerce").fillna(0)
+
+    windows = np.array([(d - first).days // refit_days for d in days])
+    names = list(SHIPPED.coefficients)
+    feats = np.zeros((len(samples), len(names)))
+    for k in sorted(set(windows)):
+        cutoff = first + timedelta(days=int(k) * refit_days)
+        rates = team_shot_rates(played[played["_d"] < cutoff])
+        starts = goalies[(goalies["_d"] < cutoff) & (goalies["toi_seconds"] >= 2400)]
+        start_toi = float(starts["toi_seconds"].mean()) if len(starts) else 3600.0
+        for i in np.flatnonzero(windows == k):
+            row = samples.iloc[i]
+            expected = float(row.get("expected_toi_seconds") or 0.0) or start_toi
+            f = feature_row(
+                base_mean=float(row["mean"]), venue=str(row["venue"]),
+                win_probability=None, team=str(row["team"]),
+                opponent=str(row["opponent"]), rates=rates,
+                toi_ratio=start_toi / expected,
+            )
+            feats[i] = [f[n] for n in names]
+    y = pd.to_numeric(samples["actual"], errors="coerce").to_numpy(float)
+    X = np.column_stack([np.ones(len(samples)), feats])
+    mean, r = np.full(len(samples), np.nan), np.full(len(samples), np.nan)
+    for k in sorted(set(windows)):
+        train = (windows < k) & np.isfinite(y)
+        test = windows == k
+        if train.sum() < min_training:
+            continue
+        beta = fit_poisson(X[train], y[train])
+        fitted = np.exp(np.clip(X[train] @ beta, -10, 10))
+        mean[test] = np.exp(np.clip(X[test] @ beta, -10, 10))
+        r[test] = residual_dispersion(y[train], fitted) or np.inf
+    out["mean"], out["r"] = mean, r
+    return out

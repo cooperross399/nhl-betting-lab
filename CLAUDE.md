@@ -2593,7 +2593,32 @@ Re-derive rather than trust if the data has moved.
   (`superseded_saves_rows`), and the 2027-04-25 verdict on saves covers the
   new model only (192 saves rows were in the ledger). Every other market,
   the edge bars, the bracket and starter checks, the market list and the
-  staking rule are unchanged. The DFS projections still read the old mean.
+  staking rule are unchanged. **The Lineup's goalie projections**
+  (`publish_lineup_projections.py`, `dfs_projections.project_slate(...,
+  saves_inputs=)`) read the same model from 2026-10-21, on the DFS
+  Projection Test's walk-forward goalie comparison
+  (`saves_context.walk_forward_means`, the "Goalies on the card's saves
+  model" section of `dfs_projection_test.md`): on 6,187 starts (DFS
+  Projection Test run 39549990121) DraftKings-points MAE 7.807 against
+  7.871 on the old saves mean, paired -0.065 [-0.100, -0.024], and bias
+  -1.012 against -1.239; DraftKings' own average 8.122.
+- **2026-10-21, a defect fix recorded as `docs/when_this_ends.md` requires:
+  a late market reaches the ledger.** Books post blocked shots, hits and
+  goalie saves after the 9:40 AM ET freeze, the card picks them game by game
+  (`GAME_BY_GAME_MARKETS`), and the 20:30 UTC re-price staked them while the
+  morning snapshot stood untouched: on 2026-10-19 the card staked 13 saves
+  bets and 5 blocks the forward ledger never saw. `write_snapshot(...,
+  late_markets=GAME_BY_GAME_MARKETS)` now lets a later run add, to the
+  standing snapshot, a late market's rows for every game the snapshot holds
+  no row of that market for. That is the first opinion on that market in that
+  game, so nothing is repriced: a (game, market) already frozen keeps every
+  row, other markets keep the first-snapshot rule, a settled day takes
+  nothing, and the puck-drop guard applies. The rows are appended, so the
+  morning file is a byte prefix of the later one, and
+  `restore_state._first_opinions` no longer puts an older carrier's copy back
+  over a copy that only extends it. The model, the edge bar, the market list
+  and the staking rule are unchanged; the ledger now holds late-market
+  opinions it used to miss.
 
 - **2026-10-21: the shadow team variants and per-team home ice were priced,
   and nothing switched.** Cooper said "Yes do all tht" to re-testing them and

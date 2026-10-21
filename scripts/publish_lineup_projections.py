@@ -47,6 +47,7 @@ from nhl_betting_lab.data.build_datasets import load_player_logs, load_team_game
 from nhl_betting_lab.data.nhl_api import current_rosters
 from nhl_betting_lab.dfs_projections import project_slate, staged_quotes
 from nhl_betting_lab.models.player_props import PlayerPropsModel
+from nhl_betting_lab.models.saves_context import SavesInputs
 from nhl_betting_lab.models.team_model import TeamModel
 from nhl_betting_lab.models.team_ratings import apply_xg_ratings
 from nhl_betting_lab.providers import odds_api
@@ -117,6 +118,12 @@ def build_payload(
             for team in (home, away):
                 b2b[team] = played_previous_day(last, team, day)
 
+    saves = SavesInputs.for_card(games, logs)
+    print(
+        "Goalie saves: on the card's game-context model."
+        if saves is not None else
+        "Goalie saves: no shot counts in the game history, so the props model's own mean."
+    )
     team_names = load_team_name_map(processed_dir=processed, raw_dir=raw)
     quotes = (
         staged_quotes(staged_props(staging), model, set(games_today), team_names=team_names)
@@ -125,6 +132,7 @@ def build_payload(
     rows = project_slate(
         model, team_model, games_today,
         rosters=current_rosters(raw_dir=raw), b2b=b2b, quotes=quotes,
+        saves_inputs=saves,
     )
     anchored = sum(1 for row in rows if row["source"] == "market")
     print(

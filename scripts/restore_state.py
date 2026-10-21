@@ -841,7 +841,10 @@ def _first_opinions(older: Path, dest: Path, run_id: object) -> int:
     replaced = 0
     for path in sorted(source.glob("*.csv")):
         target = dest / SNAPSHOTS / path.name
-        if not target.is_file() or target.read_bytes() == path.read_bytes():
+        if not target.is_file() or target.read_bytes().startswith(path.read_bytes()):
+            # The same file, or the same file with late-market rows a later
+            # run added (`write_snapshot`'s late_markets): the first opinion
+            # is all still there.
             continue
         if (path.stem in settled
                 or (target.parent / f"{path.stem}.settled").exists()):
