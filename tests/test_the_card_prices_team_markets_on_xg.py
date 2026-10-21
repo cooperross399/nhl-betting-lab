@@ -7,13 +7,16 @@ hold:
 
 * the card applies the ratings file when it runs through the latest game,
   and falls back to goals, saying why, when it is missing or stale;
+* each team's own home ice in the file (Cooper, 2026-10-21) moves its
+  games, and a file without it prices on the league's;
 * the forward report sets aside team-market rows frozen before
-  `XG_RATINGS_FROM`, counts them, and leaves props measured as before.
+  `TEAM_RATINGS_FROM`, counts them, and leaves props measured as before.
 """
 
 from __future__ import annotations
 
 import json
+import math
 from datetime import datetime, timezone
 
 import pandas as pd
@@ -21,7 +24,7 @@ import pytest
 
 from nhl_betting_lab import forward_evidence as fe
 from nhl_betting_lab.models.team_model import TeamModel
-from nhl_betting_lab.models.team_ratings import RATINGS_FILE, XG_RATINGS_FROM, apply_xg_ratings
+from nhl_betting_lab.models.team_ratings import RATINGS_FILE, TEAM_RATINGS_FROM, apply_xg_ratings
 from nhl_betting_lab.models.value import american_to_implied, profit_on_win
 
 
@@ -65,6 +68,35 @@ def test_the_card_prices_on_current_ratings_and_falls_back_on_stale(tmp_path) ->
     assert rated.moneyline_probabilities("AAA", "BBB")["home"] < goals_win
 
 
+def test_each_teams_own_home_ice_moves_its_games(tmp_path) -> None:
+    games = _games()
+    (tmp_path / RATINGS_FILE).write_text(json.dumps(_ratings("2024-11-28")), encoding="utf-8")
+    league = TeamModel().fit(games)
+    assert apply_xg_ratings(league, games, tmp_path)[0] == "xg"
+    assert league.home_ice == {}
+
+    with_home = {**_ratings("2024-11-28"), "variant": "xg_shooter_gsax",
+                 "home_ice": {"AAA": 0.10, "BBB": -0.04}}
+    (tmp_path / RATINGS_FILE).write_text(json.dumps(with_home), encoding="utf-8")
+    own = TeamModel().fit(games)
+    ratings, detail = apply_xg_ratings(own, games, tmp_path)
+    assert ratings == "xg" and "home ice" in detail and "shooter-adjusted" in detail
+    assert own.home_ice == {"AAA": 0.10, "BBB": -0.04}
+    base_home, base_away = league.expected_goals("AAA", "BBB")
+    home, away = own.expected_goals("AAA", "BBB")
+    shift = math.exp((0.10 - 0.04) / 2)
+    assert home == pytest.approx(base_home * shift)
+    assert away == pytest.approx(base_away / shift)
+    assert own.moneyline_probabilities("AAA", "BBB")["home"] > league.moneyline_probabilities("AAA", "BBB")["home"]
+    # A team the file gives no home ice keeps the league's.
+    assert own.expected_goals("CCC", "DDD") == pytest.approx(league.expected_goals("CCC", "DDD"))
+
+    (tmp_path / RATINGS_FILE).write_text(
+        json.dumps({**with_home, "home_ice": {"AAA": "high"}}), encoding="utf-8"
+    )
+    assert apply_xg_ratings(TeamModel().fit(games), games, tmp_path)[0] == "goals"
+
+
 def _row(market: str, day: str, index: int, won: bool) -> dict:
     odds, p = 100.0, 0.62
     return {
@@ -80,7 +112,7 @@ def _row(market: str, day: str, index: int, won: bool) -> dict:
 
 
 def test_the_forward_report_sets_aside_goals_priced_team_rows() -> None:
-    before, after = "2026-10-03", XG_RATINGS_FROM
+    before, after = "2026-10-21", TEAM_RATINGS_FROM
     rows = (
         [_row("moneyline", before, i, True) for i in range(5)]
         + [_row("moneyline", after, i, i % 2 == 0) for i in range(4)]
@@ -94,12 +126,12 @@ def test_the_forward_report_sets_aside_goals_priced_team_rows() -> None:
     assert payload["markets"]["moneyline"]["first_date"] == after
     assert payload["markets"]["shots_on_goal"]["opinions"] == 3
     text = fe.render_forward_report(payload)
-    assert f"5 team-market ledger row(s) frozen before {XG_RATINGS_FROM}" in text
+    assert f"5 team-market ledger row(s) frozen before {TEAM_RATINGS_FROM}" in text
 
 
 def test_a_ledger_with_nothing_before_the_switch_says_nothing_about_it() -> None:
     payload = fe.build_forward_report(
-        pd.DataFrame([_row("moneyline", XG_RATINGS_FROM, 0, True)]),
+        pd.DataFrame([_row("moneyline", TEAM_RATINGS_FROM, 0, True)]),
         now=datetime(2026, 12, 1, tzinfo=timezone.utc),
     )
     assert payload["superseded_team_rows"] == 0

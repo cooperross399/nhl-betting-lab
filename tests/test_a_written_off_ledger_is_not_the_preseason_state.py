@@ -105,15 +105,15 @@ def _opener(market: str, **fields) -> dict:
 
 
 def _leafs(market: str, **fields) -> dict:
-    """Toronto v Boston, league date 2026-10-08."""
-    return _row("Toronto Maple Leafs", "Boston Bruins", "2026-10-09T00:10:00Z",
+    """Toronto v Boston, league date 2026-10-22."""
+    return _row("Toronto Maple Leafs", "Boston Bruins", "2026-10-23T00:10:00Z",
                 market, **fields)
 
 
 def _canes(market: str, **fields) -> dict:
-    """Carolina v the Islanders, league date 2026-10-08."""
+    """Carolina v the Islanders, league date 2026-10-22."""
     return _row("Carolina Hurricanes", "New York Islanders",
-                "2026-10-09T00:10:00Z", market, **fields)
+                "2026-10-23T00:10:00Z", market, **fields)
 
 
 def _freeze(archive: Path, rows: list[dict], *, day: str, frozen: datetime) -> None:
@@ -246,14 +246,14 @@ def test_the_finders_ledger_of_voids_and_a_missing_final(tmp_path: Path) -> None
                    line=2.5, american_odds=-120),
             _canes("total_goals", selection="over", line=6.5, american_odds=-105),
         ],
-        day="2026-10-08",
-        frozen=datetime(2026, 10, 8, 15, 0, tzinfo=timezone.utc),
+        day="2026-10-22",
+        frozen=datetime(2026, 10, 22, 15, 0, tzinfo=timezone.utc),
     )
 
     result, payload, text = _settle_and_render(
         tmp_path,
-        _games(("2026-10-08", "TOR", "BOS", 4, 2)),
-        now=datetime(2026, 10, 30, 15, 0, tzinfo=timezone.utc),
+        _games(("2026-10-22", "TOR", "BOS", 4, 2)),
+        now=datetime(2026, 11, 13, 15, 0, tzinfo=timezone.utc),
     )
 
     assert (result.rows_void, result.rows_unsettleable) == (2, 1)
@@ -267,14 +267,14 @@ def test_an_all_void_ledger_is_not_the_preseason_state_either(tmp_path: Path) ->
         tmp_path / "archive",
         [_leafs("shots_on_goal", player="Auston Matthews", selection="over",
                 line=3.5, american_odds=120)],
-        day="2026-10-08",
-        frozen=datetime(2026, 10, 8, 15, 0, tzinfo=timezone.utc),
+        day="2026-10-22",
+        frozen=datetime(2026, 10, 22, 15, 0, tzinfo=timezone.utc),
     )
 
     result, payload, text = _settle_and_render(
         tmp_path,
-        _games(("2026-10-08", "TOR", "BOS", 4, 2)),
-        now=datetime(2026, 10, 9, 15, 0, tzinfo=timezone.utc),
+        _games(("2026-10-22", "TOR", "BOS", 4, 2)),
+        now=datetime(2026, 10, 23, 15, 0, tzinfo=timezone.utc),
     )
 
     assert (result.rows_void, result.rows_unsettleable) == (1, 0)
@@ -291,12 +291,12 @@ def test_rows_that_collapse_to_no_wager_are_still_rows(tmp_path: Path) -> None:
     ledger = pd.DataFrame(
         [
             {
-                "snapshot_date": "2026-10-08", "commence_time": "2026-10-09T00:10:00Z",
+                "snapshot_date": "2026-10-22", "commence_time": "2026-10-23T00:10:00Z",
                 "home_team": "Toronto Maple Leafs", "away_team": "Boston Bruins",
                 "market": "moneyline", "player": "", "selection": "home",
                 "line": None, "american_odds": None, "book": "DraftKings",
                 "model_probability": 0.62, "edge": 0.1, "verdicts_in_force": "x",
-                "settled_at": "2026-10-09T15:00:00+00:00", "outcome": "unsettleable",
+                "settled_at": "2026-10-23T15:00:00+00:00", "outcome": "unsettleable",
                 "actual": None, "profit_units": 0.0,
             }
         ],
@@ -338,14 +338,14 @@ def test_one_settled_row_brings_the_table_not_either_message(tmp_path: Path) -> 
                    line=3.5, american_odds=120),
             _canes("total_goals", selection="over", line=6.5, american_odds=-105),
         ],
-        day="2026-10-08",
-        frozen=datetime(2026, 10, 8, 15, 0, tzinfo=timezone.utc),
+        day="2026-10-22",
+        frozen=datetime(2026, 10, 22, 15, 0, tzinfo=timezone.utc),
     )
 
     result, payload, text = _settle_and_render(
         tmp_path,
-        _games(("2026-10-08", "TOR", "BOS", 4, 2)),
-        now=datetime(2026, 10, 30, 15, 0, tzinfo=timezone.utc),
+        _games(("2026-10-22", "TOR", "BOS", 4, 2)),
+        now=datetime(2026, 11, 13, 15, 0, tzinfo=timezone.utc),
     )
 
     assert (result.rows_settled, result.rows_void, result.rows_unsettleable) == (1, 1, 1)

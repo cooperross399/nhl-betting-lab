@@ -10,11 +10,15 @@ about four thousand requests). Without it, only cached games are read.
 Writes the per-game tables to `data/processed/shadow_*.csv` and the report to
 `data/outputs/shadow_stats.md` and `.json`. `--tables-only` writes the tables
 and the team ratings (`data/processed/shadow_team_ratings.json`,
-`measurement.xg_team_ratings`) and stops; Publish Site runs it that way and
-rates the public board's teams on those ratings. `--price-backtest` writes the
+`measurement.xg_team_ratings`: shooter-adjusted xG with GSAx(sh) and each
+team's own home ice, since 2026-10-21) and stops; Gameday Refresh and Publish
+Site run it that way, and the card's team markets and the public board are
+rated on those ratings. `--price-backtest` writes the
 tables and then prices the bought team markets walk-forward on identical
-games: on the card's old goals ratings, the live xG ratings, the two PostHockey
-variants and the live ratings with per-team home ice (`PRICE_VARIANTS`;
+games: on the card's old goals ratings, the xG ratings of 2026-10-06 to 10-21,
+the two PostHockey variants, per-team home ice, and the shooter-adjusted
+ratings with per-team home ice the card prices on from 2026-10-22
+(`PRICE_VARIANTS`;
 `data/outputs/shadow_price_backtest.md` and `.json`, aggregate only:
 bets, returns and intervals, never a price). It needs
 `data/processed/historical_team_prices.csv`. Nothing here is read by the card or
@@ -30,7 +34,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
 import sys
 from datetime import timedelta
 from pathlib import Path
@@ -374,7 +377,7 @@ def main(argv: list[str] | None = None) -> int:
         "--price-backtest",
         action="store_true",
         help="Write the tables, then price the bought team markets on the "
-        "card's old goals ratings, the live xG ratings and their variants "
+        "card's old goals ratings, the xG ratings and their variants "
         "(PRICE_VARIANTS), walk-forward on identical games, and stop.",
     )
     args = parser.parse_args(argv)
@@ -409,20 +412,16 @@ def main(argv: list[str] | None = None) -> int:
         print("No play-by-play on disk; run with --fetch.", file=sys.stderr)
         return 1
     scored, seasons = add_expected_goals(shots)
-    shooters_after: dict = {}
-    goalies_after: dict = {}
-    context_seasons: list = []
-    if not args.tables_only:
-        # PostHockey's glossary (posthockey.com/glossary): context xG, then
-        # shooter and goalie talent updated shot by shot. The full measurement
-        # and the price backtest build them; the ratings the site and the card
-        # read come from `xg` alone and do not move.
-        scored, context_seasons = add_expected_goals(
-            scored, column="xg_ctx", design=context_design_matrix
-        )
-        dates = team_games.drop_duplicates("game_id").set_index("game_id")["date"].astype(str)
-        scored["date"] = scored["game_id"].map(dates).fillna("")
-        scored, shooters_after, goalies_after = add_talent(scored, base="xg_ctx", order="date")
+    # PostHockey's glossary (posthockey.com/glossary): context xG, then
+    # shooter and goalie talent updated shot by shot. Every run builds them:
+    # since 2026-10-21 the ratings the site and the card read are on
+    # shooter-adjusted xG (`measurement.RATINGS_VARIANT_KEY`).
+    scored, context_seasons = add_expected_goals(
+        scored, column="xg_ctx", design=context_design_matrix
+    )
+    dates = team_games.drop_duplicates("game_id").set_index("game_id")["date"].astype(str)
+    scored["date"] = scored["game_id"].map(dates).fillna("")
+    scored, shooters_after, goalies_after = add_talent(scored, base="xg_ctx", order="date")
     team_table, player_table, goalie_table = build_tables(events, scored)
     validation = measurement.validate_against_boxscores(team_games, team_table)
     if (args.tables_only or args.price_backtest) and not _agrees(validation):
@@ -534,43 +533,6 @@ def main(argv: list[str] | None = None) -> int:
 PRICE_WINDOWS = ("late", "early")
 
 
-#: Per-team home ice (`team_home_ice`), fixed before it was first measured
-#: (2026-10-21): each team's own home-minus-road goal-ratio spread over the
-#: two years before the window, as a deviation from the league's, shrunk
-#: toward the league's by games / (games + this).
-TEAM_HOME_SHRINKAGE_GAMES = 150
-TEAM_HOME_DAYS = 730
-
-
-def team_home_ice(history: pd.DataFrame, home_advantage: float) -> dict[str, float]:
-    """Each team's home edge as a log deviation from the league's.
-
-    In a game the log of home goals over away goals is the home team's home
-    effect plus the away team's road effect; the league model sets both to
-    log(home_advantage). Team t's goal ratio at home over its goal ratio on
-    the road, opponents averaging out, is twice its own effect plus twice the
-    league's, so its deviation is half that spread less twice
-    log(home_advantage). Summed goals, not per-game logs, so a shutout is no
-    infinity. Shrunk by games / (games + TEAM_HOME_SHRINKAGE_GAMES).
-    """
-    out: dict[str, float] = {}
-    league = 2.0 * math.log(home_advantage) if home_advantage > 0 else 0.0
-    teams = set(history["home_team"].astype(str)) | set(history["away_team"].astype(str))
-    for team in teams:
-        home = history[history["home_team"].astype(str) == team]
-        road = history[history["away_team"].astype(str) == team]
-        sums = (
-            float(home["home_goals"].sum()), float(home["away_goals"].sum()),
-            float(road["away_goals"].sum()), float(road["home_goals"].sum()),
-        )
-        if min(sums) <= 0:
-            continue
-        spread = math.log(sums[0] / sums[1]) - math.log(sums[2] / sums[3])
-        games = len(home) + len(road)
-        out[team] = (spread / 2.0 - league) * games / (games + TEAM_HOME_SHRINKAGE_GAMES)
-    return out
-
-
 def xg_rater(
     team_games: pd.DataFrame,
     team_table: pd.DataFrame,
@@ -615,31 +577,29 @@ def xg_rater(
             return
         recent = played[
             (played["_date"] < start)
-            & (played["_date"] >= start - timedelta(days=TEAM_HOME_DAYS))
+            & (played["_date"] >= start - timedelta(days=measurement.TEAM_HOME_DAYS))
         ]
-        deviation = team_home_ice(recent, model.home_advantage)
-        league_goals = model.expected_goals
-
-        def expected_goals(home_team, away_team, **rest):
-            home_goals, away_goals = league_goals(home_team, away_team, **rest)
-            shift = math.exp(
-                (deviation.get(str(home_team), 0.0) + deviation.get(str(away_team), 0.0)) / 2.0
-            )
-            return home_goals * shift, away_goals / shift
-
-        model.expected_goals = expected_goals
+        model.home_ice = measurement.team_home_ice(recent, model.home_advantage)
 
     return rate
 
 
 #: What the price backtest prices, on identical games: the card's goals
-#: ratings, the live xG ratings, the two PostHockey variants, and the live
-#: ratings with per-team home ice. (column key, label, variant, home_ice)
+#: ratings, the xG ratings the card priced on from 2026-10-06, the two
+#: PostHockey variants, those xG ratings with per-team home ice, and what the
+#: card prices on from 2026-10-22 (shooter-adjusted xG with per-team home
+#: ice). (column key, label, variant, home_ice)
 PRICE_VARIANTS = (
-    ("xg", "xG ratings (live)", measurement.SITE_VARIANT_KEY, False),
+    ("xg", "xG ratings (card, 2026-10-06 to 10-21)", measurement.SITE_VARIANT_KEY, False),
     ("xg_context_luck", "Context xG (PostHockey)", "xg_context_luck", False),
     ("xg_shooter_gsax", "Shooter-adjusted xG (PostHockey)", "xg_shooter_gsax", False),
     ("xg_team_home", "xG ratings + per-team home ice", measurement.SITE_VARIANT_KEY, True),
+    (
+        "xg_shooter_home",
+        "Shooter-adjusted xG + per-team home ice (card from 2026-10-22)",
+        measurement.RATINGS_VARIANT_KEY,
+        True,
+    ),
 )
 
 
@@ -683,11 +643,12 @@ def price_backtest(team_games, team_table, prices, args) -> int:
         "",
         "Walk-forward on identical games: each refit sees only games before the "
         "window it prices. Goals is the card's `TeamModel` as it priced before "
-        "2026-10-06; xG is the same model with every team rated as the public "
-        "site and the card now rate it (recent xG, a finishing factor and a "
+        "2026-10-06; xG is the same model with every team rated as the card "
+        "rated it from 2026-10-06 to 10-21 (recent xG, a finishing factor and a "
         "goaltending/GSAx factor). The PostHockey columns rate on context xG and "
-        "on shooter-adjusted xG instead; the last adds each team's own home ice "
-        f"(two years of goals, shrunk at {TEAM_HOME_SHRINKAGE_GAMES} games). "
+        "on shooter-adjusted xG instead; the home-ice columns add each team's own "
+        f"home ice (two years of goals, shrunk at {measurement.TEAM_HOME_SHRINKAGE_GAMES} "
+        "games), and the last of them is what the card prices on from 2026-10-22. "
         "One bet per wager at the best price, flat stakes, at the measurement's "
         "edge bar. An interval that includes zero means no demonstrated edge.",
         "",

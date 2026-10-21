@@ -173,6 +173,8 @@ def _write_inputs(tmp_path: Path):
 
 
 def test_the_full_run_measures_the_posthockey_variants_and_moves_no_rating(tmp_path) -> None:
+    """Since 2026-10-21 the tables-only run (the site's and the card's) builds
+    the PostHockey columns too, and rates on shooter-adjusted xG."""
     raw, processed = _write_inputs(tmp_path)
     script = _script()
     common = ["--processed-dir", str(processed), "--raw-dir", str(raw)]
@@ -188,11 +190,14 @@ def test_the_full_run_measures_the_posthockey_variants_and_moves_no_rating(tmp_p
     assert {e["variant"] for e in result["team"]} >= {"xg_context_luck", "xg_shooter_gsax"}
     assert {e["variant"] for e in result["props"]["goals"]} >= {"ixg_context_finishing", "ixg_talent"}
     assert result["context_xg_seasons"]
-    # The plain columns, the shorthanded ones included, are what the
-    # tables-only run (the site's and the card's) wrote.
-    for column in ("xgf", "xga", "goalie_xga", "goalie_ga", "gf", "xga_sh", "ga_sh"):
-        assert np.allclose(plain[column], full[column]), column
-    assert plain["xgf_adj"].isna().all() and full["xgf_adj"].notna().all()
+    # Every column, the PostHockey ones included, is what the tables-only
+    # run (the site's and the card's) wrote.
+    for column in ("xgf", "xga", "goalie_xga", "goalie_ga", "gf", "xga_sh", "ga_sh",
+                   "xgf_adj", "xga_adj", "goalie_xga_adj"):
+        assert np.allclose(plain[column], full[column], equal_nan=True), column
+    assert full["xgf_adj"].notna().all()
+    assert json.loads(ratings)["variant"] == "xg_shooter_gsax"
+    assert "home_ice" in json.loads(ratings)
     # The site's ratings come only from the tables-only path, and it was not
     # rewritten by the full run.
     assert (processed / script.RATINGS_FILE).read_text() == ratings

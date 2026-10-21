@@ -2636,6 +2636,31 @@ Re-derive rather than trust if the data has moved.
   repeated -32.9u against long-run. The card, the ledger and the model are
   unchanged.
 
+- **2026-10-21, NOT a defect fix: Cooper switched the card's team markets
+  onto PostHockey's shooter-adjusted xG and each team's own home ice, against
+  the switch rule.** Hours after the entry above, Cooper: "I dont give a shit
+  if you find that it makes more money. I am telling you that i want it to
+  affect the model. I know it will", then "We will always be betting picks
+  the day of" (the `late` window, where shooter-adjusted xG was +55.9u and
+  per-team home ice +10.9u against live; neither passed the committed rule,
+  and every interval spans zero: no demonstrated edge). The ratings file
+  (`shadow_team_ratings.json`, built by `run_shadow_stats.py --tables-only`
+  in Gameday Refresh and Publish Site) is now `xg_shooter_gsax`
+  (`measurement.RATINGS_VARIANT_KEY`: recent shooter-adjusted xGF/xGA with
+  GSAx(sh)) and carries `home_ice`, each team's log deviation from the
+  league's home edge over the two years before the ratings date, shrunk at
+  150 games (`measurement.team_home_ice`), which `TeamModel.home_ice` applies
+  to every team market. Every run now builds context xG and shooter talent,
+  which only the full measurement did. The combined pair was never priced as
+  a pair before the switch; `--price-backtest` now prices it
+  (`xg_shooter_home`). This changes what the forward test scores for team
+  markets, as the 2026-10-05 switch did: rows frozen before
+  `TEAM_RATINGS_FROM` (2026-10-22) are set aside (`superseded_team_rows`),
+  and the 2027-04-25 verdict on team markets covers the new ratings only.
+  Props, the edge bars, the stat-side and bracket checks, the market list
+  and the staking rule are unchanged. A missing or stale file still prices
+  on goals and says so.
+
 ## Contract strings — never change these
 
 Cooper's local scheduled tasks hard-code these. Renaming any of them silently

@@ -118,6 +118,18 @@ POSTHOCKEY_VARIANT_KEYS = frozenset({"xg_context_luck", "xg_shooter_gsax"})
 #: every column in the first measurement (2026-10-05, moneyline +7.58 per
 #: 1,000 games [+3.46, +12.15] against the card's goals-based ratings).
 SITE_VARIANT_KEY = "xg_luck"
+#: The variant the ratings file is built on, which the card's team markets
+#: and the public board read. Cooper's decision of 2026-10-21 ("i want it to
+#: affect the model"): PostHockey's shooter-adjusted xG with GSAx(sh), and
+#: each team's own home ice (`team_home_ice`). Priced on bought prices the
+#: same day (docs/team_variants_decision_rule.md) it did not pass the switch
+#: rule; he switched it anyway. `SITE_VARIANT_KEY` stays the measurement's
+#: reference.
+RATINGS_VARIANT_KEY = "xg_shooter_gsax"
+#: Each team's home edge is read from its goals in this many days before the
+#: ratings date, shrunk toward the league's by games / (games + this).
+TEAM_HOME_DAYS = 730
+TEAM_HOME_SHRINKAGE_GAMES = 150
 #: A shadow table covering less of the model's regular-season games than this
 #: is not used: the ratings would describe a different set of games from the
 #: rest of the model.
@@ -804,14 +816,60 @@ def latest_season_table(team_metrics: pd.DataFrame) -> pd.DataFrame:
     return table.sort_values("5v5 xGF%", ascending=False).round(2)
 
 
+def team_home_ice(history: pd.DataFrame, home_advantage: float) -> dict[str, float]:
+    """Each team's home edge as a log deviation from the league's.
+
+    In a game the log of home goals over away goals is the home team's home
+    effect plus the away team's road effect; the league model sets both to
+    log(home_advantage). Team t's goal ratio at home over its goal ratio on
+    the road, opponents averaging out, is twice its own effect plus twice the
+    league's, so its deviation is half that spread less twice
+    log(home_advantage). Summed goals, not per-game logs, so a shutout is no
+    infinity. Shrunk by games / (games + TEAM_HOME_SHRINKAGE_GAMES).
+    """
+    out: dict[str, float] = {}
+    league = 2.0 * math.log(home_advantage) if home_advantage > 0 else 0.0
+    teams = set(history["home_team"].astype(str)) | set(history["away_team"].astype(str))
+    for team in teams:
+        home = history[history["home_team"].astype(str) == team]
+        road = history[history["away_team"].astype(str) == team]
+        sums = (
+            float(home["home_goals"].sum()), float(home["away_goals"].sum()),
+            float(road["away_goals"].sum()), float(road["home_goals"].sum()),
+        )
+        if min(sums) <= 0:
+            continue
+        spread = math.log(sums[0] / sums[1]) - math.log(sums[2] / sums[3])
+        games = len(home) + len(road)
+        out[team] = (spread / 2.0 - league) * games / (games + TEAM_HOME_SHRINKAGE_GAMES)
+    return out
+
+
+def recent_home_ice(
+    team_games: pd.DataFrame, home_advantage: float, before: date
+) -> dict[str, float]:
+    """`team_home_ice` on the regular-season games of the TEAM_HOME_DAYS before `before`."""
+    games = team_games[pd.to_numeric(team_games["game_type"], errors="coerce") == 2].copy()
+    games["_date"] = games["date"].map(_as_date)
+    for column in ("home_goals", "away_goals"):
+        games[column] = pd.to_numeric(games[column], errors="coerce")
+    games = games.dropna(subset=["_date", "home_goals", "away_goals"])
+    games = games[
+        (games["_date"] < before) & (games["_date"] >= before - timedelta(days=TEAM_HOME_DAYS))
+    ]
+    return team_home_ice(games, home_advantage)
+
+
 def xg_team_ratings(
     home_advantage: float, team_games: pd.DataFrame, team_metrics: pd.DataFrame
 ) -> dict:
-    """Attack and defence per team on `SITE_VARIANT_KEY`, for the public site.
+    """Attack and defence per team on `RATINGS_VARIANT_KEY`, and home ice.
 
-    Built exactly as the measurement builds them: recent-weighted xGF/xGA,
-    times a finishing factor on attack and a goaltending (GSAx) factor on
-    defence, each regressed toward average. A `TeamModel` fitted with this
+    Built exactly as the measurement builds them: recent-weighted
+    shooter-adjusted xGF/xGA, times a goaltending (GSAx(sh)) factor on
+    defence, regressed toward average; the shooter adjustment already carries
+    finishing. `home_ice` is each team's own home edge (`recent_home_ice`),
+    which `TeamModel.home_ice` applies. A `TeamModel` fitted with this
     `home_advantage` that takes these as its teams' attack and defence prices
     every market off them, as the measurement scored them.
 
@@ -837,10 +895,17 @@ def xg_team_ratings(
             f"The play-by-play table covers {covered} of {wanted} regular-season "
             f"games, under {SITE_MINIMUM_COVERAGE:.0%}."
         )
-    variant = next(v for v in TEAM_VARIANTS if v.key == SITE_VARIANT_KEY)
+    variant = next(v for v in TEAM_VARIANTS if v.key == RATINGS_VARIANT_KEY)
+    if not _has_columns(metrics, variant):
+        raise ValueError(
+            f"The play-by-play table carries no {RATINGS_VARIANT_KEY} columns "
+            "(context xG and shooter talent were not built)."
+        )
     factors = shadow_factors(metrics, variant, home_advantage)
+    last = games["_date"].max()
+    home_ice = recent_home_ice(team_games, home_advantage, last + timedelta(days=1))
     return {
-        "variant": SITE_VARIANT_KEY,
+        "variant": RATINGS_VARIANT_KEY,
         "home_advantage": home_advantage,
         "games_covered": covered,
         "games_wanted": wanted,
@@ -852,4 +917,5 @@ def xg_team_ratings(
             }
             for team, f in sorted(factors.items())
         },
+        "home_ice": {team: home_ice[team] for team in sorted(home_ice)},
     }
