@@ -1,0 +1,41 @@
+name: Referee Probe
+on:
+  pull_request:
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: |
+          python3 - <<'PY'
+          import json, re, urllib.request
+          def get(u):
+              req = urllib.request.Request(u, headers={"User-Agent": "Mozilla/5.0"})
+              return urllib.request.urlopen(req, timeout=30).read().decode("utf-8", "replace")
+          for gid in ("2025020500", "2026020150"):
+              try:
+                  p = json.loads(get(f"https://api-web.nhle.com/v1/gamecenter/{gid}/right-rail"))
+                  gi = p.get("gameInfo")
+                  print(gid, "top keys", list(p)[:20])
+                  print(gid, "gameInfo", json.dumps(gi)[:1500] if gi is not None else None)
+              except Exception as e:
+                  print(gid, "right-rail error", e)
+          for path in ("20252026/GS020500.HTM",):
+              try:
+                  t = get("https://www.nhl.com/scores/htmlreports/" + path)
+                  i = t.find("Referee")
+                  print("GS len", len(t), "Referee at", i)
+                  print(t[max(0, i-300): i+2500])
+              except Exception as e:
+                  print("GS error", e)
+          for gid in ("2025020500",):
+              for ep in ("landing", "boxscore"):
+                  try:
+                      t = get(f"https://api-web.nhle.com/v1/gamecenter/{gid}/{ep}")
+                      for m in re.finditer(r"[Rr]eferee", t):
+                          print(ep, t[max(0, m.start()-200): m.start()+400]); break
+                      else:
+                          print(ep, "no referee text")
+                  except Exception as e:
+                      print(ep, "error", e)
+          PY
