@@ -33,3 +33,29 @@ held to the same shape: it ships only if it beats long-run in both the `card`
 window it reports and its overall total. Its 2026-10-09 result was -33.7u over
 24,714 bets against long-run; the bought prices have not changed since, so the
 re-run is expected to repeat it.
+
+## Result (Shadow Stats run 39550297681, 2026-10-21)
+
+3,798 games every variant priced, 2023-11-22 to 2026-10-19, bought team
+prices. Units are ROI x bets as the report prints them (ROI to 0.1%, so each
+figure is good to about half a unit per market).
+
+| Ratings | `late` units (ML / PL / totals = sum) | `early` units (sum) |
+|:--|:--|:--|
+| xG ratings (live) | -17.8 / +6.0 / -42.5 = **-54.3** | +23.5 / +29.6 / -15.2 = **+37.9** |
+| Context xG (PostHockey) | -16.7 / +11.2 / -57.3 = -62.8 | +30.2 / +22.4 / -18.2 = +34.4 |
+| Shooter-adjusted xG (PostHockey) | -2.7 / +1.3 / +3.0 = +1.6 | +30.1 / +21.7 / -36.8 = +15.0 |
+| xG + per-team home ice | -1.8 / +11.3 / -52.9 = -43.4 | +28.0 / +32.8 / -23.4 = +37.4 |
+
+- Context xG: worse than live in both windows. Fails rule 1.
+- Shooter-adjusted xG: +55.9u better in `late`, 22.9u worse in `early`.
+  Fails rule 1.
+- Per-team home ice: +10.9u better in `late`, level in `early` (-0.5u, inside
+  rounding), and its `late` totals lose 10.4u against live. Fails rule 2.
+
+Every interval in every row spans zero: no demonstrated edge for any of them,
+live included. **Nothing switches.** The card keeps the live xG ratings.
+
+The Props Form Test re-run (run 39549738985, `card` window) repeated the
+2026-10-09 result: recent form -33.7u over 24,714 against long-run -0.7u over
+28,549, -32.9u. It does not switch either.
