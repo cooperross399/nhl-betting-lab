@@ -43,6 +43,18 @@ FACTOR_RANGE = (0.95, 1.05)
 SCORING_STATS = frozenset({"goals", "assists", "points"})
 
 
+def _name_of(entry: object) -> str:
+    """A referee entry's name. The right-rail nests it as fullName.default."""
+    if not isinstance(entry, dict):
+        return str(entry)
+    full = entry.get("fullName")
+    if isinstance(full, dict):
+        return str(full.get("default", ""))
+    if isinstance(full, str):
+        return full
+    return str(entry.get("default", ""))
+
+
 def referees_of(payload: object) -> list[str]:
     """The referees a right-rail names, or ValueError when it has no gameInfo."""
     info = payload.get("gameInfo") if isinstance(payload, dict) else None
@@ -50,7 +62,7 @@ def referees_of(payload: object) -> list[str]:
         raise ValueError("the right-rail answered with no gameInfo block")
     names = []
     for entry in info.get("referees") or []:
-        name = entry.get("default", "") if isinstance(entry, dict) else str(entry)
+        name = _name_of(entry)
         if str(name).strip():
             names.append(str(name).strip())
     return names

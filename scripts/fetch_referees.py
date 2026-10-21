@@ -113,4 +113,6 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
+    # Line-buffered, so a step cut off by its timeout still shows what it read.
+    sys.stdout.reconfigure(line_buffering=True)
     raise SystemExit(main())

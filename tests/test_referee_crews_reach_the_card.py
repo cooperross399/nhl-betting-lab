@@ -102,3 +102,14 @@ def test_a_right_rail_without_game_info_is_refused() -> None:
     with pytest.raises(ValueError):
         rf.referees_of({"message": "not found"})
     assert rf.referees_of({"gameInfo": {"referees": [{"default": "Wes McCauley"}, {"default": ""}]}}) == ["Wes McCauley"]
+
+
+def test_the_right_rail_shape_the_nhl_serves_is_read():
+    # Copied from the right-rail of game 2025020500, read 2026-10-21: the name
+    # sits under fullName.default, beside a sweater number.
+    payload = {"gameInfo": {
+        "referees": [{"fullName": {"default": "Kyle Rehman"}, "sweaterNumber": 10},
+                     {"fullName": {"default": "Corey Syvret"}, "sweaterNumber": 23}],
+        "linesmen": [{"fullName": {"default": "Trent Knorr"}, "sweaterNumber": 74}],
+    }}
+    assert rf.referees_of(payload) == ["Kyle Rehman", "Corey Syvret"]
