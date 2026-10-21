@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import math
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -164,3 +165,31 @@ def test_a_window_the_ratings_refuse_is_skipped_and_counted() -> None:
 
     samples, walk = generate_team_samples(games, minimum_history_games=30, use_rest=False, rate=refuse)
     assert samples.empty and walk.refits == 0 and walk.windows_skipped_for_history > 0
+
+
+def test_per_team_home_ice_is_a_shrunk_deviation_from_the_league() -> None:
+    """A team that wins big at home and loses on the road gets its own home edge."""
+    spec = importlib.util.spec_from_file_location(
+        "_shadow_script_home", PROJECT_ROOT / "scripts" / "run_shadow_stats.py"
+    )
+    script = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(script)
+
+    rows = []
+    for _ in range(40):
+        rows.append({"home_team": "FORT", "away_team": "OTHR", "home_goals": 4, "away_goals": 2})
+        rows.append({"home_team": "OTHR", "away_team": "FORT", "home_goals": 4, "away_goals": 2})
+        rows.append({"home_team": "EVEN", "away_team": "OTHR", "home_goals": 3, "away_goals": 3})
+        rows.append({"home_team": "OTHR", "away_team": "EVEN", "home_goals": 3, "away_goals": 3})
+    history = pd.DataFrame(rows)
+    deviation = script.team_home_ice(history, home_advantage=1.0)
+    games = 80
+    shrink = games / (games + script.TEAM_HOME_SHRINKAGE_GAMES)
+    assert deviation["FORT"] == pytest.approx(math.log(4.0) / 2.0 * shrink)
+    assert deviation["EVEN"] == pytest.approx(0.0)
+    # The league's own edge is taken off: a team exactly as good at home as
+    # the league's home factor says carries no deviation.
+    assert script.team_home_ice(history, home_advantage=2.0 ** 0.5)["FORT"] == pytest.approx(
+        (math.log(4.0) / 2.0 - math.log(2.0)) * shrink
+    )

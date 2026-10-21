@@ -12,9 +12,10 @@ Writes the per-game tables to `data/processed/shadow_*.csv` and the report to
 and the team ratings (`data/processed/shadow_team_ratings.json`,
 `measurement.xg_team_ratings`) and stops; Publish Site runs it that way and
 rates the public board's teams on those ratings. `--price-backtest` writes the
-tables and then prices the bought team markets twice, walk-forward on
-identical games: once on the card's goals ratings and once on the site's xG
-ratings (`data/outputs/shadow_price_backtest.md` and `.json`, aggregate only:
+tables and then prices the bought team markets walk-forward on identical
+games: on the card's old goals ratings, the live xG ratings, the two PostHockey
+variants and the live ratings with per-team home ice (`PRICE_VARIANTS`;
+`data/outputs/shadow_price_backtest.md` and `.json`, aggregate only:
 bets, returns and intervals, never a price). It needs
 `data/processed/historical_team_prices.csv`. Nothing here is read by the card or
 the forward ledger (`nhl_betting_lab.shadow`). Spends no odds credits.
@@ -29,7 +30,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import sys
+from datetime import timedelta
 from pathlib import Path
 
 import pandas as pd
@@ -371,8 +374,8 @@ def main(argv: list[str] | None = None) -> int:
         "--price-backtest",
         action="store_true",
         help="Write the tables, then price the bought team markets on the "
-        "card's goals ratings and on the site's xG ratings, walk-forward on "
-        "identical games, and stop.",
+        "card's old goals ratings, the live xG ratings and their variants "
+        "(PRICE_VARIANTS), walk-forward on identical games, and stop.",
     )
     args = parser.parse_args(argv)
     prices_path = args.processed_dir / "historical_team_prices.csv"
@@ -409,11 +412,11 @@ def main(argv: list[str] | None = None) -> int:
     shooters_after: dict = {}
     goalies_after: dict = {}
     context_seasons: list = []
-    if not (args.tables_only or args.price_backtest):
+    if not args.tables_only:
         # PostHockey's glossary (posthockey.com/glossary): context xG, then
-        # shooter and goalie talent updated shot by shot. Only the full
-        # measurement builds them; the ratings the site and the card read come
-        # from `xg` alone and do not move.
+        # shooter and goalie talent updated shot by shot. The full measurement
+        # and the price backtest build them; the ratings the site and the card
+        # read come from `xg` alone and do not move.
         scored, context_seasons = add_expected_goals(
             scored, column="xg_ctx", design=context_design_matrix
         )
@@ -531,14 +534,59 @@ def main(argv: list[str] | None = None) -> int:
 PRICE_WINDOWS = ("late", "early")
 
 
-def xg_rater(team_games: pd.DataFrame, team_table: pd.DataFrame):
+#: Per-team home ice (`team_home_ice`), fixed before it was first measured
+#: (2026-10-21): each team's own home-minus-road goal-ratio spread over the
+#: two years before the window, as a deviation from the league's, shrunk
+#: toward the league's by games / (games + this).
+TEAM_HOME_SHRINKAGE_GAMES = 150
+TEAM_HOME_DAYS = 730
+
+
+def team_home_ice(history: pd.DataFrame, home_advantage: float) -> dict[str, float]:
+    """Each team's home edge as a log deviation from the league's.
+
+    In a game the log of home goals over away goals is the home team's home
+    effect plus the away team's road effect; the league model sets both to
+    log(home_advantage). Team t's goal ratio at home over its goal ratio on
+    the road, opponents averaging out, is twice its own effect plus twice the
+    league's, so its deviation is half that spread less twice
+    log(home_advantage). Summed goals, not per-game logs, so a shutout is no
+    infinity. Shrunk by games / (games + TEAM_HOME_SHRINKAGE_GAMES).
+    """
+    out: dict[str, float] = {}
+    league = 2.0 * math.log(home_advantage) if home_advantage > 0 else 0.0
+    teams = set(history["home_team"].astype(str)) | set(history["away_team"].astype(str))
+    for team in teams:
+        home = history[history["home_team"].astype(str) == team]
+        road = history[history["away_team"].astype(str) == team]
+        sums = (
+            float(home["home_goals"].sum()), float(home["away_goals"].sum()),
+            float(road["away_goals"].sum()), float(road["home_goals"].sum()),
+        )
+        if min(sums) <= 0:
+            continue
+        spread = math.log(sums[0] / sums[1]) - math.log(sums[2] / sums[3])
+        games = len(home) + len(road)
+        out[team] = (spread / 2.0 - league) * games / (games + TEAM_HOME_SHRINKAGE_GAMES)
+    return out
+
+
+def xg_rater(
+    team_games: pd.DataFrame,
+    team_table: pd.DataFrame,
+    variant_key: str = measurement.SITE_VARIANT_KEY,
+    *,
+    home_ice: bool = False,
+):
     """A `generate_team_samples` hook rating teams as the site does.
 
     Each refit takes the `xg_luck` factors from the play-by-play of games
     strictly before the window it prices, combined as
     `measurement.xg_team_ratings` combines them, so the backtest prices what
     the board would have shown that day. A window with no prior play-by-play
-    is refused.
+    is refused. `variant_key` names another shadow variant to rate on
+    instead; `home_ice` also gives each team its own home edge
+    (`team_home_ice`), from games before the window only.
     """
     games = team_games[pd.to_numeric(team_games["game_type"], errors="coerce") == 2].copy()
     games["game_id"] = pd.to_numeric(games["game_id"], errors="coerce")
@@ -546,7 +594,10 @@ def xg_rater(team_games: pd.DataFrame, team_table: pd.DataFrame):
     metrics = team_table.copy()
     metrics["game_id"] = pd.to_numeric(metrics["game_id"], errors="coerce")
     metrics = metrics.merge(games.dropna(subset=["_date"])[["game_id", "_date"]], on="game_id")
-    variant = next(v for v in measurement.TEAM_VARIANTS if v.key == measurement.SITE_VARIANT_KEY)
+    variant = next(v for v in measurement.TEAM_VARIANTS if v.key == variant_key)
+    for column in ("home_goals", "away_goals"):
+        games[column] = pd.to_numeric(games[column], errors="coerce")
+    played = games.dropna(subset=["_date", "home_goals", "away_goals"])
 
     def rate(model: TeamModel, start) -> None:
         history = metrics[metrics["_date"] < start]
@@ -560,8 +611,36 @@ def xg_rater(team_games: pd.DataFrame, team_table: pd.DataFrame):
                 attack=f["attack"] * f["finishing"],
                 defence=f["defence"] * f["goalie"],
             )
+        if not home_ice:
+            return
+        recent = played[
+            (played["_date"] < start)
+            & (played["_date"] >= start - timedelta(days=TEAM_HOME_DAYS))
+        ]
+        deviation = team_home_ice(recent, model.home_advantage)
+        league_goals = model.expected_goals
+
+        def expected_goals(home_team, away_team, **rest):
+            home_goals, away_goals = league_goals(home_team, away_team, **rest)
+            shift = math.exp(
+                (deviation.get(str(home_team), 0.0) + deviation.get(str(away_team), 0.0)) / 2.0
+            )
+            return home_goals * shift, away_goals / shift
+
+        model.expected_goals = expected_goals
 
     return rate
+
+
+#: What the price backtest prices, on identical games: the card's goals
+#: ratings, the live xG ratings, the two PostHockey variants, and the live
+#: ratings with per-team home ice. (column key, label, variant, home_ice)
+PRICE_VARIANTS = (
+    ("xg", "xG ratings (live)", measurement.SITE_VARIANT_KEY, False),
+    ("xg_context_luck", "Context xG (PostHockey)", "xg_context_luck", False),
+    ("xg_shooter_gsax", "Shooter-adjusted xG (PostHockey)", "xg_shooter_gsax", False),
+    ("xg_team_home", "xG ratings + per-team home ice", measurement.SITE_VARIANT_KEY, True),
+)
 
 
 def _cell(roi) -> str:
@@ -574,29 +653,43 @@ def _cell(roi) -> str:
 
 
 def price_backtest(team_games, team_table, prices, args) -> int:
-    """The bought team markets, priced on goals and on xG, same games."""
+    """The bought team markets, priced on goals and each xG variant, same games."""
     use_rest = ships("team_b2b", output_dir=args.output_dir)
     goals, goals_walk = generate_team_samples(team_games, use_rest=use_rest)
-    xg, xg_walk = generate_team_samples(
-        team_games, use_rest=use_rest, rate=xg_rater(team_games, team_table)
-    )
-    common = set(goals["game_id"]) & set(xg["game_id"])
-    goals = goals[goals["game_id"].isin(common)]
-    xg = xg[xg["game_id"].isin(common)]
     print(f"Goals ratings: {goals_walk.summary_line()}")
-    print(f"xG ratings: {xg_walk.summary_line()}")
-    print(f"Compared on {len(common):,} games both priced.")
+    samples = {"goals": goals}
+    labels = {"goals": "Goals ratings (pre-2026-10-06 card)"}
+    for key, label, variant_key, home_ice in PRICE_VARIANTS:
+        variant = next(v for v in measurement.TEAM_VARIANTS if v.key == variant_key)
+        if not measurement._has_columns(team_table, variant):
+            print(f"{label}: the tables carry no {variant_key} columns; not priced.")
+            continue
+        frame, walk = generate_team_samples(
+            team_games,
+            use_rest=use_rest,
+            rate=xg_rater(team_games, team_table, variant_key, home_ice=home_ice),
+        )
+        print(f"{label}: {walk.summary_line()}")
+        samples[key], labels[key] = frame, label
+    common = set.intersection(*(set(frame["game_id"]) for frame in samples.values()))
+    samples = {k: frame[frame["game_id"].isin(common)] for k, frame in samples.items()}
+    print(f"Compared on {len(common):,} games every variant priced.")
 
-    payload: dict = {"games": len(common), "use_rest": use_rest, "windows": {}}
+    payload: dict = {
+        "games": len(common), "use_rest": use_rest, "variants": labels, "windows": {}
+    }
     lines = [
-        "# Team markets against real prices: goals ratings vs xG ratings",
+        "# Team markets against real prices: goals, xG and its variants",
         "",
         "Walk-forward on identical games: each refit sees only games before the "
-        "window it prices. Goals is the card's `TeamModel`; xG is the same "
-        "model with every team rated as the public site rates it (recent xG, "
-        "a finishing factor and a goaltending/GSAx factor). One bet per wager "
-        "at the best price, flat stakes, at the measurement's edge bar. An "
-        "interval that includes zero means no demonstrated edge.",
+        "window it prices. Goals is the card's `TeamModel` as it priced before "
+        "2026-10-06; xG is the same model with every team rated as the public "
+        "site and the card now rate it (recent xG, a finishing factor and a "
+        "goaltending/GSAx factor). The PostHockey columns rate on context xG and "
+        "on shooter-adjusted xG instead; the last adds each team's own home ice "
+        f"(two years of goals, shrunk at {TEAM_HOME_SHRINKAGE_GAMES} games). "
+        "One bet per wager at the best price, flat stakes, at the measurement's "
+        "edge bar. An interval that includes zero means no demonstrated edge.",
         "",
         f"Games compared: {len(common):,}. Back-to-back adjustment: "
         f"{'in force' if use_rest else 'off'}.",
@@ -605,9 +698,9 @@ def price_backtest(team_games, team_table, prices, args) -> int:
         try:
             reports = {
                 name: build_team_measurement(
-                    samples, prices, phase=window, processed_dir=args.processed_dir
+                    frame, prices, phase=window, processed_dir=args.processed_dir
                 )
-                for name, samples in (("goals", goals), ("xg", xg))
+                for name, frame in samples.items()
             }
         except (MixedWindowError, UnresolvedTeamsError) as exc:
             print(f"::error::{exc}")
@@ -616,26 +709,27 @@ def price_backtest(team_games, team_table, prices, args) -> int:
             "",
             f"## `{window}` window (median {reports['goals'].phase_hours:.1f}h before face-off)",
             "",
-            "| Market | Goals ratings | xG ratings |",
-            "|:--|:--|:--|",
         ]
         by_market = {
             name: {m.market: m.priced for m in report.markets}
             for name, report in reports.items()
         }
         payload["windows"][window] = {}
-        for market in sorted(set(by_market["goals"]) | set(by_market["xg"])):
-            g, x = by_market["goals"].get(market), by_market["xg"].get(market)
-            if (g is None or not g.bets) and (x is None or not x.bets):
+        markets = sorted(set().union(*(set(m) for m in by_market.values())))
+        for market in markets:
+            cells = {name: by_market[name].get(market) for name in samples}
+            if all(r is None or not r.bets for r in cells.values()):
                 continue
-            lines.append(f"| {market} | {_cell(g)} | {_cell(x)} |")
+            lines += [f"### {market}", "", "| Ratings | Result |", "|:--|:--|"]
+            lines += [f"| {labels[name]} | {_cell(r)} |" for name, r in cells.items()]
+            lines.append("")
             payload["windows"][window][market] = {
                 name: (
                     {"bets": r.bets, "roi": r.roi, "low": r.low, "high": r.high,
                      "adjusted_low": r.adjusted_low, "adjusted_high": r.adjusted_high}
                     if r is not None and r.bets else None
                 )
-                for name, r in (("goals", g), ("xg", x))
+                for name, r in cells.items()
             }
     report_text = "\n".join(lines) + "\n"
     args.output_dir.mkdir(parents=True, exist_ok=True)

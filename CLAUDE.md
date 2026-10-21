@@ -2595,6 +2595,22 @@ Re-derive rather than trust if the data has moved.
   the edge bars, the bracket and starter checks, the market list and the
   staking rule are unchanged. The DFS projections still read the old mean.
 
+- **2026-10-21: the shadow team variants and per-team home ice were priced,
+  and nothing switched.** Cooper said "Yes do all tht" to re-testing them and
+  switching on a winner. `run_shadow_stats.py --price-backtest` now prices,
+  on identical games and the bought team prices, the old goals ratings, the
+  live xG ratings, both PostHockey variants and the live ratings with
+  per-team home ice (`team_home_ice`, two years of goals shrunk at 150
+  games). The switch rule was committed before any result was read
+  (`docs/team_variants_decision_rule.md`): beat the live ratings in units in
+  both windows, and lose no more than 5u in any `late` market. Shadow Stats
+  run 39550297681, 3,798 games: none passed (context xG worse in both;
+  shooter-adjusted xG +55.9u `late` but -22.9u `early`; per-team home ice
+  +10.9u `late`, level `early`, and -10.4u on `late` totals). Every interval
+  spans zero, live included: no demonstrated edge. The Props Form Test re-run
+  repeated -32.9u against long-run. The card, the ledger and the model are
+  unchanged.
+
 ## Contract strings — never change these
 
 Cooper's local scheduled tasks hard-code these. Renaming any of them silently
