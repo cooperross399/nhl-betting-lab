@@ -55,7 +55,7 @@ from nhl_betting_lab.reports.gameday_card import (
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-NOW = datetime(2026, 10, 20, tzinfo=timezone.utc)
+NOW = datetime(2026, 10, 25, tzinfo=timezone.utc)
 CLEARS = "population_clears_edge_bar"
 #: The claims this fix removes. Lower-cased, so a re-capitalised copy of
 #: either still fails.
@@ -85,13 +85,15 @@ def _ledger() -> pd.DataFrame:
     rows = []
     for market, player, selection, line, odds, p in UNSTAKED:
         rows.append({
-            "snapshot_date": "2026-10-09",
-            "commence_time": "2026-10-09T23:00:00Z",
+            # On or after the 2026-10-21 saves change, so the saves rung is
+            # measured rather than set aside as priced on the old mean.
+            "snapshot_date": "2026-10-21",
+            "commence_time": "2026-10-21T23:00:00Z",
             "home_team": "Boston Bruins", "away_team": "New York Rangers",
             "market": market, "player": player, "selection": selection,
             "line": line, "american_odds": odds, "book": "DK",
             "model_probability": p, "edge": p - american_to_implied(odds),
-            "verdicts_in_force": "v", "settled_at": "2026-10-11T12:00:00Z",
+            "verdicts_in_force": "v", "settled_at": "2026-10-22T12:00:00Z",
             "outcome": "won", "actual": 4.0,
             "profit_units": profit_on_win(odds),
         })
