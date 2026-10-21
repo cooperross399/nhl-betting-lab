@@ -2660,6 +2660,36 @@ Re-derive rather than trust if the data has moved.
   Props, the edge bars, the stat-side and bracket checks, the market list
   and the staking rule are unchanged. A missing or stale file still prices
   on goals and says so.
+- **2026-10-21, NOT a defect fix: each club's last five games are factored
+  into team markets and props (Cooper: "I want to make sure the model is
+  learning from itself each night too ... how every team is playing in their
+  last five games", then "i dont want to completely rely on the last 5 games
+  i just want it to be factored in").** Every model already re-fits on every
+  game each run; what was missing was short-term team form. **Team markets:**
+  `measurement.team_form` takes each club's venue-adjusted shooter-adjusted
+  xGF and xGA over its last `TEAM_FORM_GAMES` (5) against its own
+  recent-weighted level, shrunk at `TEAM_FORM_SHRINKAGE_GAMES` (15, so five
+  games keep a quarter of the move) and clamped to 0.9-1.1; `xg_team_ratings`
+  multiplies it into attack and defence and publishes it as `form`, so the
+  card, the site and The Lineup read it with no reader change. **Props:**
+  `PlayerPropsModel.team_form` (`team_form_factors`) multiplies a skater's
+  expected count by his own club's last-five production and tonight's
+  opponent's last-five concession of that stat, each against the club's
+  record in the logs, same shrinkage, clamped to 0.85-1.18; the card passes
+  the roster's club. Goalie saves are untouched (the saves context model
+  already reads both clubs' recent shot rates). Constants are this lab's
+  choice, made before any price was read. Measured for information on the
+  bought prices (`run_shadow_stats.py --price-backtest`, variant
+  `xg_shooter_home_form` against the same re-rated nightly without form;
+  `run_props_form_experiment.py --team-form`); the walk-forward prices form
+  night by night (`generate_prop_samples(team_form=True)`, default off, so
+  every committed measurement is unchanged). Live from the 2026-10-22 card,
+  the same day the team-market test restarts (`TEAM_RATINGS_FROM`). **Prop
+  ledger rows frozen before 2026-10-22 were priced without form and are NOT
+  set aside**, unlike saves and team markets: setting them aside would
+  discard every prop opinion so far, and whether to is Cooper's call. The
+  edge bars, the bracket and starter checks, the market list and the staking
+  rule are unchanged.
 
 ## Contract strings — never change these
 

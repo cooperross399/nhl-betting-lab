@@ -20,6 +20,9 @@ carries each team's own home ice (`home_ice`, a log deviation from the
 league's), which this module sets as `TeamModel.home_ice`. Priced on the
 bought team markets the same day it did not pass the switch rule written
 before the test (docs/team_variants_decision_rule.md); it ships on his word.
+From the same date each team's attack and defence also carry its last-five
+form (Cooper, 2026-10-21: factored in, not relied on), already multiplied in
+by the builder and published beside them as `form`.
 """
 
 from __future__ import annotations
@@ -87,4 +90,7 @@ def apply_xg_ratings(model: TeamModel, games: pd.DataFrame, processed: Path) -> 
         else "expected goals plus goaltending and finishing"
     )
     home = f", each team's own home ice ({len(home_ice)} teams)" if home_ice else ""
+    form = ratings.get("form")
+    if isinstance(form, dict) and form:
+        home += f", last-{ratings.get('form_games', 5)} form ({len(form)} teams)"
     return "xg", f"{stat}{home}, {len(teams)} teams, through {through}"

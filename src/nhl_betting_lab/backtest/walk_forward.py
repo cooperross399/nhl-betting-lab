@@ -32,6 +32,8 @@ from nhl_betting_lab.models.player_props import (
     GOALIE_STAT,
     PlayerPropsModel,
     SKATER_STATS,
+    team_form_factors,
+    team_game_totals,
 )
 
 
@@ -241,8 +243,13 @@ def generate_prop_samples(
     end_date: str = "",
     use_rest: bool = True,
     recent_form: bool = False,
+    team_form: bool = False,
 ) -> tuple[pd.DataFrame, WalkForwardReport]:
     """Price every player-game in the log with a model that could not see it.
+
+    `team_form=True` prices each night with every club's last-five form from
+    games before that night (`team_form_factors`), as the card does from
+    2026-10-22; False prices without it, as every committed measurement did.
 
     `use_rest=False` prices with the schedule ignored, which exists so the two
     policies can be compared on identical prices — the comparison that decides
@@ -273,6 +280,7 @@ def generate_prop_samples(
     all_logs["_date"] = all_logs["date"].map(_as_date)
     all_logs = all_logs.dropna(subset=["_date"])
     b2b = _team_b2b_flags(logs) if use_rest else {}
+    totals = team_game_totals(all_logs.drop(columns=["_date"])) if team_form else None
 
     first = frame["_date"].min()
     last = frame["_date"].max()
@@ -297,12 +305,17 @@ def generate_prop_samples(
             continue
         if recent_form:
             apply_recent_form(model, history)
+        model.team_form = {}
+        form_night = None
         report.refits += 1
 
         window = frame[
             (frame["_date"] >= window_start) & (frame["_date"] <= window_end)
         ]
         for _, log in window.iterrows():
+            if totals is not None and log["_date"] != form_night:
+                form_night = log["_date"]
+                model.team_form = team_form_factors(totals, before=form_night.isoformat())
             player_id = int(log["player_id"])
             role = str(log["role"])
             if role == "goalie" and int(

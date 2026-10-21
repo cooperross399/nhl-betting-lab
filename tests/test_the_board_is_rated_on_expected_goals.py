@@ -91,9 +91,40 @@ def test_the_ratings_are_the_measurements_own_factors() -> None:
     variant = next(v for v in measurement.TEAM_VARIANTS if v.key == "xg_shooter_gsax")
     dated = metrics.merge(games.assign(_date=pd.to_datetime(games["date"]).dt.date)[["game_id", "_date"]])
     factors = measurement.shadow_factors(dated, variant, model.home_advantage)
+    form = measurement.team_form(dated, variant, model.home_advantage)
+    assert set(ratings["form"]) == set(form)
+    for team, entry in form.items():
+        assert ratings["form"][team] == pytest.approx(entry)
     for team, f in factors.items():
-        assert teams[team]["attack"] == pytest.approx(f["attack"] * f["finishing"])
-        assert teams[team]["defence"] == pytest.approx(f["defence"] * f["goalie"])
+        assert teams[team]["attack"] == pytest.approx(
+            f["attack"] * f["finishing"] * form[team]["attack"]
+        )
+        assert teams[team]["defence"] == pytest.approx(
+            f["defence"] * f["goalie"] * form[team]["defence"]
+        )
+
+
+def test_last_five_form_is_a_shrunk_clamped_nudge_on_the_rating() -> None:
+    """Cooper, 2026-10-21: the last five games are factored in, not relied on."""
+    games, metrics = _games_and_metrics()
+    dated = metrics.merge(games.assign(_date=pd.to_datetime(games["date"]).dt.date)[["game_id", "_date"]])
+    variant = next(v for v in measurement.TEAM_VARIANTS if v.key == "xg_shooter_gsax")
+    # CCC's last five games: it out-chances its opponents by half again.
+    last = dated[dated["team"] == "CCC"].sort_values("_date").tail(5).index
+    hot = dated.copy()
+    hot.loc[last, "xgf_adj"] = hot.loc[last, "xgf_adj"] * 1.5
+    steady = measurement.team_form(dated, variant, 1.0)
+    form = measurement.team_form(hot, variant, 1.0)
+    weight = 5 / (5 + measurement.TEAM_FORM_SHRINKAGE_GAMES)
+    assert steady["CCC"]["attack"] == pytest.approx(1.0)
+    # Raised, by about a quarter of the move and never past the cap.
+    assert 1.0 < form["CCC"]["attack"] <= measurement.TEAM_FORM_RANGE[1]
+    assert form["CCC"]["attack"] < 1.0 + weight * 0.5 + 1e-9
+    assert form["CCC"]["defence"] == pytest.approx(steady["CCC"]["defence"])
+    # A wild last five is held at the cap.
+    wild = dated.copy()
+    wild.loc[last, "xgf_adj"] = wild.loc[last, "xgf_adj"] * 10
+    assert measurement.team_form(wild, variant, 1.0)["CCC"]["attack"] == measurement.TEAM_FORM_RANGE[1]
 
 
 def test_a_table_without_the_shooter_adjusted_columns_yields_no_ratings() -> None:

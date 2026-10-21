@@ -49,7 +49,10 @@ from nhl_betting_lab.reports.player_props_backtest import run_backtest
 REPORT_MARKDOWN = "props_form_test.md"
 REPORT_JSON = "props_form_test.json"
 WINDOWS = ("card", "late", "early")
-VARIANTS = (("long_run", False), ("recent_form", True))
+VARIANTS = (("long_run", {}), ("recent_form", {"recent_form": True}))
+#: `--team-form`: the card's model without and with last-five team form
+#: (`PlayerPropsModel.team_form`, Cooper 2026-10-21), priced night by night.
+TEAM_FORM_VARIANTS = (("long_run", {}), ("team_form", {"team_form": True}))
 
 
 def _interval(interval) -> dict:
@@ -77,7 +80,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--phase", default="card", choices=WINDOWS)
     parser.add_argument("--processed-dir", default=str(PROCESSED_DIR))
     parser.add_argument("--output-dir", default=str(OUTPUTS_DIR))
+    parser.add_argument(
+        "--team-form", action="store_true",
+        help="Price last-five team form against the card's model instead of "
+        "player recent form.",
+    )
     args = parser.parse_args(argv)
+    variants = TEAM_FORM_VARIANTS if args.team_form else VARIANTS
+    tested = variants[1][0]
 
     processed = Path(args.processed_dir)
     outputs = Path(args.output_dir)
@@ -92,9 +102,9 @@ def main(argv: list[str] | None = None) -> int:
 
     results: dict[str, dict] = {}
     measured = None
-    for name, form in VARIANTS:
+    for name, options in variants:
         print(f"Generating walk-forward samples ({name})...")
-        samples, walk = generate_prop_samples(logs, use_rest=use_rest, recent_form=form)
+        samples, walk = generate_prop_samples(logs, use_rest=use_rest, **options)
         print(f"  {walk.summary_line()}")
         try:
             report = run_backtest(
@@ -117,7 +127,7 @@ def main(argv: list[str] | None = None) -> int:
             "by_market": {m: _interval(i) for m, i in report.by_market.items()},
         }
 
-    base, form = results["long_run"], results["recent_form"]
+    base, form = results["long_run"], results[tested]
     delta = form["overall"]["profit"] - base["overall"]["profit"]
     markets = sorted(set(base["by_market"]) & set(form["by_market"]))
     form_delta = sum(
@@ -126,9 +136,10 @@ def main(argv: list[str] | None = None) -> int:
         if m in FORM_STATS
     )
     zero = form["overall"]["low"] <= 0 <= form["overall"]["high"]
+    what = "Last-five team form" if args.team_form else "Recent form"
     verdict = (
-        f"Recent form finishes {delta:+.1f}u against the long-run rates "
-        f"({form_delta:+.1f}u of it in the four form markets). With form the "
+        f"{what} finishes {delta:+.1f}u against the long-run rates "
+        f"({form_delta:+.1f}u of it in shots, goals, assists and points). With it the "
         f"card-bar population returns {form['overall']['roi']:+.2%} over "
         f"{form['overall']['bets']:,} bets, against "
         f"{base['overall']['roi']:+.2%} over {base['overall']['bets']:,}. "
@@ -144,6 +155,7 @@ def main(argv: list[str] | None = None) -> int:
         "phase_hours": measured.phase_hours,
         "edge_threshold": args.edge_threshold,
         "use_rest": use_rest,
+        "tested": tested,
         "form_half_life_games": FORM_HALF_LIFE_GAMES,
         "form_stats": list(FORM_STATS),
         "delta_units": delta,
@@ -156,20 +168,28 @@ def main(argv: list[str] | None = None) -> int:
         json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
     lines = [
-        "# Props price test: does recent form make better bets?",
+        f"# Props price test: does {what.lower()} make better bets?",
         "",
         "The identical policy priced twice on identical bought prices: the "
-        "card's long-run player rates, and the same model with shots, goals, "
-        "assists and points moved toward each player's recent form (a game's "
-        f"weight halving every {FORM_HALF_LIFE_GAMES} of his games, regressed "
-        "toward his long-run rate, fixed in advance). One bet per wager at the "
-        "best price, flat stakes, at the card's edge bar.",
+        "card's long-run player rates, and the same model "
+        + (
+            "with each club's last-five form (its skaters' production and its "
+            "opponents' production against it over its last five games, "
+            "against its own record, shrunk and clamped), night by night."
+            if args.team_form
+            else "with shots, goals, assists and points moved toward each "
+            "player's recent form (a game's weight halving every "
+            f"{FORM_HALF_LIFE_GAMES} of his games, regressed toward his "
+            "long-run rate, fixed in advance)."
+        )
+        + " One bet per wager at the best price, flat stakes, at the card's "
+        "edge bar.",
         "",
         f"Priced in the `{measured.phase}` window, median "
         f"{measured.phase_hours:.1f} hours before face-off. Back-to-back "
         f"adjustment: {'on' if use_rest else 'off'}, as the verdict in force says.",
         "",
-        "| Market | Long-run rates | Recent form | Delta |",
+        f"| Market | Long-run rates | {what} | Delta |",
         "|:--|:--|:--|--:|",
     ]
     for m in markets:
@@ -185,9 +205,14 @@ def main(argv: list[str] | None = None) -> int:
         "",
         verdict,
         "",
-        "Nothing here reaches the card. Moving the card onto recent form is "
-        "Cooper's decision (the model is frozen until 2027-04-25, "
-        "`docs/when_this_ends.md`).",
+        (
+            "Last-five team form is on the card from 2026-10-22 (Cooper's "
+            "decision, 2026-10-21); this measures it, it does not gate it."
+            if args.team_form
+            else "Nothing here reaches the card. Moving the card onto recent "
+            "form is Cooper's decision (the model is frozen until 2027-04-25, "
+            "`docs/when_this_ends.md`)."
+        ),
         "",
     ]
     report_text = "\n".join(lines)
