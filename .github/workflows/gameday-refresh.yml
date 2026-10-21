@@ -729,6 +729,19 @@ jobs:
         run: |
           python scripts/capture_line_combinations.py
 
+      - name: Record tonight's referee crews
+        # Who referees tonight, and who refereed the games already played,
+        # from the NHL's free right-rail (Cooper, 2026-10-21). Soft: a game
+        # with no crew posted, or a referee with no history, moves nothing.
+        # Past games are added a budget a run and kept in data/processed.
+        if: always()
+        continue-on-error: true
+        timeout-minutes: 6
+        env:
+          PYTHONPATH: src
+        run: |
+          python scripts/fetch_referees.py --budget 300
+
       - name: Render the card
         id: card
         if: always()

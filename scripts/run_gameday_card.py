@@ -71,6 +71,7 @@ from nhl_betting_lab.reports.gameday_card import (
 from nhl_betting_lab.stat_sides import build_stat_sides
 from nhl_betting_lab.forward_evidence import write_snapshot
 from nhl_betting_lab.price_movement import apply_movement, movement, opening_snapshot
+from nhl_betting_lab.referees import tonight_factors
 from nhl_betting_lab.season import (
     EXPECTED_CLUBS,
     LEAGUE_TIMEZONE,
@@ -544,6 +545,12 @@ def main(argv: list[str] | None = None) -> int:
             "back-to-back history read only games dated before it, which is "
             f"what a run that morning could have seen: {'; '.join(read)}."
         )
+    # Tonight's referee crews (Cooper, 2026-10-21), from
+    # scripts/fetch_referees.py; a game with no crew posted moves nothing.
+    crews = tonight_factors(
+        processed, moment.astimezone(LEAGUE_TIMEZONE).date().isoformat(), games
+    )
+    print(f"Referee crews: {len(crews)} game(s) moved by tonight's crew.")
     if logs.empty:
         blockers.append(
             "No player logs on disk, so no prop can be priced. Run "
@@ -610,6 +617,7 @@ def main(argv: list[str] | None = None) -> int:
                 processed, moment.astimezone(LEAGUE_TIMEZONE).date().isoformat(), logs
             )
             print(f"Lineups: {lineups.describe()}.")
+            props_model.game_factors = crews
             prop_probabilities, unresolved = price_props(
                 priceable,
                 props_model,
@@ -674,6 +682,7 @@ def main(argv: list[str] | None = None) -> int:
                     f"{club}: attack x{factor:.3f} for "
                     f"{', '.join(lineups.absent.get(club, []))} out tonight."
                 )
+            team_model.game_factors = crews
             team_probabilities, unresolved = price_team_markets(
                 priceable, team_model, team_names=team_names,
                 history=team_history,

@@ -172,6 +172,10 @@ class TeamModel:
         #: by the caller that knows tonight's slate (`rest.schedule_state`);
         #: empty prices every side as neither, as before.
         self.schedule_state: dict[str, dict[str, bool]] = {}
+        #: Tonight's referee crew per game, {frozenset({home, away}): factor},
+        #: set by the card (`referees.tonight_factors`); it scales both
+        #: sides, so the total moves and the split does not.
+        self.game_factors: dict[frozenset, float] = {}
         self.report = TeamModelReport()
 
     def fit(self, games: pd.DataFrame) -> "TeamModel":
@@ -445,7 +449,8 @@ class TeamModel:
             )
             home_goals *= shift
             away_goals /= shift
-        return home_goals, away_goals
+        crew = self.game_factors.get(frozenset({str(home_team), str(away_team)}), 1.0)
+        return home_goals * crew, away_goals * crew
 
     def scoreline_matrix(
         self,

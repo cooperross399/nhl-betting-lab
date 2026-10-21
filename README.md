@@ -257,6 +257,11 @@ PYTHONPATH=src .venv/bin/python scripts/capture_deployment.py
 # game days only, polite delay. CANNOT be collected retroactively.
 PYTHONPATH=src .venv/bin/python scripts/capture_line_combinations.py
 
+# Record tonight's referee crews and add past games' crews to
+# data/processed/referee_games.csv (newest first, --budget a run). The card
+# moves each game's goals by its crew (Cooper, 2026-10-21). Free.
+PYTHONPATH=src .venv/bin/python scripts/fetch_referees.py
+
 # Send each team's newest forward lines (L1-L4) and power-play units (PP1/PP2)
 # from today's capture to The Lineup, Cooper's DFS lineup builder, by player
 # name only, with D pairs and goalies in their own keys. Nothing older, no ids,

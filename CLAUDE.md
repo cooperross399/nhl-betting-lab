@@ -2729,6 +2729,17 @@ Re-derive rather than trust if the data has moved.
   five points. The first card of a day sees none, and the private movement
   chain is not read (no new token holder). Late-market rows the re-price
   adds to the snapshot carry the moved probability.
+  **Referee crews** (`referees`, same request): Gameday Refresh's "Record
+  tonight's referee crews" (`scripts/fetch_referees.py`, free, soft) reads
+  tonight's crews from the NHL right-rail and adds past regular-season games'
+  crews to `data/processed/referee_games.csv`, 300 a run newest first, so
+  the history fills over the first few days. A referee's factor is his
+  games' total goals over the league's, shrunk at 120 games; a crew is the
+  mean of its known referees, clamped to 0.95-1.05, and scales both clubs'
+  expected goals (the total moves, the split does not) and every skater's
+  goals, assists and points in that game. Penalties are read through goals
+  because goals are what the bets settle on. A game with no crew posted
+  when the card runs moves nothing; the public board does not read crews.
 
 ## Contract strings — never change these
 

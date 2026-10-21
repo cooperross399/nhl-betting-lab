@@ -328,6 +328,10 @@ class PlayerPropsModel:
         #: `fit` from the logs it saw; `team_form_factors` rebuilds it for
         #: any night.
         self.team_form: dict[str, dict[str, dict[str, float]]] = {}
+        #: Tonight's referee crew per game, {frozenset({team, opponent}):
+        #: factor}, set by the card (`referees.tonight_factors`); it scales
+        #: goals, assists and points. Empty moves nothing.
+        self.game_factors: dict[frozenset, float] = {}
         #: Names two priced players share, which resolve to neither on their
         #: own. Some are recoverable with a team; see `_index_names`.
         self.ambiguous_names: tuple[str, ...] = ()
@@ -840,7 +844,14 @@ class PlayerPropsModel:
             * self.team_form_multiplier(
                 stat, team=team if team else rates.team, opponent=str(opponent)
             )
+            * self.crew_multiplier(stat, team if team else rates.team, opponent)
         )
+
+    def crew_multiplier(self, stat: str, team: object, opponent: object) -> float:
+        """Tonight's referee crew, on the scoring stats only."""
+        if not self.game_factors or stat not in ("goals", "assists", "points"):
+            return 1.0
+        return float(self.game_factors.get(frozenset({str(team), str(opponent)}), 1.0))
 
     def opponent_factor(self, opponent: str, group: str, stat: str) -> float:
         """What `opponent` allows this player's position group in `stat`,
