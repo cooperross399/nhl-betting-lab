@@ -2733,7 +2733,9 @@ Re-derive rather than trust if the data has moved.
   tonight's referee crews" (`scripts/fetch_referees.py`, free, soft) reads
   tonight's crews from the NHL right-rail and adds past regular-season games'
   crews to `data/processed/referee_games.csv`, 300 a run newest first, so
-  the history fills over the first few days. A referee's factor is his
+  the history fills over the first few days. (Its first version read each
+  name from the wrong key, so the first run, 2026-10-21, found no crews and
+  every factor was 1.0; #348 reads `fullName.default`, as the NHL serves it.) A referee's factor is his
   games' total goals over the league's, shrunk at 120 games; a crew is the
   mean of its known referees, clamped to 0.95-1.05, and scales both clubs'
   expected goals (the total moves, the split does not) and every skater's
