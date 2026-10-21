@@ -60,9 +60,9 @@ from nhl_betting_lab.providers import team_names
 from nhl_betting_lab.reports.card_pricing import selection_key
 
 
-#: The card freezes the 2026-10-08 slate that morning, before either face-off.
-FROZEN_AT = datetime(2026, 10, 8, 15, 0, tzinfo=timezone.utc)
-SNAPSHOT_DATE = "2026-10-08"
+#: The card freezes the 2026-10-22 slate that morning, before either face-off.
+FROZEN_AT = datetime(2026, 10, 22, 15, 0, tzinfo=timezone.utc)
+SNAPSHOT_DATE = "2026-10-22"
 
 #: Keyed the way production keys it: normalized lowercase provider names.
 TEAM_MAP = {
@@ -82,12 +82,12 @@ ABOVE_BOTH = MIN_PROP_EDGE + 0.04
 HAIR = 1e-9
 
 TORONTO = {
-    "commence_time": "2026-10-09T00:10:00Z",  # league date 2026-10-08
+    "commence_time": "2026-10-23T00:10:00Z",  # league date 2026-10-22
     "home_team": "Toronto Maple Leafs",
     "away_team": "Boston Bruins",
 }
 CAROLINA = {
-    "commence_time": "2026-10-08T23:10:00Z",  # league date 2026-10-08
+    "commence_time": "2026-10-22T23:10:00Z",  # league date 2026-10-22
     "home_team": "Carolina Hurricanes",
     "away_team": "New York Islanders",
 }

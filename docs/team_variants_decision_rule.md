@@ -59,3 +59,12 @@ live included. **Nothing switches.** The card keeps the live xG ratings.
 The Props Form Test re-run (run 39549738985, `card` window) repeated the
 2026-10-09 result: recent form -33.7u over 24,714 against long-run -0.7u over
 28,549, -32.9u. It does not switch either.
+
+## What happened next (2026-10-21)
+
+Cooper overrode the rule the same day: "I dont give a shit if you find that
+it makes more money. I am telling you that i want it to affect the model. I
+know it will", and "We will always be betting picks the day of". From the
+card of 2026-10-22 the team markets are priced on shooter-adjusted xG with
+GSAx(sh) and each team's own home ice, together. The rule above is left as
+written; this switch did not pass it, and is his decision.

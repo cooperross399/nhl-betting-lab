@@ -149,6 +149,12 @@ class TeamModel:
             "away_for": 1.0,
             "away_against": 1.0,
         }
+        #: Each team's own home edge, as a log deviation from the league's
+        #: `home_advantage` (empty: every team has the league's). A game
+        #: shifts by exp((home team's + away team's) / 2): home goals up by
+        #: it, away goals down. Set from the ratings file
+        #: (`models.team_ratings`), never fitted here.
+        self.home_ice: dict[str, float] = {}
         self.report = TeamModelReport()
 
     def fit(self, games: pd.DataFrame) -> "TeamModel":
@@ -355,6 +361,16 @@ class TeamModel:
                 scale = original_total / adjusted_total
                 home_goals *= scale
                 away_goals *= scale
+        if self.home_ice:
+            shift = math.exp(
+                (
+                    self.home_ice.get(str(home_team), 0.0)
+                    + self.home_ice.get(str(away_team), 0.0)
+                )
+                / 2.0
+            )
+            home_goals *= shift
+            away_goals /= shift
         return home_goals, away_goals
 
     def scoreline_matrix(

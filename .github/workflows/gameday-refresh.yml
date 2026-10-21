@@ -474,6 +474,8 @@ jobs:
       - name: Rate the teams on expected goals and goaltending
         # Cooper's decision of 2026-10-05: the card's team markets are priced
         # on the same ratings as the public site (models/team_ratings.py).
+        # Since 2026-10-21: shooter-adjusted xG with GSAx(sh) and each team's
+        # own home ice, which needs the context xG and talent built here too.
         # Free and keyless. Soft: on any failure the card prices the team
         # markets on goals and says so in its notes and in `team_ratings`.
         id: ratings

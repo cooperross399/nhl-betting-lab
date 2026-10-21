@@ -68,7 +68,7 @@ from nhl_betting_lab.config import DATA_DIR, MIN_EDGE, MIN_PROP_EDGE, OUTPUTS_DI
 from nhl_betting_lab.markets import MARKETS_BY_KEY, team_market_keys
 from nhl_betting_lab.models.player_props import player_name_aliases
 from nhl_betting_lab.models.saves_context import SAVES_CONTEXT_FROM
-from nhl_betting_lab.models.team_ratings import XG_RATINGS_FROM
+from nhl_betting_lab.models.team_ratings import TEAM_RATINGS_FROM
 from nhl_betting_lab.models.value import OddsError, american_to_implied, profit_on_win
 from nhl_betting_lab.puck_drop import check_commence_time
 from nhl_betting_lab.providers.team_names import (
@@ -1378,11 +1378,12 @@ def build_forward_report(
         "superseded_team_rows": 0,
         "superseded_saves_rows": 0,
     }
-    # Cooper's "full switch" of 2026-10-05: from XG_RATINGS_FROM the team
-    # markets are priced on the xG ratings (models/team_ratings.py), and the
-    # 2027-04-25 verdict on them covers those games only. Team-market rows
-    # frozen earlier were priced on goals; they stay in the ledger, counted
-    # here, and are measured nowhere in this report. Props are untouched.
+    # Cooper's "full switch" of 2026-10-05 moved the team markets onto the xG
+    # ratings, and his decision of 2026-10-21 onto shooter-adjusted xG with
+    # each team's own home ice (models/team_ratings.py). The 2027-04-25
+    # verdict on them covers games from TEAM_RATINGS_FROM only. Team-market
+    # rows frozen earlier stay in the ledger, counted here, and are measured
+    # nowhere in this report. Props are untouched.
     # The wager, void and unsettleable counts describe the whole ledger,
     # so they are taken before the set-aside.
     if not ledger.empty:
@@ -1391,7 +1392,7 @@ def build_forward_report(
         payload["unsettleable"] = int((whole["outcome"] == "unsettleable").sum())
         payload["void"] = int((whole["outcome"] == "void").sum())
         superseded = ledger["market"].astype(str).isin(team_market_keys()) & (
-            ledger["snapshot_date"].astype(str) < XG_RATINGS_FROM
+            ledger["snapshot_date"].astype(str) < TEAM_RATINGS_FROM
         )
         payload["superseded_team_rows"] = int(superseded.sum())
         # Cooper's saves change of 2026-10-20, the same way: from
@@ -1658,9 +1659,10 @@ def render_forward_report(payload: dict) -> str:
     if payload.get("superseded_team_rows"):
         lines.append(
             f"- Set aside: {payload['superseded_team_rows']:,} team-market ledger "
-            f"row(s) frozen before {XG_RATINGS_FROM}, priced on the goals ratings. "
-            "From that day the team markets are priced on the xG ratings, and "
-            "only those are measured here (Cooper's decision, 2026-10-05)."
+            f"row(s) frozen before {TEAM_RATINGS_FROM}, priced on the goals "
+            "ratings or the first xG ratings. From that day the team markets are "
+            "priced on shooter-adjusted xG with each team's own home ice, and "
+            "only those are measured here (Cooper's decision, 2026-10-21)."
         )
     if payload.get("superseded_saves_rows"):
         lines.append(

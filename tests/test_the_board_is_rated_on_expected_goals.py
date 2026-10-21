@@ -69,7 +69,9 @@ def _games_and_metrics(n_rounds: int = 30):
                     metrics.append({"game_id": gid, "season": 20242025, "team": team, "opponent": opp,
                                     "is_home": is_home, "xgf": xg[team], "xga": xg[opp],
                                     "gf": goals[team], "ga": goals[opp],
-                                    "goalie_xga": xg[opp], "goalie_ga": goals[opp]})
+                                    "goalie_xga": xg[opp], "goalie_ga": goals[opp],
+                                    "xgf_adj": xg[team], "xga_adj": xg[opp],
+                                    "goalie_xga_adj": xg[opp]})
     return pd.DataFrame(games), pd.DataFrame(metrics)
 
 
@@ -77,17 +79,28 @@ def test_the_ratings_are_the_measurements_own_factors() -> None:
     games, metrics = _games_and_metrics()
     model = TeamModel().fit(games)
     ratings = measurement.xg_team_ratings(model.home_advantage, games, metrics)
-    assert ratings["variant"] == "xg_luck"
+    assert ratings["variant"] == measurement.RATINGS_VARIANT_KEY == "xg_shooter_gsax"
     assert ratings["last_game_date"] == games["date"].max()
     teams = ratings["teams"]
     assert teams["AAA"]["attack"] > max(teams["CCC"]["attack"], teams["DDD"]["attack"])
     assert teams["BBB"]["defence"] > teams["CCC"]["defence"]  # conceding above its xG
-    variant = next(v for v in measurement.TEAM_VARIANTS if v.key == "xg_luck")
+    played = games.assign(_date=pd.to_datetime(games["date"]).dt.date)
+    assert ratings["home_ice"] == pytest.approx(
+        measurement.team_home_ice(played, model.home_advantage)
+    )
+    variant = next(v for v in measurement.TEAM_VARIANTS if v.key == "xg_shooter_gsax")
     dated = metrics.merge(games.assign(_date=pd.to_datetime(games["date"]).dt.date)[["game_id", "_date"]])
     factors = measurement.shadow_factors(dated, variant, model.home_advantage)
     for team, f in factors.items():
         assert teams[team]["attack"] == pytest.approx(f["attack"] * f["finishing"])
         assert teams[team]["defence"] == pytest.approx(f["defence"] * f["goalie"])
+
+
+def test_a_table_without_the_shooter_adjusted_columns_yields_no_ratings() -> None:
+    games, metrics = _games_and_metrics()
+    plain = metrics.drop(columns=["xgf_adj", "xga_adj", "goalie_xga_adj"])
+    with pytest.raises(ValueError, match="xg_shooter_gsax"):
+        measurement.xg_team_ratings(1.0, games, plain)
 
 
 def test_a_table_missing_games_yields_no_ratings() -> None:
@@ -169,13 +182,7 @@ def test_a_window_the_ratings_refuse_is_skipped_and_counted() -> None:
 
 def test_per_team_home_ice_is_a_shrunk_deviation_from_the_league() -> None:
     """A team that wins big at home and loses on the road gets its own home edge."""
-    spec = importlib.util.spec_from_file_location(
-        "_shadow_script_home", PROJECT_ROOT / "scripts" / "run_shadow_stats.py"
-    )
-    script = importlib.util.module_from_spec(spec)
-    assert spec.loader is not None
-    spec.loader.exec_module(script)
-
+    script = measurement
     rows = []
     for _ in range(40):
         rows.append({"home_team": "FORT", "away_team": "OTHR", "home_goals": 4, "away_goals": 2})
