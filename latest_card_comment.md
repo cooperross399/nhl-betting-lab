@@ -1,10 +1,10 @@
-**Selections changed** since the previous card — 2 best bet(s), 0.75 unit(s) staked.
+**Selections changed** since the previous card — 3 best bet(s), 1 unit(s) staked.
 
 # NHL gameday card
 
-- Generated: 2026-10-23T13:50:25+00:00
-- 2 best bet(s), 19 lean(s), 995 pass(es) across 2 game(s); 0.75 unit(s) staked.
-- Included markets: **assists, blocked_shots, goals, hits, moneyline, points, puck_line, regulation_3_way, shots_on_goal, team_total, total_goals**
+- Generated: 2026-10-23T20:46:20+00:00
+- 3 best bet(s), 32 lean(s), 1186 pass(es) across 2 game(s); 1 unit(s) staked.
+- Included markets: **assists, blocked_shots, goalie_saves, goals, hits, moneyline, points, puck_line, regulation_3_way, shots_on_goal, team_total, total_goals**
 - Unit size: $25
 
 ## Best bets
@@ -12,36 +12,53 @@
 | Game | Starts | Market | Selection | Model | Edge | Price | Book | Units |
 |:-----|:-------|:-------|:----------|------:|-----:|------:|:-----|------:|
 | Tampa Bay Lightning @ Colorado Avalanche | Oct 23, 9:10 PM ET | `hits` | Zemgus Girgensons under 2.5 | 70.4% | +19.2% | -105 | theScore Bet | 0.5 |
-| Montréal Canadiens @ Chicago Blackhawks | Oct 23, 8:10 PM ET | `hits` | Arber Xhekaj under 2.5 | 72.0% | +14.5% | -135 | theScore Bet | 0.25 |
+| Montréal Canadiens @ Chicago Blackhawks | Oct 23, 8:10 PM ET | `hits` | Cole Smith under 2.5 | 72.3% | +15.8% | -130 | theScore Bet | 0.25 |
+| Montréal Canadiens @ Chicago Blackhawks | Oct 23, 8:10 PM ET | `hits` | Arber Xhekaj under 2.5 | 74.0% | +12.5% | -160 | theScore Bet | 0.25 |
 
 ## Leans
 
 | Game | Starts | Market | Selection | Model | Edge | Price | Book |
 |:-----|:-------|:-------|:----------|------:|-----:|------:|:-----|
+| Tampa Bay Lightning @ Colorado Avalanche | Oct 23, 9:10 PM ET | `points` | Charle-Edouard D'Astous under 0.5 | 74.9% | +13.3% | -160 | theScore Bet |
 | Montréal Canadiens @ Chicago Blackhawks | Oct 23, 8:10 PM ET | `shots_on_goal` | Chris Kreider over 2.5 | 40.4% | +13.0% | +265 | Fanatics |
-| Montréal Canadiens @ Chicago Blackhawks | Oct 23, 8:10 PM ET | `shots_on_goal` | Noah Dobson under 2.5 | 61.8% | +13.0% | +105 | Bovada |
-| Tampa Bay Lightning @ Colorado Avalanche | Oct 23, 9:10 PM ET | `shots_on_goal` | Charle-Edouard D'Astous under 1.5 | 68.7% | +11.8% | -132 | Bally Bet |
 | Montréal Canadiens @ Chicago Blackhawks | Oct 23, 8:10 PM ET | `shots_on_goal` | Chris Kreider over 1.5 | 62.2% | +11.7% | -102 | BetOnline.ag |
+| Tampa Bay Lightning @ Colorado Avalanche | Oct 23, 9:10 PM ET | `shots_on_goal` | Brandon Hagel under 2.5 | 52.9% | +11.3% | +140 | theScore Bet |
+| Montréal Canadiens @ Chicago Blackhawks | Oct 23, 8:10 PM ET | `shots_on_goal` | Lane Hutson under 1.5 | 55.5% | +11.1% | +125 | Bovada |
 | Tampa Bay Lightning @ Colorado Avalanche | Oct 23, 9:10 PM ET | `shots_on_goal` | Jaden Schwartz under 1.5 | 57.2% | +10.9% | +116 | Bally Bet |
-| Tampa Bay Lightning @ Colorado Avalanche | Oct 23, 9:10 PM ET | `shots_on_goal` | Brandon Hagel under 2.5 | 52.9% | +10.4% | +135 | Bovada |
-| Montréal Canadiens @ Chicago Blackhawks | Oct 23, 8:10 PM ET | `shots_on_goal` | Lane Hutson under 1.5 | 55.5% | +10.1% | +120 | Bovada |
+| Montréal Canadiens @ Chicago Blackhawks | Oct 23, 8:10 PM ET | `goalie_saves` | Spencer Knight under 26.5 | 60.8% | +10.8% | +100 | Bovada |
+| Montréal Canadiens @ Chicago Blackhawks | Oct 23, 8:10 PM ET | `hits` | Jordan Greenway under 1.5 | 65.1% | +10.6% | -120 | theScore Bet |
+| Montréal Canadiens @ Chicago Blackhawks | Oct 23, 8:10 PM ET | `shots_on_goal` | Juraj Slafkovsky under 2.5 | 57.9% | +10.3% | +110 | Hard Rock Bet |
+| Montréal Canadiens @ Chicago Blackhawks | Oct 23, 8:10 PM ET | `shots_on_goal` | Noah Dobson under 2.5 | 63.2% | +9.7% | -115 | Hard Rock Bet |
 | Tampa Bay Lightning @ Colorado Avalanche | Oct 23, 9:10 PM ET | `shots_on_goal` | Brent Burns under 1.5 | 60.4% | +9.7% | -103 | Bally Bet |
-| Tampa Bay Lightning @ Colorado Avalanche | Oct 23, 9:10 PM ET | `points` | Devon Toews under 0.5 | 66.6% | +8.2% | -140 | BetMGM |
+| Montréal Canadiens @ Chicago Blackhawks | Oct 23, 8:10 PM ET | `shots_on_goal` | Patrick Kane over 3.5 | 31.8% | +9.1% | +340 | theScore Bet |
+| Tampa Bay Lightning @ Colorado Avalanche | Oct 23, 9:10 PM ET | `shots_on_goal` | Victor Hedman under 1.5 | 70.0% | +8.9% | -157 | Bally Bet |
+| Tampa Bay Lightning @ Colorado Avalanche | Oct 23, 9:10 PM ET | `hits` | Josh Manson under 1.5 | 51.4% | +8.8% | +135 | theScore Bet |
+| Tampa Bay Lightning @ Colorado Avalanche | Oct 23, 9:10 PM ET | `shots_on_goal` | Brandon Hagel under 3.5 | 70.2% | +8.7% | -160 | Courtside |
+| Tampa Bay Lightning @ Colorado Avalanche | Oct 23, 9:10 PM ET | `shots_on_goal` | Nathan MacKinnon under 2.5 | 38.7% | +8.4% | +230 | theScore Bet |
+| Montréal Canadiens @ Chicago Blackhawks | Oct 23, 8:10 PM ET | `blocked_shots` | Wyatt Kaiser under 1.5 | 65.8% | +8.4% | -135 | DraftKings |
 | Tampa Bay Lightning @ Colorado Avalanche | Oct 23, 9:10 PM ET | `shots_on_goal` | Gabriel Landeskog under 1.5 | 48.2% | +8.2% | +150 | BetMGM |
-| Tampa Bay Lightning @ Colorado Avalanche | Oct 23, 9:10 PM ET | `points` | Brandon Hagel under 0.5 | 46.4% | +8.0% | +160 | theScore Bet |
-| Montréal Canadiens @ Chicago Blackhawks | Oct 23, 8:10 PM ET | `points` | Oliver Kapanen under 0.5 | 59.3% | +7.6% | -107 | Bally Bet |
-| Montréal Canadiens @ Chicago Blackhawks | Oct 23, 8:10 PM ET | `shots_on_goal` | Patrick Kane over 3.5 | 30.9% | +7.1% | +320 | Fanatics |
-| Montréal Canadiens @ Chicago Blackhawks | Oct 23, 8:10 PM ET | `points` | Lane Hutson under 0.5 | 45.4% | +7.0% | +160 | BetMGM |
-| Tampa Bay Lightning @ Colorado Avalanche | Oct 23, 9:10 PM ET | `shots_on_goal` | Nazem Kadri under 2.5 | 55.2% | +6.4% | +105 | Hard Rock Bet |
-| Tampa Bay Lightning @ Colorado Avalanche | Oct 23, 9:10 PM ET | `points` | John Carlson under 0.5 | 63.8% | +6.4% | -135 | BetMGM |
-| Montréal Canadiens @ Chicago Blackhawks | Oct 23, 8:10 PM ET | `points` | Chris Kreider over 0.5 | 52.7% | +6.2% | +115 | Hard Rock Bet |
-| Montréal Canadiens @ Chicago Blackhawks | Oct 23, 8:10 PM ET | `points` | Frank Nazar under 0.5 | 63.6% | +6.1% | -135 | theScore Bet |
-| Montréal Canadiens @ Chicago Blackhawks | Oct 23, 8:10 PM ET | `regulation_3_way` | home | 37.2% | +3.8% | +200 | Bally Bet |
+| Montréal Canadiens @ Chicago Blackhawks | Oct 23, 8:10 PM ET | `points` | Oliver Kapanen under 0.5 | 58.1% | +8.1% | +100 | theScore Bet |
+| Montréal Canadiens @ Chicago Blackhawks | Oct 23, 8:10 PM ET | `shots_on_goal` | Juraj Slafkovsky under 1.5 | 35.7% | +7.9% | +260 | theScore Bet |
+| Montréal Canadiens @ Chicago Blackhawks | Oct 23, 8:10 PM ET | `points` | Lane Hutson under 0.5 | 44.9% | +7.9% | +170 | Hard Rock Bet |
+| Montréal Canadiens @ Chicago Blackhawks | Oct 23, 8:10 PM ET | `blocked_shots` | Alexandre Carrier under 1.5 | 61.1% | +7.6% | -115 | DraftKings |
+| Tampa Bay Lightning @ Colorado Avalanche | Oct 23, 9:10 PM ET | `shots_on_goal` | Cale Makar under 1.5 | 37.5% | +7.2% | +230 | theScore Bet |
+| Tampa Bay Lightning @ Colorado Avalanche | Oct 23, 9:10 PM ET | `points` | Jaden Schwartz under 0.5 | 66.8% | +6.8% | -150 | Hard Rock Bet |
+| Tampa Bay Lightning @ Colorado Avalanche | Oct 23, 9:10 PM ET | `shots_on_goal` | Jake Guentzel under 1.5 | 37.1% | +6.8% | +230 | theScore Bet |
+| Tampa Bay Lightning @ Colorado Avalanche | Oct 23, 9:10 PM ET | `points` | Devon Toews under 0.5 | 66.6% | +6.6% | -150 | theScore Bet |
+| Montréal Canadiens @ Chicago Blackhawks | Oct 23, 8:10 PM ET | `points` | Frank Nazar under 0.5 | 63.9% | +6.5% | -135 | theScore Bet |
+| Tampa Bay Lightning @ Colorado Avalanche | Oct 23, 9:10 PM ET | `shots_on_goal` | Nazem Kadri under 1.5 | 34.0% | +6.2% | +260 | theScore Bet |
+| Tampa Bay Lightning @ Colorado Avalanche | Oct 23, 9:10 PM ET | `shots_on_goal` | Nathan MacKinnon under 3.5 | 55.0% | +6.2% | +105 | theScore Bet |
+| Tampa Bay Lightning @ Colorado Avalanche | Oct 23, 9:10 PM ET | `points` | Brandon Hagel under 0.5 | 46.9% | +6.1% | +145 | Hard Rock Bet |
+| Montréal Canadiens @ Chicago Blackhawks | Oct 23, 8:10 PM ET | `regulation_3_way` | home | 36.1% | +4.9% | +220 | Bally Bet |
+| Montréal Canadiens @ Chicago Blackhawks | Oct 23, 8:10 PM ET | `moneyline` | home | 44.4% | +3.5% | +145 | Courtside |
 
 Stats check, props: a prop is staked only when the model's hit chance clears what the shortest price in its odds bracket would need. These cleared the edge bar without it and are recorded here.
 
 - Chris Kreider over 2.5 (`shots_on_goal`): Not confident enough for its odds: the model gives it a 40.4% chance to hit; props priced +201 to +300 need 45.2%. The price clears the edge bar, but the model is not confident enough for its odds bracket. Recorded as a lean and staked at zero.
-- Noah Dobson under 2.5 (`shots_on_goal`): Not confident enough for its odds: the model gives it a 61.8% chance to hit; props priced -110 to +110 need 64.4%. The price clears the edge bar, but the model is not confident enough for its odds bracket. Recorded as a lean and staked at zero.
+
+Stake withheld on `points`: `points` is the one market this lab has measured as a loss that survives correction, and it does so in both windows the backtest prices. In the card window, 9.6 hours before face-off: -4.2% over 6,140 wagers, 95% interval -6.7% to -1.7%, -7.6% to -0.7% after correcting for the 8 figures measured on the same data (7 markets and the overall figure), and -256.8 units realised. In the late window, 4.1 hours before face-off: -4.4% over 6,194 wagers, 95% interval -6.9% to -2.0%, and it holds within that window's 2025-26 season alone (-5.4% over 3,468). On the late window the evidence bundle's verdict is that "a loss that survives the correction still argues against enabling this market, not for it". The opinion is still recorded and still settles into the forward ledger; only the stake is withheld.
+
+- Charle-Edouard D'Astous under 0.5 (`points`)
 
 Leans are recorded and not staked.
 
@@ -49,33 +66,33 @@ Leans are recorded and not staked.
 
 | Game | Starts | Market | Selection | Model | Edge | Price | Book |
 |:-----|:-------|:-------|:----------|------:|-----:|------:|:-----|
-| Montréal Canadiens @ Chicago Blackhawks | Oct 23, 8:10 PM ET | `shots_on_goal` | Chris Kreider over 3.5 | 24.0% | +12.9% | +800 | Fanatics |
-| Montréal Canadiens @ Chicago Blackhawks | Oct 23, 8:10 PM ET | `assists` | Oliver Kapanen under 0.5 | 76.9% | +10.2% | -200 | Bally Bet |
-| Tampa Bay Lightning @ Colorado Avalanche | Oct 23, 9:10 PM ET | `shots_on_goal` | Victor Hedman under 1.5 | 70.6% | +8.3% | -165 | Bally Bet |
-| Tampa Bay Lightning @ Colorado Avalanche | Oct 23, 9:10 PM ET | `points` | Charle-Edouard D'Astous under 0.5 | 74.9% | +8.2% | -200 | Bally Bet |
-| Montréal Canadiens @ Chicago Blackhawks | Oct 23, 8:10 PM ET | `shots_on_goal` | Chris Kreider over 4.5 | 13.4% | +7.8% | +1700 | Courtside |
-| Tampa Bay Lightning @ Colorado Avalanche | Oct 23, 9:10 PM ET | `shots_on_goal` | Brandon Hagel under 3.5 | 69.9% | +7.6% | -165 | Hard Rock Bet |
-| Montréal Canadiens @ Chicago Blackhawks | Oct 23, 8:10 PM ET | `shots_on_goal` | Patrick Kane over 4.5 | 18.7% | +7.6% | +800 | Fanatics |
+| Montréal Canadiens @ Chicago Blackhawks | Oct 23, 8:10 PM ET | `shots_on_goal` | Chris Kreider over 3.5 | 24.5% | +12.0% | +700 | Fanatics |
+| Tampa Bay Lightning @ Colorado Avalanche | Oct 23, 9:10 PM ET | `assists` | Charle-Edouard D'Astous under 0.5 | 80.0% | +10.7% | -225 | Hard Rock Bet |
+| Montréal Canadiens @ Chicago Blackhawks | Oct 23, 8:10 PM ET | `assists` | Oliver Kapanen under 0.5 | 76.4% | +9.8% | -200 | Bally Bet |
+| Montréal Canadiens @ Chicago Blackhawks | Oct 23, 8:10 PM ET | `shots_on_goal` | Chris Kreider over 4.5 | 13.5% | +8.5% | +1900 | Fanatics |
+| Tampa Bay Lightning @ Colorado Avalanche | Oct 23, 9:10 PM ET | `shots_on_goal` | Charle-Edouard D'Astous under 1.5 | 72.0% | +8.4% | -175 | Bally Bet |
+| Tampa Bay Lightning @ Colorado Avalanche | Oct 23, 9:10 PM ET | `shots_on_goal` | Gabriel Landeskog under 2.5 | 71.4% | +7.7% | -175 | Hard Rock Bet |
+| Montréal Canadiens @ Chicago Blackhawks | Oct 23, 8:10 PM ET | `shots_on_goal` | Patrick Kane over 4.5 | 19.4% | +7.7% | +750 | BetOnline.ag |
 | Montréal Canadiens @ Chicago Blackhawks | Oct 23, 8:10 PM ET | `points` | Sam Rinzel under 0.5 | 76.8% | +7.1% | -230 | Bally Bet |
-| Tampa Bay Lightning @ Colorado Avalanche | Oct 23, 9:10 PM ET | `assists` | Charle-Edouard D'Astous under 0.5 | 79.6% | +7.0% | -265 | Bally Bet |
-| Tampa Bay Lightning @ Colorado Avalanche | Oct 23, 9:10 PM ET | `shots_on_goal` | Gabriel Landeskog under 2.5 | 70.4% | +6.8% | -175 | Bovada |
-| Montréal Canadiens @ Chicago Blackhawks | Oct 23, 8:10 PM ET | `shots_on_goal` | Cole Caufield over 6.5 | 15.3% | +6.2% | +1000 | BetOnline.ag |
+| Tampa Bay Lightning @ Colorado Avalanche | Oct 23, 9:10 PM ET | `assists` | Devon Toews under 0.5 | 73.0% | +6.3% | -200 | BetMGM |
 | Montréal Canadiens @ Chicago Blackhawks | Oct 23, 8:10 PM ET | `shots_on_goal` | Patrick Kane over 5.5 | 10.8% | +6.0% | +2000 | BetOnline.ag |
-| Montréal Canadiens @ Chicago Blackhawks | Oct 23, 8:10 PM ET | `shots_on_goal` | Juraj Slafkovsky under 2.5 | 57.2% | +6.0% | -105 | Bovada |
-| Montréal Canadiens @ Chicago Blackhawks | Oct 23, 8:10 PM ET | `shots_on_goal` | Connor Bedard under 2.5 | 51.1% | +5.7% | +120 | theScore Bet |
-| Montréal Canadiens @ Chicago Blackhawks | Oct 23, 8:10 PM ET | `shots_on_goal` | Cole Caufield over 7.5 | 9.8% | +5.6% | +2300 | BetOnline.ag |
-| Tampa Bay Lightning @ Colorado Avalanche | Oct 23, 9:10 PM ET | `shots_on_goal` | Devon Toews under 1.5 | 54.3% | +5.5% | +105 | Bovada |
-| Tampa Bay Lightning @ Colorado Avalanche | Oct 23, 9:10 PM ET | `shots_on_goal` | Jake Guentzel under 2.5 | 58.8% | +5.3% | -115 | Hard Rock Bet |
-| Tampa Bay Lightning @ Colorado Avalanche | Oct 23, 9:10 PM ET | `shots_on_goal` | Nathan MacKinnon under 3.5 | 55.3% | +5.3% | +100 | FanDuel |
-| Tampa Bay Lightning @ Colorado Avalanche | Oct 23, 9:10 PM ET | `shots_on_goal` | Anthony Cirelli over 2.5 | 27.0% | +5.3% | +360 | Fanatics |
-| Montréal Canadiens @ Chicago Blackhawks | Oct 23, 8:10 PM ET | `shots_on_goal` | Oliver Kapanen over 3.5 | 21.9% | +5.3% | +500 | Fanatics |
-| Montréal Canadiens @ Chicago Blackhawks | Oct 23, 8:10 PM ET | `goals` | Chris Kreider over 0.5 | 31.8% | +5.1% | +275 | theScore Bet |
-| Tampa Bay Lightning @ Colorado Avalanche | Oct 23, 9:10 PM ET | `assists` | Devon Toews under 0.5 | 72.9% | +5.1% | -210 | BetMGM |
-| Montréal Canadiens @ Chicago Blackhawks | Oct 23, 8:10 PM ET | `blocked_shots` | Alexandre Carrier under 1.5 | 59.7% | +5.1% | -120 | Fliff |
-| Tampa Bay Lightning @ Colorado Avalanche | Oct 23, 9:10 PM ET | `assists` | Gage Goncalves under 0.5 | 80.6% | +5.0% | -310 | Courtside |
-| Tampa Bay Lightning @ Colorado Avalanche | Oct 23, 9:10 PM ET | `shots_on_goal` | Brock Nelson over 3.5 | 19.8% | +5.0% | +575 | Fanatics |
+| Montréal Canadiens @ Chicago Blackhawks | Oct 23, 8:10 PM ET | `shots_on_goal` | Oliver Kapanen over 3.5 | 21.3% | +5.9% | +550 | Fanatics |
+| Tampa Bay Lightning @ Colorado Avalanche | Oct 23, 9:10 PM ET | `shots_on_goal` | Jake Guentzel under 2.5 | 58.3% | +5.9% | -110 | Hard Rock Bet |
+| Tampa Bay Lightning @ Colorado Avalanche | Oct 23, 9:10 PM ET | `points` | Gage Goncalves under 0.5 | 68.7% | +5.8% | -170 | theScore Bet |
+| Tampa Bay Lightning @ Colorado Avalanche | Oct 23, 9:10 PM ET | `shots_on_goal` | Nazem Kadri under 2.5 | 55.7% | +5.7% | +100 | Hard Rock Bet |
+| Montréal Canadiens @ Chicago Blackhawks | Oct 23, 8:10 PM ET | `shots_on_goal` | Connor Bedard under 2.5 | 51.6% | +5.7% | +118 | BetOnline.ag |
+| Montréal Canadiens @ Chicago Blackhawks | Oct 23, 8:10 PM ET | `shots_on_goal` | Lane Hutson under 0.5 | 25.6% | +5.6% | +400 | theScore Bet |
+| Montréal Canadiens @ Chicago Blackhawks | Oct 23, 8:10 PM ET | `shots_on_goal` | Cole Caufield over 6.5 | 14.6% | +5.5% | +1000 | BetOnline.ag |
+| Tampa Bay Lightning @ Colorado Avalanche | Oct 23, 9:10 PM ET | `shots_on_goal` | Anthony Cirelli over 2.5 | 26.5% | +5.5% | +375 | Fanatics |
+| Montréal Canadiens @ Chicago Blackhawks | Oct 23, 8:10 PM ET | `assists` | Lane Hutson under 0.5 | 49.9% | +5.5% | +125 | Hard Rock Bet |
+| Montréal Canadiens @ Chicago Blackhawks | Oct 23, 8:10 PM ET | `points` | Josh Anderson under 0.5 | 69.7% | +5.4% | -180 | theScore Bet |
+| Montréal Canadiens @ Chicago Blackhawks | Oct 23, 8:10 PM ET | `puck_line` | home +2.5 | 81.0% | +5.4% | -310 | FanDuel |
+| Montréal Canadiens @ Chicago Blackhawks | Oct 23, 8:10 PM ET | `shots_on_goal` | Oliver Kapanen over 2.5 | 37.1% | +5.4% | +215 | Fanatics |
+| Tampa Bay Lightning @ Colorado Avalanche | Oct 23, 9:10 PM ET | `shots_on_goal` | Cale Makar under 2.5 | 59.7% | +5.2% | -120 | Bovada |
+| Montréal Canadiens @ Chicago Blackhawks | Oct 23, 8:10 PM ET | `shots_on_goal` | Oliver Kapanen over 4.5 | 11.4% | +5.1% | +1500 | Fanatics |
+| Montréal Canadiens @ Chicago Blackhawks | Oct 23, 8:10 PM ET | `shots_on_goal` | Cole Caufield over 7.5 | 9.3% | +5.1% | +2300 | BetOnline.ag |
 
-_970 further passes not listed._
+_1161 further passes not listed._
 
 These are genuine model judgements about markets that were priced and modelled. They are **not** the same thing as the excluded markets below.
 
@@ -85,8 +102,8 @@ Who the model expects to win each game, from the same team ratings the card pric
 
 | Game | Puck drop | Stats' side | Win chance | Fair | Best price | Book | Against the price |
 |:--|:--|:--|--:|--:|--:|:--|:--|
-| Montréal Canadiens @ Chicago Blackhawks | Oct 23, 8:10 PM ET | **Montréal Canadiens** | 54.7% | -121 | -140 | FanDuel | price is 3.6 pts short |
-| Tampa Bay Lightning @ Colorado Avalanche | Oct 23, 9:10 PM ET | **Colorado Avalanche** | 55.2% | -123 | -122 | Courtside | price is 0.2 pts long, under the bar |
+| Montréal Canadiens @ Chicago Blackhawks | Oct 23, 8:10 PM ET | **Montréal Canadiens** | 56.0% | -127 | -159 | Bally Bet | price is 5.4 pts short |
+| Tampa Bay Lightning @ Colorado Avalanche | Oct 23, 9:10 PM ET | **Colorado Avalanche** | 55.2% | -123 | -115 | BetOnline.ag | price is 1.7 pts long, under the bar |
 
 A list, not bets: no units, no stakes, nothing frozen into the forward ledger. The lab has no measurement showing that backing the stats' side at the market's price makes money.
 
@@ -96,7 +113,7 @@ Backtest of the shipped rule (either bar) on 2024-25 and 2025-26 bought prices, 
 
 | Player | Team | Opponent | Puck drop | Category | Line | Last season | Drought | Bar reached | Bars (tier / surprise) | Rarity | Band record | Best price | Book | Flag |
 |:--|:--|:--|:--|:--|--:|--:|--:|:--|:--|:--|:--|--:|:--|:--|
-| John Carlson | TBL | COL | Oct 23, 9:00 PM ET | assists | over 0.5 | 46 | 6 | 6 (both) | tier 4 / surprise 6 | 1 in 36 for him | band 45-59 @4: -4.8% over 410 (95% -17.5% to +8.1%) | +190 | Courtside |  |
+| John Carlson | TBL | COL | Oct 23, 9:00 PM ET | assists | over 0.5 | 46 | 6 | 6 (both) | tier 4 / surprise 6 | 1 in 36 for him | band 45-59 @4: -4.8% over 410 (95% -17.5% to +8.1%) | +175 | Courtside |  |
 
 A list, not bets: no units, no stakes, and none of it is in the best bets above.
 
@@ -108,15 +125,12 @@ These appeared in the provider's prices and could not be matched to a modelled t
 - Jeffrey Viel
 - Roman Kantserov
 - T.J. Hughes
+- Taylor Makar
 - Zack Bolduc
-
-## Priced game by game
-
-- `blocked_shots`: Allowlisted, and judged game by game: priced for 1 of 2 game(s), and picked only in those. Not priced in 2026-10-24 Tampa Bay Lightning@Colorado Avalanche, so nothing in this market is carded for them; that is an absence, not a pass or a no-value call.
 
 ## Excluded markets
 
-- `goalie_saves`: The provider returned no rows for this market. That is an absence, not a price of zero and not a no-value call. Check per-bookmaker coverage including alternate lines before concluding it is not offered.
+- None.
 
 An excluded market is **not** a pass, an avoid, or a no-value call, and no price was invented for it.
 
@@ -147,6 +161,6 @@ What the evidence actually supports:
 - `data/outputs/props_calibration.md`
 - `data/outputs/what_we_can_claim.md`
 
-Run: https://github.com/cooperross399/nhl-betting-lab/actions/runs/39937867003
+Run: https://github.com/cooperross399/nhl-betting-lab/actions/runs/39994501037
 
 Recommendations only. No bet was placed, no policy was edited, and no market was allowlisted by this run.
