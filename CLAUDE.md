@@ -2751,6 +2751,44 @@ Re-derive rather than trust if the data has moved.
   day's first snapshot still stands. About 290 credits on an average night
   (up to 646 at the 640 cap), about 9,000 a month; the run of 2026-10-21
   read 61,239 credits remaining.
+- **2026-10-25, NOT a defect fix: the hits model is dialled in (Cooper:
+  "enhance and improve the hits portion of our model. DIal it in more",
+  then "i think overs could be in play a lot more often").** Four parts,
+  `player_props.HITS_OPTIONS`, all on the card from the first card after
+  this merges; the walk-forward prices any subset (`hits_options`, default
+  none, so every committed measurement stands). **Rink:** hits are counted
+  by the home club's scorer, so each club's rink factor is total hits in its
+  last 82 home games over its last 82 road games (its own style cancels),
+  shrunk at 20 home games, rescaled to average 1.0, clamped 0.6-1.6
+  (`fit_hits_rink_factors`); every logged hit is divided by its rink's
+  factor before any hits rate, baseline, opponent or form table is fitted,
+  and tonight's rink's factor is multiplied back in. **Shrinkage:** a
+  skater's hit rate is shrunk toward his position by an empirical-Bayes
+  amount (noise over the real spread of hit rates, bounded 3,000-70,000
+  seconds) instead of the 70,000 every stat shares, which pulled heavy
+  hitters toward an average forward (the out-of-sample slope recorded
+  above for hits was 1.80). **Recency:** a game's weight in the hit rate
+  halves every 60 of the player's games. **Spread:** the negative-binomial
+  dispersion for hits is measured inside each player's own games (method
+  of moments around his own mean, times the rink); measured on the whole
+  column it counted grinder-versus-winger as game-to-game noise, piled
+  probability on 0 and 1 hits and under-priced every over. Measured
+  walk-forward by `scripts/run_hits_model_study.py` (Hits Model Study
+  run 40151716329, 129,419 player-games, 2023-24 to 2026-27); information
+  only. Log-likelihood per player-game against the old model: +0.0607
+  [+0.0584, +0.0630] for all four; rink alone +0.0005; rink with the
+  own-games spread alone -0.0129 (that spread needs the lighter
+  shrinkage beside it). Skaters the old model put at 2+ hits (7,382):
+  predicted 2.385 old and 2.981 new, actual 2.840. On the bought hits
+  prices (`card` window, 6% bar, one bet per wager): old -65.8u over
+  5,249 (-1.25%), 13 of them overs; all four +125.7u over 2,621, +4.80%
+  [+1.17%, +8.43%], overs -0.11% over 1,151 and unders +8.64% over
+  1,470. Uncorrected, four variants tried on one dataset, and the parts
+  were chosen on reasoning before this run but checked against it: not
+  a demonstrated edge. The edge bars, the bracket check, the market list and
+  the staking rule are unchanged; the snapshot freezes what the card
+  priced, so hits opinions frozen from the next card are the new model's,
+  and earlier ones are not set aside (Cooper's call).
 
 ## Contract strings — never change these
 

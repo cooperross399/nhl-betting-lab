@@ -102,8 +102,15 @@ def test_the_expected_count_carries_own_form_and_the_opponents() -> None:
 
 def test_fit_reads_the_logs_last_five() -> None:
     logs = varied_logs()
-    model = PlayerPropsModel().fit(logs)
+    # Without the hits rink adjustment (2026-10-25), which fits hits form on
+    # rink-adjusted hits; every other stat is the same either way.
+    model = PlayerPropsModel(hits_options=frozenset()).fit(logs)
     assert model.team_form == team_form_factors(team_game_totals(logs))
+    rinked = PlayerPropsModel().fit(logs)
+    for team, stats in rinked.team_form.items():
+        for stat, entry in stats.items():
+            if stat != "hits":
+                assert entry == model.team_form[team][stat]
     assert set(model.team_form) == {"TOR", "BOS", "MTL", "OTT"}
 
 

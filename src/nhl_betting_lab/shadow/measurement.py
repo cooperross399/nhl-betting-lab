@@ -616,7 +616,9 @@ def summarise(
     base = frame[frame["variant"] == reference].set_index(id_column)
     for key, label in variants:
         other = frame[frame["variant"] == key].set_index(id_column)
-        joined = base.join(other, rsuffix="_v", how="inner")
+        joined = base.merge(
+            other, left_index=True, right_index=True, how="inner", suffixes=("", "_v")
+        )
         entry: dict = {"variant": key, "label": label, "rows": int(len(joined))}
         for metric in metrics:
             diffs = (joined[f"{metric}_v"] - joined[metric]).to_numpy(dtype=float)
