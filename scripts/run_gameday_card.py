@@ -42,10 +42,10 @@ from nhl_betting_lab.market_eligibility import (
     assess_markets,
     slate_games_with_schedule,
 )
-from nhl_betting_lab.models.player_props import PlayerPropsModel
+from nhl_betting_lab.models.player_props import PlayerPropsModel, player_key
 from nhl_betting_lab.models.toi_corrections import load_current_corrections
 from nhl_betting_lab.models.team_model import TeamModel
-from nhl_betting_lab.models.team_ratings import apply_xg_ratings
+from nhl_betting_lab.models.team_ratings import apply_starters, apply_xg_ratings
 from nhl_betting_lab.providers import odds_api
 from nhl_betting_lab.providers.team_names import (
     TEAM_NAMES_FILENAME,
@@ -191,6 +191,29 @@ def _under_way(start: str, moment: datetime) -> bool:
     in `slate_games_with_schedule`: ambiguity counts as a game to card."""
     begins = parse_commence_time(start)
     return begins is not None and begins <= moment
+
+
+def _listed_starters(
+    processed: Path, moment: datetime, team_names: dict[str, str], logs: pd.DataFrame
+) -> dict[str, int | None]:
+    """{club: listed starter's NHL id, or None when the logs hold no such goalie}."""
+    listing = load_starters(processed, now=moment)
+    if listing.unknown:
+        print(f"Starting goalies for team markets: none ({listing.unknown})")
+        return {}
+    ids: dict[str, int] = {}
+    if not logs.empty and {"role", "player", "player_id"} <= set(logs.columns):
+        goalies = logs[logs["role"].astype(str) == "goalie"]
+        for row in goalies.drop_duplicates("player_id").itertuples():
+            ids[player_key(str(row.player))] = int(row.player_id)
+    day = moment.astimezone(LEAGUE_TIMEZONE).date().isoformat()
+    out: dict[str, int | None] = {}
+    for (listed_day, team), (goalie, _strength) in listing.listings.items():
+        club = team_names.get(team)
+        if listed_day == day and club and goalie:
+            out[club] = ids.get(player_key(goalie))
+    print(f"Starting goalies for team markets: {len(out)} club(s) listed.")
+    return out
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -683,6 +706,13 @@ def main(argv: list[str] | None = None) -> int:
                     f"{club}: attack x{factor:.3f} for "
                     f"{', '.join(lineups.absent.get(club, []))} out tonight."
                 )
+            # Tonight's listed starter in place of the team's goalies
+            # together (Cooper, 2026-10-25), from Daily Faceoff's listing.
+            for line in apply_starters(
+                team_model, processed,
+                _listed_starters(processed, moment, team_names, logs),
+            ):
+                print(line)
             team_model.game_factors = crews
             # PostHockey's pre-game win probability (Cooper, 2026-10-25),
             # from scripts/fetch_posthockey_pregame.py: the moneyline moves

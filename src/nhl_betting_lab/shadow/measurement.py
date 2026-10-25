@@ -401,8 +401,10 @@ def project_starters(starters: pd.DataFrame, games: pd.DataFrame) -> dict[tuple[
     return projected
 
 
-def goalie_factors(goalie_history: pd.DataFrame) -> dict[int, float]:
-    """Each goalie's goals against over his expected, regressed toward 1.0.
+def goalie_factors(
+    goalie_history: pd.DataFrame, *, xga: str = "xga", anchor: float = 1.0
+) -> dict[int, float]:
+    """Each goalie's goals against over his expected, regressed toward `anchor`.
 
     Built like the team goaltending factor in `shadow_factors` (a game's
     weight halves every `HALF_LIFE_GAMES` of his appearances, an earlier
@@ -437,13 +439,39 @@ def goalie_factors(goalie_history: pd.DataFrame) -> dict[int, float]:
             (decay * fraction).sum() / decay.sum()
         )
         w = decay * fraction
-        out[int(goalie)] = _shrunk_ratio(
+        shrunk = _shrunk_ratio(
             float((w * rows["ga"].astype(float)).sum()),
-            float((w * rows["xga"].astype(float)).sum()),
+            float((w * rows[xga].astype(float)).sum()),
             games,
             LUCK_SHRINKAGE_GAMES,
         )
+        # What the regression did not keep goes to the anchor, not to 1.0.
+        out[int(goalie)] = shrunk + LUCK_SHRINKAGE_GAMES / (games + LUCK_SHRINKAGE_GAMES) * (anchor - 1.0)
     return out
+
+
+#: A goalie's goals against over his shooter-adjusted expected before he has
+#: shown anything: PostHockey's goalie forecast starts an unseen goalie at
+#: -1.40 goals saved per 1,000 shots, about 2% over expected at the league's
+#: shot quality. Each starter's own record is regressed toward it.
+UNSEEN_GOALIE_FACTOR = 1.02
+
+
+def starter_goalie_table(goalie_table: pd.DataFrame, games: pd.DataFrame) -> dict[str, float]:
+    """{goalie_id: factor} on shooter-adjusted xG, for tonight's starter.
+
+    `goalie_factors` over every regular-season appearance on or before the
+    ratings date, on `xga_adj` (GSAx(sh)), regressed toward
+    `UNSEEN_GOALIE_FACTOR`. Empty when the table carries no `xga_adj`.
+    """
+    if goalie_table.empty or "xga_adj" not in goalie_table or not goalie_table["xga_adj"].notna().any():
+        return {}
+    frame = goalie_table.copy()
+    frame["game_id"] = pd.to_numeric(frame["game_id"], errors="coerce")
+    frame = frame.merge(games[["game_id", "_date"]], on="game_id", how="inner")
+    frame = frame.dropna(subset=["xga_adj"])
+    factors = goalie_factors(frame, xga="xga_adj", anchor=UNSEEN_GOALIE_FACTOR)
+    return {str(g): round(f, 5) for g, f in sorted(factors.items())}
 
 
 def compare_team_models(
@@ -903,7 +931,10 @@ def recent_home_ice(
 
 
 def xg_team_ratings(
-    home_advantage: float, team_games: pd.DataFrame, team_metrics: pd.DataFrame
+    home_advantage: float,
+    team_games: pd.DataFrame,
+    team_metrics: pd.DataFrame,
+    goalie_table: pd.DataFrame | None = None,
 ) -> dict:
     """Attack and defence per team on `RATINGS_VARIANT_KEY`, and home ice.
 
@@ -912,7 +943,10 @@ def xg_team_ratings(
     defence, regressed toward average; the shooter adjustment already carries
     finishing, times last-five form (`team_form`, already multiplied in and
     also published as `form`). `home_ice` is each team's own home edge (`recent_home_ice`),
-    which `TeamModel.home_ice` applies. A `TeamModel` fitted with this
+    which `TeamModel.home_ice` applies. With `goalie_table`, `team_goalie`
+    is the goaltending factor inside each team's defence and `goalies` each
+    goalie's own (`starter_goalie_table`), so the card can swap in tonight's
+    starter (`models.team_ratings.apply_starters`). A `TeamModel` fitted with this
     `home_advantage` that takes these as its teams' attack and defence prices
     every market off them, as the measurement scored them.
 
@@ -966,4 +1000,9 @@ def xg_team_ratings(
         "form_games": TEAM_FORM_GAMES,
         "form": {team: form[team] for team in sorted(form)},
         "home_ice": {team: home_ice[team] for team in sorted(home_ice)},
+        "team_goalie": {team: f["goalie"] for team, f in sorted(factors.items())},
+        "goalies": (
+            starter_goalie_table(goalie_table, games) if goalie_table is not None else {}
+        ),
+        "unseen_goalie": UNSEEN_GOALIE_FACTOR,
     }

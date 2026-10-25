@@ -94,3 +94,49 @@ def apply_xg_ratings(model: TeamModel, games: pd.DataFrame, processed: Path) -> 
     if isinstance(form, dict) and form:
         home += f", last-{ratings.get('form_games', 5)} form ({len(form)} teams)"
     return "xg", f"{stat}{home}, {len(teams)} teams, through {through}"
+
+
+#: A starter's goaltending factor is read inside this range, so one hot or
+#: cold record cannot dominate a team's defence.
+STARTER_FACTOR_RANGE = (0.85, 1.15)
+
+
+def apply_starters(
+    model: TeamModel, processed: Path, starters: dict[str, int | None]
+) -> list[str]:
+    """Swap each team's goaltending for tonight's starter's, in place.
+
+    Cooper, 2026-10-25 (PostHockey prices the listed goalie, not the
+    team's goalies together). `starters` maps a club to its listed starter's
+    NHL id, or None for a listed goalie this lab has no id for. The ratings
+    file's `team_goalie` is the goaltending inside each team's defence; it is
+    divided out and the starter's own factor (`goalies`, his GSAx(sh) record
+    regressed toward `unseen_goalie`) multiplied in. A goalie with no record
+    gets `unseen_goalie`, a little below average. A club with no listing, or a
+    file without the goalie tables, is left as it was. Returns one line per
+    club moved.
+    """
+    try:
+        ratings = json.loads((Path(processed) / RATINGS_FILE).read_text(encoding="utf-8"))
+        team_goalie = {str(k): float(v) for k, v in (ratings.get("team_goalie") or {}).items()}
+        goalies = {str(k): float(v) for k, v in (ratings.get("goalies") or {}).items()}
+        unseen = float(ratings.get("unseen_goalie", 1.0))
+    except (OSError, ValueError, TypeError, AttributeError):
+        return []
+    if not team_goalie or not goalies:
+        return []
+    low, high = STARTER_FACTOR_RANGE
+    moved = []
+    for club, goalie in sorted(starters.items()):
+        rate = model.teams.get(club)
+        inside = team_goalie.get(club)
+        if rate is None or not inside or inside <= 0:
+            continue
+        own = goalies.get(str(goalie), unseen) if goalie is not None else unseen
+        own = min(high, max(low, own))
+        model.teams[club] = TeamRates(
+            team=rate.team, games=rate.games, attack=rate.attack,
+            defence=rate.defence / inside * own,
+        )
+        moved.append(f"{club}: goaltending x{own / inside:.3f} for tonight's starter")
+    return moved

@@ -2806,6 +2806,21 @@ Re-derive rather than trust if the data has moved.
   public board does not read it. Constants are this lab's choice, not
   measured against prices. The full read of the site and what still differs
   is `docs/posthockey_gap_list.md`.
+- **2026-10-25, NOT a defect fix: tonight's listed starter prices the team
+  markets (Cooper chose PostHockey's "goalie tonight" as model step 1).** The
+  ratings file now also carries `team_goalie` (the GSAx(sh) factor inside
+  each team's defence), `goalies` (each goalie's own GA over shooter-adjusted
+  xGA, `measurement.goalie_factors` on `xga_adj`, regressed toward
+  `unseen_goalie`) and `unseen_goalie` (`measurement.UNSEEN_GOALIE_FACTOR`,
+  1.02: PostHockey starts an unseen goalie at -1.40 goals saved per 1,000
+  shots). The card (`_listed_starters`, `team_ratings.apply_starters`) reads
+  Daily Faceoff's listing for the day, matches each goalie to his NHL id
+  through the logs, divides the team's goaltending out of its defence and
+  multiplies the starter's in, clamped to 0.85-1.15; a listed goalie with no
+  record gets the unseen factor, a club with no listing or a file without
+  the goalie tables moves nothing. Attack, defence and form are unchanged
+  (checked on the 2026-10-25 state: identical teams, 134 goalies).
+  Not measured against prices; constants are this lab's choice.
 
 ## Contract strings — never change these
 
