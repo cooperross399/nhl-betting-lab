@@ -769,6 +769,18 @@ jobs:
         run: |
           python scripts/fetch_referees.py --budget 300
 
+      - name: Record PostHockey's pre-game win probability
+        # PostHockey's number for each game not yet started, built from the
+        # players dressed and the goalies listed (Cooper, 2026-10-25). Free
+        # and soft: a game it has not priced moves nothing on the card.
+        if: always()
+        continue-on-error: true
+        timeout-minutes: 2
+        env:
+          PYTHONPATH: src
+        run: |
+          python scripts/fetch_posthockey_pregame.py
+
       - name: Render the card
         id: card
         if: always()
