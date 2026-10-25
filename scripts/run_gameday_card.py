@@ -695,17 +695,16 @@ def main(argv: list[str] | None = None) -> int:
             team_history = (
                 games if ships("team_b2b", output_dir=outputs) else None
             )
-            # A club missing recent regulars tonight loses part of their
-            # share of its points from its attack (`lineups`).
+            # Tonight's dressed skaters against the club's usual eighteen,
+            # on each skater's offensive rating (`lineups`, 2026-10-25): a
+            # missing star takes attack off, one back puts it on.
             for club, factor in sorted(lineups.attack_factors.items()):
                 rate = team_model.teams.get(club)
-                if rate is None or factor >= 1.0:
+                if rate is None or factor == 1.0:
                     continue
                 team_model.teams[club] = dataclasses.replace(rate, attack=rate.attack * factor)
-                print(
-                    f"{club}: attack x{factor:.3f} for "
-                    f"{', '.join(lineups.absent.get(club, []))} out tonight."
-                )
+                out = ", ".join(lineups.absent.get(club, [])) or "nobody usual"
+                print(f"{club}: attack x{factor:.3f} for tonight's lineup ({out} out).")
             # Tonight's listed starter in place of the team's goalies
             # together (Cooper, 2026-10-25), from Daily Faceoff's listing.
             for line in apply_starters(

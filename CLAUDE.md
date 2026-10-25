@@ -2838,6 +2838,21 @@ Re-derive rather than trust if the data has moved.
   xG unchanged to 1e-15, net rating moved -0.069 (OTT) to +0.025 (NYR, SJS),
   leading teams up. `xg_shooter_sva` joins the price backtest for
   information. Not measured against prices before going live.
+- **2026-10-25, NOT a defect fix: tonight's dressed lineup sets each
+  club's attack on player ratings (PostHockey's model step 3).** Every
+  skater carries an offensive rating (`lineups.skater_ratings`): his
+  offensive game score per game (0.75 goals, 0.625 assists, the mean of
+  Luszczyszyn's 0.7 and 0.55 since the logs do not split them, 0.075 shots),
+  over his last three seasons weighted 1/0.5/0.3 by games, with 10 games
+  (forwards) or 20 (defencemen) of his position's newcomer average mixed in
+  (PostHockey's Estimated Net Rating offence weights; no aging, and no
+  defensive half, which needs on-ice shift data). A posted club's attack
+  moves by half the gap between tonight's sheet and its usual eighteen
+  (most games in its last 20), per skater, clamped 0.85-1.10; a skater with
+  no record reads as a newcomer. It replaces the old points-share hole,
+  which could only take attack off: a star back from injury now puts it
+  on. On the 2026-10-25 logs: McDavid 111.4 per 84, newcomer forward 28.8;
+  EDM without him x0.969, with him x1.027. Not measured against prices.
 
 ## Contract strings — never change these
 
