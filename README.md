@@ -262,6 +262,11 @@ PYTHONPATH=src .venv/bin/python scripts/capture_line_combinations.py
 # moves each game's goals by its crew (Cooper, 2026-10-21). Free.
 PYTHONPATH=src .venv/bin/python scripts/fetch_referees.py
 
+# Record PostHockey's pre-game win probability for tonight's games not yet
+# started, to data/processed/posthockey_tonight/<day>.csv. The card moves each
+# moneyline half way to it, total held (Cooper, 2026-10-25). Free.
+PYTHONPATH=src .venv/bin/python scripts/fetch_posthockey_pregame.py
+
 # Send each team's newest forward lines (L1-L4) and power-play units (PP1/PP2)
 # from today's capture to The Lineup, Cooper's DFS lineup builder, by player
 # name only, with D pairs and goalies in their own keys. Nothing older, no ids,

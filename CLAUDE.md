@@ -2789,6 +2789,23 @@ Re-derive rather than trust if the data has moved.
   the staking rule are unchanged; the snapshot freezes what the card
   priced, so hits opinions frozen from the next card are the new model's,
   and earlier ones are not set aside (Cooper's call).
+- **2026-10-25, NOT a defect fix: PostHockey's pre-game win probability is
+  blended into the team markets (Cooper asked for what PostHockey does that
+  the model lacks to be wired into the card).** PostHockey rates a game on
+  the players dressed (Estimated Net Rating), the listed goalies' season
+  forecasts, home ice and back-to-backs, and publishes P(home wins) free at
+  `posthockey.com/api/v1/live`. `scripts/fetch_posthockey_pregame.py`
+  ("Record PostHockey's pre-game win probability", soft, free, before the
+  card and at the pre-game update) writes it to
+  `data/processed/posthockey_tonight/<day>.csv`; `posthockey.tonight_targets`
+  reads the latest pre-game read per game (never a live number), and
+  `TeamModel` moves goals between the sides, total held, until its moneyline
+  is `posthockey.BLEND_WEIGHT` (0.5) of the way to it. Puck line and team
+  totals follow; game totals do not move. `TeamModel.pregame_weight`
+  defaults to 0, so every walk-forward and measurement is unchanged; the
+  public board does not read it. Constants are this lab's choice, not
+  measured against prices. The full read of the site and what still differs
+  is `docs/posthockey_gap_list.md`.
 
 ## Contract strings — never change these
 

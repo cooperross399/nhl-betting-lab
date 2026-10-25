@@ -176,6 +176,12 @@ class TeamModel:
         #: set by the card (`referees.tonight_factors`); it scales both
         #: sides, so the total moves and the split does not.
         self.game_factors: dict[frozenset, float] = {}
+        #: PostHockey's pre-game P(home wins) per game, {(home, away): p},
+        #: set by the card (`posthockey.tonight_targets`), and how far the
+        #: moneyline moves toward it. Goals move between the sides, the
+        #: total stays, so the puck line and team totals follow.
+        self.pregame_targets: dict[tuple[str, str], float] = {}
+        self.pregame_weight = 0.0
         self.report = TeamModelReport()
 
     def fit(self, games: pd.DataFrame) -> "TeamModel":
@@ -449,6 +455,11 @@ class TeamModel:
             )
             home_goals *= shift
             away_goals /= shift
+        target = self.pregame_targets.get((str(home_team), str(away_team)))
+        if target is not None and self.pregame_weight > 0:
+            home_goals, away_goals = _toward_moneyline(
+                home_goals, away_goals, target, self.pregame_weight
+            )
         crew = self.game_factors.get(frozenset({str(home_team), str(away_team)}), 1.0)
         return home_goals * crew, away_goals * crew
 
@@ -733,3 +744,42 @@ class TeamModel:
                 home_team, away_team
             ),
         }
+
+
+def _home_win_probability(home_goals: float, away_goals: float) -> float:
+    """P(home wins) from regulation means, a tie split evenly as the model does."""
+    home_pmf = [Poisson(home_goals).pmf(k) for k in range(MAX_GOALS + 1)]
+    away_pmf = [Poisson(away_goals).pmf(k) for k in range(MAX_GOALS + 1)]
+    away_below = 0.0
+    win = tie = 0.0
+    for k, h in enumerate(home_pmf):
+        tie += h * away_pmf[k]
+        win += h * away_below
+        away_below += away_pmf[k]
+    total = sum(home_pmf) * sum(away_pmf)
+    return (win + tie / 2.0) / total if total > 0 else 0.5
+
+
+def _toward_moneyline(
+    home_goals: float, away_goals: float, target: float, weight: float
+) -> tuple[float, float]:
+    """The same total split so the moneyline reads `weight` of the way to `target`.
+
+    Bisection on the home side's share of the total: P(home wins) rises with
+    it, and the share is held inside 2-98% so a wild target cannot empty a
+    side.
+    """
+    total = home_goals + away_goals
+    if total <= 0:
+        return home_goals, away_goals
+    own = _home_win_probability(home_goals, away_goals)
+    wanted = own + weight * (target - own)
+    low, high = 0.02, 0.98
+    for _ in range(40):
+        middle = (low + high) / 2.0
+        if _home_win_probability(total * middle, total * (1.0 - middle)) < wanted:
+            low = middle
+        else:
+            high = middle
+    share = (low + high) / 2.0
+    return total * share, total * (1.0 - share)

@@ -72,6 +72,7 @@ from nhl_betting_lab.stat_sides import build_stat_sides
 from nhl_betting_lab.forward_evidence import write_snapshot
 from nhl_betting_lab.price_movement import apply_movement, movement, opening_snapshot
 from nhl_betting_lab.referees import tonight_factors
+from nhl_betting_lab import posthockey
 from nhl_betting_lab.season import (
     EXPECTED_CLUBS,
     LEAGUE_TIMEZONE,
@@ -683,6 +684,18 @@ def main(argv: list[str] | None = None) -> int:
                     f"{', '.join(lineups.absent.get(club, []))} out tonight."
                 )
             team_model.game_factors = crews
+            # PostHockey's pre-game win probability (Cooper, 2026-10-25),
+            # from scripts/fetch_posthockey_pregame.py: the moneyline moves
+            # half way to it, the total stays. A game it has not priced
+            # moves nothing.
+            team_model.pregame_targets = posthockey.tonight_targets(
+                processed, moment.astimezone(LEAGUE_TIMEZONE).date().isoformat()
+            )
+            team_model.pregame_weight = posthockey.BLEND_WEIGHT
+            print(
+                f"PostHockey pre-game: {len(team_model.pregame_targets)} game(s) "
+                f"blended {posthockey.BLEND_WEIGHT:.0%} toward its win probability."
+            )
             team_probabilities, unresolved = price_team_markets(
                 priceable, team_model, team_names=team_names,
                 history=team_history,
