@@ -13,8 +13,8 @@ Cooper asked for the gaps to be wired into the card; the earlier pass
 | Shooter and goalie talent | Bayesian walk updated shot by shot; age drift at season boundaries (full for goalies, half for shooters); re-centred each season | Same walk (`shadow/talent.py`); no age drift, no re-centring |
 | Team xGF/xGA | Shooter-adjusted on both sides | Same, on the card since 2026-10-22 |
 | Score and venue adjustment | Each attempt weighted by score state, venue and strength, weights fitted per season with team strength controlled | Even-strength attempts weighted by score state per season, textbook shares (since 2026-10-25); no talent control |
-| Goaltending | GSAx(sh); a season forecast per goalie (decayed history, age spline, an unseen goalie starts at -1.40 goals per 1,000 shots) | Tonight's listed starter's own GSAx(sh), regressed toward an unseen goalie's 1.02 (since 2026-10-25); no age spline yet |
-| Player value | Net Rating (Luszczyszyn game score split into offence and defence, per 84) and Estimated Net Rating (Marcel-style, aged, bucket-shrunk, updated game by game) | Offensive half only: a Marcel-style offensive game score per skater, and tonight's posted sheet against the usual eighteen sets attack (since 2026-10-25); no defensive half, no aging |
+| Goaltending | GSAx(sh); a season forecast per goalie (decayed history, age spline, an unseen goalie starts at -1.40 goals per 1,000 shots) | Tonight's listed starter's own GSAx(sh), regressed toward an unseen goalie's 1.02, aged on PostHockey's curve by his own record's share (since 2026-10-25) |
+| Player value | Net Rating (Luszczyszyn game score split into offence and defence, per 84) and Estimated Net Rating (Marcel-style, aged, bucket-shrunk, updated game by game) | Offensive half only: a Marcel-style offensive game score per skater, and tonight's posted sheet against the usual eighteen sets attack, each past season aged on a fitted curve (since 2026-10-25); no defensive half |
 | Game probability | The expected roster's Estimated Net Rating, the listed goalies' forecasts, home ice and back-to-backs, as P(home wins), with a calibration record per bucket | **Now blended into the card** (below) |
 | Team ratings | Pythagorean and xW%, SRS, Massey (home 0.288 goals), Elo (K 8, home 25, carry 0.65), Colley, Keener, Markov, OD | Not used; the Poisson team model stands |
 | Playoffs | Strength gap shrunk to 0.479 in playoff games | Not relevant until April |
@@ -39,8 +39,12 @@ is this lab's choice, made before any price was read.
 * **The defensive half of player ratings**: Net Rating's defence needs each
   skater's on-ice xG against from shift charts, which this lab does not
   build; PostHockey's blend carries it.
-* **Age drift and the E term** in the talent walk: small, and they change
-  the shadow walk only.
+* **Age drift inside the shot-by-shot talent walk**: skater ratings and
+  starting goalies are aged (2026-10-25), the walk's posteriors are not.
+* **The E term and the era split**: E moves every team together and the
+  ratings divide by the league mean, so it would change no price; the lab's
+  play-by-play starts in 2023-24, inside PostHockey's chip era, so there is
+  no second era to split.
 * **Props**: PostHockey publishes no per-game player projection; its
   xPts and luck columns describe the past and are not on the card.
 

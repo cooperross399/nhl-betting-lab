@@ -28,6 +28,7 @@ by the builder and published beside them as `form`.
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 
 import pandas as pd
@@ -100,9 +101,42 @@ def apply_xg_ratings(model: TeamModel, games: pd.DataFrame, processed: Path) -> 
 #: cold record cannot dominate a team's defence.
 STARTER_FACTOR_RANGE = (0.85, 1.15)
 
+#: PostHockey's goalie age curve (its goalie-forecast writeup, read
+#: 2026-10-25): the expected save talent at an age, in logits, positive the
+#: better, read off its published points and joined by straight lines;
+#: ages outside 20-40 read as the nearest end. A goalie gets it in
+#: proportion to how much of his factor is his own record.
+GOALIE_AGE_CURVE = (
+    (20.0, -0.037), (24.0, 0.031), (28.0, -0.001), (31.0, -0.006), (35.0, -0.040), (40.0, -0.094),
+)
+
+
+def goalie_age_term(age: float) -> float:
+    points = GOALIE_AGE_CURVE
+    if age <= points[0][0]:
+        return points[0][1]
+    for (a0, t0), (a1, t1) in zip(points, points[1:]):
+        if age <= a1:
+            return t0 + (t1 - t0) * (age - a0) / (a1 - a0)
+    return points[-1][1]
+
+
+def _age_on(born: str, day: str) -> float | None:
+    try:
+        b = [int(x) for x in str(born)[:10].split("-")]
+        d = [int(x) for x in str(day)[:10].split("-")]
+    except (TypeError, ValueError):
+        return None
+    return (d[0] - b[0]) + ((d[1] - b[1]) * 30.5 + (d[2] - b[2])) / 365.25
+
 
 def apply_starters(
-    model: TeamModel, processed: Path, starters: dict[str, int | None]
+    model: TeamModel,
+    processed: Path,
+    starters: dict[str, int | None],
+    *,
+    birth_dates: dict[int, str] | None = None,
+    day: str = "",
 ) -> list[str]:
     """Swap each team's goaltending for tonight's starter's, in place.
 
@@ -112,15 +146,20 @@ def apply_starters(
     file's `team_goalie` is the goaltending inside each team's defence; it is
     divided out and the starter's own factor (`goalies`, his GSAx(sh) record
     regressed toward `unseen_goalie`) multiplied in. A goalie with no record
-    gets `unseen_goalie`, a little below average. A club with no listing, or a
-    file without the goalie tables, is left as it was. Returns one line per
-    club moved.
+    gets `unseen_goalie`, a little below average. With `birth_dates` and
+    `day`, a goalie's age moves his factor along `GOALIE_AGE_CURVE`, by the
+    share of it that is his own record (`goalie_games` against
+    `goalie_shrinkage_games`); a logit of save talent is read as the same
+    proportion of goals. A club with no listing, or a file without the goalie
+    tables, is left as it was. Returns one line per club moved.
     """
     try:
         ratings = json.loads((Path(processed) / RATINGS_FILE).read_text(encoding="utf-8"))
         team_goalie = {str(k): float(v) for k, v in (ratings.get("team_goalie") or {}).items()}
         goalies = {str(k): float(v) for k, v in (ratings.get("goalies") or {}).items()}
         unseen = float(ratings.get("unseen_goalie", 1.0))
+        evidence = {str(k): float(v) for k, v in (ratings.get("goalie_games") or {}).items()}
+        shrinkage = float(ratings.get("goalie_shrinkage_games", 100.0))
     except (OSError, ValueError, TypeError, AttributeError):
         return []
     if not team_goalie or not goalies:
@@ -133,10 +172,18 @@ def apply_starters(
         if rate is None or not inside or inside <= 0:
             continue
         own = goalies.get(str(goalie), unseen) if goalie is not None else unseen
+        aged = ""
+        born = (birth_dates or {}).get(goalie) if goalie is not None else None
+        age = _age_on(born, day) if born and day else None
+        if age is not None:
+            games = evidence.get(str(goalie), 0.0)
+            term = goalie_age_term(age) * games / (games + shrinkage)
+            own *= math.exp(-term)
+            aged = f", age {age:.0f}"
         own = min(high, max(low, own))
         model.teams[club] = TeamRates(
             team=rate.team, games=rate.games, attack=rate.attack,
             defence=rate.defence / inside * own,
         )
-        moved.append(f"{club}: goaltending x{own / inside:.3f} for tonight's starter")
+        moved.append(f"{club}: goaltending x{own / inside:.3f} for tonight's starter{aged}")
     return moved

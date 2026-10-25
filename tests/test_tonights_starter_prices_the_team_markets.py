@@ -13,6 +13,7 @@ Cooper, 2026-10-25 (PostHockey prices the listed goalie). These hold:
 from __future__ import annotations
 
 import json
+import math
 
 import pandas as pd
 import pytest
@@ -81,3 +82,18 @@ def test_a_wild_record_is_clamped_and_old_files_move_nothing(tmp_path) -> None:
     model = _model()
     assert tr.apply_starters(model, tmp_path, {"DAL": 7}) == []
     assert model.teams["DAL"].defence == pytest.approx(1.04)
+
+
+def test_an_old_goalie_is_aged_by_his_share_of_his_own_record(tmp_path) -> None:
+    _ratings(tmp_path, team_goalie={"DAL": 1.04}, goalies={"7": 0.96, "8": 0.96},
+             goalie_games={"7": 100.0, "8": 0.0}, goalie_shrinkage_games=100, unseen_goalie=1.02)
+    model = _model()
+    tr.apply_starters(model, tmp_path, {"DAL": 7}, birth_dates={7: "1990-10-25"}, day="2026-10-25")
+    term = tr.goalie_age_term(36.0)
+    assert term < 0
+    assert model.teams["DAL"].defence == pytest.approx(0.96 * math.exp(-term * 0.5))
+    model = _model()
+    tr.apply_starters(model, tmp_path, {"DAL": 8}, birth_dates={8: "1990-10-25"}, day="2026-10-25")
+    assert model.teams["DAL"].defence == pytest.approx(0.96)  # no record of his own, no age
+    assert tr.goalie_age_term(24.0) == pytest.approx(0.031)
+    assert tr.goalie_age_term(50.0) == pytest.approx(-0.094)
