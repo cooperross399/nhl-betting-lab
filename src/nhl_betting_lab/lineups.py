@@ -16,10 +16,14 @@ before the card. This reads the latest capture per club and gives the card:
   forward on the logs), blended with his own last-ten ice time by the weight
   that table fits. A promoted player gets the higher line's minutes, which is
   how a missing player's minutes reach the teammates who replace him.
-* **the hole in a club's attack**: the share of its skaters' recent points
-  scored by players out tonight, half of which is taken off its attack (the
-  other half is what the replacements produce), never below
-  `MIN_ATTACK_FACTOR`.
+* **the dressed lineup's attack** (Cooper, 2026-10-25, PostHockey's model
+  step 3): every skater carries an offensive rating (`skater_ratings`, a
+  Marcel-style forecast of his offensive game score per game) and a club's
+  attack moves by half the gap between tonight's posted skaters and its
+  usual eighteen, between `MIN_ATTACK_FACTOR` and `MAX_ATTACK_FACTOR`. A
+  missing star takes attack off; a star back from injury puts it back on.
+  (Until 2026-10-25 this was the share of recent points held by regulars
+  out tonight, which could only ever take attack off.)
 
 Nothing here is measured against prices: the lines have no history before
 the capture began (2026-09-29), so this ships on Cooper's word and is
@@ -48,11 +52,26 @@ MINIMUM_LISTED = 16
 #: The days of logs the role table is fitted on.
 ROLE_HISTORY_DAYS = 400
 
-#: Recent games read for a club's point shares, and the floor on the attack
-#: factor a hole can leave.
+#: Recent games that decide a club's usual eighteen, and the range of the
+#: attack factor tonight's lineup can set.
 SHARE_GAMES = 20
 MIN_ATTACK_FACTOR = 0.85
+MAX_ATTACK_FACTOR = 1.10
 HOLE_WEIGHT = 0.5
+
+#: A skater's offensive game score per game: Luszczyszyn's offensive weights,
+#: as PostHockey's Net Rating uses them. The logs do not split primary from
+#: secondary assists, so an assist is the mean of the two (0.7, 0.55), and
+#: they hold no penalties drawn.
+GAME_SCORE_WEIGHTS = {"goals": 0.75, "assists": 0.625, "shots_on_goal": 0.075}
+#: The current season, the one before and the one before that, weighted as
+#: PostHockey's Estimated Net Rating weights a forward's offence.
+SEASON_WEIGHTS = (1.0, 0.5, 0.3)
+#: Games of his position's newcomer average a rating starts from (PostHockey's
+#: P0: 10 for a forward's offence, 20 for a defenceman's).
+PRIOR_GAMES = {"F": 10.0, "D": 20.0}
+#: Skater-seasons under this many games define a position's newcomer average.
+NEWCOMER_GAMES = 41
 
 
 def _aliases(name: object) -> set[str]:
@@ -144,35 +163,116 @@ def _fit_roles(logs: pd.DataFrame, day: str) -> RoleMinutes | None:
         return None
 
 
-def _attack_holes(
-    logs: pd.DataFrame, roles: dict[str, dict[str, tuple[str, str]]], day: str
+def _group(position: object) -> str:
+    return "D" if str(position).strip().upper().startswith("D") else "F"
+
+
+def skater_ratings(logs: pd.DataFrame, day: str) -> tuple[dict[str, float], dict[str, float]]:
+    """({alias: offensive rating per game}, {position group: newcomer rating}).
+
+    Each of a skater's last three seasons before `day` gives his game score
+    per game and his games; the rating is their `SEASON_WEIGHTS`-weighted
+    mean with `PRIOR_GAMES` of his position's newcomer average mixed in, so
+    a skater with little history reads close to a newcomer and a veteran
+    close to his own record.
+    """
+    skaters = logs[(logs["role"].astype(str) == "skater") & (logs["date"].astype(str).str[:10] < day)]
+    if skaters.empty:
+        return {}, {"F": 0.0, "D": 0.0}
+    frame = skaters.copy()
+    frame["_gs"] = sum(
+        weight * pd.to_numeric(frame[column], errors="coerce").fillna(0.0)
+        for column, weight in GAME_SCORE_WEIGHTS.items()
+    )
+    frame["_group"] = frame["position"].map(_group) if "position" in frame else "F"
+    if "season" in frame:
+        frame["_season"] = pd.to_numeric(frame["season"], errors="coerce")
+    else:  # a season starts in the autumn: date it by the year it began
+        dates = pd.to_datetime(frame["date"].astype(str).str[:10], errors="coerce")
+        frame["_season"] = dates.dt.year - (dates.dt.month < 7).astype(int)
+    seasons = sorted(frame["_season"].dropna().unique())[-len(SEASON_WEIGHTS):][::-1]
+    frame = frame[frame["_season"].isin(seasons)]
+    by_season = frame.groupby(["player_id", "_season"]).agg(
+        games=("_gs", "size"), mean=("_gs", "mean"), group=("_group", "last"), name=("player", "last")
+    ).reset_index()
+    newcomers = by_season[by_season["games"] < NEWCOMER_GAMES]
+    prior = {
+        group: float(
+            (rows["mean"] * rows["games"]).sum() / rows["games"].sum()
+        ) if not rows.empty else 0.0
+        for group, rows in ((g, newcomers[newcomers["group"] == g]) for g in ("F", "D"))
+    }
+    weight_of = {season: SEASON_WEIGHTS[k] for k, season in enumerate(seasons)}
+    ratings: dict[str, float] = {}
+    for _, rows in by_season.groupby("player_id"):
+        group = str(rows["group"].iloc[-1])
+        w = rows["_season"].map(weight_of) * rows["games"]
+        p0 = PRIOR_GAMES[group]
+        rating = float((w * rows["mean"]).sum() + p0 * prior[group]) / float(w.sum() + p0)
+        for alias in _aliases(rows["name"].iloc[-1]):
+            ratings[alias] = rating
+    return ratings, prior
+
+
+def _lineup_attack(
+    logs: pd.DataFrame,
+    roles: dict[str, dict[str, tuple[str, str]]],
+    sheets: dict[str, list[tuple[str, str]]],
+    day: str,
 ) -> tuple[dict[str, float], dict[str, list[str]]]:
+    """Each posted club's attack factor from its dressed skaters' ratings."""
     factors: dict[str, float] = {}
     absent: dict[str, list[str]] = {}
     if logs is None or logs.empty:
         return factors, absent
+    ratings, prior = skater_ratings(logs, day)
     skaters = logs[(logs["role"].astype(str) == "skater") & (logs["date"].astype(str).str[:10] < day)]
     for team, table in roles.items():
         rows = skaters[skaters["team"].astype(str) == team]
         games = (
             rows[["game_id", "date"]].drop_duplicates("game_id").sort_values("date")["game_id"].tolist()
         )
-        recent_games = games[-SHARE_GAMES:]
+        recent = rows[rows["game_id"].isin(games[-SHARE_GAMES:])]
+        if recent.empty:
+            continue
         last_five = set(games[-5:])
-        recent = rows[rows["game_id"].isin(recent_games)]
-        points = pd.to_numeric(recent["points"], errors="coerce").fillna(0)
-        total = float(points.sum())
-        missing_points = 0.0
-        names: list[str] = []
+        recent = recent.assign(position=recent["position"] if "position" in recent else "F")
+        usual = recent.groupby("player").agg(
+            games=("game_id", "nunique"), group=("position", "last")
+        ).sort_values("games", ascending=False).head(18)
+        usual_total = sum(
+            next((ratings[a] for a in _aliases(name) if a in ratings), prior[_group(group)])
+            for name, group in usual["group"].items()
+        )
+        # Tonight's eighteen: every skater on the posted even-strength lines,
+        # rated by name; one with no record reads as a newcomer at his slot.
+        position_of = {
+            alias: _group(position)
+            for name, position in recent[["player", "position"]].drop_duplicates("player").itertuples(index=False)
+            for alias in _aliases(name)
+        }
+        dressed = set(table)
+        tonight_total = 0.0
+        for name, group in sheets.get(team, []):
+            aliases = _aliases(name)
+            rating = next((ratings[a] for a in aliases if a in ratings), None)
+            if rating is None:
+                slot = "D" if str(group).lower().startswith("d") else next(
+                    (position_of[a] for a in aliases if a in position_of), "F"
+                )
+                rating = prior[slot]
+            tonight_total += rating
+        names = []
         for name, player_rows in recent.groupby("player"):
-            if player_rows["game_id"].isin(last_five).sum() < 3:
-                continue  # not a regular lately; his absence is not news
-            if _aliases(name) & set(table):
-                continue
-            names.append(str(name))
-            missing_points += float(points[player_rows.index].sum())
-        share = missing_points / total if total > 0 else 0.0
-        factors[team] = max(MIN_ATTACK_FACTOR, 1.0 - HOLE_WEIGHT * share)
+            if player_rows["game_id"].isin(last_five).sum() >= 3 and not (_aliases(name) & dressed):
+                names.append(str(name))
+        sheet = len(sheets.get(team, []))
+        if usual_total > 0 and sheet:
+            # Per skater, so a sheet of sixteen is not read as two men short.
+            ratio = (tonight_total / sheet) / (usual_total / len(usual))
+            factors[team] = min(
+                MAX_ATTACK_FACTOR, max(MIN_ATTACK_FACTOR, 1.0 + HOLE_WEIGHT * (ratio - 1.0))
+            )
         if names:
             absent[team] = sorted(names)
     return factors, absent
@@ -184,6 +284,7 @@ def tonight_lineups(processed_dir: Path, day: str, logs: pd.DataFrame) -> Tonigh
     lineups = TonightLineups()
     if captures.empty:
         return lineups
+    sheets: dict[str, list[tuple[str, str]]] = {}
     for team, rows in captures.groupby("team_abbreviation"):
         team = str(team).strip().upper()
         ev_rows = rows[rows["group_identifier"].isin(EV_GROUPS)]
@@ -201,9 +302,12 @@ def tonight_lineups(processed_dir: Path, day: str, logs: pd.DataFrame) -> Tonigh
             for alias in _aliases(name):
                 table[alias] = (str(group), pp_of.get(alias, ""))
         lineups.roles[team] = table
+        sheets[team] = list(
+            ev_rows[["player", "group_identifier"]].drop_duplicates("player").itertuples(index=False, name=None)
+        )
         if "injury_status" in rows.columns:
             hurt = rows[rows["injury_status"].astype(str).str.strip() != ""]["player"]
             lineups.injured[team] = set(hurt.astype(str))
     lineups.role_minutes = _fit_roles(logs, day)
-    lineups.attack_factors, lineups.absent = _attack_holes(logs, lineups.roles, day)
+    lineups.attack_factors, lineups.absent = _lineup_attack(logs, lineups.roles, sheets, day)
     return lineups

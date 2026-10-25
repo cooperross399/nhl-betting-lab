@@ -11,8 +11,9 @@ capture; these hold:
   blended with his own; one missing from them gets no opinion and is named;
 * a club that did not post decides nothing, and every player on it prices
   as before;
-* recent regulars absent tonight take part of their share of the club's
-  points off its attack, never below the floor.
+* tonight's dressed skaters, on their offensive ratings, set the club's
+  attack against its usual eighteen: an absent regular takes attack off,
+  never below the floor, and a better sheet puts it on, never above the cap.
 """
 
 from __future__ import annotations
@@ -99,3 +100,23 @@ def test_the_card_withholds_an_absent_skater_and_reprices_the_rest(tmp_path) -> 
     # BOS posted nothing, so Player 11 prices exactly as before.
     bos = [k for k in plain if "player 11" in str(k).lower()]
     assert bos and keys[bos[0]] == pytest.approx(plain[bos[0]])
+
+
+def test_a_rating_is_its_record_shrunk_toward_newcomers() -> None:
+    logs = _VARIED.varied_logs()
+    ratings, prior = lu.skater_ratings(logs, DAY)
+    assert set(prior) == {"F", "D"}
+    assert ratings  # every skater with games is rated
+    assert lu.skater_ratings(logs, "1900-01-01") == ({}, {"F": 0.0, "D": 0.0})
+
+
+def test_a_better_sheet_raises_the_attack_up_to_the_cap() -> None:
+    logs = _VARIED.varied_logs()
+    ratings, _ = lu.skater_ratings(logs, DAY)
+    best = max(ratings, key=ratings.get)
+    worst = min(ratings, key=ratings.get)
+    roles = {"TOR": {best: ("f1", "")}}
+    strong = lu._lineup_attack(logs, roles, {"TOR": [(best, "f1")] * 18}, DAY)[0]["TOR"]
+    weak = lu._lineup_attack(logs, roles, {"TOR": [(worst, "f1")] * 18}, DAY)[0]["TOR"]
+    assert weak < 1.0 < strong <= lu.MAX_ATTACK_FACTOR
+    assert weak >= lu.MIN_ATTACK_FACTOR
