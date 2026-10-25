@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
+import numpy as np
 import pandas as pd
 
 from nhl_betting_lab.shadow.play_by_play import GameEvents, is_high_danger
@@ -31,6 +32,9 @@ TEAM_COLUMNS: tuple[str, ...] = (
     # `_adj`, because `_sh` already means shorthanded here). NaN when the run
     # did not build them (`--tables-only`).
     "xgf_ctx", "xga_ctx", "xgf_adj", "xga_adj", "goalie_xga_ctx", "goalie_xga_adj",
+    # Shooter-adjusted xG with each attempt weighted for the score it was
+    # taken at (`score_weights`).
+    "xgf_sva", "xga_sva",
 )
 
 PLAYER_COLUMNS: tuple[str, ...] = (
@@ -112,6 +116,11 @@ def team_game_rows(events: GameEvents, shots: pd.DataFrame) -> list[dict]:
             row[f"xgf_{suffix}"] = _sum(own, shot_column)
             row[f"xga_{suffix}"] = _sum(opp, shot_column)
             row[f"goalie_xga_{suffix}"] = _sum(faced, shot_column)
+        if "xg_sh" in shots and "sva_w" in shots:
+            row["xgf_sva"] = float((own["xg_sh"].fillna(0.0) * own["sva_w"]).sum())
+            row["xga_sva"] = float((opp["xg_sh"].fillna(0.0) * opp["sva_w"]).sum())
+        else:
+            row["xgf_sva"] = row["xga_sva"] = float("nan")
         out.append(row)
     return out
 
@@ -187,11 +196,69 @@ def mark_high_danger(shots: pd.DataFrame) -> pd.DataFrame:
     return frame
 
 
+#: Score effects (PostHockey's score & venue adjustment, after McCurdy,
+#: Hockey-Graphs 2014): a trailing team shoots more and a leading one sits
+#: back, so a raw xG share mixes how a team played with the states it played
+#: in. Each attempt at even strength is weighted so that, in every season and
+#: score state, the home side's share of shooter-adjusted xG equals that
+#: season's home share at that strength (venue stays: the ratings divide it
+#: out themselves); each state's total is preserved exactly. 5v5 states run
+#: from three or more down to three or more up; 4v4 and 3v3 are trailing,
+#: tied or leading. Power play, penalty kill and extra-attacker shots keep
+#: weight 1. The textbook share, not PostHockey's talent-controlled one.
+SCORE_STATE_CAP = 3
+#: A state with less xG than this in a season keeps weight 1.
+SCORE_STATE_MINIMUM_XG = 20.0
+#: A state's home share is read inside this range.
+SCORE_SHARE_RANGE = (0.2, 0.8)
+
+
+def score_weights(shots: pd.DataFrame, column: str = "xg_sh") -> pd.Series:
+    """Each attempt's score-and-venue weight (1.0 outside even strength)."""
+    weights = pd.Series(1.0, index=shots.index)
+    if shots.empty or column not in shots or "score_diff" not in shots:
+        return weights
+    even = shots["strength"].isin(["5v5", "EV"]) & shots[column].notna()
+    if not even.any():
+        return weights
+    frame = shots.loc[even, ["game_id", "is_home", "score_diff", "strength", column]].copy()
+    home = frame["is_home"].astype(bool)
+    home_diff = np.where(home, frame["score_diff"], -frame["score_diff"]).astype(float)
+    frame["_state"] = np.where(
+        frame["strength"] == "5v5",
+        np.clip(home_diff, -SCORE_STATE_CAP, SCORE_STATE_CAP),
+        np.sign(home_diff),
+    )
+    frame["_season"] = frame["game_id"].map(season_of)
+    frame["_home_xg"] = np.where(home, frame[column], 0.0)
+    low, high = SCORE_SHARE_RANGE
+    for (_, _), group in frame.groupby(["_season", "strength"]):
+        total = float(group[column].sum())
+        if total <= 0:
+            continue
+        overall = float(group["_home_xg"].sum()) / total
+        for _, cell in group.groupby("_state"):
+            cell_total = float(cell[column].sum())
+            if cell_total < SCORE_STATE_MINIMUM_XG:
+                continue
+            home_xg = float(cell["_home_xg"].sum())
+            share = min(high, max(low, home_xg / cell_total))
+            w_home, w_away = overall / share, (1.0 - overall) / (1.0 - share)
+            # Exact when the share is inside its range; rescaled when clamped.
+            scale = cell_total / (w_home * home_xg + w_away * (cell_total - home_xg))
+            is_home = cell["is_home"].astype(bool)
+            weights.loc[cell.index[is_home]] = w_home * scale
+            weights.loc[cell.index[~is_home]] = w_away * scale
+    return weights
+
+
 def build_tables(
     games: Iterable[GameEvents], scored_shots: pd.DataFrame
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """Team, player and goalie per-game tables from xG-scored shots."""
     shots = mark_high_danger(scored_shots)
+    if not shots.empty:
+        shots["sva_w"] = score_weights(shots)
     by_game = {gid: rows for gid, rows in shots.groupby("game_id")} if not shots.empty else {}
     team_rows: list[dict] = []
     player_rows: list[dict] = []

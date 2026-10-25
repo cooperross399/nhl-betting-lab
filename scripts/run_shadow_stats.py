@@ -603,6 +603,7 @@ PRICE_VARIANTS = (
     ("xg", "xG ratings (card, 2026-10-06 to 10-21)", measurement.SITE_VARIANT_KEY, False, False, 14, False),
     ("xg_context_luck", "Context xG (PostHockey)", "xg_context_luck", False, False, 14, False),
     ("xg_shooter_gsax", "Shooter-adjusted xG (PostHockey)", "xg_shooter_gsax", False, False, 14, False),
+    ("xg_shooter_sva", "Shooter-adjusted xG, score-adjusted (PostHockey)", "xg_shooter_sva", False, False, 14, False),
     ("xg_team_home", "xG ratings + per-team home ice", measurement.SITE_VARIANT_KEY, True, False, 14, False),
     (
         "xg_shooter_home",
