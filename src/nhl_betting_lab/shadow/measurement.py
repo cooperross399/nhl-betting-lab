@@ -108,11 +108,25 @@ TEAM_VARIANTS: tuple[TeamVariant, ...] = (
         goalie_xga="goalie_xga_adj",
         finishing_xgf=None,
     ),
+    TeamVariant(
+        "xg_shooter_sva",
+        "Shooter-adjusted xG, score-adjusted, recent, plus GSAx(sh)",
+        "xgf_sva",
+        "xga_sva",
+        recent=True,
+        luck=True,
+        goalie_xga="goalie_xga_adj",
+        finishing_xgf=None,
+    ),
 )
+
+#: PostHockey's score & venue adjustment on top (`metrics.score_weights`):
+#: what the ratings file is built on whenever the table carries it.
+SCORE_ADJUSTED_VARIANT = next(v for v in TEAM_VARIANTS if v.key == "xg_shooter_sva")
 
 #: Variants that read the context and talent columns, which only a full run
 #: builds; a table without them scores none of these.
-POSTHOCKEY_VARIANT_KEYS = frozenset({"xg_context_luck", "xg_shooter_gsax"})
+POSTHOCKEY_VARIANT_KEYS = frozenset({"xg_context_luck", "xg_shooter_gsax", "xg_shooter_sva"})
 
 #: The variant the public site rates teams on: the one that forecast best on
 #: every column in the first measurement (2026-10-05, moneyline +7.58 per
@@ -978,12 +992,18 @@ def xg_team_ratings(
             f"The play-by-play table carries no {RATINGS_VARIANT_KEY} columns "
             "(context xG and shooter talent were not built)."
         )
+    # Score-adjusted when the table carries it (Cooper, 2026-10-25); the
+    # goaltending factor still compares goals with unweighted xG.
+    score_adjusted = _has_columns(metrics, SCORE_ADJUSTED_VARIANT)
+    if score_adjusted:
+        variant = SCORE_ADJUSTED_VARIANT
     factors = shadow_factors(metrics, variant, home_advantage)
     form = team_form(metrics, variant, home_advantage)
     last = games["_date"].max()
     home_ice = recent_home_ice(team_games, home_advantage, last + timedelta(days=1))
     return {
         "variant": RATINGS_VARIANT_KEY,
+        "score_adjusted": score_adjusted,
         "home_advantage": home_advantage,
         "games_covered": covered,
         "games_wanted": wanted,

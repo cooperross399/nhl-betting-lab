@@ -2821,6 +2821,23 @@ Re-derive rather than trust if the data has moved.
   the goalie tables moves nothing. Attack, defence and form are unchanged
   (checked on the 2026-10-25 state: identical teams, 134 goalies).
   Not measured against prices; constants are this lab's choice.
+- **2026-10-25, NOT a defect fix: the team ratings are score-adjusted
+  (PostHockey's score & venue adjustment, Cooper's model step 2).** Every
+  even-strength attempt is weighted (`metrics.score_weights`) so that in
+  each season and score state (5v5: three or more down to three or more up;
+  4v4/3v3: trailing, tied, leading) the home side's share of shooter-adjusted
+  xG equals the season's home share at that strength, each state's total
+  preserved; power play, penalty kill and extra attacker keep weight 1, as
+  does a state under 20 xG. The textbook shares (McCurdy 2014), not
+  PostHockey's talent-controlled ones; venue stays in, because the ratings
+  divide it out themselves. The table gains `xgf_sva`/`xga_sva`, and
+  `xg_team_ratings` builds on variant `xg_shooter_sva` whenever the table
+  carries them (`score_adjusted: true` in the file; the file's `variant`
+  stays `xg_shooter_gsax`, its family); goaltending still compares goals
+  with unweighted xGA. Checked on the 2026-10-25 state (4,095 games): total
+  xG unchanged to 1e-15, net rating moved -0.069 (OTT) to +0.025 (NYR, SJS),
+  leading teams up. `xg_shooter_sva` joins the price backtest for
+  information. Not measured against prices before going live.
 
 ## Contract strings — never change these
 
