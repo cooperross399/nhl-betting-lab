@@ -245,6 +245,7 @@ def generate_prop_samples(
     recent_form: bool = False,
     team_form: bool = False,
     position_matchup: bool = False,
+    hits_options: frozenset[str] | set[str] = frozenset(),
 ) -> tuple[pd.DataFrame, WalkForwardReport]:
     """Price every player-game in the log with a model that could not see it.
 
@@ -259,7 +260,9 @@ def generate_prop_samples(
     policies can be compared on identical prices — the comparison that decides
     whether the props rest adjustment ships. `recent_form=True` moves each
     refit's skater rates toward recent form (`apply_recent_form`), for the
-    form experiment only.
+    form experiment only. `hits_options` names the parts of the hits model
+    (`player_props.HITS_OPTIONS`) each refit fits; empty, the default, prices
+    hits as every committed measurement did, and the card fits them all.
     """
     wanted = {
         key: tuple(float(line) for line in values)
@@ -302,7 +305,9 @@ def generate_prop_samples(
             window_start = window_end + timedelta(days=1)
             continue
         try:
-            model = PlayerPropsModel().fit(history.drop(columns=["_date"]))
+            model = PlayerPropsModel(hits_options=hits_options).fit(
+                history.drop(columns=["_date"])
+            )
         except (KeyError, ValueError):
             report.windows_skipped_for_history += 1
             window_start = window_end + timedelta(days=1)

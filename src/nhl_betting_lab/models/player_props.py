@@ -47,8 +47,9 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
+import numpy as np
 import pandas as pd
 
 from nhl_betting_lab.models.counts import (
@@ -93,6 +94,28 @@ POSITION_GROUPS = ("F", "D", "G")
 #: puck. If anything the effect runs the other way, and this model does not
 #: claim to know by how much.
 PP_SENSITIVE_STATS = frozenset({"points", "goals", "assists"})
+
+#: The parts of the hits model Cooper asked to have dialled in (2026-10-25:
+#: "enhance and improve the hits portion of our model ... i think overs could
+#: be in play a lot more often"). Each is a name so the walk-forward can
+#: price any subset against the old model; the card fits all of them.
+#:
+#: ``rink``: hits are counted by the home club's off-ice scorers, and rinks
+#: disagree about what a hit is by a third or more. Every logged hit is
+#: divided by its rink's factor before any rate is fitted, and tonight's
+#: rink's factor is multiplied back in.
+#: ``shrinkage``: hitting is a style, not luck, so a skater's hit rate is
+#: shrunk toward his position by an amount measured from the spread of real
+#: hit rates (empirical Bayes) rather than the 70,000 seconds every stat
+#: shares. The shared figure pulled the league's heavy hitters toward an
+#: average forward, the very players books post hits lines on.
+#: ``recency``: a game's weight in the hit rate halves every
+#: `HITS_HALF_LIFE_GAMES` of the player's games, so a role change shows.
+#: ``dispersion``: the spread is measured inside each player's own games.
+#: Measured on the whole column it counted the gap between a grinder and a
+#: skill winger as game-to-game noise, which widened every distribution,
+#: piled probability on 0 and 1 hits, and so under-priced every over.
+HITS_OPTIONS = frozenset({"rink", "shrinkage", "recency", "dispersion"})
 
 
 def normalize_player_name(name: object) -> str:
@@ -302,7 +325,34 @@ class PlayerPropsModel:
     TEAM_FORM_SHRINKAGE_GAMES = 15
     TEAM_FORM_RANGE = (0.85, 1.18)
 
-    def __init__(self) -> None:
+    #: Hits model (`HITS_OPTIONS`). A rink's factor is its recent home games'
+    #: hits (both clubs) over the same club's recent road games', so the home
+    #: club's own style cancels; shrunk at `HITS_RINK_SHRINKAGE_GAMES` home
+    #: games and clamped to `HITS_RINK_RANGE`.
+    HITS_RINK_GAMES = 82
+    HITS_RINK_SHRINKAGE_GAMES = 20
+    HITS_RINK_RANGE = (0.6, 1.6)
+    HITS_HALF_LIFE_GAMES = 60
+    #: Bounds on the measured hits shrinkage, in seconds of ice time.
+    HITS_SHRINKAGE_RANGE = (3_000.0, 70_000.0)
+    #: Games a skater needs to count toward the measured spread.
+    HITS_MEASURE_GAMES = 30
+
+    def __init__(self, hits_options: frozenset[str] | set[str] | None = None) -> None:
+        #: Which parts of the hits model are fitted; the card fits all of
+        #: them. The walk-forward passes an empty set by default, so every
+        #: committed measurement stands as it was made.
+        self.hits_options = frozenset(
+            HITS_OPTIONS if hits_options is None else hits_options
+        )
+        unknown = self.hits_options - HITS_OPTIONS
+        if unknown:
+            raise ValueError(f"Unknown hits options {sorted(unknown)}; known {sorted(HITS_OPTIONS)}")
+        #: Rink -> hits scorer factor (1.0 is the league). Keyed by the home
+        #: club, whose rink it is.
+        self.hits_rink_factors: dict[str, float] = {}
+        #: Position group -> measured hits shrinkage, seconds of ice time.
+        self.hits_shrinkage_seconds: dict[str, float] = {}
         self.skaters: dict[int, SkaterRates] = {}
         self.goalies: dict[int, GoalieRates] = {}
         self.baselines: dict[str, dict[str, float]] = {}
@@ -382,6 +432,15 @@ class PlayerPropsModel:
             raise ValueError("No usable appearances to fit on.")
         frame["group"] = frame["position"].map(position_group)
         frame = frame.sort_values(["date", "game_id"])
+        frame["_hits_raw"] = frame["hits"].astype(float)
+        self.hits_rink_factors = {}
+        self.hits_shrinkage_seconds = {}
+        if "rink" in self.hits_options:
+            self.hits_rink_factors = fit_hits_rink_factors(frame)
+            arena = _arena(frame)
+            frame["hits"] = frame["hits"].astype(float) / arena.map(
+                lambda club: self.hits_rink_factors.get(club, 1.0)
+            ).astype(float)
 
         skaters = frame[frame["role"].astype(str) == "skater"]
         goalies = frame[frame["role"].astype(str) == "goalie"]
@@ -394,6 +453,7 @@ class PlayerPropsModel:
         self._fit_opponent_group_factors(skaters)
         self._fit_venue_factors(skaters)
         self._fit_skaters(skaters)
+        self._fit_hits(skaters)
         self._fit_goalies(goalies)
         self.opponent_shot_factors = fit_opponent_shot_factors(frame)
         self.team_form = team_form_factors(team_game_totals(frame))
@@ -529,7 +589,12 @@ class PlayerPropsModel:
         """
         regulars = skaters[skaters["toi_seconds"] >= 600]
         for stat in SKATER_STATS:
-            self.dispersion[stat] = measure_dispersion(regulars[stat].tolist())
+            column = "_hits_raw" if stat == "hits" and "_hits_raw" in regulars else stat
+            self.dispersion[stat] = measure_dispersion(regulars[column].tolist())
+        if "dispersion" in self.hits_options:
+            measured = self._hits_within_player_dispersion(regulars)
+            if measured is not None:
+                self.dispersion["hits"] = measured
         starters = goalies[goalies["toi_seconds"] >= 1800]
         self.dispersion[GOALIE_STAT] = measure_dispersion(
             starters[GOALIE_SETTLEMENT_COLUMN].tolist()
@@ -667,6 +732,127 @@ class PlayerPropsModel:
                 pp_share=(player_pp / team_total) if team_total > 0 else 0.0,
             )
         self.report.skaters_priced = len(self.skaters)
+
+    def _hits_within_player_dispersion(self, regulars: pd.DataFrame) -> Dispersion | None:
+        """Hits' negative-binomial spread inside each player's own games.
+
+        Each game's expected count is the player's own mean (on the rink
+        adjusted scale where `rink` is fitted, times that game's rink), so
+        the gap between one player and another is not counted as noise. Ice
+        time is not conditioned on, because the card prices on expected ice
+        time and tonight's minutes are part of tonight's noise. Method of
+        moments: 1/r = sum((x - mu)^2 * n/(n-1) - mu) / sum(mu^2). Returned
+        as a `Dispersion` at the league's mean with that r, so the shape every
+        reader builds is the measured one. None when too few players.
+        """
+        rows = regulars[["player_id", "hits", "_hits_raw"]].copy()
+        if "rink" in self.hits_options:
+            rows["_rink"] = _arena(regulars).map(
+                lambda club: self.hits_rink_factors.get(club, 1.0)
+            ).astype(float)
+        else:
+            rows["_rink"] = 1.0
+        counts = rows.groupby("player_id")["hits"].transform("size")
+        rows = rows[counts >= self.HITS_MEASURE_GAMES]
+        if rows["player_id"].nunique() < 20:
+            return None
+        n = rows.groupby("player_id")["hits"].transform("size").astype(float)
+        level = rows.groupby("player_id")["hits"].transform("mean")
+        mu = level * rows["_rink"]
+        x = rows["_hits_raw"].astype(float)
+        excess = float((((x - mu) ** 2) * n / (n - 1.0) - mu).sum())
+        scale = float((mu**2).sum())
+        mean = float(x.mean())
+        if scale <= 0 or mean <= 0:
+            return None
+        inverse_r = excess / scale
+        if inverse_r <= 0:
+            return Dispersion(mean=mean, variance=mean, samples=len(rows))
+        return Dispersion(
+            mean=mean, variance=mean + mean * mean * inverse_r, samples=len(rows)
+        )
+
+    def _fit_hits(self, skaters: pd.DataFrame) -> None:
+        """Refit every priced skater's hit rate, as `hits_options` says.
+
+        `shrinkage`: per position group, the shrinkage is sampling noise over
+        the real spread of hit rates. For players with `HITS_MEASURE_GAMES`
+        or more games, the spread of their raw per-second rates minus the
+        noise expected at each one's ice time (Poisson noise times the hits
+        dispersion) is the real spread tau^2, and the shrinkage in seconds is
+        phi * m / tau^2, bounded by `HITS_SHRINKAGE_RANGE`. `recency` weights
+        each game by 0.5 ** (games ago / `HITS_HALF_LIFE_GAMES`) in both the
+        hits and the seconds behind the rate. Without either the rate is the
+        one `_fit_skaters` fitted.
+        """
+        if not ({"shrinkage", "recency"} & self.hits_options) or not self.skaters:
+            return
+        frame = skaters[["player_id", "group", "toi_seconds", "hits", "date", "game_id"]].copy()
+        frame["hits"] = frame["hits"].astype(float)
+        frame = frame.sort_values(["player_id", "date", "game_id"], ascending=[True, False, False])
+        if "recency" in self.hits_options:
+            ago = frame.groupby("player_id").cumcount().to_numpy(dtype=float)
+            frame["_w"] = np.power(0.5, ago / self.HITS_HALF_LIFE_GAMES)
+        else:
+            frame["_w"] = 1.0
+        frame["_wh"] = frame["hits"] * frame["_w"]
+        frame["_ws"] = frame["toi_seconds"] * frame["_w"]
+        sums = frame.groupby("player_id")[["_wh", "_ws"]].sum()
+
+        shrink: dict[str, float] = {}
+        for group in ("F", "D"):
+            if "shrinkage" in self.hits_options:
+                shrink[group] = self._measured_hits_shrinkage(skaters, group)
+            else:
+                shrink[group] = float(self.SHRINKAGE_SECONDS)
+        self.hits_shrinkage_seconds = shrink
+
+        for player_id, rates in list(self.skaters.items()):
+            if player_id not in sums.index:
+                continue
+            seconds = float(sums.at[player_id, "_ws"])
+            if seconds <= 0:
+                continue
+            baseline = self.baselines.get(rates.group, {}).get("hits", 0.0)
+            k = shrink.get(rates.group, float(self.SHRINKAGE_SECONDS))
+            weight = seconds / (seconds + k)
+            raw = float(sums.at[player_id, "_wh"]) / seconds * 3600.0
+            per60 = dict(rates.per60)
+            per60["hits"] = baseline + weight * (raw - baseline)
+            self.skaters[player_id] = replace(rates, per60=per60)
+
+    def _measured_hits_shrinkage(self, skaters: pd.DataFrame, group: str) -> float:
+        low, high = self.HITS_SHRINKAGE_RANGE
+        rows = skaters[skaters["group"] == group]
+        per_player = rows.groupby("player_id").agg(
+            hits=("hits", "sum"), seconds=("toi_seconds", "sum"), games=("hits", "size")
+        )
+        per_player = per_player[
+            (per_player["games"] >= self.HITS_MEASURE_GAMES) & (per_player["seconds"] > 0)
+        ]
+        if len(per_player) < 20:
+            return float(self.SHRINKAGE_SECONDS)
+        rate = per_player["hits"] / per_player["seconds"]
+        seconds = per_player["seconds"].astype(float)
+        mean = float(per_player["hits"].sum() / seconds.sum())
+        if mean <= 0:
+            return float(self.SHRINKAGE_SECONDS)
+        # Game-to-game noise beyond Poisson: the hits dispersion's
+        # variance-to-mean at a typical game's count.
+        dispersion = self.dispersion.get("hits")
+        per_game = float(per_player["hits"].sum() / per_player["games"].sum())
+        r = dispersion.r if dispersion is not None else None
+        phi = 1.0 + (per_game / r if r else 0.0)
+        spread = float(np.average((rate - mean) ** 2, weights=seconds))
+        noise = float(np.average(phi * mean / seconds, weights=seconds))
+        tau2 = spread - noise
+        if tau2 <= 0:
+            return high
+        return float(min(max(phi * mean / tau2, low), high))
+
+    def hits_rink_factor(self, arena: object) -> float:
+        """Tonight's rink's hits scorer factor; 1.0 when it is not fitted."""
+        return float(self.hits_rink_factors.get(str(arena), 1.0))
 
     def _fit_goalies(self, goalies: pd.DataFrame) -> None:
         self.goalies = {}
@@ -845,6 +1031,15 @@ class PlayerPropsModel:
                 stat, team=team if team else rates.team, opponent=str(opponent)
             )
             * self.crew_multiplier(stat, team if team else rates.team, opponent)
+            * (
+                self.hits_rink_factor(
+                    (team if team else rates.team)
+                    if str(venue) == "home"
+                    else opponent
+                )
+                if stat == "hits"
+                else 1.0
+            )
         )
 
     def crew_multiplier(self, stat: str, team: object, opponent: object) -> float:
@@ -990,6 +1185,56 @@ class PlayerPropsModel:
         return self.over_probability(
             player_id, "goals", 0.5, opponent=opponent, venue=venue
         )
+
+
+def _arena(frame: pd.DataFrame) -> pd.Series:
+    """The club whose rink each row was played in: the home side."""
+    home = frame["venue"].astype(str) == "home"
+    return frame["team"].astype(str).where(home, frame["opponent"].astype(str))
+
+
+def fit_hits_rink_factors(logs: pd.DataFrame) -> dict[str, float]:
+    """Each rink's hits scorer factor, from skater logs (see `HITS_OPTIONS`).
+
+    For each club, total hits (both sides) per game over its last
+    `HITS_RINK_GAMES` home games, over the same over its last as many road
+    games: the club's own style and its schedule are on both sides of the
+    ratio, so what is left is the home scorer. Shrunk toward 1.0 at
+    `HITS_RINK_SHRINKAGE_GAMES` home games, rescaled so the clubs' factors
+    average 1.0, and clamped to `HITS_RINK_RANGE`.
+    """
+    model = PlayerPropsModel
+    skaters = logs[logs["role"].astype(str) == "skater"].copy()
+    if skaters.empty:
+        return {}
+    column = "_hits_raw" if "_hits_raw" in skaters else "hits"
+    skaters["_h"] = pd.to_numeric(skaters[column], errors="coerce").fillna(0.0)
+    skaters["_arena"] = _arena(skaters)
+    per_game = (
+        skaters.groupby(["game_id", "date", "_arena"])["_h"].sum().reset_index()
+    )
+    teams_in = skaters[["game_id", "team"]].drop_duplicates()
+    per_game = per_game.merge(teams_in, on="game_id")
+    per_game["_home"] = per_game["team"].astype(str) == per_game["_arena"].astype(str)
+    per_game = per_game.sort_values(["date", "game_id"])
+    raw: dict[str, tuple[float, int]] = {}
+    for club, rows in per_game.groupby("team"):
+        home = rows[rows["_home"]].tail(model.HITS_RINK_GAMES)
+        road = rows[~rows["_home"]].tail(model.HITS_RINK_GAMES)
+        if home.empty or road.empty or float(road["_h"].mean()) <= 0:
+            continue
+        raw[str(club)] = (float(home["_h"].mean()) / float(road["_h"].mean()), len(home))
+    if not raw:
+        return {}
+    shrunk = {
+        club: 1.0 + games / (games + model.HITS_RINK_SHRINKAGE_GAMES) * (ratio - 1.0)
+        for club, (ratio, games) in raw.items()
+    }
+    scale = float(np.mean(list(shrunk.values())))
+    low, high = model.HITS_RINK_RANGE
+    return {
+        club: float(min(max(value / scale, low), high)) for club, value in shrunk.items()
+    }
 
 
 def fit_opponent_shot_factors(logs: pd.DataFrame) -> dict[str, float]:
