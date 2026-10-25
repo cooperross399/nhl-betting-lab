@@ -376,6 +376,11 @@ PYTHONPATH=src .venv/bin/python scripts/run_props_form_experiment.py
 # against the current model (Saves Model Study workflow runs it in CI).
 PYTHONPATH=src .venv/bin/python scripts/run_saves_model_study.py
 
+# Does the dialled-in hits model (rink scorer, measured shrinkage, recency,
+# own-games spread) price hits better? Walk-forward on outcomes and on the
+# bought hits prices, overs and unders apart (Hits Model Study workflow).
+PYTHONPATH=src .venv/bin/python scripts/run_hits_model_study.py
+
 # Which Due List settings are best? Searches the qualifier, drought bar and
 # price window, scores each season's winner on the other season, and runs the
 # same search on no-edge simulations. Changes no setting (Due List Tuning
