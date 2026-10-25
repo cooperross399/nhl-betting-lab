@@ -239,7 +239,8 @@ def test_a_forward_with_the_documented_half_life_of_ice_time_keeps_exactly_half(
     assert sniper.seconds == DOCUMENTED_HALF_LIFE_SECONDS
     _assert_fixture_separates_baseline_from_raw([1])
 
-    model = PlayerPropsModel().fit(shrinkage_league())
+    # The shared rule; hits has its own since 2026-10-25 (test_the_hits_model_is_dialled_in).
+    model = PlayerPropsModel(hits_options=frozenset()).fit(shrinkage_league())
     rates = model.skaters[1]
 
     # By hand: forwards shot 300 + 50 + 150 + 48 = 548 times in 70,000 +
@@ -266,7 +267,8 @@ def test_every_forward_keeps_the_share_of_his_deviation_his_ice_time_earns() -> 
     assert len({SKATERS[pid].seconds for pid in forwards}) == len(forwards)
     _assert_fixture_separates_baseline_from_raw(forwards)
 
-    model = PlayerPropsModel().fit(shrinkage_league())
+    # The shared rule; hits has its own since 2026-10-25 (test_the_hits_model_is_dialled_in).
+    model = PlayerPropsModel(hits_options=frozenset()).fit(shrinkage_league())
 
     for player_id in forwards:
         rates = model.skaters[player_id]
@@ -283,7 +285,8 @@ def test_more_ice_time_keeps_more_of_the_measured_deviation() -> None:
     """The documented shape, whatever the half-life: a player with more
     minutes behind his rate keeps more of it. The Callup's 9,600 seconds keep
     about an eighth; the Sniper's 70,000 keep half."""
-    model = PlayerPropsModel().fit(shrinkage_league())
+    # The shared rule; hits has its own since 2026-10-25 (test_the_hits_model_is_dialled_in).
+    model = PlayerPropsModel(hits_options=frozenset()).fit(shrinkage_league())
     forwards = sorted(
         (skater for skater in ROSTER if skater.group == "F"),
         key=lambda skater: skater.seconds,
@@ -352,7 +355,8 @@ def test_a_defenceman_shrinks_toward_the_defence_baseline_not_the_forwards() -> 
         defence_baseline, _, _, _ = expected_rate(defencemen[0], stat)
         assert abs(forward_baseline - defence_baseline) > 0.05, stat
 
-    model = PlayerPropsModel().fit(shrinkage_league())
+    # The shared rule; hits has its own since 2026-10-25 (test_the_hits_model_is_dialled_in).
+    model = PlayerPropsModel(hits_options=frozenset()).fit(shrinkage_league())
 
     for player_id in defencemen:
         rates = model.skaters[player_id]
