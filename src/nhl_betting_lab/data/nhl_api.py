@@ -416,6 +416,32 @@ def current_rosters(
     return rosters
 
 
+def current_birth_dates(*, raw_dir: Path | None = None) -> dict[int, str]:
+    """{player id: "YYYY-MM-DD"} from every cached roster, for aging.
+
+    Empty when nothing is cached; a player with no birth date is simply not
+    aged.
+    """
+    directory = _cache_root(raw_dir) / "roster"
+    if not directory.is_dir():
+        return {}
+    out: dict[int, str] = {}
+    for path in sorted(directory.glob("*.json")):
+        payload = _read_cache(path)
+        if not isinstance(payload, dict):
+            continue
+        for group in ROSTER_GROUPS:
+            for player in payload.get(group) or []:
+                if not isinstance(player, dict):
+                    continue
+                born = str(player.get("birthDate") or "")[:10]
+                try:
+                    out[int(player.get("id"))] = born
+                except (TypeError, ValueError):
+                    continue
+    return {player: born for player, born in out.items() if len(born) == 10}
+
+
 #: The registry's two lists, the stats-API endpoint each is read from, and
 #: the field that endpoint spells the full name in.
 REGISTRY_ENDPOINTS = (

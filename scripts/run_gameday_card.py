@@ -27,7 +27,7 @@ import pandas as pd
 from nhl_betting_lab.config import OUTPUTS_DIR, PROCESSED_DIR, STAGING_DIR
 from nhl_betting_lab.data.build_datasets import load_player_logs, load_team_games
 from nhl_betting_lab.models.saves_context import SavesInputs
-from nhl_betting_lab.data.nhl_api import current_rosters
+from nhl_betting_lab.data.nhl_api import current_birth_dates, current_rosters
 from nhl_betting_lab.data.starting_goalies import load_starters
 from nhl_betting_lab.drought_forward import record_list
 from nhl_betting_lab.drought_rule import (
@@ -638,7 +638,8 @@ def main(argv: list[str] | None = None) -> int:
             # Tonight's posted lines (Cooper, 2026-10-21): who is out, each
             # skater's line and unit, and the hole an absence leaves.
             lineups = tonight_lineups(
-                processed, moment.astimezone(LEAGUE_TIMEZONE).date().isoformat(), logs
+                processed, moment.astimezone(LEAGUE_TIMEZONE).date().isoformat(), logs,
+                birth_dates=current_birth_dates(raw_dir=raw),
             )
             print(f"Lineups: {lineups.describe()}.")
             props_model.game_factors = crews
@@ -710,6 +711,8 @@ def main(argv: list[str] | None = None) -> int:
             for line in apply_starters(
                 team_model, processed,
                 _listed_starters(processed, moment, team_names, logs),
+                birth_dates=current_birth_dates(raw_dir=raw),
+                day=moment.astimezone(LEAGUE_TIMEZONE).date().isoformat(),
             ):
                 print(line)
             team_model.game_factors = crews

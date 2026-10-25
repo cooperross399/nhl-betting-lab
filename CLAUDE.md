@@ -2853,6 +2853,24 @@ Re-derive rather than trust if the data has moved.
   which could only take attack off: a star back from injury now puts it
   on. On the 2026-10-25 logs: McDavid 111.4 per 84, newcomer forward 28.8;
   EDM without him x0.969, with him x1.027. Not measured against prices.
+- **2026-10-25, NOT a defect fix: skater ratings and tonight's starting
+  goalie are aged (PostHockey's model step 4).** Birth dates come from the
+  rosters the card already caches (`nhl_api.current_birth_dates`).
+  **Skaters:** `lineups.aging_curves` fits, per forwards and defencemen, a
+  season's change in offensive game score per game as linear in age, by
+  weighted least squares on consecutive seasons of the same skater (20+
+  games each, harmonic-mean weights, at least 150 pairs, ages 19-38);
+  `skater_ratings` moves each past season along it to his age this season
+  before averaging. On the 2026-10-25 logs both curves peak at 27 (survivors
+  only, as PostHockey says of its own). **Goalies:** `team_ratings.apply_starters`
+  multiplies a starter's factor by exp(-term x share), term read off
+  PostHockey's published goalie age curve (`GOALIE_AGE_CURVE`, logits, peak
+  +0.031 at 24, -0.094 at 40) and share his own record's weight
+  (`goalie_games` / (+ `goalie_shrinkage_games`) in the ratings file). Not
+  built, and why: a scoring-environment term `E` would move every team's
+  xG together and the ratings divide by the league mean, so it changes no
+  price; an era split is moot because the lab's play-by-play starts in
+  2023-24, all in PostHockey's chip era. Not measured against prices.
 
 ## Contract strings — never change these
 

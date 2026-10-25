@@ -416,7 +416,11 @@ def project_starters(starters: pd.DataFrame, games: pd.DataFrame) -> dict[tuple[
 
 
 def goalie_factors(
-    goalie_history: pd.DataFrame, *, xga: str = "xga", anchor: float = 1.0
+    goalie_history: pd.DataFrame,
+    *,
+    xga: str = "xga",
+    anchor: float = 1.0,
+    games_out: dict[int, float] | None = None,
 ) -> dict[int, float]:
     """Each goalie's goals against over his expected, regressed toward `anchor`.
 
@@ -461,6 +465,8 @@ def goalie_factors(
         )
         # What the regression did not keep goes to the anchor, not to 1.0.
         out[int(goalie)] = shrunk + LUCK_SHRINKAGE_GAMES / (games + LUCK_SHRINKAGE_GAMES) * (anchor - 1.0)
+        if games_out is not None:
+            games_out[int(goalie)] = games
     return out
 
 
@@ -471,7 +477,9 @@ def goalie_factors(
 UNSEEN_GOALIE_FACTOR = 1.02
 
 
-def starter_goalie_table(goalie_table: pd.DataFrame, games: pd.DataFrame) -> dict[str, float]:
+def starter_goalie_table(
+    goalie_table: pd.DataFrame, games: pd.DataFrame, games_out: dict[str, float] | None = None
+) -> dict[str, float]:
     """{goalie_id: factor} on shooter-adjusted xG, for tonight's starter.
 
     `goalie_factors` over every regular-season appearance on or before the
@@ -484,7 +492,10 @@ def starter_goalie_table(goalie_table: pd.DataFrame, games: pd.DataFrame) -> dic
     frame["game_id"] = pd.to_numeric(frame["game_id"], errors="coerce")
     frame = frame.merge(games[["game_id", "_date"]], on="game_id", how="inner")
     frame = frame.dropna(subset=["xga_adj"])
-    factors = goalie_factors(frame, xga="xga_adj", anchor=UNSEEN_GOALIE_FACTOR)
+    evidence: dict[int, float] = {}
+    factors = goalie_factors(frame, xga="xga_adj", anchor=UNSEEN_GOALIE_FACTOR, games_out=evidence)
+    if games_out is not None:
+        games_out.update({str(g): round(n, 2) for g, n in sorted(evidence.items())})
     return {str(g): round(f, 5) for g, f in sorted(factors.items())}
 
 
@@ -999,6 +1010,7 @@ def xg_team_ratings(
         variant = SCORE_ADJUSTED_VARIANT
     factors = shadow_factors(metrics, variant, home_advantage)
     form = team_form(metrics, variant, home_advantage)
+    goalie_games: dict[str, float] = {}
     last = games["_date"].max()
     home_ice = recent_home_ice(team_games, home_advantage, last + timedelta(days=1))
     return {
@@ -1022,7 +1034,12 @@ def xg_team_ratings(
         "home_ice": {team: home_ice[team] for team in sorted(home_ice)},
         "team_goalie": {team: f["goalie"] for team, f in sorted(factors.items())},
         "goalies": (
-            starter_goalie_table(goalie_table, games) if goalie_table is not None else {}
+            starter_goalie_table(goalie_table, games, goalie_games)
+            if goalie_table is not None else {}
         ),
+        # Each goalie's effective games of evidence: the share of his factor
+        # that is his own record, which is how much of the age curve he gets.
+        "goalie_games": goalie_games,
+        "goalie_shrinkage_games": LUCK_SHRINKAGE_GAMES,
         "unseen_goalie": UNSEEN_GOALIE_FACTOR,
     }

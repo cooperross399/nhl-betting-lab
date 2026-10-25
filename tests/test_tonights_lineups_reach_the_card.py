@@ -120,3 +120,31 @@ def test_a_better_sheet_raises_the_attack_up_to_the_cap() -> None:
     weak = lu._lineup_attack(logs, roles, {"TOR": [(worst, "f1")] * 18}, DAY)[0]["TOR"]
     assert weak < 1.0 < strong <= lu.MAX_ATTACK_FACTOR
     assert weak >= lu.MIN_ATTACK_FACTOR
+
+
+def test_aging_moves_a_young_skaters_past_seasons_up_and_an_old_ones_down() -> None:
+    rows = []
+    for player, born in ((1, "2003-06-01"), (2, "1989-06-01")):
+        for season in (2023, 2024, 2025):
+            for game in range(30):
+                rows.append({"player_id": player, "player": f"Skater {player}", "role": "skater",
+                             "position": "C", "season": season * 10000 + season + 1,
+                             "date": f"{season}-11-{1 + game % 28:02d}", "goals": 0, "assists": 1,
+                             "shots_on_goal": 2})
+    # Two hundred pairs of league history: scoring rises to 27 and falls after.
+    for player in range(100, 300):
+        age_now = 20 + (player % 15)
+        for k, season in enumerate((2023, 2024)):
+            age = age_now - 1 + k
+            rows += [{"player_id": player, "player": f"P{player}", "role": "skater", "position": "C",
+                      "season": season * 10000 + season + 1, "date": f"{season}-12-{1 + g:02d}",
+                      "goals": 0, "assists": max(0.0, 1.0 - 0.01 * (age - 27) ** 2), "shots_on_goal": 0}
+                     for g in range(25)]
+    logs = pd.DataFrame(rows)
+    born = {1: "2003-06-01", 2: "1989-06-01"}
+    born.update({p: f"{2025 - (20 + p % 15)}-06-01" for p in range(100, 300)})
+    plain, _ = lu.skater_ratings(logs, "2026-10-25")
+    aged, _ = lu.skater_ratings(logs, "2026-10-25", born)
+    young, old = "skater 1", "skater 2"
+    assert aged[young] > plain[young]
+    assert aged[old] < plain[old]
