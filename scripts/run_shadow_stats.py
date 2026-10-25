@@ -434,7 +434,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.tables_only:
         model = TeamModel().fit(team_games)
         try:
-            ratings = measurement.xg_team_ratings(model.home_advantage, team_games, team_table)
+            ratings = measurement.xg_team_ratings(
+                model.home_advantage, team_games, team_table, goalie_table
+            )
         except ValueError as exc:
             print(f"::error::{exc} No team ratings written.")
             return 2
