@@ -2773,8 +2773,19 @@ Re-derive rather than trust if the data has moved.
   of moments around his own mean, times the rink); measured on the whole
   column it counted grinder-versus-winger as game-to-game noise, piled
   probability on 0 and 1 hits and under-priced every over. Measured
-  walk-forward by `scripts/run_hits_model_study.py` (Hits Model Study);
-  information only. The edge bars, the bracket check, the market list and
+  walk-forward by `scripts/run_hits_model_study.py` (Hits Model Study
+  run 40151716329, 129,419 player-games, 2023-24 to 2026-27); information
+  only. Log-likelihood per player-game against the old model: +0.0607
+  [+0.0584, +0.0630] for all four; rink alone +0.0005; rink with the
+  own-games spread alone -0.0129 (that spread needs the lighter
+  shrinkage beside it). Skaters the old model put at 2+ hits (7,382):
+  predicted 2.385 old and 2.981 new, actual 2.840. On the bought hits
+  prices (`card` window, 6% bar, one bet per wager): old -65.8u over
+  5,249 (-1.25%), 13 of them overs; all four +125.7u over 2,621, +4.80%
+  [+1.17%, +8.43%], overs -0.11% over 1,151 and unders +8.64% over
+  1,470. Uncorrected, four variants tried on one dataset, and the parts
+  were chosen on reasoning before this run but checked against it: not
+  a demonstrated edge. The edge bars, the bracket check, the market list and
   the staking rule are unchanged; the snapshot freezes what the card
   priced, so hits opinions frozen from the next card are the new model's,
   and earlier ones are not set aside (Cooper's call).
