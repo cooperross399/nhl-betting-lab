@@ -1,9 +1,9 @@
-**Selections changed** since the previous card — 6 best bet(s), 2.25 unit(s) staked.
+Selections are unchanged since the previous card; this comment was posted on request, and the run was clean.
 
 # NHL gameday card
 
-- Generated: 2026-10-26T13:46:59+00:00
-- 6 best bet(s), 50 lean(s), 1506 pass(es) across 3 game(s); 2.25 unit(s) staked.
+- Generated: 2026-10-26T14:08:09+00:00
+- 6 best bet(s), 47 lean(s), 1515 pass(es) across 3 game(s); 2.25 unit(s) staked.
 - Included markets: **assists, blocked_shots, goals, hits, moneyline, points, puck_line, regulation_3_way, shots_on_goal, team_total, total_goals**
 - Unit size: $25
 
@@ -12,7 +12,7 @@
 | Game | Starts | Market | Selection | Model | Edge | Price | Book | Units |
 |:-----|:-------|:-------|:----------|------:|-----:|------:|:-----|------:|
 | Detroit Red Wings @ Edmonton Oilers | Oct 26, 9:40 PM ET | `shots_on_goal` | Ryan Shea under 1.5 | 69.8% | +19.8% | +100 | Hard Rock Bet | 0.5 |
-| Detroit Red Wings @ Edmonton Oilers | Oct 26, 9:40 PM ET | `hits` | Michael Brandsegg-Nygard over 2.5 | 76.4% | +18.9% | -135 | theScore Bet | 0.5 |
+| Detroit Red Wings @ Edmonton Oilers | Oct 26, 9:40 PM ET | `hits` | Michael Brandsegg-Nygard over 2.5 | 75.9% | +19.4% | -130 | theScore Bet | 0.5 |
 | Los Angeles Kings @ New York Rangers | Oct 26, 7:10 PM ET | `hits` | Mika Zibanejad under 1.5 | 65.2% | +18.7% | +115 | theScore Bet | 0.5 |
 | Los Angeles Kings @ New York Rangers | Oct 26, 7:10 PM ET | `hits` | Tye Kartye over 2.5 | 72.9% | +16.3% | -130 | theScore Bet | 0.25 |
 | Los Angeles Kings @ New York Rangers | Oct 26, 7:10 PM ET | `shots_on_goal` | Pavel Dorofeyev under 2.5 | 61.0% | +14.5% | +115 | theScore Bet | 0.25 |
@@ -30,48 +30,45 @@
 | Los Angeles Kings @ New York Rangers | Oct 26, 7:10 PM ET | `hits` | Samuel Helenius over 2.5 | 61.0% | +11.0% | +100 | theScore Bet |
 | Los Angeles Kings @ New York Rangers | Oct 26, 7:10 PM ET | `shots_on_goal` | Eeli Tolvanen under 1.5 | 66.3% | +10.3% | -127 | Bally Bet |
 | Toronto Maple Leafs @ Calgary Flames | Oct 26, 8:40 PM ET | `points` | Matvei Gridin under 0.5 | 63.6% | +10.1% | -115 | BetMGM |
-| Los Angeles Kings @ New York Rangers | Oct 26, 7:10 PM ET | `points` | Alex Laferriere under 0.5 | 58.7% | +9.9% | +105 | theScore Bet |
+| Los Angeles Kings @ New York Rangers | Oct 26, 7:10 PM ET | `points` | Alex Laferriere under 0.5 | 58.7% | +9.9% | +105 | Hard Rock Bet |
 | Toronto Maple Leafs @ Calgary Flames | Oct 26, 8:40 PM ET | `shots_on_goal` | Ben Jones over 1.5 | 53.7% | +9.9% | +128 | BetOnline.ag |
 | Los Angeles Kings @ New York Rangers | Oct 26, 7:10 PM ET | `shots_on_goal` | Will Cuylle under 1.5 | 52.2% | +9.8% | +136 | FanDuel |
 | Detroit Red Wings @ Edmonton Oilers | Oct 26, 9:40 PM ET | `shots_on_goal` | Dylan Larkin under 2.5 | 57.4% | +9.7% | +110 | BetMGM |
+| Toronto Maple Leafs @ Calgary Flames | Oct 26, 8:40 PM ET | `shots_on_goal` | Ben Jones over 2.5 | 30.8% | +9.7% | +375 | Fanatics |
 | Los Angeles Kings @ New York Rangers | Oct 26, 7:10 PM ET | `points` | Brandt Clarke under 0.5 | 64.8% | +9.3% | -125 | Bally Bet |
-| Toronto Maple Leafs @ Calgary Flames | Oct 26, 8:40 PM ET | `shots_on_goal` | Ben Jones over 2.5 | 31.5% | +9.2% | +350 | BetOnline.ag |
 | Toronto Maple Leafs @ Calgary Flames | Oct 26, 8:40 PM ET | `points` | Morgan Frost under 0.5 | 56.9% | +9.2% | +110 | BetMGM |
 | Detroit Red Wings @ Edmonton Oilers | Oct 26, 9:40 PM ET | `shots_on_goal` | Leon Draisaitl under 2.5 | 53.1% | +8.7% | +125 | BetMGM |
 | Toronto Maple Leafs @ Calgary Flames | Oct 26, 8:40 PM ET | `shots_on_goal` | Matvei Gridin under 1.5 | 50.3% | +8.7% | +140 | theScore Bet |
 | Detroit Red Wings @ Edmonton Oilers | Oct 26, 9:40 PM ET | `points` | Vasily Podkolzin under 0.5 | 61.2% | +8.5% | -111 | BetMGM |
 | Detroit Red Wings @ Edmonton Oilers | Oct 26, 9:40 PM ET | `assists` | Moritz Seider under 0.5 | 65.9% | +8.5% | -135 | BetMGM |
 | Detroit Red Wings @ Edmonton Oilers | Oct 26, 9:40 PM ET | `shots_on_goal` | Kasperi Kapanen under 1.5 | 54.9% | +8.4% | +115 | Bovada |
-| Toronto Maple Leafs @ Calgary Flames | Oct 26, 8:40 PM ET | `shots_on_goal` | Nick Paul over 2.5 | 28.8% | +8.4% | +390 | Fanatics |
 | Toronto Maple Leafs @ Calgary Flames | Oct 26, 8:40 PM ET | `points` | Darren Raddysh under 0.5 | 54.7% | +8.2% | +115 | BetMGM |
 | Detroit Red Wings @ Edmonton Oilers | Oct 26, 9:40 PM ET | `shots_on_goal` | Connor McDavid under 3.5 | 65.6% | +8.2% | -135 | Bovada |
 | Detroit Red Wings @ Edmonton Oilers | Oct 26, 9:40 PM ET | `shots_on_goal` | Evan Bouchard under 2.5 | 56.7% | +7.9% | +105 | Bovada |
 | Toronto Maple Leafs @ Calgary Flames | Oct 26, 8:40 PM ET | `points` | Jack Roslovic under 0.5 | 57.9% | +7.9% | +100 | BetMGM |
+| Toronto Maple Leafs @ Calgary Flames | Oct 26, 8:40 PM ET | `shots_on_goal` | Nick Paul over 2.5 | 28.8% | +7.7% | +375 | Fanatics |
 | Toronto Maple Leafs @ Calgary Flames | Oct 26, 8:40 PM ET | `points` | Kirill Marchenko under 0.5 | 48.0% | +7.5% | +147 | BetOnline.ag |
-| Detroit Red Wings @ Edmonton Oilers | Oct 26, 9:40 PM ET | `assists` | Evan Bouchard under 0.5 | 46.6% | +7.4% | +155 | Hard Rock Bet |
 | Toronto Maple Leafs @ Calgary Flames | Oct 26, 8:40 PM ET | `points` | Joel Farabee under 0.5 | 56.1% | +7.3% | +105 | BetMGM |
 | Detroit Red Wings @ Edmonton Oilers | Oct 26, 9:40 PM ET | `shots_on_goal` | Alex DeBrincat under 3.5 | 61.6% | +7.0% | -120 | Hard Rock Bet |
 | Detroit Red Wings @ Edmonton Oilers | Oct 26, 9:40 PM ET | `goals` | Connor McDavid under 0.5 | 61.5% | +6.9% | -120 | theScore Bet |
-| Detroit Red Wings @ Edmonton Oilers | Oct 26, 9:40 PM ET | `shots_on_goal` | Ryan Nugent-Hopkins under 1.5 | 50.2% | +6.7% | +130 | theScore Bet |
+| Detroit Red Wings @ Edmonton Oilers | Oct 26, 9:40 PM ET | `puck_line` | away +1.5 | 66.5% | +6.8% | -148 | Courtside |
 | Los Angeles Kings @ New York Rangers | Oct 26, 7:10 PM ET | `shots_on_goal` | Corey Perry under 1.5 | 68.1% | +6.7% | -159 | Bally Bet |
 | Toronto Maple Leafs @ Calgary Flames | Oct 26, 8:40 PM ET | `points` | Easton Cowan under 0.5 | 58.9% | +6.7% | -109 | Bally Bet |
-| Detroit Red Wings @ Edmonton Oilers | Oct 26, 9:40 PM ET | `puck_line` | away +1.5 | 66.3% | +6.7% | -148 | Courtside |
 | Toronto Maple Leafs @ Calgary Flames | Oct 26, 8:40 PM ET | `assists` | Darren Raddysh under 0.5 | 62.2% | +6.6% | -125 | Bally Bet |
 | Toronto Maple Leafs @ Calgary Flames | Oct 26, 8:40 PM ET | `assists` | Kirill Marchenko under 0.5 | 66.6% | +6.6% | -150 | Courtside |
 | Detroit Red Wings @ Edmonton Oilers | Oct 26, 9:40 PM ET | `hits` | Vasily Podkolzin over 3.5 | 54.2% | +6.5% | +110 | theScore Bet |
-| Los Angeles Kings @ New York Rangers | Oct 26, 7:10 PM ET | `points` | Adam Fox under 0.5 | 48.1% | +6.4% | +140 | Hard Rock Bet |
-| Detroit Red Wings @ Edmonton Oilers | Oct 26, 9:40 PM ET | `assists` | Ryan Nugent-Hopkins under 0.5 | 64.6% | +6.3% | -140 | BetMGM |
+| Detroit Red Wings @ Edmonton Oilers | Oct 26, 9:40 PM ET | `assists` | Ryan Nugent-Hopkins under 0.5 | 64.8% | +6.4% | -140 | BetMGM |
+| Toronto Maple Leafs @ Calgary Flames | Oct 26, 8:40 PM ET | `shots_on_goal` | Ryan Strome under 1.5 | 57.2% | +6.2% | -104 | Bally Bet |
 | Los Angeles Kings @ New York Rangers | Oct 26, 7:10 PM ET | `shots_on_goal` | Mats Zuccarello over 2.5 | 30.0% | +6.2% | +320 | Fanatics |
 | Detroit Red Wings @ Edmonton Oilers | Oct 26, 9:40 PM ET | `points` | Ryan Nugent-Hopkins under 0.5 | 50.5% | +6.1% | +125 | BetMGM |
+| Los Angeles Kings @ New York Rangers | Oct 26, 7:10 PM ET | `points` | Will Cuylle under 0.5 | 67.6% | +6.1% | -160 | theScore Bet |
 | Toronto Maple Leafs @ Calgary Flames | Oct 26, 8:40 PM ET | `shots_on_goal` | Auston Matthews over 5.5 | 23.9% | +6.1% | +460 | Fanatics |
-| Toronto Maple Leafs @ Calgary Flames | Oct 26, 8:40 PM ET | `shots_on_goal` | Ryan Strome under 1.5 | 57.3% | +6.1% | -105 | Bally Bet |
-| Detroit Red Wings @ Edmonton Oilers | Oct 26, 9:40 PM ET | `regulation_3_way` | away | 35.3% | +5.0% | +230 | Bally Bet |
-| Los Angeles Kings @ New York Rangers | Oct 26, 7:10 PM ET | `total_goals` | over 7.5 | 28.2% | +4.4% | +320 | FanDuel |
-| Toronto Maple Leafs @ Calgary Flames | Oct 26, 8:40 PM ET | `team_total` | away_under 3.5 | 56.6% | +4.2% | -110 | FanDuel |
-| Los Angeles Kings @ New York Rangers | Oct 26, 7:10 PM ET | `total_goals` | over 6.5 | 47.3% | +3.8% | +130 | Hard Rock Bet |
-| Los Angeles Kings @ New York Rangers | Oct 26, 7:10 PM ET | `total_goals` | over 5.5 | 58.3% | +3.6% | -121 | BetOnline.ag |
-| Detroit Red Wings @ Edmonton Oilers | Oct 26, 9:40 PM ET | `moneyline` | away | 43.1% | +3.6% | +153 | Courtside |
-| Los Angeles Kings @ New York Rangers | Oct 26, 7:10 PM ET | `total_goals` | over 8.5 | 20.2% | +3.5% | +500 | FanDuel |
+| Detroit Red Wings @ Edmonton Oilers | Oct 26, 9:40 PM ET | `regulation_3_way` | away | 35.4% | +5.1% | +230 | Bally Bet |
+| Los Angeles Kings @ New York Rangers | Oct 26, 7:10 PM ET | `total_goals` | over 7.5 | 27.9% | +4.1% | +320 | FanDuel |
+| Toronto Maple Leafs @ Calgary Flames | Oct 26, 8:40 PM ET | `team_total` | away_under 3.5 | 56.4% | +4.0% | -110 | FanDuel |
+| Detroit Red Wings @ Edmonton Oilers | Oct 26, 9:40 PM ET | `moneyline` | away | 43.2% | +3.7% | +153 | Courtside |
+| Detroit Red Wings @ Edmonton Oilers | Oct 26, 9:40 PM ET | `team_total` | away_over 2.5 | 61.3% | +3.7% | -136 | FanDuel |
+| Los Angeles Kings @ New York Rangers | Oct 26, 7:10 PM ET | `total_goals` | over 6.5 | 47.0% | +3.5% | +130 | Hard Rock Bet |
 
 Stats check, props: a prop is staked only when the model's hit chance clears what the shortest price in its odds bracket would need. These cleared the edge bar without it and are recorded here.
 
@@ -86,31 +83,31 @@ Leans are recorded and not staked.
 |:-----|:-------|:-------|:----------|------:|-----:|------:|:-----|
 | Toronto Maple Leafs @ Calgary Flames | Oct 26, 8:40 PM ET | `points` | Zayne Parekh under 0.5 | 78.1% | +16.0% | -164 | BetOnline.ag |
 | Toronto Maple Leafs @ Calgary Flames | Oct 26, 8:40 PM ET | `assists` | Zayne Parekh under 0.5 | 84.5% | +14.8% | -230 | Courtside |
-| Detroit Red Wings @ Edmonton Oilers | Oct 26, 9:40 PM ET | `hits` | Keegan Kolesar over 1.5 | 78.2% | +13.9% | -180 | theScore Bet |
+| Detroit Red Wings @ Edmonton Oilers | Oct 26, 9:40 PM ET | `hits` | Keegan Kolesar over 1.5 | 78.5% | +13.6% | -185 | theScore Bet |
 | Toronto Maple Leafs @ Calgary Flames | Oct 26, 8:40 PM ET | `shots_on_goal` | Matvei Gridin under 2.5 | 72.4% | +10.2% | -165 | Hard Rock Bet |
-| Detroit Red Wings @ Edmonton Oilers | Oct 26, 9:40 PM ET | `points` | Evan Bouchard under 1.5 | 73.9% | +9.6% | -180 | theScore Bet |
 | Detroit Red Wings @ Edmonton Oilers | Oct 26, 9:40 PM ET | `shots_on_goal` | Moritz Seider under 2.5 | 75.1% | +8.5% | -200 | BetMGM |
 | Detroit Red Wings @ Edmonton Oilers | Oct 26, 9:40 PM ET | `shots_on_goal` | Ryan Nugent-Hopkins under 2.5 | 72.4% | +8.1% | -180 | Hard Rock Bet |
-| Toronto Maple Leafs @ Calgary Flames | Oct 26, 8:40 PM ET | `shots_on_goal` | Ben Jones over 3.5 | 16.7% | +8.0% | +1050 | BetOnline.ag |
+| Detroit Red Wings @ Edmonton Oilers | Oct 26, 9:40 PM ET | `puck_line` | away +2.5 | 79.4% | +7.9% | -250 | FanDuel |
 | Los Angeles Kings @ New York Rangers | Oct 26, 7:10 PM ET | `assists` | Alex Laferriere under 0.5 | 75.1% | +7.9% | -205 | Courtside |
-| Detroit Red Wings @ Edmonton Oilers | Oct 26, 9:40 PM ET | `puck_line` | away +2.5 | 79.3% | +7.8% | -250 | FanDuel |
+| Toronto Maple Leafs @ Calgary Flames | Oct 26, 8:40 PM ET | `shots_on_goal` | Ben Jones over 3.5 | 16.3% | +7.6% | +1050 | BetOnline.ag |
+| Detroit Red Wings @ Edmonton Oilers | Oct 26, 9:40 PM ET | `points` | Evan Bouchard under 1.5 | 73.9% | +7.3% | -200 | Hard Rock Bet |
 | Toronto Maple Leafs @ Calgary Flames | Oct 26, 8:40 PM ET | `assists` | Joel Farabee under 0.5 | 72.1% | +7.2% | -185 | BetMGM |
 | Los Angeles Kings @ New York Rangers | Oct 26, 7:10 PM ET | `assists` | Brandt Clarke under 0.5 | 70.4% | +6.8% | -175 | Bally Bet |
 | Toronto Maple Leafs @ Calgary Flames | Oct 26, 8:40 PM ET | `assists` | Matvei Gridin under 0.5 | 75.4% | +6.7% | -220 | BetMGM |
 | Toronto Maple Leafs @ Calgary Flames | Oct 26, 8:40 PM ET | `assists` | Kevin Bahl under 0.5 | 81.2% | +6.5% | -295 | BetMGM |
-| Toronto Maple Leafs @ Calgary Flames | Oct 26, 8:40 PM ET | `shots_on_goal` | Nick Paul over 3.5 | 14.7% | +6.4% | +1100 | Fanatics |
-| Los Angeles Kings @ New York Rangers | Oct 26, 7:10 PM ET | `shots_on_goal` | Mats Zuccarello over 3.5 | 15.6% | +6.1% | +950 | Fanatics |
 | Los Angeles Kings @ New York Rangers | Oct 26, 7:10 PM ET | `shots_on_goal` | J.T. Miller under 1.5 | 48.5% | +6.0% | +135 | Hard Rock Bet |
+| Detroit Red Wings @ Edmonton Oilers | Oct 26, 9:40 PM ET | `shots_on_goal` | Ryan Nugent-Hopkins under 1.5 | 50.2% | +6.0% | +126 | FanDuel |
 | Los Angeles Kings @ New York Rangers | Oct 26, 7:10 PM ET | `goals` | Artemi Panarin over 0.5 | 39.8% | +5.9% | +195 | FanDuel |
 | Toronto Maple Leafs @ Calgary Flames | Oct 26, 8:40 PM ET | `assists` | Morgan Frost under 0.5 | 71.4% | +5.9% | -190 | Courtside |
+| Detroit Red Wings @ Edmonton Oilers | Oct 26, 9:40 PM ET | `shots_on_goal` | Vasily Podkolzin under 1.5 | 47.5% | +5.8% | +140 | theScore Bet |
+| Detroit Red Wings @ Edmonton Oilers | Oct 26, 9:40 PM ET | `assists` | Evan Bouchard under 0.5 | 46.6% | +5.8% | +145 | Courtside |
 | Toronto Maple Leafs @ Calgary Flames | Oct 26, 8:40 PM ET | `assists` | Jack Roslovic under 0.5 | 75.0% | +5.8% | -225 | BetMGM |
 | Los Angeles Kings @ New York Rangers | Oct 26, 7:10 PM ET | `assists` | Adam Fox under 0.5 | 54.5% | +5.7% | +105 | Hard Rock Bet |
 | Los Angeles Kings @ New York Rangers | Oct 26, 7:10 PM ET | `points` | Sean Durzi under 0.5 | 72.4% | +5.7% | -200 | theScore Bet |
-| Toronto Maple Leafs @ Calgary Flames | Oct 26, 8:40 PM ET | `assists` | Easton Cowan under 0.5 | 73.3% | +5.6% | -210 | Bally Bet |
-| Toronto Maple Leafs @ Calgary Flames | Oct 26, 8:40 PM ET | `shots_on_goal` | Nick Paul over 1.5 | 51.0% | +5.5% | +120 | Fanatics |
-| Detroit Red Wings @ Edmonton Oilers | Oct 26, 9:40 PM ET | `shots_on_goal` | Vasily Podkolzin under 2.5 | 69.8% | +5.5% | -180 | theScore Bet |
+| Toronto Maple Leafs @ Calgary Flames | Oct 26, 8:40 PM ET | `shots_on_goal` | Nick Paul over 3.5 | 14.7% | +5.6% | +1000 | BetOnline.ag |
+| Los Angeles Kings @ New York Rangers | Oct 26, 7:10 PM ET | `shots_on_goal` | Mats Zuccarello over 3.5 | 15.6% | +5.6% | +900 | Fanatics |
 
-_1481 further passes not listed._
+_1490 further passes not listed._
 
 These are genuine model judgements about markets that were priced and modelled. They are **not** the same thing as the excluded markets below.
 
@@ -120,9 +117,9 @@ Who the model expects to win each game, from the same team ratings the card pric
 
 | Game | Puck drop | Stats' side | Win chance | Fair | Best price | Book | Against the price |
 |:--|:--|:--|--:|--:|--:|:--|:--|
-| Los Angeles Kings @ New York Rangers | Oct 26, 7:10 PM ET | **New York Rangers** | 53.7% | -116 | -128 | BetOnline.ag | price is 2.5 pts short |
-| Toronto Maple Leafs @ Calgary Flames | Oct 26, 8:40 PM ET | **Toronto Maple Leafs** | 55.3% | -124 | -145 | Hard Rock Bet | price is 3.9 pts short |
-| Detroit Red Wings @ Edmonton Oilers | Oct 26, 9:40 PM ET | **Edmonton Oilers** | 56.9% | -132 | -168 | BetOnline.ag | price is 5.8 pts short |
+| Los Angeles Kings @ New York Rangers | Oct 26, 7:10 PM ET | **New York Rangers** | 53.5% | -115 | -129 | BetOnline.ag | price is 2.8 pts short |
+| Toronto Maple Leafs @ Calgary Flames | Oct 26, 8:40 PM ET | **Toronto Maple Leafs** | 55.5% | -125 | -145 | Hard Rock Bet | price is 3.7 pts short |
+| Detroit Red Wings @ Edmonton Oilers | Oct 26, 9:40 PM ET | **Edmonton Oilers** | 56.8% | -131 | -169 | BetOnline.ag | price is 6.0 pts short |
 
 A list, not bets: no units, no stakes, nothing frozen into the forward ledger. The lab has no measurement showing that backing the stats' side at the market's price makes money.
 
@@ -189,6 +186,6 @@ What the evidence actually supports:
 - `data/outputs/props_calibration.md`
 - `data/outputs/what_we_can_claim.md`
 
-Run: https://github.com/cooperross399/nhl-betting-lab/actions/runs/40314118715
+Run: https://github.com/cooperross399/nhl-betting-lab/actions/runs/40333013763
 
 Recommendations only. No bet was placed, no policy was edited, and no market was allowlisted by this run.
