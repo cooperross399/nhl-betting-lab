@@ -8,9 +8,11 @@ Three modules, run in order by ``web/build_season_json.py``:
 * ``model``    — team strength ratings and per-player projections, built
                  from the three previous seasons plus whatever of the current
                  one has been played, and the injury list under
-                 ``data/season_sim/injuries.json``.
+                 ``data/season_sim/injuries.json``, blended toward the card's
+                 PostHockey-style team ratings when they are current.
 * ``simulate`` — the remaining schedule played 10,000 times; standings,
-                 playoff odds, scorer and goalie-win projections.
+                 playoff odds, the playoff bracket round by round, scorer and
+                 goalie-win projections, and trophy odds.
 
 Nothing here reads a price, spends a credit, or reaches the card. It is a
 projection of the standings, published as a projection.

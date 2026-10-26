@@ -1,0 +1,111 @@
+name: Season Sim Backtest
+
+# Scores the season simulation on the two completed seasons the lab holds
+# (2024-25 and 2025-26): projected from the standings after about 10, 20 and
+# 41 games, against how each season ended (points RMSE, playoff Brier and log
+# loss, 10th-90th coverage), over a grid of the engine's jitter and in-season
+# update weight, and with the team strengths blended from 0 to 1 toward the
+# card's PostHockey-style ratings rebuilt as of each date.
+# scripts/backtest_season_sim.py explains what it can and cannot rebuild.
+#
+# Run by hand only (Actions -> Season Sim Backtest -> Run workflow). The
+# report is uploaded as the `season-sim-backtest` artifact; nothing is
+# committed, published or changed. It reads public NHL, MoneyPuck and
+# play-by-play endpoints only, fetches no odds, spends no credit, pushes no
+# branch, edits no policy, and places no bet.
+on:
+  workflow_dispatch:
+    inputs:
+      sims:
+        description: Simulated seasons per cell (default 2,000).
+        type: number
+        default: 2000
+
+permissions:
+  contents: read
+  actions: read   # to restore Gameday Refresh's state and the play-by-play cache
+
+concurrency:
+  group: season-sim-backtest
+  cancel-in-progress: false
+
+jobs:
+  backtest:
+    name: Season Sim Backtest
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install project
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install -e .
+
+      - name: Restore the lab's game history
+        # The team games the card's ratings are rebuilt from. Soft: without
+        # it the blend toward the card's ratings is not scored, and the
+        # report says so; the rest of the backtest needs only public data.
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -u
+          python scripts/restore_state.py --artifact gameday-state --dest data \
+            --workflow gameday-refresh.yml --no-merge --attempts 3
+
+      - name: Restore cached play-by-play
+        uses: actions/cache/restore@v4
+        with:
+          path: data/raw/nhl/play_by_play
+          key: shadow-play-by-play-${{ github.run_id }}
+          restore-keys: shadow-play-by-play-
+
+      - name: Rebuild the card's ratings as of each checkpoint
+        continue-on-error: true
+        env:
+          PYTHONPATH: src
+        run: |
+          set -u
+          CUTOFFS=$(python scripts/backtest_season_sim.py --print-cutoffs)
+          echo "Checkpoints: $CUTOFFS"
+          ARGS=()
+          for d in $CUTOFFS; do ARGS+=(--ratings-as-of "$d"); done
+          timeout 60m python scripts/run_shadow_stats.py --fetch --tables-only "${ARGS[@]}"
+          ls data/processed/shadow_team_ratings_asof_*.json
+
+      - name: Backtest
+        env:
+          PYTHONPATH: src
+          SIMS: ${{ inputs.sims || 2000 }}
+        run: |
+          set -u
+          PH=()
+          if ls data/processed/shadow_team_ratings_asof_*.json >/dev/null 2>&1; then
+            PH=(--ph-dir data/processed)
+          fi
+          python scripts/backtest_season_sim.py --sims "$SIMS" "${PH[@]}" \
+            --out data/outputs/season_sim_backtest.md --json data/outputs/season_sim_backtest.json
+          cat data/outputs/season_sim_backtest.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: season-sim-backtest
+          path: |
+            data/outputs/season_sim_backtest.md
+            data/outputs/season_sim_backtest.json
+          if-no-files-found: warn
+          retention-days: 90

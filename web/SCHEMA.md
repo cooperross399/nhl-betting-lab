@@ -109,16 +109,48 @@ teams[]            sorted by projected points
   abbr, name, short, color, fg, conf ("E"|"W"), div
   now              {gp, w, l, otl, pts, gf, ga, rw, row}   — the standings to date (all zero in preseason)
   proj             {pts, p10, p90, sd, w, l, otl, gf, ga}  — full-season mean and 10th/90th percentiles
-  odds             {playoff, div, conf1, pres, last, bottom5, divRankDist[8], avgDivRank}  — shares of simulated seasons
+  odds             {playoff, div, conf1, pres, last, bottom5, divRankDist[8], avgDivRank,
+                    round1, confFinal, final, cup}  — shares of simulated seasons; round1 = won a first-round series,
+                   confFinal = reached the conference final, final = reached the Stanley Cup Final, cup = won it.
+                   The four round fields sum to 8, 4, 2 and 1 over the league and shrink round by round for every team.
+                   Absent from files written before 2026-10-26 (the committed baseline); the page then omits the section.
   lastSeason       {pts, gp, gf, ga} | null  — the previous season's final line, for the "vs last" column
-  rating           {off, ga, diff, tdOff, buOff, onIceXgf, tdXga, onIceXga, goalieGsax}  — goals per game, the model's components
+  rating           {off, ga, diff, tdOff, buOff, onIceXgf, tdXga, onIceXga, goalieGsax,
+                    ownOff, ownGa, phOff, phGa, homeIce}  — goals per game, the model's components. off/ga are what the
+                   season is played on; ownOff/ownGa the model's own ratings; phOff/phGa the card's PostHockey-style
+                   ratings (data/processed/shadow_team_ratings.json, five-game form taken out, re-centred on the league)
+                   or null when that file was missing or stale; off = (1 - w) × own + w × ph with w = method.ratings.phWeight.
+                   homeIce is the club's own home edge from that file (a log deviation from the league's, applied as
+                   exp((home's + away's) / 2) on home goals and its inverse on away goals, as the card does), 0 without it.
   scorers[]        top five by projected points: {name, pos, age, gp, g, a, p, now:{gp,g,a,p}, last:{gp,g,a,p}|null}
   goalies[]        {name, team, age, share, starts, wins, p10, p90, p30, p35, p40, gsax60, sv3, now:{gs,w,sv}, last:{gs,w,sv}|null}
 leaders            {points[30], goals[20], wins[20]}  — the same player and goalie shapes, each with `team`
 notes              {asOf, returning[], out[], unknown[]}  — the availability list as read from data/season_sim/roster_notes.json,
                    and any name in it the stats API did not know (published so a typo is visible, never silently dropped)
-method             {sigma, hfa, tieRate, leagueAvgPts}  — the engine's calibration, printed on the page
+playoffs           the bracket, played inside the same simulated seasons (NHL format: top three per division and two wild
+                   cards per conference; the better division winner meets the second wild card; 2 v 3 in each division;
+                   fixed bracket by division through the conference final; best of seven, 2-2-1-1-1, home ice to the
+                   better regular-season record; no ties; strength gap shrunk to method.playoffShrink)
+  slots[8]         {conf ("Eastern"|"Western"), label ("Atlantic 1 v wild card", "Atlantic 2 v Atlantic 3", ...),
+                    matchups[≤3]: {a, b, p}}  — the slot's most frequent first-round pairings, a the slot's higher seed
+                    (the division winner, or the division's second), p the share of simulated seasons
+  conferenceFinals[] {conf, matchups[≤5]: {a, b, p}}  — most frequent conference finals (a, b alphabetical)
+  finals[≤10]      {a (Eastern champion), b (Western champion), p}  — most frequent Stanley Cup Finals
+trophies           each award's leading candidates by the share of simulated seasons they finish first (ties split)
+  artRoss[≤10], rocket[≤10], wins[≤10], calder[≤10] | null
+                   {name, team, pos ("G" for goalies), age, p, proj, p10, p90, now}  — proj/p10/p90 the season total
+                   (points, goals or wins). Scorers' remaining goals and assists are drawn from their team's simulated
+                   goals at their projected share, with method.playerSigma rate jitter and an availability draw; goalie
+                   wins from the team's simulated wins and a drawn share of its starts. calder is the rookie points
+                   race (the trophy is voted), rookies read off the NHL's eligibility rule against the three seasons on
+                   file; null when no birth dates were available.
+  calderNote       the sentence the page prints under the awards about how rookies were identified
+method             {sigma, sigmaMode ("fixed"|"shrink"), hfa, tieRate, leagueAvgPts, playoffShrink, playerSigma,
+                    ratings: {phWeight, phThrough, phStatus}}  — the engine's calibration, printed on the page;
+                   phWeight 0 means the card's ratings were not used and phStatus says why
 ```
+
+The engine is scored on completed seasons by `scripts/backtest_season_sim.py` (Actions → Season Sim Backtest), which writes `data/outputs/season_sim_backtest.md`.
 
 Standings to date come from the NHL standings endpoint (`api-web.nhle.com/v1/standings/<date>`) and finals from each club's season schedule (`club-schedule-season`); the previous season's line is read at the last standings day the API states for it. The page never recomputes a record: in season, `now` is the league's own table and `proj` adds the simulated remainder to it.
 

@@ -29,6 +29,23 @@ SHRINK_ONICE = 0.5
 K_PLAYER = 40.0            # games of prior in a player's rate
 K_GOALIE_MINUTES = 6000.0  # minutes of prior in a goalie's GSAx/60
 K_TEAM_UPDATE = 30.0       # games of prior when updating a team toward its season to date
+#: How far each team's offense and defense move from this model's own number
+#: toward the card's PostHockey-style ratings (shooter-adjusted xG with
+#: GSAx(sh), `data/processed/shadow_team_ratings.json`, the file the card's
+#: team markets are priced on). 0.5 is the card's own weight for
+#: PostHockey's number (`posthockey.BLEND_WEIGHT`), chosen, not measured:
+#: scripts/backtest_season_sim.py scores 0 to 1 where the ratings can be
+#: rebuilt as of a past date.
+PH_WEIGHT = 0.5
+#: A ratings file older than the latest game in the standings by more than
+#: this many days is ignored rather than blended.
+PH_MAX_LAG_DAYS = 3
+#: The Calder Trophy's eligibility (NHL rule): under 26 on September 15 of
+#: the season, no more than 25 games in any earlier season, and not six or
+#: more in each of two earlier seasons.
+CALDER_AGE = 26.0
+CALDER_MAX_SEASON_GP = 25
+CALDER_TWO_SEASON_GP = 6
 SEASON_WEIGHTS = (6.0, 5.0, 3.0, 2.0)   # current season, then the three before it
 
 #: Default ice time for a player with no NHL history, by position; a touted
@@ -180,12 +197,50 @@ def _remaining_starts(weights: dict, returns: dict, games: list[dict]) -> dict:
 # ----------------------------------------------------------------------
 # the model
 # ----------------------------------------------------------------------
-def build_model(bundle: dict, injuries: dict, *, starter_shares: dict) -> dict:
+def is_rookie(prior_gp: list[int], born: str | None, season: str) -> bool | None:
+    """Calder eligibility from earlier seasons' games and the birth date;
+    None when the birth date is unknown."""
+    if not born:
+        return None
+    y, m, d = (int(x) for x in born[:10].split("-"))
+    sep15 = date(int(season[:4]), 9, 15)
+    turns = date(y + int(CALDER_AGE), m, 28 if (m, d) == (2, 29) else d)
+    if turns <= sep15:
+        return False
+    if any(gp > CALDER_MAX_SEASON_GP for gp in prior_gp):
+        return False
+    return sum(gp >= CALDER_TWO_SEASON_GP for gp in prior_gp) < 2
+
+
+def load_ph_ratings(path: Path) -> tuple[dict | None, str]:
+    """The card's team ratings file, or None and why not."""
+    try:
+        data = json.loads(Path(path).read_text(encoding="utf-8"))
+        teams = data["teams"]
+        str(data["last_game_date"])
+        for rate in teams.values():
+            float(rate["attack"]); float(rate["defence"])
+    except FileNotFoundError:
+        return None, f"no {Path(path).name}"
+    except (OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
+        return None, f"{Path(path).name} could not be read ({exc})"
+    if len(teams) < 30:
+        return None, f"{Path(path).name} rates {len(teams)} teams"
+    return data, "read"
+
+
+def build_model(bundle: dict, injuries: dict, *, starter_shares: dict, ph_ratings: dict | None = None,
+                ph_weight: float | None = None, k_team_update: float | None = None) -> dict:
     """Ratings and projections from a fetched bundle.
 
     ``injuries`` is the parsed ``data/season_sim/injuries.json``;
     ``starter_shares`` maps team -> {goalie full name: share of starts}.
+    ``ph_ratings`` is the parsed ratings file the card prices team markets
+    on (``load_ph_ratings``); when given and current, each team's strength
+    moves ``ph_weight`` of the way toward it and its own home ice is used.
     """
+    ph_weight = PH_WEIGHT if ph_weight is None else ph_weight
+    k_team_update = K_TEAM_UPDATE if k_team_update is None else k_team_update
     asof: date = bundle["today"]
     season = bundle["season"]
     seasons = [season, *[s for s in bundle["skaters"] if s != season]]
@@ -237,7 +292,7 @@ def build_model(bundle: dict, injuries: dict, *, starter_shares: dict) -> dict:
             for p in r.get(grp, []):
                 rosters[ab]["skaters"].append(dict(
                     id=p["id"], name=f"{p['firstName']['default']} {p['lastName']['default']}",
-                    pos=p["positionCode"], age=_age(p["birthDate"], asof)))
+                    pos=p["positionCode"], age=_age(p["birthDate"], asof), born=p.get("birthDate")))
         for p in r.get("goalies", []):
             rosters[ab]["goalies"].append(dict(
                 id=p["id"], name=f"{p['firstName']['default']} {p['lastName']['default']}", age=_age(p["birthDate"], asof)))
@@ -262,7 +317,8 @@ def build_model(bundle: dict, injuries: dict, *, starter_shares: dict) -> dict:
                 rosters[ab]["goalies"].append(dict(id=pid, name=entry["name"], age=_age(entry["born"], asof)))
             else:
                 pos = entry.get("pos") or sk[pid][max(sk[pid])]["positionCode"]
-                rosters[ab]["skaters"].append(dict(id=pid, name=entry["name"], pos=pos, age=_age(entry["born"], asof)))
+                rosters[ab]["skaters"].append(dict(id=pid, name=entry["name"], pos=pos, age=_age(entry["born"], asof),
+                                                   born=entry["born"]))
             on_roster.add((ab, pid))
         returns[(ab, pid)] = entry.get("return")
 
@@ -299,9 +355,10 @@ def build_model(bundle: dict, injuries: dict, *, starter_shares: dict) -> dict:
         out_games = _games_before(team_left, returns.get((ab, p["id"])))
         ros_gp = max(0.0, min(len(team_left) * avail, len(team_left) - out_games))
         now = s.get(season)
+        rookie = is_rookie([q["gamesPlayed"] for yr, q in s.items() if yr != season], p.get("born"), season)
         return dict(
             id=p["id"], name=p["name"], pos=p["pos"], age=round(p["age"], 1), toi=round(toi, 1),
-            rate_g=rate_g, rate_a=rate_a, ros_gp=ros_gp, eff_gp=eff_gp,
+            rate_g=rate_g, rate_a=rate_a, ros_gp=ros_gp, eff_gp=eff_gp, rookie=rookie, team_left=len(team_left),
             now=dict(gp=now["gamesPlayed"], g=now["goals"], a=now["assists"], p=now["points"]) if now else dict(gp=0, g=0, a=0, p=0),
             last=dict(gp=s[prior_season]["gamesPlayed"], g=s[prior_season]["goals"], a=s[prior_season]["assists"],
                       p=s[prior_season]["points"]) if prior_season in s else None,
@@ -474,16 +531,22 @@ def build_model(bundle: dict, injuries: dict, *, starter_shares: dict) -> dict:
             mgp = float(m["games_played"])
             obs_off = 0.5 * gf + 0.5 * float(m["flurryScoreVenueAdjustedxGoalsFor"]) / mgp
             obs_ga = 0.5 * ga + 0.5 * float(m["flurryScoreVenueAdjustedxGoalsAgainst"]) / mgp
-            k = K_TEAM_UPDATE
+            k = k_team_update
         else:
-            obs_off, obs_ga, k = gf, ga, K_TEAM_UPDATE * 1.5
+            obs_off, obs_ga, k = gf, ga, k_team_update * 1.5
         t["off_pre"], t["ga_pre"] = t["off"], t["ga"]
         t["off"] = (t["off"] * k + obs_off * gp) / (k + gp)
         t["ga"] = (t["ga"] * k + obs_ga * gp) / (k + gp)
 
+    # ---------------- toward the card's PostHockey-style ratings
+    ph_status, home_ice = _blend_ph(teams, ph_ratings, ph_weight, state)
+
     mo = sum(t["off"] for t in teams.values()) / 32
     mg = sum(t["ga"] for t in teams.values()) / 32
     for ab, t in teams.items():
+        for k in ("own_off", "own_ga", "ph_off", "ph_ga"):
+            if t.get(k) is not None:
+                t[k] *= LEAGUE_GPG / (mo if "off" in k else mg)
         t["off"] *= LEAGUE_GPG / mo
         t["ga"] *= LEAGUE_GPG / mg
         left = len(remaining_by_team.get(ab, []))
@@ -515,8 +578,63 @@ def build_model(bundle: dict, injuries: dict, *, starter_shares: dict) -> dict:
     return dict(
         asof=asof.isoformat(), season=season, games_per_team=games_total, state=state,
         teams=teams, team_info=team_info, players=players, goalies=goalies,
-        unknown=unknown, league_gpg=LEAGUE_GPG,
+        unknown=unknown, league_gpg=LEAGUE_GPG, home_ice=home_ice or {}, k_team_update=k_team_update,
+        ratings=dict(ph_weight=ph_weight if home_ice is not None else 0.0, ph_status=ph_status,
+                     ph_through=(ph_ratings or {}).get("last_game_date") if home_ice is not None else None),
     )
+
+
+def _blend_ph(teams: dict, ph: dict | None, weight: float, state: dict) -> tuple[str, dict | None]:
+    """Move each team's offense and defense ``weight`` of the way toward the
+    ratings file's, in place. Returns a status line and the file's home ice
+    (None when the file was not used).
+
+    The file's attack and defence are multipliers on the league rate with
+    the last-five form multiplied in; form is divided back out, because a
+    five-game streak says little about the seventy games still to play.
+    Both are re-centred on this model's own league means before blending, so
+    the blend moves teams relative to each other and not the league's
+    scoring.
+    """
+    for t in teams.values():
+        t["own_off"], t["own_ga"] = t["off"], t["ga"]
+        t["ph_off"] = t["ph_ga"] = None
+    if ph is None:
+        return "not used: no ratings file", None
+    if weight <= 0:
+        return "not used: weight 0", None
+    through = str(ph.get("last_game_date", ""))[:10]
+    latest = max((g["date"] for g in state["played"]), default=None)
+    if latest:
+        try:
+            lag = (date.fromisoformat(latest) - date.fromisoformat(through)).days
+        except ValueError:
+            return f"not used: the ratings carry no readable date ({through!r})", None
+        if lag > PH_MAX_LAG_DAYS:
+            return f"not used: the ratings run through {through}, the standings through {latest}", None
+    form = ph.get("form") or {}
+    att, dfn = {}, {}
+    for ab in teams:
+        rate = ph["teams"].get(ab)
+        if not rate:
+            continue
+        f = form.get(ab) or {}
+        att[ab] = float(rate["attack"]) / float(f.get("attack", 1.0) or 1.0)
+        dfn[ab] = float(rate["defence"]) / float(f.get("defence", 1.0) or 1.0)
+    if len(att) < 30:
+        return f"not used: the ratings rate {len(att)} of the teams", None
+    ma = sum(att.values()) / len(att); md = sum(dfn.values()) / len(dfn)
+    mo = sum(t["off"] for t in teams.values()) / len(teams)
+    mg = sum(t["ga"] for t in teams.values()) / len(teams)
+    for ab, t in teams.items():
+        if ab not in att:
+            continue
+        t["ph_off"] = mo * att[ab] / ma
+        t["ph_ga"] = mg * dfn[ab] / md
+        t["off"] = (1 - weight) * t["off"] + weight * t["ph_off"]
+        t["ga"] = (1 - weight) * t["ga"] + weight * t["ph_ga"]
+    home_ice = {str(k): float(v) for k, v in (ph.get("home_ice") or {}).items() if str(k) in teams}
+    return f"blended at {weight:.2f}, through {through}, {len(att)} teams, home ice for {len(home_ice)}", home_ice
 
 
 def load_injuries(path: Path) -> dict:

@@ -360,6 +360,33 @@ def findings(
     return out
 
 
+def ratings_as_of(
+    day: str,
+    team_games: pd.DataFrame,
+    team_table: pd.DataFrame,
+    goalie_table: pd.DataFrame,
+    processed_dir: Path,
+) -> str:
+    """The team ratings as they stood the morning of `day`, written beside
+    the live file. Every input is cut to games before `day`: the per-shot
+    talent behind the shooter adjustment is already pre-shot, and each
+    season's xG is fitted on earlier seasons, so nothing after `day` leaks
+    in. Returns the path written, or why nothing was."""
+    cut = team_games[team_games["date"].astype(str).str[:10] < str(day)[:10]]
+    ids = set(pd.to_numeric(cut["game_id"], errors="coerce").dropna().astype("int64"))
+    tt = team_table[pd.to_numeric(team_table["game_id"], errors="coerce").isin(ids)]
+    gt = goalie_table[pd.to_numeric(goalie_table["game_id"], errors="coerce").isin(ids)]
+    if cut.empty or tt.empty:
+        return "no games before it"
+    try:
+        ratings = measurement.xg_team_ratings(TeamModel().fit(cut).home_advantage, cut, tt, gt)
+    except ValueError as exc:
+        return f"not written ({exc})"
+    path = processed_dir / f"shadow_team_ratings_asof_{str(day)[:10]}.json"
+    path.write_text(json.dumps(ratings, indent=2) + "\n", encoding="utf-8")
+    return str(path)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--fetch", action="store_true")
@@ -379,6 +406,16 @@ def main(argv: list[str] | None = None) -> int:
         help="Write the tables, then price the bought team markets on the "
         "card's old goals ratings, the xG ratings and their variants "
         "(PRICE_VARIANTS), walk-forward on identical games, and stop.",
+    )
+    parser.add_argument(
+        "--ratings-as-of",
+        action="append",
+        metavar="DATE",
+        help="With --tables-only: also write the team ratings as they stood "
+        "the morning of DATE (games before it only) to "
+        "shadow_team_ratings_asof_DATE.json, for the season simulation's "
+        "backtest (scripts/backtest_season_sim.py). Repeatable. The card "
+        "never reads these files.",
     )
     args = parser.parse_args(argv)
     prices_path = args.processed_dir / "historical_team_prices.csv"
@@ -443,6 +480,9 @@ def main(argv: list[str] | None = None) -> int:
         (args.processed_dir / RATINGS_FILE).write_text(
             json.dumps(ratings, indent=2) + "\n", encoding="utf-8"
         )
+        for day in args.ratings_as_of or []:
+            written = ratings_as_of(day, team_games, team_table, goalie_table, args.processed_dir)
+            print(f"Ratings as of {day}: {written}")
         print(
             f"Shadow tables: {len(events)} of {len(ids)} games read, "
             f"{failures} fetch failure(s), shots match {validation['shots_match']:.1%}, "
