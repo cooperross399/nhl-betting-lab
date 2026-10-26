@@ -8,7 +8,7 @@ cooperross399/betting-lab-shared, merges the pull request once Tests is green,
 and then moves EPL, CBB and the hub to the same tag.
 
     python scripts/design_drop.py guard --base origin/main --head HEAD
-    python scripts/design_drop.py pin --shared DIR       # copy changed shared files, name the next tag
+    python scripts/design_drop.py pin --shared DIR       # make the shared checkout hold this branch's shared files, name the next tag
     python scripts/design_drop.py hub --shared DIR --tag vN --hub DIR
     python scripts/design_drop.py intake --zip FILE   # unpack a drop (zip or tarball)
     python scripts/design_drop.py stale PATH...        # refuse files built on an old copy
@@ -107,21 +107,32 @@ def shared_names(web: Path = WEB) -> list[str]:
 
 
 def pin(shared: Path, web: Path = WEB) -> list[str]:
-    """Copy every shared file whose bytes differ from the lock into the shared
-    checkout (logos into this lab's sport folder). Returns what was copied;
-    an empty list means the lock already holds this branch's pages."""
+    """Make the shared checkout hold this branch's bytes for every shared file
+    (logos into this lab's sport folder). Returns what was copied.
+
+    Each file is compared with the shared checkout, not with the lock: the
+    shared main can have moved past the tag the lock names (a drop pinned and
+    then closed unmerged), and copying only what differs from the lock would
+    leave that drop's files in the next tag."""
     sync = _sync()
     lock = sync.load_lock(web / "shared.lock.json")
     copied = []
     for name in shared_names(web):
         path = web / name
-        if lock["files"].get(name) == sync.digest(path):
-            continue
         dst = sync.source(shared, name, lock["sport"])
+        if dst.is_file() and sync.digest(dst) == sync.digest(path):
+            continue
         dst.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(path, dst)
         copied.append(name)
     return copied
+
+
+def lock_is_stale(web: Path = WEB) -> bool:
+    """True when any shared file's bytes differ from what the lock pins."""
+    sync = _sync()
+    lock = sync.load_lock(web / "shared.lock.json")
+    return any(lock["files"].get(name) != sync.digest(web / name) for name in shared_names(web))
 
 
 def hub(shared: Path, tag: str, hub_dir: Path) -> list[str]:
@@ -285,12 +296,14 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "pin":
         tags = subprocess.run(["git", "tag", "--list"], cwd=args.shared, capture_output=True,
                               text=True, check=True).stdout.split()
+        stale_lock = lock_is_stale()
         copied = pin(args.shared)
         tag = next_tag(tags)
+        repin = bool(copied) or stale_lock
         for name in copied:
             print(f"changed: {name}")
-        print(f"{len(copied)} shared file(s) changed" + (f"; next tag {tag}" if copied else ""))
-        _output(changed="true" if copied else "false", tag=tag)
+        print(f"{len(copied)} shared file(s) changed" + (f"; next tag {tag}" if repin else ""))
+        _output(changed="true" if repin else "false", tag=tag)
         return 0
 
     if args.command == "intake":
