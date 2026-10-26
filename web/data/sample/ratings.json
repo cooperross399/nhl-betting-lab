@@ -1,0 +1,433 @@
+{
+ "through": "2026-10-25",
+ "teams": [
+  {
+   "abbr": "ANA",
+   "name": "Anaheim Ducks",
+   "attack": 0.86,
+   "defence": 1.12,
+   "formAttack": 0.95,
+   "formDefence": 0.93,
+   "homeIce": 0.019,
+   "goaltending": 1.01
+  },
+  {
+   "abbr": "BOS",
+   "name": "Boston Bruins",
+   "attack": 1.01,
+   "defence": 1,
+   "formAttack": 1.04,
+   "formDefence": 0.98,
+   "homeIce": 0.018,
+   "goaltending": 0.95
+  },
+  {
+   "abbr": "BUF",
+   "name": "Buffalo Sabres",
+   "attack": 0.95,
+   "defence": 1.08,
+   "formAttack": 1.09,
+   "formDefence": 1.02,
+   "homeIce": 0.017,
+   "goaltending": 1.03
+  },
+  {
+   "abbr": "CAR",
+   "name": "Carolina Hurricanes",
+   "attack": 1.09,
+   "defence": 0.93,
+   "formAttack": 1.05,
+   "formDefence": 0.95,
+   "homeIce": 0.015,
+   "goaltending": 0.99
+  },
+  {
+   "abbr": "CBJ",
+   "name": "Columbus Blue Jackets",
+   "attack": 1.09,
+   "defence": 0.94,
+   "formAttack": 0.97,
+   "formDefence": 1.06,
+   "homeIce": 0.018,
+   "goaltending": 0.91
+  },
+  {
+   "abbr": "CGY",
+   "name": "Calgary Flames",
+   "attack": 1.05,
+   "defence": 1,
+   "formAttack": 1.14,
+   "formDefence": 1.09,
+   "homeIce": -0.005,
+   "goaltending": 1
+  },
+  {
+   "abbr": "CHI",
+   "name": "Chicago Blackhawks",
+   "attack": 1.12,
+   "defence": 1.06,
+   "formAttack": 1.05,
+   "formDefence": 1.03,
+   "homeIce": 0.026,
+   "goaltending": 1.08
+  },
+  {
+   "abbr": "COL",
+   "name": "Colorado Avalanche",
+   "attack": 0.96,
+   "defence": 0.97,
+   "formAttack": 1.11,
+   "formDefence": 0.97,
+   "homeIce": -0.004,
+   "goaltending": 0.96
+  },
+  {
+   "abbr": "DAL",
+   "name": "Dallas Stars",
+   "attack": 0.98,
+   "defence": 0.96,
+   "formAttack": 1.14,
+   "formDefence": 1.02,
+   "homeIce": 0.019,
+   "goaltending": 1.08
+  },
+  {
+   "abbr": "DET",
+   "name": "Detroit Red Wings",
+   "attack": 0.88,
+   "defence": 0.95,
+   "formAttack": 1.03,
+   "formDefence": 1.01,
+   "homeIce": 0.007,
+   "goaltending": 0.94
+  },
+  {
+   "abbr": "EDM",
+   "name": "Edmonton Oilers",
+   "attack": 1.06,
+   "defence": 1.02,
+   "formAttack": 1.01,
+   "formDefence": 1.03,
+   "homeIce": 0.019,
+   "goaltending": 1.04
+  },
+  {
+   "abbr": "FLA",
+   "name": "Florida Panthers",
+   "attack": 1.11,
+   "defence": 0.89,
+   "formAttack": 0.97,
+   "formDefence": 0.97,
+   "homeIce": 0.017,
+   "goaltending": 1.08
+  },
+  {
+   "abbr": "LAK",
+   "name": "Los Angeles Kings",
+   "attack": 1,
+   "defence": 0.92,
+   "formAttack": 0.98,
+   "formDefence": 0.95,
+   "homeIce": 0.005,
+   "goaltending": 0.98
+  },
+  {
+   "abbr": "MIN",
+   "name": "Minnesota Wild",
+   "attack": 0.95,
+   "defence": 1.02,
+   "formAttack": 1.04,
+   "formDefence": 0.94,
+   "homeIce": 0.026,
+   "goaltending": 0.99
+  },
+  {
+   "abbr": "MTL",
+   "name": "Montreal Canadiens",
+   "attack": 0.96,
+   "defence": 1.03,
+   "formAttack": 0.98,
+   "formDefence": 1.01,
+   "homeIce": -0.004,
+   "goaltending": 1.01
+  },
+  {
+   "abbr": "NJD",
+   "name": "New Jersey Devils",
+   "attack": 1.1,
+   "defence": 1.05,
+   "formAttack": 1.05,
+   "formDefence": 1.01,
+   "homeIce": 0.01,
+   "goaltending": 1.04
+  },
+  {
+   "abbr": "NSH",
+   "name": "Nashville Predators",
+   "attack": 1.12,
+   "defence": 0.98,
+   "formAttack": 1.07,
+   "formDefence": 0.95,
+   "homeIce": 0.013,
+   "goaltending": 0.97
+  },
+  {
+   "abbr": "NYI",
+   "name": "New York Islanders",
+   "attack": 0.95,
+   "defence": 0.98,
+   "formAttack": 1.1,
+   "formDefence": 1.11,
+   "homeIce": -0.006,
+   "goaltending": 1.06
+  },
+  {
+   "abbr": "NYR",
+   "name": "New York Rangers",
+   "attack": 0.99,
+   "defence": 0.97,
+   "formAttack": 0.95,
+   "formDefence": 1.01,
+   "homeIce": 0.012,
+   "goaltending": 0.92
+  },
+  {
+   "abbr": "OTT",
+   "name": "Ottawa Senators",
+   "attack": 0.88,
+   "defence": 0.99,
+   "formAttack": 0.91,
+   "formDefence": 0.9,
+   "homeIce": 0.03,
+   "goaltending": 0.94
+  },
+  {
+   "abbr": "PHI",
+   "name": "Philadelphia Flyers",
+   "attack": 1.04,
+   "defence": 0.92,
+   "formAttack": 1,
+   "formDefence": 1.03,
+   "homeIce": -0.004,
+   "goaltending": 1.08
+  },
+  {
+   "abbr": "PIT",
+   "name": "Pittsburgh Penguins",
+   "attack": 1.11,
+   "defence": 1.11,
+   "formAttack": 1.13,
+   "formDefence": 1.12,
+   "homeIce": 0.02,
+   "goaltending": 0.96
+  },
+  {
+   "abbr": "SEA",
+   "name": "Seattle Kraken",
+   "attack": 0.86,
+   "defence": 0.94,
+   "formAttack": 0.88,
+   "formDefence": 0.88,
+   "homeIce": 0.015,
+   "goaltending": 0.95
+  },
+  {
+   "abbr": "SJS",
+   "name": "San Jose Sharks",
+   "attack": 0.88,
+   "defence": 1.09,
+   "formAttack": 0.9,
+   "formDefence": 1.06,
+   "homeIce": 0.01,
+   "goaltending": 1.02
+  },
+  {
+   "abbr": "STL",
+   "name": "St. Louis Blues",
+   "attack": 1.07,
+   "defence": 1.01,
+   "formAttack": 1.07,
+   "formDefence": 0.94,
+   "homeIce": 0.025,
+   "goaltending": 0.95
+  },
+  {
+   "abbr": "TBL",
+   "name": "Tampa Bay Lightning",
+   "attack": 0.96,
+   "defence": 1.11,
+   "formAttack": 0.9,
+   "formDefence": 1.01,
+   "homeIce": -0.01,
+   "goaltending": 1.08
+  },
+  {
+   "abbr": "TOR",
+   "name": "Toronto Maple Leafs",
+   "attack": 1.08,
+   "defence": 0.94,
+   "formAttack": 1.02,
+   "formDefence": 0.99,
+   "homeIce": 0.021,
+   "goaltending": 0.97
+  },
+  {
+   "abbr": "UTA",
+   "name": "Utah Mammoth",
+   "attack": 1.04,
+   "defence": 1.12,
+   "formAttack": 0.87,
+   "formDefence": 1.11,
+   "homeIce": -0.002,
+   "goaltending": 1.09
+  },
+  {
+   "abbr": "VAN",
+   "name": "Vancouver Canucks",
+   "attack": 1.02,
+   "defence": 1.06,
+   "formAttack": 0.94,
+   "formDefence": 0.94,
+   "homeIce": -0.002,
+   "goaltending": 1.01
+  },
+  {
+   "abbr": "VGK",
+   "name": "Vegas Golden Knights",
+   "attack": 1.09,
+   "defence": 0.93,
+   "formAttack": 1.05,
+   "formDefence": 0.95,
+   "homeIce": 0.015,
+   "goaltending": 0.99
+  },
+  {
+   "abbr": "WPG",
+   "name": "Winnipeg Jets",
+   "attack": 0.87,
+   "defence": 1.08,
+   "formAttack": 1.07,
+   "formDefence": 1.07,
+   "homeIce": 0.01,
+   "goaltending": 0.91
+  },
+  {
+   "abbr": "WSH",
+   "name": "Washington Capitals",
+   "attack": 0.89,
+   "defence": 1.12,
+   "formAttack": 0.9,
+   "formDefence": 1.06,
+   "homeIce": 0.026,
+   "goaltending": 0.91
+  }
+ ],
+ "defence": {
+  "best": [
+   {
+    "player": "Jaccob Slavin",
+    "team": "CAR",
+    "goalsPrevented": 0.118
+   },
+   {
+    "player": "Charlie McAvoy",
+    "team": "BOS",
+    "goalsPrevented": 0.104
+   },
+   {
+    "player": "Devon Toews",
+    "team": "COL",
+    "goalsPrevented": 0.101
+   },
+   {
+    "player": "Gustav Forsling",
+    "team": "FLA",
+    "goalsPrevented": 0.097
+   },
+   {
+    "player": "Adam Fox",
+    "team": "NYR",
+    "goalsPrevented": 0.091
+   },
+   {
+    "player": "Quinn Hughes",
+    "team": "VAN",
+    "goalsPrevented": 0.088
+   },
+   {
+    "player": "Aleksander Barkov",
+    "team": "FLA",
+    "goalsPrevented": 0.086
+   },
+   {
+    "player": "Jordan Staal",
+    "team": "CAR",
+    "goalsPrevented": 0.079
+   },
+   {
+    "player": "Miro Heiskanen",
+    "team": "DAL",
+    "goalsPrevented": 0.077
+   },
+   {
+    "player": "Mikael Backlund",
+    "team": "CGY",
+    "goalsPrevented": 0.072
+   }
+  ],
+  "worst": [
+   {
+    "player": "Ryan Reaves",
+    "team": "TOR",
+    "goalsPrevented": -0.094
+   },
+   {
+    "player": "Tyler Myers",
+    "team": "VAN",
+    "goalsPrevented": -0.089
+   },
+   {
+    "player": "Jack Johnson",
+    "team": "CBJ",
+    "goalsPrevented": -0.084
+   },
+   {
+    "player": "Erik Gudbranson",
+    "team": "CBJ",
+    "goalsPrevented": -0.081
+   },
+   {
+    "player": "Ben Chiarot",
+    "team": "DET",
+    "goalsPrevented": -0.078
+   },
+   {
+    "player": "Nikita Zadorov",
+    "team": "BOS",
+    "goalsPrevented": -0.073
+   },
+   {
+    "player": "Marc-Edouard Vlasic",
+    "team": "SJS",
+    "goalsPrevented": -0.071
+   },
+   {
+    "player": "Justin Holl",
+    "team": "DET",
+    "goalsPrevented": -0.069
+   },
+   {
+    "player": "Ryan Suter",
+    "team": "STL",
+    "goalsPrevented": -0.066
+   },
+   {
+    "player": "Troy Stecher",
+    "team": "EDM",
+    "goalsPrevented": -0.062
+   }
+  ],
+  "rated": 702,
+  "games": 3410
+ }
+}

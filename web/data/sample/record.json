@@ -1,0 +1,151 @@
+{
+ "generatedAt": "2026-10-26T13:05:00Z",
+ "nights": 27,
+ "games": 191,
+ "buckets": [
+  {
+   "low": 0.5,
+   "high": 0.55,
+   "games": 58,
+   "predicted": 0.526,
+   "actual": 0.517,
+   "interval": [
+    0.39,
+    0.64
+   ]
+  },
+  {
+   "low": 0.55,
+   "high": 0.6,
+   "games": 61,
+   "predicted": 0.574,
+   "actual": 0.59,
+   "interval": [
+    0.47,
+    0.71
+   ]
+  },
+  {
+   "low": 0.6,
+   "high": 0.65,
+   "games": 39,
+   "predicted": 0.622,
+   "actual": 0.59,
+   "interval": [
+    0.44,
+    0.74
+   ]
+  },
+  {
+   "low": 0.65,
+   "high": 0.7,
+   "games": 22,
+   "predicted": 0.671,
+   "actual": 0.727,
+   "interval": [
+    0.52,
+    0.88
+   ]
+  },
+  {
+   "low": 0.7,
+   "high": 1,
+   "games": 11,
+   "predicted": 0.731,
+   "actual": 0.636,
+   "interval": [
+    0.35,
+    0.88
+   ]
+  }
+ ],
+ "brier": {
+  "games": 176,
+  "model": 0.2412,
+  "market": 0.2389
+ },
+ "movement": {
+  "toward": 23,
+  "against": 17,
+  "flat": 6,
+  "picks": 46
+ },
+ "markets": {
+  "total": {
+   "games": 148,
+   "buckets": [
+    {
+     "low": 0.5,
+     "high": 0.55,
+     "games": 71,
+     "predicted": 0.524,
+     "actual": 0.507,
+     "interval": [
+      0.39,
+      0.62
+     ]
+    },
+    {
+     "low": 0.55,
+     "high": 0.6,
+     "games": 52,
+     "predicted": 0.571,
+     "actual": 0.615,
+     "interval": [
+      0.48,
+      0.74
+     ]
+    },
+    {
+     "low": 0.6,
+     "high": 1,
+     "games": 25,
+     "predicted": 0.628,
+     "actual": 0.56,
+     "interval": [
+      0.37,
+      0.74
+     ]
+    }
+   ]
+  },
+  "puckLine": {
+   "games": 61,
+   "buckets": [
+    {
+     "low": 0.25,
+     "high": 0.3,
+     "games": 34,
+     "predicted": 0.281,
+     "actual": 0.265,
+     "interval": [
+      0.14,
+      0.42
+     ]
+    },
+    {
+     "low": 0.3,
+     "high": 0.4,
+     "games": 27,
+     "predicted": 0.336,
+     "actual": 0.37,
+     "interval": [
+      0.21,
+      0.56
+     ]
+    }
+   ]
+  }
+ },
+ "sealed": {
+  "sha256": "9f2c4a7e1b0d6c3a8e5f2b9d4c7a1e6f3b8d5c2a9e4f7b1d6c3a8e5f2b9d4c7a",
+  "sealedAt": "2026-09-29",
+  "opens": "April 2027"
+ },
+ "dueList": {
+  "entries": 58,
+  "hitRate": 0.569,
+  "avgPrice": -138,
+  "breakEven": 0.58
+ }
+}

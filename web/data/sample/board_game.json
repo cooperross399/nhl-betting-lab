@@ -1,0 +1,591 @@
+{
+ "generatedAt": "2026-10-26T15:40:00Z",
+ "season": "2026–27",
+ "phase": "regular",
+ "boardDate": "2026-10-26",
+ "unitDollars": 25,
+ "record": {
+  "straightUp": {
+   "w": 112,
+   "l": 79
+  },
+  "puckLine": {
+   "w": 34,
+   "l": 31,
+   "p": 0
+  },
+  "totals": {
+   "w": 41,
+   "l": 37,
+   "p": 3
+  },
+  "bets": {
+   "w": 19,
+   "l": 17,
+   "p": 1
+  },
+  "leans": {
+   "w": 22,
+   "l": 20,
+   "p": 2
+  }
+ },
+ "teams": {
+  "TOR": {
+   "name": "Toronto Maple Leafs",
+   "short": "Maple Leafs",
+   "color": "#00205B",
+   "fg": "#FFFFFF"
+  },
+  "MTL": {
+   "name": "Montreal Canadiens",
+   "short": "Canadiens",
+   "color": "#AF1E2D",
+   "fg": "#FFFFFF"
+  },
+  "BOS": {
+   "name": "Boston Bruins",
+   "short": "Bruins",
+   "color": "#FFB81C",
+   "fg": "#000000"
+  },
+  "NYR": {
+   "name": "New York Rangers",
+   "short": "Rangers",
+   "color": "#0038A8",
+   "fg": "#FFFFFF"
+  },
+  "CAR": {
+   "name": "Carolina Hurricanes",
+   "short": "Hurricanes",
+   "color": "#CC0000",
+   "fg": "#FFFFFF"
+  },
+  "EDM": {
+   "name": "Edmonton Oilers",
+   "short": "Oilers",
+   "color": "#FF4C00",
+   "fg": "#FFFFFF"
+  },
+  "VGK": {
+   "name": "Vegas Golden Knights",
+   "short": "Golden Knights",
+   "color": "#B4975A",
+   "fg": "#000000"
+  },
+  "SJS": {
+   "name": "San Jose Sharks",
+   "short": "Sharks",
+   "color": "#006D75",
+   "fg": "#FFFFFF"
+  }
+ },
+ "games": [
+  {
+   "id": "2026020155",
+   "startUtc": "2026-10-26T23:00:00Z",
+   "venue": "Scotiabank Arena",
+   "city": "Toronto, ON",
+   "tv": "SN / ESPN+",
+   "gameType": 2,
+   "priced": true,
+   "away": {
+    "abbr": "MTL",
+    "record": "5-3-1",
+    "projGoals": 2.71,
+    "winProb": 0.4312,
+    "b2b": false,
+    "goalie": {
+     "name": "Sam Montembeault",
+     "status": "projected"
+    }
+   },
+   "home": {
+    "abbr": "TOR",
+    "record": "6-2-1",
+    "projGoals": 3.18,
+    "winProb": 0.5688,
+    "b2b": false,
+    "goalie": {
+     "name": "Anthony Stolarz",
+     "status": "confirmed"
+    }
+   },
+   "moneyline": {
+    "open": {
+     "away": 135,
+     "home": -155
+    },
+    "current": {
+     "away": 130,
+     "home": -150
+    },
+    "fair": {
+     "away": 132,
+     "home": -132
+    }
+   },
+   "puckLine": {
+    "favorite": "TOR",
+    "line": -1.5,
+    "price": 185,
+    "coverProb": 0.341
+   },
+   "total": {
+    "open": 6,
+    "current": 6.5,
+    "overPrice": 105,
+    "underPrice": -125,
+    "proj": 6.12,
+    "overProb": 0.442
+   },
+   "regulation": {
+    "home": 0.47,
+    "draw": 0.21,
+    "away": 0.32,
+    "prices": {
+     "home": 105,
+     "draw": 340,
+     "away": 210
+    }
+   },
+   "pick": {
+    "kind": "bet",
+    "market": "Moneyline",
+    "label": "TOR ML",
+    "price": -150,
+    "edgePct": 9.4,
+    "side": "home",
+    "units": 1
+   },
+   "factors": [
+    {
+     "key": "strength",
+     "label": "Team strength (xG ratings)",
+     "homeWin": 0.528,
+     "delta": 0.028,
+     "homeGoals": 3.02,
+     "awayGoals": 2.84
+    },
+    {
+     "key": "home_ice",
+     "label": "Home ice",
+     "homeWin": 0.541,
+     "delta": 0.013,
+     "homeGoals": 3.08,
+     "awayGoals": 2.8
+    },
+    {
+     "key": "form",
+     "label": "Last-five form",
+     "homeWin": 0.552,
+     "delta": 0.011,
+     "homeGoals": 3.12,
+     "awayGoals": 2.77
+    },
+    {
+     "key": "rest",
+     "label": "Rest and travel",
+     "homeWin": 0.552,
+     "delta": 0,
+     "homeGoals": 3.12,
+     "awayGoals": 2.77
+    },
+    {
+     "key": "lineup",
+     "label": "Tonight's lineup",
+     "homeWin": 0.561,
+     "delta": 0.009,
+     "homeGoals": 3.16,
+     "awayGoals": 2.74
+    },
+    {
+     "key": "goalies",
+     "label": "Tonight's goalies",
+     "homeWin": 0.574,
+     "delta": 0.013,
+     "homeGoals": 3.2,
+     "awayGoals": 2.66
+    },
+    {
+     "key": "referees",
+     "label": "Referee crew",
+     "homeWin": 0.575,
+     "delta": 0.001,
+     "homeGoals": 3.24,
+     "awayGoals": 2.69
+    },
+    {
+     "key": "posthockey",
+     "label": "Second-opinion blend",
+     "homeWin": 0.569,
+     "delta": -0.006,
+     "homeGoals": 3.18,
+     "awayGoals": 2.71
+    }
+   ],
+   "ratings": {
+    "home": {
+     "attack": 1.08,
+     "defence": 0.94,
+     "goaltending": 0.97,
+     "formAttack": 1.02,
+     "formDefence": 0.99,
+     "homeIce": 0.021
+    },
+    "away": {
+     "attack": 0.96,
+     "defence": 1.03,
+     "goaltending": 1.01,
+     "formAttack": 0.98,
+     "formDefence": 1.01,
+     "homeIce": -0.004
+    }
+   }
+  },
+  {
+   "id": "2026020156",
+   "startUtc": "2026-10-26T23:00:00Z",
+   "venue": "Madison Square Garden",
+   "city": "New York, NY",
+   "tv": "MSG / ESPN+",
+   "gameType": 2,
+   "priced": true,
+   "away": {
+    "abbr": "BOS",
+    "record": "4-5-0",
+    "projGoals": 2.64,
+    "winProb": 0.462,
+    "b2b": true,
+    "goalie": {
+     "name": "Jeremy Swayman",
+     "status": "confirmed"
+    }
+   },
+   "home": {
+    "abbr": "NYR",
+    "record": "5-4-0",
+    "projGoals": 2.79,
+    "winProb": 0.538,
+    "b2b": false,
+    "goalie": {
+     "name": "Igor Shesterkin",
+     "status": "confirmed"
+    }
+   },
+   "moneyline": {
+    "open": {
+     "away": 120,
+     "home": -140
+    },
+    "current": {
+     "away": 125,
+     "home": -145
+    },
+    "fair": {
+     "away": 116,
+     "home": -116
+    }
+   },
+   "puckLine": {
+    "favorite": "NYR",
+    "line": -1.5,
+    "price": 210,
+    "coverProb": 0.308
+   },
+   "total": {
+    "open": 5.5,
+    "current": 5.5,
+    "overPrice": -110,
+    "underPrice": -110,
+    "proj": 5.43,
+    "overProb": 0.471
+   },
+   "regulation": {
+    "home": 0.42,
+    "draw": 0.23,
+    "away": 0.35,
+    "prices": {
+     "home": 125,
+     "draw": 320,
+     "away": 185
+    }
+   },
+   "pick": {
+    "kind": "lean",
+    "market": "Total",
+    "label": "Under 5.5",
+    "price": -110,
+    "edgePct": 2.8,
+    "side": "under",
+    "line": 5.5
+   },
+   "factors": [
+    {
+     "key": "strength",
+     "label": "Team strength (xG ratings)",
+     "homeWin": 0.512,
+     "delta": 0.012,
+     "homeGoals": 2.86,
+     "awayGoals": 2.78
+    },
+    {
+     "key": "home_ice",
+     "label": "Home ice",
+     "homeWin": 0.52,
+     "delta": 0.008,
+     "homeGoals": 2.9,
+     "awayGoals": 2.76
+    },
+    {
+     "key": "form",
+     "label": "Last-five form",
+     "homeWin": 0.509,
+     "delta": -0.011,
+     "homeGoals": 2.84,
+     "awayGoals": 2.82
+    },
+    {
+     "key": "rest",
+     "label": "Rest and travel",
+     "homeWin": 0.531,
+     "delta": 0.022,
+     "homeGoals": 2.88,
+     "awayGoals": 2.7
+    },
+    {
+     "key": "lineup",
+     "label": "Tonight's lineup",
+     "homeWin": 0.527,
+     "delta": -0.004,
+     "homeGoals": 2.86,
+     "awayGoals": 2.72
+    },
+    {
+     "key": "goalies",
+     "label": "Tonight's goalies",
+     "homeWin": 0.538,
+     "delta": 0.011,
+     "homeGoals": 2.8,
+     "awayGoals": 2.62
+    },
+    {
+     "key": "referees",
+     "label": "Referee crew",
+     "homeWin": 0.538,
+     "delta": 0,
+     "homeGoals": 2.77,
+     "awayGoals": 2.6
+    },
+    {
+     "key": "posthockey",
+     "label": "Second-opinion blend",
+     "homeWin": 0.538,
+     "delta": 0,
+     "homeGoals": 2.79,
+     "awayGoals": 2.64
+    }
+   ],
+   "ratings": {
+    "home": {
+     "attack": 0.99,
+     "defence": 0.97,
+     "goaltending": 0.92,
+     "formAttack": 0.95,
+     "formDefence": 1.01,
+     "homeIce": 0.012
+    },
+    "away": {
+     "attack": 1.01,
+     "defence": 1,
+     "goaltending": 0.95,
+     "formAttack": 1.04,
+     "formDefence": 0.98,
+     "homeIce": 0.018
+    }
+   }
+  },
+  {
+   "id": "2026020157",
+   "startUtc": "2026-10-27T01:00:00Z",
+   "venue": "Rogers Place",
+   "city": "Edmonton, AB",
+   "tv": "SN West / ESPN+",
+   "gameType": 2,
+   "priced": true,
+   "away": {
+    "abbr": "CAR",
+    "record": "7-2-0",
+    "projGoals": 3.05,
+    "winProb": 0.509,
+    "b2b": false
+   },
+   "home": {
+    "abbr": "EDM",
+    "record": "5-3-2",
+    "projGoals": 3.01,
+    "winProb": 0.491,
+    "b2b": false,
+    "goalie": {
+     "name": "Stuart Skinner",
+     "status": "projected"
+    }
+   },
+   "moneyline": {
+    "open": {
+     "away": -105,
+     "home": -115
+    },
+    "current": {
+     "away": -108,
+     "home": -112
+    },
+    "fair": {
+     "away": -104,
+     "home": 104
+    }
+   },
+   "puckLine": {
+    "favorite": "EDM",
+    "line": -1.5,
+    "price": 230,
+    "coverProb": 0.281
+   },
+   "total": {
+    "open": 6.5,
+    "current": 6.5,
+    "overPrice": -115,
+    "underPrice": -105,
+    "proj": 6.06,
+    "overProb": 0.398
+   },
+   "pick": {
+    "kind": "none",
+    "market": null,
+    "label": "No market clears the edge bar",
+    "edgePct": null
+   }
+  },
+  {
+   "id": "2026020158",
+   "startUtc": "2026-10-27T02:30:00Z",
+   "venue": "SAP Center",
+   "city": "San Jose, CA",
+   "tv": "NBCS CA / ESPN+",
+   "gameType": 2,
+   "priced": false,
+   "away": {
+    "abbr": "VGK",
+    "record": "6-1-2",
+    "projGoals": 3.22,
+    "winProb": 0.614,
+    "b2b": false,
+    "goalie": {
+     "name": "Adin Hill",
+     "status": "projected"
+    }
+   },
+   "home": {
+    "abbr": "SJS",
+    "record": "2-6-1",
+    "projGoals": 2.48,
+    "winProb": 0.386,
+    "b2b": false,
+    "goalie": {
+     "name": "Yaroslav Askarov",
+     "status": "confirmed"
+    }
+   },
+   "pick": {
+    "kind": "none",
+    "market": null,
+    "label": "Not priced",
+    "edgePct": null
+   },
+   "factors": [
+    {
+     "key": "strength",
+     "label": "Team strength (xG ratings)",
+     "homeWin": 0.402,
+     "delta": -0.098,
+     "homeGoals": 2.6,
+     "awayGoals": 3.1
+    },
+    {
+     "key": "home_ice",
+     "label": "Home ice",
+     "homeWin": 0.41,
+     "delta": 0.008,
+     "homeGoals": 2.63,
+     "awayGoals": 3.08
+    },
+    {
+     "key": "form",
+     "label": "Last-five form",
+     "homeWin": 0.396,
+     "delta": -0.014,
+     "homeGoals": 2.58,
+     "awayGoals": 3.14
+    },
+    {
+     "key": "rest",
+     "label": "Rest and travel",
+     "homeWin": 0.396,
+     "delta": 0,
+     "homeGoals": 2.58,
+     "awayGoals": 3.14
+    },
+    {
+     "key": "lineup",
+     "label": "Tonight's lineup",
+     "homeWin": 0.388,
+     "delta": -0.008,
+     "homeGoals": 2.55,
+     "awayGoals": 3.18
+    },
+    {
+     "key": "goalies",
+     "label": "Tonight's goalies",
+     "homeWin": 0.391,
+     "delta": 0.003,
+     "homeGoals": 2.52,
+     "awayGoals": 3.16
+    },
+    {
+     "key": "referees",
+     "label": "Referee crew",
+     "homeWin": 0.391,
+     "delta": 0,
+     "homeGoals": 2.5,
+     "awayGoals": 3.14
+    },
+    {
+     "key": "posthockey",
+     "label": "Second-opinion blend",
+     "homeWin": 0.386,
+     "delta": -0.005,
+     "homeGoals": 2.48,
+     "awayGoals": 3.22
+    }
+   ],
+   "ratings": {
+    "home": {
+     "attack": 0.88,
+     "defence": 1.09,
+     "goaltending": 1.02,
+     "formAttack": 0.9,
+     "formDefence": 1.06,
+     "homeIce": 0.01
+    },
+    "away": {
+     "attack": 1.09,
+     "defence": 0.93,
+     "goaltending": 0.99,
+     "formAttack": 1.05,
+     "formDefence": 0.95,
+     "homeIce": 0.015
+    }
+   }
+  }
+ ]
+}

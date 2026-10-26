@@ -2,7 +2,7 @@
 // The .dc.html pages are shared across three labs; these three are NHL's alone.
 export const TABS = [
   ["Tonight", "Board.dc.html"], ["Props", "Board.dc.html#props"], ["Results", "Results.dc.html"],
-  ["Season", "Season.dc.html"], ["Record", "Record.html"], ["Tracker", "Tracker.html"],
+  ["Season", "Season.dc.html"], ["Record", "Record.dc.html"], ["Tracker", "Tracker.html"],
 ];
 
 export function chrome(current) {
@@ -11,7 +11,7 @@ export function chrome(current) {
   return `<a href="#main" class="skip">Skip to content</a>
   <header class="mast"><a href="https://maverickhightower.com/" class="brand" aria-label="Maverick Hightower home">
     <span class="mh" aria-hidden="true">MH</span><span class="bt"><span class="k">Maverick Hightower</span><span class="n">NHL Projections</span></span></a>
-    <nav aria-label="Site" class="site"><a href="Methods.html"${current === "Methods" ? ' aria-current="page"' : ""}>Methods</a><a href="https://maverickhightower.com/about.html">About</a></nav></header>
+    <nav aria-label="Site" class="site"><a href="Methods.dc.html"${current === "Methods" ? ' aria-current="page"' : ""}>Methods</a><a href="https://maverickhightower.com/about.html">About</a></nav></header>
   <nav aria-label="Board sections" class="tabs">${tabs}</nav>`;
 }
 

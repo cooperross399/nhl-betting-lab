@@ -1,0 +1,13 @@
+{
+ "generatedAt": "2026-10-07T12:00:00Z",
+ "nights": 0,
+ "games": 0,
+ "buckets": [],
+ "brier": null,
+ "movement": {
+  "toward": 0,
+  "against": 0,
+  "flat": 0,
+  "picks": 0
+ }
+}

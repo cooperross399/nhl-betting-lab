@@ -628,8 +628,10 @@ def ratings_page(lab: Path) -> dict:
         "through": table.get("last_game_date"),
         "teams": teams,
         "unseenGoalie": _real(table.get("unseen_goalie")),
+        # None until the shift charts are cached and a skater is rated; the
+        # page says the ratings appear once they are.
         "defence": {"best": [row(v, k) for v, k in rated[:10]], "worst": [row(v, k) for v, k in rated[-10:][::-1]],
-                    "rated": len(defence), "games": table.get("skater_defence_games")},
+                    "rated": len(defence), "games": table.get("skater_defence_games")} if rated else None,
     }
 
 
@@ -753,6 +755,9 @@ def track_record(today: date, history_dir: Path) -> dict:
                         "actual": round(wins / n, 4) if n else None, "interval": _wilson(wins, n)})
     both = [r for r in games if r["market"] is not None]
     brier = (lambda key: round(sum((r[key] - r["won"]) ** 2 for r in both) / len(both), 4)) if both else None
+    if not games:
+        # Opening day: nothing settled, so no bucket to draw.
+        buckets = []
     return {
         "generatedAt": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
         "nights": nights, "games": len(games), "buckets": buckets,
@@ -935,7 +940,7 @@ def build_board(day: date, lab: Path, history_dir: Path) -> dict:
             if abbr in starters:
                 row[side]["goalie"] = dict(starters[abbr])
         if row["gameType"] == REGULAR_SEASON_GAME_TYPE and lab_model:
-            # The game page (Game.html): where the card's number comes from,
+            # The game page (Game.dc.html): where the card's number comes from,
             # and the two teams' ratings side by side.
             steps = card_factors(card, row.get("_provider"))
             if steps:
@@ -1732,8 +1737,36 @@ def settle(day: date, history_dir: Path, *, processed: Path | None = None) -> di
             # `priced` and says "Not priced" or "No play". It grades
             # neither.
             row["pick"] = None
+        # The game page's "After the game" (Game.dc.html?id=&date=).
+        row["final"] = {"away": as_, "home": hs, "finish": finish,
+                        "pickResult": (row["pick"] or {}).get("result")}
         base["games"].append(row)
     return base
+
+
+def stamp_finals(history_dir: Path, day: date, results: dict) -> bool:
+    """Keep each settled game's `final` beside the frozen board it was graded from.
+
+    The game page (Game.dc.html?id=&date=) opens a past game from the archive,
+    not from results.json, so it reads the finals from
+    `history/graded/<day>.json` ({game id: final}). The frozen board itself is
+    never rewritten (Publish Site refuses a rewritten restored board: the
+    day's first published opinion stands). True when the file was written.
+    """
+    finals = {str(r["id"]): r["final"] for r in results.get("games") or [] if isinstance(r, dict) and r.get("final")}
+    if not finals or not (history_dir / f"{day.isoformat()}.json").is_file():
+        return False
+    path = history_dir / "graded" / f"{day.isoformat()}.json"
+    try:
+        kept = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        kept = {}
+    merged = {**finals, **(kept if isinstance(kept, dict) else {})}
+    if merged == kept:
+        return False
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(merged, indent=1), encoding="utf-8")
+    return True
 
 
 #: The box-score table `build_datasets` writes, one row per player per game
@@ -2476,6 +2509,7 @@ def main(argv: list[str] | None = None) -> int:
     board = build_board(today, Path(args.lab), history)
     processed = Path(args.lab) / "data" / "processed"
     results = settle(today - timedelta(days=1), history, processed=processed)
+    stamp_finals(history, today - timedelta(days=1), results)
     tracked: list[dict] = []
     season = season_record(today, history, results, processed=processed, bets=tracked)
     results["seasonRecord"] = season

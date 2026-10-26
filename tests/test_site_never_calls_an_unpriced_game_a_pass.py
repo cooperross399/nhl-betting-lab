@@ -52,6 +52,7 @@ from __future__ import annotations
 import csv
 import importlib.util
 import json
+import re
 import shutil
 import subprocess
 from datetime import date, timedelta
@@ -513,3 +514,11 @@ def test_the_next_morning_still_settles_the_projection(tmp_path: Path, monkeypat
 
     straight = results["summary"]["straightUp"]
     assert straight["w"] + straight["l"] == len(SLATE), straight
+
+
+def test_the_game_page_says_not_priced_and_never_pass() -> None:
+    """Game.dc.html (2026-10-26) names an unpriced game "Not priced" and has no
+    "Pass" pick label to fall back on."""
+    page = (WEB / "Game.dc.html").read_text(encoding="utf-8")
+    assert "Not priced" in page
+    assert not re.search(r'>\s*Pass\s*<|label:\s*"Pass"|"Pass"', page)
