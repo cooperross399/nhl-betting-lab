@@ -174,3 +174,46 @@ def test_the_drop_never_pushes_this_repositorys_main() -> None:
     # The first runs inside the shared clone, never this checkout.
     assert 'cd "$RUNNER_TEMP/shared"' in text.split(pushes[0])[0].rsplit("(", 1)[1]
     assert "contents: write" not in text
+
+
+def _zip(tmp_path: Path, members: dict[str, bytes]) -> Path:
+    import zipfile
+    path = tmp_path / "drop.zip"
+    with zipfile.ZipFile(path, "w") as archive:
+        for name, body in members.items():
+            archive.writestr(name, body)
+    return path
+
+
+@pytest.mark.parametrize("layout", ["web/", "Drop 3/web/", ""])
+def test_intake_unpacks_only_page_files(tmp_path: Path, layout: str) -> None:
+    """A zip holding web/, a folder around web/, or web/'s contents unpacks
+    the same; everything outside ALLOWED, and the lock, is skipped."""
+    root = tmp_path / "repo"
+    zipped = _zip(tmp_path, {
+        f"{layout}Board.dc.html": b"page",
+        f"{layout}lib/sports.js": b"js",
+        f"{layout}build_site_json.py": b"builder",
+        f"{layout}shared.lock.json": b"{}",
+        f"{layout}../../evil.txt": b"x",
+        "__MACOSX/._Board.dc.html": b"",
+    })
+    written, skipped = _drop().intake(zipped, root)
+    assert sorted(written) == ["web/Board.dc.html", "web/lib/sports.js"]
+    assert (root / "web" / "Board.dc.html").read_bytes() == b"page"
+    assert len(skipped) == 4
+    assert not (root / "web" / "build_site_json.py").exists()
+    assert not (root / "web" / "shared.lock.json").exists()
+    assert not (tmp_path / "evil.txt").exists()
+
+
+def test_the_intake_opens_the_drop_with_the_token_and_never_twice() -> None:
+    workflow = _load("design-drop-intake.yml")
+    (job,) = workflow["jobs"].values()
+    assert job["env"]["GH_TOKEN"] == "${{ secrets.DESIGN_DROP_TOKEN }}"
+    text = (WORKFLOWS / "design-drop-intake.yml").read_text(encoding="utf-8")
+    pushes = [line.strip() for line in text.splitlines() if re.search(r"\bgit push\b", line)]
+    assert pushes == ['git push --quiet origin "HEAD:refs/heads/$branch"']
+    assert 'branch="design/' in text
+    assert "git diff --cached --quiet" in text
+    assert "contents: write" not in text

@@ -1,0 +1,93 @@
+name: Design Drop Intake
+
+# Claude Design cannot push a branch, so it hands a drop over as a zip at a
+# public URL. This turns that zip into the design/<date>-<slug>-<hash> branch
+# and pull request that Design Drop Guard and Design Drop take from there.
+#
+# - Dispatched with `zip_url` (and an optional `slug`), it takes that zip.
+# - Every hour it reads the repository variable DESIGN_DROP_INBOX_URL, the
+#   fixed URL Claude Design publishes its latest drop to. Unset, the hour does
+#   nothing.
+#
+# Only page files are unpacked (`ALLOWED` in scripts/design_drop.py); the rest
+# of the zip is named and skipped. A zip whose pages already match main, or
+# whose branch already exists, opens nothing, so the hourly check never opens
+# the same drop twice. The branch is pushed and the pull request opened with
+# DESIGN_DROP_TOKEN, because a pull request opened with the workflow's own
+# token starts no workflow. It fetches no odds, spends no credit, edits no
+# policy and places no bet.
+
+on:
+  workflow_dispatch:
+    inputs:
+      zip_url:
+        description: Public URL of the zipped drop
+        required: false
+        default: ""
+      slug:
+        description: Short name for the branch
+        required: false
+        default: drop
+  schedule:
+    - cron: "17 * * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: design-drop-intake
+  cancel-in-progress: false
+
+jobs:
+  intake:
+    name: Open a drop from a zip
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      TOKEN: ${{ secrets.DESIGN_DROP_TOKEN }}
+      GH_TOKEN: ${{ secrets.DESIGN_DROP_TOKEN }}
+      ZIP_URL: ${{ inputs.zip_url || vars.DESIGN_DROP_INBOX_URL }}
+      SLUG: ${{ inputs.slug || 'drop' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          token: ${{ secrets.DESIGN_DROP_TOKEN || github.token }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Unpack the zip and open the drop
+        run: |
+          if [ -z "$ZIP_URL" ]; then
+            echo "No zip_url given and DESIGN_DROP_INBOX_URL is not set: nothing to take in."
+            exit 0
+          fi
+          if [ -z "$TOKEN" ]; then
+            echo "::error::DESIGN_DROP_TOKEN is not set: a drop cannot be pushed."
+            exit 1
+          fi
+          zip="$RUNNER_TEMP/drop.zip"
+          curl -fsSL --max-filesize 52428800 --retry 3 -o "$zip" "$ZIP_URL"
+          hash=$(sha256sum "$zip" | cut -c1-8)
+          if git ls-remote --heads origin | grep -q "refs/heads/design/.*-$hash\$"; then
+            echo "A drop from this zip ($hash) is already open."
+            exit 0
+          fi
+          slug=$(printf '%s' "$SLUG" | tr 'A-Z' 'a-z' | tr -cs 'a-z0-9' '-' | sed 's/^-*//; s/-*$//' | cut -c1-40)
+          branch="design/$(date -u +%F)-${slug:-drop}-$hash"
+          git checkout --quiet -b "$branch"
+          python scripts/design_drop.py intake --zip "$zip"
+          git add web
+          if git diff --cached --quiet; then
+            echo "The zip's pages already match main: nothing to drop."
+            exit 0
+          fi
+          git config user.name "design-drop[bot]"
+          git config user.email "design-drop@users.noreply.github.com"
+          git commit --quiet -m "Pages from Claude Design ($slug, $hash)"
+          git push --quiet origin "HEAD:refs/heads/$branch"
+          gh pr create -R "$GITHUB_REPOSITORY" --base main --head "$branch" \
+            --title "Claude Design: ${slug:-drop}" \
+            --body "Opened by Design Drop Intake from a zipped Claude Design drop ($hash). Design Drop Guard holds it to page files; Design Drop merges it on green and fans it out. Fetches no odds, spends no credit, places no bet."
