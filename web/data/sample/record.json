@@ -137,11 +137,6 @@
    ]
   }
  },
- "sealed": {
-  "sha256": "9f2c4a7e1b0d6c3a8e5f2b9d4c7a1e6f3b8d5c2a9e4f7b1d6c3a8e5f2b9d4c7a",
-  "sealedAt": "2026-09-29",
-  "opens": "April 2027"
- },
  "dueList": {
   "entries": 58,
   "hitRate": 0.569,

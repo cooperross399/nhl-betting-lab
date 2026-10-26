@@ -64,6 +64,17 @@ a test, and a test whose subject changes mid-run measures nothing.
 If a mid-season result looks strong, the correct action is **nothing**. Write
 it down and wait for the date.
 
+**2026-10-26, Cooper's call: the season's betting record is published.**
+Units, win–loss records and return for every graded best bet (team picks and
+props at the card's stake, the Due List at its notional 0.25u) are on the
+site's All results page (`Tracker.dc.html`, `data/tracker.json`). This
+supersedes the owner's call of 2026-10-05 that kept any return off the site
+until this date. It changes what is shown, not what is measured: the
+registered statistic above, the date, the floor and the rule are unchanged.
+The instruction for a strong mid-season number still stands; it is now a
+number on a public page, which makes doing nothing harder, and that cost was
+weighed and accepted.
+
 ## The honest prior
 
 Everything measured so far says this comes back null. The season is worth

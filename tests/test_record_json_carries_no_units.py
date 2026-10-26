@@ -2,9 +2,9 @@
 
 The Track record and Methods pages (Claude Design's drop, 2026-10-26) read
 these two files, and the hub's NHL card reads record.json from another
-origin. Neither may carry a return, a unit, a profit or a stake: the forward
-ledger's return stays sealed until 2027-04-25, and the season's betting
-record lives on the Tracker page, which says what it counts. This scans every
+origin. Neither may carry a return, a unit, a profit or a stake: units and
+return live on All results (Tracker.dc.html, tracker.json), published since
+Cooper's call of 2026-10-26, and the calibration page measures accuracy only. This scans every
 key and every string in both documents, opening day included, so a field added
 later cannot slip one in under another name's shelter.
 """
@@ -62,3 +62,26 @@ def test_ratings_without_shift_charts_carry_no_defence(tmp_path: Path) -> None:
 def test_the_factor_keys_are_the_pages_eight_in_order() -> None:
     assert [k for k, _ in STEPS] == ["strength", "home_ice", "form", "rest", "lineup", "goalies",
                                      "referees", "posthockey"]
+
+
+def test_market_buckets_merge_thin_bands_and_cover_every_game() -> None:
+    module = site_module()
+    rows = [(0.52, True)] * 30 + [(0.57, False)] * 12 + [(0.66, True)] * 3 + [(0.31, False)] * 2
+    out = module._market_buckets(rows)
+    assert out["games"] == 47 == sum(b["games"] for b in out["buckets"])
+    assert all(b["games"] >= module.MARKET_BUCKET_MIN_GAMES for b in out["buckets"])
+    assert [b["low"] for b in out["buckets"]] == sorted(b["low"] for b in out["buckets"])
+    assert module._market_buckets([]) is None
+    _clean(out)
+
+
+def test_the_due_list_block_is_calibration_not_a_return() -> None:
+    module = site_module()
+    rows = [{"group": "due", "date": "2026-10-12", "price": 150, "result": "win"},
+            {"group": "due", "date": "2026-10-12", "price": 150, "result": "loss"},
+            {"group": "due", "date": "2026-10-08", "price": 150, "result": "win"},  # before tracking began
+            {"group": "props", "date": "2026-10-12", "price": 150, "result": "win"}]
+    due = module.due_list_record(rows)
+    assert due == {"entries": 2, "hitRate": 0.5, "avgPrice": 150, "breakEven": 0.4}
+    _clean(due)
+    assert module.due_list_record([]) is None

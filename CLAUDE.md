@@ -2912,12 +2912,47 @@ Re-derive rather than trust if the data has moved.
   card's stake, priced Due List entries at 0.25u notional) as `bets`
   (`build_site_json.tracker_rows`); a night kept without them is settled again
   once. `tracker.json` sums them by group, market, prop type, team, player,
-  price band and month, and `Tracker.html` shows them with filters, search
-  and every bet; it replaces the Archive tab on the NHL pages (the archive is
-  linked from it). Team picks frozen before the board recorded their stake
-  count at 1u and are marked. These are the published picks the Results page
-  already grades, never the sealed forward ledger. No card, snapshot, ledger
-  row or stake changed.
+  price band and month, and `Tracker.dc.html` ("All results", the design
+  drop that replaced the first draft `Tracker.html`) shows them with filters,
+  search and every bet; it replaces the Archive tab on the NHL pages (the
+  archive is linked from it). Team picks frozen before the board recorded
+  their stake count at 1u and are marked. These are the published picks the
+  Results page already grades. No card, snapshot, ledger row or stake changed.
+
+- **2026-10-26, Cooper's call: units and return are published.** The third
+  page drop states it: units, win–loss records and return for every graded
+  best bet are on All results, superseding the 2026-10-05 call that kept any
+  return off the site until 2027-04-25 (`docs/when_this_ends.md` records it;
+  the registered statistic, date and rule are unchanged).
+  `tests/test_site_publishes_no_forward_return.py` was retired; what it also
+  held (the schedule fetch's user agent, the empty-state wording, the
+  favicon, the nav) moved to `tests/test_site_pages_hold_their_line.py`, with
+  a test that the Due List is tracked and never called a bet.
+  `test_record_json_has_no_return.py` is `test_record_json_carries_no_units.py`:
+  the calibration page still carries no units. `record.json` gains
+  `markets.total` (games by the over's published chance, against the over
+  coming in), `markets.puckLine` (by the favourite's cover chance), 5-point
+  bands merged to at least 10 games with Wilson intervals, and `dueList`
+  (priced entries since 2026-10-09, hit rate, the price of their mean decimal
+  odds and its flat-stake break-even); the drop's sealed-hash block was
+  dropped with the seal. `tests/test_tracker_json_shape.py` and
+  `tests/test_tracker_rows_trace_to_archive.py` pin tracker.json.
+
+- **2026-10-26: the shared pages are pinned by tag.** Board, Results,
+  Archive, Graphic, `lib/live.js`, `lib/format.js`, `lib/sports.js` and the
+  team logos are one set of files in the NHL, EPL and CBB labs (and the hub,
+  for the two libraries); `lib/sports.js` had already drifted three ways.
+  `web/shared.lock.json` pins a tag of `cooperross399/betting-lab-shared` with
+  every file's SHA-256, Publish Site copies that tag in
+  (`web/sync_shared.py --from`, failing on any byte that differs, and
+  publishing the committed copies with a warning when the clone fails), and
+  `tests/test_shared_pages_identical.py` holds the committed copies to the
+  lock. NHL stays the editing home for page drops; a drop lands in the shared
+  repository, is tagged, and each lab bumps its lock by pull request.
+  Logos are 128 px now (`web/fetch_logos.py` shrinks each download; about
+  2.2 MB to 0.5 MB here). Pages caches every file for ten minutes and cannot
+  be raised, so `web/hash_assets.py` names `support.js` and `lib/*.js` by
+  content at publish and points the pages at those names.
 
 ## Contract strings — never change these
 

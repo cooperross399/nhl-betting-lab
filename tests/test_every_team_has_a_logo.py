@@ -10,7 +10,7 @@ whole into the deployed site, so the folder ships beside the pages.
 board can never name an image the site does not serve. What these tests hold:
 
 * every abbreviation in the builder's `TEAMS` has `web/logos/<ABBR>.png`, a whole PNG (signature,
-  IHDR, every chunk's CRC, an IDAT stream that inflates) of 500 px and more than 2 KB, checked by
+  IHDR, every chunk's CRC, an IDAT stream that inflates) of 128 px and more than 1 KB (shrunk from a 500 px download), checked by
   the fetch script's own standard-library validator, so a truncated download or an HTML error page
   saved as `.png` is red;
 * `team_entry` writes `./logos/<ABBR>.png` for each of them, and that path, read against `web/`
@@ -75,10 +75,10 @@ def test_every_team_the_builder_knows_has_a_real_logo_file(builder, fetcher) -> 
             missing.append(abbr)
             continue
         data = path.read_bytes()
-        if not fetcher.usable(data):
+        if not fetcher.usable(data, fetcher.PUBLISHED_PX, fetcher.PUBLISHED_MIN_BYTES):
             broken.append(f"{abbr} ({len(data)} bytes, size {fetcher.png_size(data)})")
     assert not missing, f"no web/logos/<ABBR>.png for {missing}: run web/fetch_logos.py"
-    assert not broken, f"not a whole 500 px PNG over 2 KB: {broken}"
+    assert not broken, f"not a whole {fetcher.PUBLISHED_PX} px PNG over 1 KB: {broken}"
 
 
 def test_team_entry_points_every_team_at_its_existing_file(builder) -> None:

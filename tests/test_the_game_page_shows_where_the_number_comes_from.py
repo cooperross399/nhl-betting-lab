@@ -17,9 +17,6 @@ showing what moved its line, a track record, and a methods page. These hold:
 from __future__ import annotations
 
 import json
-import re
-import shutil
-import subprocess
 from datetime import date
 from pathlib import Path
 
@@ -123,22 +120,6 @@ def test_the_record_is_calibration_and_movement_and_no_return(tmp_path) -> None:
         assert f'"{key}' not in text
     # A night on or after the build day is not in the record.
     assert module.track_record(date(2026, 10, 20), history)["games"] == 0
-
-
-@pytest.mark.parametrize("page", ["Tracker.html"])
-def test_each_new_page_parses(page, tmp_path) -> None:
-    node = shutil.which("node")
-    assert node, "node is not on PATH; the pages' scripts are parsed with it"
-    html = (ROOT / "web" / page).read_text(encoding="utf-8")
-    scripts = re.findall(r'<script type="module">([\s\S]*?)</script>', html)
-    assert len(scripts) == 1
-    site = tmp_path / "site"
-    (site / "lib").mkdir(parents=True)
-    shutil.copyfile(ROOT / "web" / "lib" / "page.js", site / "lib" / "page.js")
-    (site / "page.mjs").write_text(scripts[0], encoding="utf-8")
-    result = subprocess.run([node, "--check", str(site / "page.mjs")], capture_output=True, text=True, check=False)
-    assert result.returncode == 0, result.stderr
-    assert "./lib/page.css" in html and "./lib/page.js" in scripts[0]
 
 
 def test_the_slate_gets_one_breakdown_per_priced_game() -> None:

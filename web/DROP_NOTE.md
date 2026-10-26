@@ -32,7 +32,7 @@ Off the domain the pages load the fixtures; on `*.maverickhightower.com` they al
 ## Efficiency pass (same day, second prompt: `CLAUDE_CODE_PROMPT_2.md`)
 - Board (shared, NHL-gated): "Tonight in 60 seconds" paragraph; game link hands the game to Game.dc.html via sessionStorage.
 - Archive (shared): season selector once two seasons exist.
-- Record: optional `markets`, `sealed`, `dueList` blocks (shapes in the prompt); sample record extended.
+- Record: optional `markets`, `dueList` blocks (shapes in the prompt); sample record extended.
 - Methods: `ENTRIES[].updated` → "changed <date>" per entry.
 - Not done here, in the prompt: shared repo for the six identical files, logo resize (Pillow), Pages cache headers. Background-tab polling already pauses in lib/live.js.
 
@@ -49,3 +49,8 @@ Off the domain the pages load the fixtures; on `*.maverickhightower.com` they al
 - Write `data/record.json` and `data/ratings.json` on the publish run (shapes in the design prompt).
 - Write `games[].factors`, `games[].ratings` into `board.json` (already in the draft shape).
 - Hard-link checks in tests: the Methods anchor list above is referenced from Game.dc.html.
+
+## All results (Tracker) — same day, third prompt
+- New `web/Tracker.dc.html` reads `data/tracker.json` (shape: the Tracker design brief; the page recomputes every split from `rows`). Fixtures `web/data/sample/tracker.json`, `tracker_empty.json`.
+- Owner's call 2026-10-26: units, records and return for every graded best bet are published. Supersedes the 2026-10-05 seal. The Record page's sealed-hash block is removed; Record and Methods wording now points at All results.
+- NHL tab bar is now Tonight · Props · Results · Season · Record · Tracker on every page (Board, Results, Archive, Graphic, Game, Record, Methods). Archive stays reachable from the Tracker's "How to read this" and the Archive page itself. EPL/CBB keep their Archive tab.

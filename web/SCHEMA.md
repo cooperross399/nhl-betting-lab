@@ -210,9 +210,8 @@ games[].drought  [] on every regular-season game — Cooper's Due List (2026-10-
                               ci_high × 100); null when the file lacks the cell, and the page then says "no record for this
                               cell". The page prints it as "This cell <droughtWindow>: ..." (the window from the board, below),
                               a number beside a number, never coloured good or bad. The keys are
-                              not the forward ledger's spellings (roiPct, ciLow, ciHigh), which
-                              tests/test_site_publishes_no_forward_return.py keeps off the Board page: this is the historical
-                              backtest's cell, the same measurement droughtNote prints, not the sealed forward return.}
+                              not the forward ledger's spellings (roiPct, ciLow, ciHigh): this is the historical
+                              backtest's cell, the same measurement droughtNote prints, not the forward return.}
                  Each field past heavyJuice is read from the card's drought_list.json row (tier_bar, surprise_bar, hit_rate,
                  rarity, one_in, rule, band, cell_record) and is null when the row lacks it — a list the flat-rule card wrote still
                  publishes, with nulls. Nothing is computed or filled in here, and a missing price still renders "price not
@@ -295,8 +294,8 @@ Every entry on a frozen board's Due List is graded, whether or not it had a pric
 
 ## Additions (game pages, track record, methods — 2026-10-26)
 
-NHL only, read by three plain pages (`Game.dc.html`, `Record.dc.html`, `Methods.dc.html`; `Tracker.html` shares `lib/page.js` and
-`lib/page.css`); the shared `.dc.html` pages link to them from the NHL tabs and from each game card.
+NHL only, read by four pages (`Game.dc.html`, `Record.dc.html`, `Methods.dc.html`, `Tracker.dc.html`); the shared
+`.dc.html` pages link to them from the NHL tabs and from each game card.
 
 board.json, per regular-season game:
 
@@ -322,14 +321,14 @@ build moved toward the picked side. Accuracy only; never a return. With nothing 
 formDefence, homeIce, goaltending}], unseenGoalie, defence{best[], worst[], rated, games}}`, the defence rows
 `{player, team, goalsPrevented}` from the ratings file's `skater_defence`, named from the player logs. `defence` is
 null until a skater is rated (no shift charts cached). Neither file carries a return, a unit, a profit or a stake
-(`tests/test_record_json_has_no_return.py`).
+(`tests/test_record_json_carries_no_units.py`). Units and return are on `tracker.json` only.
 
 results.json, per settled game: `final {away, home, finish: "REG"|"OT"|"SO", pickResult: win|loss|push|void|null}`,
 for the game page's "After the game" (`Game.dc.html?id=&date=`). Because that page opens a past game from the
 archive, the same finals are kept as `history/graded/<day>.json` (`{game id: final}`, `stamp_finals`). The frozen board
 under `history/<day>.json` is never rewritten.
 
-## tracker.json (results tracker, Tracker.html — 2026-10-26)
+## tracker.json (All results, Tracker.dc.html — 2026-10-26)
 
 Every graded best bet and priced Due List entry of the season, one row each,
 and the same rows summed. Written by `build_site_json.tracker` from each
