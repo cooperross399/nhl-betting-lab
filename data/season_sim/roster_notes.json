@@ -2,7 +2,6 @@
   "asOf": "2026-10-26",
   "note": "Hand-kept inputs the NHL API cannot supply. `returning` lists regulars NOT on the current roster (injured non-roster, LTIR, unsigned) who are expected back, with a birth date for the age curve; `out` lists rostered players missing games. `return` is the first league date the player is expected to dress (\"season\" = out for the year); games before it are removed from his projection. `prospects` gives a no-history rookie the ice time his role implies. `goalieShares` is the opening depth chart's share of starts; in season it drifts toward the starts actually made.",
   "returning": [
-    {"name": "Connor Bedard", "team": "CHI", "pos": "C", "born": "2005-07-17", "return": "2026-11-15", "note": "left shoulder surgery Jul 9; ~4 months"},
     {"name": "Troy Terry", "team": "ANA", "pos": "R", "born": "1997-09-10", "return": "2026-11-21", "note": "hip surgery; 5-6 months"},
     {"name": "Mathew Barzal", "team": "NYI", "pos": "C", "born": "1997-05-26", "return": "2026-11-07", "note": "knee; IR, no timetable for debut (amNY Oct 19); CBS at least Nov 7"},
     {"name": "Max Domi", "team": "TOR", "pos": "C", "born": "1995-03-02", "return": "2026-11-21", "note": "back; offseason surgery, out indefinitely"},
