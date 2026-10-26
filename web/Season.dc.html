@@ -178,6 +178,95 @@
       </div>
     </section>
 
+    <!-- Playoff rounds -->
+    <sc-if value="{{ hasRounds }}" hint-placeholder-val="{{ true }}">
+    <section style="padding-top:44px;">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:16px;flex-wrap:wrap;border-bottom:3px solid var(--ink);padding-bottom:10px;">
+        <h2 style="margin:0;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:34px;line-height:1;text-transform:uppercase;letter-spacing:.01em;">Playoffs, round by round</h2>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--mute);">{{ roundsNote }}</div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,460px),1fr));gap:0 40px;">
+        <sc-for list="{{ roundConfs }}" as="c" hint-placeholder-count="2">
+          <div style="min-width:0;">
+            <h3 style="margin:26px 0 6px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:26px;text-transform:uppercase;letter-spacing:.02em;">{{ c.name }}</h3>
+            <div class="tblwrap"><div style="min-width:440px;">
+              <div style="display:grid;grid-template-columns:28px minmax(120px,1fr) 64px 64px 64px 64px 64px;gap:0 8px;padding:8px 0;" class="shead">
+                <span>#</span><span>Team</span><span class="r">Playoffs</span><span class="r">Win R1</span><span class="r">Conf final</span><span class="r">Final</span><span class="r">Cup</span>
+              </div>
+              <sc-for list="{{ c.rows }}" as="t" hint-placeholder-count="16">
+                <div style="display:grid;grid-template-columns:28px minmax(120px,1fr) 64px 64px 64px 64px 64px;gap:0 8px;padding:7px 0;font-size:13px;align-items:center;border-bottom:1px solid var(--rule-2);">
+                  <span class="mono" style="color:var(--mute);">{{ t.rank }}</span>
+                  <span style="display:flex;align-items:center;gap:8px;min-width:0;"><span class="chip" style="width:24px;height:24px;font-size:9px;background:{{ t.color }};color:{{ t.fg }};">{{ t.abbr }}</span><span style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ t.short }}</span></span>
+                  <span class="mono r">{{ t.playoff }}</span>
+                  <span class="mono r">{{ t.r1 }}</span>
+                  <span class="mono r">{{ t.r2 }}</span>
+                  <span class="mono r">{{ t.final }}</span>
+                  <span class="mono r" style="font-weight:600;">{{ t.cup }}</span>
+                </div>
+              </sc-for>
+            </div></div>
+          </div>
+        </sc-for>
+      </div>
+
+      <h3 style="margin:36px 0 10px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:26px;text-transform:uppercase;letter-spacing:.02em;">Most likely first-round matchups</h3>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,270px),1fr));gap:14px;">
+        <sc-for list="{{ slots }}" as="sl" hint-placeholder-count="8">
+          <div style="border:1px solid var(--rule);padding:10px 12px;min-width:0;">
+            <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:6px;">
+              <span class="cond" style="font-size:18px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;">{{ sl.label }}</span>
+              <span class="mono" style="font-size:11px;color:var(--mute);white-space:nowrap;">{{ sl.conf }}</span>
+            </div>
+            <sc-for list="{{ sl.rows }}" as="m" hint-placeholder-count="3">
+              <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;padding:5px 0;border-top:1px solid var(--rule-2);font-size:13px;">
+                <span style="display:flex;align-items:center;gap:6px;min-width:0;"><span class="chip" style="width:24px;height:24px;font-size:9px;background:{{ m.ac }};color:{{ m.af }};">{{ m.a }}</span><span class="mono" style="font-size:11px;color:var(--mute);">v</span><span class="chip" style="width:24px;height:24px;font-size:9px;background:{{ m.bc }};color:{{ m.bf }};">{{ m.b }}</span></span>
+                <span class="mono" style="font-weight:600;">{{ m.p }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </sc-for>
+      </div>
+
+      <h3 style="margin:36px 0 10px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:26px;text-transform:uppercase;letter-spacing:.02em;">Most likely Stanley Cup Finals</h3>
+      <div style="max-width:520px;">
+        <sc-for list="{{ finals }}" as="m" hint-placeholder-count="6">
+          <div style="display:grid;grid-template-columns:24px minmax(0,1fr) auto;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--rule-2);font-size:13px;">
+            <span class="mono" style="color:var(--mute);">{{ m.rank }}</span>
+            <span style="display:flex;align-items:center;gap:6px;min-width:0;"><span class="chip" style="width:24px;height:24px;font-size:9px;background:{{ m.ac }};color:{{ m.af }};">{{ m.a }}</span><span class="mono" style="font-size:11px;color:var(--mute);">v</span><span class="chip" style="width:24px;height:24px;font-size:9px;background:{{ m.bc }};color:{{ m.bf }};">{{ m.b }}</span><span style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ m.names }}</span></span>
+            <span class="mono" style="font-weight:600;">{{ m.p }}</span>
+          </div>
+        </sc-for>
+      </div>
+    </section>
+    </sc-if>
+
+    <!-- Trophies -->
+    <sc-if value="{{ hasTrophies }}" hint-placeholder-val="{{ true }}">
+    <section style="padding-top:44px;">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:16px;flex-wrap:wrap;border-bottom:3px solid var(--ink);padding-bottom:10px;">
+        <h2 style="margin:0;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:34px;line-height:1;text-transform:uppercase;letter-spacing:.01em;">Trophies</h2>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--mute);">{{ trophiesNote }}</div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,270px),1fr));gap:0 40px;">
+        <sc-for list="{{ trophies }}" as="b" hint-placeholder-count="4">
+          <div style="min-width:0;">
+            <h3 style="margin:26px 0 2px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:22px;text-transform:uppercase;letter-spacing:.02em;">{{ b.title }}</h3>
+            <div class="mono" style="font-size:11px;color:var(--mute);margin-bottom:6px;">{{ b.sub }}</div>
+            <div style="display:grid;grid-template-columns:24px minmax(0,1fr) auto;gap:0 10px;padding:6px 0;" class="shead"><span>#</span><span>Player</span><span class="r">Wins it</span></div>
+            <sc-for list="{{ b.rows }}" as="p" hint-placeholder-count="8">
+              <div style="display:grid;grid-template-columns:24px minmax(0,1fr) auto;gap:0 10px;padding:6px 0;border-bottom:1px solid var(--rule-2);font-size:13px;align-items:baseline;">
+                <span class="mono" style="color:var(--mute);">{{ p.rank }}</span>
+                <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><span style="font-weight:600;">{{ p.name }}</span> <span class="mono" style="font-size:11px;color:var(--mute);">{{ p.meta }}</span></span>
+                <span class="cond r" style="font-size:20px;font-weight:700;">{{ p.value }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </sc-for>
+      </div>
+      <p style="margin:14px 0 0;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--mute);max-width:900px;">{{ calderNote }}</p>
+    </section>
+    </sc-if>
+
     <!-- Scorers -->
     <section style="padding-top:44px;">
       <div style="display:flex;align-items:baseline;justify-content:space-between;gap:16px;flex-wrap:wrap;border-bottom:3px solid var(--ink);padding-bottom:10px;">
@@ -292,6 +381,7 @@ class Component extends DCLogic {
     const f1 = (x) => (Math.round(x * 10) / 10).toFixed(1);
     const PMIN = 50, PMAX = 135, scale = (v) => Math.max(0, Math.min(100, ((v - PMIN) / (PMAX - PMIN)) * 100));
     const G = d.games;
+    const byAb = Object.fromEntries(d.teams.map((t) => [t.abbr, t]));
     const inSeason = d.phase !== "preseason";
     const dash = "—";
     const cutStyle = "border-bottom:2px dashed var(--ink);";
@@ -332,27 +422,59 @@ class Component extends DCLogic {
       scorers: t.scorers.slice(0, 3).map((p, i) => ({ rank: i + 1, name: p.name, meta: p.pos, line: `${p.g}G ${p.a}A · ${Math.round(p.gp)} GP`, value: p.p })),
     }));
     const WMAX = 50, wscale = (v) => Math.max(0, Math.min(100, (v / WMAX) * 100));
-    const byAb = Object.fromEntries(d.teams.map((t) => [t.abbr, t]));
     const goalies = d.leaders.wins.slice(0, 20).map((g, i) => ({
       rank: i + 1, name: g.name, team: g.team, color: byAb[g.team] ? byAb[g.team].color : "var(--ink)", fg: byAb[g.team] ? byAb[g.team].fg : "var(--paper)",
       starts: g.starts, wins: f1(g.wins), barLeft: wscale(g.p10).toFixed(1), barWidth: (wscale(g.p90) - wscale(g.p10)).toFixed(1), meanMark: wscale(g.wins).toFixed(1),
       rangeTitle: `10th ${g.p10} · mean ${g.wins} · 90th ${g.p90}`, p30: pct(g.p30), gsax: `${g.gsax60 > 0 ? "+" : ""}${g.gsax60.toFixed(2)}`,
       last: g.last ? `${g.last.w} W / ${g.last.gs} GS · .${String(Math.round(g.last.sv * 1000)).padStart(3, "0")}` : "no NHL starts",
     }));
+    // Playoff rounds and trophies: projections from the same simulated seasons
+    const colorOf = (ab) => (byAb[ab] ? [byAb[ab].color, byAb[ab].fg] : ["var(--ink)", "var(--paper)"]);
+    const hasRounds = d.teams.length > 0 && d.teams[0].odds && d.teams[0].odds.cup != null;
+    const roundConfs = hasRounds ? [["E", "Eastern"], ["W", "Western"]].map(([key, name]) => ({
+      name, rows: d.teams.filter((t) => t.conf === key).slice().sort((a, b) => b.odds.cup - a.odds.cup || b.odds.final - a.odds.final || b.odds.playoff - a.odds.playoff)
+        .map((t, i) => ({ rank: i + 1, abbr: t.abbr, short: t.short, color: t.color, fg: t.fg, playoff: pct(t.odds.playoff), r1: pct(t.odds.round1), r2: pct(t.odds.confFinal), final: pct(t.odds.final), cup: pct(t.odds.cup) })),
+    })) : [];
+    const pairRow = (m, i) => { const [ac, af] = colorOf(m.a), [bc, bf] = colorOf(m.b); return { rank: i + 1, a: m.a, b: m.b, ac, af, bc, bf, p: pct(m.p), names: `${byAb[m.a] ? byAb[m.a].short : m.a} v ${byAb[m.b] ? byAb[m.b].short : m.b}` }; };
+    const po = d.playoffs || {};
+    const slots = (po.slots || []).map((sl) => ({ conf: sl.conf, label: sl.label, rows: (sl.matchups || []).slice(0, 3).map(pairRow) }));
+    const finals = (po.finals || []).slice(0, 6).map(pairRow);
+    const tr = d.trophies || null;
+    const awardRows = (rows, unit) => (rows || []).slice(0, 8).map((p, i) => ({ rank: i + 1, name: p.name, meta: `${p.team} · proj ${f1(p.proj)} ${unit} (${p.p10}–${p.p90})`, value: pct(p.p) }));
+    const trophies = tr ? [
+      { title: "Art Ross", sub: "Most points · ties split", rows: awardRows(tr.artRoss, "pts") },
+      { title: "Rocket Richard", sub: "Most goals · ties split", rows: awardRows(tr.rocket, "G") },
+      { title: "Most wins", sub: "Goalie wins lead · ties split", rows: awardRows(tr.wins, "W") },
+      ...(tr.calder && tr.calder.length ? [{ title: "Calder", sub: "Most points by a rookie · the trophy itself is voted", rows: awardRows(tr.calder, "pts") }] : []),
+    ].filter((b) => b.rows.length) : [];
+    const hasTrophies = trophies.length > 0;
+    const cupFav = hasRounds ? d.teams.slice().sort((a, b) => b.odds.cup - a.odds.cup)[0] : null;
+    const rt = (d.method && d.method.ratings) || null;
+    const phUsed = !!(rt && rt.phWeight > 0);
     const top = d.teams[0], art = d.leaders.points[0], goals = d.leaders.goals[0], winsLeader = d.leaders.wins[0];
     const east = d.teams.filter((t) => t.conf === "E"), west = d.teams.filter((t) => t.conf === "W");
     const strip = [
       { label: "Favourite", value: top.abbr, sub: `${f1(top.proj.pts)} pts · ${pct(top.odds.pres)} Presidents'`, fine: `${pct(top.odds.playoff)} playoffs` },
-      { label: "Art Ross", value: art.name.split(" ").slice(-1)[0], sub: `${art.p} pts · ${art.g}G ${art.a}A`, fine: `${art.team} · ${Math.round(art.gp)} GP` },
-      { label: "Rocket Richard", value: goals.name.split(" ").slice(-1)[0], sub: `${goals.g} goals`, fine: `${goals.team} · ${Math.round(goals.gp)} GP` },
-      { label: "Most wins", value: winsLeader.name.split(" ").slice(-1)[0], sub: `${f1(winsLeader.wins)} wins · ${winsLeader.starts} starts`, fine: `${winsLeader.team} · ${pct(winsLeader.p30)} for 30+` },
+      ...(cupFav ? [{ label: "Stanley Cup", value: cupFav.abbr, sub: `${pct(cupFav.odds.cup)} to win it`, fine: `${pct(cupFav.odds.final)} to reach the Final` }] : []),
+      hasTrophies && tr.artRoss.length
+        ? { label: "Art Ross", value: tr.artRoss[0].name.split(" ").slice(-1)[0], sub: `${pct(tr.artRoss[0].p)} to win · ${f1(tr.artRoss[0].proj)} pts`, fine: `${tr.artRoss[0].team} · 10th–90th ${tr.artRoss[0].p10}–${tr.artRoss[0].p90}` }
+        : { label: "Art Ross", value: art.name.split(" ").slice(-1)[0], sub: `${art.p} pts · ${art.g}G ${art.a}A`, fine: `${art.team} · ${Math.round(art.gp)} GP` },
+      hasTrophies && tr.rocket.length
+        ? { label: "Rocket Richard", value: tr.rocket[0].name.split(" ").slice(-1)[0], sub: `${pct(tr.rocket[0].p)} to win · ${f1(tr.rocket[0].proj)} goals`, fine: `${tr.rocket[0].team} · 10th–90th ${tr.rocket[0].p10}–${tr.rocket[0].p90}` }
+        : { label: "Rocket Richard", value: goals.name.split(" ").slice(-1)[0], sub: `${goals.g} goals`, fine: `${goals.team} · ${Math.round(goals.gp)} GP` },
+      hasTrophies && tr.wins.length
+        ? { label: "Most wins", value: tr.wins[0].name.split(" ").slice(-1)[0], sub: `${pct(tr.wins[0].p)} to lead · ${f1(tr.wins[0].proj)} wins`, fine: `${tr.wins[0].team} · 10th–90th ${tr.wins[0].p10}–${tr.wins[0].p90}` }
+        : { label: "Most wins", value: winsLeader.name.split(" ").slice(-1)[0], sub: `${f1(winsLeader.wins)} wins · ${winsLeader.starts} starts`, fine: `${winsLeader.team} · ${pct(winsLeader.p30)} for 30+` },
     ];
     const cutE = east[7] ? f1(east[7].proj.pts) : dash, cutW = west[7] ? f1(west[7].proj.pts) : dash;
     const method = [
       { head: "Game engine.", body: `Each remaining game is two Poisson draws from expected goals (team offense × opponent defense ÷ league average), with a ${(d.method.hfa * 100).toFixed(1)}% home bump and none at neutral sites. A calibrated share of one-goal games becomes a regulation tie so ${Math.round(d.method.tieRate * 100)}% of games reach overtime, matching last season; overtime is drawn with a shrunken strength edge and 36.5% of those go to a shootout, which earns no regulation-or-overtime win. Every simulated season also jitters each team's offense and defense by ±${Math.round(d.method.sigma * 100)}%, which is why the 10th–90th ranges are as wide as they are.` },
       { head: "Team strength.", body: "Offense is half last season's goals and expected goals per game (75/25 with the season before, regressed 20% to the mean) and half the sum of projected goals from every player on the current roster, plus a quarter-weight on the roster's relative on-ice xGF impact. Defense is last season's expected goals against, adjusted for who left and arrived (TOI-weighted on/off 5v5 xGA impact, shrunk by half), minus the goalie tandem's projected goals saved above expected. Once games are played, both move toward the season to date, weighted by games played." },
+      ...(phUsed ? [{ head: "The card's ratings.", body: `Each team's offense and defense are then moved ${Math.round(rt.phWeight * 100)}% of the way to the ratings the betting card prices team markets on: PostHockey-style shooter-adjusted expected goals with goaltending (GSAx on the same shots), through ${rt.phThrough}, with each club's own home-ice edge in place of the league's alone. Their five-game form is taken out, because a streak says little about the rest of a season.` }] : []),
       { head: "Players.", body: "Goals and assists per game from up to four seasons weighted 6/5/3/2 (current season first), regressed forty games toward a role prior set by ice time, then aged: young players up, 30-plus down, steeper past 34. Games played come from each player's own durability record and the availability list beside this. Each team's player goals are scaled to its simulated goal total, and assists to 1.69× goals." },
       { head: "Goalies.", body: "Goals saved above expected per 60 minutes from three seasons of MoneyPuck data, regressed toward zero with a 6,000-minute constant, with an age penalty past 34. Starts are split by the opening depth chart and drift toward the starts actually made. Wins are simulated team wins times the share of starts, with a small nudge for the goalie's quality relative to his partner." },
+      ...(hasRounds ? [{ head: "Playoffs.", body: `Every simulated season is seeded in the NHL's format: three per division and two wild cards per conference, the division winner with the better record against the second wild card, second against third in each division, and the bracket fixed by division through the conference final. Each series is played best of seven, 2-2-1-1-1, home ice to the better record, from the same season's ratings with the strength gap shrunk to ${Math.round((d.method.playoffShrink || 0.479) * 1000) / 10}% of its regular-season size (PostHockey's playoff shrink) and no ties.` }] : []),
+      ...(hasTrophies ? [{ head: "Trophies.", body: `In each simulated season a scorer's remaining goals and assists are drawn from his team's simulated goals, at his projected share of them, with a ±${Math.round((d.method.playerSigma || 0.1) * 100)}% rate jitter and a chance of missing games; a goalie's wins come from his team's simulated wins and a drawn share of its starts. The win percentage is the share of seasons he finishes first; ties split it. The Art Ross, Rocket Richard and wins lead are counted, not voted; the Calder is voted, so its table is the rookie points race.` }] : []),
       { head: "What it does not know.", body: "In-season trades before they happen, injuries before they are reported, coaching changes, and prospects' growth beyond the age curve. Standings are projections of a season, not prices, and nothing here is a bet." },
     ];
     const notesAll = [...(d.notes.returning || []).map((i) => ({ ...i, kind: "returning" })), ...(d.notes.out || []).map((i) => ({ ...i, kind: "out" }))];
@@ -371,6 +493,10 @@ class Component extends DCLogic {
       strip, games: d.games,
       standingsNote: `Mean of ${d.sims.toLocaleString()} seasons · East 8th place ${cutE} pts, West ${cutW}`,
       divisions, conferences, leaderBoards, teamCards, goalies,
+      hasRounds, roundConfs, slots, finals, hasTrophies, trophies,
+      roundsNote: "Share of simulated seasons · a projection, not a price",
+      trophiesNote: "Share of simulated seasons each player finishes first · a projection, not a price",
+      calderNote: tr && tr.calderNote ? tr.calderNote : "",
       scorersNote: inSeason ? "Season total = to date + rest of season · tied to each team's simulated goals" : "Full-season projection · tied to each team's simulated goals",
       goaliesNote: "Simulated team wins × projected share of starts · GSAx/60 is projected goals saved above expected per 60",
       method, injuries, notesLabel: `As of ${d.notes.asOf || d.asOf} · games before the return date are removed from the projection`,
@@ -382,7 +508,7 @@ class Component extends DCLogic {
     const vm = this.state.vm;
     const themeAttr = { Light: "light", Dark: "dark" }[this.props.theme] || "auto";
     const base = { themeAttr, otherSports: this.state.otherSports || [], hasNotice: !!this.state.notice, notice: this.state.notice || "" };
-    if (!vm) return { ...base, kicker: "Season simulation", title1: "The whole", title2: "season.", blurb: "", updated: "—", progress: "", stale: false, staleLabel: "", strip: [], divisions: [], conferences: [], leaderBoards: [], teamCards: [], goalies: [], method: [], injuries: [], games: 84, standingsNote: "", scorersNote: "", goaliesNote: "", notesLabel: "" };
+    if (!vm) return { ...base, kicker: "Season simulation", title1: "The whole", title2: "season.", blurb: "", updated: "—", progress: "", stale: false, staleLabel: "", strip: [], divisions: [], conferences: [], leaderBoards: [], teamCards: [], goalies: [], method: [], injuries: [], games: 84, standingsNote: "", scorersNote: "", goaliesNote: "", notesLabel: "", hasRounds: false, roundConfs: [], slots: [], finals: [], hasTrophies: false, trophies: [], roundsNote: "", trophiesNote: "", calderNote: "" };
     return { ...base, ...vm };
   }
 }

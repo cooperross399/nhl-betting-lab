@@ -7,7 +7,8 @@ name: Season Sim
 # Publish Site's 14:45 UTC build. It reads public endpoints only — the NHL
 # API for standings, rosters, schedules and season-to-date stats, MoneyPuck
 # for expected goals — and the hand-kept availability list under
-# data/season_sim/roster_notes.json. It fetches no odds, spends no credit,
+# data/season_sim/roster_notes.json — plus the card's own team ratings,
+# restored from Gameday Refresh's state. It fetches no odds, spends no credit,
 # pushes no branch, edits no policy, and places no bet.
 #
 # The output is one file, season.json, uploaded as the `season-sim` artifact.
@@ -27,6 +28,7 @@ on:
 
 permissions:
   contents: read
+  actions: read   # to restore the card's team ratings from Gameday Refresh's state
 
 concurrency:
   group: season-sim
@@ -55,6 +57,32 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
           python -m pip install -e .
+
+      - name: Restore the card's team ratings
+        # Cooper, 2026-10-26: the season's team strengths come from the same
+        # PostHockey-style ratings the card prices on (shooter-adjusted xG
+        # with GSAx(sh) and each club's own home ice), which Gameday Refresh
+        # builds into data/processed/shadow_team_ratings.json and carries in
+        # its `gameday-state` artifact. Only that one file is kept. Soft: the
+        # projection builds on its own ratings without it, says so in the
+        # log and on the page, and a ratings file more than a few days older
+        # than the standings is ignored by the model, not blended.
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -u
+          STATE=/tmp/gameday-state
+          mkdir -p "$STATE" data/processed
+          if python scripts/restore_state.py --artifact gameday-state --dest /tmp/gameday-state \
+               --workflow gameday-refresh.yml --no-merge --attempts 2 \
+             && [ -s "$STATE/processed/shadow_team_ratings.json" ]; then
+            cp "$STATE/processed/shadow_team_ratings.json" data/processed/
+            python -c "import json; d = json.load(open('data/processed/shadow_team_ratings.json')); print('Card ratings through', d['last_game_date'])"
+          else
+            echo "::warning::The card's team ratings could not be restored; the season is simulated on its own ratings."
+          fi
+          rm -rf "$STATE"
 
       - name: Build the season projection
         # Every input is fetched here, into a cache under data/raw that no

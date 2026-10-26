@@ -30,6 +30,7 @@ data/outputs/*
 !data/outputs/props_rest_experiment.json
 !data/outputs/drought_rule_backtest.md
 !data/outputs/drought_rule_backtest.json
+!data/outputs/season_sim_backtest.md
 data/outputs/archive/
 # Priced snapshots and the forward ledger are run state, carried between
 # workflow runs by the gameday-state artifact rather than by git — they grow

@@ -9,6 +9,13 @@ ten thousand times, and writes one JSON file in the shape ``web/SCHEMA.md``
 describes under ``season.json``. It reads no price, spends no credit, and
 places no bet.
 
+When ``--ratings`` names the card's team ratings file
+(``data/processed/shadow_team_ratings.json``, PostHockey-style
+shooter-adjusted xG with GSAx(sh) and each club's own home ice) and that file
+is current, every team's strength is blended toward it, so the Season page and
+the card rate teams on the same numbers. Without it the season is simulated on
+the model's own ratings and the page says so.
+
 The hand-kept inputs (injured regulars expected back, opening goalie depth
 charts, rookies' ice time) live in ``data/season_sim/roster_notes.json``.
 """
@@ -25,10 +32,16 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 from season_sim.fetch import fetch_bundle  # noqa: E402
-from season_sim.model import build_model, isfinite_all, load_injuries  # noqa: E402
+from season_sim.model import build_model, isfinite_all, load_injuries, load_ph_ratings  # noqa: E402
 from season_sim.simulate import simulate  # noqa: E402
 
 DEFAULT_NOTES = HERE.parent / "data" / "season_sim" / "roster_notes.json"
+DEFAULT_RATINGS = HERE.parent / "data" / "processed" / "shadow_team_ratings.json"
+
+#: What the page prints for a Calder table it cannot vouch for.
+CALDER_NOTE = ("Rookies are read off the NHL's eligibility rule (under 26 on September 15, at most 25 games in any "
+               "earlier season and not six or more in two) against the three seasons on file; a player whose games "
+               "came before then could be listed wrongly. Ranked by points, the Calder itself is voted.")
 
 
 def _team_colors() -> dict:
@@ -61,6 +74,14 @@ def compose(model: dict, result: dict, notes: dict, colors: dict, *, generated_a
                     p10=g["wins_p10"], p90=g["wins_p90"], p30=g["p_30"], p35=g["p_35"], p40=g["p_40"],
                     gsax60=g["gsax60"], sv3=g["sv_3yr"], now=g["now"], last=g["last"])
 
+    def award(rows: list[dict]) -> list[dict]:
+        return [dict(name=r["name"], team=r["team"], pos=r.get("pos", "G"), age=r["age"], p=r["p"], proj=r["proj"],
+                     p10=r["p10"], p90=r["p90"], now=r["now"]) for r in rows]
+
+    trophies_in = result.get("trophies") or {}
+    playoffs_in = result.get("playoffs") or {}
+    ratings = model.get("ratings") or {}
+
     teams = []
     for r in result["teams"]:
         ab = r["abbrev"]
@@ -72,10 +93,12 @@ def compose(model: dict, result: dict, notes: dict, colors: dict, *, generated_a
             proj=dict(pts=r["pts"], p10=r["pts_p10"], p90=r["pts_p90"], sd=r["pts_sd"], w=r["w"], l=r["l"], otl=r["otl"],
                       gf=r["gf"], ga=r["ga_sim"]),
             odds=dict(playoff=r["p_playoff"], div=r["p_div"], conf1=r["p_conf1"], pres=r["p_pres"], last=r["p_last"],
-                      bottom5=r["p_bottom5"], divRankDist=r["div_rank_dist"], avgDivRank=r["avg_div_rank"]),
+                      bottom5=r["p_bottom5"], divRankDist=r["div_rank_dist"], avgDivRank=r["avg_div_rank"],
+                      round1=r["p_r1"], confFinal=r["p_r2"], final=r["p_final"], cup=r["p_cup"]),
             lastSeason=dict(pts=last["pts"], gp=last["gp"], gf=last["gf"], ga=last["ga"]) if last else None,
             rating=dict(off=r["off"], ga=r["ga"], diff=r["diff"], tdOff=r["td_off"], buOff=r["bu_off"], onIceXgf=r["d_xgf"],
-                        tdXga=r["td_xga"], onIceXga=r["d_xga"], goalieGsax=r["goalie_gsax"]),
+                        tdXga=r["td_xga"], onIceXga=r["d_xga"], goalieGsax=r["goalie_gsax"],
+                        ownOff=r["own_off"], ownGa=r["own_ga"], phOff=r["ph_off"], phGa=r["ph_ga"], homeIce=r["home_ice"]),
             scorers=[player(p) for p in players[ab][:5]],
             goalies=[goalie(g) for g in goalies_by_team.get(ab, [])],
         ))
@@ -96,8 +119,25 @@ def compose(model: dict, result: dict, notes: dict, colors: dict, *, generated_a
                      wins=[goalie(g) for g in result["goalies"][:20]]),
         notes=dict(asOf=notes.get("asOf"), returning=notes.get("returning", []), out=notes.get("out", []),
                    unknown=model["unknown"]),
-        method=dict(sigma=result["meta"]["sigma"], hfa=result["meta"]["hfa"], tieRate=result["meta"]["tie_rate"],
-                    leagueAvgPts=result["meta"]["league_avg_pts"]),
+        playoffs=dict(
+            slots=[dict(conf=sl["conf"], label=sl["label"], matchups=sl["matchups"]) for sl in playoffs_in.get("slots", [])],
+            conferenceFinals=playoffs_in.get("conference_finals", []),
+            finals=playoffs_in.get("finals", []),
+        ),
+        trophies=dict(
+            artRoss=award(trophies_in.get("art_ross", [])),
+            rocket=award(trophies_in.get("rocket", [])),
+            wins=award(trophies_in.get("wins", [])),
+            calder=award(trophies_in["calder"]) if trophies_in.get("calder") else None,
+            calderNote=CALDER_NOTE if trophies_in.get("calder") else
+            "The rookie list could not be read off the data, so no Calder table is published.",
+        ),
+        method=dict(sigma=result["meta"]["sigma"], sigmaMode=result["meta"].get("sigma_mode", "fixed"),
+                    hfa=result["meta"]["hfa"], tieRate=result["meta"]["tie_rate"],
+                    leagueAvgPts=result["meta"]["league_avg_pts"],
+                    playoffShrink=result["meta"].get("playoff_shrink"), playerSigma=result["meta"].get("player_sigma"),
+                    ratings=dict(phWeight=ratings.get("ph_weight", 0.0), phThrough=ratings.get("ph_through"),
+                                 phStatus=ratings.get("ph_status", "not used"))),
     )
 
 
@@ -115,6 +155,20 @@ def check(site: dict) -> None:
         raise SystemExit("a percentile range does not contain its mean")
     if not site["leaders"]["points"] or not site["leaders"]["wins"]:
         raise SystemExit("the leader tables are empty")
+    # The trophy and playoff-round odds arrived after the first builds; a
+    # file without them (the committed baseline) is still a season.
+    if "cup" in teams[0]["odds"]:
+        for field, want in (("round1", 8), ("confFinal", 4), ("final", 2), ("cup", 1)):
+            total = sum(t["odds"][field] for t in teams)
+            if abs(total - want) > 0.01:
+                raise SystemExit(f"{field} odds sum to {total:.3f}, not {want}")
+        for t in teams:
+            o = t["odds"]
+            if not (o["cup"] <= o["final"] + 1e-9 <= o["confFinal"] + 2e-9 <= o["round1"] + 3e-9 <= o["playoff"] + 4e-9):
+                raise SystemExit(f"{t['abbr']}'s round odds do not shrink round by round")
+    for name, rows in (site.get("trophies") or {}).items():
+        if isinstance(rows, list) and sum(r["p"] for r in rows) > 1.001:
+            raise SystemExit(f"the {name} odds sum past 1")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -123,13 +177,21 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--cache", default="data/raw/season_sim", help="Where fetched inputs are kept.")
     parser.add_argument("--notes", default=str(DEFAULT_NOTES), help="roster_notes.json to read.")
     parser.add_argument("--sims", type=int, default=10_000)
+    parser.add_argument("--ratings", default=str(DEFAULT_RATINGS),
+                        help="The card's team ratings file (PostHockey-style xG); blended in when current.")
+    parser.add_argument("--ph-weight", type=float, default=None, help="Blend weight toward --ratings (default: the model's).")
     args = parser.parse_args(argv)
 
     notes = load_injuries(Path(args.notes))
     bundle = fetch_bundle(Path(args.cache))
-    model = build_model(bundle, notes, starter_shares=notes.get("goalieShares", {}))
+    ph, why = load_ph_ratings(Path(args.ratings))
+    model = build_model(bundle, notes, starter_shares=notes.get("goalieShares", {}), ph_ratings=ph, ph_weight=args.ph_weight)
     for line in model["unknown"]:
         print(f"::warning::roster_notes.json names a player the stats API does not know: {line}")
+    status = model["ratings"]["ph_status"]
+    print(f"Team ratings: {status}" + ("" if ph else f" ({why})"))
+    if not model["ratings"]["ph_weight"]:
+        print("::warning::The season is simulated on its own ratings, not the card's PostHockey-style ratings: " + status)
     result = simulate(model, sims=args.sims)
     site = compose(model, result, notes, _team_colors(), generated_at=datetime.now(timezone.utc).isoformat(timespec="seconds"))
     check(site)
@@ -139,6 +201,10 @@ def main(argv: list[str] | None = None) -> int:
     top = site["teams"][0]
     print(f"season.json: {site['phase']}, {site['leagueGamesPlayed']} games played, {site['remainingGames']} simulated; "
           f"favourite {top['abbr']} {top['proj']['pts']} pts; league average {site['method']['leagueAvgPts']} pts")
+    cup = max(site["teams"], key=lambda t: t["odds"]["cup"])
+    tro = site["trophies"]
+    print(f"Cup favourite {cup['abbr']} {cup['odds']['cup']:.1%}; "
+          + "; ".join(f"{k} {v[0]['name']} {v[0]['p']:.1%}" for k, v in tro.items() if isinstance(v, list) and v))
     return 0
 
 
