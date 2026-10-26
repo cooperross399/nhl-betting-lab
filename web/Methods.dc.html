@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <title>Methods — Maverick Hightower</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="How the NHL model is built: expected goals, goalies, lineups, rest, referees, a second pre-game rating, fair prices and how picks are graded. With the live team ratings.">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Maverick Hightower">
+  <meta property="og:title" content="Methods — Maverick Hightower">
+  <meta property="og:image" content="https://maverickhightower.com/share.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:site" content="@mavhightower">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root, html[data-sport="nhl"] { color-scheme: dark; --paper:#14151a; --ink:#f1efe9; --ink-2:#d2d0ca; --mute:#a3a6b1; --mute-2:#80838e; --rule:#3a3d49; --rule-2:#262832; --on-ink:#3a3d49; --alert:#f08a72; --on-alert:#14151a; --win:#5cc196; --on-win:#14151a; --desk:#0d0e12; }
+    html, body { margin: 0; padding: 0; background: var(--paper); color: var(--ink); font-family: "IBM Plex Sans", Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; overflow-x: hidden; scroll-behavior: smooth; }
+    * { box-sizing: border-box; }
+    a { color: var(--ink); text-decoration: none; }
+    a:hover { color: var(--ink-2); text-decoration: underline; text-underline-offset: 3px; }
+    a:focus-visible, button:focus-visible, select:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
+    .skip { position: absolute; left: 12px; top: -60px; background: var(--ink); color: var(--paper); padding: 10px 14px; z-index: 10; font-size: 14px; }
+    .skip:focus { top: 12px; }
+    @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; scroll-behavior: auto !important; } }
+  </style>
+  <meta name="theme-color" content="#14151a">
+  <script>(function(){document.documentElement.setAttribute("data-sport","nhl");})();</script>
+</helmet>
+<div data-screen-label="Methods" style="min-height:100vh;background:var(--paper);color:var(--ink);">
+  <a href="#main" class="skip">Skip to methods</a>
+  <div style="max-width:1240px;margin:0 auto;padding:0 clamp(16px,3vw,24px) 80px;">
+
+    <header style="border-top:4px solid var(--ink);padding:10px 0 4px;display:flex;align-items:center;justify-content:space-between;gap:8px 16px;flex-wrap:wrap;">
+      <a href="https://maverickhightower.com/" aria-label="Maverick Hightower home" style="display:flex;align-items:center;gap:12px;min-height:44px;">
+        <span aria-hidden="true" style="width:36px;height:36px;background:var(--ink);color:var(--paper);display:grid;place-items:center;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:18px;letter-spacing:.04em;">MH</span>
+        <span style="display:flex;flex-direction:column;line-height:1.1;">
+          <span style="font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute);">Maverick Hightower</span>
+          <span style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:22px;letter-spacing:.02em;text-transform:uppercase;">NHL Projections</span>
+        </span>
+      </a>
+      <nav aria-label="Site" style="display:flex;gap:0 18px;font-size:13px;letter-spacing:.1em;text-transform:uppercase;font-weight:500;flex-wrap:wrap;">
+        <a href="Methods.dc.html" aria-current="page" style="display:inline-flex;align-items:center;min-height:44px;box-shadow:inset 0 -2px 0 var(--ink);">Methods</a>
+        <a href="https://maverickhightower.com/about.html" style="display:inline-flex;align-items:center;min-height:44px;">About</a>
+        <a href="https://epl.maverickhightower.com/" style="display:inline-flex;align-items:center;min-height:44px;">EPL</a>
+        <a href="https://cbb.maverickhightower.com/" style="display:inline-flex;align-items:center;min-height:44px;">CBB</a>
+      </nav>
+    </header>
+
+    <nav aria-label="Board sections" style="position:sticky;top:0;z-index:5;background:var(--paper);border-bottom:1px solid var(--ink);display:flex;overflow-x:auto;scrollbar-width:none;">
+      <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="6">
+        <a href="{{ t.href }}" style="flex:1 1 0;max-width:150px;min-width:72px;display:flex;align-items:center;justify-content:center;min-height:48px;padding:0 4px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;font-weight:600;white-space:nowrap;text-decoration:none;color:var(--mute);">{{ t.label }}</a>
+      </sc-for>
+    </nav>
+
+    <section style="padding:36px 0 28px;border-bottom:1px solid var(--ink);">
+      <div style="font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute);margin-bottom:10px;">NHL · how the number is built</div>
+      <h1 style="margin:0;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:clamp(56px,9vw,112px);line-height:.9;letter-spacing:-.01em;text-transform:uppercase;">Methods</h1>
+      <p style="margin:18px 0 0;font-size:15px;line-height:1.5;color:var(--ink-2);max-width:640px;text-wrap:pretty;">Every number on the board comes from the steps below, in this order. Each entry says what the thing is, how it is built, and how much to trust it. Two seasons of real prices show no demonstrated edge for any market.</p>
+    </section>
+
+    <sc-if value="{{ isSample }}" hint-placeholder-val="{{ false }}">
+      <div role="status" style="display:grid;grid-template-columns:auto minmax(0,1fr);gap:16px;align-items:start;padding:14px 0;border-bottom:1px solid var(--ink);">
+        <span style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:14px;letter-spacing:.14em;text-transform:uppercase;border:1px solid var(--ink);padding:4px 9px;">Sample</span>
+        <p style="margin:0;font-size:14px;line-height:1.5;color:var(--ink-2);max-width:760px;text-wrap:pretty;">Sample ratings. On the live site the tables read the model's current ratings file.</p>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ narrow }}" hint-placeholder-val="{{ false }}">
+      <div style="position:sticky;top:49px;z-index:4;background:var(--paper);padding:8px 0;border-bottom:1px solid var(--rule);">
+        <label style="display:flex;align-items:center;gap:10px;font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--mute);">
+          <span style="letter-spacing:.1em;text-transform:uppercase;white-space:nowrap;">Jump to</span>
+          <select onChange="{{ onJump }}" value="{{ jumpValue }}" style="flex:1;min-height:44px;background:var(--paper);color:var(--ink);border:1px solid var(--ink);font-family:inherit;font-size:13px;padding:0 10px;">
+            <sc-for list="{{ toc }}" as="t" hint-placeholder-count="5"><option value="{{ t.id }}">{{ t.label }}</option></sc-for>
+          </select>
+        </label>
+      </div>
+    </sc-if>
+
+    <div id="main" style="display:grid;grid-template-columns:{{ cols }};gap:0 48px;align-items:start;">
+      <sc-if value="{{ wide }}" hint-placeholder-val="{{ true }}">
+        <nav aria-label="Contents" style="position:sticky;top:64px;padding:24px 0;max-height:calc(100vh - 64px);overflow-y:auto;scrollbar-width:thin;">
+          <div style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute);margin-bottom:8px;">Contents</div>
+          <sc-for list="{{ toc }}" as="t" hint-placeholder-count="12">
+            <a href="{{ t.href }}" style="display:block;padding:7px 0;font-size:13px;line-height:1.3;color:{{ t.color }};border-top:1px solid var(--rule-2);padding-left:{{ t.indent }};">{{ t.label }}</a>
+          </sc-for>
+        </nav>
+      </sc-if>
+
+      <div style="min-width:0;">
+
+        <section id="ratings" aria-labelledby="ratings-h" style="padding:28px 0 26px;border-bottom:1px solid var(--ink);scroll-margin-top:110px;">
+          <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px 16px;flex-wrap:wrap;">
+            <h2 id="ratings-h" style="margin:0;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:28px;line-height:1;text-transform:uppercase;letter-spacing:.01em;">Team ratings</h2>
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--mute);">{{ through }}</span>
+          </div>
+          <p style="margin:6px 0 0;font-size:14px;line-height:1.5;color:var(--ink-2);max-width:720px;text-wrap:pretty;">Multipliers on the league average of 1.00. Attack above 1 scores more; defence and goaltending below 1 allow fewer. Net is attack minus defence. Home ice is each team's own effect, roughly a percentage. Tap a column to sort.</p>
+          <sc-if value="{{ noTeams }}" hint-placeholder-val="{{ false }}"><p style="margin:12px 0 0;font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--mute);">Ratings file unavailable.</p></sc-if>
+          <sc-if value="{{ hasTeams }}" hint-placeholder-val="{{ true }}">
+          <sc-if value="{{ hasTonight }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;gap:0;margin-top:14px;border:1px solid var(--ink);width:max-content;max-width:100%;">
+              <sc-for list="{{ filters }}" as="f" hint-placeholder-count="2">
+                <button type="button" onClick="{{ f.onClick }}" aria-pressed="{{ f.pressed }}" style="min-height:44px;padding:0 14px;background:{{ f.bg }};color:{{ f.fg }};border:0;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;">{{ f.label }}</button>
+              </sc-for>
+            </div>
+          </sc-if>
+          <div style="margin-top:14px;overflow-x:auto;scrollbar-width:thin;margin-left:calc(-1 * clamp(16px,3vw,24px));margin-right:calc(-1 * clamp(16px,3vw,24px));padding:0 clamp(16px,3vw,24px);">
+            <div role="table" style="min-width:700px;border-top:2px solid var(--ink);">
+              <div role="row" style="display:grid;grid-template-columns:minmax(230px,2fr) repeat(7,minmax(60px,1fr));gap:0 8px;">
+                <sc-for list="{{ cols7 }}" as="c" hint-placeholder-count="8">
+                  <button type="button" role="columnheader" aria-sort="{{ c.sort }}" onClick="{{ c.onClick }}" style="min-height:44px;padding:0;background:var(--paper);border:0;color:{{ c.color }};font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;text-align:{{ c.align }};cursor:pointer;position:{{ c.pos }};left:0;">{{ c.label }}{{ c.arrow }}</button>
+                </sc-for>
+              </div>
+              <sc-for list="{{ teamRows }}" as="r" hint-placeholder-count="32">
+                <div role="row" style="display:grid;grid-template-columns:minmax(230px,2fr) repeat(7,minmax(60px,1fr));gap:0 8px;padding:7px 0;border-top:1px solid var(--rule-2);align-items:center;font-family:'IBM Plex Mono',monospace;font-size:13px;">
+                  <span role="cell" style="position:sticky;left:0;background:var(--paper);display:flex;align-items:center;gap:8px;min-width:0;"><span aria-hidden="true" style="width:4px;height:18px;background:{{ r.color }};flex:none;"></span><span style="font-family:'IBM Plex Sans',sans-serif;font-weight:600;font-size:13px;">{{ r.abbr }}</span><span style="font-family:'IBM Plex Sans',sans-serif;font-size:12px;color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ r.name }}</span><sc-if value="{{ r.gameHref }}" hint-placeholder-val="{{ false }}"><a href="{{ r.gameHref }}" title="{{ r.gameTitle }}" style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-2);border:1px solid var(--rule);padding:1px 6px;white-space:nowrap;flex:none;">{{ r.gameLabel }}</a></sc-if></span>
+                  <sc-for list="{{ r.cells }}" as="c" hint-placeholder-count="7"><span role="cell" style="text-align:right;font-weight:{{ c.weight }};color:{{ c.color }};">{{ c.v }}</span></sc-for>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+          </sc-if>
+        </section>
+
+        <section id="defence-ratings" aria-labelledby="def-h" style="padding:28px 0 26px;border-bottom:1px solid var(--ink);scroll-margin-top:110px;">
+          <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px 16px;flex-wrap:wrap;">
+            <h2 id="def-h" style="margin:0;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:28px;line-height:1;text-transform:uppercase;letter-spacing:.01em;">Defensive ratings</h2>
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--mute);">{{ defStamp }}</span>
+          </div>
+          <p style="margin:6px 0 0;font-size:14px;line-height:1.5;color:var(--ink-2);max-width:720px;text-wrap:pretty;">Goals prevented per game while on the ice, from on-ice expected goals against in the NHL shift charts, adjusted for teammates and opponents. Positive prevents goals; negative allows them. Feeds the lineup step.</p>
+          <sc-if value="{{ noDef }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:14px;border:1px dashed var(--mute);padding:14px 16px;max-width:760px;">
+              <div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:20px;line-height:1;text-transform:uppercase;color:var(--mute);">Defensive ratings appear once the shift charts are cached</div>
+              <p style="margin:8px 0 0;font-size:14px;line-height:1.5;color:var(--ink-2);text-wrap:pretty;">The shift charts are pulled game by game after each night. Until the cache covers enough games, the lineup step uses offence only.</p>
+            </div>
+          </sc-if>
+          <sc-if value="{{ hasDef }}" hint-placeholder-val="{{ true }}">
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:18px 40px;margin-top:14px;">
+              <sc-for list="{{ defLists }}" as="l" hint-placeholder-count="2">
+                <div style="border-top:2px solid var(--ink);">
+                  <div style="padding:8px 0 4px;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute);">{{ l.title }}</div>
+                  <sc-for list="{{ l.rows }}" as="r" hint-placeholder-count="10">
+                    <div style="display:grid;grid-template-columns:24px minmax(0,1fr) auto;gap:0 10px;padding:7px 0;border-top:1px solid var(--rule-2);align-items:baseline;">
+                      <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--mute);">{{ r.rank }}</span>
+                      <span style="min-width:0;"><span style="font-weight:600;font-size:14px;">{{ r.player }}</span> <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--mute);">{{ r.team }}</span></span>
+                      <span style="font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600;">{{ r.value }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+        </section>
+
+        <sc-for list="{{ entries }}" as="e" hint-placeholder-count="17">
+          <article id="{{ e.id }}" aria-labelledby="{{ e.hid }}" style="padding:28px 0 26px;border-bottom:1px solid var(--ink);scroll-margin-top:110px;">
+            <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;">
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--mute);">{{ e.n }}</span>
+              <h2 id="{{ e.hid }}" style="margin:0;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:28px;line-height:1;text-transform:uppercase;letter-spacing:.01em;">{{ e.title }}</h2>
+              <span style="margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--mute);white-space:nowrap;">changed {{ e.updated }}</span>
+            </div>
+            <p style="margin:10px 0 0;font-size:17px;line-height:1.4;font-weight:500;max-width:720px;text-wrap:pretty;">{{ e.def }}</p>
+            <sc-if value="{{ e.collapsed }}" hint-placeholder-val="{{ false }}">
+              <button type="button" onClick="{{ e.onToggle }}" aria-expanded="false" aria-controls="{{ e.bodyId }}" style="margin-top:8px;min-height:44px;padding:0;background:transparent;border:0;color:var(--mute);font-family:'IBM Plex Mono',monospace;font-size:12px;text-decoration:underline;text-decoration-color:var(--rule);text-underline-offset:3px;cursor:pointer;">How it's built · how sure we are +</button>
+            </sc-if>
+            <sc-if value="{{ e.open }}" hint-placeholder-val="{{ true }}">
+            <div id="{{ e.bodyId }}" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:18px 40px;margin-top:14px;align-items:start;">
+              <div style="min-width:0;">
+                <div style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute);">How it's built</div>
+                <p style="margin:6px 0 0;font-size:14px;line-height:1.55;color:var(--ink-2);text-wrap:pretty;">{{ e.build }}</p>
+                <sc-if value="{{ e.formula }}" hint-placeholder-val="{{ false }}">
+                  <pre style="margin:12px 0 0;padding:10px 12px;border:1px solid var(--rule);font-family:'IBM Plex Mono',monospace;font-size:12px;line-height:1.6;color:var(--ink);white-space:pre-wrap;overflow-wrap:anywhere;">{{ e.formula }}</pre>
+                </sc-if>
+              </div>
+              <div style="border:1px solid var(--ink);padding:12px 14px;">
+                <div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:14px;letter-spacing:.14em;text-transform:uppercase;">How sure are we</div>
+                <p style="margin:8px 0 0;font-size:14px;line-height:1.55;color:var(--ink-2);text-wrap:pretty;">{{ e.sure }}</p>
+              </div>
+            </div>
+            <sc-if value="{{ e.canCollapse }}" hint-placeholder-val="{{ false }}">
+              <button type="button" onClick="{{ e.onToggle }}" aria-expanded="true" aria-controls="{{ e.bodyId }}" style="margin-top:8px;min-height:44px;padding:0;background:transparent;border:0;color:var(--mute);font-family:'IBM Plex Mono',monospace;font-size:12px;cursor:pointer;">Less −</button>
+            </sc-if>
+            </sc-if>
+          </article>
+        </sc-for>
+
+        <section id="changelog" aria-labelledby="cl-h" style="padding:28px 0 0;scroll-margin-top:110px;">
+          <h2 id="cl-h" style="margin:0;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:28px;line-height:1;text-transform:uppercase;letter-spacing:.01em;">Changelog</h2>
+          <p style="margin:6px 0 0;font-size:14px;line-height:1.5;color:var(--ink-2);max-width:720px;">Every change to the model, with what a reader would see move.</p>
+          <div style="margin-top:14px;border-top:2px solid var(--ink);max-width:900px;">
+            <sc-for list="{{ changelog }}" as="c" hint-placeholder-count="5">
+              <div style="display:grid;grid-template-columns:110px minmax(0,1fr);gap:4px 16px;padding:12px 0;border-top:1px solid var(--rule-2);">
+                <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--mute);padding-top:2px;">{{ c.date }}</span>
+                <div style="min-width:0;">
+                  <div style="font-size:14px;font-weight:600;line-height:1.4;">{{ c.what }}</div>
+                  <div style="font-size:13px;line-height:1.5;color:var(--ink-2);margin-top:2px;text-wrap:pretty;"><span style="color:var(--mute);">You'd see:</span> {{ c.see }}</div>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </section>
+
+      </div>
+    </div>
+
+    <footer style="border-top:1px solid var(--ink);margin-top:40px;padding:18px 0 0;display:flex;flex-wrap:wrap;gap:6px 24px;font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--mute);">
+      <span>© 2026 Maverick Hightower</span>
+      <a href="Board.dc.html" style="display:inline-flex;align-items:center;min-height:44px;">Board</a>
+      <a href="Record.dc.html" style="display:inline-flex;align-items:center;min-height:44px;">Track record</a>
+      <a href="Methods.dc.html" style="display:inline-flex;align-items:center;min-height:44px;">Methods</a>
+      <a href="https://maverickhightower.com/about.html" style="display:inline-flex;align-items:center;min-height:44px;">About</a>
+      <a href="https://x.com/mavhightower" style="display:inline-flex;align-items:center;min-height:44px;">@mavhightower</a>
+    </footer>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;scenario&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Sample ratings&quot;,&quot;Shift charts not cached&quot;],&quot;default&quot;:&quot;Sample ratings&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Preview&quot;}}">
+class Component extends DCLogic {
+  state = { data: null, board: null, loadedFor: null, isSample: false, sortKey: "net", dir: -1, wide: true, hash: "", open: {}, tonightOnly: false };
+  static ENTRIES = [
+    { id: "xg", updated: "2026-09-29", title: "Expected goals", def: "The chance that a shot becomes a goal, given where and how it was taken. Add them up and you get a team's expected goals.",
+      build: "Each unblocked shot gets a probability from its distance, angle, shot type, rebound and rush context, and strength state. A team's xG for a game is the sum over its shots; xG against is the sum over the other side's. We use these rather than actual goals because they settle faster: a team can outshoot its luck for weeks, but not its shot quality.",
+      formula: "xGF = Σ P(goal | shot)   over the team's shots\nxGA = Σ P(goal | shot)   over the opponent's shots",
+      sure: "Fairly sure about the direction, less about the decimal. Different public xG models disagree by 5–10% on a team's season total, and all of them miss shooter and goalie quality, which the next two entries add back." },
+    { id: "xg-sh", updated: "2026-09-29", title: "Shooter-adjusted xG", def: "Expected goals that know who is shooting. Written xGF(sh) and xGA(sh).",
+      build: "A plain xG model gives the same shot the same value whether a 40-goal scorer or a fourth-line grinder takes it. Shooter adjustment scales each shot by the shooter's finishing talent, estimated from his career record of goals over expected with heavy shrinkage toward average. Teams built around elite finishers rate higher than their raw shot quality; teams that pile up volume from poor shooters rate lower.",
+      formula: "xGF(sh) = Σ P(goal | shot) × talent(shooter)",
+      sure: "Reasonably sure. Finishing talent is one of the more stable player skills year to year, but the adjustment is small for most players and only moves a team rating by a few hundredths." },
+    { id: "score-venue", updated: "2026-09-29", title: "Score and venue adjustment", def: "Shot rates are reweighted for the scoreline and for whether the team was at home when the shots happened.",
+      build: "Teams that lead sit back and get outshot; teams that trail push and pile up low-value attempts. Home teams get a few percent more shots than their talent earns. Each shot is weighted by how often that score state and venue produce it, so a team's rating reflects how it plays at even terms rather than how often it was ahead. The venue part is where each team's own home-ice number is separated out.",
+      formula: "",
+      sure: "Sure this matters and sure about the sign. The exact weights are fitted on past seasons and could be off by a little without changing any pick." },
+    { id: "gsax", updated: "2026-09-29", title: "GSAx (goals saved above expected)", def: "How many goals a goalie has stopped beyond what the shots he faced should have produced.",
+      build: "Expected goals against on the shots a goalie faced, minus the goals he actually allowed. A positive number means he beat the shot quality. At the team level it is the goaltending factor in the ratings table; at the player level it feeds each starter's save-talent rating.",
+      formula: "GSAx = xGA(faced) − GA",
+      sure: "Noisy. Goaltending is the least stable skill in the model. A season of GSAx has a wide range around a goalie's true talent, which is why the starter rating below shrinks hard toward average and toward age." },
+    { id: "goalies", updated: "2026-10-20", title: "Tonight's starting goalie", def: "The listed starter for each side, with an age-adjusted save-talent rating.",
+      build: "Starters are read from Daily Faceoff several times a day and tagged Confirmed, Likely, Expected or Projected. Each goalie's save talent is his multi-season GSAx per shot, shrunk toward the league average by how few shots he has faced, then adjusted along an age curve that peaks in the late twenties. The two ratings replace the team goaltending factor for tonight only. If no starter is listed, the team's season goaltending stands in and the game page says so.",
+      formula: "talent = shrink(GSAx / shots, n_shots) + age_adj(age)",
+      sure: "Sure about who is starting once it says Confirmed; a Projected starter changes maybe one night in eight. Less sure about the talent number itself, for the reasons under GSAx. This step moves the win chance by one to three points on a typical night." },
+    { id: "lineup", updated: "2026-10-20", title: "Player ratings and the dressed lineup", def: "Tonight's eighteen skaters, each with an offensive rating and a defensive rating, replace the team's season average.",
+      build: "Offence is each skater's shooter-adjusted on-ice xG for, per minute, relative to teammates. Defence, added this season, is his on-ice xG against per minute from the NHL shift charts, adjusted for who he was on the ice with and against. The dressed lineup from the morning skate is summed with expected ice time, and the gap between that and the team's season line is applied to the attack and defence ratings. A scratched top-pair defenceman or a returning first-line centre shows up here.",
+      formula: "lineup_adj = Σ TOI_i × (rating_i − team_avg)",
+      sure: "Moderately sure. Ice-time guesses are the weak link, and the defensive rating has one partial season behind it. The ten best and worst are on this page so the numbers can be argued with." },
+    { id: "home-ice", updated: "2026-09-29", title: "Home ice", def: "Each team's own home advantage, not a league-wide constant.",
+      build: "The league average home edge is small and has been shrinking. Rather than apply one number to every rink, each team's home and road shot rates are compared after the score adjustment, and the difference is shrunk toward the league average. The result is stored as a log deviation, which reads roughly as a percentage. It is listed per team in the ratings table.",
+      formula: "home_ice = shrink(log(home_rate / road_rate), n_games)",
+      sure: "Sure the league average is a point or two of win chance. Not very sure about any one team's deviation from it; the shrinkage keeps the biggest ones under three percent." },
+    { id: "rest", updated: "2026-09-29", title: "Back-to-backs, rest and travel", def: "Penalties for a second game in two nights, for crossing time zones, and a small bonus for long rest.",
+      build: "Each game is tagged with the days since each team last played, the time zones crossed since its last game, and whether it is the second half of a back-to-back. The sizes come from fitting past results: the back-to-back penalty is the largest, a west-to-east trip is next, and three or more days of rest is a slight positive. When both teams carry the same tag the step moves nothing.",
+      formula: "",
+      sure: "Sure about back-to-backs, which have been studied for twenty years and hold up. Less sure about travel, where the effect is small and tangled with the schedule." },
+    { id: "form", updated: "2026-09-29", title: "Last-five form", def: "The last five games, at about a quarter of the weight of the season rating.",
+      build: "A separate attack and defence rating is built from only the last five games, score-adjusted, and blended with the season rating at roughly one part in four. This catches a team that has changed since October, a trade, an injury the lineup step cannot see, or a goalie who has lost the net, without letting a hot week swamp a season of evidence.",
+      formula: "rating = 0.75 × season + 0.25 × last_five",
+      sure: "Least sure of the strength steps. Five games is a tiny sample and much of what it catches is noise. The weight was chosen because it tested slightly better than zero, not because it tested well." },
+    { id: "referees", updated: "2026-09-29", title: "Referee crews", def: "The crew's history of penalties called, which changes the expected number of power plays and therefore goals.",
+      build: "Crews are assigned the afternoon of the game. Each referee carries a rate of penalties per game relative to the league, shrunk toward average by games worked. A whistle-happy crew raises both teams' power-play time, which raises the projected total; a crew that lets them play lowers it. The effect on who wins is slight and comes only through the two teams' special-teams gap.",
+      formula: "",
+      sure: "Sure about the direction for the total, which is where this step belongs. For the winner it rarely moves the number by more than a tenth of a point, and the game page says so." },
+    { id: "pregame", updated: "2026-09-29", title: "The second-opinion blend", def: "The final win chance is a 50% blend of our number and an independent pre-game win probability built from tonight's expected lineups.",
+      build: "A second pre-game probability, built from the same family of inputs by a different method, rates the players expected to dress, the listed goalies, home ice and back-to-backs. Averaging two reasonable forecasts beats either one alone more often than not, so the model's output is pulled halfway toward it. On nights their number is missing the step is skipped and the breakdown shows no change.",
+      formula: "p_final = 0.5 × p_model + 0.5 × p_second",
+      sure: "Sure the blend is not worse than either input; that is what the back-test shows. Whether 50% is the best weight is open." },
+    { id: "proj-goals", updated: "2026-09-29", title: "Projected goals", def: "The expected score for each team, which is what the total and puck line are priced from.",
+      build: "Each team's attack rating is multiplied against the other's defence and goaltending ratings and the league scoring rate, then the lineup, rest, referee and form steps adjust it. The two numbers are the means of two Poisson-like distributions, from which the chance of each exact score, the over and under, and the puck line cover are read.",
+      formula: "λ_home = league_rate × attack_home × defence_away × goaltending_away × e^home_ice × adjustments",
+      sure: "Sure to within about a quarter of a goal on a given night, which sounds small and is enough to turn a lean into a pass. The projected total is more trustworthy than either side's share of it." },
+    { id: "win", updated: "2026-10-26", title: "Win %", def: "The chance each team wins the game in any fashion, including overtime and the shootout.",
+      build: "The regulation outcome comes from the two projected-goal distributions: home win, away win or tie after sixty minutes. Ties are split by a 3-on-3 and shootout model that leans toward even and slightly toward the better team. The game page lists the three steps that moved this number most, in plain words.",
+      formula: "p_win = P(reg win) + P(tie) × P(win OT or SO)",
+      sure: "The ranges on the Track record page are the honest answer. So far, games we rate in the high fifties land in the high fifties. Beyond 70% the sample is too small to say." },
+    { id: "fair", updated: "2026-09-29", title: "Fair price", def: "Our win chance written as an American price with no bookmaker margin.",
+      build: "A probability above 50% becomes a negative number (the stake needed to win 100); below 50% a positive one (the win on a 100 stake). The fair price is what the market would charge if it agreed with us exactly and took no cut. It is a translation of the win chance, not an extra opinion.",
+      formula: "p ≥ 0.5:  −100 × p / (1 − p)\np < 0.5:  +100 × (1 − p) / p",
+      sure: "Exactly as sure as the win chance it comes from. No more." },
+    { id: "edge", updated: "2026-09-29", title: "Edge %", def: "How much better our chance is than the chance implied by the best price on the board, after the margin is removed.",
+      build: "The best available price on each side is converted to an implied probability, the bookmaker's margin is stripped by scaling both sides to sum to one, and our probability is compared with the result. A positive edge means we think the side wins more often than the price says. It is reported in points of probability.",
+      formula: "edge = p_model − p_market(no vig)",
+      sure: "Not sure at all that a positive edge means profit. Two seasons of real prices show no demonstrated edge for any market. The number is published because it is the honest basis for the pick, not because it has paid." },
+    { id: "bet-lean", updated: "2026-10-26", title: "Best bet vs lean", def: "A best bet clears the edge bar on an allowed market. A lean has a positive edge that does not.",
+      build: "Each market has a bar, set from the back-test at the point where picks above it at least broke even after the margin. Clear it on a market open for selection and the pick is a best bet, shown solid. Positive but under it, or on a market not open for selection, and it is a lean, shown dashed. When nothing is positive the game reads 'nothing clears the bar'. A game with no price at all reads 'not priced', which is not a pass: nothing was judged.",
+      formula: "",
+      sure: "The bars are fitted on past seasons and will drift. A lean is shown so the reasoning is visible, not as a weaker recommendation to act on." },
+    { id: "graded", updated: "2026-10-09", title: "How picks are graded", def: "Every pick is frozen at publication and settled the morning after against the final score.",
+      build: "Moneylines settle on the final including overtime and shootout. Puck lines settle on the final margin; a total on the final combined score, with a push when it lands on the number. A pick is void if the game is postponed or a listed starter is scratched after the board froze. Results carries the season win–loss record per market; the Track record page carries calibration. Return on the forward test is sealed until April 2027 and appears nowhere on the site before then.",
+      formula: "",
+      sure: "Fully sure. Grading is mechanical and the frozen boards are in the archive, so any grade can be checked." },
+  ];
+  static CHANGELOG = [
+    { date: "2026-10-26", what: "Game pages, Track record and Methods published.", see: "A game page behind every game card: our call in plain words, the main reasons, the goalies and the odds. Calibration by bucket on Track record." },
+    { date: "2026-10-20", what: "Defensive player ratings from the NHL shift charts added to the lineup step.", see: "Lineup steps now move for scratched or returning defencemen, not only forwards. Ten best and worst listed above." },
+    { date: "2026-10-20", what: "Starting goalies read from Daily Faceoff with a Confirmed / Projected tag.", see: "Goalie names under each team on the board; the goalie step in the waterfall." },
+    { date: "2026-10-09", what: "Due List tracked at 0.25 units per priced entry.", see: "A record and units line on the Due List. Still not model bets." },
+    { date: "2026-09-29", what: "Opening-night board. Regular-season pricing switched on.", see: "Prices, fair prices and picks on every game. Exhibition slates were schedule only." },
+  ];
+  onSite() { return /(^|\.)maverickhightower\.com$/.test(location.hostname); }
+  async load() {
+    const want = this.props.scenario || "";
+    if (this.state.loadedFor === want) return;
+    this.setState({ loadedFor: want });
+    const S = await import("./lib/sports.js");
+    const { deployed } = await S.detectSport("nhl");
+    const scenario = this.onSite() ? "Normal" : this.props.scenario || "Sample ratings";
+    const live = this.onSite() || scenario === "Normal"; void deployed;
+    const url = live ? "./data/ratings.json" : scenario === "Shift charts not cached" ? "./data/sample/ratings_nodef.json" : "./data/sample/ratings.json";
+    const get = async (u) => { try { const r = await fetch(u, { cache: "no-store" }); return r.ok ? await r.json() : null; } catch (_) { return null; } };
+    const [data, board] = await Promise.all([get(url), get(live ? "./data/board.json" : "./data/sample/board_game.json")]);
+    const TEAM_COLORS = { ANA: "#F47A38", BOS: "#FFB81C", BUF: "#003087", CAR: "#CC0000", CBJ: "#002654", CGY: "#C8102E", CHI: "#CF0A2C", COL: "#6F263D", DAL: "#006847", DET: "#CE1126", EDM: "#FF4C00", FLA: "#C8102E", LAK: "#111111", MIN: "#154734", MTL: "#AF1E2D", NJD: "#CE1126", NSH: "#FFB81C", NYI: "#00539B", NYR: "#0038A8", OTT: "#C52032", PHI: "#F74902", PIT: "#FCB514", SEA: "#99D9D9", SJS: "#006D75", STL: "#002F87", TBL: "#002868", TOR: "#00205B", UTA: "#6CACE4", VAN: "#00205B", VGK: "#B4975A", WPG: "#041E42", WSH: "#C8102E" };
+    this.colors = TEAM_COLORS;
+    this.setState({ data, board, isSample: !live });
+  }
+  componentDidMount() {
+    this.mq = matchMedia("(min-width: 900px)");
+    this.onMq = () => this.setState({ wide: this.mq.matches });
+    this.mq.addEventListener("change", this.onMq); this.onMq();
+    // Arriving on a hash opens that entry on mobile too.
+    this.onHash = () => { const h = location.hash.replace("#", ""); this.setState((s) => ({ hash: h, open: h ? { ...s.open, [h]: true } : s.open })); };
+    addEventListener("hashchange", this.onHash); this.onHash();
+    // Scroll-spy: the section whose top is nearest above the sticky offset is current.
+    this.onScroll = () => { if (this.raf) return; this.raf = requestAnimationFrame(() => { this.raf = 0;
+      const ids = ["ratings", "defence-ratings", ...this.constructor.ENTRIES.map((e) => e.id), "changelog"];
+      let cur = ids[0];
+      for (const id of ids) { const el = document.getElementById(id); if (el && el.getBoundingClientRect().top <= 130) cur = id; }
+      if (cur !== this.state.hash) this.setState({ hash: cur }); }); };
+    // Capture phase: the scroller may be <body> rather than the window.
+    document.addEventListener("scroll", this.onScroll, { capture: true, passive: true });
+    this.load().then(() => this.onScroll());
+  }
+  componentWillUnmount() { if (this.mq) this.mq.removeEventListener("change", this.onMq); removeEventListener("hashchange", this.onHash); document.removeEventListener("scroll", this.onScroll, { capture: true }); }
+  toggle(id) { this.setState((s) => ({ open: { ...s.open, [id]: !s.open[id] } })); }
+  componentDidUpdate() { this.load(); }
+  sortBy(k) { this.setState((s) => ({ sortKey: k, dir: s.sortKey === k ? -s.dir : (k === "defence" || k === "goaltending" || k === "formDefence" || k === "name" ? 1 : -1) })); }
+  renderVals() {
+    const C = this.constructor, d = this.state.data, wide = this.state.wide;
+    const tabs = [["Tonight", "Board.dc.html"], ["Props", "Board.dc.html#props"], ["Results", "Results.dc.html"], ["Season", "Season.dc.html"], ["Record", "Record.dc.html"], ["Archive", "Archive.dc.html"]].map(([label, href]) => ({ label, href }));
+    const hash = this.state.hash;
+    const tocItems = [{ id: "ratings", label: "Team ratings", indent: "0" }, { id: "defence-ratings", label: "Defensive ratings", indent: "0" }, ...C.ENTRIES.map((e, i) => ({ id: e.id, label: `${i + 1}. ${e.title}`, indent: "0" })), { id: "changelog", label: "Changelog", indent: "0" }];
+    const toc = tocItems.map((t) => ({ ...t, href: `#${t.id}`, color: hash === t.id ? "var(--ink)" : "var(--mute)" }));
+    const onJump = (e) => { const id = e.target.value; if (location.hash === `#${id}`) this.onHash(); else location.hash = id; };
+    // On phones the definition stays visible and the long parts fold; on desktop everything is open.
+    const entries = C.ENTRIES.map((e, i) => { const isOpen = wide || !!this.state.open[e.id]; return { ...e, n: String(i + 1).padStart(2, "0"), hid: `${e.id}-h`, bodyId: `${e.id}-body`, open: isOpen, collapsed: !isOpen, canCollapse: !wide && isOpen, onToggle: () => this.toggle(e.id) }; });
+    const base = { tabs, toc, onJump, jumpValue: hash || "ratings", entries, changelog: C.CHANGELOG, wide, narrow: !wide, cols: wide ? "220px minmax(0,1fr)" : "minmax(0,1fr)", isSample: !!this.state.isSample };
+    if (!d) return { ...base, through: "", noTeams: false, hasTeams: false, hasTonight: false, filters: [], noDef: false, hasDef: false, defStamp: "", cols7: [], teamRows: [], defLists: [] };
+
+    const teams = (d.teams || []).map((t) => ({ ...t, net: (t.attack || 0) - (t.defence || 0) }));
+    const keys = [["name", "Team", "left"], ["attack", "Attack", "right"], ["defence", "Defence", "right"], ["net", "Net", "right"], ["goaltending", "Goalt.", "right"], ["formAttack", "Form att", "right"], ["formDefence", "Form def", "right"], ["homeIce", "Home ice", "right"]];
+    const sk = this.state.sortKey, dir = this.state.dir;
+    const cols7 = keys.map(([k, label, align]) => ({ label, align, sort: sk === k ? (dir > 0 ? "ascending" : "descending") : "none", arrow: sk === k ? (dir > 0 ? " ↑" : " ↓") : "", color: sk === k ? "var(--ink)" : "var(--mute)", pos: k === "name" ? "sticky" : "static", onClick: () => this.sortBy(k) }));
+    // Tonight's games, for the filter chip and the per-team link.
+    const tonightBy = {};
+    for (const g of ((this.state.board || {}).games || [])) { if (!g.home || !g.away) continue; const lbl = `${g.away.abbr} @ ${g.home.abbr}`; tonightBy[g.home.abbr] = { id: g.id, label: lbl, vs: `v ${g.away.abbr}` }; tonightBy[g.away.abbr] = { id: g.id, label: lbl, vs: `@ ${g.home.abbr}` }; }
+    const hasTonight = Object.keys(tonightBy).length > 0, tOnly = hasTonight && this.state.tonightOnly;
+    const filters = [{ label: "All 32", on: !tOnly, v: false }, { label: `Tonight · ${Object.keys(tonightBy).length}`, on: tOnly, v: true }].map((f) => ({ label: f.label, pressed: f.on ? "true" : "false", bg: f.on ? "var(--ink)" : "transparent", fg: f.on ? "var(--paper)" : "var(--ink)", onClick: () => this.setState({ tonightOnly: f.v }) }));
+    const sorted = teams.filter((t) => !tOnly || tonightBy[t.abbr]).slice().sort((x, y) => (sk === "name" ? x.name.localeCompare(y.name) * dir : ((x[sk] || 0) - (y[sk] || 0)) * dir));
+    const f2 = (v) => (typeof v === "number" ? v.toFixed(2) : "—"), fs = (v) => (typeof v === "number" ? (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v).toFixed(2) : "—"), fp = (v) => (typeof v === "number" ? `${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v * 100).toFixed(1)}%` : "—");
+    const good = (v, lowerBetter) => (typeof v !== "number" ? "var(--mute)" : (lowerBetter ? v < 0.97 : v > 1.03) ? "var(--ink)" : (lowerBetter ? v > 1.03 : v < 0.97) ? "var(--mute)" : "var(--ink-2)");
+    const teamRows = sorted.map((t) => ({ abbr: t.abbr, name: t.name, color: (this.colors || {})[t.abbr] || "var(--rule)",
+      gameHref: tonightBy[t.abbr] ? `Game.dc.html?id=${encodeURIComponent(tonightBy[t.abbr].id)}` : "", gameLabel: tonightBy[t.abbr] ? tonightBy[t.abbr].vs : "", gameTitle: tonightBy[t.abbr] ? `Tonight: ${tonightBy[t.abbr].label}. Open the game page.` : "", cells: [
+      { v: f2(t.attack), weight: sk === "attack" ? 600 : 400, color: good(t.attack, false) }, { v: f2(t.defence), weight: sk === "defence" ? 600 : 400, color: good(t.defence, true) },
+      { v: fs(t.net), weight: sk === "net" ? 600 : 400, color: t.net > 0.03 ? "var(--ink)" : t.net < -0.03 ? "var(--mute)" : "var(--ink-2)" }, { v: f2(t.goaltending), weight: sk === "goaltending" ? 600 : 400, color: good(t.goaltending, true) },
+      { v: f2(t.formAttack), weight: sk === "formAttack" ? 600 : 400, color: good(t.formAttack, false) }, { v: f2(t.formDefence), weight: sk === "formDefence" ? 600 : 400, color: good(t.formDefence, true) },
+      { v: fp(t.homeIce), weight: sk === "homeIce" ? 600 : 400, color: "var(--ink-2)" }] }));
+    const def = d.defence, hasDef = !!(def && Array.isArray(def.best) && def.best.length);
+    const defRow = (r, i) => ({ rank: String(i + 1), player: r.player, team: r.team, value: typeof r.goalsPrevented === "number" ? `${r.goalsPrevented > 0 ? "+" : r.goalsPrevented < 0 ? "−" : ""}${Math.abs(r.goalsPrevented).toFixed(3)}` : "—" });
+    const defLists = hasDef ? [{ title: "Prevent the most", rows: def.best.map(defRow) }, { title: "Allow the most", rows: (def.worst || []).map(defRow) }] : [];
+    return { ...base, through: d.through ? `Through ${d.through}` : "", noTeams: !teams.length, hasTeams: teams.length > 0, cols7, teamRows, hasTonight, filters,
+      hasDef, noDef: !hasDef, defStamp: hasDef ? `${def.rated} skaters rated · ${def.games} games of shift charts` : "", defLists };
+  }
+}
+</script>
+</body>
+</html>

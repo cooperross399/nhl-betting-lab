@@ -295,7 +295,7 @@ Every entry on a frozen board's Due List is graded, whether or not it had a pric
 
 ## Additions (game pages, track record, methods — 2026-10-26)
 
-NHL only, read by three plain pages (`Game.html`, `Record.html`, `Methods.html`, sharing `lib/page.js` and
+NHL only, read by three plain pages (`Game.dc.html`, `Record.dc.html`, `Methods.dc.html`; `Tracker.html` shares `lib/page.js` and
 `lib/page.css`); the shared `.dc.html` pages link to them from the NHL tabs and from each game card.
 
 board.json, per regular-season game:
@@ -315,11 +315,19 @@ interval}], brier{games, model, market} | null, movement{toward, against, flat, 
 today with a published `winProb`, against finals from the NHL schedule endpoint (`schedule_for`), kept once a night is
 all final under `history/finals/<day>.json`. `brier.market` is the frozen board's no-vig moneyline. `movement` reads
 `history/lines/<day>.json` (the board's own published prices): whether a moneyline pick's home price at the day's last
-build moved toward the picked side. Accuracy only; never a return.
+build moved toward the picked side. Accuracy only; never a return. With nothing settled (opening day) `buckets` is
+`[]` and `brier` null.
 
 `data/ratings.json` (`ratings_page`): `{generatedAt, through, teams[{abbr, name, attack, defence, formAttack,
 formDefence, homeIce, goaltending}], unseenGoalie, defence{best[], worst[], rated, games}}`, the defence rows
-`{player, team, goalsPrevented}` from the ratings file's `skater_defence`, named from the player logs.
+`{player, team, goalsPrevented}` from the ratings file's `skater_defence`, named from the player logs. `defence` is
+null until a skater is rated (no shift charts cached). Neither file carries a return, a unit, a profit or a stake
+(`tests/test_record_json_has_no_return.py`).
+
+results.json, per settled game: `final {away, home, finish: "REG"|"OT"|"SO", pickResult: win|loss|push|void|null}`,
+for the game page's "After the game" (`Game.dc.html?id=&date=`). Because that page opens a past game from the
+archive, the same finals are kept as `history/graded/<day>.json` (`{game id: final}`, `stamp_finals`). The frozen board
+under `history/<day>.json` is never rewritten.
 
 ## tracker.json (results tracker, Tracker.html — 2026-10-26)
 

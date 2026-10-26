@@ -38,7 +38,7 @@ STEPS = (
     ("lineup", "Tonight's lineup"),
     ("goalies", "Tonight's goalies"),
     ("referees", "Referee crew"),
-    ("posthockey", "PostHockey blend"),
+    ("posthockey", "Second-opinion blend"),
 )
 
 

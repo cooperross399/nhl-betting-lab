@@ -134,7 +134,7 @@ function render() {
     ${highlights(rows)}${views}${log(rows)}`
     : `<p class="lede">No bet has been graded yet. The first ones appear the morning after the first night settles.</p>`}
     <div class="callout"><b>How to read this</b><br>Team picks and player props are the card's best bets at the card's stake${T && T.teamPickDefaultUnits ? `; a team pick posted before the board recorded its stake counts at ${T.teamPickDefaultUnits}u (marked *)` : ""}. The Due List is tracked as if ${T ? T.dueStake : 0.25}u were bet on every priced entry; nothing is bet. Leans, voids and unpriced entries are not counted. Grey rows have fewer than ${THIN} bets: too few to say a team or player is really treating us right or wrong.</div>
-    <footer class="note"><a href="Archive.dc.html">Every night's board →</a> · <a href="Results.dc.html">Last night →</a> · <a href="Methods.html#grading">How picks are graded →</a> · This site recommends; it never places a bet.</footer></main>`;
+    <footer class="note"><a href="Archive.dc.html">Every night's board →</a> · <a href="Results.dc.html">Last night →</a> · <a href="Methods.dc.html#graded">How picks are graded →</a> · This site recommends; it never places a bet.</footer></main>`;
 }
 
 root.addEventListener("click", (e) => {

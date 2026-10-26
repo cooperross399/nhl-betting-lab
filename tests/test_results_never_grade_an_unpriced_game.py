@@ -143,6 +143,11 @@ def test_a_priced_game_with_no_pick_is_a_pass_and_a_pick_is_still_graded(
     }
     assert rows["NYI"]["pick"] is None and rows["NYI"]["priced"] is True, rows["NYI"]
     assert results["summary"]["picks"] == {"w": 1, "l": 0, "p": 0}
+    # The game page's "After the game" block: the final, and the pick's grade.
+    tor_final = rows["TOR"]["final"]
+    assert (tor_final["home"], tor_final["away"]) == (rows["TOR"]["home"]["final"], rows["TOR"]["away"]["final"])
+    assert tor_final["finish"] in {"REG", "OT", "SO"} and tor_final["pickResult"] == "win"
+    assert rows["NYI"]["final"]["pickResult"] is None
 
     shown = _by_home(page["games"], lambda g: g["sides"][1]["abbr"])
     tor = shown["TOR"]["pick"]
@@ -221,3 +226,23 @@ def test_a_results_row_that_does_not_say_it_was_priced_is_never_a_pass(
 
     assert "No play" not in _shown(game), _shown(game)
     _assert_not_graded(game)
+
+
+def test_the_settled_final_is_kept_beside_the_frozen_board(tmp_path) -> None:
+    """The game page opens a past game from the archive, so its final is kept
+    under history/graded/, and the frozen board is never rewritten."""
+    import json as _json
+    from datetime import date as _date
+
+    from test_site_never_calls_an_unpriced_game_a_pass import site_module
+
+    module = site_module()
+    frozen = tmp_path / "2026-10-20.json"
+    frozen.write_text(_json.dumps({"games": [{"id": "1"}, {"id": "2"}]}), encoding="utf-8")
+    before = frozen.read_bytes()
+    final = {"away": 2, "home": 4, "finish": "REG", "pickResult": "win"}
+    assert module.stamp_finals(tmp_path, _date(2026, 10, 20), {"games": [{"id": "1", "final": final}]})
+    assert frozen.read_bytes() == before
+    assert _json.loads((tmp_path / "graded" / "2026-10-20.json").read_text(encoding="utf-8")) == {"1": final}
+    assert not module.stamp_finals(tmp_path, _date(2026, 10, 20), {"games": [{"id": "1", "final": final}]})
+    assert not module.stamp_finals(tmp_path, _date(2026, 10, 21), {"games": [{"id": "1", "final": final}]})

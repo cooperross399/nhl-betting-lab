@@ -2902,7 +2902,8 @@ Re-derive rather than trust if the data has moved.
   against the frozen no-vig market, and line movement after moneyline picks
   from the board's own line series; accuracy only, never a return) and
   `ratings.json` (team table, top and bottom defenders). New NHL-only pages
-  `Game.html`, `Record.html`, `Methods.html` (`web/SCHEMA.md`).
+  `Game.dc.html`, `Record.dc.html`, `Methods.dc.html` (`web/SCHEMA.md`;
+  the design drop of 2026-10-26 replaced the first drafts).
 
 - **2026-10-26: one results page (Cooper: "transform the archive results
   pages into one big page of all our results and tracking for each

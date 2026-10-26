@@ -125,7 +125,7 @@ def test_the_record_is_calibration_and_movement_and_no_return(tmp_path) -> None:
     assert module.track_record(date(2026, 10, 20), history)["games"] == 0
 
 
-@pytest.mark.parametrize("page", ["Game.html", "Record.html", "Methods.html", "Tracker.html"])
+@pytest.mark.parametrize("page", ["Tracker.html"])
 def test_each_new_page_parses(page, tmp_path) -> None:
     node = shutil.which("node")
     assert node, "node is not on PATH; the pages' scripts are parsed with it"
