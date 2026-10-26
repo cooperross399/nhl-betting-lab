@@ -24,6 +24,12 @@ before the card. This reads the latest capture per club and gives the card:
   missing star takes attack off; a star back from injury puts it back on.
   (Until 2026-10-25 this was the share of recent points held by regulars
   out tonight, which could only ever take attack off.)
+* **the dressed lineup's defence** (Cooper, 2026-10-26, the defensive half
+  of PostHockey's Net Rating): every skater's goals prevented a game from his
+  on-ice 5v5 xG against relative to his teammates (`shadow.defence`, read
+  from the ratings file, never imported), and a club's defence moves by half
+  the goals tonight's sheet prevents beyond its usual eighteen's, between
+  `MIN_DEFENCE_FACTOR` and `MAX_DEFENCE_FACTOR`.
 
 Nothing here is measured against prices: the lines have no history before
 the capture began (2026-09-29), so this ships on Cooper's word and is
@@ -34,6 +40,7 @@ fewer than `MINIMUM_LISTED` skaters is treated as not posted.
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -59,6 +66,17 @@ SHARE_GAMES = 20
 MIN_ATTACK_FACTOR = 0.85
 MAX_ATTACK_FACTOR = 1.10
 HOLE_WEIGHT = 0.5
+
+#: The defensive half (Cooper, 2026-10-26: PostHockey's Net Rating has one).
+#: Each skater's goals prevented a game, from his on-ice xG against relative
+#: to his team at 5v5 (`shadow.defence`, published in the ratings file as
+#: `skater_defence`); a club's defence moves by `HOLE_WEIGHT` of the goals
+#: tonight's sheet prevents beyond its usual eighteen's, as a share of
+#: `LEAGUE_GOALS_PER_GAME`, between these bounds.
+RATINGS_FILE = "shadow_team_ratings.json"
+LEAGUE_GOALS_PER_GAME = 3.0
+MIN_DEFENCE_FACTOR = 0.90
+MAX_DEFENCE_FACTOR = 1.10
 
 #: A skater's offensive game score per game: Luszczyszyn's offensive weights,
 #: as PostHockey's Net Rating uses them. The logs do not split primary from
@@ -97,6 +115,8 @@ class TonightLineups:
     role_minutes: RoleMinutes | None = None
     #: club -> attack multiplier from tonight's absences
     attack_factors: dict[str, float] = field(default_factory=dict)
+    #: club -> defence (goals against) multiplier from tonight's sheet
+    defence_factors: dict[str, float] = field(default_factory=dict)
     #: club -> names of recent regulars not in tonight's lines
     absent: dict[str, list[str]] = field(default_factory=dict)
     #: "Player (TEAM)" for each priced prop the card withheld because his
@@ -367,6 +387,60 @@ def _lineup_attack(
     return factors, absent
 
 
+def load_skater_defence(processed_dir: Path) -> dict[str, float]:
+    """{NHL id: goals prevented a game} from the ratings file; empty without it."""
+    try:
+        ratings = json.loads((Path(processed_dir) / RATINGS_FILE).read_text(encoding="utf-8"))
+        return {str(k): float(v) for k, v in (ratings.get("skater_defence") or {}).items()}
+    except (OSError, ValueError, TypeError, AttributeError):
+        return {}
+
+
+def _lineup_defence(
+    logs: pd.DataFrame,
+    roles: dict[str, dict[str, tuple[str, str]]],
+    sheets: dict[str, list[tuple[str, str]]],
+    day: str,
+    impacts: dict[str, float],
+) -> dict[str, float]:
+    """Each posted club's defence factor from its dressed skaters' defence.
+
+    A skater with no defensive rating counts as zero (a league-average
+    defender relative to his teammates), as does every skater in the usual
+    eighteen without one, so a club with no rated skaters moves nothing.
+    """
+    factors: dict[str, float] = {}
+    if logs is None or logs.empty or not impacts:
+        return factors
+    skaters = logs[(logs["role"].astype(str) == "skater") & (logs["date"].astype(str).str[:10] < day)]
+    id_of: dict[str, str] = {}
+    for name, pid in skaters[["player", "player_id"]].drop_duplicates("player_id").itertuples(index=False):
+        for alias in _aliases(name):
+            id_of[alias] = str(int(pid)) if pd.notna(pid) else ""
+
+    def impact(name: object) -> float:
+        for alias in _aliases(name):
+            pid = id_of.get(alias)
+            if pid and pid in impacts:
+                return impacts[pid]
+        return 0.0
+
+    for team in roles:
+        rows = skaters[skaters["team"].astype(str) == team]
+        games = rows[["game_id", "date"]].drop_duplicates("game_id").sort_values("date")["game_id"].tolist()
+        recent = rows[rows["game_id"].isin(games[-SHARE_GAMES:])]
+        sheet = sheets.get(team, [])
+        if recent.empty or not sheet:
+            continue
+        usual = recent.groupby("player")["game_id"].nunique().sort_values(ascending=False).head(18)
+        usual_mean = sum(impact(name) for name in usual.index) / len(usual)
+        tonight_mean = sum(impact(name) for name, _ in sheet) / len(sheet)
+        prevented = (tonight_mean - usual_mean) * 18
+        factor = 1.0 - HOLE_WEIGHT * prevented / LEAGUE_GOALS_PER_GAME
+        factors[team] = min(MAX_DEFENCE_FACTOR, max(MIN_DEFENCE_FACTOR, factor))
+    return factors
+
+
 def tonight_lineups(
     processed_dir: Path, day: str, logs: pd.DataFrame, birth_dates: dict[int, str] | None = None
 ) -> TonightLineups:
@@ -401,4 +475,7 @@ def tonight_lineups(
             lineups.injured[team] = set(hurt.astype(str))
     lineups.role_minutes = _fit_roles(logs, day)
     lineups.attack_factors, lineups.absent = _lineup_attack(logs, lineups.roles, sheets, day, birth_dates)
+    lineups.defence_factors = _lineup_defence(
+        logs, lineups.roles, sheets, day, load_skater_defence(processed_dir)
+    )
     return lineups

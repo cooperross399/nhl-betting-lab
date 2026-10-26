@@ -30,6 +30,9 @@ ALLOWED = {
     PROJECT_ROOT / "scripts" / "buy_new_market_prices.py",
     PROJECT_ROOT / "scripts" / "capture_new_market_prices.py",
     PROJECT_ROOT / "scripts" / "run_new_market_backtest.py",
+    # 2026-10-26: caches the NHL's shift charts as raw JSON. The card reads
+    # only the ratings file run_shadow_stats.py derives from them.
+    PROJECT_ROOT / "scripts" / "fetch_shift_charts.py",
 }
 
 

@@ -706,6 +706,14 @@ def main(argv: list[str] | None = None) -> int:
                 team_model.teams[club] = dataclasses.replace(rate, attack=rate.attack * factor)
                 out = ", ".join(lineups.absent.get(club, [])) or "nobody usual"
                 print(f"{club}: attack x{factor:.3f} for tonight's lineup ({out} out).")
+            # The defensive half (2026-10-26): each dressed skater's on-ice xG
+            # against relative to his team, from the shift charts.
+            for club, factor in sorted(lineups.defence_factors.items()):
+                rate = team_model.teams.get(club)
+                if rate is None or factor == 1.0:
+                    continue
+                team_model.teams[club] = dataclasses.replace(rate, defence=rate.defence * factor)
+                print(f"{club}: defence x{factor:.3f} for tonight's lineup.")
             # Tonight's listed starter in place of the team's goalies
             # together (Cooper, 2026-10-25), from Daily Faceoff's listing.
             for line in apply_starters(
