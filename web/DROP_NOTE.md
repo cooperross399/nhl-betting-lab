@@ -54,3 +54,5 @@ Off the domain the pages load the fixtures; on `*.maverickhightower.com` they al
 - New `web/Tracker.dc.html` reads `data/tracker.json` (shape: the Tracker design brief; the page recomputes every split from `rows`). Fixtures `web/data/sample/tracker.json`, `tracker_empty.json`.
 - Owner's call 2026-10-26: units, records and return for every graded best bet are published. Supersedes the 2026-10-05 seal. The Record page's sealed-hash block is removed; Record and Methods wording now points at All results.
 - NHL tab bar is now Tonight · Props · Results · Season · Record · Tracker on every page (Board, Results, Archive, Graphic, Game, Record, Methods). Archive stays reachable from the Tracker's "How to read this" and the Archive page itself. EPL/CBB keep their Archive tab.
+
+<!-- Test drop 2026-10-26: no feed change needed. -->
