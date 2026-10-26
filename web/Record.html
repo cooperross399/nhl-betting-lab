@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Track record — Maverick Hightower</title>
+<meta name="description" content="How the published win chances have held up against the final scores, and which way the market moved after each pick.">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./lib/page.css">
+<meta name="theme-color" content="#14151a">
+</head>
+<body>
+<div class="wrap" id="root"><noscript>This page needs JavaScript to read the record.</noscript></div>
+<script type="module">
+import { chrome, esc, pct, getJSON } from "./lib/page.js";
+
+const root = document.getElementById("root");
+
+function chart(buckets) {
+  // Predicted (x) against actual (y), 50% to 100%, with each bucket's 95% range.
+  const W = 320, H = 320, P = 36, x = (p) => P + ((p - 0.5) / 0.5) * (W - 2 * P), y = (p) => H - P - ((p - 0.5) / 0.5) * (H - 2 * P);
+  const pts = buckets.filter((b) => b.games > 0 && b.predicted != null).map((b) => {
+    const lo = b.interval ? Math.max(0.5, b.interval[0]) : b.actual, hi = b.interval ? Math.min(1, b.interval[1]) : b.actual;
+    return `<line x1="${x(b.predicted)}" x2="${x(b.predicted)}" y1="${y(lo)}" y2="${y(hi)}" stroke="var(--mute)" stroke-width="2"/>
+      <circle cx="${x(b.predicted)}" cy="${y(Math.max(0.5, b.actual))}" r="${Math.min(10, 3 + Math.sqrt(b.games))}" fill="var(--ink)"><title>${pct(b.predicted)} predicted, ${pct(b.actual)} won, ${b.games} games</title></circle>`;
+  }).join("");
+  const ticks = [0.5, 0.6, 0.7, 0.8, 0.9, 1].map((t) => `<text x="${x(t)}" y="${H - 12}" font-size="10" fill="var(--mute)" text-anchor="middle">${t * 100}%</text><text x="10" y="${y(t) + 3}" font-size="10" fill="var(--mute)">${t * 100}%</text>`).join("");
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:420px" role="img" aria-label="Predicted against actual win rate">
+    <rect x="${P}" y="${P}" width="${W - 2 * P}" height="${H - 2 * P}" fill="none" stroke="var(--rule)"/>
+    <line x1="${x(0.5)}" y1="${y(0.5)}" x2="${x(1)}" y2="${y(1)}" stroke="var(--mute-2)" stroke-dasharray="4 4"/>${ticks}${pts}</svg>`;
+}
+
+async function main() {
+  const r = await getJSON("./data/record.json");
+  let body;
+  if (!r || !r.games) {
+    body = `<p class="lede">No regular-season night has settled with a published win chance yet. The first one appears the morning after.</p>`;
+  } else {
+    const rows = r.buckets.map((b) => `<tr><td>${pct(b.low)}–${b.high >= 1 ? "100%" : pct(b.high)}</td><td class="n">${b.games}</td><td class="n">${pct(b.predicted, 1)}</td><td class="n">${pct(b.actual, 1)}</td><td class="n">${b.interval ? `${pct(b.interval[0])}–${pct(b.interval[1])}` : "—"}</td></tr>`).join("");
+    const br = r.brier;
+    const brier = br ? `<p>On the ${br.games} games that had a market price when the board was published, the model's Brier score is <b class="mono">${br.model}</b> against the market's <b class="mono">${br.market}</b> (lower is better; a coin flip scores 0.25). ${br.model < br.market ? "The model has been the sharper forecaster so far." : br.model > br.market ? "The market has been the sharper forecaster so far." : "They are level."} With this few games, neither difference is a demonstrated edge.</p>` : "";
+    const m = r.movement || {};
+    const move = m.picks ? `<p>Of ${m.picks} moneyline picks with a later price on the board, the market moved <b>toward</b> our side on ${m.toward}, <b>against</b> it on ${m.against}, and stayed within half a point on ${m.flat}. When sharp money follows a pick, the line tends to move toward it.</p>` : `<p class="note">No moneyline pick has a later price on the board yet.</p>`;
+    body = `<p class="lede">${r.games} games over ${r.nights} nights. When the board said a team was a 60% favourite, did it win about 60% of the time?</p>
+      <h2>Calibration</h2><div class="grid2"><div>${chart(r.buckets)}<p class="note">Dot: how often the favoured side won, sized by games. Line through it: the 95% range. Dashed line: perfect calibration.</p></div>
+      <div class="scroll"><table><thead><tr><th>Favourite's chance</th><th class="n">Games</th><th class="n">Predicted</th><th class="n">Won</th><th class="n">95% range</th></tr></thead><tbody>${rows}</tbody></table></div></div>
+      <div class="callout"><b>How sure are we</b><br>A bucket with fewer than about 100 games has a range wider than 20 points. A predicted rate inside the range is consistent with good calibration, not proof of it.</div>
+      <h2>Model against the market</h2>${brier}
+      <h2>Did the market follow?</h2>${move}`;
+  }
+  root.innerHTML = chrome("Record") + `<main id="main"><div class="kicker">Track record</div><h1>How it's held up.</h1>${body}
+    <footer class="note">Accuracy only. The forward test's return stays sealed until its decision date. Pick win-loss records are on <a href="Results.dc.html">Results</a>. <a href="Methods.html#grading">How picks are graded →</a></footer></main>`;
+}
+main();
+</script>
+</body>
+</html>

@@ -331,6 +331,10 @@ class GamedayCard:
     #: `models.team_ratings`), "goals" (the ratings file was missing or
     #: stale, a degraded run), or "" when no team model was fitted.
     team_ratings: str = ""
+    #: Each priced game's home win chance layer by layer
+    #: (`factor_breakdown.slate_breakdowns`), for the public game pages. A
+    #: description of the team model, never a selection or a stake.
+    team_factors: list[dict[str, Any]] = field(default_factory=list)
     #: Cooper's Due List (2026-10-07): an UNSTAKED list he picks from.
     #: `drought_built` tells a card that built the list (possibly empty) from
     #: one that never asked, which renders no section. Nothing here is a best

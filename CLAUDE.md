@@ -2889,6 +2889,21 @@ Re-derive rather than trust if the data has moved.
   No age curve (no defensive history long enough to fit one). Not measured
   against prices; constants are this lab's choice.
 
+- **2026-10-26: game pages, a track record and a methods page on the site
+  (Cooper: "Make it perfect like Post Hockey").** Site only, plus one
+  descriptive field on the card: `gameday_card.json` carries `team_factors`,
+  each priced game's home win chance repriced layer by layer in the card's
+  own order (`factor_breakdown.slate_breakdowns`: strength with form divided
+  out, home ice, form, rest, lineup, goalies, referees, PostHockey), ending
+  at the card's moneyline before line movement. It reads the model and
+  changes no price, selection, stake, snapshot or ledger row. The site
+  publishes it as `games[].factors` with each side's ratings, and writes
+  `record.json` (calibration of published win chances against finals, Brier
+  against the frozen no-vig market, and line movement after moneyline picks
+  from the board's own line series; accuracy only, never a return) and
+  `ratings.json` (team table, top and bottom defenders). New NHL-only pages
+  `Game.html`, `Record.html`, `Methods.html` (`web/SCHEMA.md`).
+
 ## Contract strings — never change these
 
 Cooper's local scheduled tasks hard-code these. Renaming any of them silently
