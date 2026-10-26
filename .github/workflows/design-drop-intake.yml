@@ -54,6 +54,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: main
+          fetch-depth: 0
           token: ${{ secrets.DESIGN_DROP_TOKEN || github.token }}
 
       - uses: actions/setup-python@v5
@@ -88,6 +89,13 @@ jobs:
           if git diff --cached --quiet; then
             echo "The zip's pages already match main: nothing to drop."
             exit 0
+          fi
+          # A drop built on an old copy of a page would undo what changed
+          # since; refuse it rather than open a pull request that merges itself.
+          changed=$(git diff --cached --name-only)
+          if ! python scripts/design_drop.py stale $changed; then
+            echo "::error::This drop was built on old copies of the pages above. Ask Claude Design to rebuild them from main's current files and republish."
+            exit 1
           fi
           git config user.name "design-drop[bot]"
           git config user.email "design-drop@users.noreply.github.com"
