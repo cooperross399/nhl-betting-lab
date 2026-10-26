@@ -1,0 +1,258 @@
+name: Design Drop
+
+# Pages designed in Claude Design reach every site with no manual step.
+#
+# Claude Design pushes page files to a branch named design/<date>-<slug> and
+# opens a pull request against main. Design Drop Guard holds the branch to page
+# files. Then this workflow:
+#
+# 1. pin: when the branch changes a page, library or logo that every lab
+#    shares, commits it to cooperross399/betting-lab-shared under the next tag
+#    (v2, v3, ...; tags never move) and pushes the re-pinned
+#    web/shared.lock.json to the design branch, so the suite compares the
+#    copies with the tag that holds them.
+# 2. merge: when Tests passes on the branch's head, and the guard passed on
+#    that same commit, squash-merges the pull request and starts Publish Site.
+# 3. fan-out: moves the EPL lab, the CBB lab and the hub to the tag main now
+#    pins. Each gets a pull request on a shared-sync/<tag> branch with the
+#    copied files and its re-pinned lock, merged only when every check on it
+#    passes; then its publish workflow is started. The hub takes lib/sports.js
+#    and lib/format.js only. A failing check leaves that pull request open and
+#    this run red.
+#
+# Cross-repository writes use the DESIGN_DROP_TOKEN secret: a fine-grained
+# token on cooperross399 with Contents, Pull requests and Actions read and
+# write on this lab, the EPL and CBB labs, the hub and betting-lab-shared.
+# Without it every job stops red and says so.
+#
+# It pushes only the design branch it is pinning, betting-lab-shared, and the
+# shared-sync branches of the other three repositories; it never pushes this
+# repository's main (the merge goes through the pull request and its required
+# check). It fetches no odds, spends no credit, edits no policy and places no
+# bet.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_run:
+    workflows: ["Tests"]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  pin:
+    name: Pin the shared pages
+    if: >-
+      github.event_name == 'pull_request'
+      && startsWith(github.head_ref, 'design/')
+      && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: betting-lab-shared-tag
+      cancel-in-progress: false
+    env:
+      TOKEN: ${{ secrets.DESIGN_DROP_TOKEN }}
+      BRANCH: ${{ github.head_ref }}
+    steps:
+      - name: Need the cross-repository token
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::error::DESIGN_DROP_TOKEN is not set: a drop cannot be pinned, merged or fanned out."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+          token: ${{ secrets.DESIGN_DROP_TOKEN }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Refuse anything but page files
+        run: python scripts/design_drop.py guard --base "origin/${{ github.base_ref }}" --head HEAD
+
+      - name: Copy changed shared files into betting-lab-shared
+        id: pin
+        run: |
+          git clone --quiet "https://x-access-token:${TOKEN}@github.com/cooperross399/betting-lab-shared.git" "$RUNNER_TEMP/shared"
+          python scripts/design_drop.py pin --shared "$RUNNER_TEMP/shared"
+
+      - name: Tag the shared repository and re-pin this branch
+        if: steps.pin.outputs.changed == 'true'
+        env:
+          TAG: ${{ steps.pin.outputs.tag }}
+        run: |
+          git config --global user.name "design-drop[bot]"
+          git config --global user.email "design-drop@users.noreply.github.com"
+          (
+            cd "$RUNNER_TEMP/shared"
+            git add web
+            git commit --quiet -m "Pages from nhl-betting-lab $BRANCH"
+            git tag "$TAG"
+            git push --quiet origin HEAD:refs/heads/main "refs/tags/$TAG"
+          )
+          python web/sync_shared.py --lock "$RUNNER_TEMP/shared" --tag "$TAG"
+          python web/sync_shared.py --check
+          git add web/shared.lock.json
+          git commit --quiet -m "Pin the shared pages to betting-lab-shared $TAG"
+          git push --quiet origin "HEAD:refs/heads/$BRANCH"
+          echo "Shared pages tagged $TAG and pinned on $BRANCH"
+
+  merge:
+    name: Merge on green
+    if: >-
+      github.event_name == 'workflow_run'
+      && github.event.workflow_run.event == 'pull_request'
+      && github.event.workflow_run.conclusion == 'success'
+      && startsWith(github.event.workflow_run.head_branch, 'design/')
+      && github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      merged: ${{ steps.merge.outputs.merged }}
+    env:
+      TOKEN: ${{ secrets.DESIGN_DROP_TOKEN }}
+      BRANCH: ${{ github.event.workflow_run.head_branch }}
+      SHA: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Squash-merge the drop
+        id: merge
+        env:
+          GH_TOKEN: ${{ secrets.DESIGN_DROP_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::error::DESIGN_DROP_TOKEN is not set: Tests passed on $BRANCH but nothing can merge it."
+            exit 1
+          fi
+          pr=$(gh pr list -R "$GITHUB_REPOSITORY" --head "$BRANCH" --base main --state open \
+                 --json number,headRefOid,isDraft \
+                 --jq ".[] | select(.headRefOid == \"$SHA\" and (.isDraft | not)) | .number")
+          if [ -z "$pr" ]; then
+            echo "No open pull request from $BRANCH at $SHA: a newer push gets its own run."
+            exit 0
+          fi
+          guard=$(gh api "repos/$GITHUB_REPOSITORY/commits/$SHA/check-runs?check_name=Design%20drop%20guard" \
+                    --jq '[.check_runs[].conclusion] | unique | join(",")')
+          if [ "$guard" != "success" ]; then
+            echo "::error::Design drop guard on $SHA reads '${guard:-not run}'; #$pr is not merged."
+            exit 1
+          fi
+          gh pr merge "$pr" -R "$GITHUB_REPOSITORY" --squash --match-head-commit "$SHA" --delete-branch
+          echo "merged=true" >> "$GITHUB_OUTPUT"
+          echo "Merged #$pr ($BRANCH)."
+
+      - name: Publish the site
+        if: steps.merge.outputs.merged == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run publish-site.yml -R "$GITHUB_REPOSITORY" --ref main
+
+  fanout:
+    name: Fan out to ${{ matrix.target.repo }}
+    needs: merge
+    if: >-
+      always()
+      && (needs.merge.outputs.merged == 'true' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - { repo: epl-betting-lab, kind: lab, publish: publish-board.yml }
+          - { repo: cbb-betting-lab, kind: lab, publish: publish-board.yml }
+          - { repo: cooperross399.github.io, kind: hub, publish: "" }
+    env:
+      TOKEN: ${{ secrets.DESIGN_DROP_TOKEN }}
+      GH_TOKEN: ${{ secrets.DESIGN_DROP_TOKEN }}
+      REPO: cooperross399/${{ matrix.target.repo }}
+      KIND: ${{ matrix.target.kind }}
+      PUBLISH: ${{ matrix.target.publish }}
+    steps:
+      - name: Need the cross-repository token
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::error::DESIGN_DROP_TOKEN is not set: $REPO cannot be moved to the new pages."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Move the target to the tag main pins
+        id: move
+        run: |
+          tag=$(python -c 'import json; print(json.load(open("web/shared.lock.json"))["tag"])')
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          git clone --quiet --depth 1 --branch "$tag" https://github.com/cooperross399/betting-lab-shared.git "$RUNNER_TEMP/shared"
+          git clone --quiet "https://x-access-token:${TOKEN}@github.com/${REPO}.git" "$RUNNER_TEMP/target"
+          cd "$RUNNER_TEMP/target"
+          lock=$([ "$KIND" = hub ] && echo shared.lock.json || echo web/shared.lock.json)
+          now=$(python -c "import json; print(json.load(open('$lock'))['tag'])")
+          if [ "$now" = "$tag" ]; then
+            echo "$REPO already pins $tag."
+            exit 0
+          fi
+          git checkout --quiet -b "shared-sync/$tag"
+          if [ "$KIND" = hub ]; then
+            python "$GITHUB_WORKSPACE/scripts/design_drop.py" hub --shared "$RUNNER_TEMP/shared" --tag "$tag" --hub .
+          else
+            python web/sync_shared.py --lock "$RUNNER_TEMP/shared" --tag "$tag"
+            python web/sync_shared.py --from "$RUNNER_TEMP/shared"
+          fi
+          git config user.name "design-drop[bot]"
+          git config user.email "design-drop@users.noreply.github.com"
+          if [ "$KIND" = hub ]; then git add shared.lock.json lib; else git add web; fi
+          if git diff --cached --quiet; then
+            echo "$REPO: nothing to change for $tag."
+            exit 0
+          fi
+          git commit --quiet -m "Shared pages: betting-lab-shared $tag (from Claude Design via nhl-betting-lab)"
+          git push --quiet origin "HEAD:refs/heads/shared-sync/$tag"
+          url=$(gh pr create -R "$REPO" --base main --head "shared-sync/$tag" \
+                  --title "Shared pages: betting-lab-shared $tag" \
+                  --body "Opened by nhl-betting-lab's Design Drop after a Claude Design drop merged there. Copies the shared pages at betting-lab-shared $tag byte for byte and re-pins the lock. Merged automatically when every check passes; a red check leaves it open. Fetches no odds, spends no credit, places no bet.")
+          echo "pr=$url" >> "$GITHUB_OUTPUT"
+          echo "Opened $url"
+
+      - name: Merge on green
+        if: steps.move.outputs.pr != ''
+        env:
+          PR: ${{ steps.move.outputs.pr }}
+        run: |
+          for _ in $(seq 1 40); do
+            n=$(gh pr checks "$PR" --json name --jq length 2>/dev/null || echo 0)
+            [ "${n:-0}" -gt 0 ] && break
+            sleep 15
+          done
+          if [ "${n:-0}" -eq 0 ]; then
+            echo "::error::No check ever started on $PR; it is left open."
+            exit 1
+          fi
+          if ! gh pr checks "$PR" --watch --interval 30; then
+            echo "::error::A check failed on $PR; it is left open."
+            exit 1
+          fi
+          sha=$(gh pr view "$PR" --json headRefOid --jq .headRefOid)
+          gh pr merge "$PR" --squash --match-head-commit "$sha" --delete-branch
+          echo "Merged $PR."
+          if [ -n "$PUBLISH" ]; then
+            gh workflow run "$PUBLISH" -R "$REPO" --ref main
+          fi
