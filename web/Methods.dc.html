@@ -2,7 +2,6 @@
 <html>
 <head>
 <meta charset="utf-8">
-<link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script src="./support.js"></script>
 </head>
@@ -11,7 +10,7 @@
 <helmet>
   <title>Methods — Maverick Hightower</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="How the NHL model is built: expected goals, goalies, lineups, rest, referees, a second pre-game rating, fair prices and how picks are graded. With the live team ratings.">
+  <meta name="description" content="How the NHL model is built: expected goals, goalies, lineups, rest, referees, the PostHockey blend, fair prices and how picks are graded. With the live team ratings.">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Maverick Hightower">
   <meta property="og:title" content="Methods — Maverick Hightower">
@@ -229,7 +228,7 @@ class Component extends DCLogic {
       build: "Each unblocked shot gets a probability from its distance, angle, shot type, rebound and rush context, and strength state. A team's xG for a game is the sum over its shots; xG against is the sum over the other side's. We use these rather than actual goals because they settle faster: a team can outshoot its luck for weeks, but not its shot quality.",
       formula: "xGF = Σ P(goal | shot)   over the team's shots\nxGA = Σ P(goal | shot)   over the opponent's shots",
       sure: "Fairly sure about the direction, less about the decimal. Different public xG models disagree by 5–10% on a team's season total, and all of them miss shooter and goalie quality, which the next two entries add back." },
-    { id: "xg-sh", updated: "2026-09-29", title: "Shooter-adjusted xG", def: "Expected goals that know who is shooting. Written xGF(sh) and xGA(sh).",
+    { id: "xg-sh", updated: "2026-09-29", title: "Shooter-adjusted xG", def: "Expected goals that know who is shooting. PostHockey's xGF(sh) and xGA(sh).",
       build: "A plain xG model gives the same shot the same value whether a 40-goal scorer or a fourth-line grinder takes it. Shooter adjustment scales each shot by the shooter's finishing talent, estimated from his career record of goals over expected with heavy shrinkage toward average. Teams built around elite finishers rate higher than their raw shot quality; teams that pile up volume from poor shooters rate lower.",
       formula: "xGF(sh) = Σ P(goal | shot) × talent(shooter)",
       sure: "Reasonably sure. Finishing talent is one of the more stable player skills year to year, but the adjustment is small for most players and only moves a team rating by a few hundredths." },
@@ -265,16 +264,16 @@ class Component extends DCLogic {
       build: "Crews are assigned the afternoon of the game. Each referee carries a rate of penalties per game relative to the league, shrunk toward average by games worked. A whistle-happy crew raises both teams' power-play time, which raises the projected total; a crew that lets them play lowers it. The effect on who wins is slight and comes only through the two teams' special-teams gap.",
       formula: "",
       sure: "Sure about the direction for the total, which is where this step belongs. For the winner it rarely moves the number by more than a tenth of a point, and the game page says so." },
-    { id: "pregame", updated: "2026-09-29", title: "The second-opinion blend", def: "The final win chance is a 50% blend of our number and an independent pre-game win probability built from tonight's expected lineups.",
-      build: "A second pre-game probability, built from the same family of inputs by a different method, rates the players expected to dress, the listed goalies, home ice and back-to-backs. Averaging two reasonable forecasts beats either one alone more often than not, so the model's output is pulled halfway toward it. On nights their number is missing the step is skipped and the breakdown shows no change.",
-      formula: "p_final = 0.5 × p_model + 0.5 × p_second",
-      sure: "Sure the blend is not worse than either input; that is what the back-test shows. Whether 50% is the best weight is open." },
+    { id: "posthockey", updated: "2026-09-29", title: "The PostHockey blend", def: "The final win chance is a 50% blend of our number and PostHockey's own pre-game win probability.",
+      build: "PostHockey publishes a pre-game probability built from the same family of inputs by a different hand. Averaging two reasonable forecasts beats either one alone more often than not, so the model's output is pulled halfway toward theirs. On nights their number is missing the step is skipped and the breakdown shows no change.",
+      formula: "p_final = 0.5 × p_model + 0.5 × p_posthockey",
+      sure: "Sure the blend is not worse than either input; that is what the back-test shows. Whether 50% is the best weight is open. It is where this model stops being fully its own, and the waterfall shows it as the last step for that reason." },
     { id: "proj-goals", updated: "2026-09-29", title: "Projected goals", def: "The expected score for each team, which is what the total and puck line are priced from.",
       build: "Each team's attack rating is multiplied against the other's defence and goaltending ratings and the league scoring rate, then the lineup, rest, referee and form steps adjust it. The two numbers are the means of two Poisson-like distributions, from which the chance of each exact score, the over and under, and the puck line cover are read.",
       formula: "λ_home = league_rate × attack_home × defence_away × goaltending_away × e^home_ice × adjustments",
       sure: "Sure to within about a quarter of a goal on a given night, which sounds small and is enough to turn a lean into a pass. The projected total is more trustworthy than either side's share of it." },
     { id: "win", updated: "2026-10-26", title: "Win %", def: "The chance each team wins the game in any fashion, including overtime and the shootout.",
-      build: "The regulation outcome comes from the two projected-goal distributions: home win, away win or tie after sixty minutes. Ties are split by a 3-on-3 and shootout model that leans toward even and slightly toward the better team. The game page lists the three steps that moved this number most, in plain words.",
+      build: "The regulation outcome comes from the two projected-goal distributions: home win, away win or tie after sixty minutes. Ties are split by a 3-on-3 and shootout model that leans toward even and slightly toward the better team. The game page shows this number built up step by step, starting at 50% and ending at the published figure; the steps add to the total by construction.",
       formula: "p_win = P(reg win) + P(tie) × P(win OT or SO)",
       sure: "The ranges on the Track record page are the honest answer. So far, games we rate in the high fifties land in the high fifties. Beyond 70% the sample is too small to say." },
     { id: "fair", updated: "2026-09-29", title: "Fair price", def: "Our win chance written as an American price with no bookmaker margin.",
@@ -295,7 +294,7 @@ class Component extends DCLogic {
       sure: "Fully sure. Grading is mechanical and the frozen boards are in the archive, so any grade can be checked." },
   ];
   static CHANGELOG = [
-    { date: "2026-10-26", what: "Game pages, Track record and Methods published.", see: "A game page behind every game card: our call in plain words, the main reasons, the goalies and the odds. Calibration by bucket on Track record." },
+    { date: "2026-10-26", what: "Game pages, Track record and Methods published.", see: "A 'Where the number comes from' link on every game card; the win chance built up step by step; calibration by bucket." },
     { date: "2026-10-20", what: "Defensive player ratings from the NHL shift charts added to the lineup step.", see: "Lineup steps now move for scratched or returning defencemen, not only forwards. Ten best and worst listed above." },
     { date: "2026-10-20", what: "Starting goalies read from Daily Faceoff with a Confirmed / Projected tag.", see: "Goalie names under each team on the board; the goalie step in the waterfall." },
     { date: "2026-10-09", what: "Due List tracked at 0.25 units per priced entry.", see: "A record and units line on the Due List. Still not model bets." },
@@ -376,6 +375,5 @@ class Component extends DCLogic {
   }
 }
 </script>
-<!-- intake test 2026-10-26 -->
 </body>
 </html>

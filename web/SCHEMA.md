@@ -109,69 +109,16 @@ teams[]            sorted by projected points
   abbr, name, short, color, fg, conf ("E"|"W"), div
   now              {gp, w, l, otl, pts, gf, ga, rw, row}   — the standings to date (all zero in preseason)
   proj             {pts, p10, p90, sd, w, l, otl, gf, ga}  — full-season mean and 10th/90th percentiles
-  odds             {playoff, div, conf1, pres, last, bottom5, divRankDist[8], avgDivRank,
-                    round1, confFinal, final, cup}  — shares of simulated seasons; round1 = won a first-round series,
-                   confFinal = reached the conference final, final = reached the Stanley Cup Final, cup = won it.
-                   The four round fields sum to 8, 4, 2 and 1 over the league and shrink round by round for every team.
-                   Absent from files written before 2026-10-26 (the committed baseline); the page then omits the section.
+  odds             {playoff, div, conf1, pres, last, bottom5, divRankDist[8], avgDivRank}  — shares of simulated seasons
   lastSeason       {pts, gp, gf, ga} | null  — the previous season's final line, for the "vs last" column
-  rating           {off, ga, diff, tdOff, buOff, onIceXgf, tdXga, onIceXga, goalieGsax,
-                    ownOff, ownGa, phOff, phGa, homeIce}  — goals per game, the model's components. off/ga are what the
-                   season is played on; ownOff/ownGa the model's own ratings; phOff/phGa the card's PostHockey-style
-                   ratings (data/processed/shadow_team_ratings.json, five-game form taken out, re-centred on the league)
-                   or null when that file was missing or stale; off = (1 - w) × own + w × ph with w = method.ratings.phWeight.
-                   homeIce is the club's own home edge from that file (a log deviation from the league's, applied as
-                   exp((home's + away's) / 2) on home goals and its inverse on away goals, as the card does), 0 without it.
+  rating           {off, ga, diff, tdOff, buOff, onIceXgf, tdXga, onIceXga, goalieGsax}  — goals per game, the model's components
   scorers[]        top five by projected points: {name, pos, age, gp, g, a, p, now:{gp,g,a,p}, last:{gp,g,a,p}|null}
   goalies[]        {name, team, age, share, starts, wins, p10, p90, p30, p35, p40, gsax60, sv3, now:{gs,w,sv}, last:{gs,w,sv}|null}
 leaders            {points[30], goals[20], wins[20]}  — the same player and goalie shapes, each with `team`
 notes              {asOf, returning[], out[], unknown[]}  — the availability list as read from data/season_sim/roster_notes.json,
                    and any name in it the stats API did not know (published so a typo is visible, never silently dropped)
-playoffs           the bracket, played inside the same simulated seasons (NHL format: top three per division and two wild
-                   cards per conference; the better division winner meets the second wild card; 2 v 3 in each division;
-                   fixed bracket by division through the conference final; best of seven, 2-2-1-1-1, home ice to the
-                   better regular-season record; no ties; strength gap shrunk to method.playoffShrink)
-  slots[8]         {conf ("Eastern"|"Western"), label ("Atlantic 1 v wild card", "Atlantic 2 v Atlantic 3", ...),
-                    matchups[≤3]: {a, b, p}}  — the slot's most frequent first-round pairings, a the slot's higher seed
-                    (the division winner, or the division's second), p the share of simulated seasons
-  conferenceFinals[] {conf, matchups[≤5]: {a, b, p}}  — most frequent conference finals (a, b alphabetical)
-  finals[≤10]      {a (Eastern champion), b (Western champion), p}  — most frequent Stanley Cup Finals
-trophies           each award's leading candidates by the share of simulated seasons they finish first (ties split)
-  artRoss[≤10], rocket[≤10], wins[≤10], calder[≤10] | null
-                   {name, team, pos ("G" for goalies), age, p, proj, p10, p90, now}  — proj/p10/p90 the season total
-                   (points, goals or wins). Scorers' remaining goals and assists are drawn from their team's simulated
-                   goals at their projected share, with method.playerSigma rate jitter and an availability draw; goalie
-                   wins from the team's simulated wins and a drawn share of its starts. calder is the rookie points
-                   race (the trophy is voted), rookies read off the NHL's eligibility rule against the three seasons on
-                   file; null when no birth dates were available.
-  calderNote       the sentence the page prints under the awards about how rookies were identified
-  voted            {hart, norris, selke} | null  — trackers for the PHWA-voted awards (web/season_sim/awards.py), read
-                   from the hand-kept data/season_sim/award_inputs.json; null when that file is missing. Each:
-                   {label, rows[≤10], weights:{market, poll, model}, sources[], noPoll, stale, modelNote}
-    rows[]         {name, team, tracker, market, poll, model, odds, pollRank, pollPoints, projP}
-                   market   the book's implied probability with its margin removed (normalised over the listed field)
-                   poll     the player's points over the poll's total (a winner-only poll counts a vote as a point)
-                   model    this season's stats over the field (awards.award_stats: NHL and MoneyPuck rates blended
-                            with last season's by games played, shift-chart defence ratings when the card's ratings
-                            file has them): Hart, (points ÷ the leader's)^6 × (0.25 + 0.75 × club playoff odds), the
-                            points being the sim's projection pulled toward his pace; Norris and Selke,
-                            exp(2.2 × weighted z-score) over defensemen / forwards (awards.NORRIS_PARTS, SELKE_PARTS).
-                            A build without those stats falls back to projected points, and the Selke to none (null)
-                   tracker  weights.market × market + weights.poll × poll + weights.model × model; a player a signal
-                            does not name counts 0 in it. Each signal is null when the award has none
-                   odds     the American price as quoted | null; pollRank/pollPoints | null; projP projected points | null
-                   The candidates are the players a book or a poll names, plus the model's top three; rows
-                   sorted by tracker.
-    weights        0.5 / 0.3 / 0.2, renormalised over the signals the award has (0 for a missing one)
-    sources[]      {kind ("odds"|"poll"), date, url, ageDays, stale (ageDays > 14 or undated), book, source} for odds,
-                   {…, outlet, voters, scoring} for a poll. noPoll true prints "no poll yet". stale true when any source
-                   is stale (the page flags it)
-method             {sigma, sigmaMode ("fixed"|"shrink"), hfa, tieRate, leagueAvgPts, playoffShrink, playerSigma,
-                    ratings: {phWeight, phThrough, phStatus}}  — the engine's calibration, printed on the page;
-                   phWeight 0 means the card's ratings were not used and phStatus says why
+method             {sigma, hfa, tieRate, leagueAvgPts}  — the engine's calibration, printed on the page
 ```
-
-The engine is scored on completed seasons by `scripts/backtest_season_sim.py` (Actions → Season Sim Backtest), which writes `data/outputs/season_sim_backtest.md`.
 
 Standings to date come from the NHL standings endpoint (`api-web.nhle.com/v1/standings/<date>`) and finals from each club's season schedule (`club-schedule-season`); the previous season's line is read at the last standings day the API states for it. The page never recomputes a record: in season, `now` is the league's own table and `proj` adds the simulated remainder to it.
 
@@ -214,8 +161,9 @@ games[].drought  [] on every regular-season game — Cooper's Due List (2026-10-
                               ci_high × 100); null when the file lacks the cell, and the page then says "no record for this
                               cell". The page prints it as "This cell <droughtWindow>: ..." (the window from the board, below),
                               a number beside a number, never coloured good or bad. The keys are
-                              not the forward ledger's spellings (roiPct, ciLow, ciHigh): this is the historical
-                              backtest's cell, the same measurement droughtNote prints, not the forward return.}
+                              not the forward ledger's spellings (roiPct, ciLow, ciHigh), which
+                              tests/test_site_publishes_no_forward_return.py keeps off the Board page: this is the historical
+                              backtest's cell, the same measurement droughtNote prints, not the sealed forward return.}
                  Each field past heavyJuice is read from the card's drought_list.json row (tier_bar, surprise_bar, hit_rate,
                  rarity, one_in, rule, band, cell_record) and is null when the row lacks it — a list the flat-rule card wrote still
                  publishes, with nulls. Nothing is computed or filled in here, and a missing price still renders "price not
@@ -295,61 +243,3 @@ dueList            {summary, season, rows[]} | absent (absent hides the section)
 Every entry on a frozen board's Due List is graded, whether or not it had a price. An entry with no price at all is graded and counted in w/l but carries no units; it shows "price not posted". Units are notional: nothing on the Due List is bet, and none of it is in `summary.picks`, `record.picks` or the props tallies.
 
 `backfilledNights` are nights of the season before the list was first recorded (2026-10-07), rebuilt by the lab (`drought_forward.backfill_lists`) with today's rule from the games before each night and priced at the card's frozen prices that morning. `cardPriced` counts entries recorded with no price that the lab graded at the card's frozen price (`drought_forward.fill_prices`).
-
-## Additions (game pages, track record, methods — 2026-10-26)
-
-NHL only, read by four pages (`Game.dc.html`, `Record.dc.html`, `Methods.dc.html`, `Tracker.dc.html`); the shared
-`.dc.html` pages link to them from the NHL tabs and from each game card.
-
-board.json, per regular-season game:
-
-```
-factors[]        optional. The card's home win chance layer by layer (gameday_card.json `team_factors`, written by
-                 nhl_betting_lab.factor_breakdown.slate_breakdowns), in the order the card applies them:
-                 strength (xG ratings, form divided out), home_ice, form, rest, lineup, goalies, referees, posthockey.
-                 {key, label, homeWin, delta, homeGoals, awayGoals}; the last homeWin is the card's moneyline before
-                 line movement. Absent when the card did not price the game's moneyline.
-ratings          optional. {home|away: {attack, defence, goaltending, formAttack, formDefence, homeIce}} from
-                 data/processed/shadow_team_ratings.json: multipliers on the league (1.00); homeIce a log deviation.
-```
-
-`data/record.json` (`track_record`): `{generatedAt, nights, games, buckets[{low, high, games, predicted, actual,
-interval}], brier{games, model, market} | null, movement{toward, against, flat, picks}}`. Every frozen board before
-today with a published `winProb`, against finals from the NHL schedule endpoint (`schedule_for`), kept once a night is
-all final under `history/finals/<day>.json`. `brier.market` is the frozen board's no-vig moneyline. `movement` reads
-`history/lines/<day>.json` (the board's own published prices): whether a moneyline pick's home price at the day's last
-build moved toward the picked side. Accuracy only; never a return. With nothing settled (opening day) `buckets` is
-`[]` and `brier` null.
-
-`data/ratings.json` (`ratings_page`): `{generatedAt, through, teams[{abbr, name, attack, defence, formAttack,
-formDefence, homeIce, goaltending}], unseenGoalie, defence{best[], worst[], rated, games}}`, the defence rows
-`{player, team, goalsPrevented}` from the ratings file's `skater_defence`, named from the player logs. `defence` is
-null until a skater is rated (no shift charts cached). Neither file carries a return, a unit, a profit or a stake
-(`tests/test_record_json_carries_no_units.py`). Units and return are on `tracker.json` only.
-
-results.json, per settled game: `final {away, home, finish: "REG"|"OT"|"SO", pickResult: win|loss|push|void|null}`,
-for the game page's "After the game" (`Game.dc.html?id=&date=`). Because that page opens a past game from the
-archive, the same finals are kept as `history/graded/<day>.json` (`{game id: final}`, `stamp_finals`). The frozen board
-under `history/<day>.json` is never rewritten.
-
-## tracker.json (All results, Tracker.dc.html — 2026-10-26)
-
-Every graded best bet and priced Due List entry of the season, one row each,
-and the same rows summed. Written by `build_site_json.tracker` from each
-settled night's `bets` (`tracker_rows`), kept in `history/settled/<day>.json`.
-
-- `rows[]`: `{date, group: "team"|"props"|"due", market, price, result:
-  "win"|"loss"|"push", staked, units}` plus, for a team pick, `label`, `team`
-  (the side picked, null for a total), `opp`, `teams` [away, home] and
-  `stakeAssumed: true` when the board recorded no stake (counted at
-  `teamPickDefaultUnits`); for a prop or Due List entry, `propType`, `side`,
-  `line`, `player`, `playerId`, `team`, `opp`. Newest first. Leans, voids,
-  unpriced Due List entries and ungraded rows are never rows.
-- `overall`, and `byGroup`, `byMarket`, `byPropType`, `byTeam`, `byPlayer`,
-  `byPrice`, `byMonth`: `{key, label, w, l, p, bets, staked, units,
-  returnPct}`. Every split adds back to `overall` except `byTeam` (a total
-  counts under both clubs) and `byPropType`/`byPlayer` (props or players only).
-- `nights`, `firstDate`, `lastDate`, `teamPickDefaultUnits`, `dueStake`.
-
-A frozen board's `games[].pick` now carries `units`, the card's stake, on a
-best bet.

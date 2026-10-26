@@ -2,7 +2,6 @@
 <html>
 <head>
 <meta charset="utf-8">
-<link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script src="./support.js"></script>
 </head>
@@ -35,7 +34,7 @@
   <script>(function(){var d=document.documentElement;d.setAttribute("data-sport","nhl");})();</script>
 </helmet>
 <div data-screen-label="Game" style="min-height:100vh;background:var(--paper);color:var(--ink);">
-  <a href="#main" class="skip">Skip to our call</a>
+  <a href="#main" class="skip">Skip to the verdict</a>
   <div style="max-width:1240px;margin:0 auto;padding:0 clamp(16px,3vw,24px) 80px;">
 
     <header style="border-top:4px solid var(--ink);padding:10px 0 4px;display:flex;align-items:center;justify-content:space-between;gap:8px 16px;flex-wrap:wrap;">
@@ -114,79 +113,150 @@
       </section>
 
       <section id="main" aria-labelledby="verdict-h" style="padding:28px 0 26px;border-bottom:1px solid var(--ink);">
-        <h2 id="verdict-h" style="margin:0;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:28px;line-height:1;text-transform:uppercase;letter-spacing:.01em;">Our call</h2>
+        <h2 id="verdict-h" style="margin:0 0 14px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:28px;line-height:1;text-transform:uppercase;letter-spacing:.01em;">The verdict</h2>
+
+        <sc-if value="{{ unpriced }}" hint-placeholder-val="{{ false }}">
+          <div style="border:1px dashed var(--mute);padding:14px 16px;max-width:760px;">
+            <div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:22px;line-height:1;text-transform:uppercase;">Not priced</div>
+            <p style="margin:8px 0 0;font-size:14px;line-height:1.5;color:var(--ink-2);text-wrap:pretty;">No market price reached this board, so there is no fair price, no edge and no pick. The model's win chance below stands on its own.</p>
+          </div>
+        </sc-if>
 
         <sc-if value="{{ hasWin }}" hint-placeholder-val="{{ true }}">
-          <p style="margin:14px 0 0;font-size:clamp(20px,3.4vw,26px);line-height:1.3;font-weight:600;max-width:760px;text-wrap:pretty;">{{ headline }}</p>
-          <p style="margin:6px 0 0;font-family:'IBM Plex Mono',monospace;font-size:14px;color:var(--ink-2);">{{ scoreLine }}</p>
-          <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;font-family:'IBM Plex Mono',monospace;margin-top:18px;">
-            <span style="font-size:clamp(24px,5vw,36px);font-weight:600;line-height:1;">{{ awayAbbr }} {{ awayWin }}</span>
-            <span style="font-size:clamp(24px,5vw,36px);font-weight:600;line-height:1;">{{ homeWin }} {{ homeAbbr }}</span>
+          <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;font-family:'IBM Plex Mono',monospace;margin-top:{{ winTop }};">
+            <span style="font-size:clamp(26px,5vw,40px);font-weight:600;line-height:1;">{{ awayWin }}</span>
+            <span style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--mute);text-align:center;">Win chance</span>
+            <span style="font-size:clamp(26px,5vw,40px);font-weight:600;line-height:1;">{{ homeWin }}</span>
           </div>
           <div role="img" aria-label="{{ barAria }}" style="position:relative;height:14px;display:flex;margin-top:8px;background:var(--rule);">
             <div style="width:{{ awayPct }};background:{{ awayColor }};"></div>
             <div style="flex:1;background:{{ homeColor }};"></div>
+            <sc-if value="{{ band.show }}" hint-placeholder-val="{{ false }}">
+              <div aria-hidden="true" title="{{ band.title }}" style="position:absolute;top:-4px;bottom:-4px;left:{{ band.left }};width:{{ band.width }};border-left:2px solid var(--ink);border-right:2px solid var(--ink);background:repeating-linear-gradient(135deg,rgba(241,239,233,.28) 0 3px,transparent 3px 7px);"></div>
+            </sc-if>
             <div aria-hidden="true" style="position:absolute;top:-6px;bottom:-6px;left:50%;width:1px;background:var(--paper);"></div>
           </div>
-          <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--mute);text-align:center;">Chance to win, overtime and shootout included</div>
+          <div style="display:flex;justify-content:space-between;gap:12px;margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--mute);">
+            <span>{{ awayAbbr }}</span><span style="text-align:center;"><abbr title="{{ bandLong }}" style="text-decoration:underline dotted;text-underline-offset:3px;cursor:help;">{{ bandNote }}</abbr></span><span>{{ homeAbbr }}</span>
+          </div>
+          <sc-if value="{{ hasFactors }}" hint-placeholder-val="{{ true }}">
+            <a href="#wf-h" style="display:block;margin-top:18px;text-decoration:none;">
+              <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--mute);">
+                <span>How we got there</span><span>50% → {{ homeAbbr }} {{ homeWin }} · 8 steps ↓</span>
+              </div>
+              <div role="img" aria-label="{{ stripAria }}" style="position:relative;height:14px;margin-top:6px;background:var(--rule-2);">
+                <div aria-hidden="true" style="position:absolute;top:0;bottom:0;left:{{ stripMid }};width:1px;background:var(--mute);"></div>
+                <sc-for list="{{ strip }}" as="p" hint-placeholder-count="8">
+                  <div title="{{ p.title }}" style="position:absolute;top:{{ p.top }};height:{{ p.height }};left:{{ p.left }};width:{{ p.width }};min-width:{{ p.min }};background:{{ p.color }};box-shadow:0 0 0 1px var(--paper);"></div>
+                </sc-for>
+                <div aria-hidden="true" style="position:absolute;top:-4px;bottom:-4px;left:{{ stripEnd }};width:2px;background:var(--ink);"></div>
+              </div>
+              <div style="display:flex;justify-content:space-between;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--mute);margin-top:4px;"><span>{{ scaleLo }}</span><span>each block is one step · tap for the detail</span><span>{{ scaleHi }}</span></div>
+            </a>
+          </sc-if>
         </sc-if>
 
-        <div style="margin-top:22px;max-width:560px;">
-          <sc-if value="{{ unpriced }}" hint-placeholder-val="{{ false }}">
-            <div style="border:1px dashed var(--mute);padding:12px 14px;">
-              <div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:22px;line-height:1;text-transform:uppercase;">Not priced</div>
-              <div style="font-size:13px;margin-top:6px;line-height:1.5;color:var(--ink-2);">No betting line reached the board for this game, so there is no pick.</div>
+        <sc-if value="{{ priced }}" hint-placeholder-val="{{ true }}">
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:18px 32px;margin-top:22px;align-items:start;">
+            <div style="display:grid;grid-template-columns:auto 1fr;gap:6px 16px;font-family:'IBM Plex Mono',monospace;font-size:13px;line-height:1.5;align-content:start;">
+              <span style="color:var(--mute);">Our fair</span><span style="font-weight:600;">{{ fairLine }}</span>
+              <span style="color:var(--mute);">Best price</span><span style="font-weight:600;">{{ bestLine }}</span>
+              <span style="color:var(--mute);">Opened</span><span>{{ openLine }}</span>
+              <span style="color:var(--mute);">Edge</span><span>{{ edgeLine }}</span>
             </div>
-          </sc-if>
-          <sc-if value="{{ pick.isBet }}" hint-placeholder-val="{{ true }}">
-            <div style="background:var(--ink);color:var(--paper);padding:12px 14px;">
-              <div style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;">Best bet</div>
-              <div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:30px;line-height:1;text-transform:uppercase;letter-spacing:.02em;margin-top:4px;">{{ pick.label }}</div>
-              <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;margin-top:6px;color:var(--on-ink);">{{ pick.sub }}</div>
+            <div>
+              <div style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute);">{{ pick.heading }}</div>
+              <sc-if value="{{ pick.isBet }}" hint-placeholder-val="{{ true }}">
+                <div style="margin-top:8px;background:var(--ink);color:var(--paper);padding:12px 14px;">
+                  <div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:28px;line-height:1;text-transform:uppercase;letter-spacing:.02em;">{{ pick.label }}</div>
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;margin-top:6px;color:var(--on-ink);">{{ pick.sub }}</div>
+                </div>
+              </sc-if>
+              <sc-if value="{{ pick.isLean }}" hint-placeholder-val="{{ false }}">
+                <div style="margin-top:8px;border:1px dashed var(--ink);padding:12px 14px;">
+                  <div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:28px;line-height:1;text-transform:uppercase;letter-spacing:.02em;">{{ pick.label }}</div>
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;margin-top:6px;color:var(--mute);">{{ pick.sub }}</div>
+                </div>
+              </sc-if>
+              <sc-if value="{{ pick.isNone }}" hint-placeholder-val="{{ false }}">
+                <div style="margin-top:8px;border:1px dashed var(--mute);padding:12px 14px;">
+                  <div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:22px;line-height:1;text-transform:uppercase;color:var(--mute);">Nothing clears the bar</div>
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;margin-top:6px;line-height:1.5;color:var(--mute);">{{ pick.sub }}</div>
+                </div>
+              </sc-if>
+              <p style="margin:8px 0 0;font-size:12px;line-height:1.5;color:var(--mute);text-wrap:pretty;">The model has no demonstrated edge in any market. Picks are recorded so they can be graded, not because they are known winners.</p>
             </div>
-          </sc-if>
-          <sc-if value="{{ pick.isLean }}" hint-placeholder-val="{{ false }}">
-            <div style="border:1px dashed var(--ink);padding:12px 14px;">
-              <div style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute);">Lean, not a bet</div>
-              <div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:30px;line-height:1;text-transform:uppercase;letter-spacing:.02em;margin-top:4px;">{{ pick.label }}</div>
-              <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;margin-top:6px;color:var(--mute);">{{ pick.sub }}</div>
-            </div>
-          </sc-if>
-          <sc-if value="{{ pick.isNone }}" hint-placeholder-val="{{ false }}">
-            <div style="border:1px dashed var(--mute);padding:12px 14px;">
-              <div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:22px;line-height:1;text-transform:uppercase;color:var(--mute);">No bet on this game</div>
-              <div style="font-size:13px;margin-top:6px;line-height:1.5;color:var(--ink-2);">The prices are close to what we think is fair, so there is nothing worth betting.</div>
-            </div>
-          </sc-if>
-        </div>
+          </div>
+        </sc-if>
       </section>
 
-      <sc-if value="{{ hasWhy }}" hint-placeholder-val="{{ true }}">
-      <section aria-labelledby="why-h" style="padding:28px 0 26px;border-bottom:1px solid var(--ink);">
-        <h2 id="why-h" style="margin:0;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:28px;line-height:1;text-transform:uppercase;letter-spacing:.01em;">Why</h2>
-        <ul style="list-style:none;margin:14px 0 0;padding:0;max-width:760px;">
-          <sc-for list="{{ why }}" as="w" hint-placeholder-count="3">
-            <li style="display:grid;grid-template-columns:10px minmax(0,1fr);gap:12px;padding:10px 0;border-top:1px solid var(--rule-2);">
-              <span aria-hidden="true" style="background:{{ w.color }};"></span>
-              <span style="font-size:15px;line-height:1.5;text-wrap:pretty;"><strong style="font-weight:600;">{{ w.label }}.</strong> {{ w.text }}</span>
-            </li>
-          </sc-for>
-        </ul>
-        <a href="Methods.dc.html#win" style="display:inline-flex;align-items:center;min-height:44px;margin-top:4px;font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--mute);">How the model works →</a>
+      <section aria-labelledby="wf-h" style="padding:28px 0 26px;border-bottom:1px solid var(--ink);">
+        <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px 16px;flex-wrap:wrap;">
+          <h2 id="wf-h" style="margin:0;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:28px;line-height:1;text-transform:uppercase;letter-spacing:.01em;">Where the number comes from</h2>
+          <a href="Methods.dc.html#win" style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--mute);display:inline-flex;align-items:center;min-height:44px;">How the steps are built →</a>
+        </div>
+        <p style="margin:6px 0 0;font-size:14px;line-height:1.5;color:var(--ink-2);max-width:720px;text-wrap:pretty;">{{ wfIntro }}</p>
+
+        <sc-if value="{{ noFactors }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:18px;border:1px dashed var(--mute);padding:14px 16px;max-width:760px;">
+            <div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:20px;line-height:1;text-transform:uppercase;color:var(--mute);">Breakdown not available for this game</div>
+            <p style="margin:8px 0 0;font-size:14px;line-height:1.5;color:var(--ink-2);text-wrap:pretty;">The board carries the final win chance but not the step-by-step build. That happens when the board was frozen before the breakdown was written. The team comparison and markets below still apply.</p>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ hasFactors }}" hint-placeholder-val="{{ true }}">
+          <div style="margin-top:18px;border-top:2px solid var(--ink);">
+            <div style="display:grid;grid-template-columns:minmax(0,1fr) 72px;gap:0 12px;padding:6px 0;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--mute);">
+              <span style="display:flex;justify-content:space-between;"><span>{{ awayAbbr }} ←</span><span>→ {{ homeAbbr }}</span></span><span style="text-align:right;">{{ homeAbbr }} win</span>
+            </div>
+            <sc-for list="{{ steps }}" as="st" hint-placeholder-count="10">
+              <div style="display:grid;grid-template-columns:minmax(0,1fr) 72px;gap:4px 12px;padding:10px 0;border-top:1px solid var(--rule-2);align-items:start;">
+                <div style="min-width:0;">
+                  <div style="display:flex;align-items:baseline;gap:8px 12px;flex-wrap:wrap;">
+                    <sc-if value="{{ st.href }}" hint-placeholder-val="{{ true }}"><a href="{{ st.href }}" style="font-weight:600;font-size:14px;text-decoration:underline;text-decoration-color:var(--rule);text-underline-offset:3px;">{{ st.label }}</a></sc-if>
+                    <sc-if value="{{ st.isEdge }}" hint-placeholder-val="{{ false }}"><span style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:16px;letter-spacing:.06em;text-transform:uppercase;">{{ st.label }}</span></sc-if>
+                    <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:{{ st.deltaColor }};">{{ st.deltaText }}</span>
+                  </div>
+                  <div style="font-size:13px;line-height:1.45;color:var(--ink-2);margin-top:2px;max-width:640px;text-wrap:pretty;">{{ st.reason }}</div>
+                  <div aria-hidden="true" style="position:relative;height:10px;margin-top:8px;background:var(--rule-2);">
+                    <div style="position:absolute;top:0;bottom:0;left:50%;width:1px;background:var(--rule);"></div>
+                    <div style="position:absolute;top:0;bottom:0;left:{{ st.barLeft }};width:{{ st.barWidth }};background:{{ st.barColor }};min-width:{{ st.barMin }};"></div>
+                    <div style="position:absolute;top:-3px;bottom:-3px;left:{{ st.markerLeft }};width:2px;background:var(--ink);"></div>
+                  </div>
+                </div>
+                <div style="text-align:right;font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:{{ st.weight }};line-height:1.2;padding-top:2px;">{{ st.cum }}</div>
+              </div>
+            </sc-for>
+            <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 12px;padding:12px 0;border-top:2px solid var(--ink);align-items:baseline;">
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--mute);">{{ sumNote }}</span>
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--mute);text-align:right;">Scale {{ scaleLo }}–{{ scaleHi }}</span>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr));gap:12px 24px;margin-top:6px;">
+            <sc-for list="{{ goalsOut }}" as="c" hint-placeholder-count="3">
+              <div style="border-top:2px solid var(--ink);padding-top:8px;">
+                <div style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute);">{{ c.label }}</div>
+                <div style="font-family:'IBM Plex Mono',monospace;font-size:24px;font-weight:600;line-height:1;margin-top:6px;">{{ c.value }}</div>
+                <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--mute);margin-top:4px;">{{ c.sub }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
       </section>
-      </sc-if>
 
       <sc-if value="{{ hasRatings }}" hint-placeholder-val="{{ true }}">
       <section aria-labelledby="cmp-h" style="padding:28px 0 26px;border-bottom:1px solid var(--ink);">
-        <h2 id="cmp-h" style="margin:0;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:28px;line-height:1;text-transform:uppercase;letter-spacing:.01em;">Head to head</h2>
-        <p style="margin:6px 0 0;font-size:13px;color:var(--mute);">Compared with an average NHL team. Plus is better.</p>
-        <div style="margin-top:12px;border-top:2px solid var(--ink);max-width:560px;">
-          <div style="display:grid;grid-template-columns:minmax(0,1fr) 84px 84px;gap:0 10px;padding:6px 0;font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--mute);">
+        <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px 16px;flex-wrap:wrap;">
+          <h2 id="cmp-h" style="margin:0;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:28px;line-height:1;text-transform:uppercase;letter-spacing:.01em;">Team comparison</h2>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--mute);">League average 1.00 · better side marked</span>
+        </div>
+        <div style="margin-top:14px;border-top:2px solid var(--ink);max-width:760px;">
+          <div style="display:grid;grid-template-columns:minmax(0,1fr) 84px 84px;gap:0 10px;padding:6px 0;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--mute);">
             <span></span><span style="text-align:right;">{{ awayAbbr }}</span><span style="text-align:right;">{{ homeAbbr }}</span>
           </div>
-          <sc-for list="{{ cmp }}" as="r" hint-placeholder-count="4">
+          <sc-for list="{{ cmp }}" as="r" hint-placeholder-count="6">
             <div style="display:grid;grid-template-columns:minmax(0,1fr) 84px 84px;gap:0 10px;padding:9px 0;border-top:1px solid var(--rule-2);align-items:baseline;">
-              <span style="font-size:15px;font-weight:500;">{{ r.label }}</span>
+              <span style="min-width:0;"><span style="font-size:14px;font-weight:500;">{{ r.label }}</span> <span style="font-size:11px;color:var(--mute);white-space:nowrap;">{{ r.hint }}</span></span>
               <span style="text-align:right;font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:{{ r.awayWeight }};color:{{ r.awayColor }};">{{ r.away }}</span>
               <span style="text-align:right;font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:{{ r.homeWeight }};color:{{ r.homeColor }};">{{ r.home }}</span>
             </div>
@@ -196,36 +266,73 @@
       </sc-if>
 
       <section aria-labelledby="gk-h" style="padding:28px 0 26px;border-bottom:1px solid var(--ink);">
-        <h2 id="gk-h" style="margin:0;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:28px;line-height:1;text-transform:uppercase;letter-spacing:.01em;">Goalies</h2>
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:12px 24px;margin-top:14px;max-width:760px;">
+        <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px 16px;flex-wrap:wrap;">
+          <h2 id="gk-h" style="margin:0;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:28px;line-height:1;text-transform:uppercase;letter-spacing:.01em;">Goalies tonight</h2>
+          <a href="Methods.dc.html#goalies" style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--mute);display:inline-flex;align-items:center;min-height:44px;">How goalies are rated →</a>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:12px 24px;margin-top:14px;">
           <sc-for list="{{ goalies }}" as="k" hint-placeholder-count="2">
-            <div style="border-left:6px solid {{ k.color }};padding:4px 0 4px 12px;">
-              <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--mute);">{{ k.abbr }}</div>
-              <div style="font-size:18px;font-weight:600;line-height:1.2;margin-top:2px;color:{{ k.nameColor }};">{{ k.name }}</div>
-              <div style="font-size:13px;color:var(--mute);margin-top:2px;">{{ k.tag }}</div>
+            <div style="border:1px {{ k.border }} {{ k.borderColor }};padding:12px 14px;display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 12px;align-items:center;">
+              <span aria-hidden="true" style="width:10px;align-self:stretch;background:{{ k.color }};"></span>
+              <div style="min-width:0;">
+                <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--mute);">{{ k.abbr }} · G</div>
+                <div style="font-size:18px;font-weight:600;line-height:1.2;margin-top:2px;color:{{ k.nameColor }};">{{ k.name }}</div>
+                <div style="display:flex;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap;">
+                  <span style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:13px;letter-spacing:.08em;text-transform:uppercase;padding:2px 7px;background:{{ k.tagBg }};color:{{ k.tagFg }};border:1px solid {{ k.tagBorder }};">{{ k.tag }}</span>
+                  <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--mute);">{{ k.note }}</span>
+                </div>
+              </div>
             </div>
           </sc-for>
         </div>
       </section>
 
-      <sc-if value="{{ priced }}" hint-placeholder-val="{{ true }}">
       <section aria-labelledby="mk-h" style="padding:28px 0 26px;border-bottom:1px solid var(--ink);">
-        <h2 id="mk-h" style="margin:0;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:28px;line-height:1;text-transform:uppercase;letter-spacing:.01em;">The odds</h2>
-        <p style="margin:6px 0 0;font-size:13px;color:var(--mute);max-width:640px;">Our chance next to the best price we found. A pick shows up only when our chance beats the price by enough.</p>
-        <div style="margin-top:12px;border-top:2px solid var(--ink);max-width:560px;">
-          <div style="display:grid;grid-template-columns:minmax(0,1fr) 92px 92px;gap:0 10px;padding:6px 0;font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--mute);">
-            <span>Bet</span><span style="text-align:right;">Our chance</span><span style="text-align:right;">Best price</span>
-          </div>
-          <sc-for list="{{ markets }}" as="m" hint-placeholder-count="5">
-            <div style="display:grid;grid-template-columns:minmax(0,1fr) 92px 92px;gap:0 10px;padding:9px 0;border-top:1px solid {{ m.ruleColor }};align-items:baseline;">
-              <span style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;min-width:0;"><span style="font-size:15px;font-weight:{{ m.weight }};">{{ m.label }}</span><sc-if value="{{ m.tag }}" hint-placeholder-val="{{ false }}"><span style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:11px;letter-spacing:.08em;text-transform:uppercase;padding:1px 5px;background:{{ m.tagBg }};color:{{ m.tagFg }};border:1px {{ m.tagStyle }} var(--ink);white-space:nowrap;">{{ m.tag }}</span></sc-if></span>
-              <span style="text-align:right;font-family:'IBM Plex Mono',monospace;font-size:15px;">{{ m.chance }}</span>
-              <span style="text-align:right;font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:600;">{{ m.best }}</span>
-            </div>
-          </sc-for>
+        <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px 16px;flex-wrap:wrap;">
+          <h2 id="mk-h" style="margin:0;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:28px;line-height:1;text-transform:uppercase;letter-spacing:.01em;">Markets</h2>
+          <a href="Methods.dc.html#fair" style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--mute);display:inline-flex;align-items:center;min-height:44px;">Fair price and edge →</a>
         </div>
+        <sc-if value="{{ unpriced }}" hint-placeholder-val="{{ false }}">
+          <p style="margin:12px 0 0;font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--mute);">Not priced · no market lines reached this board.</p>
+        </sc-if>
+        <sc-if value="{{ stackMarkets }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:14px;border-top:2px solid var(--ink);">
+            <sc-for list="{{ markets }}" as="m" hint-placeholder-count="7">
+              <div style="padding:10px 0;border-top:1px solid {{ m.ruleColor }};display:flex;flex-direction:column;gap:6px;">
+                <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;">
+                  <span style="display:flex;align-items:baseline;gap:8px;min-width:0;"><span style="font-weight:{{ m.weight }};font-size:15px;">{{ m.label }}</span><sc-if value="{{ m.tag }}" hint-placeholder-val="{{ false }}"><span style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:11px;letter-spacing:.08em;text-transform:uppercase;padding:1px 5px;background:{{ m.tagBg }};color:{{ m.tagFg }};border:1px {{ m.tagStyle }} var(--ink);white-space:nowrap;">{{ m.tag }}</span></sc-if></span>
+                  <span style="font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:600;white-space:nowrap;">{{ m.chance }}</span>
+                </div>
+                <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;font-family:'IBM Plex Mono',monospace;font-size:12px;">
+                  <span style="display:flex;flex-direction:column;gap:1px;"><span style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--mute);">Our fair</span><span style="font-weight:600;">{{ m.fair }}</span></span>
+                  <span style="display:flex;flex-direction:column;gap:1px;"><span style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--mute);">Best</span><span>{{ m.best }}</span></span>
+                  <span style="display:flex;flex-direction:column;gap:1px;"><span style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--mute);">Open → now</span><span style="color:{{ m.moveColor }};">{{ m.move }}</span></span>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+          <p style="margin:10px 0 0;font-size:12px;line-height:1.5;color:var(--mute);text-wrap:pretty;">The big number is the model's chance. Our fair is that chance as a price with no vig. Best is the better price on the board at the last refresh. The site recommends; it does not place bets.</p>
+        </sc-if>
+        <sc-if value="{{ tableMarkets }}" hint-placeholder-val="{{ true }}">
+          <div style="margin-top:14px;overflow-x:auto;scrollbar-width:thin;margin-left:calc(-1 * clamp(16px,3vw,24px));margin-right:calc(-1 * clamp(16px,3vw,24px));padding:0 clamp(16px,3vw,24px);">
+            <div style="min-width:560px;border-top:2px solid var(--ink);">
+              <div style="display:grid;grid-template-columns:minmax(150px,1.4fr) 1fr 1fr 1fr 1.3fr;gap:0 10px;padding:6px 0;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--mute);">
+                <span style="position:sticky;left:0;background:var(--paper);">Market</span><span style="text-align:right;">Our chance</span><span style="text-align:right;">Our fair</span><span style="text-align:right;">Best</span><span style="text-align:right;">Open → now</span>
+              </div>
+              <sc-for list="{{ markets }}" as="m" hint-placeholder-count="7">
+                <div style="display:grid;grid-template-columns:minmax(150px,1.4fr) 1fr 1fr 1fr 1.3fr;gap:0 10px;padding:9px 0;border-top:1px solid {{ m.ruleColor }};align-items:baseline;font-family:'IBM Plex Mono',monospace;font-size:14px;">
+                  <span style="position:sticky;left:0;background:var(--paper);display:flex;align-items:baseline;gap:8px;min-width:0;"><span style="font-family:'IBM Plex Sans',sans-serif;font-weight:{{ m.weight }};">{{ m.label }}</span><sc-if value="{{ m.tag }}" hint-placeholder-val="{{ false }}"><span style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:11px;letter-spacing:.08em;text-transform:uppercase;padding:1px 5px;background:{{ m.tagBg }};color:{{ m.tagFg }};border:1px {{ m.tagStyle }} var(--ink);white-space:nowrap;">{{ m.tag }}</span></sc-if></span>
+                  <span style="text-align:right;">{{ m.chance }}</span>
+                  <span style="text-align:right;font-weight:600;">{{ m.fair }}</span>
+                  <span style="text-align:right;">{{ m.best }}</span>
+                  <span style="text-align:right;color:{{ m.moveColor }};">{{ m.move }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+          <p style="margin:10px 0 0;font-size:12px;line-height:1.5;color:var(--mute);max-width:720px;text-wrap:pretty;">Our chance is the model's probability. Our fair is that chance as an American price with no vig. Best is the better of the prices on the board at the last refresh. The site recommends; it does not place bets.</p>
+        </sc-if>
       </section>
-      </sc-if>
 
       <section aria-labelledby="after-h" style="padding:28px 0 26px;">
         <h2 id="after-h" style="margin:0;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:28px;line-height:1;text-transform:uppercase;letter-spacing:.01em;">After the game</h2>
@@ -297,9 +404,7 @@ class Component extends DCLogic {
     // Paint from the Board's hand-off first (sessionStorage, written on the card link), then replace with the fetch.
     const gid = new URLSearchParams(location.search).get("id");
     if (!date && gid && !this.state.data) { try { const c = JSON.parse(sessionStorage.getItem("mh.game." + gid) || "null"); if (c && c.game && Date.now() - c.at < 6 * 3600e3) this.setState({ data: { generatedAt: c.generatedAt, teams: c.teams, games: [c.game] }, isSample: !live }); } catch (_) { /* ignore */ } }
-    const [data, record, graded] = await Promise.all([err ? null : get(url), get(rurl), archived ? get(`./data/history/graded/${archived.date}.json`) : null]);
-    // A past game's final is kept beside its frozen board (history/graded/<day>.json, {id: final}).
-    if (data && graded && typeof graded === "object") for (const x of data.games || []) if (!x.final && graded[String(x.id)]) x.final = graded[String(x.id)];
+    const [data, record] = await Promise.all([err ? null : get(url), get(rurl)]);
     this.setState({ data, record, archived, dateParam: date || "", isSample: !live, err: err || (data ? "" : "Board unreachable") });
   }
   componentDidMount() {
@@ -369,28 +474,27 @@ class Component extends DCLogic {
     const p = g.pick || { kind: "none" };
     const edgeLine = p.kind !== "none" && num(p.edgePct) ? `${F.fmtSigned(p.edgePct, 1)}% on ${p.label}` : "Below the bar on every market";
     const pick = { heading: p.kind === "bet" ? "Best bet" : p.kind === "lean" ? "Lean" : "Pick",
-      isBet: p.kind === "bet", isLean: p.kind === "lean", isNone: priced && p.kind !== "bet" && p.kind !== "lean", label: p.label || "",
-      sub: p.kind === "bet" ? `${p.market || ""} at ${odds(p.price)}${num(p.units) ? ` · ${p.units} ${p.units === 1 ? "unit" : "units"}` : ""}` : p.kind === "lean" ? `${p.market || ""} at ${odds(p.price)} · a small edge, not enough to bet` : "" };
+      isBet: p.kind === "bet", isLean: p.kind === "lean", isNone: p.kind !== "bet" && p.kind !== "lean", label: p.label || "",
+      sub: p.kind === "bet" ? `${p.market || ""} · ${odds(p.price)} · edge ${num(p.edgePct) ? F.fmtSigned(p.edgePct, 1) : "—"}%${num(p.units) ? ` · ${p.units}u` : ""}` : p.kind === "lean" ? `${p.market || ""} · ${odds(p.price)} · edge ${num(p.edgePct) ? F.fmtSigned(p.edgePct, 1) : "—"}% · under the best-bet bar` : "Every market priced inside the model's own margin for error." };
 
     // Waterfall
     const facts = Array.isArray(g.factors) ? g.factors : [];
     const hasFactors = hasWin && facts.length > 0;
-    const HREF = { strength: "Methods.dc.html#xg", home_ice: "Methods.dc.html#home-ice", form: "Methods.dc.html#form", rest: "Methods.dc.html#rest", lineup: "Methods.dc.html#lineup", goalies: "Methods.dc.html#goalies", referees: "Methods.dc.html#referees", posthockey: "Methods.dc.html#pregame" };
-    const PLAIN = { strength: "Team strength", home_ice: "Home ice", form: "Recent form", rest: "Rest", lineup: "Lineup", goalies: "Goalies", referees: "Referees", posthockey: "Second opinion" };
+    const HREF = { strength: "Methods.dc.html#xg", home_ice: "Methods.dc.html#home-ice", form: "Methods.dc.html#form", rest: "Methods.dc.html#rest", lineup: "Methods.dc.html#lineup", goalies: "Methods.dc.html#goalies", referees: "Methods.dc.html#referees", posthockey: "Methods.dc.html#posthockey" };
     const R = g.ratings || {}, rh = R.home || {}, ra = R.away || {};
     const gk = (s) => (s.goalie && s.goalie.name) || null;
     const lead = (dl) => (dl > 0 ? h.abbr : a.abbr), lag = (dl) => (dl > 0 ? a.abbr : h.abbr), tiny = (dl) => Math.abs(dl) < 0.003;
     const reason = (f) => {
       const dl = f.delta || 0;
       switch (f.key) {
-        case "strength": return `${lead(dl)} has been the better team this season, creating more good chances than it gives up.`;
-        case "home_ice": return dl >= 0 ? `${h.abbr} is at home.` : `${h.abbr} is at home, but its home edge is smaller than most teams'.`;
-        case "form": return `${lead(dl)} has played better over its last five games.`;
-        case "rest": return (dl > 0 ? a : h).b2b ? `${lag(dl)} is playing the second night of a back-to-back.` : `${lag(dl)} is less rested or has travelled further.`;
-        case "lineup": return `${lag(dl)} is missing players it usually has, or ${lead(dl)} has players back.`;
-        case "goalies": { const gh = gk(h), ga = gk(a); const w = dl > 0 ? gh : ga, l = dl > 0 ? ga : gh; return w && l ? `${w} has been better in net than ${l}.` : w ? `${w} has been the better goalie of the two starters.` : `${lead(dl)} has the better goalie in net tonight.`; }
-        case "referees": return "Tonight's referees tend to call games in a way that slightly helps this side.";
-        case "posthockey": return `A second rating built on tonight's expected lineups likes ${lead(dl)} a bit more.`;
+        case "strength": return tiny(dl) ? "On recent shooter-adjusted xG the two sides rate about even." : `On recent shooter-adjusted expected goals, ${lead(dl)} rates stronger${num(rh.attack) && num(ra.attack) ? ` (attack ${h.abbr} ${rh.attack.toFixed(2)} v ${a.abbr} ${ra.attack.toFixed(2)}, defence ${rh.defence.toFixed(2)} v ${ra.defence.toFixed(2)}; 1.00 is average)` : ""}.`;
+        case "home_ice": return `${h.abbr}'s own home-ice effect${num(rh.homeIce) ? `, about ${F.fmtSigned(rh.homeIce * 100, 1)}%,` : ""} ${dl >= 0 ? "adds a little for the home side" : "is below average, so home ice helps less than usual"}.`;
+        case "form": return tiny(dl) ? "The last five games change little." : `The last five games tilt toward ${lead(dl)}, at about a quarter of the weight of the season ratings.`;
+        case "rest": return tiny(dl) ? "Neither side is on a back-to-back, long rest or a time-zone crossing worth pricing." : `${lag(dl)} is at a rest or travel disadvantage${(dl > 0 ? a : h).b2b ? " (second night of a back-to-back)" : ""}, which moves the number toward ${lead(dl)}.`;
+        case "lineup": return tiny(dl) ? "Tonight's dressed skaters rate close to each team's season line." : `Tonight's dressed skaters, offence and defence, rate ${lead(dl)} a little better than their season line.`;
+        case "goalies": { const gh = gk(h), ga = gk(a); const w = dl > 0 ? gh : ga, l = dl > 0 ? ga : gh; return tiny(dl) ? "The two listed starters rate about even on save talent." : w && l ? `${w} rates above ${l} on age-adjusted save talent.` : w ? `${w} rates above the opposing starter on save talent.` : `The listed starters favour ${lead(dl)}.`; }
+        case "referees": return `This crew mostly moves the total, not the winner${num(f.homeGoals) && num(f.awayGoals) ? ` (projected total now ${(f.homeGoals + f.awayGoals).toFixed(2)})` : ""}.`;
+        case "posthockey": return tiny(dl) ? "PostHockey's own pre-game number agrees, so the halfway blend changes little." : `PostHockey's own pre-game number is ${dl > 0 ? "higher" : "lower"} on ${h.abbr}; we blend halfway toward it.`;
         default: return "";
       }
     };
@@ -423,15 +527,6 @@ class Component extends DCLogic {
       { label: "Projected total", value: num(a.projGoals) && num(h.projGoals) ? (a.projGoals + h.projGoals).toFixed(2) : "—", sub: g.total && num(g.total.current) ? `Market total ${g.total.current.toFixed(1)}` : "No market total" },
     ] : [];
 
-    // Our call, in words, and the three biggest reasons.
-    const favT = hw >= aw ? th : ta, favS = hw >= aw ? h : a, favP = Math.max(hw, aw);
-    const headline = !hasWin ? "" : favP < 0.53 ? `Close to a coin flip. We give ${favT.name || favS.abbr} a slight edge, ${pct0(favP)}.` : `We like ${favT.name || favS.abbr} to win. We give them a ${pct0(favP)} chance.`;
-    const scoreLine = num(a.projGoals) && num(h.projGoals) ? `Projected score: ${a.abbr} ${a.projGoals.toFixed(1)}, ${h.abbr} ${h.projGoals.toFixed(1)}` : "";
-    let prevW = 0.5;
-    const ranked = facts.map((f) => { const dl = num(f.delta) ? f.delta : f.homeWin - prevW; prevW = f.homeWin; return { f, dl }; })
-      .filter((x) => !tiny(x.dl)).sort((x, y) => Math.abs(y.dl) - Math.abs(x.dl)).slice(0, 3);
-    const why = hasWin ? ranked.map(({ f, dl }) => ({ label: PLAIN[f.key] || f.label, text: reason({ ...f, delta: dl }), color: dl > 0 ? hColor : aColor })) : [];
-
     // Team comparison
     const hasRatings = num(rh.attack) && num(ra.attack);
     const cmpRow = (label, hint, ka, lowerBetter, fmt) => {
@@ -440,22 +535,13 @@ class Component extends DCLogic {
       return { label, hint, away: fmt(av), home: fmt(hv), awayWeight: better === "away" ? 600 : 400, homeWeight: better === "home" ? 600 : 400, awayColor: better === "home" ? "var(--mute)" : "var(--ink)", homeColor: better === "away" ? "var(--mute)" : "var(--ink)" };
     };
     const f2 = (v) => v.toFixed(2), fp = (v) => `${F.fmtSigned(v * 100, 1)}%`;
-    // Every row as "% better than an average team", so plus always reads as good.
-    const better = (label, ka, lowerBetter) => {
-      const av = ra[ka], hv = rh[ka]; if (!num(av) || !num(hv)) return null;
-      const sc = (v) => (lowerBetter ? 1 - v : v - 1) * 100, sa = sc(av), sh = sc(hv), r = (x) => Math.round(x);
-      const win = r(sa) === r(sh) ? null : sa > sh ? "away" : "home";
-      const show = (x) => (r(x) === 0 ? "Avg" : `${r(x) > 0 ? "+" : "−"}${Math.abs(r(x))}%`);
-      return { label, away: show(sa), home: show(sh), awayWeight: win === "away" ? 600 : 400, homeWeight: win === "home" ? 600 : 400, awayColor: win === "home" ? "var(--mute)" : "var(--ink)", homeColor: win === "away" ? "var(--mute)" : "var(--ink)" };
-    };
-    void cmpRow; void f2; void fp;
-    const cmp = hasRatings ? [better("Scoring", "attack", false), better("Keeping it out", "defence", true), better("Goaltending", "goaltending", true), better("Last five games", "formAttack", false)].filter(Boolean) : [];
+    const cmp = hasRatings ? [cmpRow("Attack", "higher scores more", "attack", false, f2), cmpRow("Defence", "lower allows fewer", "defence", true, f2), cmpRow("Goaltending", "lower allows fewer", "goaltending", true, f2), cmpRow("Form · attack", "last five", "formAttack", false, f2), cmpRow("Form · defence", "last five, lower is better", "formDefence", true, f2), cmpRow("Own home ice", "log deviation, about a %", "homeIce", false, fp)].filter(Boolean) : [];
 
     // Goalies
     const goalieCard = (s, color) => {
       const k = s.goalie || {}, st = String(k.status || "").toLowerCase(), confirmed = st === "confirmed";
-      if (!k.name) return { abbr: s.abbr, color, name: "Not announced yet", nameColor: "var(--mute)", tag: "Starter not listed", tagBg: "transparent", tagFg: "var(--mute)", tagBorder: "var(--mute)", border: "dashed", borderColor: "var(--mute)", note: "" };
-      return { abbr: s.abbr, color, name: k.name, nameColor: "var(--ink)", tag: confirmed ? "Confirmed starter" : st === "likely" ? "Likely starter" : st === "expected" ? "Expected starter" : "Projected starter", tagBg: confirmed ? "var(--ink)" : "transparent", tagFg: confirmed ? "var(--paper)" : "var(--ink)", tagBorder: "var(--ink)", border: "solid", borderColor: confirmed ? "var(--ink)" : "var(--rule)", note: confirmed ? "Daily Faceoff" : "Daily Faceoff · can change before puck drop" };
+      if (!k.name) return { abbr: s.abbr, color, name: "Goalie not confirmed", nameColor: "var(--mute)", tag: "No starter listed", tagBg: "transparent", tagFg: "var(--mute)", tagBorder: "var(--mute)", border: "dashed", borderColor: "var(--mute)", note: "Priced on the team's season goaltending until a starter is listed" };
+      return { abbr: s.abbr, color, name: k.name, nameColor: "var(--ink)", tag: confirmed ? "Confirmed" : st === "likely" ? "Likely" : st === "expected" ? "Expected" : "Projected", tagBg: confirmed ? "var(--ink)" : "transparent", tagFg: confirmed ? "var(--paper)" : "var(--ink)", tagBorder: "var(--ink)", border: "solid", borderColor: confirmed ? "var(--ink)" : "var(--rule)", note: confirmed ? "Daily Faceoff" : "Daily Faceoff · can change before puck drop" };
     };
     const goalies = [goalieCard(a, aColor), goalieCard(h, hColor)];
 
@@ -503,7 +589,7 @@ class Component extends DCLogic {
     return { ...base, builtLine, ready: true, missing: false,
       kicker: `${F.fmtDayLong(g.startUtc)} · ${g.gameType === 1 ? "Exhibition" : g.gameType === 3 ? "Playoffs" : "Regular season"}`,
       sides, time: F.fmtTime(g.startUtc), tz: F.tzName(), venueLine: [g.venue, g.city].filter(Boolean).join(" · ") || "Venue TBA", tvLine: g.tv ? `TV ${g.tv}` : "",
-      unpriced: !priced, priced, hasWin, headline, scoreLine, why, hasWhy: why.length > 0, winTop: priced ? "0" : "18px", awayWin: pct1(aw), homeWin: pct1(hw), awayPct: `${(aw * 100).toFixed(1)}%`, awayColor: aColor, homeColor: hColor, awayAbbr: a.abbr, homeAbbr: h.abbr,
+      unpriced: !priced, priced, hasWin, winTop: priced ? "0" : "18px", awayWin: pct1(aw), homeWin: pct1(hw), awayPct: `${(aw * 100).toFixed(1)}%`, awayColor: aColor, homeColor: hColor, awayAbbr: a.abbr, homeAbbr: h.abbr,
       barAria: `${ta.name || a.abbr} ${pct1(aw)}, ${th.name || h.abbr} ${pct1(hw)}`, band, bandNote, bandLong, nav,
       strip, stripAria, stripMid: `${X(0.5).toFixed(2)}%`, stripEnd: `calc(${X(hw).toFixed(2)}% - 1px)`,
       stackMarkets: priced && this.state.wide === false, tableMarkets: priced && this.state.wide !== false,

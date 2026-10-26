@@ -5,7 +5,7 @@ Pages only. Builders and workflows are the repo's.
 ## New files (nhl-betting-lab only)
 - `web/Game.dc.html?id=<gameId>` — reads `data/board.json` (`games[]`, with optional `factors[]`, `ratings`, `goalie`, `final`) and `data/record.json` (for the uncertainty band on the win bar). Replaces the draft `Game.html`.
 - `web/Record.dc.html` — reads `data/record.json`. Replaces `Record.html`. Never shows ROI, units or profit.
-- `web/Methods.dc.html` — reads `data/ratings.json`. Replaces `Methods.html`. Anchors: `#xg #xg-sh #score-venue #gsax #goalies #lineup #home-ice #rest #form #referees #pregame #proj-goals #win #fair #edge #bet-lean #graded #changelog #ratings #defence-ratings`.
+- `web/Methods.dc.html` — reads `data/ratings.json`. Replaces `Methods.html`. Anchors: `#xg #xg-sh #score-venue #gsax #goalies #lineup #home-ice #rest #form #referees #posthockey #proj-goals #win #fair #edge #bet-lean #graded #changelog #ratings #defence-ratings`.
 - `web/data/sample/board_game.json`, `record.json`, `record_empty.json`, `ratings.json`, `ratings_nodef.json` — preview fixtures, all labelled Sample on the page.
 
 Off the domain the pages load the fixtures; on `*.maverickhightower.com` they always read `./data/*.json` (#305 rule).
@@ -54,5 +54,3 @@ Off the domain the pages load the fixtures; on `*.maverickhightower.com` they al
 - New `web/Tracker.dc.html` reads `data/tracker.json` (shape: the Tracker design brief; the page recomputes every split from `rows`). Fixtures `web/data/sample/tracker.json`, `tracker_empty.json`.
 - Owner's call 2026-10-26: units, records and return for every graded best bet are published. Supersedes the 2026-10-05 seal. The Record page's sealed-hash block is removed; Record and Methods wording now points at All results.
 - NHL tab bar is now Tonight · Props · Results · Season · Record · Tracker on every page (Board, Results, Archive, Graphic, Game, Record, Methods). Archive stays reachable from the Tracker's "How to read this" and the Archive page itself. EPL/CBB keep their Archive tab.
-
-<!-- Test drop 2026-10-26: no feed change needed. -->

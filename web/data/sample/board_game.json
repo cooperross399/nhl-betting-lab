@@ -217,7 +217,7 @@
     },
     {
      "key": "posthockey",
-     "label": "Second-opinion blend",
+     "label": "PostHockey blend",
      "homeWin": 0.569,
      "delta": -0.006,
      "homeGoals": 3.18,
@@ -379,7 +379,7 @@
     },
     {
      "key": "posthockey",
-     "label": "Second-opinion blend",
+     "label": "PostHockey blend",
      "homeWin": 0.538,
      "delta": 0,
      "homeGoals": 2.79,
@@ -561,7 +561,7 @@
     },
     {
      "key": "posthockey",
-     "label": "Second-opinion blend",
+     "label": "PostHockey blend",
      "homeWin": 0.386,
      "delta": -0.005,
      "homeGoals": 2.48,
