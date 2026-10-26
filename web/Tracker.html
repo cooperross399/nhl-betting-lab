@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>All results — Maverick Hightower</title>
+<meta name="description" content="Every graded pick in one place: win–loss and units by team, player, prop type, market, price and month.">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./lib/page.css">
+<meta name="theme-color" content="#14151a">
+<style>
+  .filters{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 4px}
+  .filters button{min-height:44px;padding:0 14px;border:1px solid var(--rule);background:transparent;color:var(--ink);font:600 12px/1 'IBM Plex Sans',sans-serif;letter-spacing:.06em;text-transform:uppercase;cursor:pointer}
+  .filters button[aria-pressed="true"]{background:var(--ink);color:var(--paper)}
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:16px 0}
+  .stat{border:1px solid var(--rule);padding:12px}
+  .stat .v{font:700 28px/1.1 'Barlow Condensed',sans-serif}
+  .stat .s{font-size:12px;color:var(--mute)}
+  .pos{color:var(--win)} .neg{color:var(--alert)}
+  th[data-sort]{cursor:pointer;user-select:none}
+  th[data-sort]:after{content:" ↕";color:var(--mute-2)}
+  .search{width:100%;max-width:360px;min-height:44px;padding:0 12px;background:transparent;color:var(--ink);border:1px solid var(--rule);font:14px 'IBM Plex Sans',sans-serif;margin:8px 0}
+  .more{min-height:44px;padding:0 16px;border:1px solid var(--rule);background:transparent;color:var(--ink);cursor:pointer;margin-top:8px}
+  .thin{color:var(--mute)}
+</style>
+</head>
+<body>
+<div class="wrap" id="root"><noscript>This page needs JavaScript to read the results.</noscript></div>
+<script type="module">
+import { chrome, esc, getJSON } from "./lib/page.js";
+
+const root = document.getElementById("root");
+const GROUPS = { all: "Everything", team: "Team picks", props: "Player props", due: "Due List" };
+const THIN = 10; // fewer bets than this: shown, but greyed as too few to read
+
+const u = (x) => (typeof x === "number" ? `${x > 0 ? "+" : x < 0 ? "−" : ""}${Math.abs(x).toFixed(2)}u` : "—");
+const cls = (x) => (x > 0 ? "pos" : x < 0 ? "neg" : "");
+const price = (p) => (typeof p === "number" ? (p > 0 ? `+${p}` : `−${Math.abs(p)}`) : "—");
+const rec = (t) => `${t.w}–${t.l}${t.p ? `–${t.p}` : ""}`;
+const ret = (t) => { if (!t.staked) return "—"; const v = 100 * t.units / t.staked; return `${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v).toFixed(1)}%`; };
+
+function tally(rows) {
+  const t = { w: 0, l: 0, p: 0, bets: rows.length, staked: 0, units: 0 };
+  for (const r of rows) { t[r.result === "win" ? "w" : r.result === "loss" ? "l" : "p"] += 1; t.staked += r.staked; t.units += r.units; }
+  return t;
+}
+
+function group(rows, keyOf, labelOf) {
+  const m = new Map();
+  for (const r of rows) for (const k of keyOf(r)) {
+    if (k == null || k === "") continue;
+    if (!m.has(k)) m.set(k, { key: k, label: labelOf(r, k), rows: [] });
+    m.get(k).rows.push(r);
+  }
+  return [...m.values()].map((g) => ({ ...g, ...tally(g.rows) }));
+}
+
+const BANDS = [[-1e5, -151, "−150 and shorter"], [-150, -111, "−149 to −111"], [-110, 110, "−110 to +110"], [111, 199, "+111 to +199"], [200, 1e5, "+200 and longer"]];
+const band = (p) => (BANDS.find(([lo, hi]) => p >= lo && p <= hi) || [])[2];
+
+const VIEWS = [
+  ["market", "By market", (r) => [`${r.group}:${r.market}`], (r) => (r.group === "team" ? r.market : `${r.group === "due" ? "Due List · " : ""}${r.propType}`)],
+  ["proptype", "By prop type", (r) => (r.group === "props" ? [`${r.market}:${r.side}`] : []), (r) => `${r.propType} ${r.side || ""}`],
+  ["team", "By team", (r) => (r.group === "team" && !r.team ? [...new Set(r.teams || [])] : [r.team]), (r, k) => k],
+  ["player", "By player", (r) => (r.group === "team" ? [] : [String(r.playerId || r.player)]), (r) => `${r.player} (${r.team || "—"})`],
+  ["price", "By price", (r) => [band(r.price)], (r, k) => k],
+  ["month", "By month", (r) => [(r.date || "").slice(0, 7)], (r, k) => new Date(`${k}-01T12:00:00`).toLocaleString([], { month: "long", year: "numeric" })],
+];
+
+const state = { group: "all", sort: {}, logShown: 50, search: {} };
+
+function table(id, title, rows, note) {
+  const s = state.sort[id] || { key: "units", dir: -1 };
+  const q = (state.search[id] || "").toLowerCase();
+  let list = rows.filter((g) => !q || g.label.toLowerCase().includes(q));
+  list = list.sort((a, b) => (s.key === "label" ? a.label.localeCompare(b.label) * -s.dir : ((a[s.key] ?? 0) - (b[s.key] ?? 0)) * s.dir) || b.bets - a.bets);
+  const long = rows.length > 12;
+  const body = list.map((g) => `<tr class="${g.bets < THIN ? "thin" : ""}"><td style="white-space:normal">${esc(g.label)}</td><td class="n">${rec(g)}</td><td class="n">${g.bets}</td><td class="n">${g.staked.toFixed(2)}u</td><td class="n ${cls(g.units)}">${u(g.units)}</td><td class="n ${cls(g.units)}">${ret(g)}</td></tr>`).join("");
+  const th = (k, l, n = true) => `<th class="${n ? "n" : ""}" data-sort="${k}" data-table="${id}">${l}</th>`;
+  return `<section id="${id}"><h2>${esc(title)}</h2>${note ? `<p class="note">${note}</p>` : ""}
+    ${long ? `<input class="search" type="search" placeholder="Search ${esc(title.toLowerCase().replace("by ", ""))}" data-search="${id}" value="${esc(state.search[id] || "")}" aria-label="Search ${esc(title)}">` : ""}
+    ${list.length ? `<div class="scroll"><table><thead><tr>${th("label", "", false)}${th("w", "Record")}${th("bets", "Bets")}${th("staked", "Staked")}${th("units", "Units")}${th("returnPct", "Return")}</tr></thead><tbody>${body}</tbody></table></div>` : `<p class="note">Nothing here yet.</p>`}</section>`;
+}
+
+function highlights(rows) {
+  const pick = (view) => {
+    const [, , keyOf, labelOf] = VIEWS.find((v) => v[0] === view);
+    return group(rows, keyOf, labelOf).filter((g) => g.bets >= THIN);
+  };
+  const line = (title, gs) => {
+    if (gs.length < 2) return "";
+    const best = [...gs].sort((a, b) => b.units - a.units).slice(0, 3).filter((g) => g.units > 0);
+    const worst = [...gs].sort((a, b) => a.units - b.units).slice(0, 3).filter((g) => g.units < 0);
+    const li = (g) => `<li>${esc(g.label)} <span class="mono ${cls(g.units)}">${u(g.units)}</span> <span class="mute">(${rec(g)})</span></li>`;
+    return `<div class="card"><h3>${title}</h3><div class="grid2"><div><div class="kicker">Treating us right</div>${best.length ? `<ol>${best.map(li).join("")}</ol>` : `<p class="note">Nobody in the black yet.</p>`}</div><div><div class="kicker">Treating us wrong</div>${worst.length ? `<ol>${worst.map(li).join("")}</ol>` : `<p class="note">Nobody in the red.</p>`}</div></div></div>`;
+  };
+  const out = line("Teams", pick("team")) + line("Players", pick("player")) + line("Markets", pick("market"));
+  return out ? `<section id="highlights"><h2>Where we win and lose</h2><p class="note">Only names with ${THIN} or more graded bets.</p><div class="grid2">${out}</div></section>` : "";
+}
+
+function log(rows) {
+  const q = (state.search.log || "").toLowerCase();
+  const text = (r) => (r.group === "team" ? `${r.label} ${(r.teams || []).join(" ")} ${r.market}` : `${r.player} ${r.team} ${r.propType} ${r.side} ${r.line}`);
+  const list = rows.filter((r) => !q || text(r).toLowerCase().includes(q));
+  const shown = list.slice(0, state.logShown);
+  const what = (r) => (r.group === "team" ? `${esc(r.label)} <span class="mute">${esc((r.teams || []).join(" at "))}</span>`
+    : `${esc(r.player)} <span class="mute">${esc(r.team || "")}${r.opp ? ` v ${esc(r.opp)}` : ""}</span> · ${esc(r.propType)} ${esc(r.side || "")} ${esc(r.line ?? "")}`);
+  const body = shown.map((r) => `<tr><td class="mono">${esc(r.date)}</td><td>${esc(GROUPS[r.group])}</td><td style="white-space:normal">${what(r)}</td><td class="n">${price(r.price)}</td><td class="n">${r.staked}u${r.stakeAssumed ? "*" : ""}</td><td>${esc(r.result)}</td><td class="n ${cls(r.units)}">${u(r.units)}</td></tr>`).join("");
+  return `<section id="log"><h2>Every bet</h2><input class="search" type="search" placeholder="Search players, teams, markets" data-search="log" value="${esc(state.search.log || "")}" aria-label="Search every bet">
+    <div class="scroll"><table><thead><tr><th>Date</th><th>Type</th><th>Bet</th><th class="n">Price</th><th class="n">Stake</th><th>Result</th><th class="n">Units</th></tr></thead><tbody>${body}</tbody></table></div>
+    ${list.length > shown.length ? `<button class="more" data-more>Show ${Math.min(50, list.length - shown.length)} more of ${list.length - shown.length}</button>` : ""}</section>`;
+}
+
+let T = null;
+function render() {
+  const all = (T && T.rows) || [];
+  const rows = state.group === "all" ? all : all.filter((r) => r.group === state.group);
+  const o = tally(rows);
+  const by = (g) => tally(all.filter((r) => r.group === g));
+  const filters = Object.entries(GROUPS).map(([k, l]) => `<button data-group="${k}" aria-pressed="${state.group === k}">${l}</button>`).join("");
+  const stats = ["team", "props", "due"].map((g) => { const t = by(g); return `<div class="stat"><div class="kicker" style="margin:0">${GROUPS[g]}</div><div class="v ${cls(t.units)}">${t.bets ? u(t.units) : "—"}</div><div class="s">${t.bets ? `${rec(t)} · ${t.bets} bets · ${ret(t)}` : "Nothing graded yet"}</div></div>`; }).join("");
+  const views = VIEWS.filter(([id]) => !(id === "proptype" && !["all", "props"].includes(state.group)) && !(id === "player" && state.group === "team"))
+    .map(([id, title, keyOf, labelOf]) => table(id, title, group(rows, keyOf, labelOf),
+      id === "team" ? "A team bet counts under the team picked; a total under both clubs; a prop under the player's club. So this table does not add up to the total." : ""))
+    .join("");
+  const toc = [["highlights", "Where we win and lose"], ...VIEWS.map(([id, t]) => [id, t]), ["log", "Every bet"]].map(([id, t]) => `<a href="#${id}">${t}</a>`).join("");
+  root.innerHTML = chrome("Tracker") + `<main id="main"><div class="kicker">All results</div><h1>Every bet, tracked.</h1>
+    ${all.length ? `<p class="lede">${o.bets} graded bets${T.firstDate ? ` from ${esc(T.firstDate)} to ${esc(T.lastDate)}` : ""}: <b>${rec(o)}</b>, <b class="${cls(o.units)}">${u(o.units)}</b> on ${o.staked.toFixed(2)}u staked (${ret(o)}).</p>
+    <div class="stats">${stats}</div>
+    <div class="filters" role="group" aria-label="Show">${filters}</div>
+    <nav class="toc" aria-label="Contents">${toc}</nav>
+    ${highlights(rows)}${views}${log(rows)}`
+    : `<p class="lede">No bet has been graded yet. The first ones appear the morning after the first night settles.</p>`}
+    <div class="callout"><b>How to read this</b><br>Team picks and player props are the card's best bets at the card's stake${T && T.teamPickDefaultUnits ? `; a team pick posted before the board recorded its stake counts at ${T.teamPickDefaultUnits}u (marked *)` : ""}. The Due List is tracked as if ${T ? T.dueStake : 0.25}u were bet on every priced entry; nothing is bet. Leans, voids and unpriced entries are not counted. Grey rows have fewer than ${THIN} bets: too few to say a team or player is really treating us right or wrong.</div>
+    <footer class="note"><a href="Archive.dc.html">Every night's board →</a> · <a href="Results.dc.html">Last night →</a> · <a href="Methods.html#grading">How picks are graded →</a> · This site recommends; it never places a bet.</footer></main>`;
+}
+
+root.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-group]");
+  if (b) { state.group = b.dataset.group; state.logShown = 50; render(); return; }
+  const th = e.target.closest("th[data-sort]");
+  if (th) {
+    const id = th.dataset.table, key = th.dataset.sort, cur = state.sort[id] || { key: "units", dir: -1 };
+    state.sort[id] = { key, dir: cur.key === key ? -cur.dir : -1 };
+    render(); document.getElementById(id)?.scrollIntoView(); return;
+  }
+  if (e.target.closest("[data-more]")) { state.logShown += 50; render(); document.getElementById("log")?.scrollIntoView(); }
+});
+root.addEventListener("input", (e) => {
+  const id = e.target.dataset && e.target.dataset.search;
+  if (!id) return;
+  state.search[id] = e.target.value;
+  const pos = e.target.selectionStart;
+  render();
+  const again = root.querySelector(`[data-search="${id}"]`);
+  if (again) { again.focus(); again.setSelectionRange(pos, pos); }
+});
+
+T = await getJSON("./data/tracker.json");
+render();
+if (location.hash) document.querySelector(location.hash)?.scrollIntoView();
+</script>
+</body>
+</html>

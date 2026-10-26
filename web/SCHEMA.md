@@ -320,3 +320,25 @@ build moved toward the picked side. Accuracy only; never a return.
 `data/ratings.json` (`ratings_page`): `{generatedAt, through, teams[{abbr, name, attack, defence, formAttack,
 formDefence, homeIce, goaltending}], unseenGoalie, defence{best[], worst[], rated, games}}`, the defence rows
 `{player, team, goalsPrevented}` from the ratings file's `skater_defence`, named from the player logs.
+
+## tracker.json (results tracker, Tracker.html — 2026-10-26)
+
+Every graded best bet and priced Due List entry of the season, one row each,
+and the same rows summed. Written by `build_site_json.tracker` from each
+settled night's `bets` (`tracker_rows`), kept in `history/settled/<day>.json`.
+
+- `rows[]`: `{date, group: "team"|"props"|"due", market, price, result:
+  "win"|"loss"|"push", staked, units}` plus, for a team pick, `label`, `team`
+  (the side picked, null for a total), `opp`, `teams` [away, home] and
+  `stakeAssumed: true` when the board recorded no stake (counted at
+  `teamPickDefaultUnits`); for a prop or Due List entry, `propType`, `side`,
+  `line`, `player`, `playerId`, `team`, `opp`. Newest first. Leans, voids,
+  unpriced Due List entries and ungraded rows are never rows.
+- `overall`, and `byGroup`, `byMarket`, `byPropType`, `byTeam`, `byPlayer`,
+  `byPrice`, `byMonth`: `{key, label, w, l, p, bets, staked, units,
+  returnPct}`. Every split adds back to `overall` except `byTeam` (a total
+  counts under both clubs) and `byPropType`/`byPlayer` (props or players only).
+- `nights`, `firstDate`, `lastDate`, `teamPickDefaultUnits`, `dueStake`.
+
+A frozen board's `games[].pick` now carries `units`, the card's stake, on a
+best bet.

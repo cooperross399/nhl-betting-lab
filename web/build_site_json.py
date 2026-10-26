@@ -925,6 +925,11 @@ def build_board(day: date, lab: Path, history_dir: Path) -> dict:
                             "price": int(float(top["american_odds"])), "edgePct": round(float(top["edge"]) * 100, 1),
                             **pick_side_and_line(top),
                         }
+                        # The card's stake, for the results tracker
+                        # (Tracker.html). A lean carries none.
+                        stake = _real(top.get("suggested_units")) if kind == "bet" else None
+                        if stake:
+                            row["pick"]["units"] = stake
                         break
         for side, abbr in (("away", a), ("home", h)):
             if abbr in starters:
@@ -2053,13 +2058,174 @@ def props_tallies(rows: list[dict]) -> dict:
     return out
 
 
+
+# ---------------------------------------------------------------------------
+# The results tracker (Tracker.html, Cooper 2026-10-26: "one big page of all
+# our results and tracking for each team/player/player prop/market").
+
+#: How each prop market reads on the tracker.
+PROP_LABEL = {"shots_on_goal": "Shots on goal", "points": "Points", "goals": "Goals", "assists": "Assists",
+              "goalie_saves": "Goalie saves", "blocked_shots": "Blocked shots", "hits": "Hits"}
+
+#: A team pick frozen before the board recorded its stake (2026-10-26) is
+#: tracked at this many units, and says so.
+TEAM_PICK_DEFAULT_UNITS = 1.0
+
+#: The tracker's groups: the card's team best bets, its prop best bets, and
+#: the Due List at its notional DUE_LIST_STAKE. Leans are never tracked.
+TRACKER_GROUPS = {"team": "Team picks", "props": "Player props", "due": "Due List"}
+
+#: Price bands, by the American price taken.
+PRICE_BANDS = ((-10_000, -151, "−150 and shorter"), (-150, -111, "−149 to −111"), (-110, 110, "−110 to +110"),
+               (111, 199, "+111 to +199"), (200, 10_000, "+200 and longer"))
+
+
+def _profit(units: float, price: float, result: str) -> float:
+    if result == "win":
+        return units * win_profit(price)
+    return -units if result == "loss" else 0.0
+
+
+def tracker_rows(results: dict) -> list[dict]:
+    """Every staked result one settled night holds, one flat row each: the
+    team best bets (games[].pick, kind bet), the prop best bets
+    (props.rows, kind bet) and the priced Due List entries. Each carries
+    what was staked and what came back, in units, at the published price.
+    Only a win, a loss or a push is a row; a void, a lean, an unpriced Due
+    List entry or anything not yet graded is not."""
+    day = results.get("resultsDate")
+    out: list[dict] = []
+    for g in results.get("games") or []:
+        pick = g.get("pick") if isinstance(g, dict) else None
+        if not isinstance(pick, dict) or pick.get("kind", "bet") != "bet" or pick.get("result") not in ("win", "loss", "push"):
+            continue
+        price = _real(pick.get("price"))
+        if not price:
+            continue
+        home, away = (g.get("home") or {}).get("abbr"), (g.get("away") or {}).get("abbr")
+        label = str(pick.get("label") or "")
+        first = label.split()[0] if label else ""
+        team = first if first in (home, away) else None
+        staked = _real(pick.get("units")) or TEAM_PICK_DEFAULT_UNITS
+        out.append({"date": day, "group": "team", "market": pick.get("market"), "label": label,
+                    "team": team, "opp": (away if team == home else home) if team else None,
+                    "teams": [away, home], "price": price, "result": pick["result"], "staked": staked,
+                    "units": round(_profit(staked, price, pick["result"]), 4),
+                    **({} if _real(pick.get("units")) else {"stakeAssumed": True})})
+    for r in ((results.get("props") or {}).get("rows") or []) if isinstance(results.get("props"), dict) else []:
+        if not isinstance(r, dict) or r.get("kind") != "bet" or r.get("result") not in ("win", "loss", "push"):
+            continue
+        price, staked = _real(r.get("price")), _real(r.get("units"))
+        if not price or not staked:
+            continue
+        market = r.get("market")
+        out.append({"date": day, "group": "props", "market": market, "propType": PROP_LABEL.get(market, market),
+                    "side": r.get("side"), "line": r.get("line"), "player": r.get("player"),
+                    "playerId": r.get("playerId"), "team": r.get("team"), "opp": r.get("opp"), "price": price,
+                    "result": r["result"], "staked": staked, "units": round(_profit(staked, price, r["result"]), 4)})
+    for r in ((results.get("dueList") or {}).get("rows") or []) if isinstance(results.get("dueList"), dict) else []:
+        if not isinstance(r, dict) or r.get("result") not in ("win", "loss", "push") or not _is_number(r.get("units")):
+            continue
+        market = r.get("market")
+        out.append({"date": day, "group": "due", "market": market, "propType": PROP_LABEL.get(market, market),
+                    "side": "over", "line": r.get("line") if r.get("line") is not None else DUE_LIST_LINE,
+                    "player": r.get("player"), "playerId": r.get("playerId"), "team": r.get("team"),
+                    "opp": r.get("opp"), "price": float(r["price"]), "result": r["result"],
+                    "staked": DUE_LIST_STAKE, "units": float(r["units"])})
+    return out
+
+
+def _tally(rows: list[dict]) -> dict:
+    w = sum(r["result"] == "win" for r in rows)
+    l = sum(r["result"] == "loss" for r in rows)
+    p = sum(r["result"] == "push" for r in rows)
+    staked = sum(r["staked"] for r in rows)
+    units = sum(r["units"] for r in rows)
+    return {"w": w, "l": l, "p": p, "bets": len(rows), "staked": round(staked, 2), "units": round(units, 2),
+            "returnPct": round(100 * units / staked, 1) if staked else None}
+
+
+def _grouped(rows: list[dict], key, label=None) -> list[dict]:
+    groups: dict = {}
+    names: dict = {}
+    for r in rows:
+        for k in key(r):
+            if k is None:
+                continue
+            groups.setdefault(k, []).append(r)
+            if label:
+                names.setdefault(k, label(r, k))
+    out = [{"key": str(k), "label": names.get(k, str(k)), **_tally(v)} for k, v in groups.items()]
+    return sorted(out, key=lambda g: (-g["units"], -g["bets"], g["label"]))
+
+
+def _price_band(price: float) -> str | None:
+    for low, high, name in PRICE_BANDS:
+        if low <= price <= high:
+            return name
+    return None
+
+
+def tracker(rows: list[dict], *, nights: int, generated_at: str | None = None) -> dict:
+    """tracker.json: every settled best bet and Due List entry, and the same
+    rows summed by group, market, prop type, team, player, price band and
+    month. Every split of the whole adds back to `overall` except by team,
+    where a total counts under both clubs and a prop under its player's club."""
+    rows = sorted(rows, key=lambda r: (r["date"] or "", r["group"]), reverse=True)
+
+    def market_key(r):
+        if r["group"] == "team":
+            return [f"team:{r['market']}"]
+        return [f"{r['group']}:{r['market']}"]
+
+    def market_label(r, k):
+        if r["group"] == "team":
+            return r["market"]
+        return f"{'Due List · ' if r['group'] == 'due' else ''}{r.get('propType')}"
+
+    def player_key(r):
+        if r["group"] == "team":
+            return [None]
+        return [str(r.get("playerId") or r.get("player"))]
+
+    def team_key(r):
+        if r["group"] == "team" and not r.get("team"):
+            return list(dict.fromkeys(t for t in r.get("teams") or [] if t))
+        return [r.get("team")]
+
+    def prop_key(r):
+        if r["group"] != "props":
+            return [None]
+        return [f"{r['market']}:{r.get('side')}"]
+
+    return {
+        "generatedAt": generated_at or datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
+        "nights": nights,
+        "firstDate": rows[-1]["date"] if rows else None,
+        "lastDate": rows[0]["date"] if rows else None,
+        "teamPickDefaultUnits": TEAM_PICK_DEFAULT_UNITS,
+        "dueStake": DUE_LIST_STAKE,
+        "overall": _tally(rows),
+        "byGroup": [{"key": k, "label": name, **_tally([r for r in rows if r["group"] == k])}
+                    for k, name in TRACKER_GROUPS.items()],
+        "byMarket": _grouped(rows, market_key, market_label),
+        "byPropType": _grouped(rows, prop_key, lambda r, k: f"{r.get('propType')} {r.get('side') or ''}".strip()),
+        "byTeam": _grouped(rows, team_key, lambda r, k: k),
+        "byPlayer": _grouped(rows, player_key, lambda r, k: f"{r.get('player')} ({r.get('team') or '—'})"),
+        "byPrice": _grouped(rows, lambda r: [_price_band(r["price"])], lambda r, k: k),
+        "byMonth": sorted(_grouped(rows, lambda r: [(r["date"] or "")[:7] or None], lambda r, k: k),
+                          key=lambda g: g["key"]),
+        "rows": rows,
+    }
+
+
 def night_record(results: dict) -> dict:
     """What the season keeps of one settled night: its settled game count and
     summary, the Due List's tallies when the frozen board carried the list,
     and the props tallies when the night's props block was published (status
     "ok", as the page reads a block without one)."""
     games = results.get("games") or []
-    night = {"games": len(games), "summary": results.get("summary") or {}}
+    night = {"games": len(games), "summary": results.get("summary") or {}, "bets": tracker_rows(results)}
     due = results.get("dueList")
     if isinstance(due, dict):
         night["dueList"] = due_list_tallies(due.get("rows") or [])
@@ -2115,6 +2281,10 @@ def _kept_before_the_list_was_graded(night: dict, frozen: Path) -> bool:
     as is, would keep every entry its board published out of the season for
     good. Such a night is settled again and the cache rewritten.
     """
+    if "bets" not in night:
+        # Kept before the results tracker (2026-10-26): settled again once
+        # so its rows reach tracker.json.
+        return True
     if "dueList" in night:
         # Kept before the list was tracked at DUE_LIST_STAKE (2026-10-09):
         # settled again once so its units are counted.
@@ -2128,7 +2298,8 @@ def _kept_before_the_list_was_graded(night: dict, frozen: Path) -> bool:
     return any(isinstance(g, dict) and "drought" in g for g in board.get("games") or [])
 
 
-def season_record(today: date, history_dir: Path, latest: dict, *, processed: Path | None = None) -> dict:
+def season_record(today: date, history_dir: Path, latest: dict, *, processed: Path | None = None,
+                  bets: list | None = None) -> dict:
     """The season so far: every frozen board before `today`, settled and summed.
 
     `latest` is the night this run just settled (yesterday), used as is. Any
@@ -2184,7 +2355,12 @@ def season_record(today: date, history_dir: Path, latest: dict, *, processed: Pa
             continue
         cached = kept / path.name
         kept_night = _kept_night(cached)
+        stale = None
         if kept_night is not None and _kept_before_the_list_was_graded(kept_night, path):
+            # Kept before the tracker and otherwise current: if settling it
+            # again fails (an outage), it is still read as kept, without bets.
+            if "bets" not in kept_night and not _kept_before_the_list_was_graded({**kept_night, "bets": []}, path):
+                stale = kept_night
             kept_night = None
         if day.isoformat() == latest.get("resultsDate"):
             night = night_record(latest)
@@ -2194,9 +2370,16 @@ def season_record(today: date, history_dir: Path, latest: dict, *, processed: Pa
             try:
                 settled = settle(day, history_dir, processed=processed)
             except (OSError, ValueError, KeyError):
-                missing += 1
-                continue
-            night = night_record(settled)
+                if stale is None:
+                    missing += 1
+                    continue
+                settled = None
+            if settled is None:
+                night = kept_night = stale
+            else:
+                night = night_record(settled)
+        if bets is not None:
+            bets.extend(r for r in night.get("bets") or [] if isinstance(r, dict))
         night_due = night.get("dueList") if isinstance(night.get("dueList"), dict) else None
         night_waiting = night_due and night_due.get("pending")
         if isinstance(night.get("props"), dict) and night["props"].get("pending"):
@@ -2293,7 +2476,8 @@ def main(argv: list[str] | None = None) -> int:
     board = build_board(today, Path(args.lab), history)
     processed = Path(args.lab) / "data" / "processed"
     results = settle(today - timedelta(days=1), history, processed=processed)
-    season = season_record(today, history, results, processed=processed)
+    tracked: list[dict] = []
+    season = season_record(today, history, results, processed=processed, bets=tracked)
     results["seasonRecord"] = season
     # The board's record is the season's. Untallied (no settled night yet)
     # stays None, which the page renders as an absence, never 0–0.
@@ -2316,6 +2500,7 @@ def main(argv: list[str] | None = None) -> int:
     (out / "board.json").write_text(json.dumps(board, indent=1, ensure_ascii=False), encoding="utf-8")
     (out / "results.json").write_text(json.dumps(results, indent=1, ensure_ascii=False), encoding="utf-8")
     (out / "ratings.json").write_text(json.dumps(ratings_page(Path(args.lab)), indent=1, ensure_ascii=False), encoding="utf-8")
+    (out / "tracker.json").write_text(json.dumps(tracker(tracked, nights=season["nights"]), indent=1, ensure_ascii=False), encoding="utf-8")
     (out / "record.json").write_text(json.dumps(track_record(today, history), indent=1, ensure_ascii=False), encoding="utf-8")
     print(f"board {today}: {len(board['games'])} games ({board['phase']}); results {today - timedelta(days=1)}: {len(results['games'])} settled.")
     print("No odds were fetched, no credit was spent, and no bet was placed.")

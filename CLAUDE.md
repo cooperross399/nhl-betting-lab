@@ -2904,6 +2904,20 @@ Re-derive rather than trust if the data has moved.
   `ratings.json` (team table, top and bottom defenders). New NHL-only pages
   `Game.html`, `Record.html`, `Methods.html` (`web/SCHEMA.md`).
 
+- **2026-10-26: one results page (Cooper: "transform the archive results
+  pages into one big page of all our results and tracking for each
+  team/player/player prop/market").** Site only. Each settled night now keeps
+  its graded best bets (team picks at the card's stake, prop best bets at the
+  card's stake, priced Due List entries at 0.25u notional) as `bets`
+  (`build_site_json.tracker_rows`); a night kept without them is settled again
+  once. `tracker.json` sums them by group, market, prop type, team, player,
+  price band and month, and `Tracker.html` shows them with filters, search
+  and every bet; it replaces the Archive tab on the NHL pages (the archive is
+  linked from it). Team picks frozen before the board recorded their stake
+  count at 1u and are marked. These are the published picks the Results page
+  already grades, never the sealed forward ledger. No card, snapshot, ledger
+  row or stake changed.
+
 ## Contract strings — never change these
 
 Cooper's local scheduled tasks hard-code these. Renaming any of them silently
