@@ -17,7 +17,9 @@ the card rate teams on the same numbers. Without it the season is simulated on
 the model's own ratings and the page says so.
 
 The hand-kept inputs (injured regulars expected back, opening goalie depth
-charts, rookies' ice time) live in ``data/season_sim/roster_notes.json``.
+charts, rookies' ice time) live in ``data/season_sim/roster_notes.json``; the
+published Hart, Norris and Selke odds and media polls the award trackers read
+live in ``data/season_sim/award_inputs.json`` (see ``season_sim/awards.py``).
 """
 from __future__ import annotations
 
@@ -33,10 +35,12 @@ sys.path.insert(0, str(HERE))
 
 from season_sim.fetch import fetch_bundle  # noqa: E402
 from season_sim.model import build_model, isfinite_all, load_injuries, load_ph_ratings  # noqa: E402
+from season_sim.awards import load_inputs, trackers  # noqa: E402
 from season_sim.simulate import simulate  # noqa: E402
 
 DEFAULT_NOTES = HERE.parent / "data" / "season_sim" / "roster_notes.json"
 DEFAULT_RATINGS = HERE.parent / "data" / "processed" / "shadow_team_ratings.json"
+DEFAULT_AWARDS = HERE.parent / "data" / "season_sim" / "award_inputs.json"
 
 #: What the page prints for a Calder table it cannot vouch for.
 CALDER_NOTE = ("Rookies are read off the NHL's eligibility rule (under 26 on September 15, at most 25 games in any "
@@ -56,7 +60,8 @@ def season_label(season: str) -> str:
     return f"{season[:4]}–{season[6:]}"
 
 
-def compose(model: dict, result: dict, notes: dict, colors: dict, *, generated_at: str) -> dict:
+def compose(model: dict, result: dict, notes: dict, colors: dict, *, generated_at: str,
+            award_inputs: dict | None = None) -> dict:
     info = model["team_info"]
     players = result["players"]
     goalies_by_team: dict[str, list[dict]] = {}
@@ -79,6 +84,10 @@ def compose(model: dict, result: dict, notes: dict, colors: dict, *, generated_a
                      p10=r["p10"], p90=r["p90"], now=r["now"]) for r in rows]
 
     trophies_in = result.get("trophies") or {}
+    skaters = [dict(name=q["name"], pos=q["pos"], team=ab, p=q["proj_p"])
+               for ab, qs in model["players"].items() for q in qs if not q.get("filler")]
+    voted = trackers(award_inputs, skaters, {r["abbrev"]: r["p_playoff"] for r in result["teams"]},
+                     today=datetime.fromisoformat(generated_at).date())
     playoffs_in = result.get("playoffs") or {}
     ratings = model.get("ratings") or {}
 
@@ -131,6 +140,7 @@ def compose(model: dict, result: dict, notes: dict, colors: dict, *, generated_a
             calder=award(trophies_in["calder"]) if trophies_in.get("calder") else None,
             calderNote=CALDER_NOTE if trophies_in.get("calder") else
             "The rookie list could not be read off the data, so no Calder table is published.",
+            voted=voted,
         ),
         method=dict(sigma=result["meta"]["sigma"], sigmaMode=result["meta"].get("sigma_mode", "fixed"),
                     hfa=result["meta"]["hfa"], tieRate=result["meta"]["tie_rate"],
@@ -169,6 +179,9 @@ def check(site: dict) -> None:
     for name, rows in (site.get("trophies") or {}).items():
         if isinstance(rows, list) and sum(r["p"] for r in rows) > 1.001:
             raise SystemExit(f"the {name} odds sum past 1")
+    for name, tr in ((site.get("trophies") or {}).get("voted") or {}).items():
+        if sum(r["tracker"] for r in tr["rows"]) > 1.001 or any(r["tracker"] < 0 for r in tr["rows"]):
+            raise SystemExit(f"the {name} tracker shares do not make a distribution")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -180,6 +193,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--ratings", default=str(DEFAULT_RATINGS),
                         help="The card's team ratings file (PostHockey-style xG); blended in when current.")
     parser.add_argument("--ph-weight", type=float, default=None, help="Blend weight toward --ratings (default: the model's).")
+    parser.add_argument("--awards", default=str(DEFAULT_AWARDS),
+                        help="Hand-kept Hart/Norris/Selke odds and media polls for the award trackers.")
     args = parser.parse_args(argv)
 
     notes = load_injuries(Path(args.notes))
@@ -193,7 +208,11 @@ def main(argv: list[str] | None = None) -> int:
     if not model["ratings"]["ph_weight"]:
         print("::warning::The season is simulated on its own ratings, not the card's PostHockey-style ratings: " + status)
     result = simulate(model, sims=args.sims)
-    site = compose(model, result, notes, _team_colors(), generated_at=datetime.now(timezone.utc).isoformat(timespec="seconds"))
+    award_inputs = load_inputs(Path(args.awards))
+    if award_inputs is None:
+        print(f"::warning::No award inputs at {args.awards}; the Hart, Norris and Selke trackers are left out")
+    site = compose(model, result, notes, _team_colors(), generated_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                   award_inputs=award_inputs)
     check(site)
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -205,6 +224,19 @@ def main(argv: list[str] | None = None) -> int:
     tro = site["trophies"]
     print(f"Cup favourite {cup['abbr']} {cup['odds']['cup']:.1%}; "
           + "; ".join(f"{k} {v[0]['name']} {v[0]['p']:.1%}" for k, v in tro.items() if isinstance(v, list) and v))
+    # The page's detail, in the log too, so a run can be read without the site.
+    for k, v in tro.items():
+        if isinstance(v, list) and v:
+            print(f"  {k}: " + ", ".join(f"{r['name']} {r['p']:.1%}" for r in v[:5]))
+    for sl in site["playoffs"]["slots"]:
+        if sl["matchups"]:
+            m = sl["matchups"][0]
+            print(f"  {sl['conf']} {sl['label']}: {m['a']} v {m['b']} {m['p']:.0%}")
+    for m in site["playoffs"]["finals"][:3]:
+        print(f"  Final {m['a']} v {m['b']} {m['p']:.1%}")
+    for k, tr in (tro.get("voted") or {}).items():
+        stale = " (stale inputs)" if tr["stale"] else ""
+        print(f"  {k} tracker{stale}: " + ", ".join(f"{r['name']} {r['tracker']:.1%}" for r in tr["rows"][:5]))
     return 0
 
 
