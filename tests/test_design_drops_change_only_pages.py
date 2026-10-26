@@ -221,6 +221,14 @@ def test_a_file_beside_web_does_not_move_the_pages(tmp_path: Path, layout: str) 
     assert len(skipped) == 2
 
 
+def test_the_inbox_url_can_be_set_by_pull_request() -> None:
+    """A Claude Code session cannot set a repository variable, so the hourly
+    check falls back to a committed file."""
+    text = (WORKFLOWS / "design-drop-intake.yml").read_text(encoding="utf-8")
+    assert "vars.DESIGN_DROP_INBOX_URL" in text
+    assert "head -n1 .github/design-drop-inbox.url" in text
+
+
 def test_the_intake_opens_the_drop_with_the_token_and_never_twice() -> None:
     workflow = _load("design-drop-intake.yml")
     (job,) = workflow["jobs"].values()

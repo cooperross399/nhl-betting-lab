@@ -5,8 +5,10 @@ name: Design Drop Intake
 # and pull request that Design Drop Guard and Design Drop take from there.
 #
 # - Dispatched with `zip_url` (and an optional `slug`), it takes that zip.
-# - Every hour it reads the repository variable DESIGN_DROP_INBOX_URL, the
-#   fixed URL Claude Design publishes its latest drop to. Unset, the hour does
+# - Every hour it reads the fixed URL Claude Design publishes its latest drop
+#   to: the repository variable DESIGN_DROP_INBOX_URL, or else the first line
+#   of .github/design-drop-inbox.url (so a Claude Code session, which cannot
+#   set variables, can set it by pull request). Neither set, the hour does
 #   nothing.
 #
 # Only page files are unpacked (`ALLOWED` in scripts/design_drop.py); the rest
@@ -60,6 +62,9 @@ jobs:
 
       - name: Unpack the zip and open the drop
         run: |
+          if [ -z "$ZIP_URL" ] && [ -f .github/design-drop-inbox.url ]; then
+            ZIP_URL=$(head -n1 .github/design-drop-inbox.url | tr -d '[:space:]')
+          fi
           if [ -z "$ZIP_URL" ]; then
             echo "No zip_url given and DESIGN_DROP_INBOX_URL is not set: nothing to take in."
             exit 0
