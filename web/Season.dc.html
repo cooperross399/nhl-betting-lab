@@ -241,12 +241,13 @@
     </sc-if>
 
     <!-- Trophies -->
-    <sc-if value="{{ hasTrophies }}" hint-placeholder-val="{{ true }}">
+    <sc-if value="{{ hasTrophySection }}" hint-placeholder-val="{{ true }}">
     <section style="padding-top:44px;">
       <div style="display:flex;align-items:baseline;justify-content:space-between;gap:16px;flex-wrap:wrap;border-bottom:3px solid var(--ink);padding-bottom:10px;">
         <h2 style="margin:0;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:34px;line-height:1;text-transform:uppercase;letter-spacing:.01em;">Trophies</h2>
         <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--mute);">{{ trophiesNote }}</div>
       </div>
+      <sc-if value="{{ hasTrophies }}" hint-placeholder-val="{{ true }}">
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,270px),1fr));gap:0 40px;">
         <sc-for list="{{ trophies }}" as="b" hint-placeholder-count="4">
           <div style="min-width:0;">
@@ -264,6 +265,31 @@
         </sc-for>
       </div>
       <p style="margin:14px 0 0;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--mute);max-width:900px;">{{ calderNote }}</p>
+      </sc-if>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,330px),1fr));gap:0 40px;">
+        <sc-for list="{{ voted }}" as="v" hint-placeholder-count="3">
+          <div style="min-width:0;">
+            <h3 style="margin:30px 0 2px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:22px;text-transform:uppercase;letter-spacing:.02em;">{{ v.title }} <span class="mono" style="font-size:11px;font-weight:400;text-transform:none;letter-spacing:0;color:var(--mute);">tracker</span> <span class="mono" style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--alert);">{{ v.staleLabel }}</span></h3>
+            <div class="mono" style="font-size:11px;color:var(--mute);margin-bottom:6px;">{{ v.sub }}</div>
+            <div style="display:grid;grid-template-columns:20px minmax(0,1fr) 44px 52px 44px 46px;gap:0 6px;padding:6px 0;" class="shead"><span>#</span><span>Player</span><span class="r">Book</span><span class="r">Poll</span><span class="r">Model</span><span class="r">Share</span></div>
+            <sc-for list="{{ v.rows }}" as="p" hint-placeholder-count="8">
+              <div style="display:grid;grid-template-columns:20px minmax(0,1fr) 44px 52px 44px 46px;gap:0 6px;padding:6px 0;border-bottom:1px solid var(--rule-2);font-size:13px;align-items:baseline;">
+                <span class="mono" style="color:var(--mute);">{{ p.rank }}</span>
+                <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><span style="font-weight:600;">{{ p.name }}</span> <span class="mono" style="font-size:11px;color:var(--mute);">{{ p.meta }}</span></span>
+                <span class="mono r" style="font-size:12px;">{{ p.market }}</span>
+                <span class="mono r" style="font-size:12px;">{{ p.poll }}</span>
+                <span class="mono r" style="font-size:12px;">{{ p.model }}</span>
+                <span class="cond r" style="font-size:20px;font-weight:700;">{{ p.share }}</span>
+              </div>
+            </sc-for>
+            <sc-for list="{{ v.sources }}" as="src" hint-placeholder-count="2">
+              <div class="mono" style="font-size:11px;color:var(--mute);margin-top:6px;overflow-wrap:anywhere;">{{ src.label }} <a href="{{ src.href }}" style="color:inherit;">{{ src.link }}</a></div>
+            </sc-for>
+            <div class="mono" style="font-size:11px;color:var(--mute);margin-top:6px;">{{ v.modelNote }}</div>
+          </div>
+        </sc-for>
+      </div>
+      <p style="margin:14px 0 0;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--mute);max-width:900px;">{{ votedNote }}</p>
     </section>
     </sc-if>
 
@@ -448,6 +474,34 @@ class Component extends DCLogic {
       ...(tr.calder && tr.calder.length ? [{ title: "Calder", sub: "Most points by a rookie · the trophy itself is voted", rows: awardRows(tr.calder, "pts") }] : []),
     ].filter((b) => b.rows.length) : [];
     const hasTrophies = trophies.length > 0;
+    const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const day = (iso) => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || ""); return m ? `${MONTHS[+m[2] - 1]} ${+m[3]}, ${m[1]}` : dash; };
+    const american = (a) => (a == null ? "" : a > 0 ? `+${a}` : `${a}`);
+    const sharePct = (x) => (x == null ? dash : pct(x));
+    const vt = (tr && tr.voted) || null;
+    const voted = vt ? ["hart", "norris", "selke"].filter((k) => vt[k] && vt[k].rows && vt[k].rows.length).map((k) => {
+      const a = vt[k], w = a.weights || {};
+      const parts = [["market", "book"], ["poll", "poll"], ["model", "model"]].filter(([key]) => w[key] > 0).map(([key, word]) => `${word} ${Math.round(w[key] * 100)}%`);
+      const oldest = Math.max(...(a.sources || []).map((src) => (src.ageDays == null ? Infinity : src.ageDays)));
+      const sources = (a.sources || []).map((src) => ({
+        label: src.kind === "odds"
+          ? `Odds: ${src.book || "a book"}${src.source ? ` via ${src.source}` : ""}, ${day(src.date)}${src.stale ? ` · stale, ${src.ageDays} d old` : ""} ·`
+          : `Poll: ${src.outlet}, ${day(src.date)}${src.voters ? `, ${src.voters} voters` : ""}${src.scoring ? ` (${src.scoring})` : ""}${src.stale ? ` · stale, ${src.ageDays} d old` : ""} ·`,
+        href: src.url || "", link: src.url ? "source" : "",
+      }));
+      if (a.noPoll) sources.push({ label: "Poll: no poll yet.", href: "", link: "" });
+      return {
+        title: a.label || k, sub: `Share = ${parts.join(" + ")} · a projection of the vote, not a price`,
+        staleLabel: a.stale ? (oldest === Infinity ? "Inputs undated" : `Inputs ${oldest} d old`) : "",
+        rows: a.rows.slice(0, 8).map((r, i) => ({
+          rank: i + 1, name: r.name,
+          meta: [r.team, american(r.odds), r.projP != null && k !== "selke" ? `proj ${f1(r.projP)} pts` : ""].filter(Boolean).join(" · "),
+          market: sharePct(r.market), poll: r.pollRank ? `#${r.pollRank}·${r.pollPoints}` : dash, model: sharePct(r.model), share: pct(r.tracker),
+        })),
+        sources, modelNote: a.modelNote || "",
+      };
+    }) : [];
+    const hasVoted = voted.length > 0;
     const cupFav = hasRounds ? d.teams.slice().sort((a, b) => b.odds.cup - a.odds.cup)[0] : null;
     const rt = (d.method && d.method.ratings) || null;
     const phUsed = !!(rt && rt.phWeight > 0);
@@ -493,7 +547,8 @@ class Component extends DCLogic {
       strip, games: d.games,
       standingsNote: `Mean of ${d.sims.toLocaleString()} seasons · East 8th place ${cutE} pts, West ${cutW}`,
       divisions, conferences, leaderBoards, teamCards, goalies,
-      hasRounds, roundConfs, slots, finals, hasTrophies, trophies,
+      hasRounds, roundConfs, slots, finals, hasTrophies, trophies, voted, hasVoted, hasTrophySection: hasTrophies || hasVoted,
+      votedNote: hasVoted ? `The Hart, Norris and Selke are voted by the PHWA, so they are tracked, not simulated. Book: the award odds a book published, with its margin taken out over the listed field. Poll: rank and points in the latest media poll. Model: the season sim's projection. Share is their weighted blend over the players a book or poll names; inputs more than 14 days old are flagged. A projection, not a price.` : "",
       roundsNote: "Share of simulated seasons · a projection, not a price",
       trophiesNote: "Share of simulated seasons each player finishes first · a projection, not a price",
       calderNote: tr && tr.calderNote ? tr.calderNote : "",
@@ -508,7 +563,7 @@ class Component extends DCLogic {
     const vm = this.state.vm;
     const themeAttr = { Light: "light", Dark: "dark" }[this.props.theme] || "auto";
     const base = { themeAttr, otherSports: this.state.otherSports || [], hasNotice: !!this.state.notice, notice: this.state.notice || "" };
-    if (!vm) return { ...base, kicker: "Season simulation", title1: "The whole", title2: "season.", blurb: "", updated: "—", progress: "", stale: false, staleLabel: "", strip: [], divisions: [], conferences: [], leaderBoards: [], teamCards: [], goalies: [], method: [], injuries: [], games: 84, standingsNote: "", scorersNote: "", goaliesNote: "", notesLabel: "", hasRounds: false, roundConfs: [], slots: [], finals: [], hasTrophies: false, trophies: [], roundsNote: "", trophiesNote: "", calderNote: "" };
+    if (!vm) return { ...base, kicker: "Season simulation", title1: "The whole", title2: "season.", blurb: "", updated: "—", progress: "", stale: false, staleLabel: "", strip: [], divisions: [], conferences: [], leaderBoards: [], teamCards: [], goalies: [], method: [], injuries: [], games: 84, standingsNote: "", scorersNote: "", goaliesNote: "", notesLabel: "", hasRounds: false, roundConfs: [], slots: [], finals: [], hasTrophies: false, trophies: [], roundsNote: "", trophiesNote: "", calderNote: "", voted: [], hasVoted: false, hasTrophySection: false, votedNote: "" };
     return { ...base, ...vm };
   }
 }
