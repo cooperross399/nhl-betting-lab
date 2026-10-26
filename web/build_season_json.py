@@ -35,7 +35,7 @@ sys.path.insert(0, str(HERE))
 
 from season_sim.fetch import fetch_bundle  # noqa: E402
 from season_sim.model import build_model, isfinite_all, load_injuries, load_ph_ratings  # noqa: E402
-from season_sim.awards import load_inputs, trackers  # noqa: E402
+from season_sim.awards import award_stats, load_inputs, trackers  # noqa: E402
 from season_sim.simulate import simulate  # noqa: E402
 
 DEFAULT_NOTES = HERE.parent / "data" / "season_sim" / "roster_notes.json"
@@ -61,7 +61,7 @@ def season_label(season: str) -> str:
 
 
 def compose(model: dict, result: dict, notes: dict, colors: dict, *, generated_at: str,
-            award_inputs: dict | None = None) -> dict:
+            award_inputs: dict | None = None, award_stats_by_id: dict | None = None) -> dict:
     info = model["team_info"]
     players = result["players"]
     goalies_by_team: dict[str, list[dict]] = {}
@@ -84,7 +84,8 @@ def compose(model: dict, result: dict, notes: dict, colors: dict, *, generated_a
                      p10=r["p10"], p90=r["p90"], now=r["now"]) for r in rows]
 
     trophies_in = result.get("trophies") or {}
-    skaters = [dict(name=q["name"], pos=q["pos"], team=ab, p=q["proj_p"])
+    stats_by_id = award_stats_by_id or {}
+    skaters = [dict(name=q["name"], pos=q["pos"], team=ab, p=q["proj_p"], stats=stats_by_id.get(q.get("id")))
                for ab, qs in model["players"].items() for q in qs if not q.get("filler")]
     voted = trackers(award_inputs, skaters, {r["abbrev"]: r["p_playoff"] for r in result["teams"]},
                      today=datetime.fromisoformat(generated_at).date())
@@ -211,8 +212,17 @@ def main(argv: list[str] | None = None) -> int:
     award_inputs = load_inputs(Path(args.awards))
     if award_inputs is None:
         print(f"::warning::No award inputs at {args.awards}; the Hart, Norris and Selke trackers are left out")
+    # The voted trackers read the season so far: NHL and MoneyPuck rates, and
+    # the card's shift-chart defence ratings when the ratings file carries them.
+    try:
+        stats = award_stats(bundle, defence=(ph or {}).get("skater_defence"))
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        print(f"::warning::The award trackers' season stats could not be built ({exc}); they fall back to projected points")
+        stats = {}
+    print(f"Award stats: {len(stats)} skaters" + (", shift-chart defence ratings read" if (ph or {}).get("skater_defence") else
+                                                  ", defence from MoneyPuck on-ice xG (no shift-chart ratings)"))
     site = compose(model, result, notes, _team_colors(), generated_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
-                   award_inputs=award_inputs)
+                   award_inputs=award_inputs, award_stats_by_id=stats)
     check(site)
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
