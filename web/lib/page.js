@@ -2,7 +2,7 @@
 // The .dc.html pages are shared across three labs; these three are NHL's alone.
 export const TABS = [
   ["Tonight", "Board.dc.html"], ["Props", "Board.dc.html#props"], ["Results", "Results.dc.html"],
-  ["Season", "Season.dc.html"], ["Record", "Record.html"], ["Archive", "Archive.dc.html"],
+  ["Season", "Season.dc.html"], ["Record", "Record.html"], ["Tracker", "Tracker.html"],
 ];
 
 export function chrome(current) {

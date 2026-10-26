@@ -145,7 +145,7 @@ class Component extends DCLogic {
     const s = this.state;
     const sk = (s.sport && s.sport.key) || ((/^(nhl|epl|cbb)\./.exec(location.hostname) || [])[1]) || this.props.sport || "nhl";
     const tab = (label, href, on) => ({ label, href, current: on ? "page" : undefined, shadow: on ? "inset 0 -3px 0 var(--ink)" : "none" });
-    const tabs = [tab(sk === "epl" ? "This week" : "Tonight", "Board.dc.html"), ...(sk === "nhl" ? [tab("Props", "Board.dc.html#props")] : []), tab("Results", "Results.dc.html", false), ...(sk === "nhl" ? [tab("Season", "Season.dc.html"), tab("Record", "Record.html")] : []), tab("Archive", "Archive.dc.html", true)];
+    const tabs = [tab(sk === "epl" ? "This week" : "Tonight", "Board.dc.html"), ...(sk === "nhl" ? [tab("Props", "Board.dc.html#props")] : []), tab("Results", "Results.dc.html", false), ...(sk === "nhl" ? [tab("Season", "Season.dc.html"), tab("Record", "Record.html")] : []), (sk === "nhl" ? tab("Tracker", "Tracker.html", false) : tab("Archive", "Archive.dc.html", true))];
     const themeAttr = { Light: "light", Dark: "dark" }[this.props.theme] || "auto";
     return { themeAttr, tabs, months: s.months, count: s.count, isEmpty: s.loadedFor && s.count === 0, hasFeedNotice: !!s.feedNotice, feedNotice: s.feedNotice || "", otherSports: s.otherSports,
       sportLong: s.sport ? s.sport.longName : "", sportName: s.sport ? s.sport.name : "" };
