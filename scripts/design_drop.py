@@ -10,6 +10,7 @@ and then moves EPL, CBB and the hub to the same tag.
     python scripts/design_drop.py guard --base origin/main --head HEAD
     python scripts/design_drop.py pin --shared DIR       # copy changed shared files, name the next tag
     python scripts/design_drop.py hub --shared DIR --tag vN --hub DIR
+    python scripts/design_drop.py intake --zip FILE   # unpack a zipped drop's page files
 
 Standard library only. Nothing here fetches odds, spends a credit, edits a
 policy or places a bet.
@@ -26,6 +27,7 @@ import re
 import shutil
 import subprocess
 import sys
+import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -52,6 +54,10 @@ ALLOWED = (
 BUILDER_NOTE = "web/DROP_NOTE.md"
 
 TAG = re.compile(r"^v(\d+)$")
+
+#: A zipped drop is refused past these sizes rather than half unpacked.
+MAX_FILE_BYTES = 20 * 1024 * 1024
+MAX_TOTAL_BYTES = 50 * 1024 * 1024
 
 
 def allowed(path: str) -> bool:
@@ -135,6 +141,45 @@ def hub(shared: Path, tag: str, hub_dir: Path) -> list[str]:
     return moved
 
 
+def _repo_path(names: list[str]):
+    """How a zip member's name becomes a repository path.
+
+    A zip may hold `web/...`, one wrapping folder around `web/...`, or the
+    contents of `web/` itself."""
+    if names and all(n.startswith("web/") for n in names):
+        return lambda n: n
+    tops = {n.split("/", 1)[0] for n in names}
+    if len(tops) == 1 and all(n.split("/", 1)[-1].startswith("web/") for n in names):
+        return lambda n: n.split("/", 1)[-1]
+    return lambda n: "web/" + n
+
+
+def intake(zip_path: Path, root: Path = ROOT) -> tuple[list[str], list[str]]:
+    """Write a zipped drop's page files under `root`. Returns (written,
+    skipped): anything outside `ALLOWED`, the lock (Design Drop's pin step
+    writes that), a path that climbs out, and macOS litter are skipped."""
+    with zipfile.ZipFile(zip_path) as archive:
+        members = [m for m in archive.infolist() if not m.is_dir()]
+        names = [m.filename.replace("\\", "/") for m in members]
+        if sum(m.file_size for m in members) > MAX_TOTAL_BYTES:
+            raise ValueError(f"the zip unpacks to more than {MAX_TOTAL_BYTES} bytes")
+        to_path = _repo_path([n for n in names if not n.startswith("__MACOSX/")])
+        written, skipped = [], []
+        for member, name in zip(members, names):
+            path = to_path(name)
+            parts = path.split("/")
+            if (name.startswith("__MACOSX/") or parts[-1] == ".DS_Store" or path.startswith("/")
+                    or ".." in parts or path == "web/shared.lock.json" or not allowed(path)
+                    or member.file_size > MAX_FILE_BYTES):
+                skipped.append(name)
+                continue
+            target = root / path
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(archive.read(member))
+            written.append(path)
+    return written, skipped
+
+
 def _output(**values: str) -> None:
     target = os.environ.get("GITHUB_OUTPUT")
     if target:
@@ -155,6 +200,8 @@ def main(argv: list[str] | None = None) -> int:
     h.add_argument("--shared", type=Path, required=True)
     h.add_argument("--tag", required=True)
     h.add_argument("--hub", type=Path, required=True)
+    z = sub.add_parser("intake", help="unpack a zipped drop's page files into this checkout")
+    z.add_argument("--zip", type=Path, required=True)
     args = ap.parse_args(argv)
 
     if args.command == "guard":
@@ -176,6 +223,16 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{len(copied)} shared file(s) changed" + (f"; next tag {tag}" if copied else ""))
         _output(changed="true" if copied else "false", tag=tag)
         return 0
+
+    if args.command == "intake":
+        written, skipped = intake(args.zip)
+        for path in written:
+            print(f"wrote: {path}")
+        for name in skipped:
+            print(f"::warning::skipped {name}: not a page file a drop may change")
+        print(f"{len(written)} page file(s) written, {len(skipped)} skipped")
+        _output(written=str(len(written)))
+        return 0 if written else 1
 
     moved = hub(args.shared, args.tag, args.hub)
     print(f"hub pinned to {args.tag}: {', '.join(moved) or 'no file changed'}")
