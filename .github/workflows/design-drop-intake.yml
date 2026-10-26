@@ -92,7 +92,8 @@ jobs:
           fi
           # A drop built on an old copy of a page would undo what changed
           # since; refuse it rather than open a pull request that merges itself.
-          if ! python scripts/design_drop.py stale $(git diff --cached --name-only); then
+          changed=$(git diff --cached --name-only)
+          if ! python scripts/design_drop.py stale $changed; then
             echo "::error::This drop was built on old copies of the pages above. Ask Claude Design to rebuild them from main's current files and republish."
             exit 1
           fi
