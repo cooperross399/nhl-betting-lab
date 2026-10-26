@@ -95,7 +95,9 @@ jobs:
           (
             cd "$RUNNER_TEMP/shared"
             git add web
-            git commit --quiet -m "Pages from nhl-betting-lab $BRANCH"
+            # The shared main can already hold these bytes, when an earlier drop
+            # pinned them; then the new tag names that commit.
+            git diff --cached --quiet || git commit --quiet -m "Pages from nhl-betting-lab $BRANCH"
             git tag "$TAG"
             git push --quiet origin HEAD:refs/heads/main "refs/tags/$TAG"
           )

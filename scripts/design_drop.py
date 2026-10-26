@@ -8,9 +8,10 @@ cooperross399/betting-lab-shared, merges the pull request once Tests is green,
 and then moves EPL, CBB and the hub to the same tag.
 
     python scripts/design_drop.py guard --base origin/main --head HEAD
-    python scripts/design_drop.py pin --shared DIR       # copy changed shared files, name the next tag
+    python scripts/design_drop.py pin --shared DIR       # make the shared checkout hold this branch's shared files, name the next tag
     python scripts/design_drop.py hub --shared DIR --tag vN --hub DIR
     python scripts/design_drop.py intake --zip FILE   # unpack a drop (zip or tarball)
+    python scripts/design_drop.py stale PATH...        # refuse files built on an old copy
 
 Standard library only. Nothing here fetches odds, spends a credit, edits a
 policy or places a bet.
@@ -19,6 +20,7 @@ policy or places a bet.
 from __future__ import annotations
 
 import argparse
+import difflib
 import fnmatch
 import importlib.util
 import json
@@ -105,21 +107,32 @@ def shared_names(web: Path = WEB) -> list[str]:
 
 
 def pin(shared: Path, web: Path = WEB) -> list[str]:
-    """Copy every shared file whose bytes differ from the lock into the shared
-    checkout (logos into this lab's sport folder). Returns what was copied;
-    an empty list means the lock already holds this branch's pages."""
+    """Make the shared checkout hold this branch's bytes for every shared file
+    (logos into this lab's sport folder). Returns what was copied.
+
+    Each file is compared with the shared checkout, not with the lock: the
+    shared main can have moved past the tag the lock names (a drop pinned and
+    then closed unmerged), and copying only what differs from the lock would
+    leave that drop's files in the next tag."""
     sync = _sync()
     lock = sync.load_lock(web / "shared.lock.json")
     copied = []
     for name in shared_names(web):
         path = web / name
-        if lock["files"].get(name) == sync.digest(path):
-            continue
         dst = sync.source(shared, name, lock["sport"])
+        if dst.is_file() and sync.digest(dst) == sync.digest(path):
+            continue
         dst.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(path, dst)
         copied.append(name)
     return copied
+
+
+def lock_is_stale(web: Path = WEB) -> bool:
+    """True when any shared file's bytes differ from what the lock pins."""
+    sync = _sync()
+    lock = sync.load_lock(web / "shared.lock.json")
+    return any(lock["files"].get(name) != sync.digest(web / name) for name in shared_names(web))
 
 
 def hub(shared: Path, tag: str, hub_dir: Path) -> list[str]:
@@ -195,6 +208,56 @@ def intake(zip_path: Path, root: Path = ROOT) -> tuple[list[str], list[str]]:
     return written, skipped
 
 
+#: How many earlier versions of a page the stale check compares a drop with.
+STALE_LOOKBACK = 40
+
+
+def _git(*args: str, root: Path = ROOT) -> str:
+    return subprocess.run(["git", *args], cwd=root, capture_output=True, text=True,
+                          check=True).stdout
+
+
+def _distance(a: list[str], b: list[str]) -> int:
+    """Lines one side has that the other lacks."""
+    matched = sum(block.size for block in
+                  difflib.SequenceMatcher(None, a, b, autojunk=False).get_matching_blocks())
+    return len(a) + len(b) - 2 * matched
+
+
+def stale(paths: list[str], root: Path = ROOT) -> list[tuple[str, str, int, int]]:
+    """The drop's files that sit closer to an earlier version on this branch
+    than to the current one: built on an old copy, so merging them would
+    revert whatever changed since. Returns (path, commit, distance to that
+    commit's copy, distance to the current copy). A new file is never stale."""
+    found = []
+    for path in paths:
+        target = root / path
+        if not target.exists():
+            continue
+        try:
+            current = _git("show", f"HEAD:{path}", root=root).splitlines()
+        except subprocess.CalledProcessError:
+            continue
+        drop = target.read_text(encoding="utf-8", errors="replace").splitlines()
+        now = _distance(drop, current)
+        if now == 0:
+            continue
+        commits = _git("log", f"-{STALE_LOOKBACK + 1}", "--format=%H", "HEAD", "--", path,
+                       root=root).split()[1:]
+        best = None
+        for commit in commits:
+            try:
+                older = _git("show", f"{commit}:{path}", root=root).splitlines()
+            except subprocess.CalledProcessError:
+                continue
+            gap = _distance(drop, older)
+            if gap < now and (best is None or gap < best[1]):
+                best = (commit, gap)
+        if best:
+            found.append((path, best[0][:12], best[1], now))
+    return found
+
+
 def _output(**values: str) -> None:
     target = os.environ.get("GITHUB_OUTPUT")
     if target:
@@ -217,6 +280,8 @@ def main(argv: list[str] | None = None) -> int:
     h.add_argument("--hub", type=Path, required=True)
     z = sub.add_parser("intake", help="unpack a drop's page files (zip or tarball) into this checkout")
     z.add_argument("--zip", type=Path, required=True)
+    st = sub.add_parser("stale", help="refuse drop files built on an older copy of a page")
+    st.add_argument("paths", nargs="*")
     args = ap.parse_args(argv)
 
     if args.command == "guard":
@@ -231,12 +296,14 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "pin":
         tags = subprocess.run(["git", "tag", "--list"], cwd=args.shared, capture_output=True,
                               text=True, check=True).stdout.split()
+        stale_lock = lock_is_stale()
         copied = pin(args.shared)
         tag = next_tag(tags)
+        repin = bool(copied) or stale_lock
         for name in copied:
             print(f"changed: {name}")
-        print(f"{len(copied)} shared file(s) changed" + (f"; next tag {tag}" if copied else ""))
-        _output(changed="true" if copied else "false", tag=tag)
+        print(f"{len(copied)} shared file(s) changed" + (f"; next tag {tag}" if repin else ""))
+        _output(changed="true" if repin else "false", tag=tag)
         return 0
 
     if args.command == "intake":
@@ -248,6 +315,15 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{len(written)} page file(s) written, {len(skipped)} skipped")
         _output(written=str(len(written)))
         return 0 if written else 1
+
+    if args.command == "stale":
+        found = stale(args.paths)
+        for path, commit, then, now in found:
+            print(f"::error file={path}::{path} was built on an old copy: it is {then} line(s) from "
+                  f"main's version at {commit} and {now} from main's current one, so merging it "
+                  "would undo what changed since. Rebuild it from main's current file.")
+        print(f"{len(args.paths)} file(s) checked, {len(found)} stale")
+        return 1 if found else 0
 
     moved = hub(args.shared, args.tag, args.hub)
     print(f"hub pinned to {args.tag}: {', '.join(moved) or 'no file changed'}")

@@ -114,6 +114,19 @@ def test_pin_copies_only_what_differs_from_the_lock(tmp_path: Path) -> None:
     assert (shared / "web" / "logos" / "nhl" / "TOR.png").read_bytes() == b"png"
 
 
+def test_pin_compares_with_the_shared_main_not_the_lock(tmp_path: Path) -> None:
+    # A drop pinned and then closed unmerged leaves the shared main past the
+    # lock's tag. The next drop must put back every file it holds differently.
+    drop = _drop()
+    web, shared = _lab(tmp_path)
+    (web / "Board.dc.html").write_bytes(b"<!doctype html>trimmed")
+    (shared / "web" / "Board.dc.html").write_bytes(b"<!doctype html>trimmed")
+    (shared / "web" / "lib" / "sports.js").write_bytes(b"stale")
+    assert drop.lock_is_stale(web)
+    assert drop.pin(shared, web) == ["lib/sports.js"]
+    assert (shared / "web" / "lib" / "sports.js").read_bytes() == (web / "lib" / "sports.js").read_bytes()
+
+
 def test_the_hub_moves_to_the_tag(tmp_path: Path) -> None:
     drop = _drop()
     shared, hub = tmp_path / "shared", tmp_path / "hub"
@@ -244,6 +257,46 @@ def test_a_tarball_is_taken_like_a_zip(tmp_path: Path) -> None:
     assert (tmp_path / "repo/web/Game.dc.html").read_bytes() == b"page"
     assert len(skipped) == 2
     assert not (tmp_path / "evil.py").exists()
+
+
+def test_a_drop_built_on_an_old_copy_is_stale(tmp_path: Path) -> None:
+    """Drop 4 of 2026-10-26 was built on copies older than main and would
+    have deleted the EPL props, the playoff section and the favicons while
+    adding its own pages."""
+    import subprocess
+
+    def git(*args: str) -> None:
+        subprocess.run(["git", *args], cwd=tmp_path, check=True, capture_output=True)
+
+    git("init", "-q")
+    git("config", "user.email", "t@example.com")
+    git("config", "user.name", "t")
+    page = tmp_path / "web" / "Season.dc.html"
+    page.parent.mkdir()
+    old = [f"line {i}" for i in range(40)]
+    page.write_text("\n".join(old) + "\n")
+    git("add", ".")
+    git("commit", "-qm", "old")
+    newer = old + [f"playoffs {i}" for i in range(20)]
+    page.write_text("\n".join(newer) + "\n")
+    git("commit", "-qam", "playoffs")
+
+    drop = _drop()
+    page.write_text("\n".join(old + ["a design edit"]) + "\n")
+    found = drop.stale(["web/Season.dc.html"], root=tmp_path)
+    assert [path for path, *_ in found] == ["web/Season.dc.html"]
+
+    page.write_text("\n".join(newer + ["a design edit"]) + "\n")
+    assert drop.stale(["web/Season.dc.html"], root=tmp_path) == []
+    (tmp_path / "web" / "Game.dc.html").write_text("new page\n")
+    assert drop.stale(["web/Game.dc.html"], root=tmp_path) == []
+
+
+def test_the_intake_refuses_a_stale_drop() -> None:
+    text = (WORKFLOWS / "design-drop-intake.yml").read_text(encoding="utf-8")
+    assert "fetch-depth: 0" in text
+    stale_at = text.index("design_drop.py stale")
+    assert text.index("git add web") < stale_at < text.index("git push")
 
 
 def test_the_inbox_url_can_be_set_by_pull_request() -> None:
