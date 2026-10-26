@@ -56,6 +56,31 @@ COMMONS_AGENT = "nhl-betting-lab-fetch-logos/1.0 (https://github.com/cooperross3
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 MIN_BYTES = 2048
 SIZE_PX = 500
+#: Committed and published at this size (2026-10-26): a 500-px crest drawn in
+#: a small circle cost about 1.5 MB on a full board. A download is still
+#: checked at its source size above, then shrunk before it is written.
+PUBLISHED_PX = 128
+PUBLISHED_MIN_BYTES = 1024
+
+
+def shrink(data: bytes) -> bytes:
+    """The logo fitted inside a transparent PUBLISHED_PX square, centred and
+    optimised. Needs Pillow (`pip install pillow`); only this hand-run fetch
+    does, so nothing the workflows or the suite import requires it."""
+    import io
+
+    try:
+        from PIL import Image
+    except ImportError as exc:  # pragma: no cover - a hand-run step
+        raise SystemExit("web/fetch_logos.py needs Pillow to shrink logos: pip install pillow") from exc
+    image = Image.open(io.BytesIO(data)).convert("RGBA")
+    image.thumbnail((PUBLISHED_PX, PUBLISHED_PX), Image.LANCZOS)
+    canvas = Image.new("RGBA", (PUBLISHED_PX, PUBLISHED_PX))
+    canvas.paste(image, ((PUBLISHED_PX - image.width) // 2, (PUBLISHED_PX - image.height) // 2))
+    out = io.BytesIO()
+    canvas.save(out, format="PNG", optimize=True)
+    return out.getvalue()
+
 TIMEOUT = 30
 #: The longest a Retry-After is obeyed for; past it the source is given up on for this team.
 MAX_WAIT = 60.0
@@ -128,10 +153,11 @@ def png_size(data: bytes) -> tuple[int, int] | None:
     return (width, height) if width > 0 and height > 0 else None
 
 
-def usable(data: bytes) -> bool:
-    """A real PNG, more than 2 KB, 500 px on its longer side."""
+def usable(data: bytes, side: int = SIZE_PX, min_bytes: int = MIN_BYTES) -> bool:
+    """A real PNG, more than `min_bytes`, `side` px on its longer side: a
+    download at 500 px over 2 KB, a committed file at PUBLISHED_PX."""
     size = png_size(data)
-    return len(data) > MIN_BYTES and size is not None and max(size) == SIZE_PX
+    return len(data) > min_bytes and size is not None and max(size) == side
 
 
 # -- the network ----------------------------------------------------------------------------------
@@ -265,6 +291,7 @@ def main(argv: list[str] | None = None) -> int:
             continue
         source, url, data = got
         partial = dest / f".{abbr}.png.part"
+        data = shrink(data)
         partial.write_bytes(data)
         partial.replace(dest / f"{abbr}.png")
         sources[abbr] = (source, url)

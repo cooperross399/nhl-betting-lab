@@ -2,14 +2,15 @@
 <html>
 <head>
 <meta charset="utf-8">
-<link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <script src="./support.js"></script>
 </head>
 <body>
 <x-dc>
 <helmet>
   <title>Track record — Maverick Hightower</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="How the NHL model's win chances have held up: calibration by bucket, model against market, and whether the line followed our picks.">
   <meta property="og:type" content="website">
@@ -70,7 +71,7 @@
     <section style="padding:36px 0 28px;border-bottom:1px solid var(--ink);">
       <div style="font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute);margin-bottom:10px;">{{ kicker }}</div>
       <h1 style="margin:0;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:clamp(56px,9vw,112px);line-height:.9;letter-spacing:-.01em;text-transform:uppercase;">Track<br>record</h1>
-      <p style="margin:18px 0 0;font-size:15px;line-height:1.5;color:var(--ink-2);max-width:640px;text-wrap:pretty;">When the model says 60%, does the favourite win about 60% of the time? That is the only thing this page measures. Win–loss records for picks are on <a href="Results.dc.html" style="text-decoration:underline;text-underline-offset:3px;">Results</a>. The forward test's return stays sealed until April 2027.</p>
+      <p style="margin:18px 0 0;font-size:15px;line-height:1.5;color:var(--ink-2);max-width:640px;text-wrap:pretty;">When the model says 60%, does the favourite win about 60% of the time? That is the only thing this page measures. Win–loss records, units and return for every graded bet are on <a href="Tracker.dc.html" style="text-decoration:underline;text-underline-offset:3px;">All results</a>.</p>
     </section>
 
     <sc-if value="{{ empty }}" hint-placeholder-val="{{ false }}">
@@ -229,16 +230,9 @@
           <p style="margin:10px 0 0;font-size:14px;line-height:1.55;color:var(--ink-2);text-wrap:pretty;">{{ sureText }}</p>
         </div>
         <div style="font-size:14px;line-height:1.55;color:var(--ink-2);display:flex;flex-direction:column;gap:10px;text-wrap:pretty;">
-          <p style="margin:0;"><a href="Results.dc.html" style="text-decoration:underline;text-underline-offset:3px;">Results</a> has the win–loss records for best bets, leans, straight-up calls and totals, night by night.</p>
+          <p style="margin:0;"><a href="Tracker.dc.html" style="text-decoration:underline;text-underline-offset:3px;">All results</a> has every graded bet with units and return, by team, player, market, price and month. <a href="Results.dc.html" style="text-decoration:underline;text-underline-offset:3px;">Results</a> has last night.</p>
           <p style="margin:0;"><a href="Methods.dc.html#graded" style="text-decoration:underline;text-underline-offset:3px;">Methods</a> explains how a pick is graded and what counts as a push.</p>
-          <p style="margin:0;color:var(--mute);">This page never shows return, units or profit for the forward test. That number is sealed until April 2027.</p>
-          <sc-if value="{{ seal.show }}" hint-placeholder-val="{{ false }}">
-            <div style="border:1px solid var(--rule);padding:10px 12px;display:flex;flex-direction:column;gap:4px;">
-              <span style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute);">Sealed ledger · SHA-256</span>
-              <code style="font-family:'IBM Plex Mono',monospace;font-size:11px;line-height:1.5;color:var(--ink);overflow-wrap:anywhere;">{{ seal.hash }}</code>
-              <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--mute);">{{ seal.note }}</span>
-            </div>
-          </sc-if>
+          <p style="margin:0;color:var(--mute);">This page measures whether the numbers mean what they say. Profit and loss live on <a href="Tracker.dc.html" style="text-decoration:underline;text-underline-offset:3px;">All results</a>.</p>
         </div>
       </section>
 
@@ -296,9 +290,9 @@ class Component extends DCLogic {
   componentDidUpdate() { this.load(); }
   renderVals() {
     const F = this.F, d = this.state.data;
-    const tabsList = [["Tonight", "Board.dc.html"], ["Props", "Board.dc.html#props"], ["Results", "Results.dc.html"], ["Season", "Season.dc.html"], ["Record", "Record.dc.html"], ["Archive", "Archive.dc.html"]];
+    const tabsList = [["Tonight", "Board.dc.html"], ["Props", "Board.dc.html#props"], ["Results", "Results.dc.html"], ["Season", "Season.dc.html"], ["Record", "Record.dc.html"], ["Tracker", "Tracker.dc.html"]];
     const tabs = tabsList.map(([label, href]) => ({ label, href, current: label === "Record" ? "page" : undefined, shadow: label === "Record" ? "inset 0 -3px 0 var(--ink)" : "none", color: label === "Record" ? "var(--ink)" : "var(--mute)" }));
-    const base = { tabs, isSample: !!this.state.isSample, kicker: "NHL · 2026–27", tonight: { show: false }, headline: "", mkts: { show: false, none: true, list: [] }, seal: { show: false }, due: { show: false } };
+    const base = { tabs, isSample: !!this.state.isSample, kicker: "NHL · 2026–27", tonight: { show: false }, headline: "", mkts: { show: false, none: true, list: [] }, due: { show: false } };
     if (!d) return { ...base, ready: false, empty: !!this.state.err, kicker: this.state.err ? "NHL · record unreachable" : base.kicker };
     const nights = d.nights || 0, games = d.games || 0, buckets = (d.buckets || []).filter((b) => b.games > 0);
     if (!nights || !buckets.length) return { ...base, ready: false, empty: true, kicker: `NHL · ${nights} nights settled` };
@@ -349,15 +343,13 @@ class Component extends DCLogic {
         verdict: picks < 30 ? `${picks} picks is too few to read anything into. Check back after a month.` : tw >= 0.55 ? `${pct0(tw)} moved our way. Mildly encouraging, and consistent with the model leaning on the same public inputs the market does.` : tw <= 0.45 ? `Only ${pct0(tw)} moved our way. The market has more often disagreed with us after we posted.` : `Close to half moved each way. The market has not consistently followed or faded us.` };
     }
 
-    // Optional blocks. markets: {total: {games, buckets}, puckLine: {...}}; sealed: {sha256, sealedAt, opens}; dueList: {entries, hitRate, avgPrice, breakEven}.
+    // Optional blocks. markets: {total: {games, buckets}, puckLine: {...}}; dueList: {entries, hitRate, avgPrice, breakEven}.
     const mkRows = (bs) => (bs || []).filter((b) => b.games > 0).map((b) => ({ range: `${pct0(b.low)}–${b.high >= 1 ? "100%" : pct0(b.high)}`, games: String(b.games), actual: pct1(b.actual), interval: `${pct0(b.interval[0])}–${pct0(b.interval[1])}`, actualColor: b.predicted >= b.interval[0] && b.predicted <= b.interval[1] ? "var(--ink)" : "var(--alert)" }));
     const mkVerdict = (name, m) => { const bs = (m.buckets || []).filter((b) => b.games > 0); if (!bs.length) return ""; const inside = bs.filter((b) => b.predicted >= b.interval[0] && b.predicted <= b.interval[1]).length; return m.games < 60 ? `${m.games} ${name} is too few to judge; the ranges say so.` : inside === bs.length ? `Every bucket's prediction sits inside its range. No sign the ${name} number is off.` : `${bs.length - inside} of ${bs.length} buckets sit outside their range. Worth watching; not yet a finding.`; };
     const M = d.markets || {};
     const mkList = [["Over the total", "totals", M.total], ["Favourite covers the puck line", "puck lines", M.puckLine]].filter(([, , m]) => m && m.games > 0).map(([title, name, m]) => ({ title, games: String(m.games), rows: mkRows(m.buckets), verdict: mkVerdict(name, m) }));
     const mkts = { show: mkList.length > 0, none: mkList.length === 0, list: mkList };
-    const sl = d.sealed;
-    const seal = sl && sl.sha256 ? { show: true, hash: sl.sha256, note: `Hash of the forward-test ledger as sealed ${sl.sealedAt ? F.fmtDateOnly(sl.sealedAt) : ""}. The file is published ${sl.opens || "April 2027"}; this hash lets anyone check it was not edited in between.` } : { show: false };
-    const dl = d.dueList;
+        const dl = d.dueList;
     const due = dl && dl.entries > 0 ? { show: true, cells: [
         { label: "Priced entries", value: String(dl.entries), sub: "since 2026-10-09" },
         { label: "Hit rate", value: typeof dl.hitRate === "number" ? pct1(dl.hitRate) : "—", sub: typeof dl.breakEven === "number" ? `needs ${pct1(dl.breakEven)} at the average price` : "" },
@@ -365,10 +357,10 @@ class Component extends DCLogic {
       verdict: typeof dl.hitRate === "number" && typeof dl.breakEven === "number" ? (dl.entries < 40 ? `${dl.entries} entries is too few to judge. The gap between hit rate and break-even is what to watch.` : dl.hitRate >= dl.breakEven ? `Hitting above the break-even rate for the prices taken. Over ${dl.entries} entries that is a lead, not yet proof.` : `Hitting below the break-even rate for the prices taken over ${dl.entries} entries.`) : "" } : { show: false };
     const sureText = nights < 20 ? `${nights} nights and ${games} games. The ranges above are wide because the sample is small; one bucket can swing ten points on a single week. Treat every number on this page as provisional until the sample passes a few hundred games.`
       : nights < 60 ? `${nights} nights and ${games} games. Enough to see whether the numbers are badly off, not enough to tell a 58% from a 62%. The 95% ranges are the honest statement of what we know; the dots are the best guess inside them.`
-      : `${nights} nights and ${games} games. The buckets are now large enough that a dot outside its range would be a real finding. None of this measures profit; two seasons of real prices show no demonstrated edge for any market.`;
+      : `${nights} nights and ${games} games. The buckets are now large enough that a dot outside its range would be a real finding. None of this measures profit; that is on All results.`;
 
     return { ...base, ready: true, empty: false, kicker: `NHL · ${nights} nights · ${games} games`, calStamp: d.generatedAt ? `Through ${F.fmtUpdated(d.generatedAt)}` : "",
-      dots, grid, rows, rowsFoot, chartAria, brier, mv, sureText, tonight, headline, mkts, seal, due };
+      dots, grid, rows, rowsFoot, chartAria, brier, mv, sureText, tonight, headline, mkts, due };
   }
 }
 </script>

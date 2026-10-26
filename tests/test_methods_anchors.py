@@ -29,7 +29,7 @@ def test_every_named_anchor_exists() -> None:
 
 def test_every_linked_anchor_exists() -> None:
     defined = _defined()
-    for page in ("Game.dc.html", "Board.dc.html", "Record.dc.html", "Tracker.html"):
+    for page in ("Game.dc.html", "Board.dc.html", "Record.dc.html", "Tracker.dc.html"):
         text = (WEB / page).read_text(encoding="utf-8")
         linked = set(re.findall(r'Methods\.dc\.html#([a-z0-9-]+)', text))
         assert linked <= defined, (page, sorted(linked - defined))

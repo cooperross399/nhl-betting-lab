@@ -39,7 +39,6 @@ from test_site_never_calls_an_unpriced_game_a_pass import (
     render_results,
     site_module,
 )
-from test_site_publishes_no_forward_return import MID_SEASON, RETURN_FIELDS, THE_RETURN
 
 ACCURACY = ("straightUp", "puckLine", "totals")
 
@@ -201,56 +200,6 @@ def test_an_unpriced_or_exhibition_row_never_counts_toward_the_season(
     assert _played(season["picks"]) == 1, season
     for key in ("straightUp", "picks", "leans", "totals"):
         assert board["record"][key] == season[key], (key, board["record"][key], season[key])
-
-
-def _keys_and_numbers(node, keys: set, numbers: set) -> None:
-    if isinstance(node, dict):
-        for key, value in node.items():
-            keys.add(key)
-            _keys_and_numbers(value, keys, numbers)
-    elif isinstance(node, list):
-        for value in node:
-            _keys_and_numbers(value, keys, numbers)
-    elif isinstance(node, (int, float)) and not isinstance(node, bool):
-        numbers.add(node)
-
-
-def test_the_season_leaves_forward_alone_and_publishes_no_return(
-        tmp_path: Path, monkeypatch) -> None:
-    """Merging the season into `record` must not touch the sealed ledger.
-
-    The ledger report here is mid-season and carries a per-market return
-    (+6.1%, -2.2%) and its intervals, so a leak has something to leak.
-    `forward` on the board must be exactly what load_record seals, before
-    and after a night settles, and neither file may carry a return key or
-    one of the report's return figures anywhere.
-    """
-    lab = make_lab(tmp_path, monkeypatch, staged=True)
-    report = lab / "data" / "outputs" / "forward_evidence.json"
-    report.write_text(json.dumps(MID_SEASON), encoding="utf-8")
-    sealed = site_module().load_record(report)["forward"]
-    assert sealed["rows"] == MID_SEASON["rows"], "the fixture reached load_record"
-
-    out = tmp_path / "out"
-    before, _ = build(lab, out, monkeypatch)
-    after, results = build(lab, out, monkeypatch, day=BOARD_DAY + timedelta(days=1), finals=True)
-
-    assert after["record"]["season"]["nights"] == 1, "the season was merged into the record"
-    assert before["record"]["forward"] == sealed
-    assert after["record"]["forward"] == sealed
-    assert "forward" not in results["seasonRecord"]
-
-    returns = {
-        entry[key] for entry in MID_SEASON["markets"].values()
-        for key in ("roi", "low", "high", "adjusted_low", "adjusted_high")
-    }
-    for name, payload in (("board.json", after), ("results.json", results)):
-        keys: set = set()
-        numbers: set = set()
-        _keys_and_numbers(payload, keys, numbers)
-        leaked = keys & (set(THE_RETURN) | set(RETURN_FIELDS))
-        assert not leaked, f"{name} carries {sorted(leaked)}, a forward return sealed until 2027-04-25"
-        assert not numbers & returns, f"{name} carries {sorted(numbers & returns)} from the ledger's return"
 
 
 def test_a_missing_or_broken_report_publishes_no_record_either(tmp_path: Path) -> None:

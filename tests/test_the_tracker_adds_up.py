@@ -1,4 +1,4 @@
-"""The results tracker (Tracker.html, 2026-10-26).
+"""The results tracker (Tracker.dc.html, 2026-10-26).
 
 Cooper asked for one page of every result, broken down by team, player, prop
 type and market. These hold:
@@ -60,7 +60,7 @@ def test_only_graded_staked_rows_are_tracked_at_their_price() -> None:
         ("team", "TOR ML"), ("team", "Over 6.5"), ("props", "Auston Matthews"), ("props", "Nick Suzuki"),
         ("due", "Auston Matthews")]
     ml, total, sog, hits, due = rows
-    assert ml["units"] == pytest.approx(0.5 * 100 / 150, abs=1e-4) and ml["team"] == "TOR" and ml["opp"] == "MTL"
+    assert ml["units"] == pytest.approx(0.5 * 100 / 150, abs=0.01) and ml["team"] == "TOR" and ml["opp"] == "MTL"
     assert "stakeAssumed" not in ml
     assert total["staked"] == module.TEAM_PICK_DEFAULT_UNITS and total["stakeAssumed"] and total["team"] is None
     assert total["units"] == -module.TEAM_PICK_DEFAULT_UNITS

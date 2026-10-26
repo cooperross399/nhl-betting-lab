@@ -152,10 +152,11 @@ function nhlBoard(data) {
   // this strip printed for weeks while nothing tallied anything. Pinned by
   // tests/test_site_invents_no_season_record.py.
   //
-  // The forward ledger is not on this strip (owner's call, 2026-10-05). Its
-  // size stays in board.json; its return stays sealed until 2027-04-25
-  // (docs/when_this_ends.md) and must never be added here. Pinned by
-  // tests/test_site_publishes_no_forward_return.py.
+  // The forward ledger is not on this strip. It was sealed until 2027-04-25
+  // by the owner's call of 2026-10-05; Cooper lifted that on 2026-10-26, and
+  // units, records and return for every graded best bet are now on All
+  // results (Tracker.dc.html, tracker.json), not here
+  // (docs/when_this_ends.md).
   const kept = (rec) => rec && typeof rec === "object";
   const untallied = "No night settled yet · each night is on Results";
   const nights = typeof season.nights === "number" ? `${season.nights} night${season.nights === 1 ? "" : "s"}` : "";
@@ -223,7 +224,7 @@ function nhlResults(data) {
 }
 
 // ---------- EPL ----------
-const MK = { total_2_5: "Total 2.5", btts: "Both teams to score", double_chance: "Double chance", draw_no_bet: "Draw no bet", corners_1x2: "Corners 1x2", corners_total_9_5: "Corners 9.5", corners_total_10_5: "Corners 10.5", "1x2": "Match result" };
+const MK = { total_2_5: "Total 2.5", btts: "Both teams to score", double_chance: "Double chance", draw_no_bet: "Draw no bet", corners_1x2: "Corners 1x2", corners_total_9_5: "Corners 9.5", corners_total_10_5: "Corners 10.5", "1x2": "Match result", team_total_home_0_5: "Home team total 0.5", team_total_home_1_5: "Home team total 1.5", team_total_home_2_5: "Home team total 2.5", team_total_away_0_5: "Away team total 0.5", team_total_away_1_5: "Away team total 1.5", team_total_away_2_5: "Away team total 2.5" };
 function eplBoard(data) {
   const sport = SPORTS.epl, T = data.teams || {}, LH = data.lineHistory || {}, unit = data.unitDollars ?? 25;
   let bets = 0, leans = 0;
@@ -356,9 +357,16 @@ function picksCell(s) {
 // staked (the pipeline writes such a goalie prop as a pass; the page greys it).
 export const PROP_MARKETS = {
   shots_on_goal: { title: "Shots on goal", one: "shot", many: "shots" },
+  // EPL props (build_board_json.PROP_MARKET_KEYS); the anytime scorer is "goals" over 0.5.
+  shots: { title: "Shots", one: "shot", many: "shots" },
+  shots_on_target: { title: "Shots on target", one: "shot on target", many: "shots on target" },
   points: { title: "Points", one: "point", many: "points" },
   goals: { title: "Goals", one: "goal", many: "goals" },
   assists: { title: "Assists", one: "assist", many: "assists" },
+  // EPL cards and tackles (2026-10-19); EPL saves use goalie_saves below.
+  booked: { title: "Booked", one: "card", many: "cards" },
+  sent_off: { title: "Sent off", one: "red card", many: "red cards" },
+  tackles: { title: "Tackles", one: "tackle", many: "tackles" },
   blocked_shots: { title: "Blocked shots", one: "blocked shot", many: "blocked shots" },
   hits: { title: "Hits", one: "hit", many: "hits" },
   faceoffs_won: { title: "Faceoffs won", one: "faceoff won", many: "faceoffs won" },
@@ -436,7 +444,7 @@ function nhlPropResults(data) {
   return { status, rows, strip, empty, summaryLine: rows.length ? `${bets} best bet${bets === 1 ? "" : "s"}${leans ? ` · ${leans} lean${leans === 1 ? "" : "s"}` : ""} settled` : "" };
 }
 
-export const ADAPTERS = { nhl: { board: nhlBoard, results: nhlResults, props: nhlProps, propResults: nhlPropResults }, epl: { board: eplBoard, results: eplResults }, cbb: { board: cbbBoard, results: cbbResults } };
+export const ADAPTERS = { nhl: { board: nhlBoard, results: nhlResults, props: nhlProps, propResults: nhlPropResults }, epl: { board: eplBoard, results: eplResults, props: nhlProps, propResults: nhlPropResults }, cbb: { board: cbbBoard, results: cbbResults } };
 
 // One line for the home page.
 export function hubLine(sport, board, results) {

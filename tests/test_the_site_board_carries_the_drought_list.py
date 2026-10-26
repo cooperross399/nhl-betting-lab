@@ -89,8 +89,8 @@ def test_every_regular_season_game_carries_the_array_in_the_schemas_shape(lab, t
     assert [r["player"] for r in by["TOR"]] == ["Assist Man", "Second"], "the card's order is kept"
     assert set(by["TOR"][0]) == SCHEMA_KEYS
     # The pinned shape: the #307 fields, then the bars as the card wrote them and the cell
-    # record in percent (roi 0.105 -> 10.5), under keys that are not the sealed forward
-    # return's spellings (tests/test_site_publishes_no_forward_return.py).
+    # record in percent (roi 0.105 -> 10.5), under keys that are not the forward
+    # return's spellings.
     assert by["TOR"][0] == {"player": "Assist Man", "playerId": 8471111, "team": "TOR", "market": "assists", "line": 0.5,
                             "lastSeason": 31, "drought": 7, "price": 170, "book": "DraftKings", "heavyJuice": False,
                             "tierBar": 5, "surpriseBar": 7, "hitRate": 0.35, "rarity": 0.049, "oneIn": 20, "rule": "both", "band": "30-44",

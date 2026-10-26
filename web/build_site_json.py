@@ -683,7 +683,85 @@ def finals_for(day: date, history_dir: Path) -> dict[str, tuple[int, int]] | Non
     return out
 
 
-def track_record(today: date, history_dir: Path) -> dict:
+#: Totals and puck-line calibration (record.json `markets`): 5-point bands,
+#: merged until each holds at least this many games.
+MARKET_BUCKET_WIDTH = 0.05
+MARKET_BUCKET_MIN_GAMES = 10
+
+#: The Due List's calibration block counts priced entries from this night on.
+DUE_LIST_TRACKED_FROM = "2026-10-09"
+
+
+def _market_buckets(rows: list[tuple[float, bool]]) -> dict | None:
+    """{games, buckets} for (published chance, came in) pairs: 5-point bands
+    by the published chance, each merged into its neighbour toward the middle
+    until it holds MARKET_BUCKET_MIN_GAMES (a lone thin band stays), with a
+    95% Wilson interval on how often the side came in."""
+    if not rows:
+        return None
+    bands: dict[int, list] = {}
+    for p, hit in rows:
+        bands.setdefault(min(int(p / MARKET_BUCKET_WIDTH), int(1 / MARKET_BUCKET_WIDTH) - 1), []).append((p, hit))
+    spans = [[k, k, v] for k, v in sorted(bands.items())]
+    while len(spans) > 1:
+        thin = [i for i, s in enumerate(spans) if len(s[2]) < MARKET_BUCKET_MIN_GAMES]
+        if not thin:
+            break
+        # The thinnest tail first: the outermost thin band folds inward.
+        i = thin[0] if thin[0] == 0 or thin[-1] != len(spans) - 1 else thin[-1]
+        j = i + 1 if i < len(spans) - 1 and (i == 0 or len(spans[i + 1][2]) <= len(spans[i - 1][2])) else i - 1
+        a, b = sorted((i, j))
+        spans[a:b + 1] = [[spans[a][0], spans[b][1], spans[a][2] + spans[b][2]]]
+    buckets = []
+    for lo, hi, members in spans:
+        n, hits = len(members), sum(1 for _, h in members if h)
+        buckets.append({"low": round(lo * MARKET_BUCKET_WIDTH, 2), "high": round(min((hi + 1) * MARKET_BUCKET_WIDTH, 1.0), 2),
+                        "games": n, "predicted": round(sum(p for p, _ in members) / n, 4),
+                        "actual": round(hits / n, 4), "interval": _wilson(hits, n)})
+    return {"games": len(rows), "buckets": buckets}
+
+
+def _total_row(g: dict, final: tuple[int, int]) -> tuple[float, bool] | None:
+    tot = g.get("total") or {}
+    p, line = _real(tot.get("overProb")), _real(tot.get("current"))
+    if p is None or line is None or not 0 <= p <= 1:
+        return None
+    goals = final[0] + final[1]
+    return None if goals == line else (p, goals > line)
+
+
+def _puck_line_row(g: dict, final: tuple[int, int]) -> tuple[float, bool] | None:
+    pl = g.get("puckLine") or {}
+    p, line, fav = _real(pl.get("coverProb")), _real(pl.get("line")), pl.get("favorite")
+    if p is None or line is None or not 0 <= p <= 1:
+        return None
+    home, away = (g.get("home") or {}).get("abbr"), (g.get("away") or {}).get("abbr")
+    if fav == home:
+        margin = final[0] - final[1]
+    elif fav == away:
+        margin = final[1] - final[0]
+    else:
+        return None
+    return None if margin + line == 0 else (p, margin + line > 0)
+
+
+def due_list_record(rows: list[dict]) -> dict | None:
+    """record.json `dueList`: the Due List on calibration terms. Priced,
+    graded entries since DUE_LIST_TRACKED_FROM: how many, how often they hit
+    (pushes left out), the American price of their mean decimal odds, and the
+    hit rate that price breaks even at (1 / mean decimal odds, which is the
+    flat-stake break-even). No units and no return; those are on All results."""
+    due = [r for r in rows if r.get("group") == "due" and (r.get("date") or "") >= DUE_LIST_TRACKED_FROM
+           and r.get("result") in ("win", "loss") and _real(r.get("price"))]
+    if not due:
+        return None
+    decimal = sum(1 + win_profit(float(r["price"])) for r in due) / len(due)
+    avg = (decimal - 1) * 100 if decimal >= 2 else -100 / (decimal - 1)
+    return {"entries": len(due), "hitRate": round(sum(r["result"] == "win" for r in due) / len(due), 4),
+            "avgPrice": round(avg), "breakEven": round(1 / decimal, 4)}
+
+
+def track_record(today: date, history_dir: Path, tracked: list[dict] | None = None) -> dict:
     """record.json: how the published win chances held up, and which way the
     market moved after each moneyline pick was published.
 
@@ -695,9 +773,15 @@ def track_record(today: date, history_dir: Path) -> dict:
     reads the board's own line series (history/lines/<day>.json, the prices
     the board published through the day): for a moneyline pick, whether the
     home price at the day's last build moved toward the picked side. Nothing
-    here is a forward-ledger return, which stays sealed.
+    here is a return: units live on All results (tracker.json).
+
+    `markets` scores the totals (by the over's published chance, against the
+    over coming in) and the puck line (by the favourite's cover chance), each
+    absent until a game has settled; `dueList` reads the tracked rows.
     """
     games = []
+    totals: list[tuple[float, bool]] = []
+    puck: list[tuple[float, bool]] = []
     moves = {"toward": 0, "against": 0, "flat": 0}
     nights = 0
     for path in sorted(history_dir.glob("*.json")):
@@ -726,6 +810,9 @@ def track_record(today: date, history_dir: Path) -> dict:
             final = finals.get(str(g.get("id")))
             if not final or final[0] == final[1]:
                 continue
+            for rows, row in ((totals, _total_row(g, final)), (puck, _puck_line_row(g, final))):
+                if row:
+                    rows.append(row)
             p = float(g["home"]["winProb"])
             games.append({"p": p, "won": final[0] > final[1], "market": _no_vig_home(g.get("moneyline"))})
             pick = g.get("pick") or {}
@@ -763,6 +850,9 @@ def track_record(today: date, history_dir: Path) -> dict:
         "nights": nights, "games": len(games), "buckets": buckets,
         "brier": {"games": len(both), "model": brier("p"), "market": brier("market")} if both else None,
         "movement": dict(moves, picks=sum(moves.values())),
+        **({"markets": markets} if (markets := {k: v for k, v in (("total", _market_buckets(totals)),
+                                                                   ("puckLine", _market_buckets(puck))) if v}) else {}),
+        **({"dueList": due} if (due := due_list_record(tracked or [])) else {}),
     }
 
 
@@ -931,7 +1021,7 @@ def build_board(day: date, lab: Path, history_dir: Path) -> dict:
                             **pick_side_and_line(top),
                         }
                         # The card's stake, for the results tracker
-                        # (Tracker.html). A lean carries none.
+                        # (Tracker.dc.html). A lean carries none.
                         stake = _real(top.get("suggested_units")) if kind == "bet" else None
                         if stake:
                             row["pick"]["units"] = stake
@@ -1077,9 +1167,9 @@ def cell_record(source: object) -> dict | None:
 
     The keys are not spelled roiPct / ciLowPct / ciHighPct, which is how the
     FORWARD ledger's return would be spelled on the page, and
-    tests/test_site_publishes_no_forward_return.py forbids those spellings on
-    Board.dc.html (and `roi` / `low` / `high` as keys anywhere on the board).
-    That seal is on the pre-registered forward test; this cell is the
+    a seal on the forward test kept those spellings off Board.dc.html until
+    Cooper lifted it on 2026-10-26 (units and return now live on All results).
+    That seal was on the pre-registered forward test; this cell is the
     historical backtest's, the same measurement `droughtNote` already prints,
     and its keys say so rather than borrowing the sealed ones.
     """
@@ -1598,8 +1688,7 @@ def load_record(path: Path) -> dict:
     # it knows nothing about the ledger, and "No slate settled yet" would be
     # false from the first settled night on. The count is unknown, so none
     # is published: the page reads "Ledger size not reported". (`rows`
-    # stays 0: the page never shows it, and the seal pins every failure
-    # path to it — tests/test_site_publishes_no_forward_return.py.)
+    # stays 0: the page never shows it.)
     unknown = {**empty, "forward": {**sealed, "wagers": None}}
     if not path.is_file():
         return unknown
@@ -2093,7 +2182,7 @@ def props_tallies(rows: list[dict]) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# The results tracker (Tracker.html, Cooper 2026-10-26: "one big page of all
+# The results tracker (Tracker.dc.html, Cooper 2026-10-26: "one big page of all
 # our results and tracking for each team/player/player prop/market").
 
 #: How each prop market reads on the tracker.
@@ -2143,7 +2232,7 @@ def tracker_rows(results: dict) -> list[dict]:
         out.append({"date": day, "group": "team", "market": pick.get("market"), "label": label,
                     "team": team, "opp": (away if team == home else home) if team else None,
                     "teams": [away, home], "price": price, "result": pick["result"], "staked": staked,
-                    "units": round(_profit(staked, price, pick["result"]), 4),
+                    "units": round(_profit(staked, price, pick["result"]), 2),
                     **({} if _real(pick.get("units")) else {"stakeAssumed": True})})
     for r in ((results.get("props") or {}).get("rows") or []) if isinstance(results.get("props"), dict) else []:
         if not isinstance(r, dict) or r.get("kind") != "bet" or r.get("result") not in ("win", "loss", "push"):
@@ -2155,7 +2244,7 @@ def tracker_rows(results: dict) -> list[dict]:
         out.append({"date": day, "group": "props", "market": market, "propType": PROP_LABEL.get(market, market),
                     "side": r.get("side"), "line": r.get("line"), "player": r.get("player"),
                     "playerId": r.get("playerId"), "team": r.get("team"), "opp": r.get("opp"), "price": price,
-                    "result": r["result"], "staked": staked, "units": round(_profit(staked, price, r["result"]), 4)})
+                    "result": r["result"], "staked": staked, "units": round(_profit(staked, price, r["result"]), 2)})
     for r in ((results.get("dueList") or {}).get("rows") or []) if isinstance(results.get("dueList"), dict) else []:
         if not isinstance(r, dict) or r.get("result") not in ("win", "loss", "push") or not _is_number(r.get("units")):
             continue
@@ -2164,7 +2253,7 @@ def tracker_rows(results: dict) -> list[dict]:
                     "side": "over", "line": r.get("line") if r.get("line") is not None else DUE_LIST_LINE,
                     "player": r.get("player"), "playerId": r.get("playerId"), "team": r.get("team"),
                     "opp": r.get("opp"), "price": float(r["price"]), "result": r["result"],
-                    "staked": DUE_LIST_STAKE, "units": float(r["units"])})
+                    "staked": DUE_LIST_STAKE, "units": round(float(r["units"]), 2)})
     return out
 
 
@@ -2535,7 +2624,7 @@ def main(argv: list[str] | None = None) -> int:
     (out / "results.json").write_text(json.dumps(results, indent=1, ensure_ascii=False), encoding="utf-8")
     (out / "ratings.json").write_text(json.dumps(ratings_page(Path(args.lab)), indent=1, ensure_ascii=False), encoding="utf-8")
     (out / "tracker.json").write_text(json.dumps(tracker(tracked, nights=season["nights"]), indent=1, ensure_ascii=False), encoding="utf-8")
-    (out / "record.json").write_text(json.dumps(track_record(today, history), indent=1, ensure_ascii=False), encoding="utf-8")
+    (out / "record.json").write_text(json.dumps(track_record(today, history, tracked), indent=1, ensure_ascii=False), encoding="utf-8")
     print(f"board {today}: {len(board['games'])} games ({board['phase']}); results {today - timedelta(days=1)}: {len(results['games'])} settled.")
     print("No odds were fetched, no credit was spent, and no bet was placed.")
     return 0
