@@ -114,6 +114,19 @@ def test_pin_copies_only_what_differs_from_the_lock(tmp_path: Path) -> None:
     assert (shared / "web" / "logos" / "nhl" / "TOR.png").read_bytes() == b"png"
 
 
+def test_pin_compares_with_the_shared_main_not_the_lock(tmp_path: Path) -> None:
+    # A drop pinned and then closed unmerged leaves the shared main past the
+    # lock's tag. The next drop must put back every file it holds differently.
+    drop = _drop()
+    web, shared = _lab(tmp_path)
+    (web / "Board.dc.html").write_bytes(b"<!doctype html>trimmed")
+    (shared / "web" / "Board.dc.html").write_bytes(b"<!doctype html>trimmed")
+    (shared / "web" / "lib" / "sports.js").write_bytes(b"stale")
+    assert drop.lock_is_stale(web)
+    assert drop.pin(shared, web) == ["lib/sports.js"]
+    assert (shared / "web" / "lib" / "sports.js").read_bytes() == (web / "lib" / "sports.js").read_bytes()
+
+
 def test_the_hub_moves_to_the_tag(tmp_path: Path) -> None:
     drop = _drop()
     shared, hub = tmp_path / "shared", tmp_path / "hub"
