@@ -3143,3 +3143,7 @@ workflows, docs, and opening PRs with green CI.
 Claude stops and asks for: **provider/market allowlisting approvals**, and
 **anything spending API credits beyond a small measurement budget**. Those two
 are Cooper's alone.
+
+## Design drops
+
+- Branches named design/** come from Claude Design. They may change only page files (see .github/workflows/design-drop-guard.yml) and auto-merge on green. Never rebase or edit them by hand; ask Claude Design for a new drop instead. Design Drop (`.github/workflows/design-drop.yml`) pins a changed shared page to a new tag of `cooperross399/betting-lab-shared`, merges the drop once Tests and the guard pass on its head, and moves the EPL lab, the CBB lab and the hub to that tag through `shared-sync/<tag>` pull requests merged on green. It needs the `DESIGN_DROP_TOKEN` secret. A drop that changes `web/DROP_NOTE.md` is labelled `needs-builder`: the feed change it asks for is made by a Claude Code run, never on the design branch.

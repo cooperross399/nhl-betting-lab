@@ -1,0 +1,54 @@
+name: Design Drop Guard
+
+# Branches named design/** come from Claude Design. This holds each one to
+# page files: the paths in `ALLOWED` in scripts/design_drop.py (the
+# `*.dc.html` pages, the three shared libraries, SCHEMA.md, DROP_NOTE.md,
+# sample data, logos, and the shared-page lock Design Drop writes). Anything
+# else, a builder, a test, a workflow or the model, fails this check, and
+# Design Drop merges nothing this check has not passed.
+#
+# A drop that changes web/DROP_NOTE.md needs a feed change, which a design
+# branch may not make: the pull request is labelled `needs-builder` for a
+# human or a Claude Code run to pick up.
+#
+# It reads the branch and labels the pull request. It fetches no odds, spends
+# no credit, pushes nothing, edits no policy and places no bet.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  guard:
+    name: Design drop guard
+    if: startsWith(github.head_ref, 'design/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Refuse anything but page files
+        id: guard
+        run: python scripts/design_drop.py guard --base "origin/${{ github.base_ref }}" --head HEAD
+
+      - name: Label a drop that needs a builder change
+        if: ${{ !cancelled() && steps.guard.outputs.needs_builder == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          gh label create needs-builder --color d93f0b \
+            --description "A design drop that needs a feed change (see web/DROP_NOTE.md)" \
+            -R "$GITHUB_REPOSITORY" --force
+          gh pr edit "$PR" -R "$GITHUB_REPOSITORY" --add-label needs-builder
