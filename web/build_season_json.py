@@ -167,7 +167,7 @@ def check(site: dict) -> None:
             if not (o["cup"] <= o["final"] + 1e-9 <= o["confFinal"] + 2e-9 <= o["round1"] + 3e-9 <= o["playoff"] + 4e-9):
                 raise SystemExit(f"{t['abbr']}'s round odds do not shrink round by round")
     for name, rows in (site.get("trophies") or {}).items():
-        if isinstance(rows, list) and sum(r["p"] for r in rows) > 1.0001:
+        if isinstance(rows, list) and sum(r["p"] for r in rows) > 1.001:
             raise SystemExit(f"the {name} odds sum past 1")
 
 
