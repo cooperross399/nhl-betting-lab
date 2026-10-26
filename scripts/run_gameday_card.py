@@ -701,7 +701,7 @@ def main(argv: list[str] | None = None) -> int:
             # The team table at each layer, for the game pages' breakdown
             # (factor_breakdown, 2026-10-26): rated, then tonight's lineup,
             # then tonight's starters.
-            rated_teams = dict(team_model.teams)
+            rated_teams = dict(getattr(team_model, "teams", {}))
             # Tonight's dressed skaters against the club's usual eighteen,
             # on each skater's offensive rating (`lineups`, 2026-10-25): a
             # missing star takes attack off, one back puts it on.
@@ -720,7 +720,7 @@ def main(argv: list[str] | None = None) -> int:
                     continue
                 team_model.teams[club] = dataclasses.replace(rate, defence=rate.defence * factor)
                 print(f"{club}: defence x{factor:.3f} for tonight's lineup.")
-            lineup_teams = dict(team_model.teams)
+            lineup_teams = dict(getattr(team_model, "teams", {}))
             # Tonight's listed starter in place of the team's goalies
             # together (Cooper, 2026-10-25), from Daily Faceoff's listing.
             for line in apply_starters(
@@ -730,7 +730,7 @@ def main(argv: list[str] | None = None) -> int:
                 day=moment.astimezone(LEAGUE_TIMEZONE).date().isoformat(),
             ):
                 print(line)
-            goalie_teams = dict(team_model.teams)
+            goalie_teams = dict(getattr(team_model, "teams", {}))
             team_model.game_factors = crews
             # PostHockey's pre-game win probability (Cooper, 2026-10-25),
             # from scripts/fetch_posthockey_pregame.py: the moneyline moves
@@ -755,12 +755,18 @@ def main(argv: list[str] | None = None) -> int:
             unresolved_names.update(unresolved)
             # Where each game's number comes from, layer by layer, for the
             # public game pages. Reads the model; changes no price.
-            team_factors = slate_breakdowns(
-                priceable, team_model, team_names=team_names,
-                rated=rated_teams, lineup=lineup_teams, goalies=goalie_teams,
-                form=ratings_form(processed),
-                history=team_history, schedule_history=team_model_games,
-            )
+            # A breakdown that cannot be built leaves the pages without it
+            # and never costs the card.
+            try:
+                team_factors = slate_breakdowns(
+                    priceable, team_model, team_names=team_names,
+                    rated=rated_teams, lineup=lineup_teams, goalies=goalie_teams,
+                    form=ratings_form(processed),
+                    history=team_history, schedule_history=team_model_games,
+                )
+            except Exception as exc:  # noqa: BLE001 - descriptive only
+                print(f"::warning::The game-page breakdown was not built: {exc}")
+                team_factors = []
         except (KeyError, ValueError) as exc:
             blockers.append(f"The team model could not be fitted: {exc}")
 
