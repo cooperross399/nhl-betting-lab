@@ -55,4 +55,9 @@ Off the domain the pages load the fixtures; on `*.maverickhightower.com` they al
 - Owner's call 2026-10-26: units, records and return for every graded best bet are published. Supersedes the 2026-10-05 seal. The Record page's sealed-hash block is removed; Record and Methods wording now points at All results.
 - NHL tab bar is now Tonight · Props · Results · Season · Record · Tracker on every page (Board, Results, Archive, Graphic, Game, Record, Methods). Archive stays reachable from the Tracker's "How to read this" and the Archive page itself. EPL/CBB keep their Archive tab.
 
-<!-- Test drop 2026-10-26: no feed change needed. -->
+
+## Inline review trims (2026-10-26, drop game-pages-tracker-r2)
+Built on main @ff841d3. Pages only; no feed change.
+- Board (shared): removed the "Board built <time>" stamp, the feed-stale badge, the "Tonight in 60 seconds" paragraph, and the model-pick line inside the live score box; the live pick line under the pick is now just "Live · won/losing"; the game-page link reads "FULL GAME PREVIEW →".
+- Season: removed the playoff-odds subtitle, the "last season's pace" and "dashed rule" legend items, and the goalie-wins subtitle.
+- Ask: Connor Bedard is fully back; drop his entry from the season-sim injury notes in data/manual/ and re-run the sim.
