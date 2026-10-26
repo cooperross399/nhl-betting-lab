@@ -9,11 +9,17 @@ tracker instead reads three signals and shows them side by side:
   listed field);
 * **poll**: the latest media poll's points for each player over the poll's
   total (a winner-only poll counts each vote as a point);
-* **model**: the season sim's own projection. Hart: projected points raised
-  to the sixth power, times 0.25 + 0.75 x the team's playoff odds (voters
-  rarely pick a player whose club misses). Norris: defensemen's projected
-  points to the sixth power. Selke: none, because the sim has no defensive
-  rating for a forward, so the Selke tracker is odds and poll only.
+* **model**: what the season so far says, from :func:`award_stats` (NHL
+  season-to-date stats, MoneyPuck's on-ice and faceoff tables, and the card's
+  shift-chart defence ratings). Each stat is this season's per-game rate
+  blended with last season's by games played (``gp / (gp + PRIOR_GAMES)``),
+  so ten games in a hot start counts but does not yet decide. Hart: the
+  player's points (the sim's season projection blended with his scoring pace)
+  raised to the sixth power, times 0.25 + 0.75 x his club's playoff odds.
+  Norris and Selke: a weighted sum of z-scores across the position
+  (:data:`NORRIS_PARTS`, :data:`SELKE_PARTS`), turned into shares with
+  ``exp(TEMPERATURE x score)``. Without those stats (an old build) the model
+  falls back to projected points, and the Selke has none.
 
 The tracker share is the weighted mean of the signals that exist, with
 :data:`WEIGHTS` renormalised over them; a player missing from a signal counts
@@ -23,6 +29,7 @@ page says so. Nothing here reads a sportsbook, spends a credit or places a bet.
 from __future__ import annotations
 
 import json
+import math
 import unicodedata
 from datetime import date
 from pathlib import Path
@@ -35,6 +42,20 @@ WEIGHTS = {"market": 0.5, "poll": 0.3, "model": 0.2}
 #: Projected points are raised to this power so the model signal is as
 #: top-heavy as a real vote (the leader is far likelier than the tenth man).
 MODEL_POWER = 6
+#: Games of last season's rate a player's season-to-date rate is blended with.
+PRIOR_GAMES = 15
+#: The Norris and Selke composites: z-scores across the position, weighted.
+#: Chosen, not fitted, to read like the vote: the Norris goes to a scoring
+#: defenseman who plays big minutes and is not beaten at 5v5; the Selke to a
+#: centre who wins draws, kills penalties, suppresses chances and still scores.
+NORRIS_PARTS = {"points": 0.5, "toi": 0.2, "defence": 0.3}
+SELKE_PARTS = {"defence": 0.3, "faceoffs": 0.2, "pk": 0.15, "puck": 0.1, "points": 0.25}
+#: How top-heavy the composite shares are: exp(TEMPERATURE x score).
+TEMPERATURE = 2.2
+#: Fewest games played this season (or last, early on) to be rated at all.
+MIN_GAMES = 5
+#: Model leaders added to a field the books and polls have not priced.
+MODEL_ADDS = 3
 #: An input older than this is flagged stale on the page.
 STALE_DAYS = 14
 #: Rows published per award.
@@ -43,9 +64,15 @@ ROWS = 10
 AWARDS = ("hart", "norris", "selke")
 LABELS = {"hart": "Hart Trophy", "norris": "Norris Trophy", "selke": "Selke Trophy"}
 MODEL_NOTES = {
+    "hart": "Model: this season's points (pace blended with the projection), to the sixth power, times 0.25 + 0.75 x the club's playoff odds.",
+    "norris": "Model: points 50%, ice time 20%, 5v5 chances allowed against his teammates 30%, this season blended with last.",
+    "selke": "Model: 5v5 chances allowed against his teammates 30%, points 25%, faceoffs 20%, penalty kill time 15%, takeaways less giveaways 10%.",
+}
+#: Notes for a build that has no season-to-date stats (the old projection).
+FALLBACK_NOTES = {
     "hart": "Model: projected points to the sixth power, times 0.25 + 0.75 x the club's playoff odds.",
     "norris": "Model: a defenseman's projected points to the sixth power.",
-    "selke": "No model signal: the season sim has no defensive rating for a forward, so this tracker is the odds and the poll.",
+    "selke": "No model signal: no defensive stats reached this build, so this tracker is the odds and the poll.",
 }
 
 
@@ -94,22 +121,139 @@ def _poll(block: dict | None) -> tuple[dict[str, float], dict[str, int], dict[st
     return share, rank, pts
 
 
-def _model(award: str, players: list[dict], playoff: dict[str, float]) -> dict[str, float]:
-    if award == "selke":
+def _blend(now: float | None, gp_now: float, prior: float | None) -> float | None:
+    """This season's per-game rate, leaning on last season's until games pile up."""
+    if now is None and prior is None:
+        return None
+    if prior is None:
+        return now
+    if now is None or gp_now <= 0:
+        return prior
+    w = gp_now / (gp_now + PRIOR_GAMES)
+    return w * now + (1 - w) * prior
+
+
+def _z(values: dict[str, float]) -> dict[str, float]:
+    if len(values) < 2:
+        return {k: 0.0 for k in values}
+    mean = sum(values.values()) / len(values)
+    sd = (sum((v - mean) ** 2 for v in values.values()) / len(values)) ** 0.5
+    return {k: ((v - mean) / sd if sd > 0 else 0.0) for k, v in values.items()}
+
+
+def _composite(pool: list[dict], parts: dict[str, float]) -> dict[str, float]:
+    """Shares from a weighted z-score sum; a missing stat counts as average."""
+    if not pool:
         return {}
+    keys = [name_key(p["name"]) for p in pool]
+    score = {k: 0.0 for k in keys}
+    for part, weight in parts.items():
+        have = {k: float(p["stats"][part]) for k, p in zip(keys, pool) if p["stats"].get(part) is not None}
+        for k, z in _z(have).items():
+            score[k] += weight * z
+    raw = {k: math.exp(TEMPERATURE * v) for k, v in score.items()}
+    total = sum(raw.values())
+    return {k: v / total for k, v in raw.items()}
+
+
+def _model(award: str, players: list[dict], playoff: dict[str, float]) -> dict[str, float]:
+    rated = [p for p in players if p.get("stats") and p["stats"].get("gp", 0) >= MIN_GAMES]
+    if award == "selke":
+        pool = [p for p in rated if p.get("pos") in ("C", "L", "R") and p["stats"].get("toi", 0) >= 14.0]
+        return _composite(pool, SELKE_PARTS)
+    if award == "norris" and rated:
+        pool = [p for p in rated if p.get("pos") == "D" and p["stats"].get("toi", 0) >= 17.0]
+        return _composite(pool, NORRIS_PARTS)
     pool = [p for p in players if p.get("pos") != "G" and (award != "norris" or p.get("pos") == "D")]
     if not pool:
         return {}
-    top = max(p["p"] for p in pool) or 1.0
+
+    def points(p: dict) -> float:
+        st = p.get("stats") or {}
+        if award == "hart" and st.get("points") is not None and st.get("gp", 0) > 0:
+            # The season projection, pulled toward his pace by games played.
+            w = st["gp_now"] / (st["gp_now"] + 20) if st.get("gp_now") else 0.0
+            return (1 - w) * p["p"] + w * st["points"] * 82
+        return p["p"]
+
+    top = max(points(p) for p in pool) or 1.0
     raw = {}
     for p in pool:
-        w = (max(p["p"], 0.0) / top) ** MODEL_POWER
+        w = (max(points(p), 0.0) / top) ** MODEL_POWER
         if award == "hart":
             w *= 0.25 + 0.75 * playoff.get(p["team"], 0.0)
         k = name_key(p["name"])
         raw[k] = max(raw.get(k, 0.0), w)
     total = sum(raw.values())
     return {k: v / total for k, v in raw.items()} if total > 0 else {}
+
+
+def _f(row: dict | None, key: str) -> float:
+    try:
+        return float((row or {}).get(key) or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def award_stats(bundle: dict, *, defence: dict[str, float] | None = None) -> dict[int, dict]:
+    """Per-game award stats for every skater, keyed by NHL id.
+
+    ``bundle`` is :func:`season_sim.fetch.fetch_bundle`'s. Rates are this
+    season's blended with last season's (:func:`_blend`): points, ice time a
+    game, faceoffs won less lost a game, penalty-kill minutes a game,
+    takeaways less giveaways a game, and ``defence``, the goals a game a
+    player prevents at 5v5 against his teammates. ``defence`` comes from the
+    card's shift-chart ratings (``skater_defence``) when given; otherwise
+    from MoneyPuck's 5v5 on- and off-ice expected goals against.
+    """
+    from .model import _read_csv  # local: keeps this module light for the page tests
+
+    season = bundle["season"]
+    years = [season, *[s for s in bundle["skaters"] if s != season]]
+    prior = years[1] if len(years) > 1 else None
+    nhl = {s: {q["playerId"]: q for q in bundle["skaters"].get(s, [])} for s in (season, prior) if s}
+    mp: dict[str, dict[tuple[int, str], dict]] = {}
+    mp_team: dict[str, dict[tuple[str, str], dict]] = {}
+    for s in (season, prior):
+        files = (bundle.get("moneypuck") or {}).get(s) or {}
+        mp[s] = {(int(r["playerId"]), r["situation"]): r for r in _read_csv(files.get("skaters"))}
+        mp_team[s] = {(r["team"], r["situation"]): r for r in _read_csv(files.get("teams"))}
+
+    def rates(s: str | None, pid: int) -> tuple[float, dict]:
+        q = nhl.get(s, {}).get(pid) if s else None
+        gp = float((q or {}).get("gamesPlayed") or 0)
+        if gp <= 0:
+            return 0.0, {}
+        m_all = mp.get(s, {}).get((pid, "all"))
+        m_pk = mp.get(s, {}).get((pid, "4on5"))
+        m_ev = mp.get(s, {}).get((pid, "5on5"))
+        out = dict(points=float(q.get("points") or 0) / gp, toi=float(q.get("timeOnIcePerGame") or 0) / 60.0)
+        if m_all:
+            mgp = _f(m_all, "games_played") or gp
+            out["faceoffs"] = (_f(m_all, "faceoffsWon") - _f(m_all, "faceoffsLost")) / mgp
+            out["puck"] = (_f(m_all, "I_F_takeaways") - _f(m_all, "I_F_giveaways")) / mgp
+            out["pk"] = _f(m_pk, "icetime") / 60.0 / mgp if m_pk else 0.0
+        if m_ev and _f(m_ev, "icetime") >= 1800:
+            it = _f(m_ev, "icetime")
+            team = mp_team.get(s, {}).get((m_ev.get("team"), "5on5"))
+            if team and _f(team, "games_played") > 0:
+                team_it = _f(team, "iceTime") * _f(m_ev, "games_played") / _f(team, "games_played")
+                off_it = max(team_it - it, 3600.0)
+                rel = _f(m_ev, "OnIce_A_xGoals") / it - _f(m_ev, "OffIce_A_xGoals") / off_it
+                out["defence"] = -rel * it / max(_f(m_ev, "games_played"), 1.0)
+        return gp, out
+
+    stats: dict[int, dict] = {}
+    for pid in set(nhl.get(season, {})) | set(nhl.get(prior, {}) if prior else {}):
+        gp_now, now = rates(season, pid)
+        gp_prior, before = rates(prior, pid)
+        row: dict = dict(gp=max(gp_now, gp_prior if gp_now < MIN_GAMES else 0), gp_now=gp_now)
+        for key in ("points", "toi", "faceoffs", "pk", "puck", "defence"):
+            row[key] = _blend(now.get(key), gp_now, before.get(key))
+        if defence and str(pid) in defence:
+            row["defence"] = float(defence[str(pid)])
+        stats[pid] = row
+    return stats
 
 
 def _source(block: dict | None, kind: str, today: date) -> dict | None:
@@ -143,6 +287,13 @@ def tracker(award: str, inputs: dict, players: list[dict], playoff: dict[str, fl
     for blk, key in ((odds_block, "lines"), (poll_block, "entries")):
         for x in (blk or {}).get(key) or []:
             names.setdefault(name_key(x["name"]), (x["name"], x.get("team")))
+    # A field the books and polls have not caught up with: the model's own
+    # leaders join it, so a breakout season is on the page before it is priced.
+    if names and any(p.get("stats") for p in players):
+        by_key = {name_key(p["name"]): p for p in players}
+        for k in sorted(model, key=lambda k: -model[k])[:MODEL_ADDS]:
+            if k not in names and k in by_key:
+                names[k] = (by_key[k]["name"], by_key[k].get("team"))
     field_model = {k: model.get(k, 0.0) for k in names}
     mtot = sum(field_model.values())
     field_model = {k: v / mtot for k, v in field_model.items()} if mtot > 0 else {}
@@ -171,7 +322,7 @@ def tracker(award: str, inputs: dict, players: list[dict], playoff: dict[str, fl
     return dict(
         label=LABELS[award], rows=rows[:ROWS], weights=weights, sources=sources,
         noPoll=poll_block is None, stale=any(s["stale"] for s in sources) or not sources,
-        modelNote=MODEL_NOTES[award],
+        modelNote=(MODEL_NOTES if any(p.get("stats") for p in players) else FALLBACK_NOTES)[award],
     )
 
 

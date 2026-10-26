@@ -116,7 +116,7 @@ def test_the_norris_model_counts_defensemen_and_the_selke_has_none() -> None:
     selke = awards.tracker("selke", _inputs(), PLAYERS, PLAYOFF, today=date(2026, 10, 26))
     assert selke["weights"] == {"market": pytest.approx(0.625), "poll": pytest.approx(0.375), "model": 0.0}
     assert all(r["model"] is None for r in selke["rows"])
-    assert "no defensive rating" in selke["modelNote"]
+    assert "no defensive stats" in selke["modelNote"]
 
 
 def test_an_award_without_a_poll_says_so_and_old_inputs_are_stale() -> None:
@@ -174,3 +174,106 @@ def test_a_build_without_award_inputs_publishes_no_trackers(tmp_path: Path) -> N
     assert site["trophies"]["voted"] is None
     vals = _render(site, tmp_path)
     assert vals["hasVoted"] is False and vals["voted"] == []
+
+
+# ---------------------------------------------------------------- the season so far
+# Cooper (2026-10-26): "How do we make the Hart/Norris/Selke trophy trackers
+# accurate and up to date". The model signal reads this season's stats.
+
+
+def _stat(gp=12, gp_now=12, **kw) -> dict:
+    row = dict(gp=gp, gp_now=gp_now, points=0.5, toi=17.0, faceoffs=0.0, pk=1.0, puck=0.0, defence=0.0)
+    row.update(kw)
+    return row
+
+
+def test_the_selke_model_rewards_a_two_way_centre_once_stats_arrive() -> None:
+    awards = _awards()
+    players = [
+        dict(name="Ann Alpha", pos="C", team="AAA", p=70.0,
+             stats=_stat(points=0.8, faceoffs=4.0, pk=2.5, defence=0.15, puck=0.5, toi=20.0)),
+        dict(name="Bo Beta", pos="C", team="BBB", p=90.0,
+             stats=_stat(points=1.3, faceoffs=-3.0, pk=0.0, defence=-0.10, puck=-0.5, toi=21.0)),
+        dict(name="Cy Gamma", pos="L", team="CCC", p=40.0, stats=_stat(points=0.4, toi=15.0)),
+        dict(name="Dee Delta", pos="D", team="DDD", p=50.0, stats=_stat(points=0.6, defence=0.3, toi=24.0)),
+    ]
+    selke = awards.tracker("selke", _inputs(), players, PLAYOFF, today=date(2026, 10, 26))
+    rows = {r["name"]: r for r in selke["rows"]}
+    assert selke["weights"] == awards.WEIGHTS
+    assert rows["Ann Alpha"]["model"] > rows["Bo Beta"]["model"]
+    assert rows["Dee Delta"]["model"] == 0  # a defenseman is not a Selke candidate
+    assert "faceoffs" in selke["modelNote"]
+    assert sum(r["tracker"] for r in selke["rows"]) == pytest.approx(1.0, abs=1e-3)
+
+
+def test_the_norris_model_weighs_minutes_and_defence_beside_points() -> None:
+    awards = _awards()
+    players = [
+        dict(name="Bo Beta", pos="D", team="BBB", p=60.0, stats=_stat(points=0.9, toi=25.0, defence=0.12)),
+        dict(name="Cy Gamma", pos="D", team="CCC", p=70.0, stats=_stat(points=1.0, toi=19.0, defence=-0.15)),
+        dict(name="Eve Echo", pos="D", team="EEE", p=30.0, stats=_stat(points=0.3, toi=18.0, defence=0.0)),
+        dict(name="Ann Alpha", pos="C", team="AAA", p=100.0, stats=_stat(points=1.5, toi=21.0)),
+    ]
+    rows = {r["name"]: r for r in awards.tracker("norris", _inputs(), players, PLAYOFF, today=date(2026, 10, 26))["rows"]}
+    assert rows["Bo Beta"]["model"] > rows["Cy Gamma"]["model"]
+    assert rows["Ann Alpha"]["model"] == 0
+
+
+def test_a_player_under_the_games_floor_is_not_rated_and_early_rates_lean_on_last_season() -> None:
+    awards = _awards()
+    assert awards._blend(2.0, 0, 1.0) == 1.0
+    assert awards._blend(2.0, awards.PRIOR_GAMES, 1.0) == pytest.approx(1.5)
+    assert awards._blend(None, 0, None) is None and awards._blend(0.7, 3, None) == 0.7
+    players = [dict(name="Bo Beta", pos="D", team="BBB", p=60.0, stats=_stat(gp=2, gp_now=2)),
+               dict(name="Cy Gamma", pos="D", team="CCC", p=70.0, stats=_stat(gp=10, gp_now=10))]
+    model = awards._model("norris", players, PLAYOFF)
+    assert set(model) == {"cy gamma"}
+
+
+def test_the_hart_model_follows_a_hot_scoring_pace_and_the_model_names_an_unpriced_leader() -> None:
+    awards = _awards()
+    players = [
+        dict(name="Ann Alpha", pos="C", team="AAA", p=100.0, stats=_stat(gp_now=12, points=0.9)),
+        dict(name="Fay Foxtrot", pos="C", team="AAA", p=95.0, stats=_stat(gp_now=12, points=2.0)),
+        dict(name="Bo Beta", pos="D", team="BBB", p=40.0, stats=_stat()),
+    ]
+    rows = {r["name"]: r for r in awards.tracker("hart", _inputs(), players, PLAYOFF, today=date(2026, 10, 26))["rows"]}
+    assert "Fay Foxtrot" in rows  # in no book and no poll, but leading the model
+    assert rows["Fay Foxtrot"]["model"] > rows["Ann Alpha"]["model"]
+    assert rows["Fay Foxtrot"]["market"] == 0 and rows["Fay Foxtrot"]["odds"] is None
+
+
+def test_award_stats_reads_the_nhl_and_moneypuck_tables(tmp_path: Path) -> None:
+    awards = _awards()
+    import csv  # noqa: PLC0415
+
+    def write(path: Path, rows: list[dict]) -> Path:
+        with open(path, "w", newline="", encoding="utf-8") as handle:
+            w = csv.DictWriter(handle, fieldnames=sorted({k for r in rows for k in r}))
+            w.writeheader()
+            w.writerows(rows)
+        return path
+
+    sk = [dict(playerId=7, season=2026, team="AAA", situation="all", games_played=10, icetime=12000,
+               faceoffsWon=120, faceoffsLost=80, I_F_takeaways=9, I_F_giveaways=4),
+          dict(playerId=7, season=2026, team="AAA", situation="4on5", games_played=10, icetime=1500),
+          dict(playerId=7, season=2026, team="AAA", situation="5on5", games_played=10, icetime=9000,
+               OnIce_A_xGoals=4.0, OffIce_A_xGoals=12.0)]
+    teams = [dict(team="AAA", situation="5on5", games_played=10, iceTime=30000)]
+    bundle = dict(
+        season="20262027",
+        skaters={"20262027": [dict(playerId=7, gamesPlayed=10, points=12, timeOnIcePerGame=1200)],
+                 "20252026": [dict(playerId=7, gamesPlayed=80, points=60, timeOnIcePerGame=1140)]},
+        moneypuck={"20262027": dict(skaters=write(tmp_path / "sk.csv", sk), teams=write(tmp_path / "t.csv", teams)),
+                   "20252026": dict(skaters=None, teams=None)},
+    )
+    st = awards.award_stats(bundle)[7]
+    w = 10 / (10 + awards.PRIOR_GAMES)
+    assert st["gp"] == 10 and st["gp_now"] == 10
+    assert st["points"] == pytest.approx(w * 1.2 + (1 - w) * 0.75)
+    assert st["faceoffs"] == pytest.approx(4.0) and st["puck"] == pytest.approx(0.5)
+    assert st["pk"] == pytest.approx(2.5)
+    # on ice 4 xGA in 9000 s against the team's 12 in 21000 s off: he allows fewer
+    assert st["defence"] > 0
+    shifted = awards.award_stats(bundle, defence={"7": -0.05})[7]
+    assert shifted["defence"] == -0.05

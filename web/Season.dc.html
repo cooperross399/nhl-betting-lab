@@ -548,7 +548,7 @@ class Component extends DCLogic {
       standingsNote: `Mean of ${d.sims.toLocaleString()} seasons · East 8th place ${cutE} pts, West ${cutW}`,
       divisions, conferences, leaderBoards, teamCards, goalies,
       hasRounds, roundConfs, slots, finals, hasTrophies, trophies, voted, hasVoted, hasTrophySection: hasTrophies || hasVoted,
-      votedNote: hasVoted ? `The Hart, Norris and Selke are voted by the PHWA, so they are tracked, not simulated. Book: the award odds a book published, with its margin taken out over the listed field. Poll: rank and points in the latest media poll. Model: the season sim's projection. Share is their weighted blend over the players a book or poll names; inputs more than 14 days old are flagged. A projection, not a price.` : "",
+      votedNote: hasVoted ? `The Hart, Norris and Selke are voted by the PHWA, so they are tracked, not simulated. Book: the award odds a book published, with its margin taken out over the listed field. Poll: rank and points in the latest media poll. Model: this season's stats, as each award's note says, blended with last season's until enough games are in. Share is their weighted blend over the players a book or poll names plus the model's top three; inputs more than 14 days old are flagged. A projection, not a price.` : "",
       roundsNote: "Share of simulated seasons · a projection, not a price",
       trophiesNote: "Share of simulated seasons each player finishes first · a projection, not a price",
       calderNote: tr && tr.calderNote ? tr.calderNote : "",
