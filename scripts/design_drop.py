@@ -145,12 +145,12 @@ def _repo_path(names: list[str]):
     """How a zip member's name becomes a repository path.
 
     A zip may hold `web/...`, one wrapping folder around `web/...`, or the
-    contents of `web/` itself."""
-    if names and all(n.startswith("web/") for n in names):
+    contents of `web/` itself. Files beside `web/` (a README, a note) do not
+    change the layout; they are skipped as files outside it."""
+    if any(n.startswith("web/") for n in names):
         return lambda n: n
-    tops = {n.split("/", 1)[0] for n in names}
-    if len(tops) == 1 and all(n.split("/", 1)[-1].startswith("web/") for n in names):
-        return lambda n: n.split("/", 1)[-1]
+    if any(n.split("/", 1)[-1].startswith("web/") for n in names if "/" in n):
+        return lambda n: n.split("/", 1)[-1] if "/" in n else n
     return lambda n: "web/" + n
 
 

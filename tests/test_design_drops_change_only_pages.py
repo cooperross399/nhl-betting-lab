@@ -207,6 +207,28 @@ def test_intake_unpacks_only_page_files(tmp_path: Path, layout: str) -> None:
     assert not (tmp_path / "evil.txt").exists()
 
 
+@pytest.mark.parametrize("layout", ["", "Drop 3/"])
+def test_a_file_beside_web_does_not_move_the_pages(tmp_path: Path, layout: str) -> None:
+    """A README next to web/ once sent every page to web/web/, so a real
+    drop wrote nothing."""
+    zipped = _zip(tmp_path, {
+        f"{layout}web/Methods.dc.html": b"page",
+        f"{layout}README.txt": b"note",
+        "README.txt" if layout else "NOTES.md": b"note",
+    })
+    written, skipped = _drop().intake(zipped, tmp_path / "repo")
+    assert written == ["web/Methods.dc.html"]
+    assert len(skipped) == 2
+
+
+def test_the_inbox_url_can_be_set_by_pull_request() -> None:
+    """A Claude Code session cannot set a repository variable, so the hourly
+    check falls back to a committed file."""
+    text = (WORKFLOWS / "design-drop-intake.yml").read_text(encoding="utf-8")
+    assert "vars.DESIGN_DROP_INBOX_URL" in text
+    assert "head -n1 .github/design-drop-inbox.url" in text
+
+
 def test_the_intake_opens_the_drop_with_the_token_and_never_twice() -> None:
     workflow = _load("design-drop-intake.yml")
     (job,) = workflow["jobs"].values()
