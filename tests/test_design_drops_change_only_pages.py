@@ -221,6 +221,31 @@ def test_a_file_beside_web_does_not_move_the_pages(tmp_path: Path, layout: str) 
     assert len(skipped) == 2
 
 
+def test_a_tarball_is_taken_like_a_zip(tmp_path: Path) -> None:
+    """Claude Design can mint a URL to one project file, so a drop may come
+    as a gzipped tarball instead of a zip; the same rules apply."""
+    import io
+    import tarfile
+
+    bundle = tmp_path / "drop.tar.gz"
+    with tarfile.open(bundle, "w:gz") as archive:
+        for name, body in {"./drop-staging/web/Game.dc.html": b"page",
+                           "./drop-staging/web/../../evil.py": b"x",
+                           "./drop-staging/manifest.json": b"{}"}.items():
+            info = tarfile.TarInfo(name)
+            info.size = len(body)
+            archive.addfile(info, io.BytesIO(body))
+        link = tarfile.TarInfo("drop-staging/web/link.html")
+        link.type = tarfile.SYMTYPE
+        link.linkname = "/etc/passwd"
+        archive.addfile(link)
+    written, skipped = _drop().intake(bundle, tmp_path / "repo")
+    assert written == ["web/Game.dc.html"]
+    assert (tmp_path / "repo/web/Game.dc.html").read_bytes() == b"page"
+    assert len(skipped) == 2
+    assert not (tmp_path / "evil.py").exists()
+
+
 def test_the_inbox_url_can_be_set_by_pull_request() -> None:
     """A Claude Code session cannot set a repository variable, so the hourly
     check falls back to a committed file."""

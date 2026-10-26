@@ -10,7 +10,7 @@ and then moves EPL, CBB and the hub to the same tag.
     python scripts/design_drop.py guard --base origin/main --head HEAD
     python scripts/design_drop.py pin --shared DIR       # copy changed shared files, name the next tag
     python scripts/design_drop.py hub --shared DIR --tag vN --hub DIR
-    python scripts/design_drop.py intake --zip FILE   # unpack a zipped drop's page files
+    python scripts/design_drop.py intake --zip FILE   # unpack a drop (zip or tarball)
 
 Standard library only. Nothing here fetches odds, spends a credit, edits a
 policy or places a bet.
@@ -27,6 +27,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tarfile
 import zipfile
 from pathlib import Path
 
@@ -55,7 +56,7 @@ BUILDER_NOTE = "web/DROP_NOTE.md"
 
 TAG = re.compile(r"^v(\d+)$")
 
-#: A zipped drop is refused past these sizes rather than half unpacked.
+#: A drop (zip or tarball) is refused past these sizes rather than half unpacked.
 MAX_FILE_BYTES = 20 * 1024 * 1024
 MAX_TOTAL_BYTES = 50 * 1024 * 1024
 
@@ -154,29 +155,43 @@ def _repo_path(names: list[str]):
     return lambda n: "web/" + n
 
 
+def _entries(archive_path: Path) -> list[tuple[str, int, object]]:
+    """(name, size, read) for each file in a zip or a tarball (plain or
+    gzip). A tarball's links and devices are never entries."""
+    if zipfile.is_zipfile(archive_path):
+        archive = zipfile.ZipFile(archive_path)
+        return [(m.filename.replace("\\", "/"), m.file_size, lambda m=m: archive.read(m))
+                for m in archive.infolist() if not m.is_dir()]
+    if tarfile.is_tarfile(archive_path):
+        archive = tarfile.open(archive_path)
+        return [(m.name.replace("\\", "/").removeprefix("./"), m.size,
+                 lambda m=m: archive.extractfile(m).read())
+                for m in archive.getmembers() if m.isfile()]
+    raise ValueError(f"{archive_path} is neither a zip nor a tarball")
+
+
 def intake(zip_path: Path, root: Path = ROOT) -> tuple[list[str], list[str]]:
-    """Write a zipped drop's page files under `root`. Returns (written,
-    skipped): anything outside `ALLOWED`, the lock (Design Drop's pin step
-    writes that), a path that climbs out, and macOS litter are skipped."""
-    with zipfile.ZipFile(zip_path) as archive:
-        members = [m for m in archive.infolist() if not m.is_dir()]
-        names = [m.filename.replace("\\", "/") for m in members]
-        if sum(m.file_size for m in members) > MAX_TOTAL_BYTES:
-            raise ValueError(f"the zip unpacks to more than {MAX_TOTAL_BYTES} bytes")
-        to_path = _repo_path([n for n in names if not n.startswith("__MACOSX/")])
-        written, skipped = [], []
-        for member, name in zip(members, names):
-            path = to_path(name)
-            parts = path.split("/")
-            if (name.startswith("__MACOSX/") or parts[-1] == ".DS_Store" or path.startswith("/")
-                    or ".." in parts or path == "web/shared.lock.json" or not allowed(path)
-                    or member.file_size > MAX_FILE_BYTES):
-                skipped.append(name)
-                continue
-            target = root / path
-            target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_bytes(archive.read(member))
-            written.append(path)
+    """Write a drop's page files, from a zip or a tarball, under `root`.
+    Returns (written, skipped): anything outside `ALLOWED`, the lock (Design
+    Drop's pin step writes that), a path that climbs out, and macOS litter
+    are skipped."""
+    entries = _entries(zip_path)
+    if sum(size for _, size, _ in entries) > MAX_TOTAL_BYTES:
+        raise ValueError(f"the drop unpacks to more than {MAX_TOTAL_BYTES} bytes")
+    to_path = _repo_path([n for n, _, _ in entries if not n.startswith("__MACOSX/")])
+    written, skipped = [], []
+    for name, size, read in entries:
+        path = to_path(name)
+        parts = path.split("/")
+        if (name.startswith("__MACOSX/") or parts[-1] == ".DS_Store" or path.startswith("/")
+                or ".." in parts or path == "web/shared.lock.json" or not allowed(path)
+                or size > MAX_FILE_BYTES):
+            skipped.append(name)
+            continue
+        target = root / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(read())
+        written.append(path)
     return written, skipped
 
 
@@ -200,7 +215,7 @@ def main(argv: list[str] | None = None) -> int:
     h.add_argument("--shared", type=Path, required=True)
     h.add_argument("--tag", required=True)
     h.add_argument("--hub", type=Path, required=True)
-    z = sub.add_parser("intake", help="unpack a zipped drop's page files into this checkout")
+    z = sub.add_parser("intake", help="unpack a drop's page files (zip or tarball) into this checkout")
     z.add_argument("--zip", type=Path, required=True)
     args = ap.parse_args(argv)
 

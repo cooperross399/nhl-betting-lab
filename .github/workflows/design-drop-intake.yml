@@ -23,7 +23,7 @@ on:
   workflow_dispatch:
     inputs:
       zip_url:
-        description: Public URL of the zipped drop
+        description: Public URL of the drop (a zip, or a tarball of drop-staging/)
         required: false
         default: ""
       slug:
@@ -60,7 +60,7 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Unpack the zip and open the drop
+      - name: Unpack the drop and open it
         run: |
           if [ -z "$ZIP_URL" ] && [ -f .github/design-drop-inbox.url ]; then
             ZIP_URL=$(head -n1 .github/design-drop-inbox.url | tr -d '[:space:]')
