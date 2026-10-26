@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Methods — Maverick Hightower</title>
+<meta name="description" content="Every number the NHL board prints: what it is, how it is built, and how much to trust it.">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./lib/page.css">
+<meta name="theme-color" content="#14151a">
+</head>
+<body>
+<div class="wrap" id="root"><noscript>This page needs JavaScript for its live tables; the text below the tables does not.</noscript></div>
+<script type="module">
+import { chrome, esc, mult, getJSON } from "./lib/page.js";
+
+const ENTRIES = [
+  ["xg", "Expected goals (xG)", "How many goals a shot is worth on average, from where and how it was taken.",
+   "A logistic model fitted on every unblocked attempt in the NHL's free play-by-play: distance, angle, shot type, strength, rebounds, rushes and the play before the shot. Each season is fitted only on earlier seasons, so a number never uses the future.",
+   "Fitted on three seasons of attempts (2023-24 on). It matches the NHL's own shot and goal counts on at least 95% of games or the ratings are not built."],
+  ["xg-sh", "Shooter-adjusted xG, xGF(sh) and xGA(sh)", "xG that knows who shot it: a sniper's chance is worth more than a grinder's from the same spot.",
+   "Each shooter's finishing talent is updated shot by shot, Bayesian style, as PostHockey describes in its glossary. A team's xGF(sh) is its shots' adjusted xG, and xGA(sh) the same for the shots it allows. These are the team ratings the board runs on.",
+   "Talent estimates are shrunk hard toward average; a shooter needs hundreds of attempts before his own record dominates."],
+  ["score-adjust", "Score-and-venue adjustment", "A team protecting a lead gives up more shots than it should; this takes that out.",
+   "Every even-strength attempt is weighted so each score state carries the season's home share of xG. The total is unchanged; leading teams' defence looks better and trailing teams' attack less inflated.",
+   "Textbook shares (McCurdy 2014), not PostHockey's team-strength-controlled ones."],
+  ["gsax", "Goals saved above expected (GSAx)", "Goals a goalie stopped beyond what the shots he faced were worth.",
+   "Expected goals against minus goals against, on shooter-adjusted xG. A team's goaltending factor is its goals allowed over its xGA, shrunk toward average.",
+   "Goaltending is the noisiest number in hockey. A season of starts is still about half luck."],
+  ["goalies", "Tonight's starting goalie", "The board prices tonight's listed starter, not the team's goalies together.",
+   "The team's goaltending is divided out of its defence and the starter's own GSAx record multiplied in, aged on PostHockey's goalie age curve. A goalie with no record starts a little below average (PostHockey's −1.40 goals per 1,000 shots). Starters come from Daily Faceoff, Confirmed or Likely.",
+   "If the listed goalie changes after the card, the morning number is wrong until the next update."],
+  ["ratings", "Player ratings and the dressed lineup", "Who is actually playing tonight moves each team's attack and defence.",
+   "Offence: each skater's offensive game score per game (goals, assists, shots) over three seasons weighted 1 / 0.5 / 0.3, aged on a fitted curve and shrunk toward newcomers. Defence: his on-ice 5v5 xG against relative to his team with him off the ice, from the NHL's shift charts, shrunk toward zero. Tonight's posted lines against the club's usual eighteen move attack by up to 10% and defence by up to 10%.",
+   "Not measured against prices. A club with no posted lines moves nothing."],
+  ["home-ice", "Home ice", "The league's home edge, plus each team's own.",
+   "The league edge comes from the fitted goals model. Each team's own is its home results over two years beyond the league's, shrunk at 150 games.",
+   "Per-team home ice did not pass the lab's pre-registered switch rule; it ships on the owner's decision."],
+  ["rest", "Back-to-backs, rest and travel", "Tired teams concede more; rested and well-travelled ones are adjusted too.",
+   "Fitted factors for playing the previous day, three to ten days off, and crossing two or more time zones. They move who scores, never the expected total.",
+   "Each factor is shrunk and clamped to ±10%."],
+  ["form", "Last-five form", "How each team has played over its last five games, at about a quarter weight.",
+   "Venue-adjusted xGF and xGA over the last five games against the team's own level, shrunk at 15 games and clamped to ±10%.",
+   "Five games is mostly noise, which is why it carries only a quarter of the move."],
+  ["referees", "Referee crews", "Some crews call more penalties, and penalties are goals.",
+   "Each referee's games' total goals over the league's, shrunk at 120 games; a crew is the mean of its referees, clamped to ±5%. It scales both teams' goals, so it moves the total and barely the winner.",
+   "Crews are posted late; a game with no crew moves nothing."],
+  ["posthockey", "The PostHockey blend", "Half way to PostHockey's own pre-game win probability.",
+   "PostHockey rates each game on the players dressed, the listed goalies, home ice and back-to-backs. The moneyline is moved half way to its number with the total held.",
+   "The 50% weight is a choice, not a measurement."],
+  ["projected-goals", "Projected goals", "Each team's expected regulation goals tonight, after every layer above.", "League goals per game, times attack against the opponent's defence, times every adjustment.", ""],
+  ["win", "Win %", "The chance each team wins, overtime and shootout included.", "From a scoreline matrix of the two projected goal rates, with the fitted overtime rate.", ""],
+  ["fair-price", "Fair price", "The odds at which a bet on that side breaks even if our chance is right.", "A 60% chance is fair at −150; 40% at +150. No margin is added.", ""],
+  ["edge", "Edge %", "How far our chance is above the price's break-even.", "Our probability minus the break-even probability of the best available price.", "A positive edge is a model opinion, not a demonstrated edge."],
+  ["picks", "Best bet and lean", "Best bets clear a higher bar than leans and are the only ones counted in the picks record.",
+   "Team best bets need about a 9% edge and props 12%, nothing shorter than −160 or longer than +600. An underdog side also needs at least a 40% win chance. A lean cleared a lower bar or was stopped by one of these rules.",
+   "Every interval over two seasons of bought prices includes zero: no demonstrated edge."],
+  ["grading", "How picks are graded", "Each pick is graded the next morning against the final score, at the price it was published at.",
+   "The frozen morning board is the opinion that counts; it is never repriced. A game that was not priced is never a pass.", ""],
+];
+
+const CHANGES = [
+  ["2026-10-26", "Defensive player ratings from the shift charts, and the game page breakdown.", "The lineup now moves a team's defence, not just its attack."],
+  ["2026-10-25", "Tonight's starting goalie priced individually; score-adjusted xG; offensive player ratings; age curves; the PostHockey blend.", "Win chances move with the listed starter and the dressed lineup."],
+  ["2026-10-22", "Last-five form, rest and travel, referee crews and posted lines join the model.", "Small moves on most games; larger on back-to-backs and long trips."],
+  ["2026-10-21", "Ratings move to shooter-adjusted xG with GSAx, plus each team's own home ice.", "The board's team numbers shifted; the team-bet record restarted on 10-22."],
+];
+
+function teamTable(R) {
+  if (!R || !(R.teams || []).length) return `<p class="note">The ratings table is not available right now.</p>`;
+  const rows = R.teams.slice().sort((a, b) => (b.attack / b.defence) - (a.attack / a.defence)).map((t) =>
+    `<tr><td>${esc(t.abbr)}</td><td class="n">${mult(t.attack)}</td><td class="n">${mult(t.defence)}</td><td class="n">${t.attack && t.defence ? mult(t.attack / t.defence) : "—"}</td><td class="n">${mult(t.goaltending)}</td><td class="n">${mult(t.formAttack)} / ${mult(t.formDefence)}</td><td class="n">${typeof t.homeIce === "number" ? `${t.homeIce >= 0 ? "+" : "−"}${Math.abs(t.homeIce * 100).toFixed(1)}%` : "—"}</td></tr>`).join("");
+  return `<div class="scroll"><table><thead><tr><th>Team</th><th class="n">Attack</th><th class="n">Defence</th><th class="n">Net</th><th class="n">Goaltending</th><th class="n">Form A / D</th><th class="n">Own home ice</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <p class="note">Multipliers on the league average (1.00). Attack above 1 scores more; defence and goaltending below 1 allow fewer. Net is attack over defence. Ratings through ${esc(R.through || "the latest game")}.</p>`;
+}
+
+function defenders(R) {
+  const D = (R || {}).defence || {};
+  if (!(D.best || []).length) return `<p class="note">Defensive ratings appear once the shift charts are cached (a few days after 2026-10-26).</p>`;
+  const list = (rows) => rows.map((r) => `<tr><td>${esc(r.player)}</td><td>${esc(r.team)}</td><td class="n">${r.goalsPrevented > 0 ? "+" : "−"}${Math.abs(r.goalsPrevented).toFixed(3)}</td></tr>`).join("");
+  return `<div class="grid2"><div><h3>Prevents the most</h3><div class="scroll"><table><tbody>${list(D.best)}</tbody></table></div></div>
+    <div><h3>Allows the most</h3><div class="scroll"><table><tbody>${list(D.worst)}</tbody></table></div></div></div>
+    <p class="note">Goals prevented per game against his own team without him, at 5v5, over ${esc(D.rated)} rated skaters from ${esc(D.games ?? "—")} charted games.</p>`;
+}
+
+async function main() {
+  const R = await getJSON("./data/ratings.json");
+  const toc = ENTRIES.map(([id, title]) => `<a href="#${id}">${esc(title)}</a>`).join("");
+  const entries = ENTRIES.map(([id, title, what, how, sure]) => `<section id="${id}"><h2>${esc(title)}</h2><p class="lede">${esc(what)}</p><p>${esc(how)}</p>${sure ? `<div class="callout"><b>How sure are we</b><br>${esc(sure)}</div>` : ""}</section>`).join("");
+  const changes = CHANGES.map(([d, what, see]) => `<tr><td class="mono">${d}</td><td style="white-space:normal">${esc(what)}<div class="note">${esc(see)}</div></td></tr>`).join("");
+  root.innerHTML = chrome("Methods") + `<main id="main"><div class="kicker">Glossary &amp; methods</div><h1>Every number, explained.</h1>
+    <p class="lede">What each figure on the board is, how it is built, and how much to trust it. Two seasons of bought prices show no demonstrated edge for any market; every figure here is a forecast, not a promise.</p>
+    <nav class="toc" aria-label="Contents"><a href="#teams">Team ratings</a><a href="#defenders">Defenders</a>${toc}<a href="#changelog">Changelog</a></nav>
+    <section id="teams"><h2>Team ratings today</h2>${teamTable(R)}</section>
+    <section id="defenders"><h2>Defensive ratings</h2>${defenders(R)}</section>
+    ${entries}
+    <section id="changelog"><h2>Changelog</h2><div class="scroll"><table><tbody>${changes}</tbody></table></div></section>
+    <footer class="note">This site recommends; it never places a bet.</footer></main>`;
+  if (location.hash) document.querySelector(location.hash)?.scrollIntoView();
+}
+main();
+</script>
+</body>
+</html>

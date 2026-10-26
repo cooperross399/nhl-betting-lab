@@ -73,6 +73,7 @@ from nhl_betting_lab.forward_evidence import write_snapshot
 from nhl_betting_lab.price_movement import apply_movement, movement, opening_snapshot
 from nhl_betting_lab.referees import tonight_factors
 from nhl_betting_lab import posthockey
+from nhl_betting_lab.factor_breakdown import ratings_form, slate_breakdowns
 from nhl_betting_lab.season import (
     EXPECTED_CLUBS,
     LEAGUE_TIMEZONE,
@@ -671,6 +672,7 @@ def main(argv: list[str] | None = None) -> int:
             blockers.append(f"The props model could not be fitted: {exc}")
 
     team_ratings, ratings_detail = "", ""
+    team_factors: list[dict] = []
     if games.empty:
         blockers.append(
             "No team games on disk, so no team market can be priced."
@@ -696,6 +698,10 @@ def main(argv: list[str] | None = None) -> int:
             team_history = (
                 games if ships("team_b2b", output_dir=outputs) else None
             )
+            # The team table at each layer, for the game pages' breakdown
+            # (factor_breakdown, 2026-10-26): rated, then tonight's lineup,
+            # then tonight's starters.
+            rated_teams = dict(team_model.teams)
             # Tonight's dressed skaters against the club's usual eighteen,
             # on each skater's offensive rating (`lineups`, 2026-10-25): a
             # missing star takes attack off, one back puts it on.
@@ -714,6 +720,7 @@ def main(argv: list[str] | None = None) -> int:
                     continue
                 team_model.teams[club] = dataclasses.replace(rate, defence=rate.defence * factor)
                 print(f"{club}: defence x{factor:.3f} for tonight's lineup.")
+            lineup_teams = dict(team_model.teams)
             # Tonight's listed starter in place of the team's goalies
             # together (Cooper, 2026-10-25), from Daily Faceoff's listing.
             for line in apply_starters(
@@ -723,6 +730,7 @@ def main(argv: list[str] | None = None) -> int:
                 day=moment.astimezone(LEAGUE_TIMEZONE).date().isoformat(),
             ):
                 print(line)
+            goalie_teams = dict(team_model.teams)
             team_model.game_factors = crews
             # PostHockey's pre-game win probability (Cooper, 2026-10-25),
             # from scripts/fetch_posthockey_pregame.py: the moneyline moves
@@ -745,6 +753,14 @@ def main(argv: list[str] | None = None) -> int:
             )
             probabilities.update(team_probabilities)
             unresolved_names.update(unresolved)
+            # Where each game's number comes from, layer by layer, for the
+            # public game pages. Reads the model; changes no price.
+            team_factors = slate_breakdowns(
+                priceable, team_model, team_names=team_names,
+                rated=rated_teams, lineup=lineup_teams, goalies=goalie_teams,
+                form=ratings_form(processed),
+                history=team_history, schedule_history=team_model_games,
+            )
         except (KeyError, ValueError) as exc:
             blockers.append(f"The team model could not be fitted: {exc}")
 
@@ -860,6 +876,7 @@ def main(argv: list[str] | None = None) -> int:
         goalie_starters=starters,
     )
     card.team_ratings = team_ratings
+    card.team_factors = team_factors
     if team_ratings == "goals":
         # The reason (a path, a date) is printed above, not carried on the
         # card, so a reproduced card stays byte-identical.

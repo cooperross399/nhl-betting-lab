@@ -276,6 +276,9 @@
                           <sc-if value="{{ g.live.has }}" hint-placeholder-val="{{ false }}">
                             <div style="margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:12px;line-height:1.5;color:{{ g.live.color }};"><span style="text-transform:uppercase;letter-spacing:.08em;font-weight:600;">Live · {{ g.live.word }}</span> · {{ g.live.detail }}</div>
                           </sc-if>
+                          <sc-if value="{{ g.gameHref }}" hint-placeholder-val="{{ false }}">
+                            <a href="{{ g.gameHref }}" style="display:inline-flex;align-items:center;min-height:44px;margin-top:6px;font-size:12px;letter-spacing:.1em;text-transform:uppercase;font-weight:600;">Where the number comes from →</a>
+                          </sc-if>
                         </div>
                       </div>
                     </div>
@@ -709,7 +712,7 @@ class Component extends DCLogic {
       { label: sk === "epl" ? "This week" : "Tonight", href: links.board, onClick: (e) => { e.preventDefault(); this.setTab("tonight"); }, current: tab === "tonight" ? "page" : undefined, shadow: tab === "tonight" ? "inset 0 -3px 0 var(--ink)" : "none", color: "var(--ink)", badge: "" },
       ...(pv ? [{ label: "Props", href: `${links.board}#props`, onClick: (e) => { e.preventDefault(); this.setTab("props"); }, current: tab === "props" ? "page" : undefined, shadow: tab === "props" ? "inset 0 -3px 0 var(--ink)" : "none", color: "var(--ink)", badge: pv.status === "ok" && pv.counts.bets + pv.counts.leans ? String(pv.counts.bets + pv.counts.leans) : "" }]
         : dueOnly ? [{ label: "Due List", href: `${links.board}#drought`, onClick: (e) => { e.preventDefault(); this.setState({ propView: "drought" }); this.setTab("props"); }, current: tab === "props" ? "page" : undefined, shadow: tab === "props" ? "inset 0 -3px 0 var(--ink)" : "none", color: "var(--ink)", badge: dueBadge }] : []),
-      tabLink("Results", links.results), ...(sk === "nhl" ? [tabLink("Season", links.season)] : []), tabLink("Archive", links.archive),
+      tabLink("Results", links.results), ...(sk === "nhl" ? [tabLink("Season", links.season), tabLink("Record", "Record.html")] : []), tabLink("Archive", links.archive),
     ];
     if (!vm) return { links, themeAttr, tabs: tabsFor("tonight", null), groups: [], strip: [], otherSports: [], scoreCards: [], showScores: false, isTonight: true, isProps: false, title1: "Tonight's", title2: "Board.", pv: { rows: [] }, propViews: [], hasPropViews: false, propsTitle: "Player props", dv: { groups: [] }, isModelView: true, isDroughtView: false, propSeason: [] };
     const L = this.L, F = this.F, S = this.state, live = S.live, now = S.now, data = S.data, T = data.teams || {}, pv = S.pv, nhl = sk === "nhl", epl = sk === "epl";
@@ -868,6 +871,7 @@ class Component extends DCLogic {
       const gp = byGameProps[g.id] || [], shown = gp.filter((x) => x.kind !== "pass");
       const dr = droughtRows(r.drought).map((x) => drRow(x, g.id));
       return { ...g, sides: g.sides.map((s, i) => ({ ...withLogo(s), ...goalieOf(i === 0 ? r[p1] : r[p2]) })), hasBar: g.bar.length > 0, anchor: `g-${g.id}`, panelId: `p-${g.id}`, expanded: open, expandedAttr: open ? "true" : "false", onToggle: () => this.toggle(g.id),
+        gameHref: nhl && Array.isArray(r.factors) && r.factors.length ? `Game.html?id=${encodeURIComponent(g.id)}` : "",
         ariaLabel: `${g.sides[0].name} at ${g.sides[1].name}, ${g.time}`,
         barAria: g.sides.map((s) => `${s.name} ${s.win || ""}`.trim()).join(", "),
         cells: (epl ? eplCells(r).map((c, i) => ({ ...c, spark: (g.cells[i] || {}).spark || null })) : g.cells.map((c) => totalCell(c, r))).map((c) => ({ ...c, rows: c.rows.map((x) => ({ ...x, weight: x.bold ? 600 : 400 })) })),

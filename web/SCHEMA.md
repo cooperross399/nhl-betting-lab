@@ -243,3 +243,31 @@ dueList            {summary, season, rows[]} | absent (absent hides the section)
 Every entry on a frozen board's Due List is graded, whether or not it had a price. An entry with no price at all is graded and counted in w/l but carries no units; it shows "price not posted". Units are notional: nothing on the Due List is bet, and none of it is in `summary.picks`, `record.picks` or the props tallies.
 
 `backfilledNights` are nights of the season before the list was first recorded (2026-10-07), rebuilt by the lab (`drought_forward.backfill_lists`) with today's rule from the games before each night and priced at the card's frozen prices that morning. `cardPriced` counts entries recorded with no price that the lab graded at the card's frozen price (`drought_forward.fill_prices`).
+
+## Additions (game pages, track record, methods — 2026-10-26)
+
+NHL only, read by three plain pages (`Game.html`, `Record.html`, `Methods.html`, sharing `lib/page.js` and
+`lib/page.css`); the shared `.dc.html` pages link to them from the NHL tabs and from each game card.
+
+board.json, per regular-season game:
+
+```
+factors[]        optional. The card's home win chance layer by layer (gameday_card.json `team_factors`, written by
+                 nhl_betting_lab.factor_breakdown.slate_breakdowns), in the order the card applies them:
+                 strength (xG ratings, form divided out), home_ice, form, rest, lineup, goalies, referees, posthockey.
+                 {key, label, homeWin, delta, homeGoals, awayGoals}; the last homeWin is the card's moneyline before
+                 line movement. Absent when the card did not price the game's moneyline.
+ratings          optional. {home|away: {attack, defence, goaltending, formAttack, formDefence, homeIce}} from
+                 data/processed/shadow_team_ratings.json: multipliers on the league (1.00); homeIce a log deviation.
+```
+
+`data/record.json` (`track_record`): `{generatedAt, nights, games, buckets[{low, high, games, predicted, actual,
+interval}], brier{games, model, market} | null, movement{toward, against, flat, picks}}`. Every frozen board before
+today with a published `winProb`, against finals from the NHL schedule endpoint (`schedule_for`), kept once a night is
+all final under `history/finals/<day>.json`. `brier.market` is the frozen board's no-vig moneyline. `movement` reads
+`history/lines/<day>.json` (the board's own published prices): whether a moneyline pick's home price at the day's last
+build moved toward the picked side. Accuracy only; never a return.
+
+`data/ratings.json` (`ratings_page`): `{generatedAt, through, teams[{abbr, name, attack, defence, formAttack,
+formDefence, homeIce, goaltending}], unseenGoalie, defence{best[], worst[], rated, games}}`, the defence rows
+`{player, team, goalsPrevented}` from the ratings file's `skater_defence`, named from the player logs.

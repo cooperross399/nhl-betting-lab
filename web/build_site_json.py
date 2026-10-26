@@ -544,6 +544,223 @@ def rate_on_xg(model, games, processed: Path) -> str:
     return ratings
 
 
+def read_team_table(processed: Path) -> dict:
+    """The ratings file the card and the board are rated on, or {} without it."""
+    try:
+        return json.loads((processed / SHADOW_RATINGS).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def card_factors(card: dict, provider: tuple[str, str] | None) -> list[dict] | None:
+    """The card's own layer-by-layer home win chance for one game
+    (`factor_breakdown.slate_breakdowns`, gameday_card.json's `team_factors`)."""
+    if not provider:
+        return None
+    for entry in card.get("team_factors") or []:
+        if (entry.get("home_team"), entry.get("away_team")) == tuple(provider):
+            steps = []
+            for step in entry.get("steps") or []:
+                win = _real(step.get("homeWin"))
+                if win is None:
+                    return None
+                steps.append({"key": str(step.get("key", "")), "label": str(step.get("label", "")),
+                              "homeWin": win, "delta": _real(step.get("delta")) or 0.0,
+                              "homeGoals": _real(step.get("homeGoals")), "awayGoals": _real(step.get("awayGoals"))})
+            return steps or None
+    return None
+
+
+def team_comparison(table: dict, home: str, away: str, home_key: str, away_key: str) -> dict | None:
+    """Each side's attack, defence, form, home ice and goaltending from the
+    ratings file: multipliers on the league average (1.00), so 1.08 attack
+    scores 8% more and 0.92 defence allows 8% fewer."""
+    teams = table.get("teams") or {}
+    out = {}
+    for side, abbr, key in (("home", home, home_key), ("away", away, away_key)):
+        rate = teams.get(key) or teams.get(abbr)
+        if not isinstance(rate, dict):
+            return None
+        club = key if key in teams else abbr
+        form = (table.get("form") or {}).get(club) or {}
+        out[side] = {
+            "attack": _real(rate.get("attack")), "defence": _real(rate.get("defence")),
+            "formAttack": _real(form.get("attack")), "formDefence": _real(form.get("defence")),
+            "homeIce": _real((table.get("home_ice") or {}).get(club)),
+            "goaltending": _real((table.get("team_goalie") or {}).get(club)),
+        }
+    return out
+
+
+def ratings_page(lab: Path) -> dict:
+    """ratings.json: every team's ratings and the skaters whose defence moves a
+    lineup most, for the Methods page. Multipliers on the league average
+    (1.00); goals prevented a game for skaters. Empty lists without the file."""
+    processed = lab / "data" / "processed"
+    table = read_team_table(processed)
+    teams = []
+    for club, rate in sorted((table.get("teams") or {}).items()):
+        if not isinstance(rate, dict):
+            continue
+        form = (table.get("form") or {}).get(club) or {}
+        abbr = club if club in TEAMS else next((k for k, v in TEAMS.items() if v[0] == club), club)
+        teams.append({"abbr": abbr, "name": TEAMS.get(abbr, (club,))[0],
+                      "attack": _real(rate.get("attack")), "defence": _real(rate.get("defence")),
+                      "formAttack": _real(form.get("attack")), "formDefence": _real(form.get("defence")),
+                      "homeIce": _real((table.get("home_ice") or {}).get(club)),
+                      "goaltending": _real((table.get("team_goalie") or {}).get(club))})
+    names: dict[str, tuple[str, str]] = {}
+    path = processed / PLAYER_LOGS_FILENAME
+    defence = {str(k): _real(v) for k, v in (table.get("skater_defence") or {}).items()}
+    if defence and path.is_file():
+        try:
+            with path.open(newline="", encoding="utf-8") as fh:
+                for r in csv.DictReader(fh):
+                    pid = str(r.get("player_id") or "").strip()
+                    if pid in defence:
+                        names[pid] = (str(r.get("player") or ""), str(r.get("team") or "").strip().upper())
+        except (OSError, UnicodeDecodeError, csv.Error):
+            names = {}
+    rated = sorted(((v, k) for k, v in defence.items() if v is not None and k in names), reverse=True)
+    row = lambda v, k: {"player": names[k][0], "team": names[k][1], "goalsPrevented": v}  # noqa: E731
+    return {
+        "generatedAt": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
+        "through": table.get("last_game_date"),
+        "teams": teams,
+        "unseenGoalie": _real(table.get("unseen_goalie")),
+        "defence": {"best": [row(v, k) for v, k in rated[:10]], "worst": [row(v, k) for v, k in rated[-10:][::-1]],
+                    "rated": len(defence), "games": table.get("skater_defence_games")},
+    }
+
+
+#: Calibration buckets for the favoured side's published win chance.
+RECORD_BUCKETS = ((0.50, 0.55), (0.55, 0.60), (0.60, 0.65), (0.65, 0.70), (0.70, 1.01))
+
+
+def _wilson(wins: int, n: int) -> tuple[float, float] | None:
+    if n <= 0:
+        return None
+    z, p = 1.96, wins / n
+    centre = (p + z * z / (2 * n)) / (1 + z * z / n)
+    half = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / (1 + z * z / n)
+    return round(centre - half, 4), round(centre + half, 4)
+
+
+def _no_vig_home(moneyline: dict | None) -> float | None:
+    cur = (moneyline or {}).get("current") or {}
+    h, a = _real(cur.get("home")), _real(cur.get("away"))
+    if h is None or a is None or h == 0 or a == 0:
+        return None
+    ph, pa = implied(h), implied(a)
+    return ph / (ph + pa) if ph + pa > 0 else None
+
+
+def finals_for(day: date, history_dir: Path) -> dict[str, tuple[int, int]] | None:
+    """{game id: (home goals, away goals)} for a played night, kept under
+    history/finals/ once every game on it is final; None when the schedule
+    cannot be read."""
+    kept = history_dir / "finals" / f"{day.isoformat()}.json"
+    if kept.is_file():
+        try:
+            return {k: (int(v[0]), int(v[1])) for k, v in json.loads(kept.read_text(encoding="utf-8")).items()}
+        except (OSError, ValueError, TypeError, IndexError):
+            pass
+    try:
+        games = schedule_for(day)
+    except Exception:  # noqa: BLE001 - a schedule outage leaves the night out
+        return None
+    out, done = {}, True
+    for g in games:
+        if g.get("gameState") in {"OFF", "FINAL"}:
+            out[str(g["id"])] = (int(g["homeTeam"].get("score", 0)), int(g["awayTeam"].get("score", 0)))
+        elif int(g.get("gameType", 2)) == REGULAR_SEASON_GAME_TYPE:
+            done = False
+    if done and out:
+        kept.parent.mkdir(parents=True, exist_ok=True)
+        kept.write_text(json.dumps({k: list(v) for k, v in out.items()}), encoding="utf-8")
+    return out
+
+
+def track_record(today: date, history_dir: Path) -> dict:
+    """record.json: how the published win chances held up, and which way the
+    market moved after each moneyline pick was published.
+
+    Every frozen board before `today`: each regular-season game with a
+    published win chance and a final is one game. Calibration buckets the
+    favoured side's chance and counts how often it won (95% Wilson interval);
+    the market's no-vig chance at the time of the freeze is scored beside the
+    model's (Brier, lower is better) on the games that carried both. Movement
+    reads the board's own line series (history/lines/<day>.json, the prices
+    the board published through the day): for a moneyline pick, whether the
+    home price at the day's last build moved toward the picked side. Nothing
+    here is a forward-ledger return, which stays sealed.
+    """
+    games = []
+    moves = {"toward": 0, "against": 0, "flat": 0}
+    nights = 0
+    for path in sorted(history_dir.glob("*.json")):
+        m = FROZEN_BOARD.match(path.name)
+        if not m or m.group(1) >= today.isoformat():
+            continue
+        try:
+            board = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if board.get("phase") == "preseason":
+            continue
+        shown = [g for g in board.get("games") or [] if isinstance(g, dict)
+                 and isinstance((g.get("home") or {}).get("winProb"), (int, float))]
+        if not shown:
+            continue
+        finals = finals_for(date.fromisoformat(m.group(1)), history_dir)
+        if finals is None:
+            continue
+        nights += 1
+        try:
+            series = json.loads((history_dir / "lines" / path.name).read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            series = {}
+        for g in shown:
+            final = finals.get(str(g.get("id")))
+            if not final or final[0] == final[1]:
+                continue
+            p = float(g["home"]["winProb"])
+            games.append({"p": p, "won": final[0] > final[1], "market": _no_vig_home(g.get("moneyline"))})
+            pick = g.get("pick") or {}
+            points = ((series.get(str(g.get("id"))) or {}).get("ml_home")) or []
+            if pick.get("market") == "Moneyline" and len(points) >= 1:
+                first = _real(((g.get("moneyline") or {}).get("current") or {}).get("home"))
+                last = _real(points[-1].get("v"))
+                if first is None or last is None:
+                    continue
+                change = implied(last) - implied(first)
+                if pick.get("side") not in ("home", "away"):
+                    continue
+                home_pick = pick.get("side") == "home"
+                if abs(change) < 0.005:
+                    moves["flat"] += 1
+                elif (change > 0) == home_pick:
+                    moves["toward"] += 1
+                else:
+                    moves["against"] += 1
+    buckets = []
+    for low, high in RECORD_BUCKETS:
+        rows = [(max(r["p"], 1 - r["p"]), r["won"] == (r["p"] >= 0.5)) for r in games
+                if low <= max(r["p"], 1 - r["p"]) < high]
+        n, wins = len(rows), sum(1 for _, w in rows if w)
+        buckets.append({"low": low, "high": min(high, 1.0), "games": n,
+                        "predicted": round(sum(p for p, _ in rows) / n, 4) if n else None,
+                        "actual": round(wins / n, 4) if n else None, "interval": _wilson(wins, n)})
+    both = [r for r in games if r["market"] is not None]
+    brier = (lambda key: round(sum((r[key] - r["won"]) ** 2 for r in both) / len(both), 4)) if both else None
+    return {
+        "generatedAt": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
+        "nights": nights, "games": len(games), "buckets": buckets,
+        "brier": {"games": len(both), "model": brier("p"), "market": brier("market")} if both else None,
+        "movement": dict(moves, picks=sum(moves.values())),
+    }
+
+
 def _site_history():
     """`web/site_history.py`, loaded from beside this file. It owns the rule
     for when a board may be frozen, and freezes the same file after this
@@ -579,6 +796,8 @@ def build_board(day: date, lab: Path, history_dir: Path) -> dict:
     # an afternoon confirmation replaces the morning's projection.
     starters = read_starting_goalies(lab / "data" / "processed", day)
     lab_model, thin = None, False
+    team_table = read_team_table(lab / "data" / "processed")
+    home_key = away_key = ""
     if not preseason:
         try:
             lab_model = load_model(lab / "data" / "processed", lab / "data" / "outputs")
@@ -652,6 +871,7 @@ def build_board(day: date, lab: Path, history_dir: Path) -> dict:
             provider_away = next((r["away_team"] for r in prices if lab_model["resolve"](r.get("away_team", "")) == away_key), None)
             if provider_home and provider_away:
                 row["priced"] = True
+                row["_provider"] = (provider_home, provider_away)
                 matched[(provider_home, provider_away)] = (row["id"], h, a)
                 cur, opn = ml_pair(prices, provider_home, provider_away), ml_pair(opens, provider_home, provider_away)
                 # The open is the game's first line-movement capture
@@ -709,6 +929,16 @@ def build_board(day: date, lab: Path, history_dir: Path) -> dict:
         for side, abbr in (("away", a), ("home", h)):
             if abbr in starters:
                 row[side]["goalie"] = dict(starters[abbr])
+        if row["gameType"] == REGULAR_SEASON_GAME_TYPE and lab_model:
+            # The game page (Game.html): where the card's number comes from,
+            # and the two teams' ratings side by side.
+            steps = card_factors(card, row.get("_provider"))
+            if steps:
+                row["factors"] = steps
+            compare = team_comparison(team_table, h, a, home_key, away_key)
+            if compare:
+                row["ratings"] = compare
+        row.pop("_provider", None)
         out_games.append(row)
 
     record = load_record(lab / "data" / "outputs" / "forward_evidence.json")
@@ -2085,6 +2315,8 @@ def main(argv: list[str] | None = None) -> int:
             results["props"].setdefault("season", season["props"])
     (out / "board.json").write_text(json.dumps(board, indent=1, ensure_ascii=False), encoding="utf-8")
     (out / "results.json").write_text(json.dumps(results, indent=1, ensure_ascii=False), encoding="utf-8")
+    (out / "ratings.json").write_text(json.dumps(ratings_page(Path(args.lab)), indent=1, ensure_ascii=False), encoding="utf-8")
+    (out / "record.json").write_text(json.dumps(track_record(today, history), indent=1, ensure_ascii=False), encoding="utf-8")
     print(f"board {today}: {len(board['games'])} games ({board['phase']}); results {today - timedelta(days=1)}: {len(results['games'])} settled.")
     print("No odds were fetched, no credit was spent, and no bet was placed.")
     return 0
