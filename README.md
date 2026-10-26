@@ -267,6 +267,12 @@ PYTHONPATH=src .venv/bin/python scripts/fetch_referees.py
 # moneyline half way to it, total held (Cooper, 2026-10-25). Free.
 PYTHONPATH=src .venv/bin/python scripts/fetch_posthockey_pregame.py
 
+# Cache the NHL shift charts (who was on the ice) for final games, newest
+# first, --budget a run. run_shadow_stats.py --tables-only rates each skater's
+# defence from them (on-ice 5v5 xG against relative to his team) and the card
+# moves each club's defence for tonight's lineup (2026-10-26). Free.
+PYTHONPATH=src .venv/bin/python scripts/fetch_shift_charts.py --budget 800
+
 # Send each team's newest forward lines (L1-L4) and power-play units (PP1/PP2)
 # from today's capture to The Lineup, Cooper's DFS lineup builder, by player
 # name only, with D pairs and goalies in their own keys. Nothing older, no ids,

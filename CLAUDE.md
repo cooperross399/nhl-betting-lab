@@ -2872,6 +2872,23 @@ Re-derive rather than trust if the data has moved.
   price; an era split is moot because the lab's play-by-play starts in
   2023-24, all in PostHockey's chip era. Not measured against prices.
 
+- **2026-10-26, NOT a defect fix: the defensive half of each skater's
+  rating moves the club's defence for tonight's lineup (PostHockey's Net
+  Rating has one; Cooper: "Make it perfect like Post Hockey").** Gameday
+  Refresh caches the NHL shift charts (`scripts/fetch_shift_charts.py`,
+  free, newest first, 800 a run, its own Actions cache), and
+  `run_shadow_stats.py --tables-only` rates every skater from them
+  (`shadow.defence`): his on-ice 5v5 shooter-adjusted xG against per second
+  minus his team's with him off the ice, last three seasons weighted
+  1/0.5/0.3, shrunk toward zero by 60,000 seconds of 5v5 ice time, times his
+  own 5v5 ice time a game, sign flipped and clamped to +/-0.20 goals a game,
+  published as `skater_defence` in the ratings file. `lineups._lineup_defence`
+  moves a posted club's defence by half the goals tonight's sheet prevents
+  beyond its usual eighteen's, over 3.0 goals a game, clamped 0.90-1.10. A
+  skater with no rating counts as zero; no shift charts cached moves nothing.
+  No age curve (no defensive history long enough to fit one). Not measured
+  against prices; constants are this lab's choice.
+
 ## Contract strings — never change these
 
 Cooper's local scheduled tasks hard-code these. Renaming any of them silently

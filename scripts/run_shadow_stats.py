@@ -51,7 +51,8 @@ from nhl_betting_lab.reports.team_markets_measurement import (
     build_team_measurement,
 )
 from nhl_betting_lab.verdicts import ships
-from nhl_betting_lab.shadow import measurement
+from nhl_betting_lab.shadow import defence, measurement
+from nhl_betting_lab.shadow.shifts import cache_path as shift_cache_path, is_charted
 from nhl_betting_lab.shadow.metrics import build_tables
 from nhl_betting_lab.shadow.play_by_play import fetch_play_by_play, game_events
 from nhl_betting_lab.shadow.talent import add_talent, goalie_tier, gsax_plus
@@ -68,6 +69,32 @@ MAXIMUM_FETCH_FAILURES = 0.02
 def _final_game_ids(team_games: pd.DataFrame) -> list[int]:
     frame = team_games.dropna(subset=["home_goals", "away_goals"])
     return sorted({int(g) for g in frame["game_id"] if int(g) > 0})
+
+
+def skater_defence_tables(ids: list[int], scored: pd.DataFrame, raw_dir: Path) -> dict:
+    """The defensive half of each skater's rating, for the ratings file.
+
+    Reads the cached shift charts only (`scripts/fetch_shift_charts.py` fills
+    them); with none cached the file carries no `skater_defence` and the card
+    moves no team's defence for its lineup.
+    """
+    charts = []
+    for gid in ids:
+        payload = _read_cache(shift_cache_path(gid, raw_dir))
+        if payload is not None and is_charted(payload):
+            charts.append((gid, payload))
+    if not charts:
+        print("Skater defence: no shift charts cached; not rated.")
+        return {}
+    on_ice = defence.on_ice_table(charts, scored)
+    impacts, evidence = defence.skater_defence(on_ice)
+    print(f"Skater defence: {len(impacts)} skaters rated from {len(charts)} charted games.")
+    return {
+        "skater_defence": impacts,
+        "skater_defence_seconds": evidence,
+        "skater_defence_games": len(charts),
+        "skater_defence_shrinkage_seconds": defence.SHRINKAGE_SECONDS,
+    }
 
 
 def _fmt(cell: dict) -> str:
@@ -440,6 +467,7 @@ def main(argv: list[str] | None = None) -> int:
         except ValueError as exc:
             print(f"::error::{exc} No team ratings written.")
             return 2
+        ratings.update(skater_defence_tables(ids, scored, args.raw_dir))
         (args.processed_dir / RATINGS_FILE).write_text(
             json.dumps(ratings, indent=2) + "\n", encoding="utf-8"
         )

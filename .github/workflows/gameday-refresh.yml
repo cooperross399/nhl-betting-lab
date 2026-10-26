@@ -498,6 +498,32 @@ jobs:
           key: shadow-play-by-play-${{ github.run_id }}
           restore-keys: shadow-play-by-play-
 
+      - name: Restore cached shift charts
+        # Who was on the ice: the skaters' defensive ratings are built from
+        # it (shadow/defence.py), read by the next step.
+        uses: actions/cache/restore@v4
+        with:
+          path: data/raw/nhl/shift_charts
+          key: shadow-shift-charts-${{ github.run_id }}
+          restore-keys: shadow-shift-charts-
+
+      - name: Fetch shift charts
+        # Free and keyless, newest first, at most 800 a run, so a cold cache
+        # fills in a few runs and then only last night's games are asked.
+        # Soft: whatever is cached is rated, and nothing cached moves nothing.
+        timeout-minutes: 8
+        continue-on-error: true
+        env:
+          PYTHONPATH: src
+        run: timeout --kill-after=30s 7m python scripts/fetch_shift_charts.py --budget 800
+
+      - name: Keep the shift charts for the next run
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: data/raw/nhl/shift_charts
+          key: shadow-shift-charts-${{ github.run_id }}
+
       - name: Rate the teams on expected goals and goaltending
         # Cooper's decision of 2026-10-05: the card's team markets are priced
         # on the same ratings as the public site (models/team_ratings.py).
