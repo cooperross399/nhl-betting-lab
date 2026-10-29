@@ -295,16 +295,32 @@ def test_a_drop_built_on_an_old_copy_is_stale(tmp_path: Path) -> None:
 def test_the_intake_refuses_a_stale_drop() -> None:
     text = (WORKFLOWS / "design-drop-intake.yml").read_text(encoding="utf-8")
     assert "fetch-depth: 0" in text
-    stale_at = text.index("design_drop.py stale")
+    stale_at = text.index("design_drop.py\" stale")
     assert text.index("git add web") < stale_at < text.index("git push")
 
 
-def test_the_inbox_url_can_be_set_by_pull_request() -> None:
-    """A Claude Code session cannot set a repository variable, so the hourly
-    check falls back to a committed file."""
+def test_each_site_polls_its_own_fixed_url() -> None:
+    """One fixed URL per site, overwritten by Claude Design, read hourly."""
+    workflow = _load("design-drop-intake.yml")
+    (job,) = workflow["jobs"].values()
+    assert job["strategy"]["matrix"]["site"] == ["nhl", "epl", "cbb"]
+    assert job["env"]["DROP_BASE"] == "https://cold-forest-6e14.cooperross399.workers.dev/drop"
+    assert workflow[True]["schedule"] == [{"cron": "17 * * * *"}]
     text = (WORKFLOWS / "design-drop-intake.yml").read_text(encoding="utf-8")
-    assert "vars.DESIGN_DROP_INBOX_URL" in text
-    assert "head -n1 .github/design-drop-inbox.url" in text
+    assert '"$DROP_BASE/$SITE/meta"' in text
+    assert 'if [ "$code" = 404 ]' in text
+    # The zip taken is the one /meta named, and a seen sha is never reopened.
+    assert 'if [ "$got" != "$sha" ]' in text
+    assert 'grep -qx "$sha" "$seen"' in text
+    assert text.index('grep -qx "$sha" "$seen"') < text.index('"$DROP_BASE/$SITE"')
+    assert 'echo "$sha" >> .design-drops/seen.txt' in text
+    assert text.index("design_drop.py\" stale") < text.index(">> .design-drops/seen.txt") < text.index("git push")
+
+
+def test_the_other_labs_never_take_a_shared_file() -> None:
+    text = (WORKFLOWS / "design-drop-intake.yml").read_text(encoding="utf-8")
+    assert 'skip="--skip-locked"' in text
+    assert 'if [ "$SITE" = nhl ]' in text
 
 
 def test_the_intake_opens_the_drop_with_the_token_and_never_twice() -> None:
@@ -317,3 +333,41 @@ def test_the_intake_opens_the_drop_with_the_token_and_never_twice() -> None:
     assert 'branch="design/' in text
     assert "git diff --cached --quiet" in text
     assert "contents: write" not in text
+    merge = next(step for step in job["steps"] if step.get("name") == "Merge the other lab's drop on green")
+    assert merge["if"] == "matrix.site != 'nhl' && steps.open.outputs.pr != ''"
+    assert "--match-head-commit" in merge["run"]
+
+
+def test_the_seen_list_passes_the_guard_but_never_comes_from_a_zip(tmp_path: Path) -> None:
+    drop = _drop()
+    assert drop.allowed(".design-drops/seen.txt")
+    assert not drop.allowed(".design-drops/other.txt")
+    zipped = _zip(tmp_path, {"web/Game.dc.html": b"page", ".design-drops/seen.txt": b"x" * 64})
+    written, skipped = drop.intake(zipped, tmp_path / "repo")
+    assert written == ["web/Game.dc.html"]
+    assert skipped == [".design-drops/seen.txt"]
+
+
+def test_a_lab_that_takes_shared_pages_by_sync_skips_them(tmp_path: Path) -> None:
+    root = tmp_path / "repo"
+    (root / "web").mkdir(parents=True)
+    (root / "web" / "shared.lock.json").write_text(json.dumps(
+        {"tag": "v7", "files": {"Board.dc.html": "a", "lib/live.js": "b", "logos/ARS.png": "c"}}))
+    zipped = _zip(tmp_path, {"web/Board.dc.html": b"x", "web/lib/live.js": b"x", "web/logos/ARS.png": b"x",
+                             "web/Season.dc.html": b"own page", "web/data/sample/t.json": b"{}"})
+    written, skipped = _drop().intake(zipped, root, skip_locked=True)
+    assert sorted(written) == ["web/Season.dc.html", "web/data/sample/t.json"]
+    assert len(skipped) == 3
+    written, _ = _drop().intake(zipped, tmp_path / "nhl")
+    assert "web/Board.dc.html" in written
+
+
+@pytest.mark.parametrize("members, slug", [
+    ({"MANIFEST.json": b'{"slug": "Game Pages v2!"}', "web/Game.dc.html": b"p"}, "game-pages-v2"),
+    ({"drop/MANIFEST.json": b'{"name": "tracker"}', "drop/web/Game.dc.html": b"p"}, "tracker"),
+    ({"web/Game.dc.html": b"p"}, ""),
+    ({"MANIFEST.json": b"not json"}, ""),
+    ({"MANIFEST.json": b"[1, 2]"}, ""),
+])
+def test_the_slug_comes_from_the_manifest(tmp_path: Path, members: dict, slug: str) -> None:
+    assert _drop().manifest_slug(_zip(tmp_path, members)) == slug

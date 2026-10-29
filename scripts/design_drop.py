@@ -11,7 +11,9 @@ and then moves EPL, CBB and the hub to the same tag.
     python scripts/design_drop.py pin --shared DIR       # make the shared checkout hold this branch's shared files, name the next tag
     python scripts/design_drop.py hub --shared DIR --tag vN --hub DIR
     python scripts/design_drop.py intake --zip FILE   # unpack a drop (zip or tarball)
+    python scripts/design_drop.py intake --zip FILE --root DIR --skip-locked   # into another lab's checkout
     python scripts/design_drop.py stale PATH...        # refuse files built on an old copy
+    python scripts/design_drop.py slug --zip FILE      # the branch slug a drop's MANIFEST.json names
 
 Standard library only. Nothing here fetches odds, spends a credit, edits a
 policy or places a bet.
@@ -50,7 +52,12 @@ ALLOWED = (
     "web/data/sample/**",
     "web/logos/**",
     "web/shared.lock.json",
+    ".design-drops/seen.txt",
 )
+
+#: The sha256 of every drop zip Design Drop Intake has opened, one a line. The
+#: intake appends to it in the drop's own pull request, never from the zip.
+SEEN = ".design-drops/seen.txt"
 
 #: A change here means the drop needs a feed change a human (or a Claude Code
 #: run) makes: the pull request is labelled `needs-builder`.
@@ -183,12 +190,25 @@ def _entries(archive_path: Path) -> list[tuple[str, int, object]]:
     raise ValueError(f"{archive_path} is neither a zip nor a tarball")
 
 
-def intake(zip_path: Path, root: Path = ROOT) -> tuple[list[str], list[str]]:
+def locked(root: Path = ROOT) -> set[str]:
+    """The shared files a lab's lock pins (Board, Results, Archive, Graphic,
+    the libraries, the logos). In the EPL and CBB labs those come from this
+    lab by shared-sync, so a drop taken into either never writes them."""
+    try:
+        files = json.loads((root / "web" / "shared.lock.json").read_text(encoding="utf-8")).get("files", {})
+    except (OSError, ValueError):
+        return set()
+    return {"web/" + str(name) for name in files}
+
+
+def intake(zip_path: Path, root: Path = ROOT, skip_locked: bool = False) -> tuple[list[str], list[str]]:
     """Write a drop's page files, from a zip or a tarball, under `root`.
     Returns (written, skipped): anything outside `ALLOWED`, the lock (Design
-    Drop's pin step writes that), a path that climbs out, and macOS litter
-    are skipped."""
+    Drop's pin step writes that), the seen list, a path that climbs out, and
+    macOS litter are skipped; with `skip_locked`, so is every shared file
+    `root`'s lock pins."""
     entries = _entries(zip_path)
+    shared = locked(root) if skip_locked else set()
     if sum(size for _, size, _ in entries) > MAX_TOTAL_BYTES:
         raise ValueError(f"the drop unpacks to more than {MAX_TOTAL_BYTES} bytes")
     to_path = _repo_path([n for n, _, _ in entries if not n.startswith("__MACOSX/")])
@@ -197,8 +217,8 @@ def intake(zip_path: Path, root: Path = ROOT) -> tuple[list[str], list[str]]:
         path = to_path(name)
         parts = path.split("/")
         if (name.startswith("__MACOSX/") or parts[-1] == ".DS_Store" or path.startswith("/")
-                or ".." in parts or path == "web/shared.lock.json" or not allowed(path)
-                or size > MAX_FILE_BYTES):
+                or ".." in parts or path == "web/shared.lock.json" or path == SEEN
+                or path in shared or not allowed(path) or size > MAX_FILE_BYTES):
             skipped.append(name)
             continue
         target = root / path
@@ -206,6 +226,24 @@ def intake(zip_path: Path, root: Path = ROOT) -> tuple[list[str], list[str]]:
         target.write_bytes(read())
         written.append(path)
     return written, skipped
+
+
+def manifest_slug(zip_path: Path) -> str:
+    """The branch slug a drop names: `slug` (or else `name`) in a
+    MANIFEST.json at the archive's top or one folder down. Lower-case letters,
+    digits and hyphens, at most 40; empty when the drop names none."""
+    for name, size, read in _entries(zip_path):
+        if name.rsplit("/", 1)[-1] != "MANIFEST.json" or name.count("/") > 1 or size > 1024 * 1024:
+            continue
+        try:
+            manifest = json.loads(read().decode("utf-8"))
+        except (ValueError, UnicodeDecodeError):
+            return ""
+        if not isinstance(manifest, dict):
+            return ""
+        raw = str(manifest.get("slug") or manifest.get("name") or "")
+        return re.sub(r"[^a-z0-9]+", "-", raw.lower()).strip("-")[:40].strip("-")
+    return ""
 
 
 #: How many earlier versions of a page the stale check compares a drop with.
@@ -280,8 +318,13 @@ def main(argv: list[str] | None = None) -> int:
     h.add_argument("--hub", type=Path, required=True)
     z = sub.add_parser("intake", help="unpack a drop's page files (zip or tarball) into this checkout")
     z.add_argument("--zip", type=Path, required=True)
+    z.add_argument("--root", type=Path, default=ROOT, help="the checkout to write into (default this lab)")
+    z.add_argument("--skip-locked", action="store_true", help="never write a file the checkout's lock pins")
     st = sub.add_parser("stale", help="refuse drop files built on an older copy of a page")
+    st.add_argument("--root", type=Path, default=ROOT)
     st.add_argument("paths", nargs="*")
+    sl = sub.add_parser("slug", help="print the branch slug a drop's MANIFEST.json names")
+    sl.add_argument("--zip", type=Path, required=True)
     args = ap.parse_args(argv)
 
     if args.command == "guard":
@@ -307,7 +350,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "intake":
-        written, skipped = intake(args.zip)
+        written, skipped = intake(args.zip, args.root, args.skip_locked)
         for path in written:
             print(f"wrote: {path}")
         for name in skipped:
@@ -317,13 +360,17 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if written else 1
 
     if args.command == "stale":
-        found = stale(args.paths)
+        found = stale(args.paths, args.root)
         for path, commit, then, now in found:
             print(f"::error file={path}::{path} was built on an old copy: it is {then} line(s) from "
                   f"main's version at {commit} and {now} from main's current one, so merging it "
                   "would undo what changed since. Rebuild it from main's current file.")
         print(f"{len(args.paths)} file(s) checked, {len(found)} stale")
         return 1 if found else 0
+
+    if args.command == "slug":
+        print(manifest_slug(args.zip))
+        return 0
 
     moved = hub(args.shared, args.tag, args.hub)
     print(f"hub pinned to {args.tag}: {', '.join(moved) or 'no file changed'}")
