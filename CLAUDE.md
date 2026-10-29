@@ -2954,6 +2954,32 @@ Re-derive rather than trust if the data has moved.
   be raised, so `web/hash_assets.py` names `support.js` and `lib/*.js` by
   content at publish and points the pages at those names.
 
+- **2026-10-28, NOT a defect fix: the card learns from its own results
+  (Cooper: "I just want it to learn from the most information possible.
+  Whatever helps it make winning plays more often").** Until now every model
+  refit each run on the games, and nothing fed back whether its opinions won
+  against the price. `nhl_betting_lab.self_learning` fits, per market, on
+  the forward ledger's settled opinions (one per wager at the best price,
+  each game counting once; team markets from `TEAM_RATINGS_FROM`, saves from
+  `SAVES_CONTEXT_FROM`) `logit P(win) = logit(price) + a + w * (logit(model)
+  - logit(price))`, with a ridge prior of 10 toward `(0, 1)` (the card as it
+  was), `w` held to 0-1.5 and `a` to +/-0.25. `run_gameday_card.py` applies
+  it to the probabilities AFTER `write_snapshot`, so the ledger, what it
+  learns from next time, and the 2027-04-25 test are unchanged; only edges,
+  selections and stakes move. It writes `data/outputs/self_learning.md` and
+  `.json`. Fitted through 2026-10-27: shots on goal w=0.81, points 0.84,
+  assists 0.86, hits 0.72, total goals 0.93, the rest 0.94-1.03. Before the
+  switch, Cooper's season records from the ledger at the morning best price:
+  total-goals leans 87-147-15, -15.6u over 249 (234 overs); team leans
+  -26.6u over 987; prop leans +131.2u over 2,927; stats-check props held
+  back -3.9u over 239. Walk-forward
+  (`scripts/run_self_learning_check.py`, 22 days after a week's warm-up,
+  best-bet bars): card as it was +1.2u over 379, learned +17.0u over 237;
+  the prior of 10 was picked on that same run (5: +10.9u over 173; 20:
+  +7.1u over 303; 40: +3.9u over 338; 150: +5.3u over 369). Three weeks:
+  no demonstrated edge. The model, the edge bars, the market list and the
+  staking rule are unchanged.
+
 ## Contract strings — never change these
 
 Cooper's local scheduled tasks hard-code these. Renaming any of them silently
