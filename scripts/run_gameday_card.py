@@ -69,8 +69,14 @@ from nhl_betting_lab.reports.gameday_card import (
     save_card,
 )
 from nhl_betting_lab.stat_sides import build_stat_sides
-from nhl_betting_lab.forward_evidence import write_snapshot
+from nhl_betting_lab.forward_evidence import LEDGER_FILENAME, write_snapshot
 from nhl_betting_lab.price_movement import apply_movement, movement, opening_snapshot
+from nhl_betting_lab.self_learning import (
+    apply_trust,
+    fit_trust,
+    load_ledger_for_learning,
+    save_report as save_learning_report,
+)
 from nhl_betting_lab.referees import tonight_factors
 from nhl_betting_lab import posthockey
 from nhl_betting_lab.factor_breakdown import ratings_form, slate_breakdowns
@@ -840,6 +846,20 @@ def main(argv: list[str] | None = None) -> int:
             f"A priced snapshot for {snapshot_day} already stands; the first "
             "opinion of the day is the one that settles."
         )
+
+    # The card learns from its own results (Cooper, 2026-10-28), after the
+    # snapshot is frozen so the ledger keeps the model's own opinions:
+    # each market's settled opinions say how far its disagreement with the
+    # book has been worth trusting (`self_learning`).
+    trust = fit_trust(load_ledger_for_learning(processed / LEDGER_FILENAME))
+    probabilities, learned = apply_trust(probabilities, prices, trust, key_for=selection_key)
+    save_learning_report(trust, outputs, generated_at=moment.isoformat())
+    print(
+        f"Learned from settled results: {learned} opinion(s) adjusted across "
+        f"{len(trust)} market(s)"
+        + "".join(f"; {m} w={t.w:.2f}" for m, t in sorted(trust.items()))
+        + "."
+    )
 
     # What tells a blocked card that is a fault from one that is not
     # (`why_nothing_to_card`): what the policy allowlists, and how many

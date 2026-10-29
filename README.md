@@ -387,6 +387,11 @@ PYTHONPATH=src .venv/bin/python scripts/run_props_form_experiment.py
 # against the current model (Saves Model Study workflow runs it in CI).
 PYTHONPATH=src .venv/bin/python scripts/run_saves_model_study.py
 
+# Does the card's learning from its own results (`self_learning`) pick
+# better bets? Walk-forward over the forward ledger: each day priced with what
+# had settled before it, against the card as it was.
+PYTHONPATH=src .venv/bin/python scripts/run_self_learning_check.py --ledger data/processed/forward_evidence.csv
+
 # Does the dialled-in hits model (rink scorer, measured shrinkage, recency,
 # own-games spread) price hits better? Walk-forward on outcomes and on the
 # bought hits prices, overs and unders apart (Hits Model Study workflow).
