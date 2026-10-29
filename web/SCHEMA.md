@@ -148,7 +148,7 @@ trophies           each award's leading candidates by the share of simulated sea
   voted            {hart, norris, selke, vezina, calder} | null  — one ranking per voted award (web/season_sim/awards.py), read
                    from the hand-kept data/season_sim/award_inputs.json; null when that file is missing. Each:
                    {label, rows[≤10], weights:{market, poll, model}, sources[], noPoll, stale, modelNote, modelKind}
-    rows[]         {name, team, tracker, market, poll, model, odds, pollRank, pollPoints, projP}
+    rows[]         {name, team, tracker, market, poll, model, odds, pollRank, pollPoints, projP, trend, change7}
                    market   the odds consensus: each book's or prediction market's implied probability with its own
                             margin removed (normalised over its listed field), averaged across the sources (a player a
                             source does not list counts 0), renormalised; a source over 14 days old sits out while a
@@ -160,7 +160,11 @@ trophies           each award's leading candidates by the share of simulated sea
                             club makes the playoffs that season); Norris, Selke: exp(2.2 × weighted z-score) with the
                             simulated points a game; Vezina: exp(2.2 × z) of wins, GSAx/60 and blended save %, goalies
                             with two fifths of their club's starts; Calder: rookies' (points ÷ the rookie leader's)^6),
-                            and the chance is the mean over seasons of each one's share. Without the simulation's
+                            and the chance is the mean over seasons of each one's share. The weights are
+                            season_sim/award_fit.py's: fitted to past ballots (data/season_sim/award_voting.csv) and
+                            used only where they beat the hand-set ones on held-out seasons (see votedFit); each
+                            model also rates his share of games played (season so far plus games he is expected to
+                            be fit for), so an injury costs ground. Without the simulation's
                             arrays (modelKind "stats"):
                             this season's stats over the field (awards.award_stats: NHL and MoneyPuck rates blended
                             with last season's by games played, shift-chart defence ratings when the card's ratings
@@ -173,6 +177,16 @@ trophies           each award's leading candidates by the share of simulated sea
                    odds     the longest American price any counted book quotes | null; pollRank/pollPoints | null; projP projected points | null
                    The candidates are the players a book or a poll names, plus the model's top three; rows
                    sorted by tracker.
+                   trend    his tracker share on each of the last 30 recorded days, oldest first (null on a day he
+                            was not ranked); change7 his move since the entry a week back | null
+                   Odds blocks with live: true are Kalshi's and Polymarket's award markets read from their public
+                   APIs during the build (season_sim/live_markets.py), replacing a hand-kept block from the same venue.
+  votedHistory     {award: [{date, chance:{name: tracker}}]} | null  — each day's ranking, carried from the last
+                   build's season.json (Season Sim restores it), at most 200 days
+  votedFit         {award: {features[], default[], beta[]?, used:"fitted"|"default", reason?, seasons, firstSeason,
+                   lastSeason, heldOut:{fittedLoss, defaultLoss, fittedWinners, defaultWinners}?, ballotNames,
+                   ballotNamesUnmatched}} | null  — each award model's fit to past ballots; heldOut is the
+                   leave-one-season-out check (loss is minus the mean log-likelihood of the vote shares)
     weights        market / poll / model 0.45 / 0.2 / 0.35 with the simulated model, 0.5 / 0.3 / 0.2 with the stats
                    model, renormalised over the signals the award has (0 for a missing one)
     sources[]      {kind ("odds"|"poll"), date, url, ageDays, stale (ageDays > 14 or undated), book, source, used (in the

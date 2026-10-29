@@ -272,7 +272,7 @@
             <sc-for list="{{ v.rows }}" as="p" hint-placeholder-count="8">
               <div style="display:grid;grid-template-columns:20px minmax(0,1fr) 44px 52px 44px 46px;gap:0 6px;padding:6px 0;border-bottom:1px solid var(--rule-2);font-size:13px;align-items:baseline;">
                 <span class="mono" style="color:var(--mute);">{{ p.rank }}</span>
-                <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><span style="font-weight:600;">{{ p.name }}</span> <span class="mono" style="font-size:11px;color:var(--mute);">{{ p.meta }}</span></span>
+                <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><span style="font-weight:600;">{{ p.name }}</span> <svg width="40" height="11" viewBox="0 0 40 11" aria-label="{{ p.trendLabel }}" style="vertical-align:-1px;overflow:visible;"><path d="{{ p.spark }}" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" stroke-linecap="round" opacity=".7"></path></svg> <span class="mono" style="font-size:11px;color:var(--mute);">{{ p.meta }}</span></span>
                 <span class="mono r" style="font-size:12px;">{{ p.market }}</span>
                 <span class="mono r" style="font-size:12px;">{{ p.poll }}</span>
                 <span class="mono r" style="font-size:12px;">{{ p.model }}</span>
@@ -475,6 +475,21 @@ class Component extends DCLogic {
     const american = (a) => (a == null ? "" : a > 0 ? `+${a}` : `${a}`);
     const sharePct = (x) => (x == null ? dash : pct(x));
     const vt = (tr && tr.voted) || null;
+    // A row's chance over the last days it was ranked, scaled to its own peak.
+    const sparkPath = (vals) => {
+      if (!vals || vals.length < 2) return "";
+      const peak = Math.max(...vals.map((x) => (x == null ? 0 : x)), 0.0001);
+      const step = 40 / (vals.length - 1);
+      let path = "", pen = false;
+      vals.forEach((x, i) => {
+        if (x == null) { pen = false; return; }
+        const y = 10 - (x / peak) * 9;
+        path += `${pen ? "L" : "M"}${(i * step).toFixed(1)} ${y.toFixed(1)}`;
+        pen = true;
+      });
+      return path;
+    };
+    const moved = (c) => (c == null || Math.abs(c) < 0.005 ? "" : `${c > 0 ? "▲" : "▼"}${Math.round(Math.abs(c) * 100)} in 7 d`);
     const voted = vt ? ["hart", "norris", "selke", "vezina", "calder"].filter((k) => vt[k] && vt[k].rows && vt[k].rows.length).map((k) => {
       const a = vt[k], w = a.weights || {};
       const counted = (a.sources || []).filter((src) => src.used !== false);
@@ -494,7 +509,8 @@ class Component extends DCLogic {
         staleLabel: a.stale ? (oldest === Infinity ? "Inputs undated" : `Inputs ${oldest} d old`) : "",
         rows: a.rows.slice(0, 8).map((r, i) => ({
           rank: i + 1, name: r.name,
-          meta: [r.team, american(r.odds), r.projP != null && k !== "selke" ? `proj ${f1(r.projP)} pts` : ""].filter(Boolean).join(" · "),
+          meta: [r.team, american(r.odds), r.projP != null && k !== "selke" ? `proj ${f1(r.projP)} pts` : "", moved(r.change7)].filter(Boolean).join(" · "),
+          spark: sparkPath(r.trend), trendLabel: r.trend && r.trend.length > 1 ? `chance over the last ${r.trend.length} days` : "",
           market: sharePct(r.market), poll: r.pollRank ? `#${r.pollRank}·${r.pollPoints}` : dash, model: sharePct(r.model), share: pct(r.tracker),
         })),
         sources, modelNote: a.modelNote || "",
@@ -547,7 +563,7 @@ class Component extends DCLogic {
       standingsNote: `Mean of ${d.sims.toLocaleString()} seasons · East 8th place ${cutE} pts, West ${cutW}`,
       divisions, conferences, leaderBoards, teamCards, goalies,
       hasRounds, roundConfs, slots, finals, hasTrophies, trophies, voted, hasVoted, hasTrophySection: hasTrophies || hasVoted,
-      votedNote: hasVoted ? `The Hart, Norris, Selke, Vezina and Calder are voted, so each is one ranking built from three signals. Odds: every book's and prediction market's published odds, each with its own margin taken out, averaged into one consensus. Poll: rank and points in the latest media poll. Sim: the award played out in every simulated season, each candidate rated on his simulated final numbers by that award's model (each note says how), his chance the average of his share of the vote across seasons (where the simulation is missing, Model: this season's stats). Chance is their weighted blend over the players a book or poll names plus the model's top three; inputs more than 14 days old are flagged. A projection, not a price.` : "",
+      votedNote: hasVoted ? `The Hart, Norris, Selke, Vezina and Calder are voted, so each is one ranking built from three signals. Odds: every book's and prediction market's published odds, each with its own margin taken out, averaged into one consensus. Poll: rank and points in the latest media poll. Sim: the award played out in every simulated season, each candidate rated on his simulated final numbers by that award's model (each note says how), his chance the average of his share of the vote across seasons (where the simulation is missing, Model: this season's stats). Chance is their weighted blend over the players a book or poll names plus the model's top three; inputs more than 14 days old are flagged. Each award model's weights are fitted to how the voters actually voted in past seasons (Hockey-Reference and NHL ballots), kept only where they beat the old weights on seasons held out, and a player's share of games played counts, so an injury costs ground. The line beside each name is his chance over the last 30 days; the arrow, his move in a week. A projection, not a price.` : "",
       roundsNote: "Share of simulated seasons · a projection, not a price",
       trophiesNote: "Share of simulated seasons each player finishes first · a projection, not a price",
       calderNote: tr && tr.calderNote ? tr.calderNote : "",

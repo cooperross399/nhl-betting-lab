@@ -33,14 +33,17 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-from season_sim.fetch import fetch_bundle  # noqa: E402
-from season_sim.model import build_model, isfinite_all, load_injuries, load_ph_ratings  # noqa: E402
+from season_sim.award_fit import fit_all, load_voting  # noqa: E402
+from season_sim.fetch import fetch_bundle, fetch_history  # noqa: E402
+from season_sim.live_markets import live_blocks, merge as merge_live  # noqa: E402
+from season_sim.model import build_model, is_rookie, isfinite_all, load_injuries, load_ph_ratings  # noqa: E402
 from season_sim.awards import award_stats, load_inputs, simulated_shares, trackers  # noqa: E402
 from season_sim.simulate import simulate  # noqa: E402
 
 DEFAULT_NOTES = HERE.parent / "data" / "season_sim" / "roster_notes.json"
 DEFAULT_RATINGS = HERE.parent / "data" / "processed" / "shadow_team_ratings.json"
 DEFAULT_AWARDS = HERE.parent / "data" / "season_sim" / "award_inputs.json"
+DEFAULT_VOTING = HERE.parent / "data" / "season_sim" / "award_voting.csv"
 
 #: What the page prints for a Calder table it cannot vouch for.
 CALDER_NOTE = ("Rookies are read off the NHL's eligibility rule (under 26 on September 15, at most 25 games in any "
@@ -61,7 +64,8 @@ def season_label(season: str) -> str:
 
 
 def compose(model: dict, result: dict, notes: dict, colors: dict, *, generated_at: str,
-            award_inputs: dict | None = None, award_stats_by_id: dict | None = None) -> dict:
+            award_inputs: dict | None = None, award_stats_by_id: dict | None = None,
+            award_fit: dict | None = None, previous: dict | None = None) -> dict:
     info = model["team_info"]
     players = result["players"]
     goalies_by_team: dict[str, list[dict]] = {}
@@ -89,7 +93,8 @@ def compose(model: dict, result: dict, notes: dict, colors: dict, *, generated_a
                for ab, qs in model["players"].items() for q in qs if not q.get("filler")]
     voted = trackers(award_inputs, skaters, {r["abbrev"]: r["p_playoff"] for r in result["teams"]},
                      today=datetime.fromisoformat(generated_at).date(),
-                     sim=simulated_shares(model, result, stats_by_id) if award_inputs else None)
+                     sim=simulated_shares(model, result, stats_by_id, fit=award_fit) if award_inputs else None)
+    history = award_history(previous, voted, generated_at[:10]) if voted else None
     playoffs_in = result.get("playoffs") or {}
     ratings = model.get("ratings") or {}
 
@@ -143,6 +148,8 @@ def compose(model: dict, result: dict, notes: dict, colors: dict, *, generated_a
             calderNote=CALDER_NOTE if trophies_in.get("calder") else
             "The rookie list could not be read off the data, so no Calder table is published.",
             voted=voted,
+            votedFit=award_fit or None,
+            votedHistory=history,
         ),
         method=dict(sigma=result["meta"]["sigma"], sigmaMode=result["meta"].get("sigma_mode", "fixed"),
                     hfa=result["meta"]["hfa"], tieRate=result["meta"]["tie_rate"],
@@ -151,6 +158,42 @@ def compose(model: dict, result: dict, notes: dict, colors: dict, *, generated_a
                     ratings=dict(phWeight=ratings.get("ph_weight", 0.0), phThrough=ratings.get("ph_through"),
                                  phStatus=ratings.get("ph_status", "not used"))),
     )
+
+
+#: Days of each award's daily ranking kept in season.json, and drawn per row.
+HISTORY_DAYS = 200
+TREND_DAYS = 30
+
+
+def award_history(previous: dict | None, voted: dict | None, today: str) -> dict:
+    """Each award's daily ranking, carried from the last build's season.json.
+
+    ``{award: [{"date": day, "chance": {name: share}}]}``, oldest first, one
+    entry a day (a second build on a day replaces that day's), the last
+    :data:`HISTORY_DAYS` kept. Each published row gains ``trend``, his chance
+    on each of the last :data:`TREND_DAYS` recorded days (None where he was
+    not ranked), and ``change7``, his move since the entry a week back.
+    """
+    old = ((previous or {}).get("trophies") or {}).get("votedHistory") or {}
+    out: dict = {}
+    for award, tr in (voted or {}).items():
+        days = [e for e in old.get(award) or [] if isinstance(e, dict) and e.get("date") and e["date"] != today
+                and isinstance(e.get("chance"), dict)]
+        days.append(dict(date=today, chance={r["name"]: r["tracker"] for r in tr["rows"]}))
+        days = sorted(days, key=lambda e: e["date"])[-HISTORY_DAYS:]
+        out[award] = days
+        recent = days[-TREND_DAYS:]
+        week = [e for e in days if e["date"] <= _days_before(today, 7)]
+        for r in tr["rows"]:
+            r["trend"] = [e["chance"].get(r["name"]) for e in recent]
+            back = week[-1]["chance"].get(r["name"]) if week else None
+            r["change7"] = round(r["tracker"] - back, 4) if back is not None else None
+    return out
+
+
+def _days_before(day: str, n: int) -> str:
+    from datetime import date, timedelta
+    return (date.fromisoformat(day) - timedelta(days=n)).isoformat()
 
 
 def check(site: dict) -> None:
@@ -186,6 +229,43 @@ def check(site: dict) -> None:
             raise SystemExit(f"the {name} tracker shares do not make a distribution")
 
 
+def _read_previous(path: str | None) -> dict | None:
+    """The last build's season.json, or None (the trend lines then start today)."""
+    if not path:
+        return None
+    try:
+        data = json.loads(Path(path).read_text(encoding="utf-8"))
+        days = {a: len(v) for a, v in ((data.get("trophies") or {}).get("votedHistory") or {}).items()}
+        print(f"Previous season.json: built {data.get('generatedAt')}; award history days {days or 'none'}")
+        return data
+    except (OSError, ValueError, AttributeError) as exc:
+        print(f"::warning::The last season.json could not be read ({exc}); the award trend lines start today")
+        return None
+
+
+def fit_award_models(cache: Path, voting_path: Path) -> dict | None:
+    """Fit each voted award's model to past ballots; None (the old weights) when that cannot be done."""
+    try:
+        voting = load_voting(voting_path)
+        seasons = sorted({s for by in voting.values() for s in by})
+        mp_seasons = {s for a in ("norris", "selke", "vezina") for s in voting.get(a, {})}
+        history = fetch_history(cache, seasons, moneypuck_seasons=mp_seasons)
+        report = fit_all(voting, history, award_stats, is_rookie)
+    except Exception as exc:  # noqa: BLE001 - a failed fit leaves the old weights, never no page
+        print(f"::warning::The award models could not be fitted to past ballots ({type(exc).__name__}: {exc}); "
+              "they run on the old hand-set weights")
+        return None
+    print(f"Award fits: {len(history)} past seasons rebuilt")
+    for award, r in report.items():
+        held = r.get("heldOut") or {}
+        print(f"  {award}: {r['used']} weights over {r['seasons']} seasons"
+              + (f"; held-out loss {held['fittedLoss']} fitted v {held['defaultLoss']} old, "
+                 f"winners {held['fittedWinners']} v {held['defaultWinners']}" if held else "")
+              + f"; {r['ballotNamesUnmatched']} of {r['ballotNames']} ballot names unmatched"
+              + (f"; weights {dict(zip(r['features'], r['beta']))}" if r.get("beta") else ""))
+    return report
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--out", required=True, help="Directory to write season.json into.")
@@ -197,6 +277,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--ph-weight", type=float, default=None, help="Blend weight toward --ratings (default: the model's).")
     parser.add_argument("--awards", default=str(DEFAULT_AWARDS),
                         help="Hand-kept Hart/Norris/Selke odds and media polls for the award trackers.")
+    parser.add_argument("--no-live-markets", action="store_true",
+                        help="Do not read Kalshi's and Polymarket's award markets.")
+    parser.add_argument("--previous", default=None,
+                        help="The last build's season.json, whose daily award rankings are carried forward.")
+    parser.add_argument("--voting", default=str(DEFAULT_VOTING),
+                        help="Past award ballots the award models are fitted to.")
     args = parser.parse_args(argv)
 
     notes = load_injuries(Path(args.notes))
@@ -213,6 +299,13 @@ def main(argv: list[str] | None = None) -> int:
     award_inputs = load_inputs(Path(args.awards))
     if award_inputs is None:
         print(f"::warning::No award inputs at {args.awards}; the voted award trackers are left out")
+    elif not args.no_live_markets:
+        # Kalshi's and Polymarket's award markets, read live from their open
+        # APIs, join each award's odds; a venue that does not answer is skipped.
+        try:
+            award_inputs = merge_live(award_inputs, live_blocks(model["season"], datetime.now(timezone.utc).date()))
+        except Exception as exc:  # noqa: BLE001 - the odds already on file still make the ranking
+            print(f"::warning::The live prediction markets could not be read ({type(exc).__name__}: {exc})")
     # The voted trackers read the season so far: NHL and MoneyPuck rates, and
     # the card's shift-chart defence ratings when the ratings file carries them.
     try:
@@ -222,8 +315,10 @@ def main(argv: list[str] | None = None) -> int:
         stats = {}
     print(f"Award stats: {len(stats)} skaters" + (", shift-chart defence ratings read" if (ph or {}).get("skater_defence") else
                                                   ", defence from MoneyPuck on-ice xG (no shift-chart ratings)"))
+    fit = fit_award_models(Path(args.cache), Path(args.voting)) if award_inputs is not None else None
     site = compose(model, result, notes, _team_colors(), generated_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
-                   award_inputs=award_inputs, award_stats_by_id=stats)
+                   award_inputs=award_inputs, award_stats_by_id=stats, award_fit=fit,
+                   previous=_read_previous(args.previous))
     check(site)
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)

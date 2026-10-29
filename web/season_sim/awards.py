@@ -33,6 +33,11 @@ voted Calder have only this model. Then :data:`SIM_WEIGHTS` replaces
 :data:`WEIGHTS`, because the simulated model already carries the rest of the
 season, which the stats model could not.
 
+The simulated models' weights are fitted to past ballots where that fit
+beats the old hand-set weights on held-out seasons
+(:mod:`season_sim.award_fit`), and each rates a player's share of games
+played, so an injured candidate loses ground.
+
 The tracker share, one ranking per award, is the weighted mean of the signals
 that exist, with the weights renormalised over them; a player missing from a signal counts
 as zero in it. It is a projection of the vote, not a forecast of it, and the
@@ -61,9 +66,6 @@ SIM_POOL = {"hart": 60, "norris": 40, "selke": 80, "calder": 25}
 #: A goalie rated for the Vezina has at least this share of his club's starts
 #: (a tandem's two halves both qualify).
 VEZINA_MIN_SHARE = 0.4
-#: The Vezina composite: simulated wins, goals saved above expected per 60,
-#: and save percentage (this season blended with his three-year rate).
-VEZINA_PARTS = {"wins": 0.35, "gsax": 0.45, "sv": 0.2}
 #: Starts of the three-year save percentage a goalie's season-to-date rate is
 #: blended with.
 SV_PRIOR_STARTS = 20
@@ -420,7 +422,7 @@ def tracker(award: str, inputs: dict, players: list[dict], playoff: dict[str, fl
         label=LABELS[award], rows=rows[:ROWS], weights=weights, sources=sources,
         noPoll=poll_block is None,
         stale=any(s["stale"] for s in sources if s.get("used", True)) or not sources,
-        modelNote=(SIM_NOTES if simulated.get("share") else
+        modelNote=simulated.get("note") or (SIM_NOTES if simulated.get("share") else
                    MODEL_NOTES if any(p.get("stats") for p in players) else FALLBACK_NOTES)[award],
         modelKind="sim" if simulated.get("share") else ("stats" if model else None),
     )
@@ -437,55 +439,58 @@ def trackers(inputs: dict | None, players: list[dict], playoff: dict[str, float]
 # ----------------------------------------------------------------------
 # the awards, simulated
 # ----------------------------------------------------------------------
-def _softmax_mean(score: np.ndarray) -> np.ndarray:
-    """Each candidate's vote share exp(T x score) in every season, averaged."""
-    z = TEMPERATURE * score
-    z = z - z.max(axis=1, keepdims=True)
-    e = np.exp(z)
-    return (e / e.sum(axis=1, keepdims=True)).mean(axis=0)
+def _fit_note(award: str, report: dict | None) -> str | None:
+    """The page's line on what the simulated award model runs on."""
+    from .award_fit import FEATURE_LABELS, FEATURES
+
+    r = (report or {}).get(award)
+    feats = ", ".join(FEATURE_LABELS[f] for f in FEATURES[award])
+    if not r:
+        return None
+    span = f"{_season_label(r['firstSeason'])} to {_season_label(r['lastSeason'])}" if r.get("firstSeason") else ""
+    held = r.get("heldOut") or {}
+    check = (f" Held out one season at a time, the fitted model picked {held['fittedWinners']} of {r['seasons']} winners,"
+             f" the old hand-set one {held['defaultWinners']}.") if held else ""
+    if r.get("used") == "fitted":
+        return (f"Sim: in each simulated season the field is rated on {feats}, with the weights fitted to how the "
+                f"voters actually voted, {span} ({r['seasons']} seasons of ballots).{check}")
+    return (f"Sim: in each simulated season the field is rated on {feats}, on the old hand-set weights "
+            f"({r.get('reason') or 'no fit'}; {r.get('seasons', 0)} seasons of ballots checked).{check}")
 
 
-def _zcols(x: np.ndarray) -> np.ndarray:
-    """z-scores across the field in every season (rows)."""
-    sd = x.std(axis=1, keepdims=True)
-    return np.where(sd > 0, (x - x.mean(axis=1, keepdims=True)) / np.where(sd > 0, sd, 1.0), 0.0)
+def _season_label(season: str | None) -> str:
+    return f"{season[:4]}-{season[6:]}" if season else ""
 
 
-def _fixed_z(values: list[float | None]) -> np.ndarray:
-    """z-scores of a stat that does not change season to season; a missing one counts as average."""
-    have = {i: float(v) for i, v in enumerate(values) if v is not None}
-    z = _z({str(i): v for i, v in have.items()})
-    return np.array([z.get(str(i), 0.0) for i in range(len(values))])
-
-
-def _power_mean(points: np.ndarray, scale: np.ndarray | None = None) -> np.ndarray:
-    top = np.maximum(points.max(axis=1, keepdims=True), 1)
-    w = (np.maximum(points, 0) / top) ** MODEL_POWER
-    if scale is not None:
-        w = w * scale
-    tot = w.sum(axis=1, keepdims=True)
-    return np.where(tot > 0, w / np.where(tot > 0, tot, 1.0), 0.0).mean(axis=0)
-
-
-def simulated_shares(model: dict, result: dict, stats_by_id: dict | None = None, *, seed: int = 20262028) -> dict:
-    """Every award, simulated: {award: {"share": {key: p}, "who": {key: (name, team)}}}.
+def simulated_shares(model: dict, result: dict, stats_by_id: dict | None = None, *, seed: int = 20262028,
+                     fit: dict | None = None) -> dict:
+    """Every award, simulated: {award: {"share": {key: p}, "who": {key: (name, team)}, "note": str}}.
 
     ``result`` is :func:`season_sim.simulate.simulate`'s; its ``_arrays``
     carry each team's goals still to come and its playoff berth in every
     simulated season, and each goalie's wins. Players' season totals are drawn
     the way the trophy tables draw them (:func:`draw_season_totals`), with
-    their own generator so the published trophy odds do not move. Empty when
-    the arrays are missing.
+    their own generator so the published trophy odds do not move. In each
+    simulated season every award's model (:func:`season_sim.award_fit.design`)
+    rates its field, on the weights fitted to past ballots where that fit
+    won its held-out check (``fit``, :func:`season_sim.award_fit.fit_all`'s
+    report) and on the old hand-set weights otherwise. A player's games
+    played (his season so far plus the games he is expected to be fit for)
+    is one of the numbers rated, so an injured star loses ground the way he
+    does with voters. Empty when the arrays are missing.
     """
+    from .award_fit import design, params, shares
     from .simulate import draw_season_totals  # local: keeps this module light for the page tests
 
     arrays = result.get("_arrays") or {}
     gf_rest, playoff = arrays.get("gf_rest"), arrays.get("playoff")
     if gf_rest is None or playoff is None:
         return {}
+    beta = params(fit)
     teams = list(arrays["teams"])
     idx = {t: i for i, t in enumerate(teams)}
     sims = int(gf_rest.shape[0])
+    season_games = float(model.get("games_per_team") or 82)
     rng = np.random.default_rng(seed)
     stats_by_id = stats_by_id or {}
     pool = [(t, q) for t in teams for q in model["players"].get(t, []) if not q.get("filler")]
@@ -493,8 +498,11 @@ def simulated_shares(model: dict, result: dict, stats_by_id: dict | None = None,
     def stat(q: dict) -> dict:
         return stats_by_id.get(q.get("id")) or {}
 
-    def keyed(chosen: list[tuple[str, dict]], share: np.ndarray) -> dict:
-        out: dict = {"share": {}, "who": {}}
+    def num(v) -> float:
+        return float(v) if v is not None else float("nan")
+
+    def keyed(award: str, chosen: list[tuple[str, dict]], share: np.ndarray) -> dict:
+        out: dict = {"share": {}, "who": {}, "note": _fit_note(award, fit)}
         for (t, q), p in zip(chosen, share):
             k = name_key(q["name"])
             if p > out["share"].get(k, -1.0):
@@ -502,33 +510,35 @@ def simulated_shares(model: dict, result: dict, stats_by_id: dict | None = None,
                 out["who"][k] = (q["name"], t)
         return out
 
-    def composite(chosen: list[tuple[str, dict]], parts: dict[str, float]) -> np.ndarray:
+    def skater_cols(chosen: list[tuple[str, dict]]) -> dict:
         _, pts = draw_season_totals(rng, chosen, idx, gf_rest, sims)
         gp = np.array([max(float(q.get("proj_gp") or 0.0), 1.0) for _, q in chosen])
-        score = parts["points"] * _zcols(pts / gp)
-        for part, weight in parts.items():
-            if part != "points":
-                score = score + weight * _fixed_z([stat(q).get(part) for _, q in chosen])[None, :]
-        return _softmax_mean(score)
+        cols = dict(points=pts, points_pg=pts / gp, games=np.minimum(gp / season_games, 1.0),
+                    d=np.array([float(q.get("pos") == "D") for _, q in chosen]),
+                    berth=playoff[:, [idx[t] for t, _ in chosen]].astype(float))
+        for k in ("toi", "defence", "faceoffs", "pk", "puck"):
+            cols[k] = np.array([num(stat(q).get(k)) for _, q in chosen])
+        return cols
+
+    def run(award: str, chosen: list[tuple[str, dict]]) -> None:
+        X = design(award, skater_cols(chosen))
+        out[award] = keyed(award, chosen, shares(X, beta[award]).mean(axis=0))
 
     out: dict = {}
     by_p = sorted(pool, key=lambda tq: -tq[1]["proj_p"])
     hart = by_p[:SIM_POOL["hart"]]
     if hart:
-        _, pts = draw_season_totals(rng, hart, idx, gf_rest, sims)
-        berth = playoff[:, [idx[t] for t, _ in hart]].astype(float)
-        out["hart"] = keyed(hart, _power_mean(pts, 0.25 + 0.75 * berth))
+        run("hart", hart)
     rated = [tq for tq in by_p if stat(tq[1]).get("gp", 0) >= MIN_GAMES]
     d_pool = [tq for tq in rated if tq[1]["pos"] == "D" and stat(tq[1]).get("toi", 0) >= 17.0][:SIM_POOL["norris"]]
     if len(d_pool) >= 2:
-        out["norris"] = keyed(d_pool, composite(d_pool, NORRIS_PARTS))
+        run("norris", d_pool)
     f_pool = [tq for tq in rated if tq[1]["pos"] in ("C", "L", "R") and stat(tq[1]).get("toi", 0) >= 14.0][:SIM_POOL["selke"]]
     if len(f_pool) >= 2 and any(stat(q).get("defence") is not None for _, q in f_pool):
-        out["selke"] = keyed(f_pool, composite(f_pool, SELKE_PARTS))
+        run("selke", f_pool)
     rookies = [tq for tq in by_p if tq[1].get("rookie")][:SIM_POOL["calder"]]
-    if rookies:
-        _, pts = draw_season_totals(rng, rookies, idx, gf_rest, sims)
-        out["calder"] = keyed(rookies, _power_mean(pts))
+    if len(rookies) >= 2:
+        run("calder", rookies)
     goalies, wins_by = result.get("goalies") or [], arrays.get("goalie_wins") or []
     starters = [(g, w) for g, w in zip(goalies, wins_by) if g.get("share", 0) >= VEZINA_MIN_SHARE]
     if len(starters) >= 2:
@@ -544,11 +554,11 @@ def simulated_shares(model: dict, result: dict, stats_by_id: dict | None = None,
             w = gs / (gs + SV_PRIOR_STARTS)
             return w * float(now) + (1 - w) * float(prior)
 
-        score = (VEZINA_PARTS["wins"] * _zcols(wins)
-                 + VEZINA_PARTS["gsax"] * _fixed_z([g.get("gsax60") for g, _ in starters])[None, :]
-                 + VEZINA_PARTS["sv"] * _fixed_z([sv(g) for g, _ in starters])[None, :])
-        share = _softmax_mean(score)
-        out["vezina"] = {"share": {}, "who": {}}
+        cols = dict(wins=wins, gsax=np.array([num(g.get("gsax60")) for g, _ in starters]),
+                    sv=np.array([num(sv(g)) for g, _ in starters]),
+                    games=np.array([min(float(g.get("starts") or 0) / season_games, 1.0) for g, _ in starters]))
+        share = shares(design("vezina", cols), beta["vezina"]).mean(axis=0)
+        out["vezina"] = {"share": {}, "who": {}, "note": _fit_note("vezina", fit)}
         for (g, _), p in zip(starters, share):
             k = name_key(g["name"])
             out["vezina"]["share"][k] = float(p)
