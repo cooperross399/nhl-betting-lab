@@ -28,7 +28,7 @@ on:
 
 permissions:
   contents: read
-  actions: read   # to restore the card's team ratings from Gameday Refresh's state
+  actions: read   # to restore the card's team ratings and the last projection
 
 concurrency:
   group: season-sim
@@ -84,19 +84,61 @@ jobs:
           fi
           rm -rf "$STATE"
 
+      - name: Restore the last projection
+        # Its daily award rankings are carried forward, so each name on the
+        # Season page gets a trend line. Soft: without it the lines start
+        # today. Unpacked where the artifact is rooted, then moved straight
+        # out of dist to the runner's temp directory, so it can never be
+        # handed on in place of today's.
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -u
+          mkdir -p "$RUNNER_TEMP/previous-season"
+          if python scripts/restore_state.py --artifact season-sim --dest dist/data \
+               --workflow season-sim.yml --success-only --no-merge --attempts 2; then
+            mv dist/data/season.json "$RUNNER_TEMP/previous-season/season.json"
+          else
+            echo "::warning::The last season projection could not be restored; the award trend lines start today."
+          fi
+          rm -rf dist/data
+
+      - name: Restore past seasons' stats
+        id: history
+        # The closed seasons the award models are fitted to (NHL and
+        # MoneyPuck tables back to 2005-06). They never change, so they are
+        # fetched once and kept; a cold cache costs about a hundred requests.
+        uses: actions/cache/restore@v4
+        with:
+          path: data/raw/season_sim/history
+          key: season-sim-award-history-v1-${{ hashFiles('data/season_sim/award_voting.csv') }}
+          restore-keys: season-sim-award-history-v1-
+
       - name: Build the season projection
-        # Every input is fetched here, into a cache under data/raw that no
-        # workflow restores: a projection built on last week's rosters is
-        # worse than none, and the fetch is about ninety small requests.
+        # Every current input is fetched here, into a cache under data/raw
+        # that no workflow restores: a projection built on last week's
+        # rosters is worse than none, and the fetch is about ninety small
+        # requests. Only the closed seasons under history/ are kept.
         env:
           PYTHONPATH: src
           SIMS: ${{ inputs.sims || 10000 }}
         run: |
           set -u
+          PREV="$RUNNER_TEMP/previous-season/season.json"
+          [ -s "$PREV" ] || PREV=""
           # Written under dist/data, the path Publish Site restores it to,
           # so the artifact's root and the restore's directory agree.
-          python web/build_season_json.py --out dist/data --cache data/raw/season_sim --sims "$SIMS"
+          python web/build_season_json.py --out dist/data --cache data/raw/season_sim --sims "$SIMS" \
+            ${PREV:+--previous "$PREV"}
           test -s dist/data/season.json
+
+      - name: Keep past seasons' stats for the next run
+        if: always() && steps.history.outputs.cache-hit != 'true' && hashFiles('data/raw/season_sim/history/**') != ''
+        uses: actions/cache/save@v4
+        with:
+          path: data/raw/season_sim/history
+          key: season-sim-award-history-v1-${{ hashFiles('data/season_sim/award_voting.csv') }}
 
       - name: Hand the projection to Publish Site
         uses: actions/upload-artifact@v4

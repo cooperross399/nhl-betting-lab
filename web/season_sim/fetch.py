@@ -131,3 +131,117 @@ def fetch_bundle(cache: Path, *, season: str = SEASON, today: date | None = None
         standings_prior=prior,
         rosters=rosters, schedules=schedules, skaters=skaters, goalies=goalies, moneypuck=moneypuck,
     )
+
+
+#: The first season the award fits rebuild; earlier seasons' games are read
+#: only to tell who was still a rookie.
+HISTORY_FIRST = "20082009"
+ROOKIE_LOOKBACK_FIRST = "20052006"
+
+
+def _seasons(first: str, last: str) -> list[str]:
+    return [f"{y}{y + 1}" for y in range(int(first[:4]), int(last[:4]) + 1)]
+
+
+def _read_mp_goalies(path: Path | None) -> dict[int, dict]:
+    import csv
+    if not path or not Path(path).exists():
+        return {}
+    out = {}
+    with open(path, encoding="utf-8", newline="") as fh:
+        for r in csv.DictReader(fh):
+            if r.get("situation") != "all":
+                continue
+            try:
+                out[int(r["playerId"])] = dict(xGoals=float(r["xGoals"]), goals=float(r["goals"]), icetime=float(r["icetime"]))
+            except (KeyError, ValueError):
+                continue
+    return out
+
+
+def fetch_history(cache: Path, seasons: list[str], *, moneypuck_seasons: set[str] | None = None) -> dict[str, dict]:
+    """Closed seasons for the award fits: {season: {...}}.
+
+    Each season carries the NHL skater and goalie summaries, birth dates,
+    every earlier season's games for each skater (for Calder eligibility),
+    which clubs made the playoffs, the season's length, and (for the seasons
+    in ``moneypuck_seasons``) MoneyPuck's skater, team and goalie tables.
+    Closed seasons never change, so everything is cached for good; nothing
+    here is required, and a season whose stats do not arrive is left out.
+    """
+    cache = Path(cache) / "history"
+    moneypuck_seasons = set(moneypuck_seasons or ())
+    meta_path = Path(cache).parent / "standings_season.json"
+    _get(f"{NHL}/standings-season", meta_path, required=False, ttl_hours=CURRENT_TTL_HOURS)
+    try:
+        meta = {str(s["id"]): s for s in json.loads(meta_path.read_text())["seasons"]}
+    except (OSError, ValueError, KeyError):
+        meta = {}
+    gp_by: dict[str, dict[int, int]] = {}
+    summaries: dict[str, list[dict]] = {}
+    for s in _seasons(ROOKIE_LOOKBACK_FIRST, max(seasons)):
+        path = cache / f"skaters_{s}.json"
+        if _get(_stats_url("skater", s, "points"), path, required=False, ttl_hours=None):
+            try:
+                summaries[s] = json.loads(path.read_text()).get("data", [])
+            except ValueError:
+                continue
+            gp_by[s] = {int(q["playerId"]): int(q.get("gamesPlayed") or 0) for q in summaries[s]}
+    out: dict[str, dict] = {}
+    for s in seasons:
+        if s not in summaries:
+            continue
+        goalies_path = cache / f"goalies_{s}.json"
+        goalies = []
+        if _get(_stats_url("goalie", s, "wins"), goalies_path, required=False, ttl_hours=None):
+            try:
+                goalies = json.loads(goalies_path.read_text()).get("data", [])
+            except ValueError:
+                goalies = []
+        bios_path = cache / f"bios_{s}.json"
+        born: dict[int, str] = {}
+        bios_url = (f"{STATS}/skater/bios?isAggregate=false&isGame=false&limit=-1&sort=playerId"
+                    f"&cayenneExp=seasonId={s}%20and%20gameTypeId=2")
+        if _get(bios_url, bios_path, required=False, ttl_hours=None):
+            try:
+                born = {int(q["playerId"]): q["birthDate"] for q in json.loads(bios_path.read_text()).get("data", [])
+                        if q.get("birthDate")}
+            except (ValueError, KeyError, TypeError):
+                born = {}
+        berths, games = {}, 82.0
+        end = (meta.get(s) or {}).get("standingsEnd")
+        if end:
+            st_path = cache / f"standings_{s}.json"
+            if _get(f"{NHL}/standings/{end}", st_path, required=False, ttl_hours=None):
+                try:
+                    table = json.loads(st_path.read_text()).get("standings", [])
+                except ValueError:
+                    table = []
+                flagged = {t["teamAbbrev"]["default"]: (t.get("clinchIndicator") or "") for t in table}
+                if any(v and v != "e" for v in flagged.values()):
+                    berths = {k: bool(v) and v != "e" for k, v in flagged.items()}
+                elif table:
+                    ranked = sorted(table, key=lambda t: -float(t.get("pointPctg") or 0))
+                    berths = {t["teamAbbrev"]["default"]: i < 16 for i, t in enumerate(ranked)}
+                gps = sorted(float(t.get("gamesPlayed") or 0) for t in table)
+                if gps:
+                    games = gps[len(gps) // 2] or 82.0
+        prior = [p for p in summaries if p < s]
+        prior_gp: dict[int, list[int]] = {}
+        for p in prior:
+            for pid, gp in gp_by.get(p, {}).items():
+                prior_gp.setdefault(pid, []).append(gp)
+        mp = goalie_mp = None
+        if s in moneypuck_seasons:
+            year = int(s[:4])
+            got = {}
+            for kind in ("teams", "skaters", "goalies"):
+                path = cache / f"mp_{kind}_{year}.csv"
+                ok = _get(f"{MONEYPUCK}/{year}/regular/{kind}.csv", path, required=False, ttl_hours=None)
+                got[kind] = path if ok and path.exists() else None
+            if got["skaters"] and got["teams"]:
+                mp = dict(skaters=got["skaters"], teams=got["teams"])
+            goalie_mp = _read_mp_goalies(got["goalies"]) or None
+        out[s] = dict(season=s, skaters=summaries[s], goalies=goalies, born=born, prior_gp=prior_gp,
+                      berths=berths, games=games, moneypuck=mp, goalie_mp=goalie_mp)
+    return out
