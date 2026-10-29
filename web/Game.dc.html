@@ -193,6 +193,29 @@
           </sc-for>
         </div>
       </section>
+      <section aria-labelledby="lm-h" style="padding:28px 0 26px;border-bottom:1px solid var(--ink);">
+        <h2 id="lm-h" style="margin:0;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:28px;line-height:1;text-transform:uppercase;letter-spacing:.01em;">Line movement</h2>
+        <sc-if value="{{ hasMoves }}" hint-placeholder-val="{{ true }}">
+          <p style="margin:6px 0 0;font-size:13px;color:var(--mute);max-width:640px;">Each line is the price at every board refresh today, first to latest.</p>
+          <div style="margin-top:12px;border-top:2px solid var(--ink);max-width:560px;">
+            <sc-for list="{{ moves }}" as="mv" hint-placeholder-count="3">
+              <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 16px;padding:12px 0;border-top:1px solid var(--rule);align-items:center;">
+                <div style="min-width:0;">
+                  <div style="font-size:15px;font-weight:600;">{{ mv.label }}</div>
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--mute);margin-top:2px;">{{ mv.detail }}</div>
+                </div>
+                <div style="display:flex;align-items:center;gap:12px;">
+                  <svg aria-hidden="true" width="140" height="32" viewBox="0 0 140 32" style="flex:none;overflow:visible;"><polyline sc-camel-points="{{ mv.points }}" fill="none" stroke="var(--ink)" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"></polyline><circle cx="{{ mv.endX }}" cy="{{ mv.endY }}" r="2.5" fill="var(--ink)"></circle></svg>
+                  <span style="font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:600;min-width:84px;text-align:right;white-space:nowrap;">{{ mv.change }}</span>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+        <sc-if value="{{ noMoves }}" hint-placeholder-val="{{ false }}">
+          <p style="margin:12px 0 0;padding:12px 14px;border:1px dashed var(--rule);font-size:14px;color:var(--ink-2);max-width:560px;">No line movement captured for this game yet. It fills in as the board refreshes through the day.</p>
+        </sc-if>
+      </section>
       </sc-if>
 
       <section aria-labelledby="gk-h" style="padding:28px 0 26px;border-bottom:1px solid var(--ink);">
@@ -224,6 +247,29 @@
             </div>
           </sc-for>
         </div>
+      </section>
+      <section aria-labelledby="lm-h" style="padding:28px 0 26px;border-bottom:1px solid var(--ink);">
+        <h2 id="lm-h" style="margin:0;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:28px;line-height:1;text-transform:uppercase;letter-spacing:.01em;">Line movement</h2>
+        <sc-if value="{{ hasMoves }}" hint-placeholder-val="{{ true }}">
+          <p style="margin:6px 0 0;font-size:13px;color:var(--mute);max-width:640px;">Each line is the price at every board refresh today, first to latest.</p>
+          <div style="margin-top:12px;border-top:2px solid var(--ink);max-width:560px;">
+            <sc-for list="{{ moves }}" as="mv" hint-placeholder-count="3">
+              <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 16px;padding:12px 0;border-top:1px solid var(--rule);align-items:center;">
+                <div style="min-width:0;">
+                  <div style="font-size:15px;font-weight:600;">{{ mv.label }}</div>
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--mute);margin-top:2px;">{{ mv.detail }}</div>
+                </div>
+                <div style="display:flex;align-items:center;gap:12px;">
+                  <svg aria-hidden="true" width="140" height="32" viewBox="0 0 140 32" style="flex:none;overflow:visible;"><polyline sc-camel-points="{{ mv.points }}" fill="none" stroke="var(--ink)" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"></polyline><circle cx="{{ mv.endX }}" cy="{{ mv.endY }}" r="2.5" fill="var(--ink)"></circle></svg>
+                  <span style="font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:600;min-width:84px;text-align:right;white-space:nowrap;">{{ mv.change }}</span>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+        <sc-if value="{{ noMoves }}" hint-placeholder-val="{{ false }}">
+          <p style="margin:12px 0 0;padding:12px 14px;border:1px dashed var(--rule);font-size:14px;color:var(--ink-2);max-width:560px;">No line movement captured for this game yet. It fills in as the board refreshes through the day.</p>
+        </sc-if>
       </section>
       </sc-if>
 
@@ -465,6 +511,23 @@ class Component extends DCLogic {
     const isPick = (market, side) => p.kind !== "none" && p.market === market && p.side === side;
     const tagOf = (market, side) => (isPick(market, side) ? (p.kind === "bet" ? { tag: "Best bet", tagBg: "var(--ink)", tagFg: "var(--paper)", tagStyle: "solid" } : { tag: "Lean", tagBg: "transparent", tagFg: "var(--ink)", tagStyle: "dashed" }) : { tag: "" });
     const row = (label, chance, fairP, best, move, market, side, first) => ({ label, chance: num(chance) ? pct1(chance) : "—", fair: num(fairP) ? odds(fairP) : num(chance) ? odds(toAm(chance)) : "—", best: num(best) ? odds(best) : "—", ...move, ...tagOf(market, side), weight: isPick(market, side) ? 600 : 500, ruleColor: first ? "var(--ink)" : "var(--rule-2)" });
+    const LH = (d.lineHistory || {})[g.id] || {};
+    const lineVals = (s) => (Array.isArray(s) ? s.map((x) => (typeof x === "number" ? x : x && x.v)).filter(num) : []);
+    const moveOf = (label, series, fmt) => {
+      const v = lineVals(series);
+      if (v.length < 2) return null;
+      const lo = Math.min(...v), hi = Math.max(...v), span = hi - lo || 1;
+      const pts = v.map((y, i) => [(i / (v.length - 1)) * 140, hi === lo ? 16 : 30 - ((y - lo) / span) * 28]);
+      const first = v[0], last = v[v.length - 1];
+      return { label, points: pts.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(" "), endX: pts[pts.length - 1][0].toFixed(1), endY: pts[pts.length - 1][1].toFixed(1),
+        change: last === first ? "flat" : `${fmt(first)} → ${fmt(last)}`, detail: `${v.length} refreshes · low ${fmt(lo)} · high ${fmt(hi)}` };
+    };
+    const plv = g.puckLine || {};
+    const moves = [
+      moveOf(`${h.abbr} moneyline`, LH.ml_home, odds),
+      moveOf(plv.favorite ? `${plv.favorite} ${F.fmtLine(plv.line)} puck line price` : "Puck line price", LH.pl_price, odds),
+      moveOf("Total", LH.total, (n) => n.toFixed(1)),
+    ].filter(Boolean);
     const markets = [];
     if (priced) {
       markets.push(row(`${a.abbr} moneyline`, aw, fair.away, cur.away, mv(open.away, cur.away), "Moneyline", "away", false));
@@ -510,7 +573,7 @@ class Component extends DCLogic {
       fairLine, bestLine, openLine, edgeLine, pick,
       wfIntro: hasWin ? `The ${h.abbr} win chance, built in eight steps from a coin flip. Each bar is how far one step moved the number; the mark is where it stood after that step.` : "No win chance was written for this game.",
       noFactors: !hasFactors, hasFactors, steps, sumNote, scaleLo: pct0(lo), scaleHi: pct0(hi), goalsOut,
-      hasRatings, cmp, goalies, markets, after };
+      hasRatings, cmp, goalies, markets, after, moves, hasMoves: moves.length > 0, noMoves: moves.length === 0 };
   }
 }
 </script>
