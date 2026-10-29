@@ -67,15 +67,51 @@ def test_the_committed_inputs_name_a_source_and_a_date_for_every_number() -> Non
     data = json.loads(INPUTS.read_text(encoding="utf-8"))
     for award in awards.AWARDS:
         block = data[award]
-        odds = block["odds"]
-        assert odds["url"].startswith("https://") and date.fromisoformat(odds["date"]) and odds["book"]
-        assert odds["lines"] and all(isinstance(x["american"], int) and abs(x["american"]) >= 100 for x in odds["lines"])
+        blocks = awards.odds_blocks(block)
+        assert blocks
+        lines = []
+        for odds in blocks:
+            assert odds["url"].startswith("https://") and date.fromisoformat(odds["date"]) and odds["book"]
+            assert odds["lines"]
+            for x in odds["lines"]:
+                # A book quotes an American price; a prediction market prints a chance.
+                if "american" in x:
+                    assert isinstance(x["american"], int) and abs(x["american"]) >= 100
+                else:
+                    assert isinstance(x["chance"], (int, float)) and 0 < x["chance"] < 100
+            lines += odds["lines"]
         poll = block.get("poll")
         if poll is not None:
             assert poll["url"].startswith("https://") and date.fromisoformat(poll["date"]) and poll["outlet"]
             assert poll["entries"] and all(isinstance(e["points"], int) and e["points"] > 0 for e in poll["entries"])
-        for x in odds["lines"] + (poll or {}).get("entries", []):
-            assert x["name"].strip() and len(x["team"]) == 3
+        # A team is a fallback for a name the projection cannot find; the
+        # projection's team wins, so a source that prints none may leave it out.
+        for x in lines + (poll or {}).get("entries", []):
+            assert x["name"].strip() and len(x.get("team") or "ABC") == 3
+        for x in (poll or {}).get("entries", []):
+            assert len(x["team"]) == 3
+
+
+def test_every_source_loses_its_own_margin_and_the_sources_are_averaged() -> None:
+    awards = _awards()
+    book = dict(book="Book", date="2026-10-25", url="https://example.com/a", lines=[
+        dict(name="Ann Alpha", team="AAA", american=100), dict(name="Bo Beta", team="BBB", american=100)])
+    market = dict(book="Market", date="2026-10-24", url="https://example.com/b", lines=[
+        dict(name="Ann Alpha", team="AAA", chance=60), dict(name="Cy Gamma", team="CCC", chance=40)])
+    old = dict(book="Old", date="2026-09-01", url="https://example.com/c", lines=[
+        dict(name="Dee Delta", team="DDD", american=100)])
+    inputs = {"hart": {"odds": [book, market, old], "poll": None}}
+    tr = awards.tracker("hart", inputs, [], {}, today=date(2026, 10, 26))
+    share = {r["name"]: r["market"] for r in tr["rows"]}
+    # (0.5 + 0.6) / 2, (0.5 + 0) / 2, (0 + 0.4) / 2; the month-old book sits out.
+    assert share == pytest.approx({"Ann Alpha": 0.55, "Bo Beta": 0.25, "Cy Gamma": 0.2})
+    assert [s.get("used") for s in tr["sources"]] == [True, True, False]
+    assert tr["stale"] is False
+    # With nothing fresh, the old prices still count, and the page flags them.
+    stale = awards.tracker("hart", {"hart": {"odds": [old], "poll": None}}, [], {}, today=date(2026, 10, 26))
+    assert stale["rows"][0]["market"] == pytest.approx(1.0) and stale["stale"] is True
+    # The single-block form still reads.
+    assert awards.odds_blocks({"odds": book}) == [book]
 
 
 def test_a_books_odds_lose_their_margin_and_keep_their_order() -> None:
@@ -148,7 +184,8 @@ def test_the_page_renders_the_award_trackers(tmp_path: Path) -> None:
                            award_inputs=inputs)
     builder.check(site)
     voted = site["trophies"]["voted"]
-    assert set(voted) == {"hart", "norris", "selke"}
+    assert set(voted) == {"hart", "norris", "selke", "vezina", "calder"}
+    assert voted["vezina"]["rows"] == [] and voted["calder"]["rows"] == []  # no odds or poll on file for them here
     hart = {r["name"]: r for r in voted["hart"]["rows"]}
     assert hart[star["name"]]["projP"] is not None and hart[star["name"]]["model"] > 0
     vals = _render(site, tmp_path)
@@ -277,3 +314,68 @@ def test_award_stats_reads_the_nhl_and_moneypuck_tables(tmp_path: Path) -> None:
     assert st["defence"] > 0
     shifted = awards.award_stats(bundle, defence={"7": -0.05})[7]
     assert shifted["defence"] == -0.05
+
+
+# ---------------------------------------------------------------- the awards, simulated
+# Cooper (2026-10-29): "how can we make accurate sims and rankings of each
+# award for the website", "If we need to create our own model within the grand
+# model for each award then do it", "And that should all be combined into one
+# ranking".
+
+
+def _sim_inputs(model: dict) -> dict:
+    teams = sorted(model["players"])
+    names = {t: [q["name"] for q in model["players"][t] if not q.get("filler")] for t in teams}
+    goalies = [g["name"] for t in teams for g in model["goalies"][t]]
+    book = lambda rows: [dict(book="Book", date="2026-10-30", url="https://example.com/odds", lines=rows)]
+    return {
+        "hart": {"odds": book([dict(name=names[teams[0]][0], team=teams[0], american=200),
+                               dict(name=names[teams[1]][0], team=teams[1], american=300)]), "poll": None},
+        "vezina": {"odds": book([dict(name=goalies[0], american=250), dict(name=goalies[1], american=400)]), "poll": None},
+    }
+
+
+def test_each_award_is_played_out_in_the_simulated_seasons_and_blended_into_one_ranking(tmp_path: Path) -> None:
+    builder = _load_builder()
+    awards = _awards()
+    from season_sim.simulate import simulate  # noqa: PLC0415
+
+    model = _synthetic_model(played_rounds=2)
+    result = simulate(model, sims=300, seed=11)
+    shares = awards.simulated_shares(model, result)
+    hart = shares["hart"]["share"]
+    assert sum(hart.values()) == pytest.approx(1.0, abs=1e-6)
+    # Every club's star projects the same points here, so the Hart leans on the
+    # playoff berth each simulated season draws: stars on likely playoff clubs
+    # lead stars on unlikely ones.
+    berth = {r["abbrev"]: r["p_playoff"] for r in result["teams"]}
+    stars = [(t, q) for t, qs in model["players"].items() for q in qs if q["name"].endswith("Star")]
+    likely = [hart[awards.name_key(q["name"])] for t, q in stars if berth[t] > 0.6]
+    unlikely = [hart[awards.name_key(q["name"])] for t, q in stars if berth[t] < 0.4]
+    assert likely and unlikely and sum(likely) / len(likely) > sum(unlikely) / len(unlikely)
+    vez = shares["vezina"]["share"]
+    assert sum(vez.values()) == pytest.approx(1.0, abs=1e-6)
+    assert not any(k.endswith("backup") for k in vez)  # a backup is not a Vezina candidate
+    # The trophy tables do not move: the award draws use their own generator.
+    again = simulate(model, sims=300, seed=11)
+    assert again["trophies"] == result["trophies"]
+
+    site = builder.compose(model, result, {"asOf": "2026-11-01"}, {}, generated_at="2026-11-01T14:00:00+00:00",
+                           award_inputs=_sim_inputs(model))
+    builder.check(site)
+    tr = site["trophies"]["voted"]["hart"]
+    assert tr["modelKind"] == "sim" and "simulated season" in tr["modelNote"]
+    assert tr["weights"]["model"] == pytest.approx(awards.SIM_WEIGHTS["model"] / (1 - awards.SIM_WEIGHTS["poll"]), abs=1e-4)
+    assert sum(r["tracker"] for r in tr["rows"]) <= 1.0 + 1e-6
+    vals = _render(site, tmp_path)
+    titles = [v["title"] for v in vals["voted"]]
+    assert "Hart Trophy" in titles
+    hart_card = vals["voted"][titles.index("Hart Trophy")]
+    assert "simulated award" in hart_card["sub"] and hart_card["modelHead"] == "Sim"
+
+
+def test_the_committed_inputs_cover_all_five_voted_awards() -> None:
+    awards = _awards()
+    data = json.loads(INPUTS.read_text(encoding="utf-8"))
+    for award in awards.AWARDS:
+        assert awards.odds_blocks(data[award]), award

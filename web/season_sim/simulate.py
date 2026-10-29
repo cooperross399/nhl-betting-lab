@@ -324,7 +324,7 @@ def simulate(model: dict, *, sims: int = DEFAULT_SIMS, seed: int = SEED,
         playoffs=dict(slots=bracket["slots"], finals=bracket["finals"], conference_finals=bracket["conference_finals"]),
         trophies=trophies,
         # per-season arrays the backtest scores; not written to the site
-        _arrays=dict(teams=teams, pts=PTS, playoff=playoff),
+        _arrays=dict(teams=teams, pts=PTS, playoff=playoff, gf_rest=gf_rest, goalie_wins=goalie_wins),
     )
 
 
@@ -432,6 +432,41 @@ def _player_tables(model, teams):
     return player_rows, all_players
 
 
+def draw_season_totals(rng, chosen: list[tuple[str, dict]], idx: dict[str, int], gf_rest: np.ndarray,
+                       sims: int) -> tuple[np.ndarray, np.ndarray]:
+    """Each player's season goals and points in every simulated season.
+
+    His remaining goals and assists are drawn from his team's simulated goals
+    still to come, at his projected share of them, with a PLAYER_SIGMA rate
+    jitter and an availability draw (games he may miss); the season so far is
+    added on. Returns (goals, points), each sims x players.
+    """
+    P = len(chosen)
+    team_col = np.array([idx[t] for t, _ in chosen], dtype=int)
+    mean_team_goals = gf_rest.mean(axis=0)
+    goals = np.zeros((sims, P), np.int64); assists = np.zeros((sims, P), np.int64)
+    for j, (t, q) in enumerate(chosen):
+        i = team_col[j]
+        n = gf_rest[:, i]
+        tg = float(mean_team_goals[i])
+        ros_g = q.get("ros_g", q["proj_g"] - q["now"]["g"])
+        ros_a = q.get("ros_a", q["proj_a"] - q["now"]["a"])
+        if tg <= 0 or (ros_g <= 0 and ros_a <= 0):
+            continue
+        left = max(float(q.get("team_left", 0) or 0), 1.0)
+        f = float(np.clip(q.get("ros_gp", left) / left, 0.0, 1.0)) if "ros_gp" in q else 1.0
+        jitter = np.exp(rng.normal(0, PLAYER_SIGMA, sims) - PLAYER_SIGMA ** 2 / 2)
+        if 0.02 < f < 0.999:
+            avail = rng.beta(f * AVAIL_KAPPA, (1 - f) * AVAIL_KAPPA, sims) / f
+        else:
+            avail = np.ones(sims)
+        m = jitter * avail
+        goals[:, j] = rng.binomial(n, np.clip(ros_g / tg * m, 0, 0.9))
+        assists[:, j] = rng.binomial(n, np.clip(ros_a / tg * m, 0, 0.9))
+    now_g = np.array([q["now"]["g"] for _, q in chosen]); now_a = np.array([q["now"]["a"] for _, q in chosen])
+    return goals + now_g, goals + assists + now_g + now_a
+
+
 def _trophies(rng, model, teams, idx, gf_rest, goalie_rows, goalie_wins, sims) -> dict:
     """Art Ross, Rocket Richard, the wins lead and (where rookies are known)
     the rookie points lead, as each candidate's share of simulated seasons."""
@@ -453,29 +488,7 @@ def _trophies(rng, model, teams, idx, gf_rest, goalie_rows, goalie_wins, sims) -
                candidates=dict(skaters=len(chosen), rookies=0, goalies=len(goalie_rows)))
     if chosen:
         P = len(chosen)
-        team_col = np.array([idx[t] for t, _ in chosen])
-        mean_team_goals = gf_rest.mean(axis=0)
-        goals = np.zeros((sims, P), np.int64); assists = np.zeros((sims, P), np.int64)
-        for j, (t, q) in enumerate(chosen):
-            i = team_col[j]
-            n = gf_rest[:, i]
-            tg = float(mean_team_goals[i])
-            ros_g = q.get("ros_g", q["proj_g"] - q["now"]["g"])
-            ros_a = q.get("ros_a", q["proj_a"] - q["now"]["a"])
-            if tg <= 0 or (ros_g <= 0 and ros_a <= 0):
-                continue
-            left = max(float(q.get("team_left", 0) or 0), 1.0)
-            f = float(np.clip(q.get("ros_gp", left) / left, 0.0, 1.0)) if "ros_gp" in q else 1.0
-            jitter = np.exp(rng.normal(0, PLAYER_SIGMA, sims) - PLAYER_SIGMA ** 2 / 2)
-            if 0.02 < f < 0.999:
-                avail = rng.beta(f * AVAIL_KAPPA, (1 - f) * AVAIL_KAPPA, sims) / f
-            else:
-                avail = np.ones(sims)
-            m = jitter * avail
-            goals[:, j] = rng.binomial(n, np.clip(ros_g / tg * m, 0, 0.9))
-            assists[:, j] = rng.binomial(n, np.clip(ros_a / tg * m, 0, 0.9))
-        now_g = np.array([q["now"]["g"] for _, q in chosen]); now_a = np.array([q["now"]["a"] for _, q in chosen])
-        tot_g = goals + now_g; tot_p = goals + assists + now_g + now_a
+        tot_g, tot_p = draw_season_totals(rng, chosen, idx, gf_rest, sims)
 
         def table(values: np.ndarray, cols: np.ndarray, n: int, stat: str) -> list[dict]:
             share = _split_credit(values[:, cols]).mean(axis=0)

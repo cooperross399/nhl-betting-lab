@@ -18,7 +18,7 @@ the model's own ratings and the page says so.
 
 The hand-kept inputs (injured regulars expected back, opening goalie depth
 charts, rookies' ice time) live in ``data/season_sim/roster_notes.json``; the
-published Hart, Norris and Selke odds and media polls the award trackers read
+published Hart, Norris, Selke, Vezina and Calder odds and media polls the award trackers read
 live in ``data/season_sim/award_inputs.json`` (see ``season_sim/awards.py``).
 """
 from __future__ import annotations
@@ -35,7 +35,7 @@ sys.path.insert(0, str(HERE))
 
 from season_sim.fetch import fetch_bundle  # noqa: E402
 from season_sim.model import build_model, isfinite_all, load_injuries, load_ph_ratings  # noqa: E402
-from season_sim.awards import award_stats, load_inputs, trackers  # noqa: E402
+from season_sim.awards import award_stats, load_inputs, simulated_shares, trackers  # noqa: E402
 from season_sim.simulate import simulate  # noqa: E402
 
 DEFAULT_NOTES = HERE.parent / "data" / "season_sim" / "roster_notes.json"
@@ -88,7 +88,8 @@ def compose(model: dict, result: dict, notes: dict, colors: dict, *, generated_a
     skaters = [dict(name=q["name"], pos=q["pos"], team=ab, p=q["proj_p"], stats=stats_by_id.get(q.get("id")))
                for ab, qs in model["players"].items() for q in qs if not q.get("filler")]
     voted = trackers(award_inputs, skaters, {r["abbrev"]: r["p_playoff"] for r in result["teams"]},
-                     today=datetime.fromisoformat(generated_at).date())
+                     today=datetime.fromisoformat(generated_at).date(),
+                     sim=simulated_shares(model, result, stats_by_id) if award_inputs else None)
     playoffs_in = result.get("playoffs") or {}
     ratings = model.get("ratings") or {}
 
@@ -211,7 +212,7 @@ def main(argv: list[str] | None = None) -> int:
     result = simulate(model, sims=args.sims)
     award_inputs = load_inputs(Path(args.awards))
     if award_inputs is None:
-        print(f"::warning::No award inputs at {args.awards}; the Hart, Norris and Selke trackers are left out")
+        print(f"::warning::No award inputs at {args.awards}; the voted award trackers are left out")
     # The voted trackers read the season so far: NHL and MoneyPuck rates, and
     # the card's shift-chart defence ratings when the ratings file carries them.
     try:
@@ -246,7 +247,10 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  Final {m['a']} v {m['b']} {m['p']:.1%}")
     for k, tr in (tro.get("voted") or {}).items():
         stale = " (stale inputs)" if tr["stale"] else ""
-        print(f"  {k} tracker{stale}: " + ", ".join(f"{r['name']} {r['tracker']:.1%}" for r in tr["rows"][:5]))
+        kind = f" [{tr.get('modelKind')} model]" if tr.get("modelKind") else ""
+        print(f"  {k} tracker{stale}{kind}: " + ", ".join(
+            f"{r['name']} {r['tracker']:.1%}" + (f" (model {r['model']:.1%})" if r.get("model") is not None else "")
+            for r in tr["rows"][:5]))
     return 0
 
 
