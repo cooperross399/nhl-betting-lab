@@ -1,33 +1,55 @@
 name: Design Drop Intake
 
-# Claude Design cannot push a branch, so it hands a drop over as a zip at a
-# public URL. This turns that zip into the design/<date>-<slug>-<hash> branch
-# and pull request that Design Drop Guard and Design Drop take from there.
+# Claude Design cannot push a branch, so it hands a drop over as a zip. Each
+# site has one fixed URL that Claude Design overwrites with its latest drop:
 #
-# - Dispatched with `zip_url` (and an optional `slug`), it takes that zip.
-# - Every hour it reads the fixed URL Claude Design publishes its latest drop
-#   to: the repository variable DESIGN_DROP_INBOX_URL, or else the first line
-#   of .github/design-drop-inbox.url (so a Claude Code session, which cannot
-#   set variables, can set it by pull request). Neither set, the hour does
-#   nothing.
+#   https://cold-forest-6e14.cooperross399.workers.dev/drop/nhl
+#   https://cold-forest-6e14.cooperross399.workers.dev/drop/epl
+#   https://cold-forest-6e14.cooperross399.workers.dev/drop/cbb
 #
-# Only page files are unpacked (`ALLOWED` in scripts/design_drop.py); the rest
-# of the zip is named and skipped. A zip whose pages already match main, or
-# whose branch already exists, opens nothing, so the hourly check never opens
-# the same drop twice. The branch is pushed and the pull request opened with
-# DESIGN_DROP_TOKEN, because a pull request opened with the workflow's own
-# token starts no workflow. It fetches no odds, spends no credit, edits no
-# policy and places no bet.
+# (PUT with the drop key; GET serves the zip; /meta its sha256, bytes and
+# upload time.) Every hour this reads each site's /meta. Nothing stored (404),
+# or a sha256 already in that lab's .design-drops/seen.txt, and the hour does
+# nothing for that site, so the same zip is never opened twice. Otherwise it
+# downloads the zip, checks it is the one /meta named, and turns it into a
+# design/<date>-<slug>-<hash> branch (the slug from the zip's MANIFEST.json)
+# and pull request in that lab, with the sha appended to seen.txt in the same
+# pull request.
+#
+# This one workflow serves all three labs because it holds DESIGN_DROP_TOKEN,
+# the cross-repository token Design Drop already uses for the EPL and CBB
+# labs; neither of them holds one, and a pull request opened with a
+# workflow's own token starts no checks.
+#
+# - nhl: page files only (`ALLOWED` in scripts/design_drop.py). Design Drop
+#   Guard holds the branch to them; Design Drop pins a changed shared page to
+#   a new tag of betting-lab-shared, merges on green and fans out.
+# - epl, cbb: the same page files, minus every shared file that lab's lock
+#   pins (Board, Results, Archive, Graphic, the libraries, the logos), which
+#   reach those labs only by shared-sync from here. The pull request is merged
+#   here when every check on it passes, then that lab's publish is started; a
+#   red check leaves it open and this run red.
+#
+# Dispatched with `zip_url`, it takes that zip for `site` instead of the fixed
+# URL. A zip whose pages already match main, or whose branch already exists,
+# opens nothing. It fetches no odds, spends no credit, edits no policy and
+# places no bet.
 
 on:
   workflow_dispatch:
     inputs:
       zip_url:
-        description: Public URL of the drop (a zip, or a tarball of drop-staging/)
+        description: Public URL of a drop to take instead of the fixed URL (a zip, or a tarball of drop-staging/)
         required: false
         default: ""
+      site:
+        description: Which lab a zip_url drop is for (ignored without zip_url)
+        required: false
+        default: nhl
+        type: choice
+        options: [nhl, epl, cbb]
       slug:
-        description: Short name for the branch
+        description: Short name for the branch, when the drop's MANIFEST.json names none
         required: false
         default: drop
   schedule:
@@ -36,19 +58,25 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: design-drop-intake
-  cancel-in-progress: false
-
 jobs:
   intake:
-    name: Open a drop from a zip
+    name: Open the ${{ matrix.site }} drop
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 60
+    concurrency:
+      group: design-drop-intake-${{ matrix.site }}
+      cancel-in-progress: false
+    strategy:
+      fail-fast: false
+      matrix:
+        site: [nhl, epl, cbb]
     env:
+      SITE: ${{ matrix.site }}
+      DROP_BASE: https://cold-forest-6e14.cooperross399.workers.dev/drop
       TOKEN: ${{ secrets.DESIGN_DROP_TOKEN }}
       GH_TOKEN: ${{ secrets.DESIGN_DROP_TOKEN }}
-      ZIP_URL: ${{ inputs.zip_url || vars.DESIGN_DROP_INBOX_URL }}
+      ZIP_URL: ${{ inputs.zip_url }}
+      ZIP_SITE: ${{ inputs.site || 'nhl' }}
       SLUG: ${{ inputs.slug || 'drop' }}
     steps:
       - uses: actions/checkout@v4
@@ -62,12 +90,11 @@ jobs:
           python-version: "3.12"
 
       - name: Unpack the drop and open it
+        id: open
         run: |
-          if [ -z "$ZIP_URL" ] && [ -f .github/design-drop-inbox.url ]; then
-            ZIP_URL=$(head -n1 .github/design-drop-inbox.url | tr -d '[:space:]')
-          fi
-          if [ -z "$ZIP_URL" ]; then
-            echo "No zip_url given and DESIGN_DROP_INBOX_URL is not set: nothing to take in."
+          set -eu
+          if [ -n "$ZIP_URL" ] && [ "$ZIP_SITE" != "$SITE" ]; then
+            echo "zip_url is for $ZIP_SITE: nothing to take in for $SITE."
             exit 0
           fi
           if [ -z "$TOKEN" ]; then
@@ -75,32 +102,110 @@ jobs:
             exit 1
           fi
           zip="$RUNNER_TEMP/drop.zip"
-          curl -fsSL --max-filesize 52428800 --retry 3 -o "$zip" "$ZIP_URL"
-          hash=$(sha256sum "$zip" | cut -c1-8)
-          if git ls-remote --heads origin | grep -q "refs/heads/design/.*-$hash\$"; then
-            echo "A drop from this zip ($hash) is already open."
+          if [ -n "$ZIP_URL" ]; then
+            curl -fsSL --max-filesize 52428800 --retry 3 -o "$zip" "$ZIP_URL"
+            sha=$(sha256sum "$zip" | cut -c1-64)
+          else
+            code=$(curl -sS --retry 3 -o "$RUNNER_TEMP/meta.json" -w '%{http_code}' "$DROP_BASE/$SITE/meta")
+            if [ "$code" = 404 ]; then
+              echo "No drop stored for $SITE."
+              exit 0
+            fi
+            if [ "$code" != 200 ]; then
+              echo "::error::$DROP_BASE/$SITE/meta answered $code."
+              exit 1
+            fi
+            sha=$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["sha256"])' "$RUNNER_TEMP/meta.json")
+          fi
+
+          # The lab the drop is for: this checkout, or a clone of the other lab.
+          if [ "$SITE" = nhl ]; then
+            repo="$GITHUB_REPOSITORY"
+            target="$GITHUB_WORKSPACE"
+            skip=""
+          else
+            repo="cooperross399/$SITE-betting-lab"
+            target="$RUNNER_TEMP/target"
+            git clone --quiet "https://x-access-token:${TOKEN}@github.com/${repo}.git" "$target"
+            skip="--skip-locked"
+          fi
+          seen="$target/.design-drops/seen.txt"
+          if [ -f "$seen" ] && grep -qx "$sha" "$seen"; then
+            echo "Drop $sha for $SITE was already opened."
             exit 0
           fi
-          slug=$(printf '%s' "$SLUG" | tr 'A-Z' 'a-z' | tr -cs 'a-z0-9' '-' | sed 's/^-*//; s/-*$//' | cut -c1-40)
+          if [ -z "$ZIP_URL" ]; then
+            curl -fsSL --max-filesize 52428800 --retry 3 -o "$zip" "$DROP_BASE/$SITE"
+            got=$(sha256sum "$zip" | cut -c1-64)
+            if [ "$got" != "$sha" ]; then
+              echo "::error::The $SITE zip downloaded as $got, not the $sha /meta names (a drop uploaded mid-run?). The next hour takes it."
+              exit 1
+            fi
+          fi
+          hash=${sha:0:8}
+          if git -C "$target" ls-remote --heads origin | grep -q "refs/heads/design/.*-$hash\$"; then
+            echo "A drop from this zip ($hash) is already open in $repo."
+            exit 0
+          fi
+          slug=$(python scripts/design_drop.py slug --zip "$zip")
+          if [ -z "$slug" ]; then
+            slug=$(printf '%s' "$SLUG" | tr 'A-Z' 'a-z' | tr -cs 'a-z0-9' '-' | sed 's/^-*//; s/-*$//' | cut -c1-40)
+          fi
           branch="design/$(date -u +%F)-${slug:-drop}-$hash"
+          cd "$target"
           git checkout --quiet -b "$branch"
-          python scripts/design_drop.py intake --zip "$zip"
+          python "$GITHUB_WORKSPACE/scripts/design_drop.py" intake --zip "$zip" --root "$target" $skip
           git add web
           if git diff --cached --quiet; then
-            echo "The zip's pages already match main: nothing to drop."
+            echo "The zip's pages already match main in $repo: nothing to drop."
             exit 0
           fi
           # A drop built on an old copy of a page would undo what changed
           # since; refuse it rather than open a pull request that merges itself.
           changed=$(git diff --cached --name-only)
-          if ! python scripts/design_drop.py stale $changed; then
+          if ! python "$GITHUB_WORKSPACE/scripts/design_drop.py" stale --root "$target" $changed; then
             echo "::error::This drop was built on old copies of the pages above. Ask Claude Design to rebuild them from main's current files and republish."
             exit 1
           fi
+          mkdir -p .design-drops
+          echo "$sha" >> .design-drops/seen.txt
+          git add .design-drops/seen.txt
           git config user.name "design-drop[bot]"
           git config user.email "design-drop@users.noreply.github.com"
           git commit --quiet -m "Pages from Claude Design ($slug, $hash)"
           git push --quiet origin "HEAD:refs/heads/$branch"
-          gh pr create -R "$GITHUB_REPOSITORY" --base main --head "$branch" \
-            --title "Claude Design: ${slug:-drop}" \
-            --body "Opened by Design Drop Intake from a zipped Claude Design drop ($hash). Design Drop Guard holds it to page files; Design Drop merges it on green and fans it out. Fetches no odds, spends no credit, places no bet."
+          if [ "$SITE" = nhl ]; then
+            how="Design Drop Guard holds it to page files; Design Drop merges it on green and fans it out."
+          else
+            how="Shared pages are left to shared-sync from nhl-betting-lab. Design Drop Intake there merges it when every check passes."
+          fi
+          url=$(gh pr create -R "$repo" --base main --head "$branch" \
+                  --title "Claude Design: ${slug:-drop}" \
+                  --body "Opened by nhl-betting-lab's Design Drop Intake from the $SITE drop at $DROP_BASE/$SITE (sha256 $sha), recorded in .design-drops/seen.txt. $how Fetches no odds, spends no credit, places no bet.")
+          echo "Opened $url" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "pr=$url" >> "$GITHUB_OUTPUT"
+          echo "repo=$repo" >> "$GITHUB_OUTPUT"
+
+      - name: Merge the other lab's drop on green
+        if: matrix.site != 'nhl' && steps.open.outputs.pr != ''
+        env:
+          PR: ${{ steps.open.outputs.pr }}
+          REPO: ${{ steps.open.outputs.repo }}
+        run: |
+          for _ in $(seq 1 40); do
+            n=$(gh pr checks "$PR" --json name --jq length 2>/dev/null || echo 0)
+            [ "${n:-0}" -gt 0 ] && break
+            sleep 15
+          done
+          if [ "${n:-0}" -eq 0 ]; then
+            echo "::error::No check ever started on $PR; it is left open."
+            exit 1
+          fi
+          if ! gh pr checks "$PR" --watch --interval 30; then
+            echo "::error::A check failed on $PR; it is left open."
+            exit 1
+          fi
+          sha=$(gh pr view "$PR" --json headRefOid --jq .headRefOid)
+          gh pr merge "$PR" --squash --match-head-commit "$sha" --delete-branch
+          echo "Merged $PR." | tee -a "$GITHUB_STEP_SUMMARY"
+          gh workflow run publish-board.yml -R "$REPO" --ref main
