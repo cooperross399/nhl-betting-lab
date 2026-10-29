@@ -1,5 +1,5 @@
 {
-  "_about": "Hand-kept inputs for the Hart, Norris and Selke trackers on the Season page. Each award holds a list of published award odds, one block per book or prediction market (American prices as quoted on a public odds article, or a prediction market's chance in percent; never read off a sportsbook site, never logged in), averaged into one consensus after each source's margin is removed and the latest media poll. Every block names its source URL and the date the source gives. Update both by hand; a block older than 14 days is flagged stale on the page. Leave poll null when no poll has been published, and the page says 'no poll yet'. Names must match the NHL's spelling so the model signal can find the player.",
+  "_about": "Hand-kept inputs for the Hart, Norris, Selke, Vezina and Calder trackers on the Season page. Each award holds a list of published award odds, one block per book or prediction market (American prices as quoted on a public odds article, or a prediction market's chance in percent; never read off a sportsbook site, never logged in), averaged into one consensus after each source's margin is removed and the latest media poll. Every block names its source URL and the date the source gives. Update both by hand; a block older than 14 days is flagged stale on the page. Leave poll null when no poll has been published, and the page says 'no poll yet'. Names must match the NHL's spelling so the model signal can find the player.",
   "hart": {
     "odds": [
       {
@@ -355,6 +355,195 @@
         {"name": "Mitch Marner", "team": "VGK", "points": 1, "firstPlace": 1},
         {"name": "Anthony Cirelli", "team": "TBL", "points": 1, "firstPlace": 1},
         {"name": "Jordan Staal", "team": "CAR", "points": 1, "firstPlace": 1}
+      ]
+    }
+  },
+  "vezina": {
+    "odds": [
+      {
+        "book": "DraftKings",
+        "date": "2026-10-26",
+        "source": "SportsBettingDime, Vezina Trophy odds (odds as of Oct 26, page updated Oct 27)",
+        "url": "https://www.sportsbettingdime.com/nhl/futures/vezina-trophy-odds/",
+        "lines": [
+          {"name": "Jeremy Swayman", "team": "BOS", "american": 500},
+          {"name": "Jake Oettinger", "team": "DAL", "american": 550},
+          {"name": "Jesper Wallstedt", "team": "MIN", "american": 600},
+          {"name": "Logan Thompson", "team": "WSH", "american": 750},
+          {"name": "Connor Hellebuyck", "team": "WPG", "american": 900},
+          {"name": "Ilya Sorokin", "team": "NYI", "american": 1000},
+          {"name": "Andrei Vasilevskiy", "team": "TBL", "american": 1000},
+          {"name": "Linus Ullmark", "american": 1000},
+          {"name": "Jet Greaves", "american": 3000},
+          {"name": "Karel Vejmelka", "team": "UTA", "american": 3000},
+          {"name": "Brandon Bussi", "team": "CAR", "american": 3500},
+          {"name": "Jacob Markstrom", "team": "FLA", "american": 4000},
+          {"name": "Sergei Bobrovsky", "american": 4000},
+          {"name": "Mackenzie Blackwood", "american": 4000},
+          {"name": "Yaroslav Askarov", "american": 5000},
+          {"name": "Lukas Dostal", "american": 5000},
+          {"name": "Jakub Dobes", "team": "MTL", "american": 6000},
+          {"name": "Juuse Saros", "american": 6000},
+          {"name": "Jordan Binnington", "american": 8000}
+        ]
+      },
+      {
+        "book": "bet365",
+        "date": "2026-10-27",
+        "source": "canadasportsbetting.ca, Vezina Trophy odds (page updated Oct 27; table captioned Oct 28, 'odds courtesy of bet365')",
+        "url": "https://www.canadasportsbetting.ca/betting-odds/nhl/awards/best-goalie/",
+        "lines": [
+          {"name": "Jeremy Swayman", "team": "BOS", "american": 500},
+          {"name": "Jesper Wallstedt", "team": "MIN", "american": 600},
+          {"name": "Logan Thompson", "team": "WSH", "american": 800},
+          {"name": "Ilya Sorokin", "team": "NYI", "american": 1100},
+          {"name": "Linus Ullmark", "american": 1100},
+          {"name": "Brandon Bussi", "team": "CAR", "american": 3500},
+          {"name": "Jet Greaves", "american": 3500},
+          {"name": "Mackenzie Blackwood", "american": 3500},
+          {"name": "Karel Vejmelka", "team": "UTA", "american": 4500},
+          {"name": "Jacob Fowler", "american": 5000},
+          {"name": "Jacob Markstrom", "team": "FLA", "american": 5000},
+          {"name": "Scott Wedgewood", "american": 5000},
+          {"name": "Sergei Bobrovsky", "american": 5000},
+          {"name": "Dylan Garand", "american": 5500},
+          {"name": "Lukas Dostal", "american": 5500},
+          {"name": "Dan Vladar", "team": "PHI", "american": 6000},
+          {"name": "Darcy Kuemper", "american": 6000},
+          {"name": "Joel Hofer", "american": 6000},
+          {"name": "Yaroslav Askarov", "american": 6000},
+          {"name": "Carter Hart", "team": "VGK", "american": 6600},
+          {"name": "Jakub Dobes", "team": "MTL", "american": 6600},
+          {"name": "Juuse Saros", "american": 6600},
+          {"name": "Spencer Knight", "american": 6600},
+          {"name": "Jake Allen", "american": 8000},
+          {"name": "Alex Lyon", "american": 10000},
+          {"name": "Anthony Stolarz", "american": 10000},
+          {"name": "Dustin Wolf", "american": 10000},
+          {"name": "Filip Gustavsson", "american": 10000},
+          {"name": "Frederik Andersen", "american": 10000},
+          {"name": "Joey Daccord", "american": 10000},
+          {"name": "John Gibson", "american": 10000},
+          {"name": "Philipp Grubauer", "american": 10000},
+          {"name": "Stuart Skinner", "american": 10000},
+          {"name": "Ukko-Pekka Luukkonen", "american": 10000},
+          {"name": "Adin Hill", "american": 15000},
+          {"name": "Arturs Silovs", "american": 15000},
+          {"name": "Elvis Merzlikins", "american": 15000},
+          {"name": "Kevin Lankinen", "american": 15000},
+          {"name": "Thatcher Demko", "american": 15000},
+          {"name": "Tristan Jarry", "american": 15000},
+          {"name": "Devin Cooley", "american": 25000}
+        ]
+      }
+    ],
+    "poll": {
+      "outlet": "NHL.com Trophy Tracker",
+      "date": "2026-10-08",
+      "voters": 16,
+      "scoring": "5-4-3-2-1 points for a voter's first to fifth choice",
+      "url": "https://www.nhl.com/news/trophy-tracker-vezina-lightning-andrei-vasilevskiy-early-choice-as-top-goalie",
+      "entries": [
+        {"name": "Andrei Vasilevskiy", "team": "TBL", "points": 64, "firstPlace": 6},
+        {"name": "Logan Thompson", "team": "WSH", "points": 48, "firstPlace": 5},
+        {"name": "Ilya Sorokin", "team": "NYI", "points": 41, "firstPlace": 2},
+        {"name": "Jake Oettinger", "team": "DAL", "points": 25, "firstPlace": 2},
+        {"name": "Jeremy Swayman", "team": "BOS", "points": 14, "firstPlace": 0},
+        {"name": "Igor Shesterkin", "team": "NYR", "points": 12, "firstPlace": 0},
+        {"name": "Brandon Bussi", "team": "CAR", "points": 8, "firstPlace": 0},
+        {"name": "Jacob Markstrom", "team": "FLA", "points": 6, "firstPlace": 1},
+        {"name": "Jakub Dobes", "team": "MTL", "points": 5, "firstPlace": 0},
+        {"name": "Carter Hart", "team": "VGK", "points": 5, "firstPlace": 0},
+        {"name": "Connor Hellebuyck", "team": "WPG", "points": 4, "firstPlace": 0},
+        {"name": "Jesper Wallstedt", "team": "MIN", "points": 3, "firstPlace": 0},
+        {"name": "Karel Vejmelka", "team": "UTA", "points": 3, "firstPlace": 0},
+        {"name": "Dan Vladar", "team": "PHI", "points": 2, "firstPlace": 0}
+      ]
+    }
+  },
+  "calder": {
+    "odds": [
+      {
+        "book": "DraftKings",
+        "date": "2026-10-26",
+        "source": "SportsBettingDime, Calder Trophy odds (odds as of Oct 26, page updated Oct 27)",
+        "url": "https://www.sportsbettingdime.com/nhl/futures/calder-trophy-odds/",
+        "lines": [
+          {"name": "Gavin McKenna", "team": "TOR", "american": 280},
+          {"name": "Ivar Stenberg", "team": "SJS", "american": 450},
+          {"name": "Cole Hutson", "team": "WSH", "american": 650},
+          {"name": "Roman Kantserov", "american": 900},
+          {"name": "Porter Martone", "team": "PHI", "american": 1000},
+          {"name": "Anton Frondell", "team": "CHI", "american": 1200},
+          {"name": "Dylan Garand", "american": 1200},
+          {"name": "James Hagens", "team": "BOS", "american": 1300},
+          {"name": "Jacob Fowler", "american": 1600},
+          {"name": "Viggo Bjorck", "team": "WPG", "american": 3000},
+          {"name": "TJ Hughes", "american": 3000},
+          {"name": "Konsta Helenius", "team": "BUF", "american": 4000},
+          {"name": "Ilya Protas", "team": "WSH", "american": 4000},
+          {"name": "Victor Eklund", "team": "NYI", "american": 6500},
+          {"name": "Tij Iginla", "american": 8000},
+          {"name": "Chase Reid", "american": 8000},
+          {"name": "Adam Jiricek", "american": 8000},
+          {"name": "Caleb Desnoyers", "american": 10000},
+          {"name": "Roger McQueen", "team": "ANA", "american": 10000},
+          {"name": "Artur Akhtyamov", "american": 10000},
+          {"name": "Keaton Verhoeff", "american": 10000},
+          {"name": "Brady Martin", "american": 15000}
+        ]
+      },
+      {
+        "book": "Sports Interaction",
+        "date": "2026-10-29",
+        "source": "canadasportsbetting.ca, Calder Trophy odds (page and table updated Oct 29)",
+        "url": "https://www.canadasportsbetting.ca/betting-odds/nhl/awards/rookie-of-the-year.html",
+        "lines": [
+          {"name": "Gavin McKenna", "team": "TOR", "american": 230},
+          {"name": "Jacob Fowler", "american": 400},
+          {"name": "Ivar Stenberg", "team": "SJS", "american": 450},
+          {"name": "Cole Hutson", "team": "WSH", "american": 800},
+          {"name": "Roman Kantserov", "american": 900},
+          {"name": "Trevor Connelly", "american": 950},
+          {"name": "James Hagens", "team": "BOS", "american": 1100},
+          {"name": "Michael Brandsegg-Nygard", "american": 1300},
+          {"name": "Porter Martone", "team": "PHI", "american": 1400},
+          {"name": "Anton Frondell", "team": "CHI", "american": 1500},
+          {"name": "Dylan Garand", "american": 2000},
+          {"name": "Viggo Bjorck", "team": "WPG", "american": 3000},
+          {"name": "Ilya Protas", "team": "WSH", "american": 5000},
+          {"name": "Konsta Helenius", "team": "BUF", "american": 5000},
+          {"name": "Carter Yakemchuk", "american": 8000},
+          {"name": "Sergei Murashov", "team": "PIT", "american": 8000},
+          {"name": "Victor Eklund", "team": "NYI", "american": 8000},
+          {"name": "Nikita Klepov", "american": 10000},
+          {"name": "Roger McQueen", "team": "ANA", "american": 10000},
+          {"name": "Alberts Smits", "team": "NYR", "american": 15000},
+          {"name": "Jake O'Brien", "american": 20000},
+          {"name": "Oliver Bonk", "american": 30000}
+        ]
+      }
+    ],
+    "poll": {
+      "outlet": "NHL.com Trophy Tracker",
+      "date": "2026-10-05",
+      "voters": 16,
+      "scoring": "5-4-3-2-1 points for a voter's first to fifth choice",
+      "url": "https://www.nhl.com/news/trophy-tracker-flyers-porter-martone-preseason-choice-for-calder-trophy-as-top-rookie",
+      "entries": [
+        {"name": "Porter Martone", "team": "PHI", "points": 70, "firstPlace": 9},
+        {"name": "Gavin McKenna", "team": "TOR", "points": 59, "firstPlace": 5},
+        {"name": "Ivar Stenberg", "team": "SJS", "points": 34, "firstPlace": 1},
+        {"name": "Cole Hutson", "team": "WSH", "points": 34, "firstPlace": 1},
+        {"name": "Anton Frondell", "team": "CHI", "points": 18, "firstPlace": 0},
+        {"name": "Konsta Helenius", "team": "BUF", "points": 8, "firstPlace": 0},
+        {"name": "James Hagens", "team": "BOS", "points": 6, "firstPlace": 0},
+        {"name": "Ilya Protas", "team": "WSH", "points": 4, "firstPlace": 0},
+        {"name": "Alberts Smits", "team": "NYR", "points": 2, "firstPlace": 0},
+        {"name": "Viggo Bjorck", "team": "WPG", "points": 2, "firstPlace": 0},
+        {"name": "Victor Eklund", "team": "NYI", "points": 1, "firstPlace": 0},
+        {"name": "Sergei Murashov", "team": "PIT", "points": 1, "firstPlace": 0},
+        {"name": "Roger McQueen", "team": "ANA", "points": 1, "firstPlace": 0}
       ]
     }
   }
