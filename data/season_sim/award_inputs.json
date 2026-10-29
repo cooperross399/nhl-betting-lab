@@ -56,31 +56,21 @@
   },
   "norris": {
     "odds": {
-      "book": "DraftKings",
-      "date": "2026-10-26",
-      "source": "SportsBettingDime, Norris Trophy odds (odds as of Oct 26, page updated Oct 27)",
-      "url": "https://www.sportsbettingdime.com/nhl/futures/norris-trophy-odds/",
+      "book": "BET99",
+      "date": "2026-10-29",
+      "source": "Covers, Norris Trophy odds (odds as of 10-29, page updated Oct 29, 2026, 08:14 AM ET)",
+      "url": "https://www.covers.com/nhl/norris-trophy-odds",
       "lines": [
-        {"name": "Evan Bouchard", "team": "EDM", "american": 175},
-        {"name": "Cale Makar", "team": "COL", "american": 400},
-        {"name": "Quinn Hughes", "team": "MIN", "american": 400},
-        {"name": "Lane Hutson", "team": "MTL", "american": 900},
-        {"name": "Zach Werenski", "team": "CBJ", "american": 1000},
-        {"name": "Rasmus Dahlin", "team": "BUF", "american": 1200},
+        {"name": "Evan Bouchard", "team": "EDM", "american": 150},
+        {"name": "Quinn Hughes", "team": "MIN", "american": 320},
+        {"name": "Cale Makar", "team": "COL", "american": 500},
+        {"name": "Lane Hutson", "team": "MTL", "american": 1200},
         {"name": "Matthew Schaefer", "team": "NYI", "american": 1400},
-        {"name": "Adam Fox", "team": "NYR", "american": 2000},
-        {"name": "Moritz Seider", "team": "DET", "american": 2500},
-        {"name": "Jake Sanderson", "team": "OTT", "american": 3000},
-        {"name": "Miro Heiskanen", "team": "DAL", "american": 4000},
-        {"name": "Charlie McAvoy", "team": "BOS", "american": 4000},
-        {"name": "Jackson LaCombe", "team": "ANA", "american": 4000},
-        {"name": "Roman Josi", "team": "NSH", "american": 5000},
-        {"name": "Josh Morrissey", "team": "WPG", "american": 5000},
-        {"name": "Jakob Chychrun", "team": "WSH", "american": 5000},
-        {"name": "Darren Raddysh", "team": "TOR", "american": 6000},
-        {"name": "Mikhail Sergachev", "team": "UTA", "american": 6000},
-        {"name": "John Carlson", "team": "TBL", "american": 10000},
-        {"name": "Victor Hedman", "team": "TBL", "american": 10000}
+        {"name": "Zach Werenski", "team": "CBJ", "american": 1400},
+        {"name": "Rasmus Dahlin", "team": "BUF", "american": 1600},
+        {"name": "Adam Fox", "team": "NYR", "american": 1600},
+        {"name": "Cole Hutson", "team": "WSH", "american": 2900},
+        {"name": "Jake Sanderson", "team": "OTT", "american": 3000}
       ]
     },
     "poll": {
@@ -107,8 +97,8 @@
   "selke": {
     "odds": {
       "book": "Sports Interaction",
-      "date": "2026-10-21",
-      "source": "canadasportsbetting.ca, Selke Trophy odds (page updated Oct 21; table captioned Oct 26)",
+      "date": "2026-10-29",
+      "source": "canadasportsbetting.ca, Selke Trophy odds (page updated Oct 29; table captioned 'last updated on Oct 29, 2026')",
       "url": "https://www.canadasportsbetting.ca/betting-odds/nhl/awards/selke-trophy/",
       "lines": [
         {"name": "Aleksander Barkov", "team": "FLA", "american": 175},
