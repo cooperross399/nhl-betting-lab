@@ -477,11 +477,13 @@ class Component extends DCLogic {
     const vt = (tr && tr.voted) || null;
     const voted = vt ? ["hart", "norris", "selke"].filter((k) => vt[k] && vt[k].rows && vt[k].rows.length).map((k) => {
       const a = vt[k], w = a.weights || {};
-      const parts = [["market", "book"], ["poll", "poll"], ["model", "model"]].filter(([key]) => w[key] > 0).map(([key, word]) => `${word} ${Math.round(w[key] * 100)}%`);
-      const oldest = Math.max(...(a.sources || []).map((src) => (src.ageDays == null ? Infinity : src.ageDays)));
+      const counted = (a.sources || []).filter((src) => src.used !== false);
+      const oldest = Math.max(...counted.map((src) => (src.ageDays == null ? Infinity : src.ageDays)));
+      const books = (a.sources || []).filter((src) => src.kind === "odds" && src.used !== false).length;
+      const parts = [["market", books > 1 ? `${books}-source odds consensus` : "book"], ["poll", "poll"], ["model", "model"]].filter(([key]) => w[key] > 0).map(([key, word]) => `${word} ${Math.round(w[key] * 100)}%`);
       const sources = (a.sources || []).map((src) => ({
         label: src.kind === "odds"
-          ? `Odds: ${src.book || "a book"}${src.source ? ` via ${src.source}` : ""}, ${day(src.date)}${src.stale ? ` · stale, ${src.ageDays} d old` : ""} ·`
+          ? `Odds: ${src.book || "a book"}${src.source ? ` via ${src.source}` : ""}, ${day(src.date)}${src.used === false ? ` · ${src.ageDays} d old, not in the consensus` : src.stale ? ` · stale, ${src.ageDays} d old` : ""} ·`
           : `Poll: ${src.outlet}, ${day(src.date)}${src.voters ? `, ${src.voters} voters` : ""}${src.scoring ? ` (${src.scoring})` : ""}${src.stale ? ` · stale, ${src.ageDays} d old` : ""} ·`,
         href: src.url || "", link: src.url ? "source" : "",
       }));

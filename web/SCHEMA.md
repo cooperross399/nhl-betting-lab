@@ -149,7 +149,10 @@ trophies           each award's leading candidates by the share of simulated sea
                    from the hand-kept data/season_sim/award_inputs.json; null when that file is missing. Each:
                    {label, rows[≤10], weights:{market, poll, model}, sources[], noPoll, stale, modelNote}
     rows[]         {name, team, tracker, market, poll, model, odds, pollRank, pollPoints, projP}
-                   market   the book's implied probability with its margin removed (normalised over the listed field)
+                   market   the odds consensus: each book's or prediction market's implied probability with its own
+                            margin removed (normalised over its listed field), averaged across the sources (a player a
+                            source does not list counts 0), renormalised; a source over 14 days old sits out while a
+                            fresher one exists
                    poll     the player's points over the poll's total (a winner-only poll counts a vote as a point)
                    model    this season's stats over the field (awards.award_stats: NHL and MoneyPuck rates blended
                             with last season's by games played, shift-chart defence ratings when the card's ratings
@@ -159,13 +162,14 @@ trophies           each award's leading candidates by the share of simulated sea
                             A build without those stats falls back to projected points, and the Selke to none (null)
                    tracker  weights.market × market + weights.poll × poll + weights.model × model; a player a signal
                             does not name counts 0 in it. Each signal is null when the award has none
-                   odds     the American price as quoted | null; pollRank/pollPoints | null; projP projected points | null
+                   odds     the longest American price any counted book quotes | null; pollRank/pollPoints | null; projP projected points | null
                    The candidates are the players a book or a poll names, plus the model's top three; rows
                    sorted by tracker.
     weights        0.5 / 0.3 / 0.2, renormalised over the signals the award has (0 for a missing one)
-    sources[]      {kind ("odds"|"poll"), date, url, ageDays, stale (ageDays > 14 or undated), book, source} for odds,
+    sources[]      {kind ("odds"|"poll"), date, url, ageDays, stale (ageDays > 14 or undated), book, source, used (in the
+                    consensus)} for each odds source,
                    {…, outlet, voters, scoring} for a poll. noPoll true prints "no poll yet". stale true when any source
-                   is stale (the page flags it)
+                   the tracker uses is stale (the page flags it)
 method             {sigma, sigmaMode ("fixed"|"shrink"), hfa, tieRate, leagueAvgPts, playoffShrink, playerSigma,
                     ratings: {phWeight, phThrough, phStatus}}  — the engine's calibration, printed on the page;
                    phWeight 0 means the card's ratings were not used and phStatus says why

@@ -67,15 +67,51 @@ def test_the_committed_inputs_name_a_source_and_a_date_for_every_number() -> Non
     data = json.loads(INPUTS.read_text(encoding="utf-8"))
     for award in awards.AWARDS:
         block = data[award]
-        odds = block["odds"]
-        assert odds["url"].startswith("https://") and date.fromisoformat(odds["date"]) and odds["book"]
-        assert odds["lines"] and all(isinstance(x["american"], int) and abs(x["american"]) >= 100 for x in odds["lines"])
+        blocks = awards.odds_blocks(block)
+        assert blocks
+        lines = []
+        for odds in blocks:
+            assert odds["url"].startswith("https://") and date.fromisoformat(odds["date"]) and odds["book"]
+            assert odds["lines"]
+            for x in odds["lines"]:
+                # A book quotes an American price; a prediction market prints a chance.
+                if "american" in x:
+                    assert isinstance(x["american"], int) and abs(x["american"]) >= 100
+                else:
+                    assert isinstance(x["chance"], (int, float)) and 0 < x["chance"] < 100
+            lines += odds["lines"]
         poll = block.get("poll")
         if poll is not None:
             assert poll["url"].startswith("https://") and date.fromisoformat(poll["date"]) and poll["outlet"]
             assert poll["entries"] and all(isinstance(e["points"], int) and e["points"] > 0 for e in poll["entries"])
-        for x in odds["lines"] + (poll or {}).get("entries", []):
-            assert x["name"].strip() and len(x["team"]) == 3
+        # A team is a fallback for a name the projection cannot find; the
+        # projection's team wins, so a source that prints none may leave it out.
+        for x in lines + (poll or {}).get("entries", []):
+            assert x["name"].strip() and len(x.get("team") or "ABC") == 3
+        for x in (poll or {}).get("entries", []):
+            assert len(x["team"]) == 3
+
+
+def test_every_source_loses_its_own_margin_and_the_sources_are_averaged() -> None:
+    awards = _awards()
+    book = dict(book="Book", date="2026-10-25", url="https://example.com/a", lines=[
+        dict(name="Ann Alpha", team="AAA", american=100), dict(name="Bo Beta", team="BBB", american=100)])
+    market = dict(book="Market", date="2026-10-24", url="https://example.com/b", lines=[
+        dict(name="Ann Alpha", team="AAA", chance=60), dict(name="Cy Gamma", team="CCC", chance=40)])
+    old = dict(book="Old", date="2026-09-01", url="https://example.com/c", lines=[
+        dict(name="Dee Delta", team="DDD", american=100)])
+    inputs = {"hart": {"odds": [book, market, old], "poll": None}}
+    tr = awards.tracker("hart", inputs, [], {}, today=date(2026, 10, 26))
+    share = {r["name"]: r["market"] for r in tr["rows"]}
+    # (0.5 + 0.6) / 2, (0.5 + 0) / 2, (0 + 0.4) / 2; the month-old book sits out.
+    assert share == pytest.approx({"Ann Alpha": 0.55, "Bo Beta": 0.25, "Cy Gamma": 0.2})
+    assert [s.get("used") for s in tr["sources"]] == [True, True, False]
+    assert tr["stale"] is False
+    # With nothing fresh, the old prices still count, and the page flags them.
+    stale = awards.tracker("hart", {"hart": {"odds": [old], "poll": None}}, [], {}, today=date(2026, 10, 26))
+    assert stale["rows"][0]["market"] == pytest.approx(1.0) and stale["stale"] is True
+    # The single-block form still reads.
+    assert awards.odds_blocks({"odds": book}) == [book]
 
 
 def test_a_books_odds_lose_their_margin_and_keep_their_order() -> None:
