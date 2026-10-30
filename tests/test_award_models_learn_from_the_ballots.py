@@ -225,12 +225,22 @@ def test_live_markets_join_the_odds_and_replace_the_hand_kept_copy(monkeypatch) 
                 {"title": "Norris Trophy Winner 2025-26", "closed": True, "markets": []},
                 {"title": "James Norris Trophy Winner 2026-27", "slug": "norris-2026-27", "markets": [
                     dict(groupItemTitle=n, outcomePrices=f'["{c}", "0"]') for n, c in (("D1", 0.5), ("D2", 0.3), ("D3", 0.2))]}]})
+        if params["q"].startswith("Selke"):
+            return Resp({"events": [
+                {"title": "NHL Frank J. Selke Trophy Winner", "slug": "nhl-2025-26-frank-j-selke-trophy", "markets": [
+                    dict(groupItemTitle=n, outcomePrices='["0.3", "0.7"]') for n in ("Old1", "Old2", "Old3")]},
+                {"title": "NHL Frank J. Selke Trophy Winner", "slug": "nhl-frank-j-selke-trophy-winner-2026-27",
+                 "markets": [dict(groupItemTitle=n, outcomePrices=f'["{c}", "0"]')
+                             for n, c in (("S1", 0.4), ("S2", 0.35), ("S3", 0.25))]}]})
         return Resp({"events": []})
 
     monkeypatch.setattr(lm.requests, "get", fake_get)
     log: list[str] = []
     live = lm.live_blocks("20262027", date(2026, 10, 30), log=log.append)
-    assert set(live) == {"hart", "norris"}
+    assert set(live) == {"hart", "norris", "selke"}
+    # A season named only in the slug is found, and last season's is not taken.
+    assert live["selke"][0]["url"].endswith("winner-2026-27")
+    assert [x["name"] for x in live["selke"][0]["lines"]] == ["S1", "S2", "S3"]
     assert live["hart"][0]["book"] == "Kalshi" and live["hart"][0]["date"] == "2026-10-30"
     assert [x["chance"] for x in live["hart"][0]["lines"]] == [40.0, 30.0, 20.0]
     assert live["norris"][0]["book"] == "Polymarket" and live["norris"][0]["url"].endswith("norris-2026-27")
