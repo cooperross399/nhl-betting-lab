@@ -192,6 +192,10 @@ def test_kalshi_and_polymarket_lines_are_read_and_a_field_far_past_100_is_left_o
     assert lm._usable([dict(name=str(i), chance=25.0) for i in range(4)])
     assert not lm._usable([dict(name=str(i), chance=60.0) for i in range(4)])  # 240%: separate bets
     assert not lm._usable([dict(name="a", chance=50.0), dict(name="b", chance=50.0)])  # too few players
+    # Wide longshot spreads: the midpoints add far past 100%, the bids do not.
+    wide = {"markets": [dict(yes_sub_title=f"P{i}", yes_bid=b, yes_ask=a, status="active")
+                        for i, (b, a) in enumerate([(35, 37), (25, 27), (15, 17), (1, 40), (1, 40), (1, 40), (1, 40)])]}
+    assert not lm._usable(lm.kalshi_lines(wide)) and lm._usable(lm.kalshi_lines(wide, bids=True))
 
 
 def test_live_markets_join_the_odds_and_replace_the_hand_kept_copy(monkeypatch) -> None:

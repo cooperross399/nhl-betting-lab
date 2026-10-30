@@ -31,7 +31,7 @@ KALSHI_SERIES = {"hart": "KXNHLHART", "norris": "KXNHLNORRIS", "vezina": "KXNHLV
 KALSHI_PAGES = {"hart": "mvp-odds", "norris": "norris-trophy-odds", "vezina": "vezina-trophy-odds",
                 "calder": "rookie-of-the-year-odds", "selke": "awards"}
 TROPHY_NAMES = {"hart": "Hart", "norris": "Norris", "vezina": "Vezina", "calder": "Calder", "selke": "Selke"}
-MIN_TOTAL, MAX_TOTAL = 70.0, 130.0
+MIN_TOTAL, MAX_TOTAL = 70.0, 140.0
 MIN_PLAYERS = 3
 
 
@@ -57,8 +57,12 @@ def _cents(m: dict, key: str) -> float | None:
     return None
 
 
-def kalshi_lines(event: dict) -> list[dict]:
-    """One Kalshi event's open markets as ``[{name, chance}]`` (chance in %)."""
+def kalshi_lines(event: dict, *, bids: bool = False) -> list[dict]:
+    """One Kalshi event's open markets as ``[{name, chance}]`` (chance in %).
+
+    The midpoint of bid and ask by default; with ``bids``, the best bid alone
+    (what a seller can take), for a field whose wide longshot spreads push the
+    midpoints far past 100%."""
     lines = []
     for m in event.get("markets") or []:
         if str(m.get("status", "active")).lower() not in ("active", "open", "initialized"):
@@ -67,7 +71,10 @@ def kalshi_lines(event: dict) -> list[dict]:
         if not name:
             continue
         bid, ask = _cents(m, "yes_bid"), _cents(m, "yes_ask")
-        chance = (bid + ask) / 2 if bid and ask else _cents(m, "last_price")
+        if bids:
+            chance = bid
+        else:
+            chance = (bid + ask) / 2 if bid and ask else _cents(m, "last_price")
         if chance:
             lines.append(dict(name=name, chance=round(chance, 2)))
     return lines
@@ -107,7 +114,12 @@ def fetch_kalshi(award: str, season: str) -> list[dict] | None:
     suffix = f"-{season[6:]}"
     for ev in data.get("events") or []:
         if str(ev.get("event_ticker", "")).upper().endswith(suffix):
-            return kalshi_lines(ev)
+            lines = kalshi_lines(ev)
+            if lines and not _usable(lines):
+                by_bid = kalshi_lines(ev, bids=True)
+                if _usable(by_bid):
+                    return by_bid
+            return lines
     return None
 
 
