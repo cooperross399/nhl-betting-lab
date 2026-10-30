@@ -5,7 +5,7 @@ numbers (final points against the leader's, a playoff berth, ice time, the
 5v5 chances a defender allows, wins, goals saved above expected...). Their
 weights started as judgement. Here they are fitted to the real ballots:
 ``data/season_sim/award_voting.csv`` holds every vote-getter's points for the
-Hart (2008-09 on), Norris (2017-18 on), Selke (three seasons with full
+Hart (2008-09 on), Norris (2017-18 on), Selke (six seasons with full
 ballots), Vezina (2012-13 on) and Calder (2014-15 on), as published by
 Hockey-Reference and the NHL's award releases. Each season's field is rebuilt
 from that season's NHL and MoneyPuck stats (:func:`season_sim.fetch.fetch_history`),
