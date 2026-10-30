@@ -255,14 +255,16 @@ def fit_award_models(cache: Path, voting_path: Path) -> dict | None:
         print(f"::warning::The award models could not be fitted to past ballots ({type(exc).__name__}: {exc}); "
               "they run on the old hand-set weights")
         return None
-    print(f"Award fits: {len(history)} past seasons rebuilt")
+    lines = []
     for award, r in report.items():
         held = r.get("heldOut") or {}
-        print(f"  {award}: {r['used']} weights over {r['seasons']} seasons"
-              + (f"; held-out loss {held['fittedLoss']} fitted v {held['defaultLoss']} old, "
-                 f"winners {held['fittedWinners']} v {held['defaultWinners']}" if held else "")
-              + f"; {r['ballotNamesUnmatched']} of {r['ballotNames']} ballot names unmatched"
-              + (f"; weights {dict(zip(r['features'], r['beta']))}" if r.get("beta") else ""))
+        lines.append(f"{award}: {r['used']} weights over {r['seasons']} seasons"
+                     + (f"; held-out loss {held['fittedLoss']} fitted v {held['defaultLoss']} old, "
+                        f"winners {held['fittedWinners']} v {held['defaultWinners']}" if held else "")
+                     + f"; {r['ballotNamesUnmatched']} of {r['ballotNames']} ballot names unmatched"
+                     + (f"; weights {dict(zip(r['features'], r['beta']))}" if r.get("beta") else ""))
+    # One notice, so the run's summary shows what each award model ran on.
+    print(f"::notice title=Award fits ({len(history)} past seasons rebuilt)::" + "%0A".join(lines))
     return report
 
 
@@ -303,7 +305,10 @@ def main(argv: list[str] | None = None) -> int:
         # Kalshi's and Polymarket's award markets, read live from their open
         # APIs, join each award's odds; a venue that does not answer is skipped.
         try:
-            award_inputs = merge_live(award_inputs, live_blocks(model["season"], datetime.now(timezone.utc).date()))
+            said: list[str] = []
+            award_inputs = merge_live(award_inputs, live_blocks(model["season"], datetime.now(timezone.utc).date(),
+                                                                log=said.append))
+            print("::notice title=Live prediction markets::" + ("%0A".join(said) or "no award market listed"))
         except Exception as exc:  # noqa: BLE001 - the odds already on file still make the ranking
             print(f"::warning::The live prediction markets could not be read ({type(exc).__name__}: {exc})")
     # The voted trackers read the season so far: NHL and MoneyPuck rates, and
@@ -340,12 +345,15 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  {sl['conf']} {sl['label']}: {m['a']} v {m['b']} {m['p']:.0%}")
     for m in site["playoffs"]["finals"][:3]:
         print(f"  Final {m['a']} v {m['b']} {m['p']:.1%}")
+    ranked = []
     for k, tr in (tro.get("voted") or {}).items():
         stale = " (stale inputs)" if tr["stale"] else ""
         kind = f" [{tr.get('modelKind')} model]" if tr.get("modelKind") else ""
-        print(f"  {k} tracker{stale}{kind}: " + ", ".join(
+        ranked.append(f"{k}{stale}{kind}: " + ", ".join(
             f"{r['name']} {r['tracker']:.1%}" + (f" (model {r['model']:.1%})" if r.get("model") is not None else "")
             for r in tr["rows"][:5]))
+    if ranked:
+        print("::notice title=Award rankings::" + "%0A".join(ranked))
     return 0
 
 
