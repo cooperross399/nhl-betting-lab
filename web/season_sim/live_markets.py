@@ -129,7 +129,10 @@ def fetch_polymarket(award: str, season: str) -> tuple[list[dict], str] | None:
     tags = _season_tags(season)
     for ev in data.get("events") or []:
         title = str(ev.get("title") or "")
-        if ev.get("closed") or trophy.lower() not in title.lower() or not any(t in title for t in tags):
+        # The season can sit in the title or only in the slug: the 2026-27
+        # Selke is titled "NHL Frank J. Selke Trophy Winner", slug ...-2026-27.
+        stamp = f"{title} {ev.get('slug') or ''}"
+        if ev.get("closed") or trophy.lower() not in title.lower() or not any(t in stamp for t in tags):
             continue
         return polymarket_lines(ev), str(ev.get("slug") or "")
     return None
