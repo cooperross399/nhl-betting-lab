@@ -38,7 +38,7 @@ def test_the_ballots_on_file_cover_every_award_with_a_clear_winner_each_season()
         assert len(r["season"]) == 8 and int(r["season"][4:]) == int(r["season"][:4]) + 1
         assert int(r["votes"]) > 0 and r["player"].strip()
         seasons.setdefault(r["award"], set()).add(r["season"])
-    assert {a: len(s) for a, s in seasons.items()} == {"hart": 18, "norris": 9, "selke": 3, "vezina": 14, "calder": 12}
+    assert {a: len(s) for a, s in seasons.items()} == {"hart": 18, "norris": 9, "selke": 6, "vezina": 14, "calder": 12}
     winners = {}
     voting = af.load_voting(VOTING)
     for award, by in voting.items():
@@ -51,6 +51,9 @@ def test_the_ballots_on_file_cover_every_award_with_a_clear_winner_each_season()
     assert winners[("hart", "20242025")] == "Connor Hellebuyck"
     assert winners[("norris", "20232024")] == "Quinn Hughes"
     assert winners[("selke", "20222023")] == "Patrice Bergeron"
+    assert winners[("selke", "20252026")] == "Nick Suzuki"
+    assert winners[("selke", "20212022")] == "Patrice Bergeron"
+    assert winners[("selke", "20232024")] == "Aleksander Barkov"
     assert winners[("vezina", "20212022")] == "Igor Shesterkin"
     assert winners[("calder", "20232024")] == "Connor Bedard"
 
