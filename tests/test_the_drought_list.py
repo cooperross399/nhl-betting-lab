@@ -440,7 +440,7 @@ def test_the_section_is_a_list_with_no_units_no_stakes_and_one_headline_line():
 
     assert dr.SECTION_TITLE == "Due List" and "Drought rule" not in text
     assert "Assist Man" in section and "+170" in section and "DraftKings" in section and "over 0.5" in section
-    assert "| 5 (both) | tier 3 / surprise 5 | 1 in 32 for him | - | - | band 60+ @3: +10.5% over 184 (95% -1.7% to +23.9%) |" in section
+    assert "| 5 (both) | tier 3 / surprise 5 | 1 in 32 for him | - | - | - | - | band 60+ @3: +10.5% over 184 (95% -1.7% to +23.9%) |" in section
     assert "| Test Scorer |" in section and "| no record |" in section
     assert section.splitlines()[2] == "HEADLINE LINE"
     assert "| Units" not in section and "Tier" not in section and "Edge" not in section and "Stake" not in section
