@@ -1,7 +1,7 @@
 """Cooper's Due List, in one place, for the evidence and for the card.
 
 The rule (Cooper, 2026-10-07 evening; it replaces the flat 5-game rule shipped
-that morning in #307): a skater with 70+ points, 25+ goals or 30+ assists LAST
+that morning in #307): a skater with 70+ points, 25+ goals or 60+ assists LAST
 regular season is listed in that category when his current drought (regular-
 season games he dressed for without one in that category, carried across the
 season boundary) reaches EITHER of two bars. The better the player, the
@@ -9,8 +9,9 @@ shorter the drought:
 
 1. The TIER bar, from last season's total in the category (`TIERS`):
    points 100+ -> 3, 85-99 -> 4, 70-84 -> 5; goals 40+ -> 5, 25-39 -> 10;
-   assists 60+ -> 3, 45-59 -> 4, 30-44 -> 5. (Goals until 2026-10-10:
-   30+ to qualify, 40+ -> 3, 35-39 -> 4, 30-34 -> 5, plus the surprise bar.)
+   assists 60+ -> 3. (Goals until 2026-10-10: 30+ to qualify, 40+ -> 3,
+   35-39 -> 4, 30-34 -> 5, plus the surprise bar. Assists until 2026-10-31:
+   30+ to qualify, 60+ -> 3, 45-59 -> 4, 30-44 -> 5.)
 2. The SURPRISE bar (equal surprise, points and assists only:
    `SURPRISE_MARKETS`), from his own prior-season hit rate
    p = (prior-season regular-season games with one or more in the category)
@@ -21,7 +22,11 @@ shorter the drought:
 Each listed row says which bars the drought has reached (`rule`: "tier",
 "surprise" or "both"), his hit rate, the rarity of a streak this long for HIM
 ((1 - p)^drought, and `one_in`: "1 in N for him" from the unrounded figure)
-and the band's measured record from the committed backtest.
+and the band's measured record from the committed backtest. Since
+2026-10-31 it also carries his shots on goal a game during the drought
+against his usual rate (`shots_during_drought`), and the card's own chance of
+the over at the best price (`model_probability`, `model_edge`): information
+beside the row for Cooper's pick, never a filter or a stake.
 
 `scripts/run_drought_rule_backtest.py` measures it against bought prices and
 the Gameday card lists tonight's qualifiers from it. Both call `prepare_logs`
@@ -55,13 +60,16 @@ from nhl_betting_lab.puck_drop import apply_puck_drop_guard
 from nhl_betting_lab.season import clean_text, row_game_date, season_id
 
 #: The base qualifier: last regular season's total in the category.
-THRESHOLDS = {"points": 70, "goals": 25, "assists": 30}
+#: Assists moved from 30+ to 60+ on 2026-10-31 (Cooper, "Yes, 60+ assists
+#: only"): the 30-59 bands lost on two bought seasons and on the list's own
+#: first three weeks; 60+ at 3 was the one assists band that made money.
+THRESHOLDS = {"points": 70, "goals": 25, "assists": 60}
 #: The tier bar: (floor of last season's total, drought that lists him), best
 #: band first. The last floor of each category is the base qualifier.
 TIERS: dict[str, tuple[tuple[int, int], ...]] = {
     "points": ((100, 3), (85, 4), (70, 5)),
     "goals": ((40, 5), (25, 10)),
-    "assists": ((60, 3), (45, 4), (30, 5)),
+    "assists": ((60, 3),),
 }
 #: The surprise bar's level: the smallest drought with (1 - p)^n <= this.
 SURPRISE_LEVEL = 0.05
@@ -70,6 +78,12 @@ SURPRISE_LEVEL = 0.05
 #: drought was the one setting both bought seasons chose, and he kept 40+ at 5.
 SURPRISE_MARKETS = ("points", "assists")
 LINE = 0.5
+#: The shots check (2026-10-31): shots on goal a game during the drought
+#: against his own rate over the games before it, up to this many.
+USUAL_SHOTS_GAMES = 82
+#: Shots ratio cut-offs the card labels and the backtest splits on.
+SHOTS_UP = 1.0
+SHOTS_DOWN = 0.8
 BACKTEST_JSON = "drought_rule_backtest.json"
 SECTION_TITLE = "Due List"
 
@@ -202,6 +216,11 @@ def prepare_logs(logs: pd.DataFrame) -> pd.DataFrame:
     for market in THRESHOLDS:
         logs["drought_" + market] = logs.groupby("player_id")[market].transform(
             lambda s: pd.Series(drought_before(s.values), index=s.index))
+    if "shots_on_goal" in logs.columns:
+        for market in THRESHOLDS:
+            shots = shots_during_drought(logs, market)
+            logs["drought_sog_" + market] = shots["drought_sog"]
+            logs["usual_sog_" + market] = shots["usual_sog"]
     per_game = logs[["player_id", "season_start", *THRESHOLDS]].copy()
     for market in THRESHOLDS:
         per_game["hit_" + market] = (per_game[market] >= 1).astype(int)
@@ -213,8 +232,55 @@ def prepare_logs(logs: pd.DataFrame) -> pd.DataFrame:
     return logs.merge(prior, on=["player_id", "season_start"], how="left")
 
 
+def shots_during_drought(logs: pd.DataFrame, market: str) -> pd.DataFrame:
+    """Shots on goal a game during each row's drought, and his usual rate before it.
+
+    `logs` is sorted by player and date with `drought_<market>` set, as
+    `prepare_logs` leaves it. For a game entered on a drought of d, the
+    drought games are the d before it and the usual games are up to
+    `USUAL_SHOTS_GAMES` before those. NaN when there are none (no drought, or
+    no earlier games). A missing shot count is NaN and left out of both means.
+    """
+    out = pd.DataFrame(index=logs.index, columns=["drought_sog", "usual_sog"], dtype=float)
+    for _, g in logs.groupby("player_id", sort=False):
+        sog = pd.to_numeric(g["shots_on_goal"], errors="coerce").to_numpy(dtype=float)
+        have = ~np.isnan(sog)
+        csum = np.concatenate([[0.0], np.cumsum(np.where(have, sog, 0.0))])
+        cnt = np.concatenate([[0], np.cumsum(have)])
+        d = g["drought_" + market].to_numpy(dtype=int)
+        i = np.arange(len(g))
+        start = i - d
+        lo = np.maximum(0, start - USUAL_SHOTS_GAMES)
+        dn, un = cnt[i] - cnt[start], cnt[start] - cnt[lo]
+        with np.errstate(invalid="ignore", divide="ignore"):
+            out.loc[g.index, "drought_sog"] = np.where(dn > 0, (csum[i] - csum[start]) / np.maximum(dn, 1), np.nan)
+            out.loc[g.index, "usual_sog"] = np.where(un > 0, (csum[start] - csum[lo]) / np.maximum(un, 1), np.nan)
+    return out
+
+
+def shots_ratio(drought_sog, usual_sog) -> float | None:
+    """Drought shots over usual shots; None when either is missing or he usually takes none."""
+    try:
+        d, u = float(drought_sog), float(usual_sog)
+    except (TypeError, ValueError):
+        return None
+    if math.isnan(d) or math.isnan(u) or u <= 0:
+        return None
+    return d / u
+
+
+def shots_label(ratio) -> str:
+    """"shots up", "shots steady" or "shots down", by `SHOTS_UP` / `SHOTS_DOWN`; "-" when unknown."""
+    if ratio is None or (isinstance(ratio, float) and math.isnan(ratio)):
+        return "-"
+    if ratio >= SHOTS_UP:
+        return "shots up"
+    return "shots down" if ratio < SHOTS_DOWN else "shots steady"
+
+
 QUALIFIER_COLUMNS = ["player_id", "player", "market", "last_season", "drought",
-                     "tier_bar", "surprise_bar", "hit_rate", "rarity", "one_in", "rule", "band"]
+                     "tier_bar", "surprise_bar", "hit_rate", "rarity", "one_in", "rule", "band",
+                     "drought_sog", "usual_sog"]
 
 
 def qualifiers_entering(logs: pd.DataFrame, day: str) -> pd.DataFrame:
@@ -243,6 +309,8 @@ def qualifiers_entering(logs: pd.DataFrame, day: str) -> pd.DataFrame:
         "date": "9999-12-31", "player_id": names.index, "player": names.to_numpy(),
         "role": "skater", **{market: 1 for market in THRESHOLDS},
     })
+    if "shots_on_goal" in skaters.columns:
+        tonight["shots_on_goal"] = np.nan
     both = pd.concat([skaters[list(tonight.columns)], tonight], ignore_index=True)
     entering = prepare_logs(both)
     entering = entering[entering.game_id == _TONIGHT_GAME_ID]
@@ -255,8 +323,11 @@ def qualifiers_entering(logs: pd.DataFrame, day: str) -> pd.DataFrame:
             found = bars_reached(market, total, hit_rate, drought)
             if found is None:
                 continue
+            shots = {k: (None if pd.isna(v) else round(float(v), 2)) for k, v in (
+                ("drought_sog", getattr(r, "drought_sog_" + market, np.nan)),
+                ("usual_sog", getattr(r, "usual_sog_" + market, np.nan)))}
             rows.append({"player_id": int(r.player_id), "player": r.player, "market": market,
-                         "last_season": total, "drought": drought, **found})
+                         "last_season": total, "drought": drought, **found, **shots})
     return pd.DataFrame(rows, columns=columns)
 
 
@@ -287,6 +358,7 @@ def build_drought_list(
     day: str,
     now: datetime,
     records: Mapping[tuple[str, str], Mapping[str, Any]] | None = None,
+    probabilities: Mapping[tuple, float] | None = None,
 ) -> DroughtList:
     """Tonight's qualifiers with the best staged price each, if any is posted.
 
@@ -297,6 +369,12 @@ def build_drought_list(
     resolves to neither and is listed in `unresolved`. `records` is
     `cell_records(...)`, the band records the committed backtest measured;
     a row whose band has none carries `cell_record` None, never a guess.
+    `probabilities` is the card's own probability map: a priced row carries
+    `model_probability` (the card's chance of the over) and `model_edge`
+    (that chance minus the best price's implied chance), both None when the
+    card has no opinion. Information beside the row, never a filter.
+    Every row also carries `drought_sog` and `usual_sog` (shots on goal a
+    game during the drought and before it) and `shots` (`shots_label`).
     Sorted by category, then rarity (rarest first), then longest drought,
     then name.
     """
@@ -335,19 +413,27 @@ def build_drought_list(
             "hit_rate": float(q.hit_rate), "rarity": float(q.rarity), "one_in": _optional_int(q.one_in),
             "rule": str(q.rule), "band": str(q.band),
             "cell_record": dict(record) if record is not None else None,
+            "drought_sog": q.drought_sog, "usual_sog": q.usual_sog,
+            "shots": shots_label(shots_ratio(q.drought_sog, q.usual_sog)),
             "american_odds": None, "book": "", "heavy_juice": False,
+            "model_probability": None, "model_edge": None,
         })
     guarded = apply_puck_drop_guard(candidates, now=now)
     result.removed_by_guard = len(guarded.quarantined)
     rows = [{k: v for k, v in row.items() if not k.startswith("puck_drop_")} for row in guarded.playable]
 
     best, unresolved = best_over_prices(rows, prices=prices, logs=logs, team_of=team_of,
-                                        playing=playing, team_names=team_names, day=day)
+                                        playing=playing, team_names=team_names, day=day,
+                                        probabilities=probabilities)
     for row in rows:
         priced = best.get((row["player_id"], row["market"]))
         if priced:
-            row["american_odds"], row["book"] = priced
+            row["american_odds"], row["book"] = priced[0], priced[1]
             row["heavy_juice"] = priced[0] < HEAVY_JUICE
+            chance = priced[2] if len(priced) > 2 else None
+            if chance is not None:
+                row["model_probability"] = round(float(chance), 4)
+                row["model_edge"] = round(float(chance) - 1 / _decimal(priced[0]), 4)
     order = {m: i for i, m in enumerate(THRESHOLDS)}
     rows.sort(key=lambda r: (order[r["market"]], r["rarity"], -r["drought"], r["player"]))
     result.rows = rows
@@ -364,10 +450,13 @@ def best_over_prices(
     playing: Mapping[str, tuple[str, str]],
     team_names: Mapping[str, str],
     day: str,
-) -> tuple[dict[tuple[int, str], tuple[float, str]], set[str]]:
+    probabilities: Mapping[tuple, float] | None = None,
+) -> tuple[dict[tuple[int, str], tuple[float, str, float | None]], set[str]]:
     """The best over 0.5 price any book in `prices` quoted for each listed row.
 
-    Returns ({(player id, market): (American odds, book)}, unresolved names).
+    Returns ({(player id, market): (American odds, book, model chance)},
+    unresolved names); the model chance is `probabilities` at that quote's
+    `selection_key`, the first any quote of the selection carries, or None.
     `team_of` is {player id: club} and `playing` {club: (home, away)} for the
     day's games. A price name that matches two players on its game resolves
     to neither and is named in the second element. Never filled in: a row
@@ -381,7 +470,8 @@ def best_over_prices(
         if team in playing and pid in known.index:
             for alias in player_name_aliases(known[pid]):
                 on_game.setdefault(playing[team], {}).setdefault(alias, set()).add(int(pid))
-    best: dict[tuple[int, str], tuple[float, str]] = {}
+    best: dict[tuple[int, str], tuple[float, str, float | None]] = {}
+    chances: dict[tuple[int, str], float] = {}
     unresolved: set[str] = set()
     wanted = {(r["player_id"], r["market"]) for r in rows}
     if prices is not None and not prices.empty and rows:
@@ -406,8 +496,15 @@ def best_over_prices(
             if pd.isna(odds):
                 continue
             key = (next(iter(hit)), market)
+            if probabilities and key not in chances:
+                from nhl_betting_lab.reports.card_pricing import selection_key
+
+                chance = probabilities.get(selection_key(p, market=market, selection="over", line=LINE))
+                if chance is not None and not pd.isna(chance):
+                    chances[key] = float(chance)
             if key not in best or _decimal(float(odds)) > _decimal(best[key][0]):
-                best[key] = (float(odds), clean_text(p.book))
+                best[key] = (float(odds), clean_text(p.book), None)
+    best = {k: (v[0], v[1], chances.get(k)) for k, v in best.items()}
     return best, unresolved
 
 
@@ -535,6 +632,26 @@ def record_text(row: Mapping[str, Any]) -> str:
         return "no record"
     return (f"band {row.get('band')} @{row.get('tier_bar')}: {record['roi'] * 100:+.1f}% over {record['wagers']} "
             f"(95% {record['ci_low'] * 100:+.1f}% to {record['ci_high'] * 100:+.1f}%)")
+
+
+def shots_text(row: Mapping[str, Any]) -> str:
+    """"shots up: 3.4 a game vs 2.9 usual", or "-" when either rate is missing."""
+    d, u = row.get("drought_sog"), row.get("usual_sog")
+    label = shots_label(shots_ratio(d, u))
+    if label == "-":
+        return "-"
+    return f"{label}: {float(d):.1f} a game vs {float(u):.1f} usual"
+
+
+def model_text(row: Mapping[str, Any]) -> str:
+    """"model 41% (+3.2 pts)", or "-" when the card has no opinion on the row."""
+    chance, edge = row.get("model_probability"), row.get("model_edge")
+    if chance is None or (isinstance(chance, float) and np.isnan(chance)):
+        return "-"
+    text = f"model {float(chance) * 100:.0f}%"
+    if edge is not None and not (isinstance(edge, float) and np.isnan(edge)):
+        text += f" ({float(edge) * 100:+.1f} pts)"
+    return text
 
 
 def fingerprint(rows: list[Mapping[str, Any]]) -> str:

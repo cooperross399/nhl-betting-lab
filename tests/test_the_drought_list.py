@@ -43,10 +43,10 @@ def _games(pid, name, season, start, n, *, goals=0, assists=0, game_type=2, role
 def make_logs() -> pd.DataFrame:
     """Last season's hit segment always comes LAST, so each drought entering 2026-27 starts at zero."""
     rows = []
-    # 1: 31 assists in 62 games last season (p = 0.5: surprise bar 5; 30-44 band: tier bar 5), then 5 games
+    # 1: 62 assists in 124 games last season (p = 0.5: surprise bar 5; 60+ band: tier bar 3), then 5 games
     #    this season without one: listed, drought 5, both bars.
-    rows += _games(1, "Assist Man", 20252026, "2025-10-10", 31)
-    rows += _games(1, "Assist Man", 20252026, "2025-11-10", 31, assists=1, offset=31)
+    rows += _games(1, "Assist Man", 20252026, "2025-10-10", 62)
+    rows += _games(1, "Assist Man", 20252026, "2025-12-11", 62, assists=1, offset=62)
     rows += _games(1, "Assist Man", 20262027, "2026-10-01", 5)
     # 2: 32 goals in 64 games (25-39 band: tier bar 10), only 4 games dry: below the bar.
     rows += _games(2, "Four Dry", 20252026, "2025-10-10", 32)
@@ -93,16 +93,15 @@ def test_the_tier_bar_and_its_band_at_every_boundary():
         ("points", 85, 4, "85-99"), ("points", 99, 4, "85-99"), ("points", 100, 3, "100+"), ("points", 153, 3, "100+"),
         ("goals", 24, None, None), ("goals", 25, 10, "25-39"), ("goals", 34, 10, "25-39"),
         ("goals", 39, 10, "25-39"), ("goals", 40, 5, "40+"), ("goals", 64, 5, "40+"),
-        ("assists", 29, None, None), ("assists", 30, 5, "30-44"), ("assists", 44, 5, "30-44"),
-        ("assists", 45, 4, "45-59"), ("assists", 59, 4, "45-59"), ("assists", 60, 3, "60+"),
+        ("assists", 30, None, None), ("assists", 59, None, None), ("assists", 60, 3, "60+"),
     ]
     for market, total, bar, band in cases:
         assert dr.tier_bar(market, total) == bar, (market, total)
         assert dr.band_label(market, total) == band, (market, total)
     assert dr.tier_bar("points", float("nan")) is None and dr.band_label("goals", None) is None
     assert dr.TIERS == {"points": ((100, 3), (85, 4), (70, 5)), "goals": ((40, 5), (25, 10)),
-                        "assists": ((60, 3), (45, 4), (30, 5))}
-    assert dr.THRESHOLDS == {"points": 70, "goals": 25, "assists": 30}
+                        "assists": ((60, 3),)}
+    assert dr.THRESHOLDS == {"points": 70, "goals": 25, "assists": 60}, "assists 30+ until 2026-10-31"
     assert dr.SURPRISE_MARKETS == ("points", "assists"), "goals left the surprise bar on 2026-10-10"
 
 
@@ -143,7 +142,7 @@ def _either_bar_logs() -> pd.DataFrame:
     rows += _games(11, "Tier Only", 20262027, "2026-10-01", 3)
     # 12: 70 points (28 goals in 14 games, then 42 assists in 42) in 76 games, 56 with a point: p = 0.737
     #     (surprise 3); 70-84 band (tier 5). Drought 4 reaches the surprise bar only. His 42 assists
-    #     (p = 0.553: surprise 4; 30-44 band: tier 5) do the same; 28 goals reach the 25-39 bar (10) on a 46-game drought.
+    #     are under the 60+ assists qualifier (since 2026-10-31); 28 goals reach the 25-39 bar (10) on a 46-game drought.
     rows += _games(12, "Surprise Only", 20252026, "2025-10-10", 20)
     rows += _games(12, "Surprise Only", 20252026, "2025-10-30", 14, goals=2, offset=20)
     rows += _games(12, "Surprise Only", 20252026, "2025-11-13", 42, assists=1, offset=34)
@@ -155,7 +154,7 @@ def _either_bar_logs() -> pd.DataFrame:
     rows += _games(13, "Both Bars", 20262027, "2026-10-01", 5)
     # 14 and 15: 70 points (29 goals in 29 games, then 41 assists in 41) in 140 games: p = 0.5 for points
     #     (surprise 5, tier 5), 0.293 for assists (surprise 9, tier 5); 29 goals reach 10 on 45 and 46. Drought 4
-    #     reaches nothing; drought 5 reaches both bars for points and the tier bar alone for assists.
+    #     reaches nothing; drought 5 reaches both bars for points. 41 assists are under the 60+ qualifier.
     for pid, name, dry in ((14, "Neither", 4), (15, "Then Five", 5)):
         rows += _games(pid, name, 20252026, "2025-10-10", 70)
         rows += _games(pid, name, 20252026, "2025-12-19", 29, goals=1, offset=70)
@@ -169,9 +168,9 @@ def test_a_player_is_listed_when_either_bar_is_reached_and_the_rule_names_which(
 
     assert set(zip(q.player_id, q.market, q.rule)) == {
         (11, "points", "tier"), (11, "assists", "tier"),
-        (12, "points", "surprise"), (12, "assists", "surprise"),
+        (12, "points", "surprise"),
         (13, "points", "both"), (13, "assists", "both"),
-        (15, "points", "both"), (15, "assists", "tier"),
+        (15, "points", "both"),
         # 28 and 29 goals clear 25, and none since: droughts of 46, 45 and 46 reach the 25-39 band's bar of 10.
         (12, "goals", "tier"), (14, "goals", "tier"), (15, "goals", "tier"),
     }, "14 (drought 4 in points and assists, every bar at 5 or more) is listed only in goals"
@@ -182,11 +181,10 @@ def test_a_player_is_listed_when_either_bar_is_reached_and_the_rule_names_which(
     assert (surprise_only.tier_bar, surprise_only.surprise_bar, surprise_only.hit_rate, surprise_only.band, surprise_only.rarity) == (
         5, 3, 0.737, "70-84", 0.0048), "0.263^4"
     assert surprise_only.one_in == 209, "1 / (20/76)^4 = 208.5 from the unrounded figure; 1 / 0.0048 would say 208"
-    assert (by.loc[(12, "assists")].tier_bar, by.loc[(12, "assists")].surprise_bar, by.loc[(12, "assists")].hit_rate) == (5, 4, 0.553)
+    assert (12, "assists") not in by.index and (15, "assists") not in by.index, (
+        "42 and 41 assists are under the 60+ assists qualifier (2026-10-31), whatever the drought")
     both = by.loc[(13, "points")]
     assert (both.tier_bar, both.surprise_bar, both.hit_rate, both.rarity, both.one_in) == (3, 3, 0.75, 0.001, 1024), "0.25^5"
-    assert (by.loc[(15, "assists")].tier_bar, by.loc[(15, "assists")].surprise_bar, by.loc[(15, "assists")].band,
-            by.loc[(15, "assists")].drought) == (5, 9, "30-44", 5)
     assert [(by.loc[(pid, "goals")].drought, by.loc[(pid, "goals")].tier_bar, by.loc[(pid, "goals")].band) for pid in (12, 14, 15)] == [
         (46, 10, "25-39"), (45, 10, "25-39"), (46, 10, "25-39")]
     assert all(pd.isna(by.loc[(pid, "goals")].surprise_bar) for pid in (12, 14, 15)), "goals carry no surprise bar"
@@ -213,18 +211,18 @@ def test_one_in_is_computed_from_the_unrounded_figure_not_the_four_dp_rarity():
 
 
 def test_the_hit_rate_and_rarity_count_the_games_he_dressed_for_not_his_teams():
-    rows = _games(21, "Iron Man", 20252026, "2025-10-10", 82, goals=1)  # the team's 82 games, through a teammate
-    # 22 dressed for 60 of them: 15 without an assist, then 45 with one. p = 45/60 = 0.75, not 45/82 = 0.549.
-    rows += _games(22, "Missed Games", 20252026, "2025-10-10", 15)
-    rows += _games(22, "Missed Games", 20252026, "2025-10-25", 45, assists=1, offset=15)
+    rows = _games(21, "Iron Man", 20252026, "2025-10-10", 164, goals=1)  # the team's 164 games, through a teammate
+    # 22 dressed for 120 of them: 30 without an assist, then 90 with one. p = 90/120 = 0.75, not 90/164 = 0.549.
+    rows += _games(22, "Missed Games", 20252026, "2025-10-10", 30)
+    rows += _games(22, "Missed Games", 20252026, "2025-11-09", 90, assists=1, offset=30)
     rows += _games(22, "Missed Games", 20262027, "2026-10-01", 4)
     q = dr.qualifiers_entering(pd.DataFrame(rows), DAY).set_index(["player_id", "market"]).loc[(22, "assists")]
 
-    assert (q.hit_rate, q.surprise_bar, q.tier_bar, q.rule) == (0.75, 3, 4, "both"), "at 45/82 the surprise bar would be 4"
-    assert q.rarity == 0.0039 and q.one_in == 256, "0.25^4; at 45/82 it would be 0.0413"
+    assert (q.hit_rate, q.surprise_bar, q.tier_bar, q.rule) == (0.75, 3, 3, "both"), "at 90/164 the surprise bar would be 4"
+    assert q.rarity == 0.0039 and q.one_in == 256, "0.25^4; at 90/164 it would be 0.0413"
     prepared = dr.prepare_logs(pd.DataFrame(rows)).set_index(["player_id", "season_start"])
-    assert (prepared.loc[(22, 2026), "prior_gp"].iloc[0], prepared.loc[(22, 2026), "prior_hit_assists"].iloc[0]) == (60, 45)
-    assert prepared.loc[(22, 2026), "prior_assists"].iloc[0] == 45 and prepared.loc[(22, 2025), "prior_gp"].isna().all()
+    assert (prepared.loc[(22, 2026), "prior_gp"].iloc[0], prepared.loc[(22, 2026), "prior_hit_assists"].iloc[0]) == (120, 90)
+    assert prepared.loc[(22, 2026), "prior_assists"].iloc[0] == 90 and prepared.loc[(22, 2025), "prior_gp"].isna().all()
 
 
 # -- the list ----------------------------------------------------------------
@@ -233,7 +231,7 @@ def test_the_hit_rate_and_rarity_count_the_games_he_dressed_for_not_his_teams():
 def test_the_qualifiers_are_the_evidences_own_drought_and_last_seasons_totals():
     q = dr.qualifiers_entering(make_logs(), DAY).set_index(["player_id", "market"])
 
-    assert q.loc[(1, "assists"), "drought"] == 5 and q.loc[(1, "assists"), "last_season"] == 31
+    assert q.loc[(1, "assists"), "drought"] == 5 and q.loc[(1, "assists"), "last_season"] == 62
     assert q.loc[(3, "goals"), "drought"] == 5, "3 dry games last season + 2 this season"
     assert q.loc[(4, "points"), "drought"] == 5, "a preseason point is not a regular-season game"
     assert (2, "goals") not in q.index, "4 dry games is below the 25-39 band's bar of 10"
@@ -242,7 +240,7 @@ def test_the_qualifiers_are_the_evidences_own_drought_and_last_seasons_totals():
     assert not any(pid == 9 for pid, _ in q.index), "goalies never qualify"
     assert (1, "points") not in q.index and (1, "goals") not in q.index
     assert list(q.columns) == [c for c in dr.QUALIFIER_COLUMNS if c not in ("player_id", "market")]
-    assert tuple(q.loc[(1, "assists"), ["tier_bar", "surprise_bar", "hit_rate", "rule", "band"]]) == (5, 5, 0.5, "both", "30-44")
+    assert tuple(q.loc[(1, "assists"), ["tier_bar", "surprise_bar", "hit_rate", "rule", "band"]]) == (3, 5, 0.5, "both", "60+")
     assert tuple(q.loc[(4, "assists"), ["tier_bar", "surprise_bar", "rule", "band"]]) == (3, 3, "both", "60+")
 
 
@@ -277,7 +275,7 @@ def test_the_list_publishes_with_not_posted_prices_when_no_book_has_posted():
     assert dr.price_text(result.rows[0]) == "not posted"
     row = result.rows[1]
     assert (row["tier_bar"], row["surprise_bar"], row["hit_rate"], row["rarity"], row["one_in"], row["rule"], row["band"]) == (
-        5, 5, 0.5, 0.0312, 32, "both", "30-44")
+        3, 5, 0.5, 0.0312, 32, "both", "60+")
 
 
 def test_the_team_is_the_rosters_not_the_logs_last_club():
@@ -340,26 +338,27 @@ def test_a_name_two_players_share_resolves_to_neither_and_is_listed_unresolved()
 
 def test_rows_sort_by_category_then_rarest_first_not_longest_drought():
     # 8: 60 assists in 75 games (p = 0.8), 5 dry: rarity 0.2^5 = 0.0003, the rarest streak on the list.
-    # 10: 31 assists in 62 games (p = 0.5), 7 dry (the 8th game is dated DAY: tonight, not history): 0.5^7 = 0.0078.
+    # 10: 62 assists in 124 games (p = 0.5), 7 dry (the 8th game is dated DAY: tonight, not history): 0.5^7 = 0.0078.
     # Assist Man: p = 0.5, 5 dry: 0.0312. A longer drought at a lower hit rate sorts AFTER a shorter, rarer one.
-    # 16: 36 assists in 82 games (p = 0.439), 6 dry: 0.561^6 = 0.03117, which is 0.0312 at 4 dp, the same rarity as
+    # 16: 72 assists in 164 games (p = 0.439), 6 dry: 0.561^6 = 0.03117, which is 0.0312 at 4 dp, the same rarity as
     #     Assist Man's 0.03125. At equal rarity the LONGER drought is listed first (the registered tiebreak).
     extra = (_games(8, "Short Rare", 20252026, "2025-10-10", 15)
              + _games(8, "Short Rare", 20252026, "2025-10-25", 60, assists=1, offset=15)
              + _games(8, "Short Rare", 20262027, "2026-10-01", 5)
-             + _games(10, "Long Dry", 20252026, "2025-10-10", 31)
-             + _games(10, "Long Dry", 20252026, "2025-11-10", 31, assists=1, offset=31)
+             + _games(10, "Long Dry", 20252026, "2025-10-10", 62)
+             + _games(10, "Long Dry", 20252026, "2025-12-11", 62, assists=1, offset=62)
              + _games(10, "Long Dry", 20262027, "2026-10-01", 8)
-             + _games(16, "Tied Rare", 20252026, "2025-10-10", 46)
-             + _games(16, "Tied Rare", 20252026, "2025-11-25", 36, assists=1, offset=46)
+             + _games(16, "Tied Rare", 20252026, "2025-10-10", 92)
+             + _games(16, "Tied Rare", 20252026, "2026-01-10", 72, assists=1, offset=92)
              + _games(16, "Tied Rare", 20262027, "2026-10-01", 6))
     result = build(logs=pd.concat([make_logs(), pd.DataFrame(extra)]), rosters={**ROSTERS, 8: "CGY", 10: "CGY", 16: "CGY"})
 
     assert [(r["market"], r["player"], r["drought"], r["rarity"]) for r in result.rows] == [
+        ("points", "Tied Rare", 6, 0.0312),  # 72 assists are 72 points: listed in points too
         ("goals", "Test Scorer", 5, 0.0189), ("assists", "Short Rare", 5, 0.0003),
         ("assists", "Long Dry", 7, 0.0078), ("assists", "Tied Rare", 6, 0.0312), ("assists", "Assist Man", 5, 0.0312)]
-    assert [r["rule"] for r in result.rows] == ["tier"] + ["both"] * 4
-    assert [r["one_in"] for r in result.rows] == [53, 3125, 128, 32, 32]
+    assert [r["rule"] for r in result.rows] == ["both", "tier"] + ["both"] * 4
+    assert [r["one_in"] for r in result.rows] == [32, 53, 3125, 128, 32, 32]
 
 
 # -- the band's record, read from the backtest ------------------------------
@@ -373,16 +372,17 @@ def _bucket(market, bucket, *, window="card", season="both", wagers=184, roi=0.1
 
 def test_the_cell_record_is_the_bands_card_window_bucket_and_null_when_the_file_lacks_it(tmp_path):
     (tmp_path / dr.BACKTEST_JSON).write_text(json.dumps({"buckets": [
-        _bucket("assists", "TIER 30-44 @5"),
-        _bucket("assists", "TIER 30-44 @5", season="2024", wagers=1), _bucket("assists", "TIER 30-44 @5", window="late", wagers=2),
-        _bucket("assists", "TIER 30-44 ==5", wagers=3), _bucket("assists", "TIER 60+ @4", wagers=4),  # 60+ is @3 today: stale
+        _bucket("assists", "TIER 60+ @3"),
+        _bucket("assists", "TIER 60+ @3", season="2024", wagers=1), _bucket("assists", "TIER 60+ @3", window="late", wagers=2),
+        _bucket("assists", "TIER 60+ ==3", wagers=3), _bucket("assists", "TIER 60+ @4", wagers=4),  # 60+ is @3 today: stale
+        _bucket("assists", "TIER 30-44 @5", wagers=7),  # a band retired on 2026-10-31: stale
         _bucket("points", "TIER 100+ @3", wagers=5, roi=-0.2, lo=-0.5, hi=0.1),
         _bucket("goals", "SHIPPED: either bar", wagers=6),
     ]}))
 
     records = dr.cell_records(tmp_path)
 
-    assert records == {("assists", "30-44"): {"wagers": 184, "roi": 0.105, "ci_low": -0.017, "ci_high": 0.239},
+    assert records == {("assists", "60+"): {"wagers": 184, "roi": 0.105, "ci_low": -0.017, "ci_high": 0.239},
                        ("points", "100+"): {"wagers": 5, "roi": -0.2, "ci_low": -0.5, "ci_high": 0.1}}
     assert dr.cell_records(tmp_path / "nowhere") == {} and dr.cell_records(None, fallback=tmp_path) == records
     (tmp_path / "broken" ).mkdir()
@@ -392,7 +392,7 @@ def test_the_cell_record_is_the_bands_card_window_bucket_and_null_when_the_file_
     rows = {r["player"]: r for r in build(records=records).rows}
     assert rows["Assist Man"]["cell_record"] == {"wagers": 184, "roi": 0.105, "ci_low": -0.017, "ci_high": 0.239}
     assert rows["Test Scorer"]["cell_record"] is None, "goals 40+ has no bucket in this file"
-    assert dr.record_text(rows["Assist Man"]) == "band 30-44 @5: +10.5% over 184 (95% -1.7% to +23.9%)"
+    assert dr.record_text(rows["Assist Man"]) == "band 60+ @3: +10.5% over 184 (95% -1.7% to +23.9%)"
     assert dr.record_text(rows["Test Scorer"]) == "no record"
     assert dr.tier_bucket("60+", 3) == "TIER 60+ @3" and dr.tier_bucket("60+", 3, exactly=True) == "TIER 60+ ==3"
 
@@ -429,7 +429,7 @@ def test_the_row_texts_read_the_bar_the_rarity_and_the_record():
 def test_the_section_is_a_list_with_no_units_no_stakes_and_one_headline_line():
     card = GamedayCard(generated_at=NOW.isoformat(), card_generated=False, blockers=["Stale prices."])
     result = build([quote("Assist Man", "assists", 170, "DraftKings")],
-                   records={("assists", "30-44"): {"wagers": 184, "roi": 0.105, "ci_low": -0.017, "ci_high": 0.239}})
+                   records={("assists", "60+"): {"wagers": 184, "roi": 0.105, "ci_low": -0.017, "ci_high": 0.239}})
     card.drought_built, card.drought_rows = True, result.rows
     card.drought_notes, card.drought_unresolved = ["a note"], ["Somebody (goals, A @ B)"]
     card.drought_headline = "HEADLINE LINE"
@@ -440,7 +440,7 @@ def test_the_section_is_a_list_with_no_units_no_stakes_and_one_headline_line():
 
     assert dr.SECTION_TITLE == "Due List" and "Drought rule" not in text
     assert "Assist Man" in section and "+170" in section and "DraftKings" in section and "over 0.5" in section
-    assert "| 5 (both) | tier 5 / surprise 5 | 1 in 32 for him | band 30-44 @5: +10.5% over 184 (95% -1.7% to +23.9%) |" in section
+    assert "| 5 (both) | tier 3 / surprise 5 | 1 in 32 for him | - | - | band 60+ @3: +10.5% over 184 (95% -1.7% to +23.9%) |" in section
     assert "| Test Scorer |" in section and "| no record |" in section
     assert section.splitlines()[2] == "HEADLINE LINE"
     assert "| Units" not in section and "Tier" not in section and "Edge" not in section and "Stake" not in section
@@ -489,6 +489,45 @@ def test_the_headline_is_read_from_the_shipped_bucket_of_the_backtest_json(tmp_p
 def test_the_committed_backtest_headline_reads_its_file():
     line = dr.backtest_headline(dr.Path(__file__).resolve().parents[1] / "data" / "outputs")
 
-    # The committed JSON's SHIPPED bucket (either bar), card window, both seasons. The flat rule read 69 / 971 / 1804; the either-bar rule with the old goals tiers 311 / 1355 / 2135.
-    assert "points -1.6% over 311 wagers" in line and "goals +3.6% over 537 wagers" in line and "assists -8.6% over 2157 wagers" in line
+    # The committed JSON's SHIPPED bucket (either bar), card window, both seasons. The flat rule read 69 / 971 / 1804; the either-bar rule with the old goals tiers 311 / 1355 / 2135; with 30+ assists (until 2026-10-31) 311 / 537 / 2157.
+    assert "points -1.6% over 311 wagers" in line and "goals +3.6% over 537 wagers" in line and "assists +10.5% over 184 wagers" in line
     assert "unavailable" not in line and "no category's interval sits above zero" in line
+
+
+# -- the shots check and the model's chance (2026-10-31) ----------------------
+
+
+def test_shots_during_the_drought_are_measured_against_his_rate_before_it():
+    # Ten games: a goal and 2 shots in each of the first five, then five dry games at 4 shots.
+    rows = [{"game_id": i, "season": 20252026, "game_type": 2, "date": f"2025-10-{10 + i}", "player_id": 1,
+             "player": "A", "role": "skater", "goals": int(i < 5), "assists": 0, "points": int(i < 5),
+             "shots_on_goal": 2 if i < 5 else 4} for i in range(10)]
+    logs = dr.prepare_logs(pd.DataFrame(rows))
+    last = logs.iloc[-1]
+    assert last.drought_goals == 4 and last.drought_sog_goals == 4.0 and last.usual_sog_goals == 2.0
+    assert math.isnan(logs.iloc[3].drought_sog_goals), "no drought, no drought shots"
+    assert dr.shots_ratio(4.0, 2.0) == 2.0 and dr.shots_ratio(1.0, 0.0) is None and dr.shots_ratio(None, 2.0) is None
+    assert [dr.shots_label(r) for r in (1.0, 0.9, 0.79, None)] == ["shots up", "shots steady", "shots down", "-"]
+    assert dr.shots_text({"drought_sog": 4.0, "usual_sog": 2.0}) == "shots up: 4.0 a game vs 2.0 usual"
+    assert dr.shots_text({"drought_sog": None, "usual_sog": 2.0}) == "-"
+
+
+def test_a_listed_row_carries_its_shots_and_the_cards_own_chance_and_none_is_invented():
+    logs = make_logs()
+    logs["shots_on_goal"] = 3
+    from nhl_betting_lab.reports.card_pricing import selection_key
+
+    q = pd.Series(quote("Assist Man", "assists", 150, "FanDuel"))
+    chance = {selection_key(q, market="assists", selection="over", line=0.5): 0.45}
+    result = build([quote("Assist Man", "assists", 150, "FanDuel"), quote("Assist Man", "assists", 170, "DraftKings"),
+                    quote("Test Scorer", "goals", 300, "X", home="Winnipeg Jets", away="Montreal Canadiens")],
+                   logs=logs, probabilities=chance)
+    by = {r["player"]: r for r in result.rows}
+    man = by["Assist Man"]
+    assert (man["american_odds"], man["model_probability"]) == (170, 0.45)
+    assert man["model_edge"] == round(0.45 - 1 / 2.7, 4), "the gap is to the BEST price"
+    assert (man["drought_sog"], man["usual_sog"], man["shots"]) == (3.0, 3.0, "shots up")
+    assert dr.model_text(man) == f"model 45% ({(0.45 - 1 / 2.7) * 100:+.1f} pts)"
+    scorer = by["Test Scorer"]
+    assert scorer["model_probability"] is None and scorer["model_edge"] is None and dr.model_text(scorer) == "-"
+    assert "units" not in man and "stake" not in man, "information beside the row, never a stake"

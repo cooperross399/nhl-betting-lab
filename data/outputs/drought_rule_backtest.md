@@ -1,10 +1,10 @@
 # Due List backtest
 
-Generated 2026-10-10T17:38:48+00:00 by `scripts/run_drought_rule_backtest.py`. Every figure below comes from that script.
+Generated 2026-10-31T13:03:45+00:00 by `scripts/run_drought_rule_backtest.py`. Every figure below comes from that script.
 
-**The rule.** A skater with 70+ points, 25+ goals or 30+ assists last regular season is listed in that category when his drought reaches either the tier bar from last season's total (points 100+ -> 3, 85-99 -> 4, 70-84 -> 5; goals 40+ -> 5, 25-39 -> 10; assists 60+ -> 3, 45-59 -> 4, 30-44 -> 5) or, for points and assists, the surprise bar from his own prior-season hit rate p, the smallest n with (1 - p)^n <= 0.05; the wager is the over 0.5.
+**The rule.** A skater with 70+ points, 25+ goals or 60+ assists last regular season is listed in that category when his drought reaches either the tier bar from last season's total (points 100+ -> 3, 85-99 -> 4, 70-84 -> 5; goals 40+ -> 5, 25-39 -> 10; assists 60+ -> 3) or, for points and assists, the surprise bar from his own prior-season hit rate p, the smallest n with (1 - p)^n <= 0.05; the wager is the over 0.5.
 
-**The bars.** Tier bar, from last season's total: points 100+ -> 3, 85-99 -> 4, 70-84 -> 5; goals 40+ -> 5, 25-39 -> 10; assists 60+ -> 3, 45-59 -> 4, 30-44 -> 5. Surprise bar, from his own prior-season hit rate p (games with one or more / games dressed): the smallest n with (1 - p)^n <= 0.05 (undefined when p is 0; 1 when p is 1). A player is listed when his drought reaches either. The flat rule shipped that morning (#307: every qualifier at 5+) is kept below as `RULE: drought 5+` so the history reads the same.
+**The bars.** Tier bar, from last season's total: points 100+ -> 3, 85-99 -> 4, 70-84 -> 5; goals 40+ -> 5, 25-39 -> 10; assists 60+ -> 3. Surprise bar, from his own prior-season hit rate p (games with one or more / games dressed): the smallest n with (1 - p)^n <= 0.05 (undefined when p is 0; 1 when p is 1). A player is listed when his drought reaches either. The flat rule shipped that morning (#307: every qualifier at 5+) is kept below as `RULE: drought 5+` so the history reads the same.
 
 **How it is measured.** 2024-25 and 2025-26 regular seasons. One wager per selection at the best price any book offered. `card` is each event's first snapshot (the window the Gameday card prices in); `late` is its last. Interval: 95%, bootstrapped over game nights. MDE: the smallest ROI this sample could detect at 80% power. Seasons are labelled by their starting year.
 
@@ -14,7 +14,7 @@ Generated 2026-10-10T17:38:48+00:00 by `scripts/run_drought_rule_backtest.py`. E
 |:--|--:|--:|--:|--:|--:|:--|--:|--:|--:|
 | points | 311 | 179 | 59.2% | 60.0% | -1.6% | -10.8% .. +7.1% | 13.3% | -8.5% / 199 | +10.5% / 112 |
 | goals | 537 | 245 | 31.1% | 30.8% | +3.6% | -9.3% .. +19.2% | 19.6% | +2.6% / 332 | +5.4% / 205 |
-| assists | 2157 | 336 | 35.1% | 38.2% | -8.6% | -14.6% .. -2.3% | 8.5% | -11.0% / 1135 | -5.9% / 1022 |
+| assists | 184 | 133 | 57.6% | 52.6% | +10.5% | -1.8% .. +23.8% | 19.1% | +11.8% / 108 | +8.6% / 76 |
 
 ## The two bars apart (card window)
 
@@ -28,9 +28,25 @@ Generated 2026-10-10T17:38:48+00:00 by `scripts/run_drought_rule_backtest.py`. E
 | goals | SHIPPED: either bar | 537 | 245 | 31.1% | 30.8% | +3.6% | -9.3% .. +19.2% | 19.6% | +2.6% / 332 | +5.4% / 205 |
 | goals | TIER bars only | 537 | 245 | 31.1% | 30.8% | +3.6% | -10.3% .. +17.4% | 19.7% | +2.6% / 332 | +5.4% / 205 |
 | goals | SURPRISE 5% only | 0 | 0 | — | — | — | — | — | — | — |
-| assists | SHIPPED: either bar | 2157 | 336 | 35.1% | 38.2% | -8.6% | -14.6% .. -2.3% | 8.5% | -11.0% / 1135 | -5.9% / 1022 |
-| assists | TIER bars only | 2152 | 336 | 35.1% | 38.2% | -8.5% | -14.0% .. -2.3% | 8.5% | -10.9% / 1134 | -5.9% / 1018 |
-| assists | SURPRISE 5% only | 1090 | 309 | 33.4% | 37.8% | -13.1% | -21.1% .. -4.4% | 11.7% | -17.6% / 595 | -7.6% / 495 |
+| assists | SHIPPED: either bar | 184 | 133 | 57.6% | 52.6% | +10.5% | -1.8% .. +23.8% | 19.1% | +11.8% / 108 | +8.6% / 76 |
+| assists | TIER bars only | 184 | 133 | 57.6% | 52.6% | +10.5% | -2.0% .. +24.4% | 19.5% | +11.8% / 108 | +8.6% / 76 |
+| assists | SURPRISE 5% only | 79 | 70 | 58.2% | 54.0% | +7.9% | -11.9% .. +26.2% | 28.2% | +11.9% / 41 | +3.6% / 38 |
+
+## Shots during the drought (card window, the shipped rule)
+
+Shots on goal a game during the drought over his own rate in up to 82 games before it. "Shots up" is a player still shooting as usual or more; "shots down" is one whose shots dried up.
+
+| Market | Bucket | Wagers | Nights | Hit | Implied | ROI | 95% interval | MDE | 2024-25 | 2025-26 |
+|:--|:--|--:|--:|--:|--:|--:|:--|--:|--:|--:|
+| points | SHIPPED, shots up (>= 1x usual) | 80 | 70 | 60.0% | 60.7% | -1.1% | -17.4% .. +15.8% | 25.2% | -8.2% / 49 | +10.2% / 31 |
+| points | SHIPPED, shots steady (0.8-1x) | 66 | 60 | 56.1% | 59.8% | -7.9% | -25.7% .. +11.7% | 26.4% | -7.0% / 39 | -9.3% / 27 |
+| points | SHIPPED, shots down (< 0.8x) | 165 | 118 | 60.0% | 59.7% | +0.6% | -12.6% .. +13.3% | 19.0% | -9.1% / 111 | +20.6% / 54 |
+| goals | SHIPPED, shots up (>= 1x usual) | 69 | 61 | 39.1% | 32.7% | +18.2% | -16.8% .. +53.5% | 50.5% | +61.3% / 30 | -14.9% / 39 |
+| goals | SHIPPED, shots steady (0.8-1x) | 166 | 132 | 30.7% | 31.4% | -1.4% | -22.7% .. +22.1% | 32.8% | +2.2% / 83 | -5.1% / 83 |
+| goals | SHIPPED, shots down (< 0.8x) | 302 | 175 | 29.5% | 30.0% | +3.1% | -16.0% .. +22.6% | 27.9% | -5.4% / 219 | +25.5% / 83 |
+| assists | SHIPPED, shots up (>= 1x usual) | 76 | 65 | 52.6% | 52.4% | -0.4% | -23.1% .. +20.3% | 31.2% | -4.6% / 49 | +7.2% / 27 |
+| assists | SHIPPED, shots steady (0.8-1x) | 44 | 40 | 59.1% | 53.9% | +11.7% | -21.0% .. +39.8% | 42.8% | +26.1% / 26 | -9.3% / 18 |
+| assists | SHIPPED, shots down (< 0.8x) | 64 | 58 | 62.5% | 52.0% | +22.6% | -1.6% .. +46.2% | 33.3% | +24.8% / 33 | +20.3% / 31 |
 
 ## Per band (card window)
 
@@ -44,8 +60,6 @@ Generated 2026-10-10T17:38:48+00:00 by `scripts/run_drought_rule_backtest.py`. E
 | goals | 40+ | 5 | 212 | 34.0% | 36.9% | -7.4% | -24.8% .. +11.2% | 25.6% | -6.1% / 152 | -10.6% / 60 | 76 | -3.3% | -32.5% .. +23.6% |
 | goals | 25-39 | 10 | 325 | 29.2% | 26.8% | +10.8% | -10.3% .. +31.4% | 29.3% | +9.9% / 180 | +12.0% / 145 | 95 | +15.6% | -17.7% .. +50.8% |
 | assists | 60+ | 3 | 184 | 57.6% | 52.6% | +10.5% | -1.2% .. +23.6% | 18.5% | +11.8% / 108 | +8.6% / 76 | 104 | +8.5% | -11.2% .. +25.8% |
-| assists | 45-59 | 4 | 410 | 41.5% | 44.0% | -4.8% | -17.5% .. +8.1% | 17.9% | -14.6% / 244 | +9.5% / 166 | 176 | -3.5% | -19.5% .. +14.4% |
-| assists | 30-44 | 5 | 1558 | 30.8% | 35.0% | -11.7% | -19.1% .. -4.7% | 9.9% | -12.9% / 782 | -10.6% / 776 | 502 | -1.9% | -11.6% .. +8.4% |
 
 ## Every bucket
 
@@ -75,6 +89,15 @@ Control is the same qualifying players when they are NOT in a drought (flat rule
 | card | points | SURPRISE 5% only | both | 311 | 179 | 59.2% | 60.0% | -150 | -1.6% | -10.7% .. +7.5% | 13.5% | -5.1 |
 | card | points | SURPRISE 5% only | 2024 | 199 | 106 | 54.3% | 58.7% | -145 | -8.5% | -20.4% .. +3.4% | 17.0% | -16.9 |
 | card | points | SURPRISE 5% only | 2025 | 112 | 73 | 67.9% | 62.3% | -170 | +10.5% | -3.0% .. +24.6% | 20.3% | +11.8 |
+| card | points | SHIPPED, shots up (>= 1x usual) | both | 80 | 70 | 60.0% | 60.7% | -153 | -1.1% | -17.4% .. +15.8% | 25.2% | -0.8 |
+| card | points | SHIPPED, shots up (>= 1x usual) | 2024 | 49 | 41 | 55.1% | 59.7% | -145 | -8.2% | -29.7% .. +14.1% | 32.2% | -4.0 |
+| card | points | SHIPPED, shots up (>= 1x usual) | 2025 | 31 | 29 | 67.7% | 62.4% | -170 | +10.2% | -14.3% .. +33.9% | 35.2% | +3.2 |
+| card | points | SHIPPED, shots steady (0.8-1x) | both | 66 | 60 | 56.1% | 59.8% | -152 | -7.9% | -25.7% .. +11.7% | 26.4% | -5.2 |
+| card | points | SHIPPED, shots steady (0.8-1x) | 2024 | 39 | 35 | 56.4% | 58.1% | -140 | -7.0% | -31.8% .. +18.0% | 35.2% | -2.7 |
+| card | points | SHIPPED, shots steady (0.8-1x) | 2025 | 27 | 25 | 55.6% | 62.3% | -170 | -9.3% | -37.8% .. +18.7% | 42.0% | -2.5 |
+| card | points | SHIPPED, shots down (< 0.8x) | both | 165 | 118 | 60.0% | 59.7% | -150 | +0.6% | -12.6% .. +13.3% | 19.0% | +1.0 |
+| card | points | SHIPPED, shots down (< 0.8x) | 2024 | 111 | 73 | 53.2% | 58.4% | -148 | -9.1% | -25.2% .. +8.0% | 24.1% | -10.1 |
+| card | points | SHIPPED, shots down (< 0.8x) | 2025 | 54 | 45 | 74.1% | 62.4% | -162 | +20.6% | -1.6% .. +41.2% | 30.7% | +11.1 |
 | card | points | TIER 100+ @3 | both | 15 | 14 | 73.3% | 64.3% | -185 | +15.5% | -25.5% .. +46.9% | 51.9% | +2.3 |
 | card | points | TIER 100+ @3 | 2024 | 12 | 11 | 66.7% | 64.5% | -178 | +4.8% | -45.4% .. +46.6% | 64.0% | +0.6 |
 | card | points | TIER 100+ @3 | 2025 | 3 | 3 | 100.0% | 63.2% | -185 | +58.6% | +52.6% .. +69.0% | 11.8% | +1.8 |
@@ -114,6 +137,15 @@ Control is the same qualifying players when they are NOT in a drought (flat rule
 | card | goals | TIER bars only | both | 537 | 245 | 31.1% | 30.8% | +240 | +3.6% | -10.3% .. +17.4% | 19.7% | +19.6 |
 | card | goals | TIER bars only | 2024 | 332 | 134 | 31.0% | 30.5% | +240 | +2.6% | -14.6% .. +20.9% | 26.0% | +8.5 |
 | card | goals | TIER bars only | 2025 | 205 | 111 | 31.2% | 31.2% | +230 | +5.4% | -18.3% .. +30.2% | 34.6% | +11.1 |
+| card | goals | SHIPPED, shots up (>= 1x usual) | both | 69 | 61 | 39.1% | 32.7% | +210 | +18.2% | -16.8% .. +53.5% | 50.5% | +12.6 |
+| card | goals | SHIPPED, shots up (>= 1x usual) | 2024 | 30 | 29 | 53.3% | 32.3% | +220 | +61.3% | +2.1% .. +121.8% | 86.9% | +18.4 |
+| card | goals | SHIPPED, shots up (>= 1x usual) | 2025 | 39 | 32 | 28.2% | 33.0% | +210 | -14.9% | -54.6% .. +25.1% | 57.6% | -5.8 |
+| card | goals | SHIPPED, shots steady (0.8-1x) | both | 166 | 132 | 30.7% | 31.4% | +240 | -1.4% | -22.7% .. +22.1% | 32.8% | -2.4 |
+| card | goals | SHIPPED, shots steady (0.8-1x) | 2024 | 83 | 66 | 32.5% | 31.0% | +250 | +2.2% | -28.8% .. +38.6% | 47.5% | +1.8 |
+| card | goals | SHIPPED, shots steady (0.8-1x) | 2025 | 83 | 66 | 28.9% | 31.8% | +230 | -5.1% | -37.6% .. +30.3% | 47.9% | -4.3 |
+| card | goals | SHIPPED, shots down (< 0.8x) | both | 302 | 175 | 29.5% | 30.0% | +240 | +3.1% | -16.0% .. +22.6% | 27.9% | +9.4 |
+| card | goals | SHIPPED, shots down (< 0.8x) | 2024 | 219 | 110 | 27.4% | 30.1% | +240 | -5.4% | -26.1% .. +14.0% | 29.0% | -11.8 |
+| card | goals | SHIPPED, shots down (< 0.8x) | 2025 | 83 | 65 | 34.9% | 29.8% | +230 | +25.5% | -15.9% .. +71.6% | 65.1% | +21.1 |
 | card | goals | TIER 40+ @5 | both | 212 | 145 | 34.0% | 36.9% | +170 | -7.4% | -24.8% .. +11.2% | 25.6% | -15.7 |
 | card | goals | TIER 40+ @5 | 2024 | 152 | 98 | 34.2% | 36.6% | +170 | -6.1% | -26.8% .. +16.1% | 30.8% | -9.3 |
 | card | goals | TIER 40+ @5 | 2025 | 60 | 47 | 33.3% | 37.9% | +165 | -10.6% | -43.6% .. +22.4% | 46.1% | -6.3 |
@@ -126,48 +158,42 @@ Control is the same qualifying players when they are NOT in a drought (flat rule
 | card | goals | TIER 25-39 ==10 | both | 95 | 84 | 31.6% | 27.6% | +270 | +15.6% | -17.7% .. +50.8% | 48.0% | +14.8 |
 | card | goals | TIER 25-39 ==10 | 2024 | 52 | 47 | 34.6% | 27.1% | +290 | +25.3% | -18.4% .. +72.7% | 66.9% | +13.2 |
 | card | goals | TIER 25-39 ==10 | 2025 | 43 | 37 | 27.9% | 28.3% | +250 | +3.8% | -44.3% .. +53.2% | 69.7% | +1.7 |
-| card | assists | not in drought (0-4) | both | 16904 | 345 | 40.9% | 44.2% | +130 | -7.4% | -9.2% .. -5.5% | 2.6% | -1248.3 |
-| card | assists | not in drought (0-4) | 2024 | 8522 | 178 | 40.3% | 44.0% | +135 | -8.6% | -10.9% .. -6.2% | 3.5% | -731.2 |
-| card | assists | not in drought (0-4) | 2025 | 8382 | 167 | 41.5% | 44.4% | +130 | -6.2% | -8.7% .. -3.5% | 3.7% | -517.1 |
-| card | assists | RULE: drought 5+ | both | 1826 | 329 | 32.6% | 36.3% | +180 | -10.6% | -17.4% .. -4.4% | 9.6% | -192.9 |
-| card | assists | RULE: drought 5+ | 2024 | 953 | 168 | 31.8% | 36.9% | +175 | -13.8% | -22.5% .. -4.9% | 12.8% | -131.5 |
-| card | assists | RULE: drought 5+ | 2025 | 873 | 161 | 33.6% | 35.7% | +190 | -7.0% | -16.3% .. +3.1% | 13.8% | -61.4 |
-| card | assists | drought 5-6 | both | 992 | 304 | 35.3% | 38.1% | +165 | -7.4% | -15.3% .. +0.4% | 11.5% | -73.6 |
-| card | assists | drought 5-6 | 2024 | 504 | 154 | 34.5% | 38.4% | +160 | -8.8% | -18.3% .. +1.9% | 14.6% | -44.5 |
-| card | assists | drought 5-6 | 2025 | 488 | 150 | 36.1% | 37.7% | +170 | -6.0% | -18.6% .. +6.0% | 17.3% | -29.1 |
-| card | assists | drought 7-9 | both | 544 | 254 | 31.1% | 35.2% | +190 | -12.0% | -23.4% .. -0.2% | 16.6% | -65.0 |
-| card | assists | drought 7-9 | 2024 | 285 | 126 | 31.6% | 36.2% | +176 | -13.2% | -29.0% .. +3.3% | 23.0% | -37.6 |
-| card | assists | drought 7-9 | 2025 | 259 | 128 | 30.5% | 34.1% | +195 | -10.6% | -26.5% .. +6.8% | 24.0% | -27.5 |
-| card | assists | drought 10+ | both | 290 | 178 | 26.6% | 32.4% | +215 | -18.7% | -35.5% .. -2.5% | 24.4% | -54.3 |
-| card | assists | drought 10+ | 2024 | 164 | 94 | 23.8% | 33.3% | +210 | -30.1% | -49.8% .. -10.7% | 27.2% | -49.4 |
-| card | assists | drought 10+ | 2025 | 126 | 84 | 30.2% | 31.3% | +230 | -3.8% | -30.2% .. +23.8% | 39.7% | -4.8 |
-| card | assists | SHIPPED: either bar | both | 2157 | 336 | 35.1% | 38.2% | +170 | -8.6% | -14.6% .. -2.3% | 8.5% | -184.5 |
-| card | assists | SHIPPED: either bar | 2024 | 1135 | 174 | 34.5% | 38.6% | +165 | -11.0% | -19.0% .. -2.9% | 11.3% | -124.5 |
-| card | assists | SHIPPED: either bar | 2025 | 1022 | 162 | 35.8% | 37.8% | +176 | -5.9% | -14.6% .. +2.9% | 12.4% | -60.0 |
-| card | assists | TIER bars only | both | 2152 | 336 | 35.1% | 38.2% | +170 | -8.5% | -14.0% .. -2.3% | 8.5% | -183.5 |
-| card | assists | TIER bars only | 2024 | 1134 | 174 | 34.6% | 38.5% | +165 | -10.9% | -18.9% .. -3.0% | 11.6% | -123.5 |
-| card | assists | TIER bars only | 2025 | 1018 | 162 | 35.8% | 37.8% | +176 | -5.9% | -14.4% .. +2.6% | 12.5% | -60.0 |
-| card | assists | SURPRISE 5% only | both | 1090 | 309 | 33.4% | 37.8% | +175 | -13.1% | -21.1% .. -4.4% | 11.7% | -142.7 |
-| card | assists | SURPRISE 5% only | 2024 | 595 | 158 | 32.1% | 38.1% | +170 | -17.6% | -28.8% .. -5.7% | 16.7% | -104.9 |
-| card | assists | SURPRISE 5% only | 2025 | 495 | 151 | 34.9% | 37.4% | +185 | -7.6% | -19.5% .. +4.4% | 16.9% | -37.8 |
+| card | assists | not in drought (0-4) | both | 1927 | 324 | 54.5% | 57.0% | -130 | -4.0% | -8.0% .. +0.2% | 5.8% | -77.0 |
+| card | assists | not in drought (0-4) | 2024 | 1081 | 165 | 54.0% | 56.0% | -125 | -3.2% | -8.9% .. +2.6% | 8.1% | -34.2 |
+| card | assists | not in drought (0-4) | 2025 | 846 | 159 | 55.2% | 58.4% | -140 | -5.1% | -10.9% .. +0.9% | 8.5% | -42.8 |
+| card | assists | RULE: drought 5+ | both | 34 | 34 | 55.9% | 50.7% | -2 | +11.1% | -24.7% .. +44.2% | 49.6% | +3.8 |
+| card | assists | RULE: drought 5+ | 2024 | 21 | 21 | 52.4% | 48.8% | +110 | +8.2% | -33.6% .. +50.1% | 61.5% | +1.7 |
+| card | assists | RULE: drought 5+ | 2025 | 13 | 13 | 61.5% | 53.7% | -120 | +15.9% | -34.5% .. +67.1% | 76.5% | +2.1 |
+| card | assists | drought 5-6 | both | 31 | 31 | 54.8% | 51.1% | -110 | +7.8% | -24.8% .. +44.0% | 49.8% | +2.4 |
+| card | assists | drought 5-6 | 2024 | 19 | 19 | 52.6% | 49.1% | +105 | +8.0% | -37.7% .. +52.9% | 67.6% | +1.5 |
+| card | assists | drought 5-6 | 2025 | 12 | 12 | 58.3% | 54.3% | -120 | +7.6% | -41.7% .. +57.8% | 70.1% | +0.9 |
+| card | assists | drought 7-9 | both | 3 | 3 | 66.7% | 46.2% | +115 | +45.0% | -100.0% .. +120.0% | 169.3% | +1.4 |
+| card | assists | drought 7-9 | 2024 | 2 | 2 | 50.0% | 46.0% | +117 | +10.0% | -100.0% .. +120.0% | 212.7% | +0.2 |
+| card | assists | drought 7-9 | 2025 | 1 | 1 | 100.0% | 46.5% | +115 | +115.0% | +115.0% .. +115.0% | 0.0% | +1.1 |
+| card | assists | SHIPPED: either bar | both | 184 | 133 | 57.6% | 52.6% | -110 | +10.5% | -1.8% .. +23.8% | 19.1% | +19.3 |
+| card | assists | SHIPPED: either bar | 2024 | 108 | 77 | 56.5% | 50.9% | +100 | +11.8% | -5.1% .. +30.2% | 26.1% | +12.8 |
+| card | assists | SHIPPED: either bar | 2025 | 76 | 56 | 59.2% | 55.0% | -125 | +8.6% | -9.7% .. +28.0% | 26.9% | +6.5 |
+| card | assists | TIER bars only | both | 184 | 133 | 57.6% | 52.6% | -110 | +10.5% | -2.0% .. +24.4% | 19.5% | +19.3 |
+| card | assists | TIER bars only | 2024 | 108 | 77 | 56.5% | 50.9% | +100 | +11.8% | -5.9% .. +29.5% | 25.6% | +12.8 |
+| card | assists | TIER bars only | 2025 | 76 | 56 | 59.2% | 55.0% | -125 | +8.6% | -11.4% .. +26.4% | 26.6% | +6.5 |
+| card | assists | SURPRISE 5% only | both | 79 | 70 | 58.2% | 54.0% | -115 | +7.9% | -11.9% .. +26.2% | 28.2% | +6.3 |
+| card | assists | SURPRISE 5% only | 2024 | 41 | 35 | 58.5% | 52.0% | -105 | +11.9% | -14.8% .. +41.1% | 40.5% | +4.9 |
+| card | assists | SURPRISE 5% only | 2025 | 38 | 35 | 57.9% | 56.1% | -125 | +3.6% | -23.5% .. +31.0% | 39.6% | +1.4 |
+| card | assists | SHIPPED, shots up (>= 1x usual) | both | 76 | 65 | 52.6% | 52.4% | -110 | -0.4% | -23.1% .. +20.3% | 31.2% | -0.3 |
+| card | assists | SHIPPED, shots up (>= 1x usual) | 2024 | 49 | 41 | 49.0% | 50.9% | +100 | -4.6% | -32.5% .. +22.9% | 38.0% | -2.2 |
+| card | assists | SHIPPED, shots up (>= 1x usual) | 2025 | 27 | 24 | 59.3% | 55.1% | -125 | +7.2% | -29.8% .. +44.5% | 52.2% | +1.9 |
+| card | assists | SHIPPED, shots steady (0.8-1x) | both | 44 | 40 | 59.1% | 53.9% | -120 | +11.7% | -21.0% .. +39.8% | 42.8% | +5.1 |
+| card | assists | SHIPPED, shots steady (0.8-1x) | 2024 | 26 | 24 | 65.4% | 51.9% | -110 | +26.1% | -15.8% .. +60.4% | 55.1% | +6.8 |
+| card | assists | SHIPPED, shots steady (0.8-1x) | 2025 | 18 | 16 | 50.0% | 56.9% | -125 | -9.3% | -56.9% .. +32.6% | 63.9% | -1.7 |
+| card | assists | SHIPPED, shots down (< 0.8x) | both | 64 | 58 | 62.5% | 52.0% | +100 | +22.6% | -1.6% .. +46.2% | 33.3% | +14.5 |
+| card | assists | SHIPPED, shots down (< 0.8x) | 2024 | 33 | 31 | 60.6% | 50.1% | +100 | +24.8% | -11.9% .. +58.9% | 50.8% | +8.2 |
+| card | assists | SHIPPED, shots down (< 0.8x) | 2025 | 31 | 27 | 64.5% | 53.9% | -120 | +20.3% | -12.4% .. +50.8% | 45.5% | +6.3 |
 | card | assists | TIER 60+ @3 | both | 184 | 133 | 57.6% | 52.6% | -110 | +10.5% | -1.2% .. +23.6% | 18.5% | +19.3 |
 | card | assists | TIER 60+ @3 | 2024 | 108 | 77 | 56.5% | 50.9% | +100 | +11.8% | -5.6% .. +31.2% | 26.2% | +12.8 |
 | card | assists | TIER 60+ @3 | 2025 | 76 | 56 | 59.2% | 55.0% | -125 | +8.6% | -9.7% .. +26.5% | 25.7% | +6.5 |
 | card | assists | TIER 60+ ==3 | both | 104 | 82 | 56.7% | 53.3% | -115 | +8.5% | -11.2% .. +25.8% | 26.4% | +8.9 |
 | card | assists | TIER 60+ ==3 | 2024 | 61 | 48 | 57.4% | 51.7% | -105 | +12.3% | -11.4% .. +38.0% | 36.4% | +7.5 |
 | card | assists | TIER 60+ ==3 | 2025 | 43 | 34 | 55.8% | 55.4% | -125 | +3.2% | -24.9% .. +27.9% | 38.1% | +1.4 |
-| card | assists | TIER 45-59 @4 | both | 410 | 223 | 41.5% | 44.0% | +126 | -4.8% | -17.5% .. +8.1% | 17.9% | -19.8 |
-| card | assists | TIER 45-59 @4 | 2024 | 244 | 123 | 36.5% | 42.3% | +135 | -14.6% | -30.6% .. +1.8% | 23.8% | -35.6 |
-| card | assists | TIER 45-59 @4 | 2025 | 166 | 100 | 48.8% | 46.4% | +115 | +9.5% | -7.7% .. +27.7% | 25.6% | +15.8 |
-| card | assists | TIER 45-59 ==4 | both | 176 | 133 | 41.5% | 44.9% | +126 | -3.5% | -19.5% .. +14.4% | 25.1% | -6.1 |
-| card | assists | TIER 45-59 ==4 | 2024 | 94 | 71 | 41.5% | 43.8% | +126 | -3.2% | -26.1% .. +22.5% | 34.8% | -3.0 |
-| card | assists | TIER 45-59 ==4 | 2025 | 82 | 62 | 41.5% | 46.2% | +120 | -3.8% | -27.7% .. +22.1% | 35.5% | -3.1 |
-| card | assists | TIER 30-44 @5 | both | 1558 | 323 | 30.8% | 35.0% | +190 | -11.7% | -19.1% .. -4.7% | 9.9% | -183.0 |
-| card | assists | TIER 30-44 @5 | 2024 | 782 | 165 | 30.9% | 35.7% | +180 | -12.9% | -21.3% .. -4.1% | 12.7% | -100.7 |
-| card | assists | TIER 30-44 @5 | 2025 | 776 | 158 | 30.7% | 34.3% | +195 | -10.6% | -20.7% .. -0.1% | 14.9% | -82.3 |
-| card | assists | TIER 30-44 ==5 | both | 502 | 235 | 35.3% | 36.4% | +176 | -1.9% | -11.6% .. +8.4% | 14.8% | -9.6 |
-| card | assists | TIER 30-44 ==5 | 2024 | 247 | 122 | 34.8% | 36.9% | +170 | -3.3% | -17.3% .. +10.6% | 19.7% | -8.1 |
-| card | assists | TIER 30-44 ==5 | 2025 | 255 | 113 | 35.7% | 35.9% | +185 | -0.6% | -16.1% .. +15.7% | 22.7% | -1.5 |
 | late | points | not in drought (0-4) | both | 3003 | 318 | 62.1% | 63.9% | -180 | -3.0% | -6.2% .. -0.2% | 4.3% | -90.7 |
 | late | points | not in drought (0-4) | 2024 | 1965 | 169 | 61.6% | 63.9% | -180 | -3.9% | -7.8% .. -0.0% | 5.5% | -76.1 |
 | late | points | not in drought (0-4) | 2025 | 1038 | 149 | 63.0% | 64.0% | -180 | -1.4% | -6.1% .. +3.3% | 6.7% | -14.6 |
@@ -190,6 +216,15 @@ Control is the same qualifying players when they are NOT in a drought (flat rule
 | late | points | SURPRISE 5% only | both | 170 | 117 | 58.8% | 59.4% | -150 | -0.4% | -13.7% .. +13.7% | 19.1% | -0.7 |
 | late | points | SURPRISE 5% only | 2024 | 117 | 72 | 54.7% | 58.3% | -148 | -5.8% | -21.2% .. +10.1% | 22.4% | -6.8 |
 | late | points | SURPRISE 5% only | 2025 | 53 | 45 | 67.9% | 61.7% | -162 | +11.5% | -9.8% .. +30.7% | 29.1% | +6.1 |
+| late | points | SHIPPED, shots up (>= 1x usual) | both | 37 | 35 | 67.6% | 62.1% | -155 | +9.8% | -14.2% .. +32.2% | 33.4% | +3.6 |
+| late | points | SHIPPED, shots up (>= 1x usual) | 2024 | 27 | 25 | 63.0% | 62.1% | -155 | +1.3% | -26.6% .. +28.0% | 39.4% | +0.3 |
+| late | points | SHIPPED, shots up (>= 1x usual) | 2025 | 10 | 10 | 80.0% | 61.9% | -158 | +32.8% | -12.3% .. +68.9% | 57.2% | +3.3 |
+| late | points | SHIPPED, shots steady (0.8-1x) | both | 34 | 33 | 52.9% | 59.7% | -150 | -13.5% | -39.2% .. +13.0% | 37.9% | -4.6 |
+| late | points | SHIPPED, shots steady (0.8-1x) | 2024 | 21 | 21 | 47.6% | 58.3% | -140 | -22.0% | -55.1% .. +14.8% | 49.7% | -4.6 |
+| late | points | SHIPPED, shots steady (0.8-1x) | 2025 | 13 | 12 | 61.5% | 62.1% | -162 | +0.3% | -41.5% .. +42.2% | 59.5% | +0.0 |
+| late | points | SHIPPED, shots down (< 0.8x) | both | 99 | 80 | 57.6% | 58.2% | -150 | +0.2% | -16.2% .. +17.1% | 24.6% | +0.2 |
+| late | points | SHIPPED, shots down (< 0.8x) | 2024 | 69 | 50 | 53.6% | 56.9% | -145 | -3.7% | -25.4% .. +17.6% | 30.6% | -2.5 |
+| late | points | SHIPPED, shots down (< 0.8x) | 2025 | 30 | 30 | 66.7% | 61.4% | -163 | +9.2% | -17.6% .. +37.0% | 39.7% | +2.8 |
 | late | points | TIER 100+ @3 | both | 8 | 8 | 62.5% | 67.4% | -190 | -4.9% | -61.5% .. +36.3% | 74.3% | -0.4 |
 | late | points | TIER 100+ @3 | 2024 | 7 | 7 | 57.1% | 66.8% | -185 | -11.4% | -77.6% .. +34.2% | 81.9% | -0.8 |
 | late | points | TIER 100+ @3 | 2025 | 1 | 1 | 100.0% | 71.3% | -248 | +40.3% | +40.3% .. +40.3% | 0.0% | +0.4 |
@@ -229,6 +264,15 @@ Control is the same qualifying players when they are NOT in a drought (flat rule
 | late | goals | TIER bars only | both | 211 | 137 | 31.8% | 30.6% | +240 | +6.1% | -15.2% .. +29.9% | 32.1% | +12.8 |
 | late | goals | TIER bars only | 2024 | 139 | 83 | 31.7% | 30.9% | +250 | +1.8% | -23.9% .. +30.1% | 39.1% | +2.5 |
 | late | goals | TIER bars only | 2025 | 72 | 54 | 31.9% | 30.1% | +240 | +14.4% | -22.3% .. +55.1% | 55.7% | +10.4 |
+| late | goals | SHIPPED, shots up (>= 1x usual) | both | 17 | 15 | 47.1% | 29.3% | +240 | +54.1% | -23.8% .. +132.4% | 114.2% | +9.2 |
+| late | goals | SHIPPED, shots up (>= 1x usual) | 2024 | 7 | 6 | 42.9% | 27.4% | +290 | +51.4% | -100.0% .. +171.1% | 213.1% | +3.6 |
+| late | goals | SHIPPED, shots up (>= 1x usual) | 2025 | 10 | 9 | 50.0% | 30.6% | +240 | +56.0% | -32.0% .. +140.6% | 124.6% | +5.6 |
+| late | goals | SHIPPED, shots steady (0.8-1x) | both | 62 | 56 | 33.9% | 31.8% | +235 | +7.3% | -28.8% .. +46.9% | 54.7% | +4.5 |
+| late | goals | SHIPPED, shots steady (0.8-1x) | 2024 | 33 | 29 | 39.4% | 32.0% | +240 | +14.7% | -30.8% .. +67.1% | 69.8% | +4.8 |
+| late | goals | SHIPPED, shots steady (0.8-1x) | 2025 | 29 | 27 | 27.6% | 31.5% | +210 | -1.2% | -60.6% .. +61.4% | 87.3% | -0.4 |
+| late | goals | SHIPPED, shots down (< 0.8x) | both | 132 | 100 | 28.8% | 30.2% | +245 | -0.6% | -30.5% .. +29.0% | 41.9% | -0.9 |
+| late | goals | SHIPPED, shots down (< 0.8x) | 2024 | 99 | 68 | 28.3% | 30.7% | +240 | -6.0% | -36.0% .. +28.1% | 46.7% | -6.0 |
+| late | goals | SHIPPED, shots down (< 0.8x) | 2025 | 33 | 32 | 30.3% | 28.8% | +250 | +15.5% | -44.1% .. +83.4% | 92.6% | +5.1 |
 | late | goals | TIER 40+ @5 | both | 83 | 68 | 34.9% | 36.6% | +175 | -4.8% | -31.9% .. +23.5% | 40.8% | -4.0 |
 | late | goals | TIER 40+ @5 | 2024 | 64 | 51 | 34.4% | 36.4% | +175 | -6.5% | -36.7% .. +25.7% | 44.9% | -4.1 |
 | late | goals | TIER 40+ @5 | 2025 | 19 | 17 | 36.8% | 37.6% | +175 | +0.8% | -53.6% .. +61.8% | 82.8% | +0.1 |
@@ -241,48 +285,42 @@ Control is the same qualifying players when they are NOT in a drought (flat rule
 | late | goals | TIER 25-39 ==10 | both | 40 | 38 | 32.5% | 28.0% | +265 | +15.5% | -31.6% .. +67.6% | 73.1% | +6.2 |
 | late | goals | TIER 25-39 ==10 | 2024 | 21 | 21 | 33.3% | 28.4% | +250 | +6.0% | -54.3% .. +72.0% | 91.1% | +1.2 |
 | late | goals | TIER 25-39 ==10 | 2025 | 19 | 17 | 31.6% | 27.6% | +270 | +26.1% | -50.0% .. +116.8% | 117.6% | +5.0 |
-| late | assists | not in drought (0-4) | both | 7927 | 322 | 41.2% | 44.4% | +130 | -6.9% | -9.3% .. -4.2% | 3.8% | -546.2 |
-| late | assists | not in drought (0-4) | 2024 | 4801 | 169 | 40.7% | 44.4% | +130 | -8.2% | -11.7% .. -4.8% | 5.0% | -392.3 |
-| late | assists | not in drought (0-4) | 2025 | 3126 | 153 | 42.0% | 44.3% | +130 | -4.9% | -9.3% .. -0.9% | 6.0% | -153.9 |
-| late | assists | RULE: drought 5+ | both | 891 | 261 | 33.1% | 36.3% | +180 | -9.4% | -18.0% .. -0.4% | 12.4% | -83.4 |
-| late | assists | RULE: drought 5+ | 2024 | 561 | 147 | 32.4% | 37.2% | +170 | -12.6% | -23.8% .. -1.4% | 16.0% | -70.7 |
-| late | assists | RULE: drought 5+ | 2025 | 330 | 114 | 34.2% | 34.8% | +195 | -3.9% | -18.1% .. +10.7% | 20.8% | -12.7 |
-| late | assists | drought 5-6 | both | 476 | 216 | 35.9% | 37.7% | +170 | -5.2% | -16.7% .. +6.0% | 16.3% | -24.6 |
-| late | assists | drought 5-6 | 2024 | 298 | 125 | 34.6% | 38.5% | +160 | -9.1% | -23.1% .. +6.3% | 20.9% | -27.1 |
-| late | assists | drought 5-6 | 2025 | 178 | 91 | 38.2% | 36.4% | +185 | +1.4% | -16.6% .. +21.8% | 26.7% | +2.4 |
-| late | assists | drought 7-9 | both | 270 | 162 | 31.1% | 35.6% | +180 | -11.7% | -26.2% .. +4.4% | 22.1% | -31.7 |
-| late | assists | drought 7-9 | 2024 | 171 | 102 | 32.7% | 36.7% | +175 | -10.5% | -30.0% .. +7.1% | 25.6% | -18.0 |
-| late | assists | drought 7-9 | 2025 | 99 | 60 | 28.3% | 33.7% | +195 | -13.9% | -40.6% .. +14.7% | 38.3% | -13.8 |
-| late | assists | drought 10+ | both | 145 | 108 | 27.6% | 33.0% | +210 | -18.6% | -40.5% .. +5.3% | 32.8% | -27.0 |
-| late | assists | drought 10+ | 2024 | 92 | 63 | 25.0% | 33.8% | +200 | -27.9% | -52.9% .. -2.3% | 36.7% | -25.6 |
-| late | assists | drought 10+ | 2025 | 53 | 45 | 32.1% | 31.7% | +230 | -2.6% | -39.2% .. +39.0% | 56.7% | -1.4 |
-| late | assists | SHIPPED: either bar | both | 1042 | 267 | 34.9% | 38.1% | +170 | -9.0% | -17.1% .. -0.7% | 11.8% | -94.0 |
-| late | assists | SHIPPED: either bar | 2024 | 654 | 149 | 34.3% | 38.7% | +165 | -11.8% | -21.6% .. -1.2% | 14.7% | -77.0 |
-| late | assists | SHIPPED: either bar | 2025 | 388 | 118 | 36.1% | 37.1% | +185 | -4.4% | -17.3% .. +9.4% | 19.0% | -16.9 |
-| late | assists | TIER bars only | both | 1042 | 267 | 34.9% | 38.1% | +170 | -9.0% | -16.4% .. -0.7% | 11.3% | -94.0 |
-| late | assists | TIER bars only | 2024 | 654 | 149 | 34.3% | 38.7% | +165 | -11.8% | -21.1% .. -1.4% | 14.7% | -77.0 |
-| late | assists | TIER bars only | 2025 | 388 | 118 | 36.1% | 37.1% | +185 | -4.4% | -15.9% .. +8.4% | 17.4% | -16.9 |
-| late | assists | SURPRISE 5% only | both | 546 | 216 | 32.2% | 38.0% | +170 | -16.8% | -27.5% .. -6.4% | 15.5% | -91.7 |
-| late | assists | SURPRISE 5% only | 2024 | 356 | 127 | 30.9% | 38.5% | +167 | -21.5% | -35.1% .. -8.7% | 19.2% | -76.4 |
-| late | assists | SURPRISE 5% only | 2025 | 190 | 89 | 34.7% | 37.0% | +192 | -8.0% | -25.5% .. +10.8% | 26.4% | -15.3 |
+| late | assists | not in drought (0-4) | both | 946 | 258 | 55.1% | 57.5% | -135 | -3.6% | -9.4% .. +2.4% | 8.8% | -34.1 |
+| late | assists | not in drought (0-4) | 2024 | 590 | 139 | 53.1% | 56.8% | -125 | -6.0% | -13.2% .. +2.0% | 10.9% | -35.5 |
+| late | assists | not in drought (0-4) | 2025 | 356 | 119 | 58.4% | 58.7% | -145 | +0.4% | -8.6% .. +10.1% | 13.9% | +1.5 |
+| late | assists | RULE: drought 5+ | both | 19 | 19 | 63.2% | 50.5% | +104 | +22.9% | -21.7% .. +62.8% | 62.3% | +4.4 |
+| late | assists | RULE: drought 5+ | 2024 | 13 | 13 | 53.8% | 50.1% | +105 | +3.2% | -52.7% .. +56.7% | 76.2% | +0.4 |
+| late | assists | RULE: drought 5+ | 2025 | 6 | 6 | 83.3% | 51.4% | -117 | +65.6% | -4.1% .. +110.1% | 88.2% | +3.9 |
+| late | assists | drought 5-6 | both | 17 | 17 | 58.8% | 51.1% | -115 | +11.8% | -35.0% .. +53.3% | 65.2% | +2.0 |
+| late | assists | drought 5-6 | 2024 | 12 | 12 | 50.0% | 50.5% | +104 | -6.5% | -55.8% .. +45.4% | 77.7% | -0.8 |
+| late | assists | drought 5-6 | 2025 | 5 | 5 | 80.0% | 52.3% | -120 | +55.7% | -26.7% .. +113.1% | 101.1% | +2.8 |
+| late | assists | drought 7-9 | both | 2 | 2 | 100.0% | 46.0% | +117 | +117.5% | +115.0% .. +120.0% | 4.9% | +2.4 |
+| late | assists | drought 7-9 | 2024 | 1 | 1 | 100.0% | 45.5% | +120 | +120.0% | +120.0% .. +120.0% | 0.0% | +1.2 |
+| late | assists | drought 7-9 | 2025 | 1 | 1 | 100.0% | 46.5% | +115 | +115.0% | +115.0% .. +115.0% | 0.0% | +1.1 |
+| late | assists | SHIPPED: either bar | both | 87 | 71 | 58.6% | 53.2% | -115 | +8.0% | -11.4% .. +28.7% | 28.5% | +7.0 |
+| late | assists | SHIPPED: either bar | 2024 | 55 | 43 | 50.9% | 52.2% | -110 | -6.1% | -32.2% .. +19.6% | 36.9% | -3.3 |
+| late | assists | SHIPPED: either bar | 2025 | 32 | 28 | 71.9% | 54.9% | -125 | +32.2% | +0.2% .. +59.0% | 41.4% | +10.3 |
+| late | assists | TIER bars only | both | 87 | 71 | 58.6% | 53.2% | -115 | +8.0% | -11.6% .. +27.2% | 27.9% | +7.0 |
+| late | assists | TIER bars only | 2024 | 55 | 43 | 50.9% | 52.2% | -110 | -6.1% | -29.2% .. +20.4% | 36.2% | -3.3 |
+| late | assists | TIER bars only | 2025 | 32 | 28 | 71.9% | 54.9% | -125 | +32.2% | +3.9% .. +57.4% | 39.1% | +10.3 |
+| late | assists | SURPRISE 5% only | both | 37 | 34 | 64.9% | 54.4% | -120 | +17.4% | -10.8% .. +43.0% | 39.7% | +6.4 |
+| late | assists | SURPRISE 5% only | 2024 | 22 | 20 | 54.5% | 53.0% | -115 | -0.9% | -37.8% .. +33.9% | 50.3% | -0.2 |
+| late | assists | SURPRISE 5% only | 2025 | 15 | 14 | 80.0% | 56.4% | -130 | +44.2% | +1.5% .. +77.4% | 56.0% | +6.6 |
+| late | assists | SHIPPED, shots up (>= 1x usual) | both | 32 | 29 | 50.0% | 52.6% | -117 | -8.0% | -40.6% .. +26.5% | 48.5% | -2.6 |
+| late | assists | SHIPPED, shots up (>= 1x usual) | 2024 | 25 | 22 | 40.0% | 51.7% | -115 | -26.0% | -65.4% .. +15.7% | 57.2% | -6.5 |
+| late | assists | SHIPPED, shots up (>= 1x usual) | 2025 | 7 | 7 | 85.7% | 55.6% | -130 | +56.2% | +1.1% .. +92.3% | 68.5% | +3.9 |
+| late | assists | SHIPPED, shots steady (0.8-1x) | both | 22 | 20 | 68.2% | 54.6% | -122 | +22.1% | -16.7% .. +55.1% | 52.9% | +4.9 |
+| late | assists | SHIPPED, shots steady (0.8-1x) | 2024 | 13 | 13 | 61.5% | 53.5% | -115 | +9.2% | -40.7% .. +54.4% | 67.1% | +1.2 |
+| late | assists | SHIPPED, shots steady (0.8-1x) | 2025 | 9 | 7 | 77.8% | 56.3% | -125 | +40.7% | -18.3% .. +85.2% | 74.8% | +3.7 |
+| late | assists | SHIPPED, shots down (< 0.8x) | both | 33 | 32 | 60.6% | 52.9% | +100 | +14.2% | -18.3% .. +47.2% | 47.2% | +4.7 |
+| late | assists | SHIPPED, shots down (< 0.8x) | 2024 | 17 | 16 | 58.8% | 51.9% | +105 | +11.7% | -34.0% .. +58.6% | 68.1% | +2.0 |
+| late | assists | SHIPPED, shots down (< 0.8x) | 2025 | 16 | 16 | 62.5% | 53.9% | -122 | +16.9% | -31.5% .. +60.9% | 66.1% | +2.7 |
 | late | assists | TIER 60+ @3 | both | 87 | 71 | 58.6% | 53.2% | -115 | +8.0% | -14.3% .. +27.3% | 29.2% | +7.0 |
 | late | assists | TIER 60+ @3 | 2024 | 55 | 43 | 50.9% | 52.2% | -110 | -6.1% | -31.8% .. +19.5% | 36.9% | -3.3 |
 | late | assists | TIER 60+ @3 | 2025 | 32 | 28 | 71.9% | 54.9% | -125 | +32.2% | +2.4% .. +60.4% | 41.8% | +10.3 |
 | late | assists | TIER 60+ ==3 | both | 50 | 42 | 58.0% | 53.8% | -117 | +5.6% | -20.4% .. +34.1% | 39.4% | +2.8 |
 | late | assists | TIER 60+ ==3 | 2024 | 30 | 24 | 53.3% | 52.7% | -106 | -3.4% | -36.7% .. +33.6% | 50.4% | -1.0 |
 | late | assists | TIER 60+ ==3 | 2025 | 20 | 18 | 65.0% | 55.3% | -127 | +19.2% | -22.5% .. +57.3% | 57.7% | +3.8 |
-| late | assists | TIER 45-59 @4 | both | 198 | 134 | 40.4% | 43.7% | +127 | -7.1% | -23.4% .. +11.5% | 24.9% | -14.0 |
-| late | assists | TIER 45-59 @4 | 2024 | 135 | 88 | 40.0% | 42.7% | +130 | -7.2% | -29.5% .. +13.1% | 30.6% | -9.7 |
-| late | assists | TIER 45-59 @4 | 2025 | 63 | 46 | 41.3% | 46.0% | +120 | -6.9% | -36.9% .. +23.2% | 42.7% | -4.3 |
-| late | assists | TIER 45-59 ==4 | both | 83 | 72 | 36.1% | 44.7% | +126 | -15.9% | -40.0% .. +13.2% | 37.9% | -13.2 |
-| late | assists | TIER 45-59 ==4 | 2024 | 51 | 43 | 41.2% | 44.1% | +126 | -5.1% | -37.6% .. +29.5% | 48.0% | -2.6 |
-| late | assists | TIER 45-59 ==4 | 2025 | 32 | 29 | 28.1% | 45.7% | +117 | -33.1% | -71.5% .. +6.9% | 55.8% | -10.6 |
-| late | assists | TIER 30-44 @5 | both | 757 | 252 | 30.8% | 34.9% | +190 | -11.5% | -21.3% .. -1.3% | 13.8% | -86.9 |
-| late | assists | TIER 30-44 @5 | 2024 | 464 | 142 | 30.6% | 36.0% | +180 | -13.8% | -25.5% .. -1.3% | 16.7% | -64.0 |
-| late | assists | TIER 30-44 @5 | 2025 | 293 | 110 | 31.1% | 33.3% | +210 | -7.8% | -24.3% .. +7.6% | 22.6% | -22.9 |
-| late | assists | TIER 30-44 ==5 | both | 240 | 151 | 36.7% | 35.9% | +185 | +3.5% | -14.5% .. +21.1% | 24.4% | +8.3 |
-| late | assists | TIER 30-44 ==5 | 2024 | 143 | 88 | 34.3% | 36.8% | +175 | -3.1% | -24.2% .. +20.2% | 31.3% | -4.4 |
-| late | assists | TIER 30-44 ==5 | 2025 | 97 | 63 | 40.2% | 34.5% | +195 | +13.1% | -12.3% .. +39.2% | 36.9% | +12.7 |
 
 ## Goals: does a higher scoring bar help? (card window, flat drought 5+)
 
@@ -297,5 +335,5 @@ Control is the same qualifying players when they are NOT in a drought (flat rule
 
 Best-price selections read per window, and why any were not graded. `no_regular_season_game` is a playoff game or a game the player did not dress for.
 
-- `card`: selections 178017, no_regular_season_game 15549, ambiguous_name 232, graded 162236
-- `late`: selections 74966, no_regular_season_game 5672, ambiguous_name 94, graded 69200
+- `card`: selections 178017, no_regular_season_game 15334, ambiguous_name 232, graded 162451
+- `late`: selections 74966, no_regular_season_game 5578, ambiguous_name 94, graded 69294

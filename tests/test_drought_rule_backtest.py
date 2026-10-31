@@ -32,9 +32,9 @@ def test_drought_carries_across_the_season_boundary_and_uses_last_seasons_record
 
 
 def test_qualifying_bars_are_the_ones_cooper_set():
-    assert drb.THRESHOLDS == {"points": 70, "goals": 25, "assists": 30}
+    assert drb.THRESHOLDS == {"points": 70, "goals": 25, "assists": 60}, "assists 30+ until 2026-10-31"
     assert drb.TIERS == {"points": ((100, 3), (85, 4), (70, 5)), "goals": ((40, 5), (25, 10)),
-                         "assists": ((60, 3), (45, 4), (30, 5))}
+                         "assists": ((60, 3),)}
     assert drb.SURPRISE_MARKETS == ("points", "assists"), "goals left the surprise bar on 2026-10-10"
     assert drb.SURPRISE_LEVEL == 0.05
     assert drb.FLAT_DROUGHT == 5, "the #307 rule's bar, kept so the history buckets read the same"
@@ -54,10 +54,10 @@ def _wagers() -> pd.DataFrame:
         _wager("2024-11-01", 60, 60, 3),   # A: 60+ (tier 3), p .75 (surprise 3): both bars at 3
         _wager("2024-11-02", 60, 60, 2),   # B: the same player a night earlier: neither bar
         _wager("2024-11-03", 65, 40, 4),   # C: 60+ (tier 3), p .5 (surprise 5): the tier bar only, past it
-        _wager("2024-11-04", 35, 60, 3),   # D: 30-44 (tier 5), p .75 (surprise 3): the surprise bar only
-        _wager("2024-11-05", 35, 40, 5),   # E: 30-44, p .5: both bars, exactly at 5
-        _wager("2024-11-06", 35, 40, 6),   # F: 30-44, p .5: both bars, past 5
-        _wager("2024-11-07", 50, 60, 4),   # G: 45-59 (tier 4), p .75 (surprise 3): both, exactly at 4
+        _wager("2024-11-04", 70, 40, 5),   # D: 60+ (tier 3), p .5 (surprise 5): both bars, the surprise one exactly
+        _wager("2024-11-05", 70, 40, 6),   # E: 60+, p .5: both bars, past both
+        _wager("2024-11-06", 35, 60, 3),   # F: 35 assists, under 60 since 2026-10-31: not a qualifier
+        _wager("2024-11-07", 50, 60, 4),   # G: 50 assists, under 60: not a qualifier
         _wager("2024-11-08", 20, 10, 10),  # H: not a qualifier, however long the drought
         _wager("2024-11-09", 60, 0, 3),    # I: p = 0: the surprise bar is undefined; the tier bar lists him
     ])
@@ -68,13 +68,14 @@ def test_each_wager_is_labelled_with_its_band_and_both_bars():
 
     assert w.loc["2024-11-01", ["band", "tier_bar", "surprise_bar", "either_bar", "hit_rate"]].tolist() == ["60+", 3, 3, 3, 0.75]
     assert w.loc["2024-11-03", ["tier_bar", "surprise_bar", "either_bar"]].tolist() == [3, 5, 3]
-    assert w.loc["2024-11-04", ["band", "tier_bar", "surprise_bar", "either_bar"]].tolist() == ["30-44", 5, 3, 3]
-    assert w.loc["2024-11-07", ["band", "tier_bar", "surprise_bar"]].tolist() == ["45-59", 4, 3]
+    assert w.loc["2024-11-04", ["band", "tier_bar", "surprise_bar", "either_bar"]].tolist() == ["60+", 3, 5, 3]
+    assert pd.isna(w.loc["2024-11-06", "band"]) and pd.isna(w.loc["2024-11-06", "tier_bar"]), "35 assists: no band"
+    assert pd.isna(w.loc["2024-11-07", "band"]), "50 assists: no band since 2026-10-31"
     assert not w.loc["2024-11-08", "qualifies"] and pd.isna(w.loc["2024-11-08", "band"])
     assert pd.isna(w.loc["2024-11-08", "tier_bar"]) and w.loc["2024-11-08", "either_bar"] == 23, (
         "a non-qualifier has no tier bar; his surprise bar (p = 0.125) exists, and `qualifies` keeps him out of every bucket")
     assert pd.isna(w.loc["2024-11-09", "surprise_bar"]) and w.loc["2024-11-09", "either_bar"] == 3
-    assert w.qualifies.tolist() == [True] * 7 + [False, True]
+    assert w.qualifies.tolist() == [True] * 5 + [False, False, False, True]
 
 
 def test_a_goals_wager_has_no_surprise_bar_and_lists_on_its_tier_bar_alone():
@@ -100,16 +101,15 @@ def test_the_buckets_count_the_wagers_each_bar_lists():
     wagers = {b["bucket"]: b["wagers"] for b in result["buckets"] if b["window"] == "card" and b["season"] == "both"}
 
     assert wagers == {
-        "not in drought (0-4)": 6, "RULE: drought 5+": 2, "drought 5-6": 2,
-        "SHIPPED: either bar": 7, "TIER bars only": 6, "SURPRISE 5% only": 5,
-        "TIER 60+ @3": 3, "TIER 60+ ==3": 2, "TIER 45-59 @4": 1, "TIER 45-59 ==4": 1,
-        "TIER 30-44 @5": 2, "TIER 30-44 ==5": 1,
-    }, "a bucket with no wager is absent; H, the non-qualifier, is in none"
+        "not in drought (0-4)": 4, "RULE: drought 5+": 2, "drought 5-6": 2,
+        "SHIPPED: either bar": 5, "TIER bars only": 5, "SURPRISE 5% only": 3,
+        "TIER 60+ @3": 5, "TIER 60+ ==3": 2,
+    }, "a bucket with no wager is absent; F, G and H, the non-qualifiers, are in none"
     assert {b["market"] for b in result["buckets"]} == {"assists"} and {b["window"] for b in result["buckets"]} == {"card"}
     seasons = {(b["bucket"], b["season"]) for b in result["buckets"]}
     assert ("SHIPPED: either bar", "2024") in seasons and ("SHIPPED: either bar", "2025") not in seasons
     order = [b["bucket"] for b in result["buckets"] if b["season"] == "both"]
-    assert order.index("RULE: drought 5+") < order.index("SHIPPED: either bar") < order.index("TIER 60+ @3") < order.index("TIER 30-44 ==5")
+    assert order.index("RULE: drought 5+") < order.index("SHIPPED: either bar") < order.index("TIER 60+ @3") < order.index("TIER 60+ ==3")
     for b in result["buckets"]:
         assert {"wagers", "nights", "hit_rate", "implied", "median_odds", "roi", "units", "ci_low", "ci_high", "mde"} <= set(b)
         assert b["ci_low"] <= b["roi"] <= b["ci_high"]
@@ -122,15 +122,15 @@ def test_the_json_keeps_its_keys_and_names_the_tiers_the_level_and_the_rule():
     assert set(payload) == {"generated_at", "thresholds", "min_drought", "tiers", "surprise_level", "rule",
                             "accounting", "buckets", "goal_sweep"}
     assert payload["tiers"] == {"points": [[100, 3], [85, 4], [70, 5]], "goals": [[40, 5], [25, 10]],
-                                "assists": [[60, 3], [45, 4], [30, 5]]}
+                                "assists": [[60, 3]]}
     assert payload["surprise_level"] == 0.05 and payload["min_drought"] == 5
     assert "either" in payload["rule"] and "(1 - p)^n <= 0.05" in payload["rule"] and "100+ -> 3" in payload["rule"]
     text = drb.render(result, {"card": {"graded": 9}}, "now")
     assert text.startswith("# Due List backtest") and "## Headline (card window, the shipped rule: either bar)" in text
-    assert "| assists | 7 | 7 |" in text, "the headline row is the SHIPPED bucket"
-    assert "| assists | 60+ | 3 | 3 |" in text and "| assists | 30-44 | 5 | 2 |" in text, "the per-band table"
+    assert "| assists | 5 | 5 |" in text, "the headline row is the SHIPPED bucket"
+    assert "| assists | 60+ | 3 | 5 |" in text, "the per-band table"
     assert "| points | 0 | 0 |" in text, "a market with no wager is a row of zeros, not a missing row"
-    assert "| assists | SURPRISE 5% only | 5 |" in text and "Drought rule" not in text
+    assert "| assists | SURPRISE 5% only | 3 |" in text and "Drought rule" not in text
 
 
 def test_the_committed_report_was_generated_by_the_shipped_rule():
@@ -145,3 +145,15 @@ def test_the_committed_report_was_generated_by_the_shipped_rule():
     assert {drb.tier_bucket(drb.band_label(m, floor), bar) for m, tiers in drb.TIERS.items() for floor, bar in tiers} <= buckets
     markdown = (root / "drought_rule_backtest.md").read_text(encoding="utf-8")
     assert markdown.startswith("# Due List backtest") and payload["generated_at"] in markdown
+
+
+def test_the_shipped_wagers_split_by_shots_during_the_drought():
+    rows = [{**_wager(f"2024-11-{i + 1:02d}", 70, 40, 5), "drought_sog": d, "usual_sog": u}
+            for i, (d, u) in enumerate([(3.0, 2.5), (2.0, 2.0), (1.8, 2.0), (1.0, 2.0), (None, 2.0)])]
+    result = drb.measure(drb.label_bars(pd.DataFrame(rows)))
+    wagers = {b["bucket"]: b["wagers"] for b in result["buckets"] if b["season"] == "both"}
+    up, steady, down = (label for label, _, _ in drb.SHOTS_BUCKETS)
+
+    assert (wagers[up], wagers[steady], wagers[down]) == (2, 1, 1), "1.2x and 1.0x up, 0.9x steady, 0.5x down"
+    assert wagers["SHIPPED: either bar"] == 5, "a row with no shot count stays in the rule, just in no shots bucket"
+    assert "## Shots during the drought" in drb.render(result, {}, "now")

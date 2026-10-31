@@ -212,7 +212,7 @@ games[].pick     + side   "away" | "home" | "over" | "under"  — which side the
                  + line   number | null — the total's or puck line's number; null for moneyline and regulation
                  Written by build_site_json.py::pick_side_and_line from the card candidate's own selection and line.
 games[].drought  [] on every regular-season game — Cooper's Due List (2026-10-07; that evening the two bars below replaced
-                 the flat 5-game rule of #307), an unstaked list he picks from: 70+ points, 25+ goals or 30+ assists last regular
+                 the flat 5-game rule of #307), an unstaked list he picks from: 70+ points, 25+ goals or 60+ assists (30+ until 2026-10-31) last regular
                  season, and a drought in that category (games dressed without one, carried across the season boundary) that
                  has reached EITHER bar. Rows come in the card's order: points, goals, assists; then rarity ascending (rarest
                  first); then drought descending; then name.
@@ -220,7 +220,7 @@ games[].drought  [] on every regular-season game — Cooper's Due List (2026-10-
                  drought (games in a row without one, entering tonight), price (best American odds | null: not posted),
                  book (string | null), heavyJuice (bool: shorter than -160),
                  tierBar      int | null — the bar his last-season total sets: points 100+ 3, 85-99 4, 70-84 5;
-                              goals 40+ 5, 25-39 10; assists 60+ 3, 45-59 4, 30-44 5
+                              goals 40+ 5, 25-39 10; assists 60+ 3 (45-59 4 and 30-44 5 until 2026-10-31)
                  surpriseBar  int | null — his own equal-surprise bar, the smallest n >= 1 with (1 - hitRate)^n <= 0.05;
                               null when hitRate is 0 (that bar never lists him; 1 when hitRate is 1), and on every
                               goals row (goals left the surprise bar on 2026-10-10)
@@ -233,6 +233,10 @@ games[].drought  [] on every regular-season game — Cooper's Due List (2026-10-
                               before the field existed) reads N = round(1 / rarity) instead, and a rarity of exactly 0 prints
                               the card's two spellings: "never last season" when hitRate is 1, otherwise "rarer than 1 in
                               10,000 for him". The line is omitted only when oneIn and rarity are both null.
+                 droughtShots float | null — shots on goal a game during the drought (2026-10-31); null when unknown
+                 usualShots   float | null — his shots on goal a game in up to 82 games before the drought
+                 modelChance  float | null — the card's own chance of the over (0-1); null when the card has no opinion
+                 modelEdge    float | null — modelChance minus the best price's implied chance (information, never a stake)
                  rule         "tier" | "surprise" | "both" | null — which bars his drought has reached
                  band         string | null — the tier band label: "100+", "85-99", "70-84", "40+", ..., "60+", "45-59", "30-44"
                  cellRecord   {wagers, returnPct, lowPct, highPct} | null — that band's measured record from

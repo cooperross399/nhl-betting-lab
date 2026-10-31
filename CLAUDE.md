@@ -2344,6 +2344,30 @@ Re-derive rather than trust if the data has moved.
   unchanged, and recorded lists and their forward record keep their columns
   (nights already recorded are not rebuilt).
 
+- **2026-10-31: the Due List's assists rule changed, on Cooper's word, and
+  every row shows its shots and the card's own chance.** Cooper chose "Yes,
+  60+ assists only" on a decision card. Assists now qualify at 60+ last
+  season (`THRESHOLDS`), tier bar 3 (`TIERS`), and the surprise bar still
+  applies. The list's first three weeks (Oct 8-29, graded from card-feed's
+  card history against the forward ledger, best price): 179 entries, 36.3%
+  hit against 37.3% implied, -3.2u at 1u each; assists were 121 of them at
+  -3.7u. Regenerated backtest (Due List Tuning run 41203596438, card window,
+  either bar): points -1.6% over 311 (-10.8% to +7.1%), goals +3.6% over 537
+  (-9.3% to +19.2%), assists **+10.5% over 184 (-1.8% to +23.8%)**, where
+  30+ assists read -8.6% over 2,157. No category's interval sits above zero:
+  **no demonstrated edge**, and the 60+ band was picked after seeing it.
+  Every row now also carries `drought_sog` / `usual_sog` (shots on goal a
+  game during the drought against his rate in up to 82 games before it,
+  `shots_during_drought`) and `model_probability` / `model_edge` (the card's
+  own chance of the over and its gap to the best price), as card columns and
+  as `droughtShots`, `usualShots`, `modelChance`, `modelEdge` on the site
+  JSON. Both are information, never a filter. The backtest's new shots split
+  separates nothing: goals with shots up +18.2% over 69 (+61% in 2024-25,
+  -15% in 2025-26), shots down +3.1% over 302; on the live list the model
+  agreeing made -2.7u over 49. Still an UNSTAKED list: the model, the edge
+  bar, the market list, the staking rule, the snapshot, the forward ledger
+  and the registered test are unchanged.
+
 - **2026-10-09: the card's player props are on the public site.** Cooper:
   "player props need to be posting to the website". The pages had rendered a
   `props` block since the 2026-10-07 drop, and `season_record` summed one,

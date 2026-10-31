@@ -513,7 +513,7 @@ def fill_prices(
             key = (int(listed.at[i, "player_id"]), listed.at[i, "market"])
             if key not in best:
                 continue
-            odds, book = best[key]
+            odds, book = best[key][0], best[key][1]
             listed.at[i, "american_odds"], listed.at[i, "book"] = odds, book
             filled.append({"player_id": key[0], "market": key[1], "american_odds": odds, "book": book})
             if len(ledger):

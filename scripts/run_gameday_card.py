@@ -942,6 +942,7 @@ def main(argv: list[str] | None = None) -> int:
             day=snapshot_day,
             now=moment,
             records=cell_records(outputs, fallback=OUTPUTS_DIR),
+            probabilities=probabilities,
         )
     except (KeyError, ValueError) as exc:
         from nhl_betting_lab.drought_rule import DroughtList

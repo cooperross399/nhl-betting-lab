@@ -1,11 +1,11 @@
 """Measure the Due List rule against bought prop prices.
 
 The rule (Cooper, 2026-10-07 evening; goals changed 2026-10-10): a skater who
-produced 70+ points, 25+ goals or 30+ assists LAST regular season is listed in
+produced 70+ points, 25+ goals or 60+ assists LAST regular season is listed in
 that category when his current drought (straight regular-season games dressed
 without one in it) reaches EITHER bar: the TIER bar from last season's total
 (points 100+ -> 3, 85-99 -> 4, 70-84 -> 5; goals 40+ -> 5, 25-39 -> 10;
-assists 60+ -> 3, 45-59 -> 4, 30-44 -> 5) or, for points and assists only,
+assists 60+ -> 3; assists were 30+ until 2026-10-31) or, for points and assists only,
 the SURPRISE bar from his own prior-season hit rate p (the smallest n with
 (1 - p)^n <= 0.05). The wager measured
 is the over 0.5 in that category (1+ point, anytime goal, 1+ assist). The flat
@@ -40,6 +40,8 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from nhl_betting_lab.drought_rule import (  # noqa: E402,F401
     SHIPPED_BUCKET,
+    SHOTS_DOWN,
+    SHOTS_UP,
     SURPRISE_LEVEL,
     SURPRISE_MARKETS,
     THRESHOLDS,
@@ -66,11 +68,16 @@ BUCKETS = (("not in drought (0-4)", 0, 4), (f"RULE: drought {FLAT_DROUGHT}+", FL
 TIER_ONLY_BUCKET = "TIER bars only"
 SURPRISE_ONLY_BUCKET = f"SURPRISE {SURPRISE_LEVEL:.0%} only"
 GOAL_SWEEP = (30, 35, 40, 45)
+#: The shots check (2026-10-31): the shipped rule's wagers split by shots on
+#: goal a game during the drought over his usual rate before it.
+SHOTS_BUCKETS = ((f"SHIPPED, shots up (>= {SHOTS_UP:g}x usual)", SHOTS_UP, np.inf),
+                 (f"SHIPPED, shots steady ({SHOTS_DOWN:g}-{SHOTS_UP:g}x)", SHOTS_DOWN, SHOTS_UP),
+                 (f"SHIPPED, shots down (< {SHOTS_DOWN:g}x)", -np.inf, SHOTS_DOWN))
 BOOTSTRAPS = 1000
 RULE_SENTENCE = (
-    "A skater with 70+ points, 25+ goals or 30+ assists last regular season is listed in that category when "
+    "A skater with 70+ points, 25+ goals or 60+ assists last regular season is listed in that category when "
     "his drought reaches either the tier bar from last season's total (points 100+ -> 3, 85-99 -> 4, 70-84 -> 5; "
-    "goals 40+ -> 5, 25-39 -> 10; assists 60+ -> 3, 45-59 -> 4, 30-44 -> 5) or, for points and assists, the "
+    "goals 40+ -> 5, 25-39 -> 10; assists 60+ -> 3) or, for points and assists, the "
     f"surprise bar from his own prior-season hit rate p, the smallest n with (1 - p)^n <= {SURPRISE_LEVEL}; "
     "the wager is the over 0.5."
 )
@@ -112,7 +119,9 @@ def build_wagers(prices: pd.DataFrame, logs: pd.DataFrame) -> tuple[pd.DataFrame
             rows.append({"window": window, "date": r.gdate, "season": int(g.season_start), "market": r.market,
                          "player": g.player, "odds": float(r.american_odds), "book": r.book, "dec": float(r.dec),
                          "won": bool(g[r.market] >= 1), "prior": g["prior_" + r.market], "drought": int(g["drought_" + r.market]),
-                         "prior_gp": g["prior_gp"], "prior_hits": g["prior_hit_" + r.market]})
+                         "prior_gp": g["prior_gp"], "prior_hits": g["prior_hit_" + r.market],
+                         "drought_sog": g.get("drought_sog_" + r.market, np.nan),
+                         "usual_sog": g.get("usual_sog_" + r.market, np.nan)})
     return label_bars(pd.DataFrame(rows)), counts
 
 
@@ -128,6 +137,11 @@ def label_bars(w: pd.DataFrame) -> pd.DataFrame:
     w["surprise_bar"] = pd.to_numeric(pd.Series([surprise_bar(p) if m in SURPRISE_MARKETS else None
                                                  for m, p in zip(w.market, w.hit_rate)], index=w.index), errors="coerce")
     w["either_bar"] = w[["tier_bar", "surprise_bar"]].min(axis=1)
+    if "drought_sog" in w.columns:
+        usual = pd.to_numeric(w.usual_sog, errors="coerce")
+        w["shots_ratio"] = pd.to_numeric(w.drought_sog, errors="coerce") / usual.where(usual > 0)
+    else:
+        w["shots_ratio"] = np.nan
     return w
 
 
@@ -154,6 +168,9 @@ def bucket_masks(q: pd.DataFrame, market: str) -> list[tuple[str, pd.Series]]:
         (TIER_ONLY_BUCKET, q.drought >= q.tier_bar),
         (SURPRISE_ONLY_BUCKET, q.surprise_bar.notna() & (q.drought >= q.surprise_bar)),
     ]
+    shipped = q.drought >= q.either_bar
+    for label, lo, hi in SHOTS_BUCKETS:
+        masks.append((label, shipped & (q.shots_ratio >= lo) & (q.shots_ratio < hi)))
     for floor, bar in TIERS[market]:
         band = band_label(market, floor)
         masks.append((tier_bucket(band, bar), (q.band == band) & (q.drought >= bar)))
@@ -230,6 +247,20 @@ def render(result: dict, counts: dict, generated_at: str) -> str:
           "|:--|:--|--:|--:|--:|--:|--:|:--|--:|--:|--:|"]
     for m in THRESHOLDS:
         for label in (SHIPPED_BUCKET, TIER_ONLY_BUCKET, SURPRISE_ONLY_BUCKET):
+            b, s1, s2 = by.get(("card", m, label, "both")), by.get(("card", m, label, "2024")), by.get(("card", m, label, "2025"))
+            if b:
+                L.append(f"| {m} | {label} | {b['wagers']} | {b['nights']} | {b['hit_rate']*100:.1f}% | {b['implied']*100:.1f}% | "
+                         f"{pct(b['roi'])} | {pct(b['ci_low'])} .. {pct(b['ci_high'])} | {b['mde']*100:.1f}% | "
+                         f"{pct(s1['roi']) + ' / ' + str(s1['wagers']) if s1 else '—'} | {pct(s2['roi']) + ' / ' + str(s2['wagers']) if s2 else '—'} |")
+            else:
+                L.append(f"| {m} | {label} | 0 | 0 | — | — | — | — | — | — | — |")
+    L += ["", "## Shots during the drought (card window, the shipped rule)", "",
+          "Shots on goal a game during the drought over his own rate in up to 82 games before it. "
+          "\"Shots up\" is a player still shooting as usual or more; \"shots down\" is one whose shots dried up.", "",
+          "| Market | Bucket | Wagers | Nights | Hit | Implied | ROI | 95% interval | MDE | 2024-25 | 2025-26 |",
+          "|:--|:--|--:|--:|--:|--:|--:|:--|--:|--:|--:|"]
+    for m in THRESHOLDS:
+        for label, _, _ in SHOTS_BUCKETS:
             b, s1, s2 = by.get(("card", m, label, "both")), by.get(("card", m, label, "2024")), by.get(("card", m, label, "2025"))
             if b:
                 L.append(f"| {m} | {label} | {b['wagers']} | {b['nights']} | {b['hit_rate']*100:.1f}% | {b['implied']*100:.1f}% | "
