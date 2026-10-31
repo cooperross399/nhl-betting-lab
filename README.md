@@ -563,6 +563,7 @@ bought the window again and uploaded a thin copy as the newest carrier.
 | Season Sim Backtest | on demand only: scores the season engine on 2024-25 and 2025-26, report as the `season-sim-backtest` artifact | no |
 | Design Drop Guard | on every pull request from a `design/**` branch: fails it unless it changes only page files | no |
 | Design Drop | on `design/**` pull requests, after Tests passes on them, and on demand: pins shared pages to a new tag, merges on green, fans out to EPL, CBB and the hub | no |
+| Lineup Contest Feed | daily at 15:15 and 20:15 UTC, and on demand: copies The Lineup's contest plan for tonight (names, links, fees; no balance) to the `lineup-feed` branch for the morning post | no |
 | Design Drop Intake | hourly, and on demand with `zip_url`: turns a zipped Claude Design drop at a public URL into a `design/**` branch and pull request | no |
 | Shadow Stats | on demand, and on PRs that change `src/nhl_betting_lab/shadow/` | no |
 | New Market Prices | daily in season (cron 10:00 UTC, which lands near the card's window): tonight's new-market prices, cap 640; on demand: probe, buy or backtest a past window. Prices go only to the private repository; the artifact is aggregate | yes, capped, required cap |

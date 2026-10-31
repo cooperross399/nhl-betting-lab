@@ -93,6 +93,9 @@ def test_no_workflow_grants_write_access_to_contents(workflow: str) -> None:
         # place: a scheduled job that rewrites the card's policy on its own
         # is tuning by another name, and it would corrupt the forward test.
         "experiment-refresh.yml": "$BRANCH",
+        # Copies The Lineup's contest plan (contest names, links, fees; no
+        # balance, no prices) to its own orphan branch for the morning post.
+        "lineup-contest-feed.yml": "refs/heads/lineup-feed",
     }
     if workflow not in writers:
         assert "contents: write" not in text
