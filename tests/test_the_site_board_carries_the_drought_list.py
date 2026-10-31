@@ -28,7 +28,11 @@ from test_site_never_calls_an_unpriced_game_a_pass import (
 BAR_KEYS = {"tierBar", "surpriseBar", "hitRate", "rarity", "oneIn", "rule", "band", "cellRecord"}
 #: 2026-10-31: shots in the drought and before it, and the card's own chance of the over.
 INFO_KEYS = {"droughtShots", "usualShots", "modelChance", "modelEdge"}
-SCHEMA_KEYS = {"player", "playerId", "team", "market", "line", "lastSeason", "drought", "price", "book", "heavyJuice"} | BAR_KEYS | INFO_KEYS
+#: 2026-10-31 (round two): tonight's posted line and unit, and the goalie he faces.
+CONTEXT_KEYS = {"lineTonight", "ppTonight", "lineBefore", "ppBefore", "lineMove", "status",
+                "oppGoalie", "oppGoalieStatus", "oppGoalieBackup", "oppGoalieVsExpected"}
+SCHEMA_KEYS = ({"player", "playerId", "team", "market", "line", "lastSeason", "drought", "price", "book", "heavyJuice"}
+               | BAR_KEYS | INFO_KEYS | CONTEXT_KEYS)
 #: The same fields as the card's drought_list.json spells them.
 CARD_BAR_FIELDS = ("tier_bar", "surprise_bar", "hit_rate", "rarity", "one_in", "rule", "band", "cell_record")
 ROOT = Path(__file__).resolve().parents[1]
@@ -97,7 +101,8 @@ def test_every_regular_season_game_carries_the_array_in_the_schemas_shape(lab, t
                             "lastSeason": 31, "drought": 7, "price": 170, "book": "DraftKings", "heavyJuice": False,
                             "tierBar": 5, "surpriseBar": 7, "hitRate": 0.35, "rarity": 0.049, "oneIn": 20, "rule": "both", "band": "30-44",
                             "cellRecord": {"wagers": 184, "returnPct": 10.5, "lowPct": -1.7, "highPct": 23.9},
-                            "droughtShots": None, "usualShots": None, "modelChance": None, "modelEdge": None}
+                            "droughtShots": None, "usualShots": None, "modelChance": None, "modelEdge": None,
+                            **{key: None for key in CONTEXT_KEYS}}
     assert by["TOR"][1]["price"] is None and by["TOR"][1]["book"] is None, "a missing price stays null"
     assert by["NYI"][0]["price"] == -190 and by["NYI"][0]["heavyJuice"] is True
 
@@ -375,3 +380,22 @@ def test_the_page_shows_the_shots_and_the_cards_chance_and_omits_them_when_absen
     assert rows["Short"]["Model's chance"]["sub"] == "-5.0 pts vs the price"
     assert "Shots in drought" not in rows["Bare"] and "Model's chance" not in rows["Bare"], (
         "a row missing either shot figure or the chance shows no cell for it")
+
+
+def test_tonights_line_and_the_goalie_faced_are_copied_and_bad_values_are_null(lab, tmp_path, monkeypatch) -> None:
+    write_list(lab, [row("TOR", "MTL", line_tonight="F1", pp_tonight="PP1", line_before="F2", pp_before="PP2", line_move="up",
+                         status="", opp_goalie="Sam Montembeault", opp_goalie_status="Confirmed",
+                         opp_goalie_backup=False, opp_goalie_vs_expected=0.061),
+                     row("NYI", "BOS", player="Odd", player_id=5, line_move="sideways", opp_goalie_backup="yes",
+                         opp_goalie_vs_expected=float("inf"))])
+
+    by = {g["home"]["abbr"]: g["drought"] for g in build(lab, tmp_path / "out", monkeypatch)["games"]}
+
+    assert {k: by["TOR"][0][k] for k in CONTEXT_KEYS} == {
+        "lineTonight": "F1", "ppTonight": "PP1", "lineBefore": "F2", "ppBefore": "PP2", "lineMove": "up",
+        "status": None, "oppGoalie": "Sam Montembeault", "oppGoalieStatus": "Confirmed",
+        "oppGoalieBackup": False, "oppGoalieVsExpected": 0.061}
+    odd = by["NYI"][0]
+    assert odd["lineMove"] is None and odd["oppGoalieBackup"] is None and odd["oppGoalieVsExpected"] is None
+    assert odd["lineTonight"] is None, "a row the card wrote before the field reads null"
+    assert by["TOR"][0]["line"] == 0.5, "the prop's line is not tonight's line"

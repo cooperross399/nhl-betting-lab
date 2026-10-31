@@ -2367,6 +2367,30 @@ Re-derive rather than trust if the data has moved.
   agreeing made -2.7u over 49. Still an UNSTAKED list: the model, the edge
   bar, the market list, the staking rule, the snapshot, the forward ledger
   and the registered test are unchanged.
+  **Round two, same day (Cooper: "yes do all that except 4").** `due_context.annotate`
+  runs on the list after it is built:
+  - **Not dressing:** a player whose club posted tonight's lines (16+
+    skaters, the card's rule) without him is taken off and named in the
+    list's notes.
+  - **Line tags:** each row carries `line_tonight` / `pp_tonight` (not
+    `line`, which is the prop's 0.5), the latest earlier capture's
+    `line_before` / `pp_before`, `line_move` (up, down, same, mixed) and
+    Daily Faceoff's `status`.
+  - **The goalie he faces:** `opp_goalie` and `opp_goalie_status` (Daily
+    Faceoff), and `opp_goalie_backup`, true when he is not the goalie with
+    the most starts in his club's last 20 games. It also carries
+    `opp_goalie_vs_expected`, his regressed GA over xGA minus 1 from the
+    ratings file.
+
+  These are card columns "Line tonight" and "Goalie faced" and site
+  fields (`web/SCHEMA.md`). The recorded lists and the Due List ledger
+  gain `model_probability` / `model_edge` (older files read blank). Every
+  Monday the card carries "Due List scorecard": the last full Sunday to
+  Saturday and the season, by category, hits, units at 0.25u, and model
+  agreed vs disagreed (`drought_forward.build_scorecard`). It is saved
+  every run as `due_list_scorecard.md`. None of it is measured against
+  prices; apart from the not-dressing removal it filters nothing. Same
+  unchanged list as above.
 
 - **2026-10-09: the card's player props are on the public site.** Cooper:
   "player props need to be posting to the website". The pages had rendered a

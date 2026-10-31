@@ -29,7 +29,7 @@ from nhl_betting_lab.data.build_datasets import load_player_logs, load_team_game
 from nhl_betting_lab.models.saves_context import SavesInputs
 from nhl_betting_lab.data.nhl_api import current_birth_dates, current_rosters
 from nhl_betting_lab.data.starting_goalies import load_starters
-from nhl_betting_lab.drought_forward import record_list
+from nhl_betting_lab.drought_forward import build_scorecard, load_ledger, record_list, render_scorecard
 from nhl_betting_lab.drought_rule import (
     SITE_LIST_FILENAME,
     backtest_headline,
@@ -57,6 +57,7 @@ from nhl_betting_lab.providers.team_names import (
     saved_team_name_map,
 )
 from nhl_betting_lab.puck_drop import parse_commence_time
+from nhl_betting_lab.due_context import annotate as annotate_due_list
 from nhl_betting_lab.lineups import TonightLineups, tonight_lineups
 from nhl_betting_lab.reports.card_pricing import (
     price_props,
@@ -949,9 +950,29 @@ def main(argv: list[str] | None = None) -> int:
 
         drought = DroughtList(day=snapshot_day, notes=[f"The Due List could not be built: {exc}"])
         print(f"::warning::The Due List could not be built: {exc}")
+    # Tonight's context on each row (Cooper, 2026-10-31): his posted line and
+    # power-play unit and how they moved, the goalie he faces, and a player his
+    # club's posted lines leave out taken off the list and named.
+    try:
+        drought.rows, not_dressing = annotate_due_list(
+            drought.rows, processed=processed, day=snapshot_day, now=moment,
+            logs=logs, team_names=team_names,
+        )
+        drought.notes.extend(not_dressing)
+    except (KeyError, ValueError, OSError) as exc:
+        print(f"::warning::The Due List's lines and goalies could not be read: {exc}")
     card.drought_rows = drought.rows
     card.drought_unresolved = drought.unresolved
     card.drought_notes = list(drought.notes)
+    # The Monday scorecard (Cooper, 2026-10-31): last week's and the season's
+    # record, read from the settled ledger, on the card every Monday.
+    if datetime.fromisoformat(snapshot_day).weekday() == 0:
+        try:
+            card.due_scorecard = render_scorecard(
+                build_scorecard(load_ledger(processed), snapshot_day)
+            )
+        except (KeyError, ValueError, OSError) as exc:
+            print(f"::warning::The Due List scorecard could not be built: {exc}")
     if drought.removed_by_guard:
         card.drought_notes.append(
             f"{drought.removed_by_guard} qualifier(s) are not listed: their game has started or "
