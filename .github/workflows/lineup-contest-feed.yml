@@ -1,0 +1,102 @@
+name: Lineup Contest Feed
+
+# Copies The Lineup's "Contests to enter" plan for tonight's NHL main slate
+# onto the lineup-feed branch, so the project's morning routine can post the
+# contest links. The plan comes from the worker's public GET /contests/feed,
+# which builds it from DraftKings' live lobby: contest name, id, link, fee,
+# entries to make, field size, per-user maximum and lock time. No balance,
+# no lineup, no personal data. The cloud routine cannot reach workers.dev,
+# and this runner can, which is the whole reason this job exists.
+#
+# It writes contests/latest.json and contests/<date>.json and pushes only
+# refs/heads/lineup-feed, an orphan branch holding nothing else. It fetches no
+# odds, spends no credit, enters no contest and places no bet.
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 15:15 and 20:15 UTC: about 10:15 AM and 3:15 PM ET in winter, an hour
+    # later in summer. The second run picks up contests DK posts later.
+    - cron: "15 15,20 * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: lineup-contest-feed
+  cancel-in-progress: false
+
+jobs:
+  feed:
+    name: Copy tonight's contest plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Fetch the plan from The Lineup
+        env:
+          FEED_URL: https://the-lineup.cooperross399.workers.dev/contests/feed
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/feed"
+          curl -fsS --retry 3 --retry-delay 10 --max-time 60 "$FEED_URL" -o "$RUNNER_TEMP/feed/plan.json"
+          python3 -I - "$RUNNER_TEMP/feed/plan.json" <<'PY'
+          import json, sys
+          plan = json.load(open(sys.argv[1], encoding="utf-8"))
+          for key in ("date", "entries", "generated_at"):
+              if key not in plan:
+                  sys.exit(f"feed is missing {key!r}")
+          if not isinstance(plan["entries"], list):
+              sys.exit("feed entries is not a list")
+          for entry in plan["entries"]:
+              for key in ("name", "contest_id", "url", "fee", "entries", "lock_et"):
+                  if key not in entry:
+                      sys.exit(f"an entry is missing {key!r}")
+              if not str(entry["url"]).startswith("https://www.draftkings.com/"):
+                  sys.exit(f"unexpected link {entry['url']!r}")
+          banned = {"balance", "bankroll", "cap_balance", "user", "username", "lineup", "lineups"}
+          found = banned & {k.lower() for k in plan}
+          if found:
+              sys.exit(f"feed carries fields that must stay private: {sorted(found)}")
+          print(f"{plan['date']}: {len(plan['entries'])} contests")
+          PY
+
+      - name: Publish to the lineup-feed branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          DAY=$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))["date"])' "$RUNNER_TEMP/feed/plan.json")
+          case "$DAY" in
+            [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]) ;;
+            *) echo "::error::feed date $DAY is not YYYY-MM-DD"; exit 1 ;;
+          esac
+          REMOTE="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          WORK="$RUNNER_TEMP/branch"
+          git init -q "$WORK"
+          cd "$WORK"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git fetch -q "$REMOTE" refs/heads/lineup-feed:refs/remotes/origin/lineup-feed; then
+            git checkout -q -B lineup-feed refs/remotes/origin/lineup-feed
+          else
+            echo "No lineup-feed branch yet; starting one."
+            git checkout -q --orphan lineup-feed
+          fi
+          mkdir -p contests
+          cp "$RUNNER_TEMP/feed/plan.json" contests/latest.json
+          cp "$RUNNER_TEMP/feed/plan.json" "contests/$DAY.json"
+          git add contests
+          if git diff --cached --quiet; then
+            echo "Nothing changed."
+            exit 0
+          fi
+          git commit -q -m "Contest plan for $DAY"
+          git push -q "$REMOTE" HEAD:refs/heads/lineup-feed
