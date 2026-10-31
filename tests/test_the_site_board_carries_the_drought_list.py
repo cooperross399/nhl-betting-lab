@@ -26,7 +26,9 @@ from test_site_never_calls_an_unpriced_game_a_pass import (
 
 #: What a row gained on 2026-10-07 evening, beyond the #307 shape.
 BAR_KEYS = {"tierBar", "surpriseBar", "hitRate", "rarity", "oneIn", "rule", "band", "cellRecord"}
-SCHEMA_KEYS = {"player", "playerId", "team", "market", "line", "lastSeason", "drought", "price", "book", "heavyJuice"} | BAR_KEYS
+#: 2026-10-31: shots in the drought and before it, and the card's own chance of the over.
+INFO_KEYS = {"droughtShots", "usualShots", "modelChance", "modelEdge"}
+SCHEMA_KEYS = {"player", "playerId", "team", "market", "line", "lastSeason", "drought", "price", "book", "heavyJuice"} | BAR_KEYS | INFO_KEYS
 #: The same fields as the card's drought_list.json spells them.
 CARD_BAR_FIELDS = ("tier_bar", "surprise_bar", "hit_rate", "rarity", "one_in", "rule", "band", "cell_record")
 ROOT = Path(__file__).resolve().parents[1]
@@ -94,7 +96,8 @@ def test_every_regular_season_game_carries_the_array_in_the_schemas_shape(lab, t
     assert by["TOR"][0] == {"player": "Assist Man", "playerId": 8471111, "team": "TOR", "market": "assists", "line": 0.5,
                             "lastSeason": 31, "drought": 7, "price": 170, "book": "DraftKings", "heavyJuice": False,
                             "tierBar": 5, "surpriseBar": 7, "hitRate": 0.35, "rarity": 0.049, "oneIn": 20, "rule": "both", "band": "30-44",
-                            "cellRecord": {"wagers": 184, "returnPct": 10.5, "lowPct": -1.7, "highPct": 23.9}}
+                            "cellRecord": {"wagers": 184, "returnPct": 10.5, "lowPct": -1.7, "highPct": 23.9},
+                            "droughtShots": None, "usualShots": None, "modelChance": None, "modelEdge": None}
     assert by["TOR"][1]["price"] is None and by["TOR"][1]["book"] is None, "a missing price stays null"
     assert by["NYI"][0]["price"] == -190 and by["NYI"][0]["heavyJuice"] is True
 
@@ -176,7 +179,7 @@ def test_the_note_is_the_rule_and_the_backtest_headline_read_from_its_file(lab, 
     board = build(lab, tmp_path / "out", monkeypatch)
     note = board["droughtNote"]
 
-    assert "70+ points, 25+ goals or 30+ assists" in note and "unstaked" in note and "Due List" in note
+    assert "70+ points, 25+ goals or 60+ assists" in note and "unstaked" in note and "Due List" in note
     # The shipped rule's card-window headline (either bar), as the committed backtest JSON states it.
     assert "points -1.6% over 311 wagers" in note and "goals +3.6% over 537" in note and "assists -8.6% over 2157" in note
     assert "no category's interval sits above zero" in note
@@ -339,3 +342,14 @@ def test_the_page_prints_the_cards_rarity_line_for_every_row_and_names_the_measu
     unnamed = next(g for g in render_page(board, tmp_path)["tonight"]["games"] if g["rows"])
     assert unnamed["rows"][0]["record"].startswith("This cell: +15.5% over 15"), (
         "a board naming no window prints none, never a season the record was not measured on")
+
+
+def test_the_shots_and_the_cards_chance_are_copied_and_never_computed_here(lab, tmp_path, monkeypatch) -> None:
+    write_list(lab, [row("TOR", "MTL", drought_sog=3.4, usual_sog=2.9, model_probability=0.41, model_edge=0.032),
+                     row("NYI", "BOS", player="Inf", player_id=5, drought_sog=float("inf"), model_probability=None)])
+
+    by = {g["home"]["abbr"]: g["drought"] for g in build(lab, tmp_path / "out", monkeypatch)["games"]}
+
+    assert {k: by["TOR"][0][k] for k in INFO_KEYS} == {"droughtShots": 3.4, "usualShots": 2.9,
+                                                       "modelChance": 0.41, "modelEdge": 0.032}
+    assert by["NYI"][0]["droughtShots"] is None and by["NYI"][0]["modelChance"] is None, "an infinity or a blank is null"

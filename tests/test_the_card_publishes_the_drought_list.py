@@ -41,16 +41,16 @@ def raw_dirs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 
 def _add_last_season(processed: Path) -> None:
-    """Skater 1 (TOR): 35 assists in 70 games in 2025-26 (35 without one first, so his hit rate is 0.5 and
+    """Skater 1 (TOR): 64 assists in 128 games in 2025-26 (64 without one first, so his hit rate is 0.5 and
     the drought entering this season starts at zero), then five games this October without one."""
     path = processed / PLAYER_LOGS_FILENAME
     logs = pd.read_csv(path)
     template = logs[logs.player_id == 1].iloc[-1].to_dict()
     rows = []
-    for i in range(35):
+    for i in range(64):
         rows.append({**template, "game_id": 6000 + i, "season": 20252026, "date": f"2025-11-{1 + i % 28:02d}",
                      "goals": 0, "assists": 0, "points": 0})
-    for i in range(35):
+    for i in range(64):
         rows.append({**template, "game_id": 7000 + i, "season": 20252026, "date": f"2026-01-{1 + i % 28:02d}",
                      "goals": 0, "assists": 1, "points": 1})
     for i in range(5):
@@ -74,20 +74,20 @@ def test_a_card_with_no_prices_still_publishes_the_list_with_not_posted(tmp_path
 
     assert card["card_generated"] is False and card["blockers"], "no prices: the card is blocked"
     assert [(r["player"], r["market"], r["drought"], r["last_season"], r["team"], r["opponent"], r["american_odds"])
-            for r in card["drought_rows"]] == [("Skater 1", "assists", 5, 35, "TOR", "BOS", None)]
+            for r in card["drought_rows"]] == [("Skater 1", "assists", 5, 64, "TOR", "BOS", None)]
     row = card["drought_rows"][0]
     assert (row["tier_bar"], row["surprise_bar"], row["hit_rate"], row["rarity"], row["rule"], row["band"]) == (
-        5, 5, 0.5, 0.0312, "both", "30-44")
+        3, 5, 0.5, 0.0312, "both", "60+")
     committed = json.loads((Path(__file__).resolve().parents[1] / "data" / "outputs" / "drought_rule_backtest.json")
                            .read_text(encoding="utf-8"))
     bucket = next(b for b in committed["buckets"] if b["window"] == "card" and b["season"] == "both"
-                  and b["market"] == "assists" and b["bucket"] == "TIER 30-44 @5")
+                  and b["market"] == "assists" and b["bucket"] == "TIER 60+ @3")
     assert row["cell_record"] == {k: bucket[k] for k in ("wagers", "roi", "ci_low", "ci_high")}, (
         "the band's record is read from the committed backtest through the card's own main()")
     markdown = (tmp_path / "outputs" / "gameday_card.md").read_text(encoding="utf-8")
     section = markdown[markdown.index("## Due List"):]
     assert "Skater 1" in section and "not posted" in section and "over 0.5" in section
-    assert "| 5 (both) | tier 5 / surprise 5 | 1 in 32 for him | band 30-44 @5: " in section
+    assert "| 5 (both) | tier 3 / surprise 5 | 1 in 32 for him | " in section and "| band 60+ @3: " in section
     assert "Backtest" in section.splitlines()[2], "one headline line under the heading"
     assert "Drought rule" not in markdown
     listed = json.loads((tmp_path / "outputs" / "drought_list.json").read_text(encoding="utf-8"))
