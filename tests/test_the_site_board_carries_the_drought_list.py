@@ -263,7 +263,7 @@ const c = new Component();
 c.S = S; c.F = F; c.L = L;
 const vm = S.ADAPTERS.nhl.board(data);
 vm.otherSports = [];
-const pick = (x) => ({ player: x.player, meta: x.meta, record: x.record });
+const pick = (x) => ({ player: x.player, meta: x.meta, record: x.record, facts: x.facts });
 const out = {};
 for (const tab of ["tonight", "props"]) {
   c.state = { vm, data, pv: null, sportKey: "nhl", deployed: false, tab, propView: "drought", now: Date.now(), expanded: {}, allOpen: true, wide: true,
@@ -353,3 +353,25 @@ def test_the_shots_and_the_cards_chance_are_copied_and_never_computed_here(lab, 
     assert {k: by["TOR"][0][k] for k in INFO_KEYS} == {"droughtShots": 3.4, "usualShots": 2.9,
                                                        "modelChance": 0.41, "modelEdge": 0.032}
     assert by["NYI"][0]["droughtShots"] is None and by["NYI"][0]["modelChance"] is None, "an infinity or a blank is null"
+
+
+def test_the_page_shows_the_shots_and_the_cards_chance_and_omits_them_when_absent(lab, tmp_path, monkeypatch) -> None:
+    """Rendered through Board.dc.html's own component: the two facts added 2026-10-31 (#399).
+
+    "Shots in drought" needs both shot figures; "Model's chance" needs the chance and prints the edge
+    beside it when there is one. A row without them shows neither cell, never a zero or a dash.
+    """
+    write_list(lab, [row("TOR", "MTL", player="Both", player_id=1, drought_sog=3.44, usual_sog=2.9, model_probability=0.413, model_edge=0.032),
+                     row("TOR", "MTL", player="Short", player_id=2, drought_sog=1.0, usual_sog=2.5, model_probability=0.28, model_edge=-0.05),
+                     row("TOR", "MTL", player="Bare", player_id=3, drought_sog=2.0, usual_sog=None, model_probability=None, model_edge=None)])
+    board = build(lab, tmp_path / "out", monkeypatch)
+
+    page = render_page(board, tmp_path)
+
+    rows = {r["player"]: {f["label"]: f for f in r["facts"]}
+            for g in page["tonight"]["games"] for r in g["rows"]}
+    assert rows["Both"]["Shots in drought"]["value"] == "3.4 a game" and rows["Both"]["Shots in drought"]["sub"] == "usual 2.9"
+    assert rows["Both"]["Model's chance"]["value"] == "41%" and rows["Both"]["Model's chance"]["sub"] == "+3.2 pts vs the price"
+    assert rows["Short"]["Model's chance"]["sub"] == "-5.0 pts vs the price"
+    assert "Shots in drought" not in rows["Bare"] and "Model's chance" not in rows["Bare"], (
+        "a row missing either shot figure or the chance shows no cell for it")
