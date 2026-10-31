@@ -1131,6 +1131,13 @@ DROUGHT_RATE_FIELDS = (("hit_rate", "hitRate"), ("rarity", "rarity"),
                        ("drought_sog", "droughtShots"), ("usual_sog", "usualShots"),
                        ("model_probability", "modelChance"), ("model_edge", "modelEdge"))
 DROUGHT_RULES = frozenset({"tier", "surprise", "both"})
+#: 2026-10-31 (round two): his posted line and power-play unit tonight and the
+#: latest earlier capture's, Daily Faceoff's injury or game-time note, and the
+#: goalie he faces (src/nhl_betting_lab/due_context.py). Text or null.
+DROUGHT_TEXT_FIELDS = (("line_tonight", "lineTonight"), ("pp_tonight", "ppTonight"), ("line_before", "lineBefore"),
+                       ("pp_before", "ppBefore"), ("status", "status"),
+                       ("opp_goalie", "oppGoalie"), ("opp_goalie_status", "oppGoalieStatus"))
+DROUGHT_LINE_MOVES = frozenset({"up", "down", "same", "mixed"})
 
 
 def _whole(value: object) -> int | None:
@@ -1269,8 +1276,17 @@ def drought_for_game(listed: dict | None, home: str, away: str, started: bool) -
             "rule": rule if isinstance(rule, str) and rule in DROUGHT_RULES else None,
             "band": band if isinstance(band, str) and band else None,
             "cellRecord": cell_record(r.get("cell_record")),
+            **{site: _text(r.get(card)) for card, site in DROUGHT_TEXT_FIELDS},
+            "lineMove": r.get("line_move") if r.get("line_move") in DROUGHT_LINE_MOVES else None,
+            "oppGoalieBackup": r.get("opp_goalie_backup") if isinstance(r.get("opp_goalie_backup"), bool) else None,
+            "oppGoalieVsExpected": _real(r.get("opp_goalie_vs_expected")),
         })
     return out
+
+
+def _text(value: object) -> str | None:
+    """A text field, or None: anything not a non-empty string is nothing."""
+    return value.strip() if isinstance(value, str) and value.strip() else None
 
 
 def pick_side_and_line(c: dict) -> dict:

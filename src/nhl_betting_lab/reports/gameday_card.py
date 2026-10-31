@@ -118,6 +118,8 @@ from nhl_betting_lab.drought_rule import rarity_text as drought_rarity_text
 from nhl_betting_lab.drought_rule import model_text as drought_model_text
 from nhl_betting_lab.drought_rule import record_text as drought_record_text
 from nhl_betting_lab.drought_rule import shots_text as drought_shots_text
+from nhl_betting_lab.due_context import goalie_text as drought_goalie_text
+from nhl_betting_lab.due_context import line_text as drought_line_text
 from nhl_betting_lab.market_eligibility import EligibilityReport
 from nhl_betting_lab.markets import MARKETS_BY_KEY
 from nhl_betting_lab.models.player_props import player_key
@@ -347,6 +349,8 @@ class GamedayCard:
     drought_unresolved: list[str] = field(default_factory=list)
     drought_notes: list[str] = field(default_factory=list)
     drought_headline: str = ""
+    #: The Due List scorecard, as markdown lines, on Mondays only (2026-10-31).
+    due_scorecard: list[str] = field(default_factory=list)
     #: Stat sides (Cooper, 2026-10-10): each priced game's model-favoured
     #: moneyline side and its win chance (`nhl_betting_lab.stat_sides`). A
     #: LIST like the Due List: nothing here is a best bet, a lean, a pass, a
@@ -1217,7 +1221,8 @@ def render_drought_section(card: GamedayCard) -> list[str]:
     has reached a bar, with the bar he reached and which rule set it ("3
     (tier)", "4 (both)"), both bars as set for him, how unlikely a streak this
     long is for him ("1 in N for him"), his shots on goal a game during the
-    drought against before it (since 2026-10-31), the card's own chance of the
+    drought against before it (since 2026-10-31), his posted line and power-play
+    unit tonight and the goalie he faces (`due_context`), the card's own chance of the
     over and its gap to the price (information beside the row, never a
     filter or a stake), the band's
     measured record from the committed backtest or "no record", and the best
@@ -1231,8 +1236,9 @@ def render_drought_section(card: GamedayCard) -> list[str]:
     if card.drought_rows:
         lines += [
             "| Player | Team | Opponent | Puck drop | Category | Line | Last season | Drought | Bar reached "
-            "| Bars (tier / surprise) | Rarity | Shots in drought | Model | Band record | Best price | Book | Flag |",
-            "|:--|:--|:--|:--|:--|--:|--:|--:|:--|:--|:--|:--|:--|:--|--:|:--|:--|",
+            "| Bars (tier / surprise) | Rarity | Line tonight | Goalie faced | Shots in drought | Model | Band record "
+            "| Best price | Book | Flag |",
+            "|:--|:--|:--|:--|:--|--:|--:|--:|:--|:--|:--|:--|:--|:--|:--|:--|--:|:--|:--|",
         ]
         for row in card.drought_rows:
             flag = "heavy juice (shorter than -160)" if row.get("heavy_juice") else ""
@@ -1240,7 +1246,8 @@ def render_drought_section(card: GamedayCard) -> list[str]:
                 f"| {row.get('player')} | {row.get('team')} | {row.get('opponent')} "
                 f"| {_start_eastern(row)} | {row.get('market')} | over {float(row.get('line', 0.5)):g} "
                 f"| {row.get('last_season')} | {row.get('drought')} | {drought_bar_text(row)} "
-                f"| {drought_bars_text(row)} | {drought_rarity_text(row)} | {drought_shots_text(row)} "
+                f"| {drought_bars_text(row)} | {drought_rarity_text(row)} | {drought_line_text(row)} "
+                f"| {drought_goalie_text(row)} | {drought_shots_text(row)} "
                 f"| {drought_model_text(row)} | {drought_record_text(row)} "
                 f"| {drought_price_text(row)} | {row.get('book') or '-'} | {flag} |"
             )
@@ -1254,6 +1261,7 @@ def render_drought_section(card: GamedayCard) -> list[str]:
         ]
     if card.drought_notes or card.drought_unresolved:
         lines.append("")
+    lines.extend(card.due_scorecard)
     return lines
 
 

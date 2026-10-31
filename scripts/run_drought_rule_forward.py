@@ -28,11 +28,13 @@ from nhl_betting_lab.data.nhl_api import current_rosters
 from nhl_betting_lab.drought_forward import (
     backfill_lists,
     build_report,
+    build_scorecard,
     fill_prices,
     load_ledger,
     load_sources,
     pending_rows,
     save_report,
+    save_scorecard,
     settle_lists,
 )
 from nhl_betting_lab.drought_rule import cell_records
@@ -79,6 +81,9 @@ def main(argv: list[str] | None = None) -> int:
                            sources=load_sources(processed))
     for name, path in save_report(payload, output_dir=outputs).items():
         print(f"  {name}: {path}")
+    # The scorecard the Monday card carries, saved every run (Cooper, 2026-10-31).
+    for name, path in save_scorecard(build_scorecard(load_ledger(processed), today), output_dir=outputs).items():
+        print(f"  scorecard {name}: {path}")
     print("The Due List is unstaked; no bet was placed and the registered forward test was not touched.")
     return 0
 

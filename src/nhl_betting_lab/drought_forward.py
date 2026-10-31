@@ -65,6 +65,9 @@ LIST_COLUMNS = (
     "date", "commence_time", "home_team", "away_team", "team", "opponent", "player",
     "player_id", "market", "selection", "line", "last_season", "drought",
     "american_odds", "book",
+    # Since 2026-10-31: the card's own chance of the over and its gap to the
+    # listed price, as the row showed them. Older files lack them and read blank.
+    "model_probability", "model_edge",
 )
 LEDGER_COLUMNS = LIST_COLUMNS + ("settled_at", "outcome", "actual", "profit_units")
 _KEY = ["player_id", "market"]
@@ -102,7 +105,7 @@ def record_list(rows, day: str, *, processed_dir: Path | None = None) -> str:
     if new.empty and not target.is_file():
         return "nothing to record: no row is listed."
     if target.is_file():
-        old = pd.read_csv(target)
+        old = pd.read_csv(target, dtype={"book": str})
         old["book"] = old["book"].fillna("").astype(str)
         merged = old.copy()
         have = {(int(r.player_id), r.market): i for i, r in enumerate(old.itertuples())}
@@ -114,14 +117,14 @@ def record_list(rows, day: str, *, processed_dir: Path | None = None) -> str:
             elif pd.isna(merged.at[i, "american_odds"]) and not pd.isna(r.american_odds):
                 merged.at[i, "american_odds"], merged.at[i, "book"] = r.american_odds, r.book
         if add:
-            merged = pd.concat([merged, pd.DataFrame(add).drop(columns="Index")[list(LIST_COLUMNS)]], ignore_index=True)
+            merged = pd.concat([merged, pd.DataFrame(add).drop(columns="Index").reindex(columns=list(LIST_COLUMNS))], ignore_index=True)
         if merged.equals(old):
             return f"{day}'s list stands ({len(old)} row(s)); nothing new to record."
         frame = merged
     else:
         frame = new
     directory.mkdir(parents=True, exist_ok=True)
-    _replace_whole(frame[list(LIST_COLUMNS)], target)
+    _replace_whole(frame.reindex(columns=list(LIST_COLUMNS)), target)
     return f"{len(frame)} row(s) recorded for {day} in {target}."
 
 
@@ -208,7 +211,7 @@ def settle_lists(
     if new_rows:
         frame = pd.DataFrame(new_rows, columns=list(LEDGER_COLUMNS))
         if len(existing):
-            frame = pd.concat([existing[list(LEDGER_COLUMNS)], frame], ignore_index=True)
+            frame = pd.concat([existing.reindex(columns=list(LEDGER_COLUMNS)), frame], ignore_index=True)
         ledger_path.parent.mkdir(parents=True, exist_ok=True)
         _replace_whole(frame, ledger_path)
     return result
@@ -524,11 +527,94 @@ def fill_prices(
                     outcome = ledger.at[j, "outcome"]
                     ledger.at[j, "profit_units"] = profit_on_win(odds) if outcome == "won" else -1.0 if outcome == "lost" else 0.0
                     ledger_changed = True
-        _replace_whole(listed[list(LIST_COLUMNS)], path)
+        _replace_whole(listed.reindex(columns=list(LIST_COLUMNS)), path)
         notes.append(f"{day}: {len(filled)} entry(ies) priced from the card's frozen prices.")
     if any(sources["filled"].values()):
         sources["filled"] = {d: v for d, v in sources["filled"].items() if v}
         _save_sources(sources, processed_dir)
     if ledger_changed:
-        _replace_whole(ledger[list(LEDGER_COLUMNS)], ledger_path)
+        _replace_whole(ledger.reindex(columns=list(LEDGER_COLUMNS)), ledger_path)
     return notes
+
+
+# -- the Monday scorecard (Cooper, 2026-10-31) --------------------------------
+
+SCORECARD_MARKDOWN_FILENAME = "due_list_scorecard.md"
+SCORECARD_JSON_FILENAME = "due_list_scorecard.json"
+
+
+def scorecard_week(day: str) -> tuple[str, str]:
+    """(Sunday, Saturday) of the last full week that ended before `day`."""
+    moment = datetime.fromisoformat(day).date()
+    back = (moment.weekday() - 5) % 7 or 7
+    end = moment - timedelta(days=back)
+    return (end - timedelta(days=6)).isoformat(), end.isoformat()
+
+
+def _card_stat(rows: pd.DataFrame) -> dict[str, Any]:
+    graded = rows[rows["outcome"].isin(["won", "lost"])]
+    wagers = graded[pd.to_numeric(graded["american_odds"], errors="coerce").notna()]
+    units = float(pd.to_numeric(wagers["profit_units"], errors="coerce").fillna(0).sum()) * TRACKED_STAKE
+    return {
+        "listed": int(len(rows)), "graded": int(len(graded)),
+        "hits": int((graded["outcome"] == "won").sum()),
+        "wagers": int(len(wagers)), "units": round(units, 2) if len(wagers) else None,
+    }
+
+
+def build_scorecard(ledger: pd.DataFrame, day: str) -> dict[str, Any]:
+    """Last week's and the season's record, by category, and by whether the card agreed.
+
+    Units are at `TRACKED_STAKE` on every priced entry, as the site tracks the list.
+    "Model agreed" is a row whose recorded `model_edge` was above zero; rows listed
+    before 2026-10-31 recorded none and count in neither split.
+    """
+    start, end = scorecard_week(day)
+    frame = ledger.reindex(columns=list(LEDGER_COLUMNS)).copy()
+    frame["date"] = frame["date"].astype(str)
+    edge = pd.to_numeric(frame["model_edge"], errors="coerce")
+    week = frame[(frame["date"] >= start) & (frame["date"] <= end)]
+    out: dict[str, Any] = {"day": day, "week": [start, end], "stake": TRACKED_STAKE, "slices": {}}
+    for label, part in (("week", week), ("season", frame)):
+        part_edge = edge.loc[part.index]
+        out["slices"][label] = {
+            "categories": {m: _card_stat(part[part["market"] == m]) for m in THRESHOLDS},
+            "overall": _card_stat(part),
+            "model_agreed": _card_stat(part[part_edge > 0]),
+            "model_disagreed": _card_stat(part[part_edge <= 0]),
+        }
+    return out
+
+
+def _line(name: str, s: Mapping[str, Any]) -> str:
+    rate = "n/a" if not s["graded"] else f"{s['hits']}/{s['graded']} ({s['hits'] / s['graded'] * 100:.0f}%)"
+    units = "n/a" if s["units"] is None else f"{s['units']:+.2f}u over {s['wagers']}"
+    return f"| {name} | {s['listed']} | {rate} | {units} |"
+
+
+def render_scorecard(card: Mapping[str, Any]) -> list[str]:
+    """Markdown lines: the Monday post on the card, and the saved report."""
+    start, end = card["week"]
+    def fmt(d: str) -> str:
+        return datetime.fromisoformat(d).strftime("%a %b %-d")
+    lines = [f"## Due List scorecard, {fmt(start)} to {fmt(end)}", ""]
+    for label, title in (("week", "Last week"), ("season", "Season")):
+        s = card["slices"][label]
+        lines += [f"**{title}**", "", "| | Listed | Hits | Units at 0.25u |", "|:--|--:|--:|--:|"]
+        lines += [_line(m, s["categories"][m]) for m in THRESHOLDS]
+        lines += [_line("all", s["overall"]), _line("model agreed", s["model_agreed"]),
+                  _line("model disagreed", s["model_disagreed"]), ""]
+    lines += ["Hits count every graded entry; units count entries that had a price, at 0.25u as the site tracks "
+              "the list. \"Model agreed\" means the card's own chance beat the listed price; entries listed "
+              "before Oct 31 recorded no chance and sit in neither row. Nothing here is bet, and a week is "
+              "far too few to call an edge either way.", ""]
+    return lines
+
+
+def save_scorecard(card: Mapping[str, Any], *, output_dir: Path | None = None) -> dict[str, str]:
+    directory = Path(output_dir) if output_dir else OUTPUTS_DIR
+    directory.mkdir(parents=True, exist_ok=True)
+    md, js = directory / SCORECARD_MARKDOWN_FILENAME, directory / SCORECARD_JSON_FILENAME
+    md.write_text("\n".join(render_scorecard(card)), encoding="utf-8")
+    js.write_text(json.dumps(card, indent=1, sort_keys=True) + "\n", encoding="utf-8")
+    return {"markdown": str(md), "json": str(js)}

@@ -237,6 +237,21 @@ games[].drought  [] on every regular-season game — Cooper's Due List (2026-10-
                  usualShots   float | null — his shots on goal a game in up to 82 games before the drought
                  modelChance  float | null — the card's own chance of the over (0-1); null when the card has no opinion
                  modelEdge    float | null — modelChance minus the best price's implied chance (information, never a stake)
+                 lineTonight  string | null — his even-strength line in tonight's posted lines, "F1".."F4", "D1".."D4"
+                              (2026-10-31); null when his club has posted none. A player his club's posted lines leave
+                              out is not listed at all; the card names him in the list's notes.
+                 ppTonight    string | null — "PP1" or "PP2"; null when he is on neither unit or nothing is posted
+                 lineBefore   string | null — his line in the latest earlier capture that posted his club
+                 ppBefore     string | null — his unit in that capture
+                 lineMove     "up" | "down" | "same" | "mixed" | null — line and unit against that capture ("mixed": one
+                              better, one worse); null with nothing to compare
+                 status       string | null — Daily Faceoff's injury or game-time note on him, as written
+                 oppGoalie    string | null — the opponent's listed starter tonight (Daily Faceoff), null when none listed
+                 oppGoalieStatus string | null — that listing's strength: "Confirmed", "Likely", "Expected", "Unconfirmed"
+                 oppGoalieBackup bool | null — true when he is not the goalie with the most starts in his club's last 20
+                              games; null when the logs cannot say
+                 oppGoalieVsExpected float | null — his goals allowed against expected goals from the ratings file,
+                              regressed, minus 1: +0.06 is 6% more goals than the shots were worth. Information only.
                  rule         "tier" | "surprise" | "both" | null — which bars his drought has reached
                  band         string | null — the tier band label: "100+", "85-99", "70-84", "40+", ..., "60+", "45-59", "30-44"
                  cellRecord   {wagers, returnPct, lowPct, highPct} | null — that band's measured record from
