@@ -3028,6 +3028,19 @@ Re-derive rather than trust if the data has moved.
   no demonstrated edge. The model, the edge bars, the market list and the
   staking rule are unchanged.
 
+- **2026-11-01: the site refreshes at 7:00 AM New York, and a failed live-score
+  poll is quiet.** Cooper asked for both. Publish Site gains two crons (10:55
+  and 11:55 UTC) and a `when` job that keeps only the one at 7 AM in New York
+  that day; a 7 AM board is built on yesterday's card, so it is shown and not
+  frozen. And "Live scores unavailable — retrying in 2 min" no longer shows:
+  the Board shows the last update time while it retries, and a prop's live
+  tracker hides until its box score loads. That page is shared, so the change
+  is on `betting-lab-shared` main, pinned here as `v12.1`, a BRANCH, because
+  this session could not push tags; the lock's hashes still hold it byte for
+  byte. EPL and CBB stay on `v12` until the next drop fans out. A Claude Design
+  drop built on an older Board would bring the message back: the next drop's
+  Board should keep this behaviour.
+
 ## Contract strings — never change these
 
 Cooper's local scheduled tasks hard-code these. Renaming any of them silently
