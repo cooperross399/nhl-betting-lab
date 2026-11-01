@@ -235,7 +235,11 @@ def _workflow() -> dict:
 
 def _steps() -> list[dict]:
     jobs = _workflow()["jobs"]
-    assert list(jobs) == ["publish"], "Publish Site is expected to be one job"
+    # `when` only decides whether a scheduled run is the 7 AM New York one;
+    # it restores, builds and keeps nothing, so every step this replays is
+    # still in `publish`.
+    assert list(jobs) == ["when", "publish"], "Publish Site is expected to be the clock gate and one publish job"
+    assert "restore_state" not in yaml.safe_dump(jobs["when"]), "the clock gate must restore nothing"
     return jobs["publish"]["steps"]
 
 
