@@ -28,6 +28,16 @@ name: Publish Site
 on:
   schedule:
     - cron: "45 14 * * *"   # 10:45 New York, after the 09:30 card
+    # The 7:00 AM New York refresh (Cooper, 2026-11-01), so the site shows
+    # last night's results and today's slate when the day starts. Cron reads
+    # UTC, so both offsets are scheduled and the `when` job below keeps only
+    # the one that is 7 AM in New York today (EDT 10:55 UTC, EST 11:55 UTC;
+    # five minutes early because the build takes about that long). A board
+    # built on yesterday's card is shown and never frozen
+    # (web/site_history.py::built_on_stale_state), so this cannot take the
+    # day's first published opinion from the build after the card.
+    - cron: "55 10 * * *"
+    - cron: "55 11 * * *"
   workflow_run:
     workflows: ["Gameday Refresh"]
     types: [completed]
@@ -61,8 +71,36 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  when:
+    name: Decide whether this run publishes
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      go: ${{ steps.clock.outputs.go }}
+    steps:
+      - name: Keep only the 7 AM New York morning cron
+        id: clock
+        env:
+          SCHEDULE: ${{ github.event.schedule }}
+        run: |
+          set -u
+          offset=$(TZ=America/New_York date +%z)
+          case "$SCHEDULE" in
+            "55 10 * * *") want="-0400" ;;
+            "55 11 * * *") want="-0500" ;;
+            *) want="" ;;
+          esac
+          if [ -z "$want" ] || [ "$offset" = "$want" ]; then
+            echo "go=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "go=false" >> "$GITHUB_OUTPUT"
+            echo "New York is at UTC$offset today, so the '$SCHEDULE' cron is not 7 AM there; the other one publishes."
+          fi
+
   publish:
     name: Publish Site
+    needs: when
+    if: needs.when.outputs.go == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment:
