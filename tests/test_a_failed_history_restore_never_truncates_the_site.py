@@ -238,8 +238,11 @@ def _steps() -> list[dict]:
     # `when` only decides whether a scheduled run is the 7 AM New York one;
     # it restores, builds and keeps nothing, so every step this replays is
     # still in `publish`.
-    assert list(jobs) == ["when", "publish"], "Publish Site is expected to be the clock gate and one publish job"
-    assert "restore_state" not in yaml.safe_dump(jobs["when"]), "the clock gate must restore nothing"
+    assert list(jobs) == ["when", "wait", "wait-more", "publish"], (
+        "Publish Site is expected to be the clock gate, two waits and one publish job"
+    )
+    for name in ("when", "wait", "wait-more"):
+        assert "restore_state" not in yaml.safe_dump(jobs[name]), f"{name} must restore nothing"
     return jobs["publish"]["steps"]
 
 

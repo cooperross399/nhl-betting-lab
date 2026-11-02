@@ -3040,6 +3040,13 @@ Re-derive rather than trust if the data has moved.
   byte. EPL and CBB stay on `v12` until the next drop fans out. A Claude Design
   drop built on an older Board would bring the message back: the next drop's
   Board should keep this behaviour.
+  **2026-11-02: the crons written at 10:55 and 11:55 UTC had not started by
+  12:34 UTC**, the lateness Gameday Refresh and Line Movement already work
+  around. The morning crons now fire eight hours early (02:55 and 03:55 UTC),
+  the `when` gate reads New York's offset at the slot, and `wait`/`wait-more`
+  hold the publishing run there (`scripts/wait_for_round.py`). Publish Site's
+  `publish-site` concurrency group moved from the workflow onto the publish
+  job, so a Gameday Refresh completion cannot cancel the wait.
 
 - **2026-11-02: one tab bar on every page, and smoother tab switches.**
   Cooper: the Season tab dropped Tracker and Record and showed an Archive tab

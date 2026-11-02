@@ -31,13 +31,22 @@ on:
     # The 7:00 AM New York refresh (Cooper, 2026-11-01), so the site shows
     # last night's results and today's slate when the day starts. Cron reads
     # UTC, so both offsets are scheduled and the `when` job below keeps only
-    # the one that is 7 AM in New York today (EDT 10:55 UTC, EST 11:55 UTC;
-    # five minutes early because the build takes about that long). A board
-    # built on yesterday's card is shown and never frozen
+    # the one that is 7 AM in New York that day (EDT 10:55 UTC, EST 11:55
+    # UTC; five minutes early because the build takes about that long).
+    #
+    # EACH MORNING CRON FIRES EIGHT HOURS BEFORE ITS SLOT, and the `wait`
+    # jobs hold the run until it (scripts/wait_for_round.py), as Gameday
+    # Refresh and Line Movement do. GitHub starts this repository's
+    # scheduled runs hours late: the 14:45 cron started at 19:11 UTC on
+    # 2026-11-01, and the first morning crons, written at 10:55 and 11:55,
+    # had not started by 12:34 UTC on 2026-11-02. Moving the slot means
+    # moving the cron to eight hours before it.
+    #
+    # A board built on yesterday's card is shown and never frozen
     # (web/site_history.py::built_on_stale_state), so this cannot take the
     # day's first published opinion from the build after the card.
-    - cron: "55 10 * * *"
-    - cron: "55 11 * * *"
+    - cron: "55 2 * * *"
+    - cron: "55 3 * * *"
   workflow_run:
     workflows: ["Gameday Refresh"]
     types: [completed]
@@ -66,10 +75,10 @@ permissions:
   pages: write
   id-token: write
 
-concurrency:
-  group: publish-site
-  cancel-in-progress: true
-
+# The group sits on the publish job, not the workflow: a morning run waits
+# up to eight hours before it publishes, and a workflow-level group with
+# cancel-in-progress would let any Gameday Refresh completion or dispatch in
+# that time cancel the wait, and the two morning crons cancel each other.
 jobs:
   when:
     name: Decide whether this run publishes
@@ -77,6 +86,7 @@ jobs:
     timeout-minutes: 2
     outputs:
       go: ${{ steps.clock.outputs.go }}
+      hold: ${{ steps.clock.outputs.hold }}
     steps:
       - name: Keep only the 7 AM New York morning cron
         id: clock
@@ -84,23 +94,72 @@ jobs:
           SCHEDULE: ${{ github.event.schedule }}
         run: |
           set -u
-          offset=$(TZ=America/New_York date +%z)
+          # Each morning cron fires eight hours before its slot; the offset
+          # is New York's AT the slot, so a run that fires before a daylight
+          # saving change and publishes after it still picks the right cron.
           case "$SCHEDULE" in
-            "55 10 * * *") want="-0400" ;;
-            "55 11 * * *") want="-0500" ;;
-            *) want="" ;;
+            "55 2 * * *") want="-0400"; slot="10:55" ;;
+            "55 3 * * *") want="-0500"; slot="11:55" ;;
+            *) want=""; slot="" ;;
           esac
-          if [ -z "$want" ] || [ "$offset" = "$want" ]; then
+          if [ -z "$want" ]; then
             echo "go=true" >> "$GITHUB_OUTPUT"
+            echo "hold=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          offset=$(TZ=America/New_York date -d "$slot UTC" +%z)
+          if [ "$offset" = "$want" ]; then
+            echo "go=true" >> "$GITHUB_OUTPUT"
+            echo "hold=true" >> "$GITHUB_OUTPUT"
+            echo "7 AM New York today is $slot UTC: this run waits for it, then publishes."
           else
             echo "go=false" >> "$GITHUB_OUTPUT"
-            echo "New York is at UTC$offset today, so the '$SCHEDULE' cron is not 7 AM there; the other one publishes."
+            echo "hold=false" >> "$GITHUB_OUTPUT"
+            echo "New York is at UTC$offset at $slot UTC today, so the '$SCHEDULE' cron is not 7 AM there; the other one publishes."
           fi
+
+  # Two jobs, because one may run for at most six hours and the slot can be
+  # eight away; each waits at most 340 minutes and the second recomputes the
+  # slot from the same cron. Only the morning cron that publishes waits.
+  wait:
+    name: Wait for 7 AM New York
+    needs: when
+    if: needs.when.outputs.hold == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Wait for the slot
+        env:
+          SCHEDULE: ${{ github.event.schedule }}
+        run: python3 scripts/wait_for_round.py --schedule "$SCHEDULE" --budget-minutes 340
+
+  wait-more:
+    name: Wait for 7 AM New York (continued)
+    needs: [when, wait]
+    # A wait that failed must not cost the refresh: publish late rather than not at all.
+    if: ${{ !cancelled() && needs.when.outputs.hold == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Wait for the slot
+        env:
+          SCHEDULE: ${{ github.event.schedule }}
+        run: python3 scripts/wait_for_round.py --schedule "$SCHEDULE" --budget-minutes 340
 
   publish:
     name: Publish Site
-    needs: when
-    if: needs.when.outputs.go == 'true'
+    needs: [when, wait-more]
+    # Skipped waits (every trigger but the morning cron) do not hold it back.
+    if: ${{ !cancelled() && needs.when.result == 'success' && needs.when.outputs.go == 'true' }}
+    concurrency:
+      group: publish-site
+      cancel-in-progress: true
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment:
