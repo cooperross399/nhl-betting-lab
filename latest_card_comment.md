@@ -1,24 +1,25 @@
-**Selections changed** since the previous card — 0 best bet(s), 0 unit(s) staked.
+**Selections changed** since the previous card — 1 best bet(s), 0.25 unit(s) staked.
 
 # NHL gameday card
 
-- Generated: 2026-11-02T22:04:34+00:00
-- 0 best bet(s), 35 lean(s), 2463 pass(es) across 4 game(s); 0 unit(s) staked.
+- Generated: 2026-11-02T23:03:58+00:00
+- 1 best bet(s), 33 lean(s), 2517 pass(es) across 4 game(s); 0.25 unit(s) staked.
 - Included markets: **assists, blocked_shots, goalie_saves, goals, moneyline, points, puck_line, regulation_3_way, shots_on_goal, team_total, total_goals**
 - Unit size: $25
 
 ## Best bets
 
-_No best bets._
+| Game | Starts | Market | Selection | Model | Edge | Price | Bet down to | Book | Units |
+|:-----|:-------|:-------|:----------|------:|-----:|------:|------------:|:-----|------:|
+| Calgary Flames @ San Jose Sharks | Nov 2, 9:10 PM ET | `shots_on_goal` | Zayne Parekh under 1.5 | 61.7% | +14.5% | +112 | +102 | FanDuel | 0.25 |
 
 ## Leans
 
 | Game | Starts | Market | Selection | Model | Edge | Price | Bet down to | Book |
 |:-----|:-------|:-------|:----------|------:|-----:|------:|------------:|:-----|
+| Calgary Flames @ San Jose Sharks | Nov 2, 9:10 PM ET | `points` | Dmitry Orlov under 0.5 | 75.8% | +15.0% | -155 | -160 | BetMGM |
 | Vegas Golden Knights @ Boston Bruins | Nov 2, 7:10 PM ET | `blocked_shots` | Charlie McAvoy under 1.5 | 57.2% | +14.7% | +135 | -104 | DraftKings |
-| Calgary Flames @ San Jose Sharks | Nov 2, 9:10 PM ET | `points` | Dmitry Orlov under 0.5 | 75.3% | +14.5% | -155 | -160 | BetMGM |
 | Calgary Flames @ San Jose Sharks | Nov 2, 9:10 PM ET | `points` | Zayne Parekh under 0.5 | 71.4% | +13.9% | -135 | -160 | Hard Rock Bet |
-| Calgary Flames @ San Jose Sharks | Nov 2, 9:10 PM ET | `shots_on_goal` | Zayne Parekh under 1.5 | 61.9% | +13.8% | +108 | -126 | FanDuel |
 | Calgary Flames @ San Jose Sharks | Nov 2, 9:10 PM ET | `blocked_shots` | Zach Whitecloud under 1.5 | 61.2% | +13.5% | +110 | -123 | DraftKings |
 | Detroit Red Wings @ Florida Panthers | Nov 2, 7:10 PM ET | `shots_on_goal` | Lucas Raymond under 2.5 | 67.8% | +11.3% | -130 | -160 | Hard Rock Bet |
 | Calgary Flames @ San Jose Sharks | Nov 2, 9:10 PM ET | `points` | Ivar Stenberg under 0.5 | 58.6% | +11.0% | +110 | -110 | Hard Rock Bet |
@@ -26,35 +27,33 @@ _No best bets._
 | Detroit Red Wings @ Florida Panthers | Nov 2, 7:10 PM ET | `shots_on_goal` | Lucas Raymond under 1.5 | 44.5% | +10.0% | +190 | +160 | theScore Bet |
 | Detroit Red Wings @ Florida Panthers | Nov 2, 7:10 PM ET | `points` | Seth Jones under 0.5 | 57.5% | +9.8% | +110 | -105 | Bally Bet |
 | Detroit Red Wings @ Florida Panthers | Nov 2, 7:10 PM ET | `shots_on_goal` | Sam Reinhart under 1.5 | 39.4% | +9.1% | +230 | +200 | theScore Bet |
-| Vegas Golden Knights @ Boston Bruins | Nov 2, 7:10 PM ET | `shots_on_goal` | Mitch Marner under 1.5 | 45.8% | +8.8% | +170 | +152 | theScore Bet |
 | Calgary Flames @ San Jose Sharks | Nov 2, 9:10 PM ET | `shots_on_goal` | Macklin Celebrini under 2.5 | 37.2% | +8.6% | +250 | +221 | theScore Bet |
+| Vegas Golden Knights @ Boston Bruins | Nov 2, 7:10 PM ET | `blocked_shots` | Hampus Lindholm under 1.5 | 63.0% | +8.5% | -120 | -132 | DraftKings |
 | Vegas Golden Knights @ Boston Bruins | Nov 2, 7:10 PM ET | `shots_on_goal` | Tomas Hertl under 1.5 | 45.5% | +8.5% | +170 | +154 | theScore Bet |
-| Vegas Golden Knights @ Boston Bruins | Nov 2, 7:10 PM ET | `shots_on_goal` | Mitch Marner under 2.5 | 69.2% | +8.4% | -155 | -160 | theScore Bet |
 | Vegas Golden Knights @ Boston Bruins | Nov 2, 7:10 PM ET | `points` | Mitch Marner under 0.5 | 44.0% | +8.3% | +180 | +163 | BetMGM |
+| Vegas Golden Knights @ Boston Bruins | Nov 2, 7:10 PM ET | `shots_on_goal` | Mitch Marner under 2.5 | 69.3% | +7.9% | -159 | -160 | Bally Bet |
 | Detroit Red Wings @ Florida Panthers | Nov 2, 7:10 PM ET | `shots_on_goal` | Anton Lundell under 1.5 | 48.6% | +7.8% | +145 | +135 | Courtside |
-| Calgary Flames @ San Jose Sharks | Nov 2, 9:10 PM ET | `points` | Macklin Celebrini under 1.5 | 64.1% | +7.6% | -130 | -138 | Hard Rock Bet |
+| Vegas Golden Knights @ Boston Bruins | Nov 2, 7:10 PM ET | `shots_on_goal` | Mitch Marner under 1.5 | 46.1% | +7.7% | +160 | +150 | theScore Bet |
+| Calgary Flames @ San Jose Sharks | Nov 2, 9:10 PM ET | `shots_on_goal` | Macklin Celebrini under 3.5 | 55.1% | +7.5% | +110 | +104 | Bovada |
+| Calgary Flames @ San Jose Sharks | Nov 2, 9:10 PM ET | `points` | Macklin Celebrini under 1.5 | 63.9% | +7.4% | -130 | -137 | Hard Rock Bet |
 | Vegas Golden Knights @ Boston Bruins | Nov 2, 7:10 PM ET | `points` | Elias Lindholm under 0.5 | 57.3% | +7.3% | +100 | -105 | BetMGM |
 | Detroit Red Wings @ Florida Panthers | Nov 2, 7:10 PM ET | `shots_on_goal` | Sam Reinhart under 2.5 | 61.8% | +7.2% | -120 | -126 | theScore Bet |
-| Calgary Flames @ San Jose Sharks | Nov 2, 9:10 PM ET | `shots_on_goal` | Collin Graf under 1.5 | 61.7% | +7.2% | -120 | -125 | Bovada |
 | Detroit Red Wings @ Florida Panthers | Nov 2, 7:10 PM ET | `points` | Emmitt Finnie under 0.5 | 59.7% | +7.1% | -111 | -116 | BetMGM |
-| Calgary Flames @ San Jose Sharks | Nov 2, 9:10 PM ET | `shots_on_goal` | Macklin Celebrini under 3.5 | 54.6% | +7.0% | +110 | +106 | Bovada |
+| Calgary Flames @ San Jose Sharks | Nov 2, 9:10 PM ET | `shots_on_goal` | Collin Graf under 1.5 | 61.6% | +7.0% | -120 | -125 | Bovada |
 | Vegas Golden Knights @ Boston Bruins | Nov 2, 7:10 PM ET | `assists` | Jack Eichel under 0.5 | 55.7% | +6.9% | +105 | +102 | BetMGM |
 | Vegas Golden Knights @ Boston Bruins | Nov 2, 7:10 PM ET | `assists` | Charlie McAvoy under 0.5 | 64.2% | +6.9% | -134 | -139 | Bally Bet |
 | Detroit Red Wings @ Florida Panthers | Nov 2, 7:10 PM ET | `shots_on_goal` | Seth Jones under 1.5 | 49.4% | +6.8% | +135 | +131 | BetMGM |
-| Calgary Flames @ San Jose Sharks | Nov 2, 9:10 PM ET | `shots_on_goal` | Joel Farabee over 3.5 | 26.2% | +6.6% | +410 | +395 | FanDuel |
 | Vegas Golden Knights @ Boston Bruins | Nov 2, 7:10 PM ET | `points` | Trevor Connelly under 0.5 | 63.3% | +6.4% | -132 | -134 | theScore Bet |
 | Vegas Golden Knights @ Boston Bruins | Nov 2, 7:10 PM ET | `assists` | Mitch Marner under 0.5 | 57.6% | +6.4% | -105 | -106 | BetMGM |
-| Vegas Golden Knights @ Boston Bruins | Nov 2, 7:10 PM ET | `blocked_shots` | Hampus Lindholm under 1.5 | 65.5% | +6.4% | -145 | -147 | DraftKings |
 | Detroit Red Wings @ Florida Panthers | Nov 2, 7:10 PM ET | `shots_on_goal` | Matthew Tkachuk over 3.5 | 29.4% | +6.1% | +330 | +329 | Courtside |
 | Colorado Avalanche @ Chicago Blackhawks | Nov 2, 8:10 PM ET | `shots_on_goal` | Brock Nelson over 2.5 | 38.3% | +6.0% | +210 | +210 | FanDuel |
-| Colorado Avalanche @ Chicago Blackhawks | Nov 2, 8:10 PM ET | `regulation_3_way` | away | 61.8% | +4.3% | -135 | -139 | Courtside |
+| Colorado Avalanche @ Chicago Blackhawks | Nov 2, 8:10 PM ET | `regulation_3_way` | away | 61.9% | +4.4% | -135 | -140 | Courtside |
 | Detroit Red Wings @ Florida Panthers | Nov 2, 7:10 PM ET | `regulation_3_way` | away | 32.4% | +4.3% | +255 | +246 | Bally Bet |
 | Vegas Golden Knights @ Boston Bruins | Nov 2, 7:10 PM ET | `regulation_3_way` | home | 43.0% | +3.7% | +155 | +154 | Bally Bet |
 
 Stats check, props: a prop is staked only when the model's hit chance clears what the shortest price in its odds bracket would need. These cleared the edge bar without it and are recorded here.
 
 - Charlie McAvoy under 1.5 (`blocked_shots`): Not confident enough for its odds: the model gives it a 57.2% chance to hit; props priced +111 to +150 need 59.4%. The price clears the edge bar, but the model is not confident enough for its odds bracket. Recorded as a lean and staked at zero.
-- Zayne Parekh under 1.5 (`shots_on_goal`): Not confident enough for its odds: the model gives it a 61.9% chance to hit; props priced -110 to +110 need 64.4%. The price clears the edge bar, but the model is not confident enough for its odds bracket. Recorded as a lean and staked at zero.
 - Zach Whitecloud under 1.5 (`blocked_shots`): Not confident enough for its odds: the model gives it a 61.2% chance to hit; props priced -110 to +110 need 64.4%. The price clears the edge bar, but the model is not confident enough for its odds bracket. Recorded as a lean and staked at zero.
 
 Stake withheld on `points`: `points` is the one market this lab has measured as a loss that survives correction, and it does so in both windows the backtest prices. In the card window, 9.6 hours before face-off: -4.2% over 6,140 wagers, 95% interval -6.7% to -1.7%, -7.6% to -0.7% after correcting for the 8 figures measured on the same data (7 markets and the overall figure), and -256.8 units realised. In the late window, 4.1 hours before face-off: -4.4% over 6,194 wagers, 95% interval -6.9% to -2.0%, and it holds within that window's 2025-26 season alone (-5.4% over 3,468). On the late window the evidence bundle's verdict is that "a loss that survives the correction still argues against enabling this market, not for it". The opinion is still recorded and still settles into the forward ledger; only the stake is withheld.
@@ -68,33 +67,33 @@ Leans are recorded and not staked.
 
 | Game | Starts | Market | Selection | Model | Edge | Price | Book |
 |:-----|:-------|:-------|:----------|------:|-----:|------:|:-----|
-| Calgary Flames @ San Jose Sharks | Nov 2, 9:10 PM ET | `assists` | Dmitry Orlov under 0.5 | 78.6% | +14.9% | -175 | BetMGM |
+| Calgary Flames @ San Jose Sharks | Nov 2, 9:10 PM ET | `assists` | Dmitry Orlov under 0.5 | 78.8% | +15.2% | -175 | BetMGM |
 | Calgary Flames @ San Jose Sharks | Nov 2, 9:10 PM ET | `assists` | Zayne Parekh under 0.5 | 79.2% | +12.5% | -200 | Hard Rock Bet |
 | Calgary Flames @ San Jose Sharks | Nov 2, 9:10 PM ET | `shots_on_goal` | Zayne Parekh under 2.5 | 81.2% | +11.9% | -225 | Hard Rock Bet |
 | Calgary Flames @ San Jose Sharks | Nov 2, 9:10 PM ET | `assists` | Ivar Stenberg under 0.5 | 72.6% | +9.0% | -175 | Hard Rock Bet |
-| Calgary Flames @ San Jose Sharks | Nov 2, 9:10 PM ET | `points` | Jacob Trouba under 0.5 | 71.0% | +7.1% | -177 | Bally Bet |
+| Calgary Flames @ San Jose Sharks | Nov 2, 9:10 PM ET | `points` | Jacob Trouba under 0.5 | 70.9% | +7.3% | -175 | Bally Bet |
 | Detroit Red Wings @ Florida Panthers | Nov 2, 7:10 PM ET | `assists` | Emmitt Finnie under 0.5 | 75.8% | +7.0% | -220 | BetMGM |
-| Calgary Flames @ San Jose Sharks | Nov 2, 9:10 PM ET | `shots_on_goal` | Dmitry Orlov under 1.5 | 69.4% | +6.9% | -167 | Bally Bet |
 | Detroit Red Wings @ Florida Panthers | Nov 2, 7:10 PM ET | `points` | Seth Jones under 1.5 | 89.2% | +6.4% | -480 | Bally Bet |
-| Colorado Avalanche @ Chicago Blackhawks | Nov 2, 8:10 PM ET | `shots_on_goal` | Tyler Bertuzzi over 3.5 | 15.3% | +6.2% | +1000 | BetOnline.ag |
+| Vegas Golden Knights @ Boston Bruins | Nov 2, 7:10 PM ET | `shots_on_goal` | Tomas Hertl under 2.5 | 69.2% | +6.2% | -170 | Bovada |
 | Detroit Red Wings @ Florida Panthers | Nov 2, 7:10 PM ET | `puck_line` | away +2.5 | 79.8% | +6.2% | -280 | FanDuel |
 | Vegas Golden Knights @ Boston Bruins | Nov 2, 7:10 PM ET | `assists` | Trevor Connelly under 0.5 | 77.5% | +6.1% | -250 | BetMGM |
-| Vegas Golden Knights @ Boston Bruins | Nov 2, 7:10 PM ET | `points` | Jack Eichel under 1.5 | 76.6% | +6.0% | -240 | Bally Bet |
-| Vegas Golden Knights @ Boston Bruins | Nov 2, 7:10 PM ET | `shots_on_goal` | David Pastrnak over 5.5 | 18.5% | +6.0% | +700 | Fanatics |
+| Colorado Avalanche @ Chicago Blackhawks | Nov 2, 8:10 PM ET | `shots_on_goal` | Tyler Bertuzzi over 3.5 | 15.1% | +6.0% | +1000 | BetOnline.ag |
+| Calgary Flames @ San Jose Sharks | Nov 2, 9:10 PM ET | `shots_on_goal` | Dmitry Orlov under 1.5 | 69.6% | +6.0% | -175 | Bally Bet |
 | Colorado Avalanche @ Chicago Blackhawks | Nov 2, 8:10 PM ET | `shots_on_goal` | Tyler Bertuzzi over 2.5 | 30.4% | +6.0% | +310 | BetOnline.ag |
-| Vegas Golden Knights @ Boston Bruins | Nov 2, 7:10 PM ET | `shots_on_goal` | Tomas Hertl under 2.5 | 68.9% | +5.9% | -170 | Bovada |
+| Vegas Golden Knights @ Boston Bruins | Nov 2, 7:10 PM ET | `points` | Jack Eichel under 1.5 | 76.5% | +5.9% | -240 | Bally Bet |
 | Vegas Golden Knights @ Boston Bruins | Nov 2, 7:10 PM ET | `points` | Charlie McAvoy under 0.5 | 54.6% | +5.9% | +105 | theScore Bet |
+| Vegas Golden Knights @ Boston Bruins | Nov 2, 7:10 PM ET | `shots_on_goal` | William Karlsson over 3.5 | 17.6% | +5.9% | +750 | BetOnline.ag |
 | Detroit Red Wings @ Florida Panthers | Nov 2, 7:10 PM ET | `shots_on_goal` | Matthew Tkachuk over 4.5 | 16.9% | +5.8% | +800 | Courtside |
-| Colorado Avalanche @ Chicago Blackhawks | Nov 2, 8:10 PM ET | `goals` | Tyler Bertuzzi over 0.5 | 27.1% | +5.8% | +370 | Bally Bet |
-| Calgary Flames @ San Jose Sharks | Nov 2, 9:10 PM ET | `shots_on_goal` | Will Smith under 2.5 | 54.5% | +5.7% | +105 | Hard Rock Bet |
+| Calgary Flames @ San Jose Sharks | Nov 2, 9:10 PM ET | `shots_on_goal` | Joel Farabee over 3.5 | 26.9% | +5.8% | +375 | FanDuel |
+| Vegas Golden Knights @ Boston Bruins | Nov 2, 7:10 PM ET | `shots_on_goal` | David Pastrnak over 5.5 | 19.1% | +5.8% | +650 | FanDuel |
 | Detroit Red Wings @ Florida Panthers | Nov 2, 7:10 PM ET | `points` | Michael Brandsegg-Nygard under 0.5 | 64.0% | +5.7% | -140 | BetMGM |
-| Vegas Golden Knights @ Boston Bruins | Nov 2, 7:10 PM ET | `points` | David Pastrnak over 1.5 | 41.3% | +5.6% | +180 | theScore Bet |
+| Calgary Flames @ San Jose Sharks | Nov 2, 9:10 PM ET | `shots_on_goal` | Will Smith under 2.5 | 54.4% | +5.6% | +105 | Hard Rock Bet |
+| Vegas Golden Knights @ Boston Bruins | Nov 2, 7:10 PM ET | `shots_on_goal` | David Pastrnak over 4.5 | 29.4% | +5.6% | +320 | FanDuel |
 | Detroit Red Wings @ Florida Panthers | Nov 2, 7:10 PM ET | `points` | Lars Eller under 0.5 | 68.5% | +5.6% | -170 | theScore Bet |
 | Detroit Red Wings @ Florida Panthers | Nov 2, 7:10 PM ET | `shots_on_goal` | Brady Tkachuk over 5.5 | 18.0% | +5.5% | +700 | FanDuel |
-| Vegas Golden Knights @ Boston Bruins | Nov 2, 7:10 PM ET | `goals` | David Pastrnak over 0.5 | 45.5% | +5.5% | +150 | FanDuel |
-| Vegas Golden Knights @ Boston Bruins | Nov 2, 7:10 PM ET | `shots_on_goal` | William Karlsson over 3.5 | 17.2% | +5.5% | +750 | BetOnline.ag |
+| Colorado Avalanche @ Chicago Blackhawks | Nov 2, 8:10 PM ET | `shots_on_goal` | Martin Necas over 4.5 | 18.0% | +5.5% | +700 | Fanatics |
 
-_2438 further passes not listed._
+_2492 further passes not listed._
 
 These are genuine model judgements about markets that were priced and modelled. They are **not** the same thing as the excluded markets below.
 
@@ -104,10 +103,10 @@ Who the model expects to win each game, from the same team ratings the card pric
 
 | Game | Puck drop | Stats' side | Win chance | Fair | Best price | Book | Against the price |
 |:--|:--|:--|--:|--:|--:|:--|:--|
-| Detroit Red Wings @ Florida Panthers | Nov 2, 7:10 PM ET | **Florida Panthers** | 59.0% | -144 | -170 | theScore Bet | price is 4.0 pts short |
-| Vegas Golden Knights @ Boston Bruins | Nov 2, 7:10 PM ET | **Boston Bruins** | 51.3% | -105 | +104 | Courtside | price is 2.3 pts long, under the bar |
-| Colorado Avalanche @ Chicago Blackhawks | Nov 2, 8:10 PM ET | **Colorado Avalanche** | 68.9% | -221 | -220 | BetUS | price is 0.1 pts long, under the bar |
-| Calgary Flames @ San Jose Sharks | Nov 2, 9:10 PM ET | **San Jose Sharks** | 53.2% | -114 | -114 | BetOnline.ag | price is 0.1 pts short |
+| Detroit Red Wings @ Florida Panthers | Nov 2, 7:10 PM ET | **Florida Panthers** | 59.1% | -145 | -175 | Hard Rock Bet | price is 4.5 pts short |
+| Vegas Golden Knights @ Boston Bruins | Nov 2, 7:10 PM ET | **Boston Bruins** | 51.3% | -105 | +100 | BetMGM | price is 1.3 pts long, under the bar |
+| Colorado Avalanche @ Chicago Blackhawks | Nov 2, 8:10 PM ET | **Colorado Avalanche** | 69.3% | -226 | -215 | BetUS | price is 1.0 pts long, under the bar |
+| Calgary Flames @ San Jose Sharks | Nov 2, 9:10 PM ET | **San Jose Sharks** | 53.2% | -114 | -115 | BetOnline.ag | price is 0.3 pts short |
 
 A list, not bets: no units, no stakes, nothing frozen into the forward ledger. The lab has no measurement showing that backing the stats' side at the market's price makes money.
 
@@ -198,6 +197,6 @@ What the evidence actually supports:
 - `data/outputs/props_calibration.md`
 - `data/outputs/what_we_can_claim.md`
 
-Run: https://github.com/cooperross399/nhl-betting-lab/actions/runs/41532304530
+Run: https://github.com/cooperross399/nhl-betting-lab/actions/runs/41540687570
 
 Recommendations only. No bet was placed, no policy was edited, and no market was allowlisted by this run.
