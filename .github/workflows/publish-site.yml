@@ -355,6 +355,12 @@ jobs:
           if-no-files-found: warn
           retention-days: 400
 
+      - name: Make moving between pages smooth
+        # The site's dark behind every page while it draws, a crossfade between
+        # tabs, and React fetched early (web/smooth_pages.py). Published copies
+        # only; the committed shared pages stay byte for byte as pinned.
+        run: python web/smooth_pages.py dist
+
       - name: Name the scripts by their content
         # GitHub Pages caches every file for ten minutes and cannot be told
         # otherwise; hashed names make any longer cache in front of it safe
