@@ -1,6 +1,6 @@
 {
  "repo": "cooperross399/betting-lab-shared",
- "tag": "v12.1",
+ "tag": "v13",
  "sport": "nhl",
  "files": {
   "Board.dc.html": "cf39e47b575fd14292817ff692bd425cecea0404c27c346e802d398c723e546e",
@@ -9,7 +9,7 @@
   "Graphic.dc.html": "e3010ac59bda9c30249c3e3df341140b119d6662ecf9bac55bec71ef557aee8d",
   "lib/live.js": "606836333b6599c19c5f1706939c2a75166ea27bbb5a709fdbc30fcdb9950ee7",
   "lib/format.js": "179f294bc78370d06487f6b2d5fd93e30e198208c4a6c6ce51fb97208975576a",
-  "lib/sports.js": "c7971cd1a65166678b8150a6469c84e53a063c89a5ae9cab0ecf0974586e16c6",
+  "lib/sports.js": "f4af3684cd065ff6aec9f202cb4f707b8bd6797392055bc94904db291f490f39",
   "logos/ANA.png": "b4c63c690de7bf8f0f885262d4e71fe130dabf2c0952717dff822f712a82b551",
   "logos/BOS.png": "828a611c59ecb0583900ae6d9dd39df18044bd9cd2aaec8eeb303f8659cceb8e",
   "logos/BUF.png": "5d4c821cdb222c627993e96f08a6c603020da795e6491b12261319b9ddf71305",
