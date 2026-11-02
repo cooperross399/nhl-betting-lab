@@ -414,9 +414,11 @@ class Component extends DCLogic {
     const openLine = num(open[favSide]) ? `${favAbbr} ${odds(open[favSide])}` : "—";
     const p = g.pick || { kind: "none" };
     const edgeLine = p.kind !== "none" && num(p.edgePct) ? `${F.fmtSigned(p.edgePct, 1)}% on ${p.label}` : "Below the bar on every market";
+    // Cooper, 2026-11-01: every pick carries the worst price that still clears its bar.
+    const downText = num(p.betDownTo) ? ` · bet down to ${odds(p.betDownTo)}` : "";
     const pick = { heading: p.kind === "bet" ? "Best bet" : p.kind === "lean" ? "Lean" : "Pick",
       isBet: p.kind === "bet", isLean: p.kind === "lean", isNone: priced && p.kind !== "bet" && p.kind !== "lean", label: p.label || "",
-      sub: p.kind === "bet" ? `${p.market || ""} at ${odds(p.price)}${num(p.units) ? ` · ${p.units} ${p.units === 1 ? "unit" : "units"}` : ""}` : p.kind === "lean" ? `${p.market || ""} at ${odds(p.price)} · a small edge, not enough to bet` : "" };
+      sub: p.kind === "bet" ? `${p.market || ""} at ${odds(p.price)}${downText}${num(p.units) ? ` · ${p.units} ${p.units === 1 ? "unit" : "units"}` : ""}` : p.kind === "lean" ? `${p.market || ""} at ${odds(p.price)}${downText} · a small edge, not enough to bet` : "" };
 
     // Waterfall
     const facts = Array.isArray(g.factors) ? g.factors : [];

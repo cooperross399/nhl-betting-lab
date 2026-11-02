@@ -91,6 +91,7 @@ headings.
 from __future__ import annotations
 
 import json
+import math
 from collections.abc import Mapping, Sequence
 from types import SimpleNamespace
 from dataclasses import dataclass, field
@@ -298,6 +299,12 @@ class Candidate:
     #: carried on the candidate rather than computed at render time so that
     #: the card, the JSON and any reader downstream see the same sentence.
     demotion_reason: str = ""
+    #: Cooper, 2026-11-01: "always include a bet down to number". The worst
+    #: American price at which this selection still clears the bar its
+    #: section was decided on (`bet_down_to`): the best-bet bar for a best
+    #: bet, the card's edge bar for a lean. None on a pass, and when no price
+    #: the card would take clears. Display only: nothing reads it to decide.
+    bet_down_to: int | None = None
 
     def as_row(self) -> dict[str, Any]:
         return dict(self.__dict__)
@@ -402,6 +409,53 @@ class GamedayCard:
             f"{len(self.passes)} pass(es) across {self.slate_games} game(s); "
             f"{self.total_units:g} unit(s) staked."
         )
+
+
+def bet_down_to(
+    probability: object,
+    bar: float,
+    *,
+    juice_limit: int = MAX_DEFAULT_JUICE,
+) -> int | None:
+    """The worst American price at which `probability` still clears `bar`.
+
+    Cooper's "bet down to" number (2026-11-01). The card's edge is
+    `probability - implied(price)` against the vigged price, so the bar
+    clears while `implied(price) <= probability - bar`: the price is read
+    off that implied chance and rounded to the whole American price that
+    still clears (up for a plus price, toward zero for a minus price), then
+    checked in the same floating-point arithmetic `build_candidates` uses.
+
+    Floored at the juice limit, because the card never takes a price heavier
+    than it whatever the edge says. None when there is no probability or no
+    price can clear. It restates a bar already read and decides nothing.
+    """
+    try:
+        p = float(probability)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+    if not 0.0 < p < 1.0:
+        return None
+    room = p - float(bar)
+    if room <= 0.0:
+        return None
+    if room >= 1.0:
+        return int(juice_limit)
+    if room >= 0.5:
+        american = -math.floor(round(100.0 * room / (1.0 - room), 9))
+        if american == -100:
+            american = 100
+    else:
+        american = math.ceil(round(100.0 * (1.0 - room) / room, 9))
+    for _ in range(3):
+        if p - american_to_implied(american) >= float(bar):
+            break
+        american = 101 if american == -101 else american + 1
+    if p - american_to_implied(american) < float(bar):
+        return None
+    if american < 0 and american < int(juice_limit):
+        return int(juice_limit)
+    return int(american)
 
 
 def _tier_for(edge: float, is_prop: bool) -> str:
@@ -636,6 +690,20 @@ def build_candidates(
     # that genuinely cleared the bar — it becomes a lean, not a pass, and not
     # a deletion.
     _one_stake_per_outcome(staked)
+
+    # Last, once every gate (and the one-stake pass) has settled each
+    # selection's section, so the number answers "how far can this price
+    # fall and still be what the card calls it".
+    for candidate in selections:
+        market = MARKETS_BY_KEY.get(candidate.market)
+        is_prop = bool(market is not None and market.is_prop)
+        if candidate.section == BEST_BETS_SECTION:
+            bar = BEST_BET_PROP_EDGE if is_prop else BEST_BET_EDGE
+        else:
+            bar = min_prop_edge if is_prop else min_edge
+        candidate.bet_down_to = bet_down_to(
+            candidate.model_probability, bar, juice_limit=juice_limit
+        )
 
     selections.sort(key=lambda item: (-item.edge, item.market, item.player))
     passes.sort(key=lambda item: (-item.edge, item.market, item.player))
@@ -942,18 +1010,18 @@ def _start_eastern(row: Mapping[str, Any]) -> str:
     return local.strftime("%b %-d, %-I:%M %p ET")
 
 
-def _rows_table(rows: Sequence[Mapping[str, Any]], *, staked: bool) -> list[str]:
-    header = "| Game | Starts | Market | Selection | Model | Edge | Price | Book |"
-    divider = "|:-----|:-------|:-------|:----------|------:|-----:|------:|:-----|"
+def _rows_table(
+    rows: Sequence[Mapping[str, Any]], *, staked: bool, down_to: bool = False
+) -> list[str]:
+    """One section's table. `down_to` adds the "Bet down to" column (Cooper,
+    2026-11-01) after the price; best bets and leans carry it, passes do not,
+    because a pass has no bar it cleared."""
+    down_head, down_div = (" Bet down to |", "------------:|") if down_to else ("", "")
+    header = f"| Game | Starts | Market | Selection | Model | Edge | Price |{down_head} Book |"
+    divider = f"|:-----|:-------|:-------|:----------|------:|-----:|------:|{down_div}:-----|"
     if staked:
-        header = (
-            "| Game | Starts | Market | Selection | Model | Edge | Price "
-            "| Book | Units |"
-        )
-        divider = (
-            "|:-----|:-------|:-------|:----------|------:|-----:|------:"
-            "|:-----|------:|"
-        )
+        header += " Units |"
+        divider += "------:|"
     lines = [header, divider]
     for row in rows:
         game = f"{row.get('away_team', '')} @ {row.get('home_team', '')}".strip(" @")
@@ -963,7 +1031,8 @@ def _rows_table(rows: Sequence[Mapping[str, Any]], *, staked: bool) -> list[str]
             f"| {float(row.get('model_probability', 0.0)):.1%} "
             f"| {float(row.get('edge', 0.0)):+.1%} "
             f"| {_price(row.get('american_odds'))} "
-            f"| {row.get('book') or '-'} |"
+            + (f"| {_price(row.get('bet_down_to'))} " if down_to else "")
+            + f"| {row.get('book') or '-'} |"
         )
         if staked:
             cells += f" {float(row.get('suggested_units', 0.0)):g} |"
@@ -1298,13 +1367,13 @@ def render_card(card: GamedayCard) -> str:
     else:
         lines.extend([f"## {BEST_BETS_SECTION}", ""])
         lines.extend(
-            _rows_table(card.best_bets, staked=True)
+            _rows_table(card.best_bets, staked=True, down_to=True)
             if card.best_bets
             else ["_No best bets._", ""]
         )
         lines.extend([f"## {LEANS_SECTION}", ""])
         lines.extend(
-            _rows_table(card.leans, staked=False)
+            _rows_table(card.leans, staked=False, down_to=True)
             if card.leans
             else ["_No leans._", ""]
         )

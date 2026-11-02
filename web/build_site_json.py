@@ -1020,6 +1020,12 @@ def build_board(day: date, lab: Path, history_dir: Path) -> dict:
                             "price": int(float(top["american_odds"])), "edgePct": round(float(top["edge"]) * 100, 1),
                             **pick_side_and_line(top),
                         }
+                        # Cooper, 2026-11-01: the worst price the pick still
+                        # clears its bar at, as the card wrote it. Absent on a
+                        # card written before the field, never computed here.
+                        floor = _int_price(top.get("bet_down_to"))
+                        if floor is not None:
+                            row["pick"]["betDownTo"] = floor
                         # The card's stake, for the results tracker
                         # (Tracker.dc.html). A lean carries none.
                         stake = _real(top.get("suggested_units")) if kind == "bet" else None
@@ -1468,6 +1474,7 @@ def build_props(day: date, card: dict, matched: dict, lab: Path, allowlisted: li
                 "opp": (away if team == home else home) if team else None, "position": position,
                 "market": market, "line": _real(c.get("line")), "side": str(c.get("selection") or "").lower(),
                 "price": _int_price(c.get("american_odds")), "book": c.get("book") or None,
+                "betDownTo": _int_price(c.get("bet_down_to")),
                 "projection": None, "modelProb": round(prob, 4) if prob is not None else None,
                 "fairPrice": _int_price(c.get("fair_american")),
                 "edgePct": round(edge * 100, 1) if edge is not None else None,
@@ -1557,7 +1564,7 @@ def grade_props(board: dict, finals: dict, processed: Path | None) -> dict:
     for entry in rows_in:
         game_id = str(entry.get("gameId"))
         row = {k: entry.get(k) for k in ("gameId", "player", "playerId", "team", "opp", "position", "market", "line",
-                                         "side", "price", "book", "kind", "tier", "units")}
+                                         "side", "price", "betDownTo", "book", "kind", "tier", "units")}
         row.update(actual=None, result=None)
         column = PROP_MARKETS.get(entry.get("market"))
         if game_id in finals and game_id in boxed and column:
@@ -2252,7 +2259,8 @@ def tracker_rows(results: dict) -> list[dict]:
         staked = _real(pick.get("units")) or TEAM_PICK_DEFAULT_UNITS
         out.append({"date": day, "group": "team", "market": pick.get("market"), "label": label,
                     "team": team, "opp": (away if team == home else home) if team else None,
-                    "teams": [away, home], "price": price, "result": pick["result"], "staked": staked,
+                    "teams": [away, home], "price": price, "betDownTo": _int_price(pick.get("betDownTo")),
+                    "result": pick["result"], "staked": staked,
                     "units": round(_profit(staked, price, pick["result"]), 2),
                     **({} if _real(pick.get("units")) else {"stakeAssumed": True})})
     for r in ((results.get("props") or {}).get("rows") or []) if isinstance(results.get("props"), dict) else []:
@@ -2265,6 +2273,7 @@ def tracker_rows(results: dict) -> list[dict]:
         out.append({"date": day, "group": "props", "market": market, "propType": PROP_LABEL.get(market, market),
                     "side": r.get("side"), "line": r.get("line"), "player": r.get("player"),
                     "playerId": r.get("playerId"), "team": r.get("team"), "opp": r.get("opp"), "price": price,
+                    "betDownTo": _int_price(r.get("betDownTo")),
                     "result": r["result"], "staked": staked, "units": round(_profit(staked, price, r["result"]), 2)})
     for r in ((results.get("dueList") or {}).get("rows") or []) if isinstance(results.get("dueList"), dict) else []:
         if not isinstance(r, dict) or r.get("result") not in ("win", "loss", "push") or not _is_number(r.get("units")):

@@ -43,7 +43,7 @@ def _prop(player, market, selection, line, odds, edge, section, *, units=0.0, ti
         "selection": selection, "player": player, "line": line, "american_odds": odds,
         "book": "Bovada", "model_probability": 0.69, "implied_probability": 0.49,
         "edge": edge, "fair_american": -222, "tier": tier, "suggested_units": units,
-        "section": section, "demotion_reason": reason,
+        "section": section, "demotion_reason": reason, "bet_down_to": -105,
     }
 
 
@@ -139,7 +139,7 @@ def test_tonights_props_are_on_the_board(tmp_path, monkeypatch):
     assert bet == {
         "gameId": GAME, "player": "Auston Matthews", "playerId": "8479318", "team": "TOR", "opp": "MTL",
         "position": "C", "market": "shots_on_goal", "line": 3.5, "side": "under", "price": 105, "book": "Bovada",
-        "projection": None, "modelProb": 0.69, "fairPrice": -222, "edgePct": 20.2, "kind": "bet", "tier": "A",
+        "betDownTo": -105, "projection": None, "modelProb": 0.69, "fairPrice": -222, "edgePct": 20.2, "kind": "bet", "tier": "A",
         "units": 0.5, "allowlisted": False, "starterConfirmed": None,
     }
     assert "Only best bets are listed; 3 other priced props (leans and passes) are not." in props["note"]
