@@ -65,7 +65,7 @@ games[]
                  staged bulk (featured) totals, never an alternate-ladder rung; open is null, because a capture's totals mix
                  alternate_totals rungs with the featured line and the board does not tell them apart
   regulation     {away, draw, home, prices:{away,draw,home}}
-  pick           {kind:"bet"|"lean", market, label, price, edgePct} | null   ← one market per game: the card's highest-edge best bet, or
+  pick           {kind:"bet"|"lean", market, label, price, betDownTo, edgePct} | null   ← one market per game: the card's highest-edge best bet, or
                  its highest-edge lean only when the game holds no best bet; null on a priced game means nothing cleared the edge bar,
                  on an unpriced game it means nothing was assessed. A pick without `kind` (frozen before it existed) reads as "bet"
 ```
@@ -86,7 +86,7 @@ games[]
   projWinner     ABBR
   total          {line, proj, result:"over"|"under"|"push"}
   priced         the frozen board's `priced` for this game (a board frozen before that flag: whether it carried a moneyline)
-  pick           {kind, market, label, price, edgePct, result:"win"|"loss"|"push"} | null  ← null when the board carried no pick for the game;
+  pick           {kind, market, label, price, betDownTo, edgePct, result:"win"|"loss"|"push"} | null  ← null when the board carried no pick for the game;
                  the page renders it "Not priced" unless priced is true, "No play" when it is, and grades neither and shows no price
 ```
 
@@ -277,7 +277,7 @@ props            {status, note, marketNotes, rows[]} | absent (absent renders "P
   status         "ok" | "no_lines" | "abstain"
   note           optional sentence under the heading (or the body of the empty state)
   marketNotes    {[market]: string} — honesty badge per market, e.g. "Tested as a loss over two seasons"
-  rows[]         gameId, player, playerId, team, opp, position, market, line, side ("over"|"under"), price, book,
+  rows[]         gameId, player, playerId, team, opp, position, market, line, side ("over"|"under"), price, betDownTo, book,
                  projection, modelProb, fairPrice, edgePct, kind ("bet"|"lean"|"pass"), tier ("A"|"B"|null), units (number|null),
                  allowlisted (bool), starterConfirmed (true|false|null — null: not a goalie market),
                  espnId (optional — ESPN athlete id; the live tracker matches on it before falling back to name + team)
@@ -299,7 +299,7 @@ props            {status, note, marketNotes, rows[]} | absent (absent renders "P
 props            {status, note, summary, season, rows[]} | absent
   summary        {w, l, p, units, ungraded} — best bets only, this date; units = profit in units
   season         {w, l, p, units, nights}   — best bets only, every settled night so far
-  rows[]         the board row's gameId, player, team, opp, position, market, line, side, price, book, kind, tier, units, plus
+  rows[]         the board row's gameId, player, team, opp, position, market, line, side, price, betDownTo, book, kind, tier, units, plus
                  actual (number | null — the player's final stat; null when he did not play),
                  result ("win"|"loss"|"push"|"void"|null), profitUnits (number, best bets only)
 ```
@@ -399,3 +399,15 @@ settled night's `bets` (`tracker_rows`), kept in `history/settled/<day>.json`.
 
 A frozen board's `games[].pick` now carries `units`, the card's stake, on a
 best bet.
+
+## Bet down to (2026-11-01)
+
+Cooper: "always include a bet down to number". Every team `pick` and every
+prop row of kind `bet` or `lean` carries `betDownTo`: the worst American price
+at which it still clears the bar its section was decided on (the best-bet bar
+for a best bet, the card's edge bar for a lean), floored at the card's -160
+juice limit. It is the card's own `bet_down_to` from `gameday_card.json`
+(`reports/gameday_card.bet_down_to`), never computed here, and null on a card
+written before the field or when no price the card would take clears.
+`results.json` carries it on the graded pick and prop rows, and the tracker's
+`team` and `props` rows carry it too.
