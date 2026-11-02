@@ -3041,6 +3041,17 @@ Re-derive rather than trust if the data has moved.
   drop built on an older Board would bring the message back: the next drop's
   Board should keep this behaviour.
 
+- **2026-11-02: one tab bar on every page, and smoother tab switches.**
+  Cooper: the Season tab dropped Tracker and Record and showed an Archive tab
+  "which shouldnt even be a thing", and pages "visibly glitch whenever i click
+  a different tab". `Season.dc.html` had its own hard-coded tabs; it now draws
+  the same list as Tracker, Record and Game. Publish Site runs
+  `web/smooth_pages.py` on the published pages (not the committed, pinned
+  shared ones): the site's dark on `html`/`body` before anything draws (the
+  blank page between tabs was the browser's white), a cross-document view
+  transition, and preloads of the React files `support.js` loads. Site only.
+  `tests/test_pages_move_smoothly.py`.
+
 ## Contract strings — never change these
 
 Cooper's local scheduled tasks hard-code these. Renaming any of them silently

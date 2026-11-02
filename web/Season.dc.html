@@ -64,12 +64,10 @@
       </nav>
     </header>
 
-    <nav aria-label="Board sections" style="position:sticky;top:0;z-index:5;background:var(--paper);border-bottom:1px solid var(--ink);display:flex;">
-      <a href="Board.dc.html" style="flex:1 1 0;max-width:150px;min-width:0;display:flex;align-items:center;justify-content:center;min-height:48px;padding:0 4px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;font-weight:600;white-space:nowrap;text-decoration:none;box-shadow:none;">Tonight</a>
-      <a href="Board.dc.html#props" style="flex:1 1 0;max-width:150px;min-width:0;display:flex;align-items:center;justify-content:center;min-height:48px;padding:0 4px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;font-weight:600;white-space:nowrap;text-decoration:none;box-shadow:none;">Props</a>
-      <a href="Results.dc.html" style="flex:1 1 0;max-width:150px;min-width:0;display:flex;align-items:center;justify-content:center;min-height:48px;padding:0 4px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;font-weight:600;white-space:nowrap;text-decoration:none;box-shadow:none;">Results</a>
-      <a href="Season.dc.html" aria-current="page" style="flex:1 1 0;max-width:150px;min-width:0;display:flex;align-items:center;justify-content:center;min-height:48px;padding:0 4px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;font-weight:600;white-space:nowrap;text-decoration:none;box-shadow:inset 0 -3px 0 var(--ink);">Season</a>
-      <a href="Archive.dc.html" style="flex:1 1 0;max-width:150px;min-width:0;display:flex;align-items:center;justify-content:center;min-height:48px;padding:0 4px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;font-weight:600;white-space:nowrap;text-decoration:none;box-shadow:none;">Archive</a>
+    <nav aria-label="Board sections" style="position:sticky;top:0;z-index:5;background:var(--paper);border-bottom:1px solid var(--ink);display:flex;overflow-x:auto;scrollbar-width:none;">
+      <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="6">
+        <a href="{{ t.href }}" aria-current="{{ t.current }}" style="flex:1 1 0;max-width:150px;min-width:56px;display:flex;align-items:center;justify-content:center;min-height:48px;padding:0 4px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;font-weight:600;white-space:nowrap;text-decoration:none;box-shadow:{{ t.shadow }};color:{{ t.color }};">{{ t.label }}</a>
+      </sc-for>
     </nav>
 
     <section style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:24px 40px;align-items:end;padding:40px 0 28px;border-bottom:1px solid var(--ink);">
@@ -577,7 +575,9 @@ class Component extends DCLogic {
   renderVals() {
     const vm = this.state.vm;
     const themeAttr = { Light: "light", Dark: "dark" }[this.props.theme] || "auto";
-    const base = { themeAttr, otherSports: this.state.otherSports || [], hasNotice: !!this.state.notice, notice: this.state.notice || "" };
+    const tabsList = [["Tonight", "Board.dc.html"], ["Props", "Board.dc.html#props"], ["Results", "Results.dc.html"], ["Season", "Season.dc.html"], ["Record", "Record.dc.html"], ["Tracker", "Tracker.dc.html"]];
+    const tabs = tabsList.map(([label, href]) => ({ label, href, current: label === "Season" ? "page" : undefined, shadow: label === "Season" ? "inset 0 -3px 0 var(--ink)" : "none", color: label === "Season" ? "var(--ink)" : "var(--mute)" }));
+    const base = { tabs, themeAttr, otherSports: this.state.otherSports || [], hasNotice: !!this.state.notice, notice: this.state.notice || "" };
     if (!vm) return { ...base, kicker: "Season simulation", title1: "The whole", title2: "season.", blurb: "", updated: "—", progress: "", stale: false, staleLabel: "", strip: [], divisions: [], conferences: [], leaderBoards: [], teamCards: [], goalies: [], method: [], injuries: [], games: 84, standingsNote: "", scorersNote: "", goaliesNote: "", notesLabel: "", hasRounds: false, roundConfs: [], slots: [], finals: [], hasTrophies: false, trophies: [], roundsNote: "", trophiesNote: "", calderNote: "", voted: [], hasVoted: false, hasTrophySection: false, votedNote: "" };
     return { ...base, ...vm };
   }
