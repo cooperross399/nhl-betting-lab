@@ -3051,6 +3051,20 @@ Re-derive rather than trust if the data has moved.
   blank page between tabs was the browser's white), a cross-document view
   transition, and preloads of the React files `support.js` loads. Site only.
   `tests/test_pages_move_smoothly.py`.
+  **Later the same day, Props and Results still glitched** (Cooper: "When i
+  click the props and results tab it still glitches"). Measured in a browser
+  at 390 px: the header's Site links jumped a row when the page's data
+  arrived, Board and Results drew their tabs without Props, Season, Record
+  or Tracker and with an Archive tab until then, and Board opened on
+  `#props` drew Tonight first. `smooth_pages.py` now also starts Board and
+  Results with this site's tabs and the address's tab (exact-string
+  patches to the published copies, which fail the publish if a page no
+  longer holds them), keeps the Site links on their own row on a narrow
+  screen, keeps a line for the date above each headline, and sizes every
+  tab bar's tabs the same way. Season gained the Methods, EPL and CBB
+  links, and Record, Methods and Game the 56 px tab width the others use.
+  Shared pages stay pinned; a design drop that changes these strings
+  turns the publish red until `PATCHES` is updated.
 
 ## Contract strings — never change these
 
