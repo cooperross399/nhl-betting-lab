@@ -203,6 +203,17 @@ if args[:1] == ["api"]:
                           "status": run["status"], "conclusion": run["conclusion"] or None,
                           "head_branch": run.get("headBranch", "main")}}))
         sys.exit(0)
+if args[:2] == ["run", "view"]:
+    run_id = args[2]
+    injected("view:" + run_id, "HTTP 502: Bad Gateway")
+    run = next((r for r in registry if str(r["databaseId"]) == run_id), None)
+    if run is None:
+        print("HTTP 404: Not Found", file=sys.stderr)
+        sys.exit(1)
+    # Every run here ran its publish job unless a test says it stood down.
+    jobs = run.get("jobs") or [{{"name": "Publish Site", "conclusion": "success"}}]
+    print(json.dumps({{"jobs": jobs}}))
+    sys.exit(0)
 if args[:2] == ["run", "download"]:
     run_id, name, dest = args[2], value("--name"), Path(value("--dir"))
     injected("download:" + run_id + ":" + name,
@@ -1147,3 +1158,53 @@ def test_a_deployed_index_that_cannot_be_read_is_unknown_not_empty(monkeypatch) 
     assert module.deployed_boards("https://x/index.json", 2, fetch=missing) is module.NOT_DEPLOYED
     body = json.dumps({"dates": [{"file": "2026-10-04.json"}]}).encode()
     assert module.deployed_boards("https://x/index.json", 2, fetch=lambda url: body) == {"2026-10-04.json"}
+
+
+def _stood_down(chain: PublishSite) -> int:
+    """A 7 AM cron run the gate stood down: green, its publish job skipped,
+    nothing uploaded (2026-11-03, run 41618590042)."""
+    run_id = chain.red("success")
+    chain.registry[0]["jobs"] = [
+        {"name": "Decide whether this run publishes", "conclusion": "success"},
+        {"name": "Wait for 7 AM New York", "conclusion": "skipped"},
+        {"name": "Wait for 7 AM New York (continued)", "conclusion": "skipped"},
+        {"name": "Publish Site", "conclusion": "skipped"},
+    ]
+    return run_id
+
+
+def test_a_stood_down_seven_am_run_is_passed_over(chain: PublishSite) -> None:
+    """The newest green run that never ran its publish job carries no
+    site-history, so it cannot be the newest publish every later run must
+    restore from: on 2026-11-03 it was, and every publish after it refused."""
+    chain.run(D1)
+    newest = chain.run(D2)
+    _stood_down(chain)
+    _stood_down(chain)
+
+    after = chain.run(D3)
+
+    assert after.conclusion == "success", after.log
+    assert after.boards == _dates(D3, D2, D1)
+    assert "never ran its 'Publish Site' job" in after.log
+    assert newest.run_id in {r["databaseId"] for r in chain.registry}
+
+
+def test_a_run_whose_jobs_cannot_be_asked_is_a_refusal(chain: PublishSite) -> None:
+    """Under --require-newest an unanswered jobs listing never lets an older
+    run stand in for the newest publish: nothing is built."""
+    chain.run(D1)
+    newest = chain.run(D2)
+
+    after = chain.run(D3, fail={f"view:{newest.run_id}": 9})
+
+    assert after.conclusion == "failure", after.log
+    assert after.deployed is None
+    assert_the_history_only_grows(chain)
+
+
+def test_the_history_restore_passes_over_a_run_that_never_published() -> None:
+    step = next(s for s in _steps() if s.get("name") == HISTORY_STEP)
+    assert '--require-job "Publish Site"' in str(step["run"])
+    job = _workflow()["jobs"]["publish"]
+    assert job["name"] == "Publish Site"

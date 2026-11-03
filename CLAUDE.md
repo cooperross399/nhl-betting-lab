@@ -3047,6 +3047,15 @@ Re-derive rather than trust if the data has moved.
   hold the publishing run there (`scripts/wait_for_round.py`). Publish Site's
   `publish-site` concurrency group moved from the workflow onto the publish
   job, so a Gameday Refresh completion cannot cancel the wait.
+  **2026-11-03: the stood-down run blocked every publish after it.** The
+  02:55 UTC run stands down at `when` and GitHub records it as a success
+  that uploaded nothing, so the site-history restore (`--success-only
+  --require-newest`) took it as the newest publish and the 7 AM run failed
+  ("the run holds no such artifact", run 41618590042). The restore now
+  passes `--require-job "Publish Site"`: `restore_state.job_ran` asks
+  GitHub for the run's jobs and passes over a run whose publish job was
+  skipped; a jobs listing that cannot be asked is a refusal under
+  `--require-newest`, never a reason to read an older run.
 
 - **2026-11-02: one tab bar on every page, and smoother tab switches.**
   Cooper: the Season tab dropped Tracker and Record and showed an Archive tab

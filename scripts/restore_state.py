@@ -421,6 +421,47 @@ def _not_consulted(later: list[str], artifact: str) -> str:
     )
 
 
+def job_ran(run_id: object, job: str, *, attempts: int = 1,
+            strict: bool = False) -> bool | None:
+    """Whether the run's job named `job` ran (any conclusion but skipped).
+
+    Publish Site's two 7 AM crons stand one run down every day: its gate job
+    succeeds, its publish job is skipped, and GitHub records the run as a
+    success that uploaded nothing. Under `--require-newest` that run was the
+    newest successful publish and held no site-history, so every later
+    publish refused to build (2026-11-03, run 41618590042). `--require-job`
+    passes over a run whose named job never ran: it built nothing, so it
+    added nothing an older run lacks.
+
+    Returns None when GitHub could not be asked on every attempt (raising
+    `Unreachable` instead when `strict`); the caller then treats the run as
+    one that ran, so a failure to ask never skips a real publish.
+    """
+    problem = ""
+    for attempt in range(attempts):
+        if attempt:
+            _pause(attempt)
+        result = _gh("run", "view", str(run_id), "--json", "jobs")
+        if result.returncode != 0:
+            problem = _said(result)
+            continue
+        try:
+            jobs = json.loads(result.stdout or "{}").get("jobs") or []
+        except (json.JSONDecodeError, AttributeError):
+            problem = "the jobs were listed as something other than JSON"
+            continue
+        named = [j for j in jobs if j.get("name") == job]
+        if not named:
+            return False
+        return any(j.get("conclusion") != "skipped" for j in named)
+    sentence = (f"Could not ask GitHub whether run {run_id} ran its "
+                f"{job!r} job after {attempts} attempt(s) ({problem}).")
+    if strict:
+        raise Unreachable(sentence + " An older run cannot stand in for it.")
+    print(f"::warning::{sentence} Treated as a run that ran it.")
+    return None
+
+
 def restore(
     *,
     artifact: str,
@@ -437,6 +478,7 @@ def restore(
     require_listing: bool = False,
     listing_attempts: int | None = None,
     refuse_unreachable: bool = False,
+    require_job: str = "",
 ) -> dict:
     """Restore `artifact` into `dest`; returns what it did, for the log and tests.
 
@@ -480,6 +522,22 @@ def restore(
                 f"{artifact} is unknown.{_not_consulted(later, artifact)}",
             )
             break
+        if require_job:
+            kept = []
+            for run in runs:
+                if job_ran(run["databaseId"], require_job, attempts=attempts,
+                           strict=(require_newest or refuse_unreachable)) is False:
+                    print(f"Run {run['databaseId']} of {workflow} never ran its "
+                          f"{require_job!r} job (stood down), so it carries "
+                          f"nothing; passed over.")
+                    continue
+                kept.append(run)
+                if require_newest:
+                    # Only the newest run that ran is ever read under
+                    # --require-newest; asking about older ones costs calls.
+                    kept.extend(runs[runs.index(run) + 1:])
+                    break
+            runs = kept
         for index, run in enumerate(runs):
             with tempfile.TemporaryDirectory() as scratch:
                 why = _fetch(run["databaseId"], artifact, Path(scratch), attempts)
@@ -1176,6 +1234,15 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     parser.add_argument(
+        "--require-job", default="", metavar="NAME",
+        help=(
+            "Pass over a listed run whose job named NAME never ran (skipped "
+            "or absent): a run stood down before it built anything carries "
+            "nothing. A run GitHub cannot be asked about counts as one that "
+            "ran, or exits 1 under --require-newest."
+        ),
+    )
+    parser.add_argument(
         "--record-run", metavar="FILE",
         help=(
             "Write the id of the run the artifact was restored from to FILE, "
@@ -1225,6 +1292,7 @@ def main(argv: list[str] | None = None) -> int:
             require_listing=args.require_listing,
             listing_attempts=args.listing_attempts,
             refuse_unreachable=args.refuse_unreachable,
+            require_job=args.require_job,
         )
     except Unreachable as exc:
         print(f"::error::{exc}")

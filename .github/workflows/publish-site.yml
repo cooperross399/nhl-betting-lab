@@ -293,6 +293,12 @@ jobs:
         # site-history in the artifacts API, and the restored boards against
         # every board the live Archive lists, and stops the job here when
         # either disagrees or cannot be asked. See scripts/site_history_floor.py.
+        #
+        # `--require-job "Publish Site"` passes over a run whose publish job
+        # never ran. The 7 AM crons stand one run down every day, and GitHub
+        # records it as a success that uploaded nothing; on 2026-11-03 that
+        # run (41618590042) became the "newest successful publish" and every
+        # publish after it refused to build.
         env:
           GH_TOKEN: ${{ github.token }}
           START_HISTORY_AFRESH: ${{ inputs.start_history_afresh && 'true' || 'false' }}
@@ -307,7 +313,7 @@ jobs:
           else
             python scripts/restore_state.py --artifact site-history --dest dist/data/history \
               --workflow publish-site.yml --success-only --require-newest --attempts 3 \
-              --record-run "$RUNNER_TEMP/site-history.run" || {
+              --require-job "Publish Site" --record-run "$RUNNER_TEMP/site-history.run" || {
               echo "::error::The site's history could not be restored, so nothing is built, kept or deployed; the public site keeps its last build and the next run tries again. If the newest successful publish's site-history artifact has expired or been deleted it cannot come back, and dispatching Publish Site with start_history_afresh starts the history again from today."
               exit 1
             }
