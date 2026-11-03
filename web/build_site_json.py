@@ -1800,7 +1800,8 @@ def settle(day: date, history_dir: Path, *, processed: Path | None = None) -> di
     frozen = history_dir / f"{day.isoformat()}.json"
     base = {"generatedAt": now, "season": "2026–27", "resultsDate": day.isoformat(), "teams": {}, "games": [],
             "summary": {"straightUp": {"w": 0, "l": 0}, "picks": {"w": 0, "l": 0, "p": 0},
-                        "leans": {"w": 0, "l": 0, "p": 0}, "totals": {"w": 0, "l": 0, "p": 0}}}
+                        "leans": {"w": 0, "l": 0, "p": 0}, "totals": {"w": 0, "l": 0, "p": 0},
+                        "money": {key: {"units": 0.0, "staked": 0.0} for key in SEASON_KEYS}}}
     if not frozen.exists():
         base["notice"] = "No board was published for this date, so there is nothing to settle."
         return base
@@ -1844,6 +1845,8 @@ def settle(day: date, history_dir: Path, *, processed: Path | None = None) -> di
         winner = ha if hs > as_ else aa
         proj_winner = ha if g["home"]["projGoals"] >= g["away"]["projGoals"] else aa
         s["straightUp"]["w" if winner == proj_winner else "l"] += 1
+        ml_now = ((g.get("moneyline") or {}).get("current") or {})
+        _add_units(s["money"]["straightUp"], ml_now.get("home" if proj_winner == ha else "away"), "win" if winner == proj_winner else "loss")
         base["teams"].setdefault(ha, team_entry(ha)); base["teams"].setdefault(aa, team_entry(aa))
         row = {"id": g["id"], "startUtc": g["startUtc"], "finish": finish, "projWinner": proj_winner,
                "away": {"abbr": aa, "projGoals": g["away"]["projGoals"], "final": as_},
@@ -1854,6 +1857,8 @@ def settle(day: date, history_dir: Path, *, processed: Path | None = None) -> di
             res = "push" if total_goals == tot["current"] else "over" if total_goals > tot["current"] else "under"
             proj_side = "over" if tot["proj"] > tot["current"] else "under"
             s["totals"]["p" if res == "push" else "w" if res == proj_side else "l"] += 1
+            _add_units(s["money"]["totals"], tot.get("overPrice" if proj_side == "over" else "underPrice"),
+                       "push" if res == "push" else "win" if res == proj_side else "loss")
             row["total"] = {"line": tot["current"], "proj": tot["proj"], "result": res}
         # What the frozen board said about this game's prices, carried onto
         # the results row so the page can say it. A board frozen before the
@@ -1873,6 +1878,7 @@ def settle(day: date, history_dir: Path, *, processed: Path | None = None) -> di
             # recorded-not-staked calls did without mixing them into it.
             tally = s["picks"] if pick.get("kind", "bet") == "bet" else s["leans"]
             tally["w" if outcome == "win" else "l" if outcome == "loss" else "p"] += 1
+            _add_units(s["money"]["picks" if tally is s["picks"] else "leans"], pick.get("price"), outcome)
             row["pick"] = {**pick, "result": outcome}
         else:
             # A game with no pick settles with no pick. This used to write
@@ -2434,6 +2440,38 @@ FROZEN_BOARD = re.compile(r"^(\d{4}-\d{2}-\d{2})\.json$")
 
 SEASON_KEYS = ("straightUp", "picks", "leans", "totals")
 
+#: The stake the season's four records are tracked at (Cooper, 2026-11-03:
+#: "I want a tracked profit/loss for best bets/totals/leans/straight up
+#: underneath the record", ".25u per bet. to win .25u for -odds"). On plus
+#: odds 0.25u is risked; on minus odds enough is risked to win 0.25u. Nothing
+#: is bet; it is how each record would have paid.
+RECORD_STAKE = 0.25
+
+
+def record_units(price, outcome: str) -> tuple[float, float] | None:
+    """(profit, risked) of one graded call at RECORD_STAKE, or None without a price.
+
+    A win at +150 pays 0.375u on 0.25u risked; a win at −150 pays 0.25u on
+    0.375u risked, and the loss costs the 0.375u. A push returns the stake."""
+    if not isinstance(price, (int, float)) or isinstance(price, bool) or not -100000 < price < 100000 or -100 < price < 100:
+        return None
+    risk = RECORD_STAKE * abs(price) / 100 if price < 0 else RECORD_STAKE
+    win = RECORD_STAKE if price < 0 else RECORD_STAKE * price / 100
+    profit = win if outcome == "win" else -risk if outcome == "loss" else 0.0
+    return profit, risk
+
+
+def _add_units(tally: dict, price, outcome: str) -> None:
+    """Add one call's 0.25u profit to a night's `summary.money` entry; an unpriced call adds nothing and is counted."""
+    tally.setdefault("units", 0.0)
+    tally.setdefault("staked", 0.0)
+    got = record_units(price, outcome)
+    if got is None:
+        tally["unpriced"] = tally.get("unpriced", 0) + 1
+        return
+    tally["units"] = round(tally["units"] + got[0], 4)
+    tally["staked"] = round(tally["staked"] + got[1], 4)
+
 #: How long a night with a Due List entry still unread (result null) is
 #: settled again each run rather than kept: the forward ledger's rule for a
 #: game with no result (`nhl_betting_lab.forward_evidence.PATIENCE_DAYS`,
@@ -2456,6 +2494,16 @@ def _kept_night(path: Path) -> dict | None:
     except (OSError, UnicodeDecodeError, json.JSONDecodeError):
         return None
     return night if isinstance(night, dict) else None
+
+
+def _kept_without_record_units(night: dict) -> bool:
+    """A night kept before its four records carried 0.25u profit (2026-11-03).
+
+    Settled again once, so the season's profit counts every night; if that
+    fails the kept night is read as it was and counted in nightsWithoutUnits."""
+    summary = night.get("summary") if isinstance(night.get("summary"), dict) else {}
+    return "money" not in summary and any(
+        isinstance(summary.get(k), dict) and any(int(summary[k].get(x) or 0) for x in ("w", "l", "p")) for k in SEASON_KEYS)
 
 
 def _kept_before_the_list_was_graded(night: dict, frozen: Path) -> bool:
@@ -2530,6 +2578,7 @@ def season_record(today: date, history_dir: Path, latest: dict, *, processed: Pa
            "impliedSum": 0.0, "impliedCount": 0, "units": 0.0, "staked": 0.0}
     props = {"w": 0, "l": 0, "p": 0, "units": 0.0, "nights": 0}
     prop_leans = {"w": 0, "l": 0, "p": 0, "nights": 0}
+    money = {key: {"units": 0.0, "staked": 0.0, "unpriced": 0, "nightsWithout": 0} for key in SEASON_KEYS}
     kept = history_dir / SETTLED_DIR
     nights, missing, first, last = 0, 0, None, None
     for path in sorted(history_dir.glob("*.json")):
@@ -2547,6 +2596,9 @@ def season_record(today: date, history_dir: Path, latest: dict, *, processed: Pa
             # again fails (an outage), it is still read as kept, without bets.
             if "bets" not in kept_night and not _kept_before_the_list_was_graded({**kept_night, "bets": []}, path):
                 stale = kept_night
+            kept_night = None
+        if kept_night is not None and _kept_without_record_units(kept_night):
+            stale = stale or kept_night
             kept_night = None
         if day.isoformat() == latest.get("resultsDate"):
             night = night_record(latest)
@@ -2601,11 +2653,30 @@ def season_record(today: date, history_dir: Path, latest: dict, *, processed: Pa
         first = first or day.isoformat()
         last = day.isoformat()
         for key in SEASON_KEYS:
-            for k, v in (night["summary"].get(key) or {}).items():
+            part = night["summary"].get(key) or {}
+            for k, v in part.items():
                 if k in tally[key]:
                     tally[key][k] += int(v)
+            paid = (night["summary"].get("money") or {}).get(key)
+            if isinstance(paid, dict):
+                money[key]["units"] += float(paid.get("units") or 0.0)
+                money[key]["staked"] += float(paid.get("staked") or 0.0)
+                money[key]["unpriced"] += int(paid.get("unpriced") or 0)
+            elif any(int(part.get(k) or 0) for k in ("w", "l", "p")):
+                money[key]["nightsWithout"] += 1
     span = {"nights": nights, "firstDate": first, "lastDate": last, "missingNights": missing}
     season = {**tally, **span} if nights else span
+    if nights:
+        # Each record's profit at RECORD_STAKE, beside the records, not in
+        # them: the w/l/p tallies keep their shape.
+        season["money"] = {}
+        for key in SEASON_KEYS:
+            m = money[key]
+            season["money"][key] = {"units": round(m["units"], 2), "staked": round(m["staked"], 2), "stake": RECORD_STAKE}
+            if m["unpriced"]:
+                season["money"][key]["unpriced"] = m["unpriced"]
+            if m["nightsWithout"]:
+                season["money"][key]["nightsWithoutUnits"] = m["nightsWithout"]
     if due["nights"]:
         season["dueList"] = {"w": due["w"], "l": due["l"], "p": due["p"], "nights": due["nights"], "byMarket": due["byMarket"],
                              "stake": DUE_LIST_STAKE, "units": round(due["units"], 2), "staked": round(due["staked"], 2),

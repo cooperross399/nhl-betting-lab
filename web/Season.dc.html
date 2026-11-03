@@ -577,7 +577,7 @@ class Component extends DCLogic {
   renderVals() {
     const vm = this.state.vm;
     const themeAttr = { Light: "light", Dark: "dark" }[this.props.theme] || "auto";
-    const tabsList = [["Tonight", "Board.dc.html"], ["Props", "Board.dc.html#props"], ["Results", "Results.dc.html"], ["Season", "Season.dc.html"], ["Record", "Record.dc.html"], ["Tracker", "Tracker.dc.html"]];
+    const tabsList = [["Tonight", "Board.dc.html"], ["Props", "Board.dc.html#props"], ["Results", "Results.dc.html"], ["Season", "Season.dc.html"], ["Record", "Record.dc.html"]];
     const tabs = tabsList.map(([label, href]) => ({ label, href, current: label === "Season" ? "page" : undefined, shadow: label === "Season" ? "inset 0 -3px 0 var(--ink)" : "none", color: label === "Season" ? "var(--ink)" : "var(--mute)" }));
     const base = { tabs, themeAttr, otherSports: this.state.otherSports || [], hasNotice: !!this.state.notice, notice: this.state.notice || "" };
     if (!vm) return { ...base, kicker: "Season simulation", title1: "The whole", title2: "season.", blurb: "", updated: "—", progress: "", stale: false, staleLabel: "", strip: [], divisions: [], conferences: [], leaderBoards: [], teamCards: [], goalies: [], method: [], injuries: [], games: 84, standingsNote: "", scorersNote: "", goaliesNote: "", notesLabel: "", hasRounds: false, roundConfs: [], slots: [], finals: [], hasTrophies: false, trophies: [], roundsNote: "", trophiesNote: "", calderNote: "", voted: [], hasVoted: false, hasTrophySection: false, votedNote: "" };

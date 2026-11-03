@@ -3095,6 +3095,37 @@ Re-derive rather than trust if the data has moved.
   over 2,410 graded. Nothing is bet; the card, snapshot, ledger, model, edge
   bars and staking rule are unchanged.
 
+- **2026-11-03: Record and Tracker are one page, pages no longer jump, and
+  the four season records carry a 0.25u profit.** Cooper: "results/season/
+  record/tracker pages all glitch when you click on them still", "combine
+  record/tracker into one page for all of the sports on the website ... Just
+  make it simple", "I want a tracked profit/loss for best bets/totals/leans/
+  straight up underneath the record", ".25u per bet. to win .25u for -odds".
+  Site only. **The glitch:** every page draws twice, from its template and
+  again when its data arrives, and the second draw moved everything (one
+  layout shift of 0.44 on the live Results page, 0.43 on Tracker); #405 and
+  #408 had steadied the header and tab bar only. `web/smooth_pages.py` now
+  adds a gate that keeps the page undrawn until its same-site data has
+  arrived and nothing has changed for 120 ms (1.6 s at most), so the browser
+  keeps the page you left on screen until the new one is ready; the
+  cross-document view transition was taken out, because it shows the new
+  page's first (empty) frame. Speculation rules let Chrome draw a tab while
+  the pointer rests on it. Measured locally after: zero layout shifts on
+  every page. **One page:** `Record.dc.html` ("Our record") is the old
+  Tracker in plain words plus "Do our win chances come true?" read from
+  record.json's buckets; the old calibration, Brier and line-movement view
+  is gone, and `Tracker.dc.html` forwards to it. Tabs end at Record on every
+  page; the published shared pages and lib/sports.js draw no Tracker or
+  Archive tab (`NO_TRACKER_TAB`, publish-time patches, the committed shared
+  copies stay pinned). EPL and CBB get the same page and smoothing in their
+  own repositories. **Profit:** `settle` writes `summary.money` per record
+  (`record_units`, `RECORD_STAKE` = 0.25; straight up at the frozen board's
+  moneyline for the projected winner, totals at the projected side's price,
+  best bets and leans at the pick's price), `season_record` sums it into
+  `season.money`, re-settling once any kept night without it, and the board
+  strip and the Results season cell print it ("+1.25u at 0.25u a bet").
+  Nothing is bet; the card, snapshot, ledger, model, edge bars and staking
+  rule are unchanged.
 ## Contract strings — never change these
 
 Cooper's local scheduled tasks hard-code these. Renaming any of them silently

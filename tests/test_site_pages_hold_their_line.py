@@ -172,7 +172,7 @@ def test_the_due_list_is_tracked_and_never_called_a_bet() -> None:
     """The Due List sits on All results at a notional stake. It is Cooper's
     list, not the model's pick: the page says so on its card, and the builder
     keeps its rows out of the best bets and their record."""
-    page = (PROJECT_ROOT / "web" / "Tracker.dc.html").read_text(encoding="utf-8")
+    page = (PROJECT_ROOT / "web" / "Record.dc.html").read_text(encoding="utf-8")
     assert 'key === "due" ? `Cooper\'s list · ${base.dueStake}u per entry, not bet`' in page
     module = _module()
     night = {"resultsDate": "2026-10-20", "games": [], "props": {"status": "ok", "rows": []},

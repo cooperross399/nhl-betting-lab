@@ -76,8 +76,13 @@ games[]
 generatedAt, season, phase, notice (shown when games is empty)
 resultsDate      "YYYY-MM-DD"
 summary          {straightUp:{w,l}, picks:{w,l,p}, leans:{w,l,p}, totals:{w,l,p}}   ← picks counts best bets only; leans are tallied apart
+                 + money {straightUp|picks|leans|totals: {units, staked, unpriced?}}: each record's profit at 0.25u a bet
+                   (risk 0.25u on plus odds, enough to win 0.25u on minus odds; straight up at the board's moneyline for
+                   the projected winner, totals at the projected side's price), since 2026-11-03
 seasonRecord     the same object as board.json's record.season: every frozen board before today, settled and summed.
                  Before a night has settled it is {nights: 0, firstDate: null, lastDate: null, missingNights} with no tallies
+                 money {straightUp|picks|leans|totals: {units, staked, stake: 0.25, unpriced?, nightsWithoutUnits?}}
+                   summed from each night's summary.money; the board strip prints it under each record
 teams[ABBR]      {name, short, color, fg, logo?}  — as board.json
 games[]
   id, startUtc

@@ -136,7 +136,7 @@ def test_both_table_layouts_parse() -> None:
 
 
 def test_the_tracker_page_keeps_leans_out_of_the_bets_headline() -> None:
-    page = (ROOT / "web" / "Tracker.dc.html").read_text(encoding="utf-8")
+    page = (ROOT / "web" / "Record.dc.html").read_text(encoding="utf-8")
     assert "./data/prop_leans.json" in page
     assert '["leans", "Prop leans"]' in page
     assert "const ov = agg(bets)" in page

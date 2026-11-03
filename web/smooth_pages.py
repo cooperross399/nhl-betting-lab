@@ -16,9 +16,6 @@ In each `dist/*.dc.html` page this adds, right after `<meta charset>`:
 - the site's own background and text colour on `html`/`body` and a dark
   `color-scheme`, so the empty page between two tabs is the site's dark, never
   white;
-- a cross-document view transition (`@view-transition { navigation: auto }`,
-  Chrome and Safari 18.2+; ignored elsewhere), so the browser crossfades from
-  the page you left to the one you opened instead of cutting to an empty one;
 - preconnects to unpkg and Google Fonts, and preloads of the exact React files
   `support.js` asks for (same URL, same integrity, so the browser reuses them),
   so the scripts start downloading while the page is still being read;
@@ -42,6 +39,7 @@ checked. Running it twice adds nothing the second time. Standard library only.
 
 from __future__ import annotations
 
+import json
 import re
 import sys
 from pathlib import Path
@@ -55,10 +53,96 @@ CDN = re.compile(r'var (REACT|REACT_DOM)_(URL|SRI) = "([^"]+)";')
 PAPER = "#14151a"
 INK = "#f1efe9"
 
-# This site's pages (`lib/sports.js` PAGE_KEYS for nhl, and site.json).
+# This site's pages (`lib/sports.js` PAGE_KEYS, and site.json). Record and
+# Tracker were one page from 2026-11-03: Record.dc.html holds both and
+# Tracker.dc.html sends its visitors there. "tracker" stays in the set because
+# the shared tabsFor draws an Archive tab when it is missing; the published
+# lib/sports.js (SPORTS_PATCHES) draws it as nothing.
 PAGES = '["season","record","tracker","methods","game"]'
 
+# Hold each page back until it is drawn (2026-11-03). Every page draws twice:
+# once from its template, then again when its data arrives, and the second
+# draw moved everything (measured on Results: one layout shift of 0.44 as the
+# night's games arrived and pushed the footer and the site links down). The
+# page draws nothing (the browser keeps showing the page you left) until the same-site data it asked for has
+# arrived, the fonts are in and nothing has changed for 120 ms, and then it
+# appears once, whole. It never waits longer than 1.6 s.
+#
+# Until this, a cross-document view transition crossfaded into each new page.
+# It was taken out with the gate: the transition shows the new page the moment
+# it first renders, which with the gate is an empty page, while without it the
+# browser keeps the page you left on screen until the new one paints something
+# (paint holding, Chrome and Safari). So the old page now stays up until the
+# new one is ready and the two swap in one frame.
+GATE = (
+    "<script>(function(){var d=document.documentElement;d.classList.add('sp-wait');"
+    "var n=0,saw=0,last=Date.now(),t0=last,done=0,f=window.fetch;"
+    "function own(u){try{return new URL(u&&u.url||u,location.href).origin===location.origin}catch(e){return 0}}"
+    "if(f)window.fetch=function(u){var o=own(u);if(o)n++;var p=f.apply(this,arguments);"
+    "if(o){var e=function(){n--;saw=1;last=Date.now()};p.then(e,e)}return p};"
+    "function show(){if(done)return;done=1;d.classList.remove('sp-wait')}"
+    "function tick(){if(done)return;var now=Date.now(),fo=!document.fonts||document.fonts.status==='loaded';"
+    "if(now-t0>1600||(saw&&!n&&fo&&now-last>120&&document.readyState!=='loading'))show();else setTimeout(tick,40)}"
+    "new MutationObserver(function(){last=Date.now()}).observe(d,{subtree:true,childList:true,characterData:true,attributes:true});"
+    "setTimeout(tick,40)})();</script>"
+)
+
+# Chrome draws the page a tab points at while the pointer rests on it, so the
+# click shows a page already drawn, data and all. Ignored by other browsers.
+SPECULATION = (
+    '<script type="speculationrules">{"prerender":[{"where":{"href_matches":"/*.dc.html"},'
+    '"eagerness":"moderate"}]}</script>'
+)
+
+# Record and Tracker are one page (Record.dc.html) on every site from
+# 2026-11-03 (Cooper: "combine record/tracker into one page for all of the
+# sports on the website"). The shared pages and lib/sports.js still draw a
+# Tracker tab, or an Archive tab where a site has no Tracker; this draws
+# neither. Each pattern must match exactly once, as the patches below.
+NO_TRACKER_TAB: dict[str, re.Pattern[str]] = {
+    "Board.dc.html": re.compile(r'\.\.\.\(hasPage\("tracker"\) \? \[tabLink\("Tracker"[^\]]*\] : \[tabLink\("Archive"[^\]]*\]\),'),
+    "Results.dc.html": re.compile(r', \.\.\.\(hasPage\("tracker"\) \? \[tab\("Tracker"[^\]]*\] : \[tab\("Archive"[^\]]*\]\)'),
+    "Archive.dc.html": re.compile(r', \.\.\.\(hasPage\("tracker"\) \? \[tab\("Tracker"[^\]]*\] : \[tab\("Archive"[^\]]*\]\)'),
+    "Graphic.dc.html": re.compile(r', \.\.\.\(hasPage\("tracker"\) \? \[tab\("Tracker"[^\]]*\] : \[tab\("Archive"[^\]]*\]\)'),
+    "lib/sports.js": re.compile(r'\n    \.\.\.\(has\("tracker"\) \? \[tab\("Tracker"[^\]]*\] : \[tab\("Archive"[^\]]*\]\),'),
+}
+
+# Under each season record on the board, how it would have paid at 0.25u a
+# bet (Cooper, 2026-11-03: "I want a tracked profit/loss for best
+# bets/totals/leans/straight up underneath the record", ".25u per bet. to win
+# .25u for -odds"). build_site_json.season_record writes `units` beside each
+# record; a record without it keeps the old line.
+PL = ('const pl = (key, alt) => { const m = r.season && r.season.money && r.season.money[key]; '
+      'return m && typeof m.units === "number" ? '
+      '`${m.units > 0.004 ? "+" : m.units < -0.004 ? "−" : ""}${Math.abs(m.units).toFixed(2)}u at ${m.stake ?? 0.25}u a bet` : alt; };\n  ')
+
 PATCHES: dict[str, list[tuple[str, str]]] = {
+    "lib/sports.js": [
+        (
+            "  const strip = [\n    { label: \"Best bets · season\"",
+            "  " + PL + "const strip = [\n    { label: \"Best bets · season\"",
+        ),
+        (
+            'sub: kept(r.picks) ? `${F.winRate(r.picks.w || 0, r.picks.l || 0)} · ${nights}${missed}` : untallied',
+            'sub: kept(r.picks) ? pl("picks", `${F.winRate(r.picks.w || 0, r.picks.l || 0)} · ${nights}${missed}`) : untallied',
+        ),
+        (
+            'sub: kept(r.straightUp) ? `${F.winRate(r.straightUp.w || 0, r.straightUp.l || 0)} of games` : untallied',
+            'sub: kept(r.straightUp) ? pl("straightUp", `${F.winRate(r.straightUp.w || 0, r.straightUp.l || 0)} of games`) : untallied',
+        ),
+        (
+            'sub: kept(r.totals) ? "model side of the line" : untallied',
+            'sub: kept(r.totals) ? pl("totals", "model side of the line") : untallied',
+        ),
+        (
+            'sub: kept(r.leans) ? "recorded, not staked" : untallied',
+            'sub: kept(r.leans) ? pl("leans", "recorded, not staked") : untallied',
+        ),
+        (
+            '[{ label: "Best bets · season", value: F.recStr(data.seasonRecord.picks) }]',
+            '[{ label: "Best bets · season", value: F.recStr(data.seasonRecord.picks), ...((m) => (m && typeof m.units === "number" ? { sub: `${m.units > 0.004 ? "+" : m.units < -0.004 ? "−" : ""}${Math.abs(m.units).toFixed(2)}u at ${m.stake ?? 0.25}u a bet` } : {}))((data.seasonRecord.money || {}).picks) }]',
+        ),
+    ],
     "Board.dc.html": [
         (
             'tab: "tonight", propView: "model",',
@@ -76,6 +160,13 @@ PATCHES: dict[str, list[tuple[str, str]]] = {
         ),
     ],
     "Results.dc.html": [
+        (
+            """<div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:44px;line-height:1;margin-top:8px;">{{ c.value }}</div>
+        </div>""",
+            """<div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:44px;line-height:1;margin-top:8px;">{{ c.value }}</div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--ink-2);margin-top:6px;">{{ c.sub }}</div>
+        </div>""",
+        ),
         (
             "state = { vm: null, feedNotice: null, loadedFor: null };",
             f"state = {{ vm: null, feedNotice: null, loadedFor: null, pages: new Set({PAGES}), propsTab: true }};",
@@ -100,22 +191,23 @@ def react_files(support: Path) -> list[tuple[str, str]]:
     return out
 
 
-def snippet(react: list[tuple[str, str]]) -> str:
+def snippet(react: list[tuple[str, str]], sport: str = "nhl") -> str:
+    dark = sport == "nhl"
+    colours = f"html,body{{margin:0;background:{PAPER};color:{INK};}}" if dark else ""
     lines = [
         MARK,
-        '<meta name="color-scheme" content="dark">',
-        f'<meta name="theme-color" content="{PAPER}">',
+        *(['<meta name="color-scheme" content="dark">', f'<meta name="theme-color" content="{PAPER}">'] if dark else []),
         "<style>"
-        f"html,body{{margin:0;background:{PAPER};color:{INK};}}"
-        "@view-transition{navigation:auto;}"
+        f"{colours}"
         '@media (max-width:719px){header>nav[aria-label="Site"]{flex-basis:100%;}}'
         "section div:has(+h1){min-height:1.2em;}"
         'nav[aria-label="Board sections"]{overflow-x:auto;scrollbar-width:none;}'
         'nav[aria-label="Board sections"] a{flex:1 0 auto!important;min-width:0!important;padding:0 7px!important;}'
         '@media (max-width:519px){nav[aria-label="Board sections"] a{font-size:11px!important;letter-spacing:.03em!important;padding:0 5px!important;}}'
-        "::view-transition-old(root),::view-transition-new(root){animation-duration:.18s;}"
-        "@media (prefers-reduced-motion:reduce){::view-transition-group(*),::view-transition-old(*),::view-transition-new(*){animation:none!important;}}"
+        "html.sp-wait body{visibility:hidden;}"
         "</style>",
+        GATE,
+        SPECULATION,
         '<link rel="preconnect" href="https://unpkg.com" crossorigin>',
         '<link rel="preconnect" href="https://fonts.googleapis.com">',
         '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>',
@@ -126,8 +218,26 @@ def snippet(react: list[tuple[str, str]]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def patch(name: str, text: str) -> str:
-    for old, new in PATCHES.get(name, []):
+def drop_tracker_tab(name: str, text: str) -> str:
+    pat = NO_TRACKER_TAB.get(name)
+    if pat is None:
+        return text
+    found = len(pat.findall(text))
+    if found != 1:
+        raise SystemExit(f"{name}: expected one Tracker/Archive tab to drop, found {found}")
+    return pat.sub("", text)
+
+
+def site_sport(dist: Path) -> str:
+    try:
+        return json.loads((dist / "site.json").read_text(encoding="utf-8")).get("sport") or "nhl"
+    except (OSError, ValueError, AttributeError):
+        return "nhl"
+
+
+def patch(name: str, text: str, sport: str = "nhl") -> str:
+    text = drop_tracker_tab(name, text)
+    for old, new in (PATCHES.get(name, []) if sport == "nhl" else []):
         if text.count(old) != 1:
             raise SystemExit(f"{name}: expected one {old!r} to patch, found {text.count(old)}")
         text = text.replace(old, new)
@@ -135,16 +245,25 @@ def patch(name: str, text: str) -> str:
 
 
 def smooth(dist: Path) -> list[str]:
-    add = snippet(react_files(dist / "support.js"))
+    sport = site_sport(dist)
+    add = snippet(react_files(dist / "support.js"), sport)
     changed = []
+    lib = dist / "lib" / "sports.js"
+    if lib.is_file():
+        js = lib.read_text(encoding="utf-8")
+        if NO_TRACKER_TAB["lib/sports.js"].search(js):
+            lib.write_text(patch("lib/sports.js", js, sport), encoding="utf-8")
+            changed.append("lib/sports.js")
     for page in sorted(dist.glob("*.dc.html")):
         text = page.read_text(encoding="utf-8")
-        if MARK in text:
+        if MARK in text or "support.js" not in text:
+            # Already smoothed, or a plain page that draws once (the Tracker
+            # address that forwards to Record).
             continue
         m = CHARSET.search(text)
         if not m:
             continue
-        text = patch(page.name, text)
+        text = patch(page.name, text, sport)
         m = CHARSET.search(text)
         page.write_text(text[: m.end()] + "\n" + add + text[m.end():].lstrip("\n"), encoding="utf-8")
         changed.append(page.name)
