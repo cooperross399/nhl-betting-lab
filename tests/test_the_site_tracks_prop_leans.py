@@ -87,7 +87,7 @@ def feed(tmp_path: Path) -> Path:
     ], new=True)}, "card 2026-10-02 later")
     # Oct 3: not settled yet (no ledger file).
     commit(repo, {"latest_card_comment.md": card("2026-10-03T13:40:00+00:00", [
-        f"| {g} | Oct 3, 7:00 PM ET | `goals` | Auston Matthews over 0.5 | 40.0% | +8.0% | +150 | Fliff |",
+        f"| {g} | Oct 3, 7:00 PM ET | `goals` | Auston Matthews over 0.5 | 40.0% | +8.0% | +150 | +130 | Fliff |",
     ], new=True)}, "card 2026-10-03")
     h, a = "Toronto Maple Leafs", "Utah Mammoth"
     commit(repo, {
