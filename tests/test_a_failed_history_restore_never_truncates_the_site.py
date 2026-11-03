@@ -361,6 +361,16 @@ class PublishSite:
         self.gh = bin_dir / "gh"
         self.gh.write_text(FAKE_GH.format(python=sys.executable), encoding="utf-8")
         self.gh.chmod(self.gh.stat().st_mode | stat.S_IEXEC)
+        # git clone and git fetch reach GitHub (the shared pages, card-feed);
+        # offline they fail, as a lost network would, and each step's own
+        # fallback runs. Every other git command is the real one.
+        real_git = shutil.which("git")
+        fake_git = bin_dir / "git"
+        fake_git.write_text(
+            "#!/bin/sh\n"
+            'case "$1" in clone|fetch) echo "fake git: $1 is offline in this chain" >&2; exit 128;; esac\n'
+            f'exec "{real_git}" "$@"\n', encoding="utf-8")
+        fake_git.chmod(fake_git.stat().st_mode | stat.S_IEXEC)
         self.path = f"{bin_dir}:{Path(sys.executable).parent}:{os.environ.get('PATH', '')}"
         self.block_seconds = BLOCK_SECONDS
         self.build = _web_module("build_site_json.py")
