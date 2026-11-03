@@ -1,8 +1,8 @@
 {
  "generatedAt": "2026-11-03T14:00:00Z",
- "stake": 1.0,
+ "stake": 0.25,
  "source": "card-feed: each league day's first card that lists a prop lean, settled by the forward ledger",
- "note": "Leans are props the card lists but does not bet. This is what 1u on every one would have done, at the price the card listed. Nothing here was bet.",
+ "note": "Leans are props the card lists but does not bet. This is what 0.25u on every one would have done (on a minus price, enough to win 0.25u), at the price the card listed. Nothing here was bet.",
  "firstDate": "2026-09-29",
  "lastDate": "2026-11-02",
  "nights": 34,
@@ -14,10 +14,10 @@
   "void": 31,
   "pending": 0,
   "unmatched": 35,
-  "units": -17.29,
-  "staked": 2410.0,
+  "units": -4.03,
+  "staked": 675.45,
   "graded": 2410,
-  "returnPct": -0.7,
+  "returnPct": -0.6,
   "winPct": 44.8
  },
  "byMarket": [
@@ -31,10 +31,10 @@
    "void": 16,
    "pending": 0,
    "unmatched": 31,
-   "units": 73.25,
-   "staked": 1207.0,
+   "units": 21.11,
+   "staked": 330.98,
    "graded": 1207,
-   "returnPct": 6.1,
+   "returnPct": 6.4,
    "winPct": 45.9
   },
   {
@@ -47,10 +47,10 @@
    "void": 1,
    "pending": 0,
    "unmatched": 1,
-   "units": 6.03,
-   "staked": 97.0,
+   "units": 1.93,
+   "staked": 25.01,
    "graded": 97,
-   "returnPct": 6.2,
+   "returnPct": 7.7,
    "winPct": 36.1
   },
   {
@@ -63,10 +63,10 @@
    "void": 0,
    "pending": 0,
    "unmatched": 0,
-   "units": 3.61,
-   "staked": 9.0,
+   "units": 1.15,
+   "staked": 2.79,
    "graded": 9,
-   "returnPct": 40.2,
+   "returnPct": 41.3,
    "winPct": 77.8
   },
   {
@@ -79,10 +79,10 @@
    "void": 2,
    "pending": 0,
    "unmatched": 0,
-   "units": 2.1,
-   "staked": 62.0,
+   "units": 0.28,
+   "staked": 18.11,
    "graded": 62,
-   "returnPct": 3.4,
+   "returnPct": 1.5,
    "winPct": 53.2
   },
   {
@@ -95,8 +95,8 @@
    "void": 1,
    "pending": 0,
    "unmatched": 0,
-   "units": -1.0,
-   "staked": 1.0,
+   "units": -0.25,
+   "staked": 0.25,
    "graded": 1,
    "returnPct": -100.0,
    "winPct": 0.0
@@ -111,10 +111,10 @@
    "void": 1,
    "pending": 0,
    "unmatched": 0,
-   "units": -33.27,
-   "staked": 252.0,
+   "units": -9.24,
+   "staked": 75.94,
    "graded": 252,
-   "returnPct": -13.2,
+   "returnPct": -12.2,
    "winPct": 45.2
   },
   {
@@ -127,10 +127,10 @@
    "void": 10,
    "pending": 0,
    "unmatched": 3,
-   "units": -68.02,
-   "staked": 782.0,
+   "units": -19.0,
+   "staked": 222.37,
    "graded": 782,
-   "returnPct": -8.7,
+   "returnPct": -8.5,
    "winPct": 43.0
   }
  ],
@@ -145,10 +145,10 @@
    "void": 13,
    "pending": 0,
    "unmatched": 12,
-   "units": 21.44,
-   "staked": 727.0,
+   "units": 5.3,
+   "staked": 186.95,
    "graded": 727,
-   "returnPct": 2.9,
+   "returnPct": 2.8,
    "winPct": 33.8
   },
   {
@@ -161,10 +161,10 @@
    "void": 18,
    "pending": 0,
    "unmatched": 23,
-   "units": -38.73,
-   "staked": 1683.0,
+   "units": -9.33,
+   "staked": 488.5,
    "graded": 1683,
-   "returnPct": -2.3,
+   "returnPct": -1.9,
    "winPct": 49.5
   }
  ],
@@ -179,10 +179,10 @@
    "void": 1,
    "pending": 0,
    "unmatched": 0,
-   "units": 9.0,
-   "staked": 59.0,
+   "units": 2.31,
+   "staked": 16.03,
    "graded": 59,
-   "returnPct": 15.3,
+   "returnPct": 14.4,
    "winPct": 47.5
   },
   {
@@ -195,10 +195,10 @@
    "void": 0,
    "pending": 0,
    "unmatched": 0,
-   "units": -2.04,
-   "staked": 27.0,
+   "units": -0.28,
+   "staked": 7.42,
    "graded": 27,
-   "returnPct": -7.6,
+   "returnPct": -3.7,
    "winPct": 40.7
   },
   {
@@ -211,10 +211,10 @@
    "void": 1,
    "pending": 0,
    "unmatched": 0,
-   "units": -17.79,
-   "staked": 113.0,
+   "units": -4.89,
+   "staked": 31.4,
    "graded": 113,
-   "returnPct": -15.7,
+   "returnPct": -15.6,
    "winPct": 35.4
   },
   {
@@ -227,10 +227,10 @@
    "void": 0,
    "pending": 0,
    "unmatched": 0,
-   "units": -6.82,
-   "staked": 43.0,
+   "units": -2.11,
+   "staked": 12.62,
    "graded": 43,
-   "returnPct": -15.9,
+   "returnPct": -16.7,
    "winPct": 44.2
   },
   {
@@ -243,10 +243,10 @@
    "void": 1,
    "pending": 0,
    "unmatched": 0,
-   "units": -8.46,
-   "staked": 58.0,
+   "units": -2.4,
+   "staked": 16.6,
    "graded": 58,
-   "returnPct": -14.6,
+   "returnPct": -14.4,
    "winPct": 41.4
   },
   {
@@ -259,10 +259,10 @@
    "void": 3,
    "pending": 0,
    "unmatched": 0,
-   "units": -3.64,
-   "staked": 88.0,
+   "units": -0.92,
+   "staked": 22.99,
    "graded": 88,
-   "returnPct": -4.1,
+   "returnPct": -4.0,
    "winPct": 36.4
   },
   {
@@ -275,10 +275,10 @@
    "void": 0,
    "pending": 0,
    "unmatched": 35,
-   "units": -3.5,
-   "staked": 99.0,
+   "units": -0.49,
+   "staked": 27.44,
    "graded": 99,
-   "returnPct": -3.5,
+   "returnPct": -1.8,
    "winPct": 44.4
   },
   {
@@ -291,10 +291,10 @@
    "void": 0,
    "pending": 0,
    "unmatched": 0,
-   "units": -3.02,
-   "staked": 48.0,
+   "units": -0.5,
+   "staked": 13.48,
    "graded": 48,
-   "returnPct": -6.3,
+   "returnPct": -3.7,
    "winPct": 45.8
   },
   {
@@ -307,10 +307,10 @@
    "void": 1,
    "pending": 0,
    "unmatched": 0,
-   "units": -3.6,
-   "staked": 90.0,
+   "units": -0.6,
+   "staked": 25.31,
    "graded": 90,
-   "returnPct": -4.0,
+   "returnPct": -2.4,
    "winPct": 44.4
   },
   {
@@ -323,10 +323,10 @@
    "void": 0,
    "pending": 0,
    "unmatched": 0,
-   "units": -0.55,
-   "staked": 43.0,
+   "units": 0.47,
+   "staked": 12.09,
    "graded": 43,
-   "returnPct": -1.3,
+   "returnPct": 3.9,
    "winPct": 48.8
   },
   {
@@ -339,10 +339,10 @@
    "void": 1,
    "pending": 0,
    "unmatched": 0,
-   "units": 8.5,
-   "staked": 144.0,
+   "units": 2.3,
+   "staked": 41.24,
    "graded": 144,
-   "returnPct": 5.9,
+   "returnPct": 5.6,
    "winPct": 47.2
   },
   {
@@ -355,10 +355,10 @@
    "void": 2,
    "pending": 0,
    "unmatched": 0,
-   "units": 0.13,
-   "staked": 27.0,
+   "units": -0.11,
+   "staked": 7.74,
    "graded": 27,
-   "returnPct": 0.5,
+   "returnPct": -1.5,
    "winPct": 44.4
   },
   {
@@ -371,10 +371,10 @@
    "void": 0,
    "pending": 0,
    "unmatched": 0,
-   "units": 8.96,
-   "staked": 20.0,
+   "units": 2.19,
+   "staked": 5.67,
    "graded": 20,
-   "returnPct": 44.8,
+   "returnPct": 38.7,
    "winPct": 55.0
   },
   {
@@ -387,10 +387,10 @@
    "void": 1,
    "pending": 0,
    "unmatched": 0,
-   "units": 56.84,
-   "staked": 177.0,
+   "units": 15.73,
+   "staked": 49.97,
    "graded": 177,
-   "returnPct": 32.1,
+   "returnPct": 31.5,
    "winPct": 58.8
   },
   {
@@ -403,10 +403,10 @@
    "void": 1,
    "pending": 0,
    "unmatched": 0,
-   "units": 5.3,
-   "staked": 24.0,
+   "units": 1.71,
+   "staked": 7.07,
    "graded": 24,
-   "returnPct": 22.1,
+   "returnPct": 24.1,
    "winPct": 62.5
   },
   {
@@ -419,10 +419,10 @@
    "void": 2,
    "pending": 0,
    "unmatched": 0,
-   "units": 14.17,
-   "staked": 96.0,
+   "units": 2.77,
+   "staked": 26.85,
    "graded": 96,
-   "returnPct": 14.8,
+   "returnPct": 10.3,
    "winPct": 45.8
   },
   {
@@ -435,10 +435,10 @@
    "void": 0,
    "pending": 0,
    "unmatched": 0,
-   "units": -8.05,
-   "staked": 16.0,
+   "units": -2.12,
+   "staked": 4.4,
    "graded": 16,
-   "returnPct": -50.3,
+   "returnPct": -48.1,
    "winPct": 25.0
   },
   {
@@ -451,10 +451,10 @@
    "void": 3,
    "pending": 0,
    "unmatched": 0,
-   "units": 14.84,
-   "staked": 149.0,
+   "units": 2.73,
+   "staked": 41.79,
    "graded": 149,
-   "returnPct": 10.0,
+   "returnPct": 6.5,
    "winPct": 47.0
   },
   {
@@ -467,10 +467,10 @@
    "void": 0,
    "pending": 0,
    "unmatched": 0,
-   "units": 3.21,
-   "staked": 21.0,
+   "units": 1.01,
+   "staked": 5.83,
    "graded": 21,
-   "returnPct": 15.3,
+   "returnPct": 17.3,
    "winPct": 57.1
   },
   {
@@ -483,10 +483,10 @@
    "void": 1,
    "pending": 0,
    "unmatched": 0,
-   "units": -4.37,
-   "staked": 40.0,
+   "units": -1.05,
+   "staked": 10.99,
    "graded": 40,
-   "returnPct": -10.9,
+   "returnPct": -9.6,
    "winPct": 40.0
   },
   {
@@ -499,10 +499,10 @@
    "void": 0,
    "pending": 0,
    "unmatched": 0,
-   "units": -11.67,
-   "staked": 143.0,
+   "units": -2.88,
+   "staked": 40.64,
    "graded": 143,
-   "returnPct": -8.2,
+   "returnPct": -7.1,
    "winPct": 42.7
   },
   {
@@ -515,10 +515,10 @@
    "void": 0,
    "pending": 0,
    "unmatched": 0,
-   "units": -2.8,
-   "staked": 33.0,
+   "units": -0.84,
+   "staked": 10.22,
    "graded": 33,
-   "returnPct": -8.5,
+   "returnPct": -8.2,
    "winPct": 48.5
   },
   {
@@ -531,10 +531,10 @@
    "void": 3,
    "pending": 0,
    "unmatched": 0,
-   "units": -9.95,
-   "staked": 153.0,
+   "units": -3.05,
+   "staked": 43.06,
    "graded": 153,
-   "returnPct": -6.5,
+   "returnPct": -7.1,
    "winPct": 43.1
   },
   {
@@ -547,10 +547,10 @@
    "void": 0,
    "pending": 0,
    "unmatched": 0,
-   "units": 5.3,
-   "staked": 18.0,
+   "units": 1.29,
+   "staked": 4.89,
    "graded": 18,
-   "returnPct": 29.4,
+   "returnPct": 26.5,
    "winPct": 61.1
   },
   {
@@ -563,10 +563,10 @@
    "void": 3,
    "pending": 0,
    "unmatched": 0,
-   "units": -25.4,
-   "staked": 177.0,
+   "units": -7.37,
+   "staked": 49.96,
    "graded": 177,
-   "returnPct": -14.3,
+   "returnPct": -14.8,
    "winPct": 38.4
   },
   {
@@ -579,10 +579,10 @@
    "void": 1,
    "pending": 0,
    "unmatched": 0,
-   "units": 2.55,
-   "staked": 58.0,
+   "units": 1.15,
+   "staked": 16.01,
    "graded": 58,
-   "returnPct": 4.4,
+   "returnPct": 7.2,
    "winPct": 48.3
   },
   {
@@ -595,10 +595,10 @@
    "void": 3,
    "pending": 0,
    "unmatched": 0,
-   "units": -9.44,
-   "staked": 39.0,
+   "units": -2.27,
+   "staked": 10.86,
    "graded": 39,
-   "returnPct": -24.2,
+   "returnPct": -20.9,
    "winPct": 38.5
   },
   {
@@ -611,10 +611,10 @@
    "void": 1,
    "pending": 0,
    "unmatched": 0,
-   "units": 2.85,
-   "staked": 117.0,
+   "units": 1.71,
+   "staked": 31.91,
    "graded": 117,
-   "returnPct": 2.4,
+   "returnPct": 5.4,
    "winPct": 47.9
   },
   {
@@ -627,10 +627,10 @@
    "void": 1,
    "pending": 0,
    "unmatched": 0,
-   "units": 11.54,
-   "staked": 47.0,
+   "units": 3.22,
+   "staked": 13.24,
    "graded": 47,
-   "returnPct": 24.6,
+   "returnPct": 24.3,
    "winPct": 59.6
   },
   {
@@ -643,10 +643,10 @@
    "void": 1,
    "pending": 0,
    "unmatched": 0,
-   "units": -24.52,
-   "staked": 87.0,
+   "units": -6.61,
+   "staked": 24.13,
    "graded": 87,
-   "returnPct": -28.2,
+   "returnPct": -27.4,
    "winPct": 34.5
   },
   {
@@ -659,10 +659,10 @@
    "void": 0,
    "pending": 0,
    "unmatched": 0,
-   "units": -7.38,
-   "staked": 21.0,
+   "units": -2.13,
+   "staked": 6.23,
    "graded": 21,
-   "returnPct": -35.1,
+   "returnPct": -34.3,
    "winPct": 33.3
   },
   {
@@ -675,10 +675,10 @@
    "void": 0,
    "pending": 0,
    "unmatched": 0,
-   "units": 4.81,
-   "staked": 71.0,
+   "units": 1.43,
+   "staked": 19.29,
    "graded": 71,
-   "returnPct": 6.8,
+   "returnPct": 7.4,
    "winPct": 43.7
   },
   {
@@ -691,10 +691,10 @@
    "void": 0,
    "pending": 0,
    "unmatched": 0,
-   "units": -13.78,
-   "staked": 36.0,
+   "units": -3.9,
+   "staked": 10.15,
    "graded": 36,
-   "returnPct": -38.3,
+   "returnPct": -38.4,
    "winPct": 27.8
   },
   {
@@ -707,10 +707,10 @@
    "void": 0,
    "pending": 0,
    "unmatched": 0,
-   "units": 1.5,
-   "staked": 28.0,
+   "units": 0.46,
+   "staked": 7.97,
    "graded": 28,
-   "returnPct": 5.4,
+   "returnPct": 5.7,
    "winPct": 53.6
   }
  ],
@@ -735,8 +735,8 @@
    "modelProb": 0.716,
    "edge": 0.124,
    "result": "win",
-   "staked": 1.0,
-   "units": 0.69
+   "staked": 0.3625,
+   "units": 0.25
   },
   {
    "date": "2026-11-02",
@@ -758,8 +758,8 @@
    "modelProb": 0.532,
    "edge": 0.067,
    "result": "win",
-   "staked": 1.0,
-   "units": 1.15
+   "staked": 0.25,
+   "units": 0.2875
   },
   {
    "date": "2026-11-02",
@@ -781,8 +781,8 @@
    "modelProb": 0.279,
    "edge": 0.079,
    "result": "loss",
-   "staked": 1.0,
-   "units": -1.0
+   "staked": 0.25,
+   "units": -0.25
   },
   {
    "date": "2026-11-02",
@@ -804,8 +804,8 @@
    "modelProb": 0.505,
    "edge": 0.071,
    "result": "loss",
-   "staked": 1.0,
-   "units": -1.0
+   "staked": 0.25,
+   "units": -0.25
   },
   {
    "date": "2026-11-02",
@@ -827,8 +827,8 @@
    "modelProb": 0.633,
    "edge": 0.064,
    "result": "loss",
-   "staked": 1.0,
-   "units": -1.0
+   "staked": 0.33,
+   "units": -0.33
   },
   {
    "date": "2026-11-02",
@@ -850,8 +850,8 @@
    "modelProb": 0.564,
    "edge": 0.064,
    "result": "loss",
-   "staked": 1.0,
-   "units": -1.0
+   "staked": 0.25,
+   "units": -0.25
   },
   {
    "date": "2026-11-02",
@@ -873,8 +873,8 @@
    "modelProb": 0.573,
    "edge": 0.108,
    "result": "win",
-   "staked": 1.0,
-   "units": 1.15
+   "staked": 0.25,
+   "units": 0.2875
   },
   {
    "date": "2026-11-02",
@@ -896,8 +896,8 @@
    "modelProb": 0.65,
    "edge": 0.105,
    "result": "win",
-   "staked": 1.0,
-   "units": 0.83
+   "staked": 0.3,
+   "units": 0.25
   },
   {
    "date": "2026-11-02",
@@ -919,8 +919,8 @@
    "modelProb": 0.495,
    "edge": 0.07,
    "result": "win",
-   "staked": 1.0,
-   "units": 1.35
+   "staked": 0.25,
+   "units": 0.3375
   },
   {
    "date": "2026-11-02",
@@ -942,8 +942,8 @@
    "modelProb": 0.625,
    "edge": 0.079,
    "result": "loss",
-   "staked": 1.0,
-   "units": -1.0
+   "staked": 0.3,
+   "units": -0.3
   },
   {
    "date": "2026-11-02",
@@ -965,8 +965,8 @@
    "modelProb": 0.597,
    "edge": 0.063,
    "result": "loss",
-   "staked": 1.0,
-   "units": -1.0
+   "staked": 0.2875,
+   "units": -0.2875
   },
   {
    "date": "2026-11-02",
@@ -988,8 +988,8 @@
    "modelProb": 0.444,
    "edge": 0.087,
    "result": "loss",
-   "staked": 1.0,
-   "units": -1.0
+   "staked": 0.25,
+   "units": -0.25
   },
   {
    "date": "2026-11-02",
@@ -1011,8 +1011,8 @@
    "modelProb": 0.687,
    "edge": 0.087,
    "result": "win",
-   "staked": 1.0,
-   "units": 0.67
+   "staked": 0.375,
+   "units": 0.25
   },
   {
    "date": "2026-11-02",
@@ -1034,8 +1034,8 @@
    "modelProb": 0.58,
    "edge": 0.068,
    "result": "loss",
-   "staked": 1.0,
-   "units": -1.0
+   "staked": 0.2625,
+   "units": -0.2625
   },
   {
    "date": "2026-11-02",
@@ -1057,8 +1057,8 @@
    "modelProb": 0.548,
    "edge": 0.072,
    "result": "win",
-   "staked": 1.0,
-   "units": 1.1
+   "staked": 0.25,
+   "units": 0.275
   },
   {
    "date": "2026-11-02",
@@ -1080,8 +1080,8 @@
    "modelProb": 0.675,
    "edge": 0.1,
    "result": "win",
-   "staked": 1.0,
-   "units": 0.74
+   "staked": 0.3375,
+   "units": 0.25
   },
   {
    "date": "2026-11-02",
@@ -1103,8 +1103,8 @@
    "modelProb": 0.261,
    "edge": 0.065,
    "result": "loss",
-   "staked": 1.0,
-   "units": -1.0
+   "staked": 0.25,
+   "units": -0.25
   },
   {
    "date": "2026-11-02",
@@ -1126,8 +1126,8 @@
    "modelProb": 0.693,
    "edge": 0.077,
    "result": "loss",
-   "staked": 1.0,
-   "units": -1.0
+   "staked": 0.4,
+   "units": -0.4
   },
   {
    "date": "2026-11-02",
@@ -1149,8 +1149,8 @@
    "modelProb": 0.557,
    "edge": 0.069,
    "result": "win",
-   "staked": 1.0,
-   "units": 1.05
+   "staked": 0.25,
+   "units": 0.2625
   },
   {
    "date": "2026-11-02",
@@ -1172,8 +1172,8 @@
    "modelProb": 0.589,
    "edge": 0.101,
    "result": "win",
-   "staked": 1.0,
-   "units": 1.05
+   "staked": 0.25,
+   "units": 0.2625
   },
   {
    "date": "2026-11-02",
@@ -1195,8 +1195,8 @@
    "modelProb": 0.597,
    "edge": 0.071,
    "result": "loss",
-   "staked": 1.0,
-   "units": -1.0
+   "staked": 0.2775,
+   "units": -0.2775
   },
   {
    "date": "2026-11-02",
@@ -1218,8 +1218,8 @@
    "modelProb": 0.569,
    "edge": 0.069,
    "result": "loss",
-   "staked": 1.0,
-   "units": -1.0
+   "staked": 0.25,
+   "units": -0.25
   },
   {
    "date": "2026-11-02",
@@ -1241,8 +1241,8 @@
    "modelProb": 0.715,
    "edge": 0.189,
    "result": "win",
-   "staked": 1.0,
-   "units": 0.9
+   "staked": 0.2775,
+   "units": 0.25
   },
   {
    "date": "2026-11-02",
@@ -1264,8 +1264,8 @@
    "modelProb": 0.671,
    "edge": 0.073,
    "result": "win",
-   "staked": 1.0,
-   "units": 0.67
+   "staked": 0.3725,
+   "units": 0.25
   },
   {
    "date": "2026-11-02",
@@ -1287,8 +1287,8 @@
    "modelProb": 0.565,
    "edge": 0.065,
    "result": "win",
-   "staked": 1.0,
-   "units": 1.0
+   "staked": 0.25,
+   "units": 0.25
   },
   {
    "date": "2026-11-02",
@@ -1310,8 +1310,8 @@
    "modelProb": 0.642,
    "edge": 0.069,
    "result": "win",
-   "staked": 1.0,
-   "units": 0.75
+   "staked": 0.335,
+   "units": 0.25
   },
   {
    "date": "2026-11-02",
@@ -1333,8 +1333,8 @@
    "modelProb": 0.279,
    "edge": 0.068,
    "result": "loss",
-   "staked": 1.0,
-   "units": -1.0
+   "staked": 0.25,
+   "units": -0.25
   },
   {
    "date": "2026-11-02",
@@ -1356,8 +1356,8 @@
    "modelProb": 0.496,
    "edge": 0.079,
    "result": "win",
-   "staked": 1.0,
-   "units": 1.4
+   "staked": 0.25,
+   "units": 0.35
   },
   {
    "date": "2026-11-01",
@@ -1379,8 +1379,8 @@
    "modelProb": 0.321,
    "edge": 0.065,
    "result": "loss",
-   "staked": 1.0,
-   "units": -1.0
+   "staked": 0.25,
+   "units": -0.25
   },
   {
    "date": "2026-11-01",
@@ -1402,8 +1402,8 @@
    "modelProb": 0.554,
    "edge": 0.088,
    "result": "win",
-   "staked": 1.0,
-   "units": 1.15
+   "staked": 0.25,
+   "units": 0.2875
   },
   {
    "date": "2026-11-01",
@@ -1425,8 +1425,8 @@
    "modelProb": 0.631,
    "edge": 0.084,
    "result": "loss",
-   "staked": 1.0,
-   "units": -1.0
+   "staked": 0.3025,
+   "units": -0.3025
   },
   {
    "date": "2026-11-01",
@@ -1448,8 +1448,8 @@
    "modelProb": 0.554,
    "edge": 0.083,
    "result": "loss",
-   "staked": 1.0,
-   "units": -1.0
+   "staked": 0.25,
+   "units": -0.25
   },
   {
    "date": "2026-11-01",
@@ -1471,8 +1471,8 @@
    "modelProb": 0.249,
    "edge": 0.068,
    "result": "loss",
-   "staked": 1.0,
-   "units": -1.0
+   "staked": 0.25,
+   "units": -0.25
   },
   {
    "date": "2026-11-01",
@@ -1494,8 +1494,8 @@
    "modelProb": 0.413,
    "edge": 0.08,
    "result": "loss",
-   "staked": 1.0,
-   "units": -1.0
+   "staked": 0.25,
+   "units": -0.25
   },
   {
    "date": "2026-11-01",
@@ -1517,8 +1517,8 @@
    "modelProb": 0.644,
    "edge": 0.06,
    "result": "loss",
-   "staked": 1.0,
-   "units": -1.0
+   "staked": 0.35,
+   "units": -0.35
   },
   {
    "date": "2026-11-01",
@@ -1540,8 +1540,8 @@
    "modelProb": 0.358,
    "edge": 0.068,
    "result": "loss",
-   "staked": 1.0,
-   "units": -1.0
+   "staked": 0.25,
+   "units": -0.25
   },
   {
    "date": "2026-11-01",
@@ -1563,8 +1563,8 @@
    "modelProb": 0.539,
    "edge": 0.139,
    "result": "loss",
-   "staked": 1.0,
-   "units": -1.0
+   "staked": 0.25,
+   "units": -0.25
   },
   {
    "date": "2026-11-01",
@@ -1586,8 +1586,8 @@
    "modelProb": 0.674,
    "edge": 0.066,
    "result": "win",
-   "staked": 1.0,
-   "units": 0.65
+   "staked": 0.3875,
+   "units": 0.25
   },
   {
    "date": "2026-11-01",
@@ -1609,8 +1609,8 @@
    "modelProb": 0.526,
    "edge": 0.1,
    "result": "win",
-   "staked": 1.0,
-   "units": 1.35
+   "staked": 0.25,
+   "units": 0.3375
   },
   {
    "date": "2026-11-01",
@@ -1632,8 +1632,8 @@
    "modelProb": 0.435,
    "edge": 0.071,
    "result": "loss",
-   "staked": 1.0,
-   "units": -1.0
+   "staked": 0.25,
+   "units": -0.25
   },
   {
    "date": "2026-11-01",
@@ -1655,8 +1655,8 @@
    "modelProb": 0.348,
    "edge": 0.066,
    "result": "win",
-   "staked": 1.0,
-   "units": 2.55
+   "staked": 0.25,
+   "units": 0.6375
   },
   {
    "date": "2026-11-01",
@@ -1678,8 +1678,8 @@
    "modelProb": 0.506,
    "edge": 0.08,
    "result": "loss",
-   "staked": 1.0,
-   "units": -1.0
+   "staked": 0.25,
+   "units": -0.25
   },
   {
    "date": "2026-11-01",
@@ -1701,8 +1701,8 @@
    "modelProb": 0.664,
    "edge": 0.064,
    "result": "loss",
-   "staked": 1.0,
-   "units": -1.0
+   "staked": 0.375,
+   "units": -0.375
   },
   {
    "date": "2026-11-01",
@@ -1724,8 +1724,8 @@
    "modelProb": 0.401,
    "edge": 0.107,
    "result": "loss",
-   "staked": 1.0,
-   "units": -1.0
+   "staked": 0.25,
+   "units": -0.25
   },
   {
    "date": "2026-11-01",
@@ -1747,8 +1747,8 @@
    "modelProb": 0.581,
    "edge": 0.081,
    "result": "win",
-   "staked": 1.0,
-   "units": 1.0
+   "staked": 0.25,
+   "units": 0.25
   },
   {
    "date": "2026-11-01",
@@ -1770,8 +1770,8 @@
    "modelProb": 0.507,
    "edge": 0.072,
    "result": "loss",
-   "staked": 1.0,
-   "units": -1.0
+   "staked": 0.25,
+   "units": -0.25
   },
   {
    "date": "2026-11-01",
@@ -1793,8 +1793,8 @@
    "modelProb": 0.681,
    "edge": 0.065,
    "result": "win",
-   "staked": 1.0,
-   "units": 0.62
+   "staked": 0.4,
+   "units": 0.25
   },
   {
    "date": "2026-11-01",
@@ -1816,8 +1816,8 @@
    "modelProb": 0.574,
    "edge": 0.109,
    "result": "win",
-   "staked": 1.0,
-   "units": 1.15
+   "staked": 0.25,
+   "units": 0.2875
   },
   {
    "date": "2026-11-01",
@@ -1839,8 +1839,8 @@
    "modelProb": 0.357,
    "edge": 0.087,
    "result": "loss",
-   "staked": 1.0,
-   "units": -1.0
+   "staked": 0.25,
+   "units": -0.25
   },
   {
    "date": "2026-11-01",
@@ -1862,8 +1862,8 @@
    "modelProb": 0.674,
    "edge": 0.066,
    "result": "win",
-   "staked": 1.0,
-   "units": 0.65
+   "staked": 0.3875,
+   "units": 0.25
   },
   {
    "date": "2026-11-01",
@@ -1885,8 +1885,8 @@
    "modelProb": 0.672,
    "edge": 0.072,
    "result": "loss",
-   "staked": 1.0,
-   "units": -1.0
+   "staked": 0.375,
+   "units": -0.375
   },
   {
    "date": "2026-11-01",
@@ -1908,8 +1908,8 @@
    "modelProb": 0.508,
    "edge": 0.1,
    "result": "loss",
-   "staked": 1.0,
-   "units": -1.0
+   "staked": 0.25,
+   "units": -0.25
   },
   {
    "date": "2026-11-01",
@@ -1931,8 +1931,8 @@
    "modelProb": 0.678,
    "edge": 0.086,
    "result": "loss",
-   "staked": 1.0,
-   "units": -1.0
+   "staked": 0.3625,
+   "units": -0.3625
   },
   {
    "date": "2026-11-01",
@@ -1954,8 +1954,8 @@
    "modelProb": 0.384,
    "edge": 0.062,
    "result": "win",
-   "staked": 1.0,
-   "units": 2.1
+   "staked": 0.25,
+   "units": 0.525
   },
   {
    "date": "2026-11-01",
@@ -1977,8 +1977,8 @@
    "modelProb": 0.51,
    "edge": 0.075,
    "result": "loss",
-   "staked": 1.0,
-   "units": -1.0
+   "staked": 0.25,
+   "units": -0.25
   },
   {
    "date": "2026-11-01",
@@ -2000,8 +2000,8 @@
    "modelProb": 0.447,
    "edge": 0.153,
    "result": "loss",
-   "staked": 1.0,
-   "units": -1.0
+   "staked": 0.25,
+   "units": -0.25
   },
   {
    "date": "2026-11-01",
@@ -2023,8 +2023,8 @@
    "modelProb": 0.632,
    "edge": 0.151,
    "result": "loss",
-   "staked": 1.0,
-   "units": -1.0
+   "staked": 0.25,
+   "units": -0.25
   },
   {
    "date": "2026-11-01",
@@ -2046,8 +2046,8 @@
    "modelProb": 0.57,
    "edge": 0.07,
    "result": "win",
-   "staked": 1.0,
-   "units": 1.0
+   "staked": 0.25,
+   "units": 0.25
   },
   {
    "date": "2026-11-01",
@@ -2069,8 +2069,8 @@
    "modelProb": 0.676,
    "edge": 0.061,
    "result": "loss",
-   "staked": 1.0,
-   "units": -1.0
+   "staked": 0.4,
+   "units": -0.4
   },
   {
    "date": "2026-11-01",
@@ -2092,8 +2092,8 @@
    "modelProb": 0.26,
    "edge": 0.06,
    "result": "loss",
-   "staked": 1.0,
-   "units": -1.0
+   "staked": 0.25,
+   "units": -0.25
   },
   {
    "date": "2026-11-01",
@@ -2115,8 +2115,8 @@
    "modelProb": 0.6,
    "edge": 0.088,
    "result": "loss",
-   "staked": 1.0,
-   "units": -1.0
+   "staked": 0.2625,
+   "units": -0.2625
   },
   {
    "date": "2026-11-01",
@@ -2138,8 +2138,8 @@
    "modelProb": 0.434,
    "edge": 0.064,
    "result": "loss",
-   "staked": 1.0,
-   "units": -1.0
+   "staked": 0.25,
+   "units": -0.25
   },
   {
    "date": "2026-11-01",
@@ -2161,8 +2161,8 @@
    "modelProb": 0.384,
    "edge": 0.061,
    "result": "loss",
-   "staked": 1.0,
-   "units": -1.0
+   "staked": 0.25,
+   "units": -0.25
   },
   {
    "date": "2026-11-01",
@@ -2184,8 +2184,8 @@
    "modelProb": 0.624,
    "edge": 0.078,
    "result": "loss",
-   "staked": 1.0,
-   "units": -1.0
+   "staked": 0.3,
+   "units": -0.3
   }
  ]
 }

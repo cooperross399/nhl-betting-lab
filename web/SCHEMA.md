@@ -415,8 +415,8 @@ written before the field or when no price the card would take clears.
 ## prop_leans.json (All results' "Prop leans" — 2026-11-03)
 
 Cooper: "track the prop leans record/profit on the website". Every player
-prop the card listed under Leans (never bet), graded as if 1u were on each at
-the price the card listed. Written by `web/prop_leans.py` from the public
+prop the card listed under Leans (never bet), graded as if 0.25u were on each (on a minus
+price, enough to win 0.25u) at the price the card listed. Written by `web/prop_leans.py` from the public
 `card-feed` branch every Publish Site run, whole season each time:
 
 - Which leans: each league day's first card in the history of

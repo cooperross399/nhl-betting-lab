@@ -1,4 +1,4 @@
-"""The card's prop leans are graded at 1u each from card-feed, and add up.
+"""The card's prop leans are graded at 0.25u (to win 0.25u on a minus price), and add up.
 
 Cooper, 2026-11-03: "track the prop leans record/profit on the website".
 web/prop_leans.py reads every card from card-feed's history of
@@ -109,12 +109,14 @@ def test_each_lean_is_graded_once_at_one_unit_and_the_counts_add_up(feed: Path) 
     assert s["listed"] == 6
     assert (s["w"], s["l"], s["p"], s["void"], s["unmatched"], s["pending"]) == (1, 1, 1, 1, 1, 1)
     assert s["w"] + s["l"] + s["p"] + s["void"] + s["unmatched"] + s["pending"] == s["listed"]
-    # +1.20 at +120, -1 at -150, 0 on the push.
-    assert s["units"] == pytest.approx(0.2)
-    assert s["staked"] == 3.0
-    assert doc["stake"] == 1.0
+    # 0.25u at +120 wins +0.30; to win 0.25u at -150 risks 0.375 and loses
+    # it; the push at -110 risked 0.275 and returns 0.
+    assert s["units"] == pytest.approx(-0.075, abs=0.006)
+    assert s["staked"] == pytest.approx(0.9, abs=0.006)
+    assert doc["stake"] == 0.25
     assert sorted(r["result"] for r in doc["rows"]) == ["loss", "push", "win"]
-    assert all(r["group"] == "leans" and r["staked"] == 1.0 for r in doc["rows"])
+    assert all(r["group"] == "leans" for r in doc["rows"])
+    assert sorted(r["staked"] for r in doc["rows"]) == pytest.approx([0.25, 0.275, 0.375])
     # The afternoon re-price on Oct 1 never replaced the morning card.
     assert not any(r["market"] == "hits" for r in doc["rows"])
     assert [n["date"] for n in doc["byNight"]] == ["2026-10-01", "2026-10-02", "2026-10-03"]

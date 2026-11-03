@@ -3082,7 +3082,9 @@ Re-derive rather than trust if the data has moved.
   Shared pages stay pinned; a design drop that changes these strings
   turns the publish red until `PATCHES` is updated.
 
-- **2026-11-03: the card's prop leans are tracked on the site at 1u each.**
+- **2026-11-03: the card's prop leans are tracked on the site at 0.25u
+  each (Cooper: "0.25u per bet. to win .25u for -odds": a minus price risks
+  what wins 0.25u).**
   Cooper: "track the prop leans record/profit on the website". Site only:
   `web/prop_leans.py` reads every card from card-feed's history of
   `latest_card_comment.md` (each league day's first card that lists a prop
@@ -3091,8 +3093,8 @@ Re-derive rather than trust if the data has moved.
   card-feed for the prop leans record", soft). All results
   (`Tracker.dc.html`) shows them as their own "Prop leans" group, card and
   filter, never in the bets' headline or "Everything". Through 2026-11-02:
-  2,476 listed, 1,079-1,331, 31 void, 35 unmatched (all 2026-10-06), -17.29u
-  over 2,410 graded. Nothing is bet; the card, snapshot, ledger, model, edge
+  2,476 listed, 1,079-1,331, 31 void, 35 unmatched (all 2026-10-06), -4.03u
+  on 675.45u risked over 2,410 graded (-0.6%). Nothing is bet; the card, snapshot, ledger, model, edge
   bars and staking rule are unchanged.
 
 ## Contract strings — never change these

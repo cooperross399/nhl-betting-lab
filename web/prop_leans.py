@@ -1,4 +1,4 @@
-"""The card's player-prop leans, graded season long at a flat 1u: prop_leans.json.
+"""The card's player-prop leans, graded season long at 0.25u (to win 0.25u on a minus price): prop_leans.json.
 
 Cooper, 2026-11-03: "track the prop leans record/profit on the website".
 
@@ -6,7 +6,7 @@ A lean is a prop the card lists under "Leans" and stakes at zero: its edge
 clears the measurement bar but not the best-bet bar, or it cleared the
 best-bet bar and a rule held the stake back (the odds-bracket stats check,
 one stake per outcome, the `points` exclusion, the saves starter check).
-Nothing here is bet. The record is what 1u on every lean would have done.
+Nothing here is bet. The record is what 0.25u on every lean would have done (to win 0.25u on a minus price).
 
 Both sources are on the public `card-feed` branch, so this needs no state of
 its own and every run rebuilds the whole season:
@@ -26,7 +26,7 @@ its own and every run rebuilds the whole season:
   no ledger file yet is pending (it settles the next morning). A lean the
   ledger does not hold is counted as unmatched, never guessed.
 * **The price.** The card's own listed price for the lean. A win pays at
-  that price, a loss is -1u, a push or a void is 0.
+  that price, a loss is the stake, a push or a void is 0.
 
 Only player props are counted; the card's team-market leans are not.
 Every record carries its counts so that W + L + P + voids + unmatched +
@@ -47,7 +47,7 @@ from zoneinfo import ZoneInfo
 ET = ZoneInfo("America/New_York")
 
 #: The flat notional stake on every lean, in units.
-LEAN_STAKE = 1.0
+LEAN_STAKE = 0.25
 
 #: The card's prop markets, as the card names them.
 PROP_MARKETS = ("shots_on_goal", "points", "goals", "assists", "goalie_saves", "blocked_shots", "hits")
@@ -192,22 +192,28 @@ def win_profit(american: float) -> float:
     return american / 100.0 if american > 0 else 100.0 / abs(american)
 
 
+def risk(price: float) -> float:
+    """Cooper, 2026-11-03: "0.25u per bet. to win 0.25u for -odds". A plus
+    price risks LEAN_STAKE; a minus price risks what wins LEAN_STAKE."""
+    return LEAN_STAKE if price > 0 else LEAN_STAKE * abs(price) / 100.0
+
+
 def _units(result: str, price: float) -> float:
     if result == "win":
-        return round(LEAN_STAKE * win_profit(price), 4)
-    return -LEAN_STAKE if result == "loss" else 0.0
+        return round(risk(price) * win_profit(price), 4)
+    return -round(risk(price), 4) if result == "loss" else 0.0
 
 
 def _empty() -> dict:
     return {"listed": 0, "w": 0, "l": 0, "p": 0, "void": 0, "pending": 0, "unmatched": 0, "units": 0.0, "staked": 0.0}
 
 
-def _add(tally: dict, result: str | None, units: float) -> None:
+def _add(tally: dict, result: str | None, units: float, staked: float = 0.0) -> None:
     tally["listed"] += 1
     if result in ("win", "loss", "push"):
         tally["w" if result == "win" else "l" if result == "loss" else "p"] += 1
         tally["units"] += units
-        tally["staked"] += LEAN_STAKE
+        tally["staked"] += staked
     elif result == "void":
         tally["void"] += 1
     elif result == "pending":
@@ -254,7 +260,7 @@ def build(repo: Path, ref: str, *, today: date, directory=None, abbr=None,
             units = _units(result, lean["price"]) if result in ("win", "loss", "push", "void") else 0.0
             for tally in (season, night, by_market.setdefault(lean["market"], _empty()),
                           by_side.setdefault(lean["side"], _empty())):
-                _add(tally, result, units)
+                _add(tally, result, units, risk(lean["price"]))
             if result not in ("win", "loss", "push"):
                 continue
             home_abbr = abbr(lean["home"]) if abbr else None
@@ -267,7 +273,7 @@ def build(repo: Path, ref: str, *, today: date, directory=None, abbr=None,
                 "opp": (away_abbr if team == home_abbr else home_abbr) if team else None,
                 "teams": [away_abbr, home_abbr], "price": lean["price"], "book": lean.get("book"),
                 "modelProb": lean.get("modelProb"), "edge": lean.get("edge"),
-                "result": result, "staked": LEAN_STAKE, "units": round(units, 2),
+                "result": result, "staked": round(risk(lean["price"]), 4), "units": round(units, 4),
             })
         nights.append({"date": day, "card": days[day]["generated"], **_finish(night)})
     rows.sort(key=lambda r: (r["date"], r["player"]), reverse=True)
@@ -276,8 +282,8 @@ def build(repo: Path, ref: str, *, today: date, directory=None, abbr=None,
         "generatedAt": generated_at or datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
         "stake": LEAN_STAKE,
         "source": "card-feed: each league day's first card that lists a prop lean, settled by the forward ledger",
-        "note": ("Leans are props the card lists but does not bet. This is what 1u on every one would have done, "
-                 "at the price the card listed. Nothing here was bet."),
+        "note": ("Leans are props the card lists but does not bet. This is what 0.25u on every one would have done "
+                 "(on a minus price, enough to win 0.25u), at the price the card listed. Nothing here was bet."),
         "firstDate": graded_nights[0]["date"] if graded_nights else None,
         "lastDate": graded_nights[-1]["date"] if graded_nights else None,
         "nights": len(graded_nights),

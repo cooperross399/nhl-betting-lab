@@ -877,7 +877,7 @@ def _prop_leans_module():
 
 
 def prop_leans_page(lab: Path, ref: str, today: date) -> dict:
-    """prop_leans.json: the card's prop leans graded at 1u each, season long
+    """prop_leans.json: the card's prop leans graded at 0.25u (to win 0.25u on a minus price), season long
     (web/prop_leans.py). A card-feed ref this checkout cannot read writes a
     file that says so, with no record, never an empty one."""
     module = _prop_leans_module()
@@ -2701,7 +2701,7 @@ def main(argv: list[str] | None = None) -> int:
     elif leans.get("season"):
         s = leans["season"]
         print(f"prop leans: {s['w']}-{s['l']}-{s['p']} ({s['void']} void, {s['pending']} pending, "
-              f"{s['unmatched']} unmatched) over {leans['nights']} nights, {s['units']:+.2f}u at 1u each.")
+              f"{s['unmatched']} unmatched) over {leans['nights']} nights, {s['units']:+.2f}u at 0.25u (to win 0.25u on minus prices).")
     else:
         print(f"::warning::prop leans not built: {leans.get('note')}")
     print(f"board {today}: {len(board['games'])} games ({board['phase']}); results {today - timedelta(days=1)}: {len(results['games'])} settled.")
