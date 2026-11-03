@@ -319,6 +319,13 @@ PYTHONPATH=src .venv/bin/python scripts/probe_low_vig_venues.py
 # `us,us2`. Also runnable as the manual-dispatch Venue Probe workflow.
 PYTHONPATH=src .venv/bin/python scripts/probe_low_vig_venues.py \
     --live --credit-cap 400
+
+# Which books, in which provider regions, quote NHL hits right now? One
+# upcoming event, one request per region and market, capped on measured
+# spend; names books and outcome counts, never a price. Also runnable as the
+# manual-dispatch Hits Source Probe workflow.
+PYTHONPATH=src .venv/bin/python scripts/probe_hits_sources.py \
+    --live --credit-cap 30
 ```
 
 # Team markets, from the bulk endpoint — far cheaper, per snapshot not per event
