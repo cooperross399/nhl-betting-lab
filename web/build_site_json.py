@@ -883,13 +883,15 @@ def prop_leans_page(lab: Path, ref: str, today: date) -> dict:
     module = _prop_leans_module()
     by_key = {_team_key(name): abbr for abbr, (name, *_rest) in TEAMS.items()}
     by_key.update({"stlouisblues": "STL", "montrealcanadiens": "MTL", "utahhockeyclub": "UTA"})
-    players = read_player_directory(lab / "data" / "processed")
-    aliases = _aliases()
+    cache: dict = {}
 
     def directory(name, home, away):
         if not home or not away:
             return None, None
-        pid, team, _position = _prop_player(players, name, home, away, aliases)
+        if not cache:  # read once, and only when a lean is graded
+            cache["players"] = read_player_directory(lab / "data" / "processed")
+            cache["aliases"] = _aliases()
+        pid, team, _position = _prop_player(cache["players"], name, home, away, cache["aliases"])
         return pid, team
 
     try:
@@ -2652,8 +2654,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--lab", default=".", help="Root of the nhl-betting-lab checkout.")
     ap.add_argument("--out", default="dist/data", help="Where board.json / results.json / history/ are written.")
     ap.add_argument("--date", default="", help="League date to build (default: today in New York).")
-    ap.add_argument("--card-feed", default="origin/card-feed",
-                    help="Git ref of the card-feed branch, read for prop_leans.json (web/prop_leans.py).")
+    ap.add_argument("--card-feed", default="",
+                    help="Git ref of the card-feed branch, read for prop_leans.json (web/prop_leans.py). "
+                         "Left out, prop_leans.json is not written: walking card-feed's history is slow, "
+                         "so only Publish Site asks for it.")
     args = ap.parse_args(argv)
     today = date.fromisoformat(args.date) if args.date else datetime.now(ET).date()
     out = Path(args.out)
@@ -2689,9 +2693,12 @@ def main(argv: list[str] | None = None) -> int:
     (out / "ratings.json").write_text(json.dumps(ratings_page(Path(args.lab)), indent=1, ensure_ascii=False), encoding="utf-8")
     (out / "tracker.json").write_text(json.dumps(tracker(tracked, nights=season["nights"]), indent=1, ensure_ascii=False), encoding="utf-8")
     (out / "record.json").write_text(json.dumps(track_record(today, history, tracked), indent=1, ensure_ascii=False), encoding="utf-8")
-    leans = prop_leans_page(Path(args.lab), args.card_feed, today)
-    (out / "prop_leans.json").write_text(json.dumps(leans, indent=1, ensure_ascii=False), encoding="utf-8")
-    if leans.get("season"):
+    leans = prop_leans_page(Path(args.lab), args.card_feed, today) if args.card_feed else None
+    if leans is not None:
+        (out / "prop_leans.json").write_text(json.dumps(leans, indent=1, ensure_ascii=False), encoding="utf-8")
+    if leans is None:
+        pass
+    elif leans.get("season"):
         s = leans["season"]
         print(f"prop leans: {s['w']}-{s['l']}-{s['p']} ({s['void']} void, {s['pending']} pending, "
               f"{s['unmatched']} unmatched) over {leans['nights']} nights, {s['units']:+.2f}u at 1u each.")

@@ -406,7 +406,7 @@ jobs:
         env:
           PYTHONPATH: src
         run: |
-          python web/build_site_json.py --lab . --out dist/data
+          python web/build_site_json.py --lab . --out dist/data --card-feed origin/card-feed
           python web/site_history.py --data dist/data
           printf '{"sport":"nhl"}' > dist/site.json
 
