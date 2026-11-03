@@ -303,8 +303,8 @@ class Component extends DCLogic {
     const live = this.onSite() || scenario === "Normal"; void deployed;
     const url = live ? "./data/tracker.json" : scenario === "No bet graded yet" ? "./data/sample/tracker_empty.json" : "./data/sample/tracker.json";
     const get = async (u) => { try { const r = await fetch(u, { cache: "no-store" }); return r.ok ? await r.json() : null; } catch (_) { return null; } };
-    const [data, board] = await Promise.all([get(url), get(live ? "./data/board.json" : "./data/sample/board_game.json")]);
-    this.setState({ data, teams: (board && board.teams) || {}, isSample: !live, err: data ? "" : "unreachable" });
+    const [data, board, leans] = await Promise.all([get(url), get(live ? "./data/board.json" : "./data/sample/board_game.json"), get(live ? "./data/prop_leans.json" : "./data/sample/prop_leans.json")]);
+    this.setState({ data, leans, teams: (board && board.teams) || {}, isSample: !live, err: data ? "" : "unreachable" });
   }
   componentDidMount() { this.load(); }
   componentDidUpdate() { this.load(); }
@@ -315,41 +315,45 @@ class Component extends DCLogic {
     const tabs = tabsList.map(([label, href]) => ({ label, href, current: label === "Tracker" ? "page" : undefined, shadow: label === "Tracker" ? "inset 0 -3px 0 var(--ink)" : "none", color: label === "Tracker" ? "var(--ink)" : "var(--mute)" }));
     const base = { tabs, isSample: !!this.state.isSample, kicker: "NHL · 2026–27", headline: "", defaultUnits: "1", dueStake: "0.25" };
     if (!d) return { ...base, ready: false, empty: !!this.state.err, kicker: this.state.err ? "NHL · tracker unreachable" : base.kicker };
-    const all = Array.isArray(d.rows) ? d.rows : [];
+    // Prop leans (prop_leans.json, web/prop_leans.py): listed by the card, never bet, tracked at 1u each.
+    // Their own group, card and filter; never in the headline or "Everything", which are the bets.
+    const LZ = this.state.leans, leanRows = LZ && Array.isArray(LZ.rows) ? LZ.rows.filter((r) => r && ["win", "loss", "push"].includes(r.result)) : [];
+    const all = (Array.isArray(d.rows) ? d.rows : []).concat(leanRows), bets = all.filter((r) => r.group !== "leans");
     base.defaultUnits = String(d.teamPickDefaultUnits ?? 1); base.dueStake = String(d.dueStake ?? 0.25);
-    if (!all.length) return { ...base, ready: false, empty: true, kicker: "NHL · 0 nights graded", headline: "Nothing graded yet. The record starts the morning after opening night." };
+    if (!bets.length) return { ...base, ready: false, empty: true, kicker: "NHL · 0 nights graded", headline: "Nothing graded yet. The record starts the morning after opening night." };
 
     const u2 = (n) => `${n > 0 ? "+" : n < 0 ? "−" : ""}${Math.abs(n).toFixed(2)}u`, u1 = (n) => `${n > 0 ? "+" : n < 0 ? "−" : ""}${Math.abs(n).toFixed(1)}%`;
     const colorOf = (n) => (n > 0.004 ? "var(--win)" : n < -0.004 ? "var(--alert)" : "var(--ink-2)");
     const agg = (rs) => { const o = { w: 0, l: 0, p: 0, bets: rs.length, staked: 0, units: 0 }; for (const r of rs) { o[r.result === "win" ? "w" : r.result === "loss" ? "l" : "p"]++; o.staked += r.staked || 0; o.units += r.units || 0; } o.ret = o.staked ? (100 * o.units) / o.staked : 0; return o; };
     const rec = (o) => `${o.w}–${o.l}${o.p ? `–${o.p}` : ""}`;
-    const GROUPS = [["team", "Team picks"], ["props", "Player props"], ["due", "Due List"]];
+    const GROUPS = [["team", "Team picks"], ["props", "Player props"], ["due", "Due List"], ["leans", "Prop leans"]];
     const gLabel = Object.fromEntries(GROUPS);
-    const ov = agg(all), first = d.firstDate || all[all.length - 1].date, last = d.lastDate || all[0].date;
+    const ov = agg(bets), first = d.firstDate || bets[bets.length - 1].date, last = d.lastDate || bets[0].date;
     const headline = `${rec(ov)} over ${ov.bets} graded bets from ${F.fmtDateOnly(first)} to ${F.fmtDateOnly(last)}: ${u2(ov.units)} on ${ov.staked.toFixed(1)}u staked, a ${u1(ov.ret)} return.`;
 
     // Cumulative series by date, oldest first.
     const series = (rs) => { const by = new Map(); for (const r of rs) by.set(r.date, (by.get(r.date) || 0) + (r.units || 0)); const ds = [...by.keys()].sort(); let c = 0; return ds.map((dt) => ({ date: dt, v: (c += by.get(dt)) })); };
     const spark = (rs) => { const s = series(rs); if (s.length < 2) return { points: "", zeroY: "24" }; const vs = s.map((p) => p.v), lo = Math.min(0, ...vs), hi = Math.max(0, ...vs), span = hi - lo || 1; const Y = (v) => 44 - ((v - lo) / span) * 40; return { points: s.map((p, i) => `${((i / (s.length - 1)) * 110).toFixed(1)},${Y(p.v).toFixed(1)}`).join(" "), zeroY: Y(0).toFixed(1) }; };
-    const cards = GROUPS.map(([key, label]) => { const rs = all.filter((r) => r.group === key), o = agg(rs), sp = spark(rs); return { label, units: rs.length ? u2(o.units) : "—", color: rs.length ? colorOf(o.units) : "var(--mute)", sub: rs.length ? `${rec(o)} · ${o.bets} bets · ${u1(o.ret)} on ${o.staked.toFixed(1)}u` : "No bets graded", note: key === "due" ? `Cooper's list · ${base.dueStake}u per entry, not bet` : key === "team" ? "Best bets at the card's stake" : "Best bets at the card's stake", ...sp }; });
+    const LS = LZ && LZ.season, leanNote = LS ? `Listed, not bet · 1u each${LS.void ? ` · ${LS.void} void` : ""}${LS.unmatched ? ` · ${LS.unmatched} not graded` : ""}${LS.pending ? ` · ${LS.pending} waiting` : ""}` : "Listed, not bet · 1u each";
+    const cards = GROUPS.map(([key, label]) => { const rs = all.filter((r) => r.group === key), o = agg(rs), sp = spark(rs); return { label, units: rs.length ? u2(o.units) : "—", color: rs.length ? colorOf(o.units) : "var(--mute)", sub: rs.length ? `${rec(o)} · ${o.bets} bets · ${u1(o.ret)} on ${o.staked.toFixed(1)}u` : "No bets graded", note: key === "due" ? `Cooper's list · ${base.dueStake}u per entry, not bet` : key === "leans" ? leanNote : key === "team" ? "Best bets at the card's stake" : "Best bets at the card's stake", ...sp }; });
 
     // Filter
-    const f = this.state.filter, rows = f === "all" ? all : all.filter((r) => r.group === f);
+    const f = this.state.filter, rows = f === "all" ? bets : all.filter((r) => r.group === f);
     const filters = [["all", "Everything"], ...GROUPS].map(([key, label]) => ({ label, selected: f === key ? "true" : "false", bg: f === key ? "var(--ink)" : "transparent", fg: f === key ? "var(--paper)" : "var(--ink)", onClick: () => this.setState({ filter: key, page: 0 }) }));
     const fo = agg(rows);
     const filterLine = rows.length ? `${rows.length} bets · ${rec(fo)} · ${u2(fo.units)}` : "";
-    const filterEmpty = rows.length === 0, filterEmptyNote = f === "due" ? "Due List tracking started 2026-10-09. Entries appear the morning after they settle." : `No ${(gLabel[f] || "").toLowerCase()} have settled yet.`;
+    const filterEmpty = rows.length === 0, filterEmptyNote = f === "due" ? "Due List tracking started 2026-10-09. Entries appear the morning after they settle." : f === "leans" ? (LZ && LZ.note) || "The prop leans record could not be read this run." : `No ${(gLabel[f] || "").toLowerCase()} have settled yet.`;
 
     // Where we win and lose
     const groupBy = (rs, keyFn, labelFn) => { const m = new Map(); for (const r of rs) for (const k of [].concat(keyFn(r)).filter(Boolean)) { if (!m.has(k)) m.set(k, { key: k, label: labelFn(k, r), rs: [] }); m.get(k).rs.push(r); } return [...m.values()].map((g) => ({ ...g, ...agg(g.rs) })); };
     const teamName = (k) => k;
     const byTeam = groupBy(rows, (r) => (r.group === "team" ? (r.team ? [r.team] : r.teams || []) : [r.team]), teamName);
-    const byPlayer = groupBy(rows.filter((r) => r.playerId || r.player), (r) => String(r.playerId || r.player), (k, r) => `${r.player} (${r.team})`);
+    const byPlayer = groupBy(rows.filter((r) => r.playerId || r.player), (r) => String(r.playerId || r.player), (k, r) => (r.team ? `${r.player} (${r.team})` : r.player));
     const byMarket = groupBy(rows, (r) => (r.group === "team" ? `team:${r.market}` : `${r.market}:${r.side || ""}`), (k, r) => (r.group === "team" ? r.market : `${r.propType || r.market} ${r.side || ""}`.trim()));
     const half = (list, good) => { const q = list.filter((x) => x.bets >= 10 && (good ? x.units > 0 : x.units < 0)).sort((a, b) => (good ? b.units - a.units : a.units - b.units)).slice(0, 3); return { title: good ? "Treating us right" : "Treating us wrong", color: good ? "var(--win)" : "var(--alert)", none: q.length === 0, noneText: list.some((x) => x.bets >= 10) ? `Nobody in the ${good ? "black" : "red"} yet` : "Nobody has 10 bets yet", rows: q.map((x) => ({ name: x.label, record: rec(x), bets: `${x.bets} bets`, units: u2(x.units), color: colorOf(x.units) })) }; };
     const panels = [["Teams", byTeam], ["Players", byPlayer], ["Markets", byMarket]].map(([title, list]) => ({ title, halves: [half(list, true), half(list, false)] }));
 
-    // Cumulative chart, all three groups regardless of filter (the filter picks the emphasised line).
+    // Cumulative chart, every group regardless of filter (the filter picks the emphasised line).
     const W = 640, H = 240, L = 44, R = 632, TOP = 14, BOT = 216;
     const dates = [...new Set(all.map((r) => r.date))].sort();
     const lines0 = GROUPS.map(([key, label]) => ({ key, label, s: series(all.filter((r) => r.group === key)) })).filter((l) => l.s.length);
@@ -357,7 +361,7 @@ class Component extends DCLogic {
     const X = (dt) => L + ((dates.indexOf(dt)) / Math.max(1, dates.length - 1)) * (R - L), Y = (v) => BOT - ((v - vLo) / vSpan) * (BOT - TOP);
     const step = Math.max(1, Math.ceil(vSpan / 5)), ticks = []; for (let v = Math.ceil(vLo / step) * step; v <= vHi; v += step) ticks.push(v);
     const grid = ticks.map((v) => ({ y: Y(v).toFixed(1), ty: (Y(v) + 3.5).toFixed(1), label: `${v > 0 ? "+" : ""}${v}`, stroke: v === 0 ? "var(--mute)" : "var(--rule-2)", w: v === 0 ? "1.5" : "1" }));
-    const STYLE = { team: ["var(--ink)", ""], props: ["var(--mute)", ""], due: ["var(--alert)", "4 3"] };
+    const STYLE = { team: ["var(--ink)", ""], props: ["var(--mute)", ""], due: ["var(--alert)", "4 3"], leans: ["var(--win)", "2 2"] };
     const lines = lines0.map((l) => { const lastP = l.s[l.s.length - 1]; return { label: `${l.label} ${u2(lastP.v)}`, points: l.s.map((p) => `${X(p.date).toFixed(1)},${Y(p.v).toFixed(1)}`).join(" "), stroke: STYLE[l.key][0], dash: STYLE[l.key][1], w: f === l.key ? "2.5" : "1.5", lx: (Math.min(X(lastP.date), R - 110) + 4).toFixed(1), ly: (Y(lastP.v) - 6).toFixed(1) }; });
     const xs = dates.filter((_, i) => i === 0 || i === dates.length - 1 || i % Math.ceil(dates.length / 4) === 0).map((dt) => ({ x: X(dt).toFixed(1), label: F.fmtDateOnly(dt).replace(/,.*$/, "") }));
     const chart = { stamp: `${dates.length} nights · zero line marked`, aria: `Cumulative units by group: ${lines.map((l) => l.label).join("; ")}`, grid, xs, lines, legend: lines0.map((l) => ({ text: l.label, stroke: STYLE[l.key][0], style: STYLE[l.key][1] ? "dashed" : "solid" })) };
@@ -397,8 +401,8 @@ class Component extends DCLogic {
     const lrows = lq ? rows.filter((r) => text(r).includes(lq)) : rows;
     const PER = 25, pages = Math.max(1, Math.ceil(lrows.length / PER)), page = Math.min(this.state.page, pages - 1);
     const CHIP = { win: ["Win", "var(--win)", "var(--on-win)", "var(--win)"], loss: ["Loss", "transparent", "var(--alert)", "var(--alert)"], push: ["Push", "transparent", "var(--mute)", "var(--rule)"] };
-    const logRows = lrows.slice(page * PER, page * PER + PER).map((r) => { const c = CHIP[r.result] || CHIP.push; const prop = r.player ? { main: r.player, sub: `${r.team} v ${r.opp} · ${r.propType || r.market} ${r.side || ""} ${r.line ?? ""}`.replace(/\s+/g, " ").trim() } : { main: r.label, sub: r.teams ? `${r.teams[0]} @ ${r.teams[1]} · ${r.market}` : r.market };
-      return { date: r.date, type: r.group === "team" ? "Team" : r.group === "props" ? "Prop" : "Due", ...prop, price: F.fmtOdds(r.price), down: typeof r.betDownTo === "number" ? F.fmtOdds(r.betDownTo) : "—", stake: `${(r.staked || 0).toFixed(2)}u${r.stakeAssumed ? "*" : ""}`, result: c[0], chipBg: c[1], chipFg: c[2], chipBorder: c[3], units: u2(r.units || 0), unitsColor: colorOf(r.units || 0) }; });
+    const logRows = lrows.slice(page * PER, page * PER + PER).map((r) => { const c = CHIP[r.result] || CHIP.push; const prop = r.player ? { main: r.player, sub: `${r.team ? `${r.team} v ${r.opp}` : (r.teams || []).filter(Boolean).join(" @ ")} · ${r.propType || r.market} ${r.side || ""} ${r.line ?? ""}`.replace(/\s+/g, " ").trim() } : { main: r.label, sub: r.teams ? `${r.teams[0]} @ ${r.teams[1]} · ${r.market}` : r.market };
+      return { date: r.date, type: r.group === "team" ? "Team" : r.group === "props" ? "Prop" : r.group === "leans" ? "Lean" : "Due", ...prop, price: F.fmtOdds(r.price), down: typeof r.betDownTo === "number" ? F.fmtOdds(r.betDownTo) : "—", stake: `${(r.staked || 0).toFixed(2)}u${r.stakeAssumed ? "*" : ""}`, result: c[0], chipBg: c[1], chipFg: c[2], chipBorder: c[3], units: u2(r.units || 0), unitsColor: colorOf(r.units || 0) }; });
     const log = { stamp: `${rows.length} bets · newest first`, query: this.state.logQuery, onSearch: (e) => this.setState({ logQuery: e.target.value, page: 0 }), noMatch: lrows.length === 0, noMatchText: `No bet matches "${lq}".`, hasRows: lrows.length > 0,
       rows: logRows, pageLine: `${page * PER + 1}–${Math.min(lrows.length, (page + 1) * PER)} of ${lrows.length}`, onPrev: () => this.setState({ page: Math.max(0, page - 1) }), onNext: () => this.setState({ page: Math.min(pages - 1, page + 1) }), prevDisabled: page === 0, nextDisabled: page >= pages - 1, prevColor: page === 0 ? "var(--rule)" : "var(--ink)", nextColor: page >= pages - 1 ? "var(--rule)" : "var(--ink)" };
 

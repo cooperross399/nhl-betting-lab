@@ -394,6 +394,14 @@ jobs:
             echo "::warning::The season projection could not be restored; the Season page keeps the committed baseline."
           fi
 
+      # The prop leans record (web/prop_leans.py, Cooper 2026-11-03) reads
+      # every card ever published from card-feed's history and grades it on
+      # card-feed's forward ledger. Both are public, so this is a plain read.
+      # A failed fetch builds the site without the record and says so.
+      - name: Read card-feed for the prop leans record
+        continue-on-error: true
+        run: git fetch --no-tags --quiet origin +refs/heads/card-feed:refs/remotes/origin/card-feed
+
       - name: Build today's board and yesterday's results
         env:
           PYTHONPATH: src

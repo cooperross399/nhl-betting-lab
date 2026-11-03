@@ -411,3 +411,27 @@ juice limit. It is the card's own `bet_down_to` from `gameday_card.json`
 written before the field or when no price the card would take clears.
 `results.json` carries it on the graded pick and prop rows, and the tracker's
 `team` and `props` rows carry it too.
+
+## prop_leans.json (All results' "Prop leans" — 2026-11-03)
+
+Cooper: "track the prop leans record/profit on the website". Every player
+prop the card listed under Leans (never bet), graded as if 1u were on each at
+the price the card listed. Written by `web/prop_leans.py` from the public
+`card-feed` branch every Publish Site run, whole season each time:
+
+- Which leans: each league day's first card in the history of
+  `latest_card_comment.md` that lists a prop lean (the morning card).
+- Result: that day's `forward_evidence/<day>.csv`, matched on game, market,
+  player, side and line. No ledger file yet is `pending`; a lean the ledger
+  does not hold is `unmatched` (2026-10-06's afternoon card priced props the
+  morning snapshot never froze), never guessed.
+
+Fields: `stake` (1.0), `note`, `source`, `nights`, `firstDate`, `lastDate`;
+`season`, `byMarket[]`, `bySide[]`, `byNight[]` each `{listed, w, l, p, void,
+pending, unmatched, graded, staked, units, returnPct, winPct}` with
+`w + l + p + void + pending + unmatched = listed` (the build raises if not);
+`rows[]` the graded leans in tracker.json's row shape with `group: "leans"`,
+`staked: 1.0`, plus `teams`, `book`, `modelProb`, `edge`. Tracker.dc.html
+adds them as their own group, card and filter; they are never in its
+headline or "Everything", which are the bets. A run that cannot read
+card-feed writes `{status: "unavailable", note, rows: []}`.

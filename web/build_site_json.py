@@ -867,6 +867,38 @@ def _site_history():
     return module
 
 
+def _prop_leans_module():
+    """`web/prop_leans.py`, loaded from beside this file."""
+    path = Path(__file__).resolve().with_name("prop_leans.py")
+    spec = importlib.util.spec_from_file_location("_nhl_prop_leans", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def prop_leans_page(lab: Path, ref: str, today: date) -> dict:
+    """prop_leans.json: the card's prop leans graded at 1u each, season long
+    (web/prop_leans.py). A card-feed ref this checkout cannot read writes a
+    file that says so, with no record, never an empty one."""
+    module = _prop_leans_module()
+    by_key = {_team_key(name): abbr for abbr, (name, *_rest) in TEAMS.items()}
+    by_key.update({"stlouisblues": "STL", "montrealcanadiens": "MTL", "utahhockeyclub": "UTA"})
+    players = read_player_directory(lab / "data" / "processed")
+    aliases = _aliases()
+
+    def directory(name, home, away):
+        if not home or not away:
+            return None, None
+        pid, team, _position = _prop_player(players, name, home, away, aliases)
+        return pid, team
+
+    try:
+        return module.build(lab, ref, today=today, directory=directory, abbr=lambda n: by_key.get(_team_key(n)))
+    except Exception as exc:  # a missing ref, an unreadable history
+        return {"status": "unavailable", "stake": module.LEAN_STAKE, "rows": [],
+                "note": f"The prop leans record could not be read from card-feed this run ({type(exc).__name__})."}
+
+
 def build_board(day: date, lab: Path, history_dir: Path) -> dict:
     now = datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
     games = schedule_for(day)
@@ -2620,6 +2652,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--lab", default=".", help="Root of the nhl-betting-lab checkout.")
     ap.add_argument("--out", default="dist/data", help="Where board.json / results.json / history/ are written.")
     ap.add_argument("--date", default="", help="League date to build (default: today in New York).")
+    ap.add_argument("--card-feed", default="origin/card-feed",
+                    help="Git ref of the card-feed branch, read for prop_leans.json (web/prop_leans.py).")
     args = ap.parse_args(argv)
     today = date.fromisoformat(args.date) if args.date else datetime.now(ET).date()
     out = Path(args.out)
@@ -2655,6 +2689,14 @@ def main(argv: list[str] | None = None) -> int:
     (out / "ratings.json").write_text(json.dumps(ratings_page(Path(args.lab)), indent=1, ensure_ascii=False), encoding="utf-8")
     (out / "tracker.json").write_text(json.dumps(tracker(tracked, nights=season["nights"]), indent=1, ensure_ascii=False), encoding="utf-8")
     (out / "record.json").write_text(json.dumps(track_record(today, history, tracked), indent=1, ensure_ascii=False), encoding="utf-8")
+    leans = prop_leans_page(Path(args.lab), args.card_feed, today)
+    (out / "prop_leans.json").write_text(json.dumps(leans, indent=1, ensure_ascii=False), encoding="utf-8")
+    if leans.get("season"):
+        s = leans["season"]
+        print(f"prop leans: {s['w']}-{s['l']}-{s['p']} ({s['void']} void, {s['pending']} pending, "
+              f"{s['unmatched']} unmatched) over {leans['nights']} nights, {s['units']:+.2f}u at 1u each.")
+    else:
+        print(f"::warning::prop leans not built: {leans.get('note')}")
     print(f"board {today}: {len(board['games'])} games ({board['phase']}); results {today - timedelta(days=1)}: {len(results['games'])} settled.")
     print("No odds were fetched, no credit was spent, and no bet was placed.")
     return 0
