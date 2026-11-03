@@ -274,7 +274,7 @@ def completed_runs(
     success_only: bool = False, attempts: int = 1, strict: bool = False,
 ) -> list[dict] | None:
     """The workflow's completed runs on `branch`, newest first, of every
-    conclusion — or, with `success_only`, its successes as GitHub filters them.
+    conclusion — or, with `success_only`, its successes, picked out of the unfiltered listing.
 
     This listed every branch: no `--branch`, no `headBranch`. Line Movement's
     newest carrier is a 2026-09-02 dispatch on `rehearse-the-line-fetch`, and
@@ -290,11 +290,16 @@ def completed_runs(
     like "this workflow has no runs" and the caller moved on to the next
     workflow's state (see the module docstring).
     """
+    # Successes are picked out here, never with `--status success`: on
+    # 2026-11-03 GitHub's filtered listing left out a successful publish
+    # (run 41659371842) for hours while the unfiltered one held it, and
+    # every publish after it refused as built on a stale listing. The
+    # unfiltered listing is asked for more runs so that the successes still
+    # fill `limit`.
+    asked = max(limit * 5, 50) if success_only else limit
     args = ["run", "list", "--workflow", workflow, "--branch", branch,
-            "--limit", str(limit),
+            "--limit", str(asked),
             "--json", "databaseId,conclusion,status,headBranch"]
-    if success_only:
-        args += ["--status", "success"]
     problem = f"{workflow} runs were listed as something other than JSON."
     for attempt in range(attempts):
         if attempt:
@@ -318,7 +323,10 @@ def completed_runs(
                             for r in elsewhere)
                 + "); none of them is a restore source."
             )
-        return [r for r in completed if r.get("headBranch") == branch]
+        mine = [r for r in completed if r.get("headBranch") == branch]
+        if success_only:
+            mine = [r for r in mine if r.get("conclusion") == "success"][:limit]
+        return mine
     if strict:
         raise Unreachable(f"{problem} ({attempts} attempt(s))")
     return None
