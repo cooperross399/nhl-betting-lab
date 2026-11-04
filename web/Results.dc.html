@@ -344,7 +344,8 @@ class Component extends DCLogic {
     if (pr.strip && RP.seasonLeans) pr.strip = [...pr.strip, { label: "Props · leans · season", value: RP.seasonLeans.nights ? rec(RP.seasonLeans) : "—", sub: RP.seasonLeans.nights ? rate(RP.seasonLeans) : "No night settled yet" }];
     // Due List (results.json dueList): Cooper's list, graded like a prop and tracked as if 0.25u were bet on every priced entry (nothing is bet).
     const D = raw.dueList;
-    const CAT = { points: ["1+ point", "point", "points"], goals: ["Anytime goal", "goal", "goals"], assists: ["1+ assist", "assist", "assists"] };
+    const CAT = { points: ["1+ point", "point", "points"], goals: ["Anytime goal", "goal", "goals"], assists: ["1+ assist", "assist", "assists"],
+      two_goals: ["2+ goals", "goal", "goals"], hat_trick: ["Hat trick", "goal", "goals"], shutout: ["Shutout", "shutout", "shutouts"] };
     const GW = { win: ["Hit", "var(--win)"], loss: ["Miss", "var(--alert)"], push: ["Push", "var(--ink)"], void: ["Void", "var(--mute)"] };
     const dl = !D ? { show: false, rows: [], strip: [] } : (() => {
       const se = D.season || {}, bm = se.byMarket || {}, su = D.summary;
@@ -355,7 +356,8 @@ class Component extends DCLogic {
         { label: "Season", value: se.nights ? rec(se) : "—", sub: se.nights ? `${rate(se)}${typeof se.impliedPct === "number" ? ` · prices implied ${Math.round(se.impliedPct)}%` : ""}` : "No night settled yet" },
         { label: `Units · season · ${se.stake || 0.25}u each`, value: se.nights && typeof se.units === "number" ? u(se.units) : "—",
           sub: se.nights && typeof se.staked === "number" ? `${se.staked.toFixed(2)} u staked${typeof se.returnPct === "number" ? ` · ${se.returnPct > 0 ? "+" : ""}${se.returnPct}%` : ""}${se.unpriced ? ` · ${se.unpriced} unpriced, not counted` : ""}` : "No night settled yet" },
-        ...["points", "goals", "assists"].map((k) => ({ label: `${CAT[k][0]} · season`, value: bm[k] ? rec(bm[k]) : "—", sub: bm[k] ? `${rate(bm[k])}${typeof bm[k].units === "number" ? ` · ${u(bm[k].units)}` : ""}` : "" })),
+        // The big games (2026-11-04) show once one of them has a graded entry.
+        ...["points", "goals", "assists", ...["two_goals", "hat_trick", "shutout"].filter((k) => bm[k] && (bm[k].w || bm[k].l))].map((k) => ({ label: `${CAT[k][0]} · season`, value: bm[k] ? rec(bm[k]) : "—", sub: bm[k] ? `${rate(bm[k])}${typeof bm[k].units === "number" ? ` · ${u(bm[k].units)}` : ""}` : "" })),
       ];
       const notes = [];
       if ((se.backfilledNights || []).length) notes.push(`Rebuilt after the fact, before the list was first published: ${se.backfilledNights.join(", ")}.`);
@@ -363,7 +365,7 @@ class Component extends DCLogic {
       const rows = (D.rows || []).map((x) => {
         const c = CAT[x.market] || [x.market, x.market, x.market], t = T[x.team] || {}, g = GW[x.result] || ["Not graded", "var(--mute)"];
         const fin = typeof x.actual === "number" ? `finished with ${x.actual}` : x.result === "void" ? "did not play" : "no final stat yet";
-        return { player: x.player, team: x.team || "", color: t.color || "var(--ink)", fg: t.fg || "var(--paper)", meta: [x.opp ? `vs ${x.opp}` : "", x.drought != null ? `${x.drought} games without` : ""].filter(Boolean).join(" · "),
+        return { player: x.player, team: x.team || "", color: t.color || "var(--ink)", fg: t.fg || "var(--paper)", meta: [x.opp ? `vs ${x.opp}` : "", x.drought != null ? `${x.drought} ${x.market === "shutout" ? "starts" : "games"} without` : ""].filter(Boolean).join(" · "),
           line: `${c[0]} — ${fin}`, priceLine: typeof x.price === "number" ? `${x.price > 0 ? "+" : "−"}${Math.abs(x.price)}${x.priceSource === "card" ? " (card's morning price)" : x.book ? ` at ${x.book}` : ""}${x.heavyJuice ? " · heavy juice" : ""}${typeof x.units === "number" ? ` · ${u(x.units)}` : ""}` : "price not posted · not counted in units",
           result: g[0], resultColor: g[1], aria: `${x.player}, ${c[0]}, ${g[0]}` };
       });
