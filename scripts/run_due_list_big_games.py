@@ -20,26 +20,37 @@ of each says:
 A shutout here is a start (`START_SECONDS` of ice time or more) with no goal
 against and 59 minutes or more played; shootout goals are not goals against.
 
+With `--history FIRST` (Cooper, 2026-11-04: "test as many seasons as you
+can") it also reads the NHL's free game logs from season FIRST onward for
+every player who could qualify (30+ goals or 2+ shutouts the season before)
+and writes the rates, no prices, to `data/outputs/due_list_big_games_history.md`:
+the sweep pooled over every season, and each season alone at the shipped
+setting. Prices exist only for the two bought seasons, so the history says
+whether a drought makes the event likelier, never whether a price pays.
+
 Every figure is an aggregate. It records nothing the card reads and spends
 nothing. Run where the bought prices are (Due List Tuning restores them):
 
-    PYTHONPATH=src python scripts/run_due_list_big_games.py --data data/processed
+    PYTHONPATH=src python scripts/run_due_list_big_games.py --data data/processed --history 2009
 """
 from __future__ import annotations
 
 import argparse
+import json
 import sys
+import time
 import zlib
 from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import requests
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from nhl_betting_lab.drought_rule import drought_before  # noqa: E402
+from nhl_betting_lab.drought_rule import BIG_GAMES, drought_before  # noqa: E402
 from nhl_betting_lab.models.player_props import player_name_aliases  # noqa: E402
 from nhl_betting_lab.season import game_date  # noqa: E402
 
@@ -180,10 +191,133 @@ def render_goalies(g: pd.DataFrame) -> list[str]:
     return L + [""]
 
 
+STATS = "https://api.nhle.com/stats/rest/en/{role}/summary"
+GAME_LOG = "https://api-web.nhle.com/v1/player/{pid}/game-log/{season}/2"
+HEADERS = {"User-Agent": "nhl-betting-lab (due list research)"}
+
+
+def _get(url: str, params: dict | None, cache: Path) -> dict:
+    if cache.exists():
+        return json.loads(cache.read_text())
+    last = None
+    for attempt in range(4):
+        try:
+            r = requests.get(url, params=params, headers=HEADERS, timeout=30)
+            if r.status_code == 200:
+                data = r.json()
+                cache.parent.mkdir(parents=True, exist_ok=True)
+                cache.write_text(json.dumps(data))
+                return data
+            last = f"HTTP {r.status_code}"
+        except requests.RequestException as exc:
+            last = str(exc)
+        time.sleep(2 ** attempt)
+    raise RuntimeError(f"{url} {params}: {last}")
+
+
+def _seconds(toi) -> float:
+    if isinstance(toi, (int, float)):
+        return float(toi)
+    try:
+        m, sec = str(toi).split(":")
+        return int(m) * 60 + int(sec)
+    except ValueError:
+        return float("nan")
+
+
+def season_qualifiers(season: int, role: str, cache: Path) -> dict[int, str]:
+    """Players with 30+ goals (skaters) or 2+ shutouts (goalies) in a regular season."""
+    field, floor = ("goals", min(GOAL_FLOORS)) if role == "skater" else ("shutouts", min(SHUTOUT_FLOORS))
+    out, start = {}, 0
+    while True:
+        params = {"isAggregate": "true", "isGame": "false", "start": start, "limit": 100,
+                  "cayenneExp": f"seasonId={season} and gameTypeId=2 and {field}>={floor}"}
+        data = _get(STATS.format(role=role), params, cache / f"{role}_{season}_{start}.json")
+        rows = data.get("data", [])
+        for r in rows:
+            out[int(r["playerId"])] = r.get("skaterFullName") or r.get("goalieFullName") or ""
+        start += len(rows)
+        if not rows or start >= int(data.get("total", 0)):
+            return out
+
+
+def history_logs(first: int, last: int, cache: Path) -> pd.DataFrame:
+    """Game logs for the seasons around every potential qualifier, in the lab's log schema."""
+    want: dict[tuple[int, int], str] = {}
+    for start_year in range(first, last + 1):
+        season = start_year * 10000 + start_year + 1
+        for role in ("skater", "goalie"):
+            for pid in season_qualifiers(season, role, cache):
+                for s in (season, season + 10001):
+                    want[(pid, s)] = role
+    rows = []
+    for (pid, season), role in sorted(want.items()):
+        data = _get(GAME_LOG.format(pid=pid, season=season), None, cache / "log" / f"{pid}_{season}.json")
+        for g in data.get("gameLog", []):
+            rows.append({"game_id": g.get("gameId"), "season": season, "game_type": 2, "date": g.get("gameDate"),
+                         "player_id": pid, "role": role, "goals": g.get("goals", 0) if role == "skater" else 0,
+                         "toi_seconds": _seconds(g.get("toi")),
+                         "goals_against": g.get("goalsAgainst") if role == "goalie" else np.nan})
+    return pd.DataFrame(rows)
+
+
+def render_history(s: pd.DataFrame, g: pd.DataFrame, first: int, last: int) -> list[str]:
+    seasons = sorted(set(s.season_start.dropna().astype(int)) | set(g.season_start.dropna().astype(int)))
+    L = ["# Due List big games across every season the NHL's logs reach", "",
+         f"Seasons {first + 1}-{str(first + 2)[2:]} to {last + 1}-{str(last + 2)[2:]} (each player qualifies on the "
+         "season before). Rates only: no prices exist before 2024-25. Rate is the share of games entered at that "
+         "drought with the event; own rate is that player's share the season before. A drought makes the event "
+         "likelier only where the rate beats the own rate. Short seasons (2012-13, 2019-20, 2020-21) are counted "
+         "on raw goals, so fewer players qualify in them.", ""]
+    for event, (k, _) in EVENTS.items():
+        L += [f"## {k}+ goals, pooled", "", "| Last season goals | Drought bar | Games | Rate | Own rate | Rate / own |",
+              "|--:|--:|--:|--:|--:|--:|"]
+        for floor in GOAL_FLOORS:
+            q = s[s.prior_goals >= floor]
+            for bar in BARS[event]:
+                x = q[q["drought_" + event] >= bar]
+                if not len(x):
+                    continue
+                rate, own = x[event].mean(), (x["prior_" + event] / x.prior_gp).mean()
+                L.append(f"| {floor}+ | {bar} | {len(x)} | {rate*100:.1f}% | {own*100:.1f}% | {rate/own:.2f} |")
+        spec = BIG_GAMES[event]
+        L += ["", f"Shipped setting ({spec['floor']}+ goals, {spec['bar']}+ games), by season:", "",
+              "| Season | Games | Rate | Own rate |", "|:--|--:|--:|--:|"]
+        x = s[(s.prior_goals >= spec["floor"]) & (s["drought_" + event] >= spec["bar"])]
+        for y in seasons:
+            b = x[x.season_start == y]
+            if len(b):
+                L.append(f"| {y}-{str(y + 1)[2:]} | {len(b)} | {b[event].mean()*100:.1f}% | "
+                         f"{(b['prior_' + event] / b.prior_gp).mean()*100:.1f}% |")
+        L.append("")
+    L += ["## Shutouts, pooled", "", "| Last season shutouts | Drought bar (starts) | Starts | Rate | Own rate | Rate / own |",
+          "|--:|--:|--:|--:|--:|--:|"]
+    for floor in SHUTOUT_FLOORS:
+        q = g[g.prior_so >= floor]
+        for bar in SHUTOUT_BARS:
+            x = q[q.drought >= bar]
+            if not len(x):
+                continue
+            rate, own = x.shutout.mean(), (x.prior_so / x.prior_starts).mean()
+            L.append(f"| {floor}+ | {bar} | {len(x)} | {rate*100:.1f}% | {own*100:.1f}% | {rate/own:.2f} |")
+    spec = BIG_GAMES["shutout"]
+    L += ["", f"Shipped setting ({spec['floor']}+ shutouts, {spec['bar']}+ starts), by season:", "",
+          "| Season | Starts | Rate | Own rate |", "|:--|--:|--:|--:|"]
+    x = g[(g.prior_so >= spec["floor"]) & (g.drought >= spec["bar"])]
+    for y in seasons:
+        b = x[x.season_start == y]
+        if len(b):
+            L.append(f"| {y}-{str(y + 1)[2:]} | {len(b)} | {b.shutout.mean()*100:.1f}% | "
+                     f"{(b.prior_so / b.prior_starts).mean()*100:.1f}% |")
+    return L + [""]
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--data", type=Path, default=ROOT / "data" / "processed")
     ap.add_argument("--out", type=Path, default=ROOT / "data" / "outputs")
+    ap.add_argument("--history", type=int, default=None,
+                    help="also read the NHL's game logs from this season's first year (e.g. 2009) and report rates")
     a = ap.parse_args(argv)
     logs = pd.read_csv(a.data / "player_game_logs.csv")
     s, g = skater_frame(logs), goalie_frame(logs)
@@ -210,6 +344,15 @@ def main(argv: list[str] | None = None) -> int:
     a.out.mkdir(parents=True, exist_ok=True)
     (a.out / "due_list_big_games.md").write_text(text)
     print(text)
+    if a.history is not None:
+        last = 2024
+        hist = history_logs(a.history, last, ROOT / "data" / "raw" / "nhl" / "big_games_history")
+        hs, hg = skater_frame(hist), goalie_frame(hist)
+        span = range(a.history + 1, last + 2)
+        text = "\n".join(render_history(hs[hs.season_start.isin(span)], hg[hg.season_start.isin(span)],
+                                         a.history, last)) + "\n"
+        (a.out / "due_list_big_games_history.md").write_text(text)
+        print(text)
     return 0
 
 

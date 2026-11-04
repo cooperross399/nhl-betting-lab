@@ -6,7 +6,8 @@ name: Due List Tuning
 # season, and runs the same search on simulated no-edge seasons.
 # See scripts/run_due_list_tuning.py.
 #
-# It fetches no odds, spends no credit, places no bet, pushes nothing, uploads nothing,
+# With --history it also reads the NHL's free game logs back to 2009-10
+# (rates only). It fetches no odds, spends no credit, places no bet, pushes nothing, uploads nothing,
 # edits no policy and records no verdict the card reads. The bought prices
 # are restored onto the runner and never leave it; the result is aggregate
 # (bets, units, ROI, intervals) and goes to the run summary and the log only.
@@ -90,10 +91,14 @@ jobs:
           # cell records from; it is printed between markers for committing.
           python scripts/run_drought_rule_backtest.py > /dev/null || status=$?
           # 2-goal games, hat tricks and shutouts (Cooper, 2026-11-04).
-          python scripts/run_due_list_big_games.py > /dev/null || status=$?
+          python scripts/run_due_list_big_games.py --history 2009 > /dev/null || status=$?
           if [ -s data/outputs/due_list_big_games.md ]; then
             cat data/outputs/due_list_big_games.md >> "$GITHUB_STEP_SUMMARY"
             cat data/outputs/due_list_big_games.md
+          fi
+          if [ -s data/outputs/due_list_big_games_history.md ]; then
+            cat data/outputs/due_list_big_games_history.md >> "$GITHUB_STEP_SUMMARY"
+            cat data/outputs/due_list_big_games_history.md
           fi
           if [ -s data/outputs/drought_rule_backtest.json ]; then
             echo "----- drought_rule_backtest.json -----"
