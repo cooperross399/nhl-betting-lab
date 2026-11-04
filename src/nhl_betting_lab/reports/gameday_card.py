@@ -156,6 +156,23 @@ PASSES_SECTION = "Passes / notable avoids"
 BEST_BET_EDGE = 0.09
 BEST_BET_PROP_EDGE = 0.12
 
+#: Lower lean bars for one market and side, by Cooper's decision on
+#: 2026-11-04 ("Lean points overs more often", after "i like taking points
+#: overs"). A points over whose edge clears this bar, and not the usual prop
+#: bar, is listed as a lean. It is never staked (`points` is in
+#: `STAKE_EXCLUDED_MARKETS`), and the forward ledger, its report and every
+#: backtest keep `MIN_PROP_EDGE`, so nothing measured moves. No measurement
+#: supports it: every points over 0.5 at the best price since 2026-10-19
+#: lost or broke even, the model's 6%+ overs at about -11%.
+LEAN_BAR_OVERRIDES: dict[tuple[str, str], float] = {("points", "over"): 0.03}
+
+
+def lean_bar(market_key: str, selection: str, default: float) -> float:
+    """The edge a selection needs to be listed: `default`, or the lower bar
+    `LEAN_BAR_OVERRIDES` gives that market and side."""
+    override = LEAN_BAR_OVERRIDES.get((market_key, str(selection).strip().lower()))
+    return min(default, override) if override is not None else default
+
 #: Flat stakes by tier, in units. Small on purpose: these are positions whose
 #: expected value is genuinely uncertain, and the sizing should say so.
 #: The opening words of every reason `_one_stake_per_outcome` writes. Single
@@ -628,7 +645,7 @@ def build_candidates(
         price = float(getattr(row, "american_odds"))
         implied = american_to_implied(price)
         edge = float(probability) - implied
-        bar = min_prop_edge if market.is_prop else min_edge
+        bar = lean_bar(market_key, selection, min_prop_edge) if market.is_prop else min_edge
         candidate = Candidate(
             date=str(getattr(row, "date", "")),
             commence_time=str(getattr(row, "commence_time", "")),
@@ -711,7 +728,10 @@ def build_candidates(
         if candidate.section == BEST_BETS_SECTION:
             bar = BEST_BET_PROP_EDGE if is_prop else BEST_BET_EDGE
         else:
-            bar = min_prop_edge if is_prop else min_edge
+            bar = (
+                lean_bar(candidate.market, candidate.selection, min_prop_edge)
+                if is_prop else min_edge
+            )
         candidate.bet_down_to = bet_down_to(
             candidate.model_probability, bar, juice_limit=juice_limit
         )

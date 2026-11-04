@@ -3194,6 +3194,21 @@ Re-derive rather than trust if the data has moved.
   and Due List units use the same rule. Prop leans and the four strip records
   already did (#417, #418). The card's own stake on tonight's board, the
   card, snapshot, ledger, model, edge bars and staking rule are unchanged.
+- **2026-11-04, NOT a defect fix: points overs are listed as leans from a
+  3% edge (Cooper chose "Lean points overs more often" on a decision card,
+  after "i like taking points overs").** The prop leans record on the site
+  had fallen from +16.8u (10-18) to -7.51u (through 11-03, 1,109-1,379),
+  and points unders carried it: 111-171, -18.3u since 10-19, while scoring
+  rose (6.98 goals a game from 10-28 against 6.22 before 10-19); grading
+  checked out against the ledger. `gameday_card.LEAN_BAR_OVERRIDES` and
+  `lean_bar` lower the card's listing bar for `points` `over` only; a points
+  over is still never staked (`STAKE_EXCLUDED_MARKETS`). `MIN_PROP_EDGE`,
+  the forward ledger, its report and every backtest are unchanged, so
+  nothing measured moves; the site's leans record will hold the extra
+  overs. No measurement supports it: every points over 0.5 at the best
+  price returned -7.6% over 3,001 through 10-18, -5.5% over 1,420 from
+  10-19 to 10-27 and -0.2% over 1,120 since 10-28, and the model's 6%+
+  overs about -11% since 10-19.
 ## Contract strings — never change these
 
 Cooper's local scheduled tasks hard-code these. Renaming any of them silently
