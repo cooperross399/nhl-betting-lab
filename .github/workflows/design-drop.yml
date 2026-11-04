@@ -203,7 +203,12 @@ jobs:
         run: |
           tag=$(python -c 'import json; print(json.load(open("web/shared.lock.json"))["tag"])')
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
-          git clone --quiet --depth 1 --branch "$tag" https://github.com/cooperross399/betting-lab-shared.git "$RUNNER_TEMP/shared"
+          # The tag, never a branch of the same name (git clone --branch
+          # prefers the branch; a stale branch v13 shadowed tag v13).
+          git init --quiet "$RUNNER_TEMP/shared"
+          git -C "$RUNNER_TEMP/shared" remote add origin https://github.com/cooperross399/betting-lab-shared.git
+          git -C "$RUNNER_TEMP/shared" fetch --quiet --depth 1 origin "refs/tags/$tag"
+          git -C "$RUNNER_TEMP/shared" checkout --quiet FETCH_HEAD
           git clone --quiet "https://x-access-token:${TOKEN}@github.com/${REPO}.git" "$RUNNER_TEMP/target"
           cd "$RUNNER_TEMP/target"
           lock=$([ "$KIND" = hub ] && echo shared.lock.json || echo web/shared.lock.json)

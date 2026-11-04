@@ -351,8 +351,16 @@ jobs:
         # differ from the lock fails the run.
         run: |
           tag=$(python -c 'import json; print(json.load(open("web/shared.lock.json"))["tag"])')
-          if git clone --quiet --depth 1 --branch "$tag" https://github.com/cooperross399/betting-lab-shared.git "$RUNNER_TEMP/shared"; then
-            python web/sync_shared.py --from "$RUNNER_TEMP/shared"
+          # The tag first, then a branch of that name: `git clone --branch`
+          # prefers a branch, and on 2026-11-04 a stale branch named v13
+          # shadowed the v13 tag, so every publish failed the lock.
+          dir="$RUNNER_TEMP/shared"
+          git init --quiet "$dir"
+          git -C "$dir" remote add origin https://github.com/cooperross399/betting-lab-shared.git
+          if { git -C "$dir" fetch --quiet --depth 1 origin "refs/tags/$tag" \
+               || git -C "$dir" fetch --quiet --depth 1 origin "refs/heads/$tag"; } \
+             && git -C "$dir" checkout --quiet FETCH_HEAD; then
+            python web/sync_shared.py --from "$dir"
           else
             echo "::warning::betting-lab-shared@$tag could not be cloned; publishing the committed copies, which match the lock."
             python web/sync_shared.py --check

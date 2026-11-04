@@ -3093,6 +3093,13 @@ Re-derive rather than trust if the data has moved.
   GitHub for the run's jobs and passes over a run whose publish job was
   skipped; a jobs listing that cannot be asked is a refusal under
   `--require-newest`, never a reason to read an older run.
+  **2026-11-04: a branch shadowed the pinned tag.** `betting-lab-shared` holds
+  both a tag `v13` (the lock's bytes) and an older branch `v13`, pushed when
+  a session could not push tags, and `git clone --branch v13` takes the
+  branch, so every publish from #421 on failed "Board.dc.html: v13 differs
+  from the lock". Publish Site now fetches `refs/tags/<tag>` first and a
+  branch of that name only when no tag exists (`v12.1` was a branch);
+  Design Drop's fan-out fetches the tag only.
 
 - **2026-11-02: one tab bar on every page, and smoother tab switches.**
   Cooper: the Season tab dropped Tracker and Record and showed an Archive tab
