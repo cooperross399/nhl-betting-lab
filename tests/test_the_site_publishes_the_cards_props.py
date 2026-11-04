@@ -161,10 +161,10 @@ def test_the_next_morning_grades_the_props(tmp_path, monkeypatch):
     props = results["props"]
     graded = {r["player"]: r for r in props["rows"]}
     assert (graded["Auston Matthews"]["actual"], graded["Auston Matthews"]["result"]) == (2, "win")
-    assert graded["Auston Matthews"]["profitUnits"] == 0.53  # 0.5 units at +105
+    assert graded["Auston Matthews"]["profitUnits"] == 0.26  # tracked at 0.25u at +105 (2026-11-04), not the card's 0.5u
     assert graded["John Tavares"]["result"] == "void", "a best bet on a player who did not dress is void"
     assert set(graded) == {"Auston Matthews", "John Tavares"}, "no lean was published, so none is graded"
-    assert props["summary"] == {"w": 1, "l": 0, "p": 0, "units": 0.53, "ungraded": 0}
+    assert props["summary"] == {"w": 1, "l": 0, "p": 0, "units": 0.26, "ungraded": 0}
     assert props["season"]["w"] == 1 and props["seasonLeans"]["l"] == 0
     assert board["record"]["props"]["w"] == 1, "the board's season line counts the props"
     assert results["summary"]["picks"] == {"w": 1, "l": 0, "p": 0}, "props never reach the team record"

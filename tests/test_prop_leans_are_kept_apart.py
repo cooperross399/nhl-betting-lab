@@ -73,7 +73,7 @@ def test_leans_have_their_own_season_line_and_the_bets_keep_theirs(tmp_path: Pat
     _, first_board, first_results, _, _ = _three_nights(tmp_path, monkeypatch)
 
     assert first_results["props"]["seasonLeans"] == {"w": 2, "l": 1, "p": 0, "nights": 1}
-    assert first_results["props"]["season"] == {"w": 1, "l": 1, "p": 1, "units": 0.37, "nights": 1}
+    assert first_results["props"]["season"] == {"w": 1, "l": 1, "p": 1, "units": -0.03, "nights": 1}  # 0.25u to win 0.25u at -110: +0.25 -0.275 +0
     assert first_board["record"]["props"] == first_results["props"]["season"]
     assert first_board["record"]["propLeans"] == first_results["props"]["seasonLeans"]
     # Three leans, two of them winners, moved the best bets' record not at all.
@@ -86,7 +86,7 @@ def test_the_season_sums_every_night_that_carried_props_and_no_other(tmp_path: P
 
     # D0 and D1 published props; D2 did not. The team record counts all three nights.
     assert board["record"]["season"]["nights"] == 3
-    assert board["record"]["props"] == {"w": 2, "l": 1, "p": 1, "units": 0.87, "nights": 2}
+    assert board["record"]["props"] == {"w": 2, "l": 1, "p": 1, "units": 0.22, "nights": 2}  # restaked at 0.25u (2026-11-04), not the card's
     assert board["record"]["propLeans"] == {"w": 2, "l": 2, "p": 0, "nights": 2}
     assert results["seasonRecord"]["props"] == board["record"]["props"]
     assert results["seasonRecord"]["propLeans"] == board["record"]["propLeans"]

@@ -1571,10 +1571,6 @@ def read_box_scores(processed: Path | None, game_ids: set[str]) -> tuple[dict, d
     return by_id, by_alias, boxed
 
 
-def _profit_per_unit(price: float) -> float:
-    return price / 100.0 if price > 0 else 100.0 / abs(price)
-
-
 def grade_props(board: dict, finals: dict, processed: Path | None) -> dict:
     """results.json's `props` for one frozen board: each published prop row
     graded on the player's box-score line, by the forward ledger's rules.
@@ -1626,13 +1622,13 @@ def grade_props(board: dict, finals: dict, processed: Path | None) -> dict:
                     result = "push" if actual == line else "win" if (actual > line) == (side == "over") else "loss"
                     row.update(actual=actual, result=result)
         if row["kind"] == "bet":
-            units = _real(row.get("units")) or 0.0
+            # Tracked at RECORD_STAKE to win it on a minus price (Cooper,
+            # 2026-11-04), whatever the card staked; `units` stays the card's.
             price = _real(row.get("price"))
             result = row["result"]
-            if result == "win" and price:
-                row["profitUnits"] = round(units * _profit_per_unit(price), 2)
-            elif result == "loss":
-                row["profitUnits"] = round(-units, 2)
+            got = record_units(price, result) if result in ("win", "loss") else None
+            if got is not None:
+                row["profitUnits"] = round(got[0], 2)
             elif result in ("push", "void"):
                 row["profitUnits"] = 0.0
             if result in ("win", "loss", "push"):
@@ -1972,7 +1968,14 @@ def due_units(result: str | None, price: object) -> float | None:
         return None
     if result == "push":
         return 0.0
-    return round(DUE_LIST_STAKE * (win_profit(float(price)) if result == "win" else -1.0), 4)
+    got = record_units(float(price), result)
+    return None if got is None else round(got[0], 4)
+
+
+def due_risk(price: object) -> float:
+    """What one priced Due List entry risks: DUE_LIST_STAKE, or what wins it on a minus price."""
+    got = record_units(float(price), "push") if _is_number(price) else None
+    return got[1] if got is not None else DUE_LIST_STAKE
 
 
 def read_due_ledger(processed: Path | None) -> tuple[list[dict], dict]:
@@ -2050,7 +2053,7 @@ def due_ledger_season(rows: list[dict], sources: dict) -> dict | None:
             continue
         units = due_units(result, price) or 0.0
         out["units"] += units
-        out["staked"] += DUE_LIST_STAKE
+        out["staked"] += due_risk(price)
         out["wagers"] += 1
         out["impliedSum"] += implied(price)
         if market in out["byMarket"]:
@@ -2237,9 +2240,11 @@ def due_list_tallies(rows: list[dict]) -> dict:
             if _is_number(r.get("price")):
                 out["impliedSum"] += implied(float(r["price"]))
                 out["impliedCount"] += 1
-            if _is_number(r.get("units")):
-                out["units"] += float(r["units"])
-                out["staked"] += DUE_LIST_STAKE
+            if _is_number(r.get("price")) and result in ("win", "loss", "push"):
+                units = due_units(result, r["price"])
+                if units is not None:
+                    out["units"] += units
+                    out["staked"] += due_risk(r["price"])
         elif result is None:
             out["pending"] += 1
     return out
@@ -2288,10 +2293,22 @@ PRICE_BANDS = ((-10_000, -151, "−150 and shorter"), (-150, -111, "−149 to �
                (111, 199, "+111 to +199"), (200, 10_000, "+200 and longer"))
 
 
-def _profit(units: float, price: float, result: str) -> float:
-    if result == "win":
-        return units * win_profit(price)
-    return -units if result == "loss" else 0.0
+#: How every tracked bet is staked on the site (Cooper, 2026-11-04: "every
+#: bet weve tracked on the website in records and stuff is all .25u or to
+#: win .25u for -odds"): RECORD_STAKE risked on a plus price, enough to win
+#: it on a minus price. The card's own stake stays on the card and the board.
+TRACKED_STAKE_RULE = "0.25u, to win 0.25u on a minus price"
+
+
+def restake(row: dict) -> dict:
+    """One tracker row restated at RECORD_STAKE (to win it on a minus price),
+    from its own price and result: a row kept at the card's stake reads the same."""
+    got = record_units(row.get("price"), row.get("result"))
+    if got is None:
+        return row
+    out = {k: v for k, v in row.items() if k != "stakeAssumed"}
+    out.update(staked=round(got[1], 4), units=round(got[0], 2))
+    return out
 
 
 def tracker_rows(results: dict) -> list[dict]:
@@ -2314,34 +2331,31 @@ def tracker_rows(results: dict) -> list[dict]:
         label = str(pick.get("label") or "")
         first = label.split()[0] if label else ""
         team = first if first in (home, away) else None
-        staked = _real(pick.get("units")) or TEAM_PICK_DEFAULT_UNITS
-        out.append({"date": day, "group": "team", "market": pick.get("market"), "label": label,
+        out.append(restake({"date": day, "group": "team", "market": pick.get("market"), "label": label,
                     "team": team, "opp": (away if team == home else home) if team else None,
                     "teams": [away, home], "price": price, "betDownTo": _int_price(pick.get("betDownTo")),
-                    "result": pick["result"], "staked": staked,
-                    "units": round(_profit(staked, price, pick["result"]), 2),
-                    **({} if _real(pick.get("units")) else {"stakeAssumed": True})})
+                    "result": pick["result"], "staked": 0.0, "units": 0.0}))
     for r in ((results.get("props") or {}).get("rows") or []) if isinstance(results.get("props"), dict) else []:
         if not isinstance(r, dict) or r.get("kind") != "bet" or r.get("result") not in ("win", "loss", "push"):
             continue
-        price, staked = _real(r.get("price")), _real(r.get("units"))
-        if not price or not staked:
+        price = _real(r.get("price"))
+        if not price:
             continue
         market = r.get("market")
-        out.append({"date": day, "group": "props", "market": market, "propType": PROP_LABEL.get(market, market),
+        out.append(restake({"date": day, "group": "props", "market": market, "propType": PROP_LABEL.get(market, market),
                     "side": r.get("side"), "line": r.get("line"), "player": r.get("player"),
                     "playerId": r.get("playerId"), "team": r.get("team"), "opp": r.get("opp"), "price": price,
                     "betDownTo": _int_price(r.get("betDownTo")),
-                    "result": r["result"], "staked": staked, "units": round(_profit(staked, price, r["result"]), 2)})
+                    "result": r["result"], "staked": 0.0, "units": 0.0}))
     for r in ((results.get("dueList") or {}).get("rows") or []) if isinstance(results.get("dueList"), dict) else []:
-        if not isinstance(r, dict) or r.get("result") not in ("win", "loss", "push") or not _is_number(r.get("units")):
+        if not isinstance(r, dict) or r.get("result") not in ("win", "loss", "push") or not _is_number(r.get("price")):
             continue
         market = r.get("market")
-        out.append({"date": day, "group": "due", "market": market, "propType": PROP_LABEL.get(market, market),
+        out.append(restake({"date": day, "group": "due", "market": market, "propType": PROP_LABEL.get(market, market),
                     "side": "over", "line": r.get("line") if r.get("line") is not None else DUE_LIST_LINE,
                     "player": r.get("player"), "playerId": r.get("playerId"), "team": r.get("team"),
                     "opp": r.get("opp"), "price": float(r["price"]), "result": r["result"],
-                    "staked": DUE_LIST_STAKE, "units": round(float(r["units"]), 2)})
+                    "staked": 0.0, "units": 0.0}))
     return out
 
 
@@ -2381,7 +2395,7 @@ def tracker(rows: list[dict], *, nights: int, generated_at: str | None = None) -
     rows summed by group, market, prop type, team, player, price band and
     month. Every split of the whole adds back to `overall` except by team,
     where a total counts under both clubs and a prop under its player's club."""
-    rows = sorted(rows, key=lambda r: (r["date"] or "", r["group"]), reverse=True)
+    rows = sorted((restake(r) for r in rows), key=lambda r: (r["date"] or "", r["group"]), reverse=True)
 
     def market_key(r):
         if r["group"] == "team":
@@ -2415,6 +2429,8 @@ def tracker(rows: list[dict], *, nights: int, generated_at: str | None = None) -
         "lastDate": rows[0]["date"] if rows else None,
         "teamPickDefaultUnits": TEAM_PICK_DEFAULT_UNITS,
         "dueStake": DUE_LIST_STAKE,
+        "stake": RECORD_STAKE,
+        "stakeRule": TRACKED_STAKE_RULE,
         "overall": _tally(rows),
         "byGroup": [{"key": k, "label": name, **_tally([r for r in rows if r["group"] == k])}
                     for k, name in TRACKER_GROUPS.items()],
@@ -2655,8 +2671,9 @@ def season_record(today: date, history_dir: Path, latest: dict, *, processed: Pa
                         due["byMarket"][market][k] += int(split.get(k) or 0)
             due["impliedSum"] += float(night_due.get("impliedSum") or 0.0)
             due["impliedCount"] += int(night_due.get("impliedCount") or 0)
-            due["units"] += float(night_due.get("units") or 0.0)
-            due["staked"] += float(night_due.get("staked") or 0.0)
+            due_rows = [restake(r) for r in night.get("bets") or [] if isinstance(r, dict) and r.get("group") == "due"]
+            due["units"] += sum(r["units"] for r in due_rows)
+            due["staked"] += sum(r["staked"] for r in due_rows)
         night_props = night.get("props") if isinstance(night.get("props"), dict) else None
         if night_props:
             props["nights"] += 1
@@ -2664,7 +2681,10 @@ def season_record(today: date, history_dir: Path, latest: dict, *, processed: Pa
             for k in ("w", "l", "p"):
                 props[k] += int((night_props.get("bets") or {}).get(k) or 0)
                 prop_leans[k] += int((night_props.get("leans") or {}).get(k) or 0)
-            props["units"] += float((night_props.get("bets") or {}).get("units") or 0.0)
+            # Summed from the night's tracker rows at RECORD_STAKE, so a
+            # night kept at the card's stake reads the same (2026-11-04).
+            props["units"] += sum(restake(r)["units"] for r in night.get("bets") or []
+                                  if isinstance(r, dict) and r.get("group") == "props")
         if not night["games"]:
             continue
         nights += 1

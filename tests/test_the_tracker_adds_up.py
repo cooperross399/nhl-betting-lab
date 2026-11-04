@@ -5,9 +5,10 @@ type and market. These hold:
 
 * only a graded best bet, or a priced Due List entry, is a row: no lean, void,
   unpriced entry or ungraded row;
-* each row's units are its stake times the published price's profit;
+* each row is staked at 0.25u, or to win 0.25u on a minus price (Cooper,
+  2026-11-04), whatever the card staked, and a row kept at the card's stake
+  is restated the same way;
 * every split of the whole (group, market, price, month) adds back to it;
-* a team pick with no recorded stake counts at the default and says so;
 * a night kept before the tracker existed is settled again once.
 """
 
@@ -60,12 +61,23 @@ def test_only_graded_staked_rows_are_tracked_at_their_price() -> None:
         ("team", "TOR ML"), ("team", "Over 6.5"), ("props", "Auston Matthews"), ("props", "Nick Suzuki"),
         ("due", "Auston Matthews")]
     ml, total, sog, hits, due = rows
-    assert ml["units"] == pytest.approx(0.5 * 100 / 150, abs=0.01) and ml["team"] == "TOR" and ml["opp"] == "MTL"
-    assert "stakeAssumed" not in ml
-    assert total["staked"] == module.TEAM_PICK_DEFAULT_UNITS and total["stakeAssumed"] and total["team"] is None
-    assert total["units"] == -module.TEAM_PICK_DEFAULT_UNITS
-    assert sog["units"] == pytest.approx(0.25 * 1.2) and hits["units"] == 0.0
+    # -150 win: 0.375u risked to win 0.25u, whatever the card's 0.5u was.
+    assert ml["units"] == 0.25 and ml["staked"] == 0.375 and ml["team"] == "TOR" and ml["opp"] == "MTL"
+    assert "stakeAssumed" not in ml and "stakeAssumed" not in total
+    assert total["staked"] == 0.25 and total["units"] == -0.25 and total["team"] is None
+    assert sog["units"] == pytest.approx(0.25 * 1.2) and sog["staked"] == 0.25
+    assert hits["units"] == 0.0 and hits["staked"] == pytest.approx(0.275)
     assert due["staked"] == module.DUE_LIST_STAKE and due["units"] == -0.25
+
+
+def test_a_row_kept_at_the_cards_stake_is_restated_at_a_quarter_unit() -> None:
+    module = site_module()
+    kept = {"date": "2026-10-20", "group": "team", "market": "Moneyline", "label": "TOR ML", "price": -200,
+            "result": "loss", "staked": 1.0, "units": -1.0, "stakeAssumed": True}
+    t = module.tracker([kept], nights=1)
+    row = t["rows"][0]
+    assert (row["staked"], row["units"]) == (0.5, -0.5) and "stakeAssumed" not in row
+    assert t["overall"]["units"] == -0.5 and t["stake"] == 0.25
 
 
 def test_every_split_adds_back_to_the_whole() -> None:

@@ -318,7 +318,7 @@ Props are never counted in `summary.picks` or `record`; team picks are never cou
 Graded by build_site_json.py::grade_props on the frozen board's rows and the box-score logs, by the forward
 ledger's rules: a player with no row in a game the logs hold is void; a saves prop on a goalie under 2,400 seconds
 of ice time is void; a game not final or not yet in the logs is result null (ungraded, and the night is settled
-again); profitUnits = units x the published price's profit per unit on a win, -units on a loss, 0 on a push or void.
+again); profitUnits = the profit at 0.25u (to win 0.25u on a minus price) since 2026-11-04, whatever `units` the card gave it; 0 on a push or void.
 
 ### Live scores (browser only, not written by the pipeline)
 The Board reads ESPN's public scoreboard (`site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard?dates=YYYYMMDD`, from `boardDate`) and, for open live games, the game summary (`.../summary?event=ID`). Mapping tables live in `lib/live.js`: `ESPN_TO_BOARD` (team codes) and `PROP_STATS` (prop market → box-score column).
@@ -341,7 +341,7 @@ dueList            {summary, season, rows[]} | absent (absent hides the section)
                     source ("ledger"|"boards"), and from the ledger: firstDate, lastDate, wagers, unpriced, void,
                     backfilledNights[], cardPriced}
                    impliedPct = mean implied probability of the posted prices graded (optional)
-                   units = profit as if `stake` (0.25u) were bet on every priced entry; staked = stake × priced entries
+                   units = profit as if `stake` (0.25u, to win 0.25u on a minus price) were bet on every priced entry; staked = what that risked
                    source "ledger": read from data/processed/drought_forward.csv (the lab's Due List ledger) and
                    data/processed/drought_list/sources.json; source "boards": summed from the frozen boards
   rows[]           the board's drought entry (player, team, opp, market, line, lastSeason, drought, price, book, heavyJuice)
@@ -397,16 +397,23 @@ settled night's `bets` (`tracker_rows`), kept in `history/settled/<day>.json`.
 
 - `rows[]`: `{date, group: "team"|"props"|"due", market, price, result:
   "win"|"loss"|"push", staked, units}` plus, for a team pick, `label`, `team`
-  (the side picked, null for a total), `opp`, `teams` [away, home] and
-  `stakeAssumed: true` when the board recorded no stake (counted at
-  `teamPickDefaultUnits`); for a prop or Due List entry, `propType`, `side`,
+  (the side picked, null for a total), `opp` and `teams` [away, home]; for a prop or Due List entry, `propType`, `side`,
   `line`, `player`, `playerId`, `team`, `opp`. Newest first. Leans, voids,
   unpriced Due List entries and ungraded rows are never rows.
 - `overall`, and `byGroup`, `byMarket`, `byPropType`, `byTeam`, `byPlayer`,
   `byPrice`, `byMonth`: `{key, label, w, l, p, bets, staked, units,
   returnPct}`. Every split adds back to `overall` except `byTeam` (a total
   counts under both clubs) and `byPropType`/`byPlayer` (props or players only).
-- `nights`, `firstDate`, `lastDate`, `teamPickDefaultUnits`, `dueStake`.
+- `nights`, `firstDate`, `lastDate`, `teamPickDefaultUnits` (unused since
+  2026-11-04), `dueStake`, `stake` (0.25) and `stakeRule`.
+
+Since 2026-11-04 (Cooper: "every bet weve tracked on the website in records
+and stuff is all .25u or to win .25u for -odds") every row is staked at 0.25u
+on a plus price and enough to win 0.25u on a minus price, whatever the card
+staked (`restake`). `staked` is what was risked; a row kept at the card's
+stake is restated from its own price and result when tracker.json is built.
+The same rule settles `props.rows[].profitUnits`, the Due List's `units` and
+`staked`, and the season's props and Due List units.
 
 A frozen board's `games[].pick` now carries `units`, the card's stake, on a
 best bet.

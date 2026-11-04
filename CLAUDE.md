@@ -3184,6 +3184,16 @@ Re-derive rather than trust if the data has moved.
   lines (PrizePicks)" (`nhl_betting_lab.dfs_hits_lines`): no units, no odds,
   nothing in the fingerprint, snapshot, forward ledger or allowlist; the
   puck-drop guard applies. PrizePicks is not a book the card may price from.
+- **2026-11-04: every tracked bet on the site is 0.25u, to win 0.25u on
+  minus odds.** Cooper: "Make it so every bet weve tracked on the website in
+  records and stuff is all .25u or to win .25u for -odds". Site only:
+  `web/build_site_json.restake` restates every tracker.json row (team picks,
+  prop best bets, Due List) from its own price and result by `record_units`,
+  including rows kept at the card's stake; prop best bets' `profitUnits`, the
+  Due List's units and risk (`due_units`, `due_risk`) and the season's props
+  and Due List units use the same rule. Prop leans and the four strip records
+  already did (#417, #418). The card's own stake on tonight's board, the
+  card, snapshot, ledger, model, edge bars and staking rule are unchanged.
 ## Contract strings — never change these
 
 Cooper's local scheduled tasks hard-code these. Renaming any of them silently

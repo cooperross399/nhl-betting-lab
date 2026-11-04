@@ -273,8 +273,8 @@ def test_the_rows_are_the_frozen_entries_with_their_grade(tmp_path: Path, monkey
     published = next(e for g in frozen["games"] for e in (g.get("drought") or []) if e["player"] == "Alpha Points")
     alpha = next(r for r in by_night[D0]["dueList"]["rows"] if r["player"] == "Alpha Points")
     assert set(alpha) == SCHEMA_KEYS | {"gameId", "opp", "actual", "result", "units"}
-    # -150 won at the notional 0.25u (Cooper, 2026-10-09): 0.25 x 100/150.
-    assert alpha == {**published, "gameId": TOR_GAME[D0], "opp": "MTL", "actual": 2, "result": "win", "units": 0.1667}
+    # -150 won, tracked to win 0.25u on a minus price (Cooper, 2026-11-04).
+    assert alpha == {**published, "gameId": TOR_GAME[D0], "opp": "MTL", "actual": 2, "result": "win", "units": 0.25}
     assert (published["playerId"], published["team"], published["market"], published["price"], published["book"]) == (1, "TOR", "points", -150, "DraftKings")
     bravo = next(r for r in by_night[D0]["dueList"]["rows"] if r["player"] == "Bravo Goals")
     assert (bravo["team"], bravo["opp"], bravo["actual"], bravo["result"]) == ("MTL", "TOR", 0, "loss")
