@@ -120,20 +120,20 @@
       },
       {
         "book": "BET99",
-        "date": "2026-10-20",
-        "source": "Covers, NHL MVP odds",
+        "date": "2026-11-03",
+        "source": "Covers, NHL MVP odds (page updated Nov 3, 2026; odds courtesy of Bet99 as of Nov. 3)",
         "url": "https://www.covers.com/nhl/nhl-mvp-odds",
         "lines": [
-          {"name": "Connor McDavid", "team": "EDM", "american": 210},
-          {"name": "Nathan MacKinnon", "team": "COL", "american": 350},
-          {"name": "Macklin Celebrini", "team": "SJS", "american": 550},
-          {"name": "Kirill Kaprizov", "team": "MIN", "american": 950},
+          {"name": "Connor McDavid", "team": "EDM", "american": -190},
+          {"name": "Kirill Kaprizov", "team": "MIN", "american": 725},
+          {"name": "Nathan MacKinnon", "team": "COL", "american": 800},
           {"name": "Leon Draisaitl", "team": "EDM", "american": 1100},
-          {"name": "Nikita Kucherov", "team": "TBL", "american": 1500},
-          {"name": "Nick Suzuki", "team": "MTL", "american": 1500},
-          {"name": "Auston Matthews", "team": "TOR", "american": 2000},
-          {"name": "David Pastrnak", "team": "BOS", "american": 2000},
-          {"name": "Nico Hischier", "team": "NJD", "american": 2250}
+          {"name": "Macklin Celebrini", "team": "SJS", "american": 1700},
+          {"name": "Evan Bouchard", "team": "EDM", "american": 1800},
+          {"name": "Jack Eichel", "team": "VGK", "american": 2000},
+          {"name": "Nikita Kucherov", "team": "TBL", "american": 2000},
+          {"name": "Nico Hischier", "team": "NJD", "american": 2250},
+          {"name": "Auston Matthews", "team": "TOR", "american": 2250}
         ]
       },
       {
@@ -320,8 +320,8 @@
     "odds": [
       {
         "book": "Sports Interaction",
-        "date": "2026-11-02",
-        "source": "canadasportsbetting.ca, Selke Trophy odds (page updated Nov 2; table note 'last updated on Nov 03, 2026'; odds courtesy of Sports Interaction)",
+        "date": "2026-11-03",
+        "source": "canadasportsbetting.ca, Selke Trophy odds (page updated Nov 3; table note 'last updated on Nov 04, 2026'; odds courtesy of Sports Interaction)",
         "url": "https://www.canadasportsbetting.ca/betting-odds/nhl/awards/selke-trophy/",
         "lines": [
           {"name": "Aleksander Barkov", "team": "FLA", "american": 175},
