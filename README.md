@@ -418,6 +418,11 @@ PYTHONPATH=src .venv/bin/python scripts/run_hits_model_study.py
 # workflow runs it in CI on the bought prices).
 PYTHONPATH=src .venv/bin/python scripts/run_due_list_tuning.py
 
+# Do 2-goal games, hat tricks and shutouts come "due"? Hit rates by drought
+# against each player's own rate, and the goals over 1.5 / 2.5 priced (Due List
+# Tuning workflow runs it in CI on the bought prices).
+PYTHONPATH=src .venv/bin/python scripts/run_due_list_big_games.py
+
 # How good are the DFS projections? Walk-forward MAE, rank and ceiling coverage
 # of the lab's DraftKings projection against DK averages and the app's old
 # formula (DFS Projection Test workflow runs it in CI on the bought prices).
