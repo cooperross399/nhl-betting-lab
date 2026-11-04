@@ -16,6 +16,7 @@ on:
     paths:
       - "scripts/run_due_list_tuning.py"
       - "scripts/run_drought_rule_backtest.py"
+      - "scripts/run_due_list_big_games.py"
       - "src/nhl_betting_lab/drought_rule.py"
       - ".github/workflows/due-list-tuning.yml"
 
@@ -88,6 +89,12 @@ jobs:
           # aggregate data/outputs/drought_rule_backtest.json the card reads its
           # cell records from; it is printed between markers for committing.
           python scripts/run_drought_rule_backtest.py > /dev/null || status=$?
+          # 2-goal games, hat tricks and shutouts (Cooper, 2026-11-04).
+          python scripts/run_due_list_big_games.py > /dev/null || status=$?
+          if [ -s data/outputs/due_list_big_games.md ]; then
+            cat data/outputs/due_list_big_games.md >> "$GITHUB_STEP_SUMMARY"
+            cat data/outputs/due_list_big_games.md
+          fi
           if [ -s data/outputs/drought_rule_backtest.json ]; then
             echo "----- drought_rule_backtest.json -----"
             cat data/outputs/drought_rule_backtest.json
