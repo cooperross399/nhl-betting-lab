@@ -812,7 +812,11 @@ class Component extends DCLogic {
     const tone = { win: "var(--win)", lose: "var(--alert)", flat: "var(--ink)", mute: "var(--mute)" };
 
     // Cooper's Due List (board.json games[].drought): an unstaked list he picks from. Never styled as a pick, never given units.
-    const DROUGHT_UNITS = { points: ["point", "points", "1+ point", "a point"], goals: ["goal", "goals", "Anytime goal", "a goal"], assists: ["assist", "assists", "1+ assist", "an assist"] };
+    // [one, many, category, "without ___", what the drought counts, the live stat it is tracked on]. The big games (2026-11-04;
+    // SCHEMA.md games[].drought): 2+ goals and hat tricks track live as goals over 1.5 / 2.5; a shutout counts starts and has no live stat.
+    const DROUGHT_UNITS = { points: ["point", "points", "1+ point", "a point"], goals: ["goal", "goals", "Anytime goal", "a goal"], assists: ["assist", "assists", "1+ assist", "an assist"],
+      two_goals: ["goal", "goals", "2+ goals", "a 2-goal game", "games", "goals"], hat_trick: ["goal", "goals", "Hat trick", "a hat trick", "games", "goals"],
+      shutout: ["shutout", "shutouts", "Shutout", "a shutout", "starts", "shutout"] };
     const DROUGHT_NOTE = data.droughtNote || "70+ points, 25+ goals or 30+ assists last season, and a drought in that category at the tier bar his total sets or, for points and assists, at his own equal-surprise bar.";
     // The seasons the cell records were measured on ("2024-26"), read from the board (SCHEMA.md droughtWindow); a board
     // without it names no window rather than one the record was not measured on.
@@ -881,10 +885,10 @@ class Component extends DCLogic {
           : { label: `Past picks like this${DROUGHT_WINDOW}`, value: "none yet", sub: "" },
       ].filter(Boolean);
       return { player: x.player, team: x.team || "", color: t.color || "var(--ink)", fg: t.fg || "var(--paper)", streak: x.drought != null ? String(x.drought) : "—", category: u[2],
-        history: `${x.lastSeason ?? "—"} ${u[1]} last season · ${x.drought} straight games without ${u[3]}`, meta, record, facts, hasFacts: facts.length > 0,
+        history: `${x.lastSeason ?? "—"} ${u[1]} last season · ${x.drought} straight ${u[4] || "games"} without ${u[3]}`, meta, record, facts, hasFacts: facts.length > 0,
         price: priced ? F.fmtOdds(x.price) : "—", book: priced ? x.book || "" : "price not posted", priceColor: priced ? "var(--ink)" : "var(--mute)", juice: !!x.heavyJuice,
-        track: track({ ...x, gameId: gid, side: "over", line, unitOne: u[0], unitMany: u[1] }),
-        aria: `${x.player}, ${u[2]}, ${x.drought} straight games without ${u[3]}, ${priced ? F.fmtOdds(x.price) : "price not posted"}${x.heavyJuice ? ", heavy juice" : ""}${meta ? `, ${meta}` : ""}${record ? `, ${record}` : ""}` };
+        track: track({ ...x, market: u[5] || x.market, gameId: gid, side: "over", line, unitOne: u[0], unitMany: u[1] }),
+        aria: `${x.player}, ${u[2]}, ${x.drought} straight ${u[4] || "games"} without ${u[3]}, ${priced ? F.fmtOdds(x.price) : "price not posted"}${x.heavyJuice ? ", heavy juice" : ""}${meta ? `, ${meta}` : ""}${record ? `, ${record}` : ""}` };
     };
     const byGameProps = {};
     for (const r of pv ? pv.rows : []) (byGameProps[r.gameId] = byGameProps[r.gameId] || []).push(r);
