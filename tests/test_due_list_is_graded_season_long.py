@@ -202,7 +202,8 @@ def test_three_frozen_nights_sum_into_the_season_record(tmp_path: Path, monkeypa
     count = {k: board["record"]["dueList"][k] for k in ("w", "l", "p", "nights")}
     assert count == {"w": 4, "l": 2, "p": 0, "nights": 3}
     season = results["dueList"]["season"]
-    assert season["byMarket"] == {"points": {"w": 1, "l": 1}, "goals": {"w": 1, "l": 1}, "assists": {"w": 2, "l": 0}}
+    assert season["byMarket"] == {"points": {"w": 1, "l": 1}, "goals": {"w": 1, "l": 1}, "assists": {"w": 2, "l": 0},
+                                 "two_goals": {"w": 0, "l": 0}, "hat_trick": {"w": 0, "l": 0}, "shutout": {"w": 0, "l": 0}}
     assert {k: season[k] for k in ("w", "l", "p", "nights")} == count
     assert results["seasonRecord"]["dueList"] == season
     # The record on the board is the page's own keys: the count and the
@@ -301,7 +302,8 @@ def test_old_nights_are_kept_with_their_tallies_and_read_back(tmp_path: Path, mo
     season = module.season_record(D3 + timedelta(days=1), out / "history", yesterday)
     assert season["missingNights"] == 1
     assert {k: v for k, v in season["dueList"].items() if k not in TRACKING_KEYS} == {"w": 3, "l": 2, "p": 0, "nights": 2,
-                                 "byMarket": {"points": {"w": 1, "l": 1}, "goals": {"w": 0, "l": 1}, "assists": {"w": 2, "l": 0}},
+                                 "byMarket": {"points": {"w": 1, "l": 1}, "goals": {"w": 0, "l": 1}, "assists": {"w": 2, "l": 0},
+                                 "two_goals": {"w": 0, "l": 0}, "hat_trick": {"w": 0, "l": 0}, "shutout": {"w": 0, "l": 0}},
                                  "impliedPct": round(100 * sum(_implied(p) for p in (-150, 140, -200, 120)) / 4, 1)}
     assert board["record"]["dueList"]["nights"] == 3, "the live build, with the network, counted all three"
 

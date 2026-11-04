@@ -111,7 +111,8 @@ from nhl_betting_lab.config import (
 )
 from nhl_betting_lab.data.starting_goalies import GoalieStarters
 from nhl_betting_lab.data.starting_goalies import PREFIX as STARTER_PREFIX
-from nhl_betting_lab.drought_rule import SECTION_TITLE, fingerprint as drought_fingerprint_of
+from nhl_betting_lab.drought_rule import BIG_GAMES_HEADLINE, SECTION_TITLE, fingerprint as drought_fingerprint_of
+from nhl_betting_lab.drought_rule import category_label as drought_category_label
 from nhl_betting_lab.drought_rule import bar_text as drought_bar_text
 from nhl_betting_lab.drought_rule import bars_text as drought_bars_text
 from nhl_betting_lab.drought_rule import price_text as drought_price_text
@@ -1293,6 +1294,13 @@ def _demoted_leans_by_reason(leans: Sequence[Mapping[str, Any]]) -> list[str]:
     return lines
 
 
+def _due_line_text(row: dict) -> str:
+    """"over 0.5", "over 1.5" (2+ goals), "over 2.5" (hat trick), or "no goal against" (shutout)."""
+    if row.get("market") == "shutout":
+        return "no goal against"
+    return f"over {float(row.get('line', 0.5)):g}"
+
+
 def render_drought_section(card: GamedayCard) -> list[str]:
     """Cooper's Due List: a selection list, not staked bets.
 
@@ -1311,7 +1319,7 @@ def render_drought_section(card: GamedayCard) -> list[str]:
     """
     if not card.drought_built:
         return []
-    lines = [f"## {SECTION_TITLE}", "", card.drought_headline, ""]
+    lines = [f"## {SECTION_TITLE}", "", card.drought_headline, "", BIG_GAMES_HEADLINE, ""]
     if card.drought_rows:
         lines += [
             "| Player | Team | Opponent | Puck drop | Category | Line | Last season | Drought | Bar reached "
@@ -1323,7 +1331,8 @@ def render_drought_section(card: GamedayCard) -> list[str]:
             flag = "heavy juice (shorter than -160)" if row.get("heavy_juice") else ""
             lines.append(
                 f"| {row.get('player')} | {row.get('team')} | {row.get('opponent')} "
-                f"| {_start_eastern(row)} | {row.get('market')} | over {float(row.get('line', 0.5)):g} "
+                f"| {_start_eastern(row)} | {drought_category_label(row.get('market'))} "
+                f"| {_due_line_text(row)} "
                 f"| {row.get('last_season')} | {row.get('drought')} | {drought_bar_text(row)} "
                 f"| {drought_bars_text(row)} | {drought_rarity_text(row)} | {drought_line_text(row)} "
                 f"| {drought_goalie_text(row)} | {drought_shots_text(row)} "

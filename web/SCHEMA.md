@@ -219,9 +219,15 @@ games[].pick     + side   "away" | "home" | "over" | "under"  — which side the
 games[].drought  [] on every regular-season game — Cooper's Due List (2026-10-07; that evening the two bars below replaced
                  the flat 5-game rule of #307), an unstaked list he picks from: 70+ points, 25+ goals or 60+ assists (30+ until 2026-10-31) last regular
                  season, and a drought in that category (games dressed without one, carried across the season boundary) that
-                 has reached EITHER bar. Rows come in the card's order: points, goals, assists; then rarity ascending (rarest
-                 first); then drought descending; then name.
-  []             {player, playerId, team, market ("points"|"goals"|"assists"), line (0.5), lastSeason (that category's total),
+                 has reached EITHER bar. Since 2026-11-04 also the big games: "two_goals" (2+ goals, line 1.5) and
+                 "hat_trick" (3+ goals, line 2.5) for a 40+ goal scorer 15 / 40 games without one, and "shutout" (a goalie
+                 with 4+ shutouts last season, 15 starts without one; lastSeason is shutouts, drought is starts, price is
+                 always null: no book in the feed prices one; graded won on a start with no goal against, void when he
+                 did not start). Their tierBar is that bar and surpriseBar is null. Rows come in the card's order: points,
+                 goals, assists, two_goals, hat_trick, shutout; then rarity ascending (rarest first); then drought
+                 descending; then name.
+  []             {player, playerId, team, market ("points"|"goals"|"assists"|"two_goals"|"hat_trick"|"shutout"), line
+                 (0.5; 1.5 for two_goals, 2.5 for hat_trick), lastSeason (that category's total),
                  drought (games in a row without one, entering tonight), price (best American odds | null: not posted),
                  book (string | null), heavyJuice (bool: shorter than -160),
                  tierBar      int | null — the bar his last-season total sets: points 100+ 3, 85-99 4, 70-84 5;

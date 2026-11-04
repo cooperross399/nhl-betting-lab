@@ -54,8 +54,12 @@ def make_logs() -> pd.DataFrame:
     rows += _games(2, "Four Dry", 20262027, "2026-10-01", 4)
     # 3: 40 goals in 73 games (40+ band: tier bar 5; goals have no surprise bar), then 3 dry games LAST
     #    season and 2 this season: the drought crosses the boundary.
-    rows += _games(3, "Test Scorer", 20252026, "2025-10-10", 30)
-    rows += _games(3, "Test Scorer", 20252026, "2025-11-09", 40, goals=1, offset=30)
+    #    His last scoring game last season was a hat trick (2026-11-04: the big-game categories), so
+    #    no 2+ goal or hat-trick drought lists him here; the 40 goals and 73 games are unchanged.
+    rows += _games(3, "Test Scorer", 20252026, "2025-10-10", 31)
+    rows += _games(3, "Test Scorer", 20252026, "2025-11-10", 37, goals=1, offset=31)
+    rows += _games(3, "Test Scorer", 20252026, "2025-12-17", 1, offset=68)
+    rows += _games(3, "Test Scorer", 20252026, "2025-12-18", 1, goals=3, offset=69)
     rows += _games(3, "Test Scorer", 20252026, "2026-03-01", 3, offset=70)
     rows += _games(3, "Test Scorer", 20262027, "2026-10-01", 2)
     # 4: 70 points, all assists, in 105 games (p = 0.667: surprise bar 3; points tier bar 5, assists tier
@@ -355,7 +359,7 @@ def test_rows_sort_by_category_then_rarest_first_not_longest_drought():
 
     assert [(r["market"], r["player"], r["drought"], r["rarity"]) for r in result.rows] == [
         ("points", "Tied Rare", 6, 0.0312),  # 72 assists are 72 points: listed in points too
-        ("goals", "Test Scorer", 5, 0.0189), ("assists", "Short Rare", 5, 0.0003),
+        ("goals", "Test Scorer", 5, 0.0253), ("assists", "Short Rare", 5, 0.0003),
         ("assists", "Long Dry", 7, 0.0078), ("assists", "Tied Rare", 6, 0.0312), ("assists", "Assist Man", 5, 0.0312)]
     assert [r["rule"] for r in result.rows] == ["both", "tier"] + ["both"] * 4
     assert [r["one_in"] for r in result.rows] == [32, 53, 3125, 128, 32, 32]

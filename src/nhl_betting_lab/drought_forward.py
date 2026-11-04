@@ -34,8 +34,11 @@ import pandas as pd
 
 from nhl_betting_lab.config import OUTPUTS_DIR, PROCESSED_DIR
 from nhl_betting_lab.drought_rule import (
+    BIG_GAMES,
+    CATEGORIES,
+    GOALIE_START_SECONDS,
     SECTION_TITLE,
-    THRESHOLDS,
+    is_shutout,
     backtest_headline,
     best_over_prices,
     build_drought_list,
@@ -190,12 +193,18 @@ def settle_lists(
                 # An unpriced row is not a wager: it is graded for the hit rate with a
                 # placeholder price that never reaches the profit column.
                 priced = not pd.isna(r.american_odds)
-                probe = type("Row", (), {"market": r.market, "player": r.player, "line": r.line,
+                # 2+ goals and hat tricks settle as the goals over their line; a
+                # shutout on the goalie's own start (`settle_shutout`).
+                market = "goals" if r.market in BIG_GAMES and BIG_GAMES[r.market]["role"] == "skater" else r.market
+                probe = type("Row", (), {"market": market, "player": r.player, "line": r.line,
                                          "selection": r.selection,
                                          "american_odds": r.american_odds if priced else 100.0})()
                 teams = {resolve_team(r.home_team, team_names) or str(r.home_team).upper(),
                          resolve_team(r.away_team, team_names) or str(r.away_team).upper()}
-                outcome, actual, profit = _settle_prop_row(probe, index, teams)
+                if r.market == "shutout":
+                    outcome, actual, profit = settle_shutout(logs, day, r.player_id, probe.american_odds)
+                else:
+                    outcome, actual, profit = _settle_prop_row(probe, index, teams)
                 if not priced:
                     profit = 0.0
             if outcome == "void":
@@ -215,6 +224,34 @@ def settle_lists(
         ledger_path.parent.mkdir(parents=True, exist_ok=True)
         _replace_whole(frame, ledger_path)
     return result
+
+
+def settle_shutout(logs: pd.DataFrame, day: str, player_id, american_odds) -> tuple[str, float | None, float]:
+    """(outcome, goals against, profit) for a listed shutout.
+
+    Void when the goalie did not start (no row that day, or under
+    `GOALIE_START_SECONDS`), as a saves prop is; unsettleable when his row
+    carries no ice time or goals against. Won is a shutout (`is_shutout`).
+    """
+    if logs.empty or not {"player_id", "date", "toi_seconds", "goals_against"} <= set(logs.columns):
+        return "unsettleable", None, 0.0
+    try:
+        pid = int(player_id)
+    except (TypeError, ValueError):
+        return "unsettleable", None, 0.0
+    mine = logs[(pd.to_numeric(logs["player_id"], errors="coerce") == pid)
+                & (logs["date"].astype(str).str.slice(0, 10) == day)]
+    if mine.empty:
+        return "void", None, 0.0
+    row = mine.iloc[-1]
+    toi, ga = pd.to_numeric(row["toi_seconds"], errors="coerce"), pd.to_numeric(row["goals_against"], errors="coerce")
+    if pd.isna(toi) or pd.isna(ga):
+        return "unsettleable", None, 0.0
+    if toi < GOALIE_START_SECONDS:
+        return "void", None, 0.0
+    if is_shutout(ga, toi):
+        return "won", float(ga), profit_on_win(float(american_odds))
+    return "lost", float(ga), -1.0
 
 
 def _stat(rows: pd.DataFrame) -> dict[str, Any]:
@@ -253,7 +290,7 @@ def build_report(ledger: pd.DataFrame, *, pending_rows: int = 0, outputs_dir: Pa
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "pending_rows": int(pending_rows),
         "headline": backtest_headline(outputs_dir, fallback=OUTPUTS_DIR),
-        "categories": {m: _stat(ledger[ledger["market"] == m]) for m in THRESHOLDS},
+        "categories": {m: _stat(ledger[ledger["market"] == m]) for m in CATEGORIES},
         "overall": _stat(ledger),
         "tracked_stake": TRACKED_STAKE,
         "backfilled_days": sorted((sources.get("backfilled") or {}).keys()),
@@ -578,7 +615,7 @@ def build_scorecard(ledger: pd.DataFrame, day: str) -> dict[str, Any]:
     for label, part in (("week", week), ("season", frame)):
         part_edge = edge.loc[part.index]
         out["slices"][label] = {
-            "categories": {m: _card_stat(part[part["market"] == m]) for m in THRESHOLDS},
+            "categories": {m: _card_stat(part[part["market"] == m]) for m in CATEGORIES},
             "overall": _card_stat(part),
             "model_agreed": _card_stat(part[part_edge > 0]),
             "model_disagreed": _card_stat(part[part_edge <= 0]),
@@ -601,7 +638,7 @@ def render_scorecard(card: Mapping[str, Any]) -> list[str]:
     for label, title in (("week", "Last week"), ("season", "Season")):
         s = card["slices"][label]
         lines += [f"**{title}**", "", "| | Listed | Hits | Units at 0.25u |", "|:--|--:|--:|--:|"]
-        lines += [_line(m, s["categories"][m]) for m in THRESHOLDS]
+        lines += [_line(m, s["categories"][m]) for m in CATEGORIES]
         lines += [_line("all", s["overall"]), _line("model agreed", s["model_agreed"]),
                   _line("model disagreed", s["model_disagreed"]), ""]
     lines += ["Hits count every graded entry; units count entries that had a price, at 0.25u as the site tracks "

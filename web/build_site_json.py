@@ -1157,7 +1157,8 @@ DROUGHT_RULE_SENTENCE = ("Cooper's Due List, an unstaked list he picks from: a s
                          "last regular season whose drought in that category has reached either bar, the tier bar his total sets "
                          "(points 100+ → 3, 85-99 → 4, 70-84 → 5; goals 40+ → 5, 25-39 → 10; assists 60+ → 3) or, for points "
                          "and assists, his own equal-surprise bar, the shortest drought with no more than a 5% chance at his "
-                         "last-season hit rate.")
+                         "last-season hit rate; and, for the big games, a 40+ goal scorer 15 games without 2+ goals or 40 "
+                         "without a hat trick, or a goalie with 4+ shutouts 15 starts without one.")
 
 #: What a listed row carries beyond the #307 fields, as the card's
 #: drought_list.json spells it -> as this board spells it. Each is read, never
@@ -1277,8 +1278,8 @@ def drought_window(lab: Path) -> str | None:
 def drought_note(lab: Path, listed: bool) -> str:
     """One sentence above each game's list: the rule and the backtest headline, read from its file."""
     try:
-        from nhl_betting_lab.drought_rule import backtest_headline
-        headline = backtest_headline(lab / "data" / "outputs")
+        from nhl_betting_lab.drought_rule import BIG_GAMES_HEADLINE, backtest_headline
+        headline = f"{backtest_headline(lab / 'data' / 'outputs')} {BIG_GAMES_HEADLINE}"
     except ImportError:
         headline = "Backtest headline unavailable: the lab's package could not be imported."
     note = f"{DROUGHT_RULE_SENTENCE} {headline}"
@@ -1932,9 +1933,15 @@ def stamp_finals(history_dir: Path, day: date, results: dict) -> bool:
 #: gameday-state. Read for the Due List and the player props.
 PLAYER_LOGS_FILENAME = "player_game_logs.csv"
 
-#: The Due List's categories, every one over 0.5 (web/SCHEMA.md, games[].drought).
-#: Points are goals plus assists.
-DUE_LIST_MARKETS = ("points", "goals", "assists")
+#: The Due List's categories (web/SCHEMA.md, games[].drought). Points are goals
+#: plus assists. Since 2026-11-04 the big games too: 2+ goals and hat tricks
+#: (goals over 1.5 / 2.5) and shutouts (goals against 0 on a start).
+DUE_LIST_MARKETS = ("points", "goals", "assists", "two_goals", "hat_trick", "shutout")
+#: A goalie start and a shutout, as the lab's drought_rule counts them
+#: (`GOALIE_START_SECONDS`, `SHUTOUT_SECONDS`), spelled out for the reason
+#: USER_AGENT gives.
+DUE_LIST_START_SECONDS = 2400
+DUE_LIST_SHUTOUT_SECONDS = 59 * 60
 
 #: The line a Due List entry is graded against when the frozen entry carries
 #: none: the rule's own, over 0.5.
@@ -2099,7 +2106,17 @@ def read_player_counts(processed: Path | None, game_ids: set[str]) -> tuple[dict
                     continue
                 boxed.add(game_id)
                 goals, assists = _count(r.get("goals")), _count(r.get("assists"))
-                counts = {"goals": goals, "assists": assists, "points": goals + assists}
+                counts = {"goals": goals, "assists": assists, "points": goals + assists,
+                          "two_goals": goals, "hat_trick": goals}
+                if str(r.get("role") or "").strip() == "goalie":
+                    # A shutout entry is graded on the goalie's own start: 1 a
+                    # shutout, 0 not, None (void) when he did not start.
+                    try:
+                        toi, against = float(r.get("toi_seconds") or ""), float(r.get("goals_against") or "")
+                    except ValueError:
+                        toi, against = None, None
+                    counts["shutout"] = (None if toi is None or toi < DUE_LIST_START_SECONDS
+                                         else int(against == 0 and toi >= DUE_LIST_SHUTOUT_SECONDS))
                 player_id = str(r.get("player_id") or "").strip()
                 if player_id:
                     by_id[(game_id, player_id)] = counts
@@ -2172,9 +2189,10 @@ def grade_due_list(board: dict, finals: dict, processed: Path | None,
                 if counts is None:
                     counts = by_name.get((game_id, str(entry.get("player") or "").strip().lower(),
                                           str(entry.get("team") or "").strip().upper()))
-                if counts is None:
+                if counts is None or (entry.get("market") in DUE_LIST_MARKETS
+                                      and counts.get(entry["market"], 0) is None):
                     row["result"] = "void"
-                elif entry.get("market") in DUE_LIST_MARKETS:
+                elif entry.get("market") in DUE_LIST_MARKETS and entry["market"] in counts:
                     actual = counts[entry["market"]]
                     try:
                         line = float(entry.get("line") if entry.get("line") is not None else DUE_LIST_LINE)

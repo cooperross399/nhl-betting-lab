@@ -13,6 +13,9 @@ Three things beside each row, read from what the card already fetches:
    `pp_before`, `line_move`: "up", "down", "same", "mixed", or None with no
    earlier capture). `status` carries Daily Faceoff's injury or game-time
    note when there is one.
+   A shutout row (a goalie) is never checked against the lines; it is taken
+   off when another goalie is his club's listed starter tonight, and carries
+   `status` "listed starter (Confirmed)" when he is the one listed.
 3. **The goalie he faces** (`opp_goalie`, `opp_goalie_status`), whether that
    goalie is his club's backup (`opp_goalie_backup`: not the goalie with the
    most starts in his club's last `STARTS_WINDOW` games), and his record
@@ -193,6 +196,18 @@ def annotate(
         for key in CONTEXT_FIELDS:
             out.setdefault(key, None)
         team = str(row.get("team", "")).strip().upper()
+        if row.get("market") == "shutout":
+            # A goalie is on no line. He is listed only while nobody else is his
+            # club's listed starter tonight; the goalie he faces is himself.
+            listed = starters.get(team)
+            if listed is not None and player_key(listed[0]) != player_key(str(row.get("player", ""))):
+                removed.append(f"{row.get('player')} ({team}, shutout): {listed[0]} is {team}'s listed starter "
+                               "tonight, so not listed.")
+                continue
+            if listed is not None:
+                out["status"] = f"listed starter ({listed[1]})" if listed[1] else "listed starter"
+            kept.append(out)
+            continue
         sheet = sheets.get(team)
         if sheet is not None:
             spot = _find(sheet, row.get("player"))

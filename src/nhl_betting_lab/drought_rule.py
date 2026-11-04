@@ -331,6 +331,149 @@ def qualifiers_entering(logs: pd.DataFrame, day: str) -> pd.DataFrame:
     return pd.DataFrame(rows, columns=columns)
 
 
+#: Big games (Cooper, 2026-11-04: "work shutouts/2 goal games/hat tricks into
+#: the due list for the really elite goalscorers/goalies"). Each is its own
+#: category beside points, goals and assists: `floor` is last season's total
+#: that makes a player elite for it (goals for the two scoring categories,
+#: shutouts for goalies) and `bar` the drought that lists him (games dressed
+#: without the event for skaters, starts without one for goalies). `price`
+#: is the provider market and line its best price is read from; a shutout
+#: has no market any book in this lab's feed quotes, so it is never priced.
+BIG_GAMES: dict[str, dict[str, Any]] = {
+    "two_goals": {"role": "skater", "count": 2, "line": 1.5, "price": ("goals", 1.5), "floor": 40, "bar": 15},
+    "hat_trick": {"role": "skater", "count": 3, "line": 2.5, "price": ("goals", 2.5), "floor": 40, "bar": 40},
+    "shutout": {"role": "goalie", "count": 1, "line": 0.5, "price": None, "floor": 4, "bar": 15},
+}
+#: Every category the list carries, in its order on the card.
+CATEGORIES = (*THRESHOLDS, *BIG_GAMES)
+#: How the card names each category.
+CATEGORY_LABELS = {"points": "points", "goals": "goals", "assists": "assists",
+                   "two_goals": "2+ goals", "hat_trick": "hat trick", "shutout": "shutout"}
+#: The big games' measured records, card window, 2024-25 and 2025-26, best
+#: price, flat stake, 95% interval bootstrapped over nights, at the shipped
+#: floor and bar: `scripts/run_due_list_big_games.py`, Due List Tuning run
+#: 41759820070 (2026-11-04). A shutout has no price, so no record.
+BIG_GAMES_RECORDS: dict[tuple[str, str], dict[str, Any]] = {
+    ("two_goals", "40+"): {"wagers": 576, "roi": -0.278, "ci_low": -0.476, "ci_high": -0.091},
+    ("hat_trick", "40+"): {"wagers": 1056, "roi": -0.663, "ci_low": -0.881, "ci_high": -0.420},
+}
+#: One line for the card, from the same run.
+BIG_GAMES_HEADLINE = (
+    "Big games, measured on 2024-25 and 2025-26 (scripts/run_due_list_big_games.py): a drought does not make "
+    "any of them likelier. 2+ goals, 40+ goal scorers 15+ games without one: hit 7.5% against 10.9% implied, "
+    "-27.8% over 576 (95% -47.6% to -9.1%). Hat trick, 40+ at 40+: -66.3% over 1,056 (95% -88.1% to -42.0%). "
+    "Shutouts, 4+ last season at 15+ starts without one: 4.8% of 475 starts against 9.7% the season before; "
+    "no book in this feed prices a shutout, so those rows are graded for hits only. A demonstrated loss for "
+    "the two priced categories; Cooper picks from the list."
+)
+
+
+def category_label(category: str) -> str:
+    return CATEGORY_LABELS.get(str(category), str(category))
+#: A goalie start, as the backtest counts one (`walk_forward.GOALIE_START_SECONDS`).
+GOALIE_START_SECONDS = 2400
+#: A shutout: a start with no goal against and this much ice time (the whole
+#: game; a shootout goal is not a goal against).
+SHUTOUT_SECONDS = 59 * 60
+#: The provider market and line each priced category reads its best over from.
+PRICE_OF: dict[str, tuple[str, float]] = {
+    **{m: (m, LINE) for m in THRESHOLDS},
+    **{c: spec["price"] for c, spec in BIG_GAMES.items() if spec["price"] is not None},
+}
+
+
+def line_of(category: str) -> float:
+    """The over a category is graded on: 0.5, or 1.5 / 2.5 for 2+ goals and hat tricks."""
+    return float(BIG_GAMES[category]["line"]) if category in BIG_GAMES else LINE
+
+
+def is_shutout(goals_against, toi_seconds) -> bool:
+    """A shutout: no goal against over (practically) the whole game."""
+    ga, toi = pd.to_numeric(goals_against, errors="coerce"), pd.to_numeric(toi_seconds, errors="coerce")
+    return bool(not pd.isna(ga) and not pd.isna(toi) and ga == 0 and toi >= SHUTOUT_SECONDS)
+
+
+def big_game_events(logs: pd.DataFrame) -> pd.DataFrame:
+    """One row per regular-season skater game dressed or goalie start, with each big game's flag.
+
+    Columns: player_id, player, date, game_id, season, season_start, role, and a
+    0/1 column per `BIG_GAMES` category (0 on rows of the other role).
+    """
+    needed = {"role", "game_type", "season", "date", "game_id", "player_id", "player", "goals"}
+    if logs.empty or not needed <= set(logs.columns):
+        return pd.DataFrame(columns=["player_id", "player", "date", "game_id", "season", "season_start", "role",
+                                     *BIG_GAMES])
+    rs = logs[logs.game_type == 2]
+    skaters = rs[rs.role == "skater"].copy()
+    goalies = rs[rs.role == "goalie"].copy()
+    if "toi_seconds" in goalies.columns:
+        goalies = goalies[pd.to_numeric(goalies.toi_seconds, errors="coerce") >= GOALIE_START_SECONDS]
+    else:
+        goalies = goalies.iloc[0:0]
+    goals = pd.to_numeric(skaters.goals, errors="coerce")
+    for category, spec in BIG_GAMES.items():
+        if spec["role"] == "skater":
+            skaters[category] = (goals >= spec["count"]).astype(int)
+            goalies[category] = 0
+        else:
+            ga = goalies["goals_against"] if "goals_against" in goalies.columns else pd.Series(np.nan, index=goalies.index)
+            toi = goalies["toi_seconds"] if "toi_seconds" in goalies.columns else pd.Series(np.nan, index=goalies.index)
+            goalies[category] = [int(is_shutout(a, s)) for a, s in zip(ga, toi)]
+            skaters[category] = 0
+    both = pd.concat([skaters, goalies], ignore_index=True)
+    both["season_start"] = pd.to_numeric(both.season, errors="coerce") // 10000
+    return both[["player_id", "player", "date", "game_id", "season", "season_start", "role", *BIG_GAMES]]
+
+
+def big_game_qualifiers_entering(logs: pd.DataFrame, day: str) -> pd.DataFrame:
+    """Every (player, big-game category) listed for a game on league date `day`.
+
+    Same columns as `qualifiers_entering`. Last season's total is goals (2+
+    goals, hat tricks) or shutouts; the drought is regular-season games dressed
+    (starts, for a goalie) since his last such game, carried across the season
+    boundary; the hit rate is last season's share of games (starts) with one.
+    A player is listed when last season's total reaches the category's floor
+    and the drought its bar. Only games before `day` are read.
+    """
+    columns = list(QUALIFIER_COLUMNS)
+    events = big_game_events(logs)
+    events = events[events["date"].astype(str).str.slice(0, 10) < day]
+    if events.empty:
+        return pd.DataFrame(columns=columns)
+    events = events.sort_values(["player_id", "date", "game_id"])
+    tonight_season = int(season_id(day)) // 10000
+    prior_rows = events[events.season_start == tonight_season - 1]
+    goals_by = {}
+    if not logs.empty and "goals" in logs.columns:
+        sk = logs[(logs.role == "skater") & (logs.game_type == 2)]
+        sk = sk[(pd.to_numeric(sk.season, errors="coerce") // 10000) == tonight_season - 1]
+        sk = sk[sk["date"].astype(str).str.slice(0, 10) < day]
+        goals_by = pd.to_numeric(sk.goals, errors="coerce").groupby(sk.player_id).sum().to_dict()
+    rows = []
+    for category, spec in BIG_GAMES.items():
+        mine = events[events.role == spec["role"]]
+        prior = prior_rows[prior_rows.role == spec["role"]].groupby("player_id")[category].agg(["sum", "size"])
+        for pid, g in mine.groupby("player_id", sort=False):
+            if pid not in prior.index:
+                continue
+            total = int(goals_by.get(pid, 0)) if spec["role"] == "skater" else int(prior.at[pid, "sum"])
+            if total < spec["floor"]:
+                continue
+            flags = g[category].to_numpy()
+            hit = np.flatnonzero(flags >= 1)
+            drought = int(len(flags) - (hit[-1] + 1)) if len(hit) else int(len(flags))
+            if drought < spec["bar"]:
+                continue
+            games = int(prior.at[pid, "size"])
+            p = float(prior.at[pid, "sum"]) / games if games else 0.0
+            rows.append({"player_id": int(pid), "player": g.player.iloc[-1], "market": category,
+                         "last_season": total, "drought": drought, "tier_bar": int(spec["bar"]),
+                         "surprise_bar": None, "hit_rate": round(p, 3),
+                         "rarity": round((1.0 - p) ** drought, 4), "one_in": one_in(p, drought),
+                         "rule": "tier", "band": f"{spec['floor']}+", "drought_sog": None, "usual_sog": None})
+    return pd.DataFrame(rows, columns=columns)
+
+
 @dataclass
 class DroughtList:
     """Tonight's list, and what could not be placed on it."""
@@ -393,10 +536,11 @@ def build_drought_list(
         result.notes.append(f"No regular-season game is scheduled for {day}.")
         return result
 
-    qualified = qualifiers_entering(logs, day)
+    parts = [f for f in (qualifiers_entering(logs, day), big_game_qualifiers_entering(logs, day)) if not f.empty]
+    qualified = pd.concat(parts, ignore_index=True) if parts else pd.DataFrame(columns=QUALIFIER_COLUMNS)
     team_of = {pid: str(team).strip().upper() for pid, team in rosters.items()}
     playing = {team: (h, a) for (h, a) in games for team in (h, a)}
-    records = records or {}
+    records = {**BIG_GAMES_RECORDS, **(records or {})}
     candidates: list[dict[str, Any]] = []
     for q in qualified.itertuples():
         team = team_of.get(int(q.player_id))
@@ -407,13 +551,14 @@ def build_drought_list(
         candidates.append({
             "date": day, "commence_time": games[(home, away)], "home_team": home, "away_team": away,
             "team": team, "opponent": away if team == home else home,
-            "player": q.player, "player_id": int(q.player_id), "market": q.market, "line": LINE,
+            "player": q.player, "player_id": int(q.player_id), "market": q.market, "line": line_of(q.market),
             "selection": "over", "last_season": int(q.last_season), "drought": int(q.drought),
             "tier_bar": int(q.tier_bar), "surprise_bar": _optional_int(q.surprise_bar),
             "hit_rate": float(q.hit_rate), "rarity": float(q.rarity), "one_in": _optional_int(q.one_in),
             "rule": str(q.rule), "band": str(q.band),
             "cell_record": dict(record) if record is not None else None,
-            "drought_sog": q.drought_sog, "usual_sog": q.usual_sog,
+            "drought_sog": None if q.drought_sog is None or pd.isna(q.drought_sog) else q.drought_sog,
+            "usual_sog": None if q.usual_sog is None or pd.isna(q.usual_sog) else q.usual_sog,
             "shots": shots_label(shots_ratio(q.drought_sog, q.usual_sog)),
             "american_odds": None, "book": "", "heavy_juice": False,
             "model_probability": None, "model_edge": None,
@@ -434,7 +579,7 @@ def build_drought_list(
             if chance is not None:
                 row["model_probability"] = round(float(chance), 4)
                 row["model_edge"] = round(float(chance) - 1 / _decimal(priced[0]), 4)
-    order = {m: i for i, m in enumerate(THRESHOLDS)}
+    order = {m: i for i, m in enumerate(CATEGORIES)}
     rows.sort(key=lambda r: (order[r["market"]], r["rarity"], -r["drought"], r["player"]))
     result.rows = rows
     result.unresolved = sorted(unresolved)
@@ -475,9 +620,11 @@ def best_over_prices(
     unresolved: set[str] = set()
     wanted = {(r["player_id"], r["market"]) for r in rows}
     if prices is not None and not prices.empty and rows:
-        quotes = prices[prices["market"].astype(str).str.strip().isin(THRESHOLDS)
-                        & (prices["selection"].astype(str).str.strip().str.lower() == "over")
-                        & (pd.to_numeric(prices["line"], errors="coerce") == LINE)]
+        category_of = {spec: c for c, spec in PRICE_OF.items()}
+        lines = pd.to_numeric(prices["line"], errors="coerce")
+        markets = prices["market"].astype(str).str.strip()
+        quotes = prices[(prices["selection"].astype(str).str.strip().str.lower() == "over")
+                        & pd.Series([(m, ln) in category_of for m, ln in zip(markets, lines)], index=prices.index)]
         for p in quotes.itertuples():
             game = (resolve_team(clean_text(p.home_team), team_names), resolve_team(clean_text(p.away_team), team_names))
             if game not in on_game or row_game_date(p) != day:
@@ -485,7 +632,8 @@ def best_over_prices(
             ids: set[int] = set()
             for alias in player_name_aliases(p.player):
                 ids |= on_game[game].get(alias, set())
-            market = str(p.market).strip()
+            provider_market, line = str(p.market).strip(), float(p.line)
+            market = category_of[(provider_market, line)]
             hit = {pid for pid in ids if (pid, market) in wanted}
             if not hit:
                 continue
@@ -499,7 +647,7 @@ def best_over_prices(
             if probabilities and key not in chances:
                 from nhl_betting_lab.reports.card_pricing import selection_key
 
-                chance = probabilities.get(selection_key(p, market=market, selection="over", line=LINE))
+                chance = probabilities.get(selection_key(p, market=provider_market, selection="over", line=line))
                 if chance is not None and not pd.isna(chance):
                     chances[key] = float(chance)
             if key not in best or _decimal(float(odds)) > _decimal(best[key][0]):
