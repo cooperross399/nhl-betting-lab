@@ -2,8 +2,8 @@ Selections are unchanged since the previous card; this comment was posted on req
 
 # NHL gameday card
 
-- Generated: 2026-11-04T14:11:24+00:00
-- 1 best bet(s), 35 lean(s), 2086 pass(es) across 4 game(s); 0.25 unit(s) staked.
+- Generated: 2026-11-04T14:57:33+00:00
+- 1 best bet(s), 33 lean(s), 2076 pass(es) across 4 game(s); 0.25 unit(s) staked.
 - Included markets: **assists, goals, moneyline, points, puck_line, regulation_3_way, shots_on_goal, team_total, total_goals**
 - Unit size: $25
 
@@ -19,9 +19,9 @@ Selections are unchanged since the previous card; this comment was posted on req
 |:-----|:-------|:-------|:----------|------:|-----:|------:|------------:|:-----|
 | Calgary Flames @ Seattle Kraken | Nov 4, 10:10 PM ET | `shots_on_goal` | Zayne Parekh under 1.5 | 64.0% | +15.2% | +105 | -137 | Hard Rock Bet |
 | Chicago Blackhawks @ Florida Panthers | Nov 4, 7:40 PM ET | `points` | Frank Nazar under 0.5 | 65.5% | +11.0% | -120 | -146 | Hard Rock Bet |
+| Chicago Blackhawks @ Florida Panthers | Nov 4, 7:40 PM ET | `shots_on_goal` | Frank Nazar under 1.5 | 55.0% | +10.6% | +125 | +104 | Bovada |
 | Chicago Blackhawks @ Florida Panthers | Nov 4, 7:40 PM ET | `assists` | Seth Jones under 0.5 | 61.8% | +10.6% | -105 | -126 | BetMGM |
 | San Jose Sharks @ Los Angeles Kings | Nov 4, 10:10 PM ET | `points` | Ivar Stenberg under 0.5 | 65.0% | +10.4% | -120 | -143 | Courtside |
-| Chicago Blackhawks @ Florida Panthers | Nov 4, 7:40 PM ET | `shots_on_goal` | Frank Nazar under 1.5 | 54.8% | +10.3% | +125 | +106 | Bovada |
 | San Jose Sharks @ Los Angeles Kings | Nov 4, 10:10 PM ET | `goals` | Artemi Panarin over 0.5 | 45.7% | +10.0% | +180 | +152 | Bally Bet |
 | Chicago Blackhawks @ Florida Panthers | Nov 4, 7:40 PM ET | `points` | Seth Jones under 0.5 | 53.3% | +9.8% | +130 | +112 | BetMGM |
 | Calgary Flames @ Seattle Kraken | Nov 4, 10:10 PM ET | `team_total` | away_under 2.5 | 52.5% | +8.1% | +125 | +104 | Courtside |
@@ -33,16 +33,14 @@ Selections are unchanged since the previous card; this comment was posted on req
 | Calgary Flames @ Seattle Kraken | Nov 4, 10:10 PM ET | `points` | Berkly Catton under 0.5 | 64.3% | +6.8% | -135 | -139 | BetMGM |
 | Ottawa Senators @ Buffalo Sabres | Nov 4, 7:40 PM ET | `points` | Owen Power under 0.5 | 62.3% | +6.8% | -125 | -128 | BetMGM |
 | Chicago Blackhawks @ Florida Panthers | Nov 4, 7:40 PM ET | `shots_on_goal` | Brady Tkachuk over 4.5 | 36.1% | +6.7% | +240 | +232 | FanDuel |
+| Calgary Flames @ Seattle Kraken | Nov 4, 10:10 PM ET | `regulation_3_way` | home | 52.1% | +6.6% | +120 | +106 | Courtside |
 | San Jose Sharks @ Los Angeles Kings | Nov 4, 10:10 PM ET | `regulation_3_way` | home | 55.3% | +6.5% | +105 | -107 | Courtside |
 | Chicago Blackhawks @ Florida Panthers | Nov 4, 7:40 PM ET | `assists` | Sam Bennett under 0.5 | 65.6% | +6.4% | -145 | -147 | Courtside |
-| Calgary Flames @ Seattle Kraken | Nov 4, 10:10 PM ET | `points` | Morgan Frost under 0.5 | 57.6% | +6.4% | -105 | -106 | BetMGM |
 | San Jose Sharks @ Los Angeles Kings | Nov 4, 10:10 PM ET | `assists` | Macklin Celebrini under 0.5 | 54.0% | +6.4% | +110 | +109 | Hard Rock Bet |
 | Calgary Flames @ Seattle Kraken | Nov 4, 10:10 PM ET | `shots_on_goal` | Morgan Frost under 1.5 | 53.8% | +6.2% | +110 | +110 | BetMGM |
 | Calgary Flames @ Seattle Kraken | Nov 4, 10:10 PM ET | `total_goals` | under 5.5 | 51.0% | +6.2% | +123 | +111 | Bally Bet |
 | Calgary Flames @ Seattle Kraken | Nov 4, 10:10 PM ET | `total_goals` | under 6.5 | 62.1% | +6.2% | -127 | -141 | Courtside |
 | Calgary Flames @ Seattle Kraken | Nov 4, 10:10 PM ET | `total_goals` | under 5 | 36.9% | +6.1% | +225 | +200 | Bovada |
-| Calgary Flames @ Seattle Kraken | Nov 4, 10:10 PM ET | `shots_on_goal` | Mackie Samoskevich under 1.5 | 45.5% | +6.1% | +154 | +154 | FanDuel |
-| Calgary Flames @ Seattle Kraken | Nov 4, 10:10 PM ET | `regulation_3_way` | home | 52.2% | +5.9% | +116 | +106 | Bally Bet |
 | Chicago Blackhawks @ Florida Panthers | Nov 4, 7:40 PM ET | `team_total` | away_over 2.5 | 50.0% | +5.0% | +122 | +115 | FanDuel |
 | Calgary Flames @ Seattle Kraken | Nov 4, 10:10 PM ET | `team_total` | away_under 2 | 37.2% | +4.9% | +210 | +197 | BetMGM |
 | Calgary Flames @ Seattle Kraken | Nov 4, 10:10 PM ET | `total_goals` | under 4.5 | 28.5% | +4.7% | +320 | +300 | Bally Bet |
@@ -67,10 +65,10 @@ Leans are recorded and not staked.
 | Calgary Flames @ Seattle Kraken | Nov 4, 10:10 PM ET | `assists` | Zayne Parekh under 0.5 | 81.6% | +10.5% | -245 | Bally Bet |
 | San Jose Sharks @ Los Angeles Kings | Nov 4, 10:10 PM ET | `points` | Dmitry Orlov under 0.5 | 75.7% | +10.2% | -190 | Bally Bet |
 | Chicago Blackhawks @ Florida Panthers | Nov 4, 7:40 PM ET | `shots_on_goal` | Matthew Tkachuk over 4.5 | 22.5% | +9.2% | +650 | BetOnline.ag |
-| San Jose Sharks @ Los Angeles Kings | Nov 4, 10:10 PM ET | `assists` | Ivar Stenberg under 0.5 | 77.5% | +8.8% | -220 | BetMGM |
 | Calgary Flames @ Seattle Kraken | Nov 4, 10:10 PM ET | `team_total` | away_under 3.5 | 74.1% | +8.6% | -190 | Courtside |
 | Chicago Blackhawks @ Florida Panthers | Nov 4, 7:40 PM ET | `assists` | Frank Nazar under 0.5 | 79.1% | +8.5% | -240 | Courtside |
 | Chicago Blackhawks @ Florida Panthers | Nov 4, 7:40 PM ET | `assists` | Roman Kantserov under 0.5 | 75.1% | +8.4% | -200 | theScore Bet |
+| San Jose Sharks @ Los Angeles Kings | Nov 4, 10:10 PM ET | `assists` | Ivar Stenberg under 0.5 | 77.6% | +8.4% | -225 | BetMGM |
 | San Jose Sharks @ Los Angeles Kings | Nov 4, 10:10 PM ET | `assists` | Dmitry Orlov under 0.5 | 80.4% | +7.8% | -265 | Bally Bet |
 | Chicago Blackhawks @ Florida Panthers | Nov 4, 7:40 PM ET | `shots_on_goal` | Matthew Tkachuk over 5.5 | 12.7% | +7.6% | +1850 | BetOnline.ag |
 | Calgary Flames @ Seattle Kraken | Nov 4, 10:10 PM ET | `team_total` | away_under 4 | 86.5% | +7.6% | -375 | BetMGM |
@@ -84,12 +82,12 @@ Leans are recorded and not staked.
 | Chicago Blackhawks @ Florida Panthers | Nov 4, 7:40 PM ET | `shots_on_goal` | Teuvo Teravainen under 1.5 | 72.7% | +6.0% | -200 | Bally Bet |
 | Chicago Blackhawks @ Florida Panthers | Nov 4, 7:40 PM ET | `points` | Seth Jones under 1.5 | 87.9% | +5.9% | -455 | Bally Bet |
 | San Jose Sharks @ Los Angeles Kings | Nov 4, 10:10 PM ET | `goals` | Artemi Panarin over 1.5 | 12.5% | +5.8% | +1400 | Courtside |
-| Ottawa Senators @ Buffalo Sabres | Nov 4, 7:40 PM ET | `assists` | Thomas Chabot under 0.5 | 70.5% | +5.6% | -185 | BetMGM |
+| Ottawa Senators @ Buffalo Sabres | Nov 4, 7:40 PM ET | `shots_on_goal` | Jack Quinn under 2.5 | 58.7% | +5.6% | -113 | FanDuel |
 | Calgary Flames @ Seattle Kraken | Nov 4, 10:10 PM ET | `team_total` | away_under 4.5 | 88.5% | +5.5% | -485 | Courtside |
 | Calgary Flames @ Seattle Kraken | Nov 4, 10:10 PM ET | `puck_line` | home +2.5 | 91.6% | +5.5% | -615 | Courtside |
 | Chicago Blackhawks @ Florida Panthers | Nov 4, 7:40 PM ET | `shots_on_goal` | Brady Tkachuk over 7.5 | 9.5% | +5.5% | +2400 | BetOnline.ag |
 
-_2061 further passes not listed._
+_2051 further passes not listed._
 
 These are genuine model judgements about markets that were priced and modelled. They are **not** the same thing as the excluded markets below.
 
@@ -110,7 +108,23 @@ A list, not bets: no units, no stakes, nothing frozen into the forward ledger. T
 
 No sportsbook the lab can reach has posted hits since October 27. PrizePicks still posts hits lines, so each one is listed with the model's chance of the over and the under. PrizePicks is a pick'em app, not a sportsbook: its lines carry no odds to beat, so nothing here is a bet.
 
-_PrizePicks has not posted a hits line for tonight's games yet._
+| Game | Puck drop | Player | Line | Over | Under | Model leans |
+|:--|:--|:--|--:|--:|--:|:--|
+| Chicago Blackhawks @ Florida Panthers | Nov 4, 7:40 PM ET | Artyom Levshunov | 2 | 27.3% | 72.7% | Under |
+| Chicago Blackhawks @ Florida Panthers | Nov 4, 7:40 PM ET | Anton Lundell | 1.5 | 31.0% | 69.0% | Under |
+| Ottawa Senators @ Buffalo Sabres | Nov 4, 7:40 PM ET | Beck Malenstyn | 3.5 | 41.2% | 58.8% | Under |
+| Ottawa Senators @ Buffalo Sabres | Nov 4, 7:40 PM ET | Nick Cousins | 2 | 41.2% | 58.8% | Under |
+| Ottawa Senators @ Buffalo Sabres | Nov 4, 7:40 PM ET | Drake Batherson | 1.5 | 54.3% | 45.7% | Over |
+| Ottawa Senators @ Buffalo Sabres | Nov 4, 7:40 PM ET | Dylan Cozens | 3 | 52.6% | 47.4% | Over |
+| San Jose Sharks @ Los Angeles Kings | Nov 4, 10:10 PM ET | Barclay Goodrow | 2.5 | 28.1% | 71.9% | Under |
+| San Jose Sharks @ Los Angeles Kings | Nov 4, 10:10 PM ET | Darnell Nurse | 2 | 39.2% | 60.8% | Under |
+| San Jose Sharks @ Los Angeles Kings | Nov 4, 10:10 PM ET | Alex Laferriere | 3 | 42.8% | 57.2% | Under |
+| San Jose Sharks @ Los Angeles Kings | Nov 4, 10:10 PM ET | Kiefer Sherwood | 5 | 57.1% | 42.9% | Over |
+| Calgary Flames @ Seattle Kraken | Nov 4, 10:10 PM ET | Martin Pospisil | 5 | 43.2% | 56.8% | Under |
+| Calgary Flames @ Seattle Kraken | Nov 4, 10:10 PM ET | Adam Klapka | 3.5 | 45.9% | 54.1% | Under |
+| Calgary Flames @ Seattle Kraken | Nov 4, 10:10 PM ET | Bobby McMann | 2 | 51.6% | 48.4% | Over |
+
+A list, not bets: no units, no stakes, nothing frozen into the forward ledger. Measured on real prices, the hits model has no demonstrated edge.
 
 ## Due List
 
@@ -175,6 +189,6 @@ What the evidence actually supports:
 - `data/outputs/props_calibration.md`
 - `data/outputs/what_we_can_claim.md`
 
-Run: https://github.com/cooperross399/nhl-betting-lab/actions/runs/41840407101
+Run: https://github.com/cooperross399/nhl-betting-lab/actions/runs/41849995664
 
 Recommendations only. No bet was placed, no policy was edited, and no market was allowlisted by this run.
