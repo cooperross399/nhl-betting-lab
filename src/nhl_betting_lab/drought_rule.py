@@ -340,9 +340,9 @@ def qualifiers_entering(logs: pd.DataFrame, day: str) -> pd.DataFrame:
 #: is the provider market and line its best price is read from; a shutout
 #: has no market any book in this lab's feed quotes, so it is never priced.
 BIG_GAMES: dict[str, dict[str, Any]] = {
-    "two_goals": {"role": "skater", "count": 2, "line": 1.5, "price": ("goals", 1.5), "floor": 40, "bar": 15},
-    "hat_trick": {"role": "skater", "count": 3, "line": 2.5, "price": ("goals", 2.5), "floor": 40, "bar": 40},
-    "shutout": {"role": "goalie", "count": 1, "line": 0.5, "price": None, "floor": 4, "bar": 15},
+    "two_goals": {"role": "skater", "count": 2, "line": 1.5, "price": ("goals", 1.5), "floor": 40, "bar": 20},
+    "hat_trick": {"role": "skater", "count": 3, "line": 2.5, "price": ("goals", 2.5), "floor": 40, "bar": 30},
+    "shutout": {"role": "goalie", "count": 1, "line": 0.5, "price": None, "floor": 5, "bar": 15},
 }
 #: Every category the list carries, in its order on the card.
 CATEGORIES = (*THRESHOLDS, *BIG_GAMES)
@@ -354,17 +354,18 @@ CATEGORY_LABELS = {"points": "points", "goals": "goals", "assists": "assists",
 #: floor and bar: `scripts/run_due_list_big_games.py`, Due List Tuning run
 #: 41759820070 (2026-11-04). A shutout has no price, so no record.
 BIG_GAMES_RECORDS: dict[tuple[str, str], dict[str, Any]] = {
-    ("two_goals", "40+"): {"wagers": 576, "roi": -0.278, "ci_low": -0.476, "ci_high": -0.091},
-    ("hat_trick", "40+"): {"wagers": 1056, "roi": -0.663, "ci_low": -0.881, "ci_high": -0.420},
+    ("two_goals", "40+"): {"wagers": 391, "roi": -0.236, "ci_low": -0.479, "ci_high": 0.026},
+    ("hat_trick", "40+"): {"wagers": 1269, "roi": -0.586, "ci_low": -0.811, "ci_high": -0.332},
 }
 #: One line for the card, from the same run.
 BIG_GAMES_HEADLINE = (
-    "Big games, measured on 2024-25 and 2025-26 (scripts/run_due_list_big_games.py): a drought does not make "
-    "any of them likelier. 2+ goals, 40+ goal scorers 15+ games without one: hit 7.5% against 10.9% implied, "
-    "-27.8% over 576 (95% -47.6% to -9.1%). Hat trick, 40+ at 40+: -66.3% over 1,056 (95% -88.1% to -42.0%). "
-    "Shutouts, 4+ last season at 15+ starts without one: 4.8% of 475 starts against 9.7% the season before; "
-    "no book in this feed prices a shutout, so those rows are graded for hits only. A demonstrated loss for "
-    "the two priced categories; Cooper picks from the list."
+    "Big games, measured on 2024-25 and 2025-26 (scripts/run_due_list_big_games.py), with the floor and bar "
+    "picked from that sweep as the least bad: no setting makes any of them likelier than the player's own rate. "
+    "2+ goals, 40+ goal scorers 20+ games without one: hit 7.7% against 10.7% implied, -23.6% over 391 "
+    "(95% -47.9% to +2.6%; -24.3% in 2024-25, -21.0% in 2025-26), no demonstrated edge. Hat trick, 40+ at "
+    "30+: -58.6% over 1,269 (95% -81.1% to -33.2%), a demonstrated loss at every setting tried. Shutouts, 5+ "
+    "last season at 15+ starts without one: 6.7% of 210 starts against 11.4% the season before; no book in "
+    "this feed prices a shutout, so those rows are graded for hits only. Cooper picks from the list."
 )
 
 

@@ -2395,8 +2395,8 @@ Re-derive rather than trust if the data has moved.
   (Cooper: "work shutouts/2 goal games/hat tricks into the due list for the
   really elite goalscorers/goalies").** Three categories beside points,
   goals and assists (`drought_rule.BIG_GAMES`): `two_goals` (goals over 1.5)
-  and `hat_trick` (over 2.5) for a skater with 40+ goals last season, at 15
-  and 40 games dressed without one; `shutout` for a goalie with 4+ shutouts
+  and `hat_trick` (over 2.5) for a skater with 40+ goals last season, at 20
+  and 30 games dressed without one; `shutout` for a goalie with 5+ shutouts
   last season at 15 starts without one (a start is 2,400 seconds; a shutout
   is no goal against over 59 minutes or more). The two goal categories take
   the best staged goals over 1.5 / 2.5; a shutout is never priced (no book in
@@ -2407,14 +2407,18 @@ Re-derive rather than trust if the data has moved.
   start) and on the site (`DUE_LIST_MARKETS`). **The measurement
   (`scripts/run_due_list_big_games.py`, Due List Tuning run 41759820070,
   2024-25 and 2025-26, card window, best price): a drought makes none of
-  them likelier.** 2+ goals at 40+ / 15: hit 7.5% against 10.9% implied,
-  **-27.8% over 576 (95% -47.6% to -9.1%)**; hat trick at 40+ / 40:
-  **-66.3% over 1,056 (-88.1% to -42.0%)**; shutouts at 4+ / 15: 4.8% of 475
-  starts against 9.7% the season before. Both priced categories are
-  demonstrated losses; every row carries its record and the card prints the
-  headline. The floors and bars are this lab's choice of "really elite",
-  not a tuned optimum. Still an UNSTAKED list: the model, the edge bar, the
-  market list, the staking rule, the snapshot, the forward ledger and the
+  them likelier.** Cooper asked for "good parameters for each", so the floor
+  and bar are the least bad cell of that sweep that both seasons agree on
+  (picked after seeing it, so the figures flatter them): 2+ goals at 40+ /
+  20: hit 7.7% against 10.7% implied, **-23.6% over 391 (95% -47.9% to
+  +2.6%)**, -24.3% and -21.0% by season, no demonstrated edge; hat trick at
+  40+ / 30: **-58.6% over 1,269 (-81.1% to -33.2%)**, a demonstrated loss
+  at every floor and bar tried; shutouts at 5+ / 15: 6.7% of 210 starts
+  against 11.4% the season before (shorter or longer bars and other floors
+  are no better). First shipped at 40+/15, 40+/40 and 4+/15 (-27.8% over
+  576, -66.3% over 1,056, 4.8% of 475). Every row carries its record and the
+  card prints the headline. Still an UNSTAKED list: the model, the edge bar,
+  the market list, the staking rule, the snapshot, the forward ledger and the
   registered test are unchanged.
 
 - **2026-10-09: the card's player props are on the public site.** Cooper:

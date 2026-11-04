@@ -220,8 +220,8 @@ games[].drought  [] on every regular-season game — Cooper's Due List (2026-10-
                  the flat 5-game rule of #307), an unstaked list he picks from: 70+ points, 25+ goals or 60+ assists (30+ until 2026-10-31) last regular
                  season, and a drought in that category (games dressed without one, carried across the season boundary) that
                  has reached EITHER bar. Since 2026-11-04 also the big games: "two_goals" (2+ goals, line 1.5) and
-                 "hat_trick" (3+ goals, line 2.5) for a 40+ goal scorer 15 / 40 games without one, and "shutout" (a goalie
-                 with 4+ shutouts last season, 15 starts without one; lastSeason is shutouts, drought is starts, price is
+                 "hat_trick" (3+ goals, line 2.5) for a 40+ goal scorer 20 / 30 games without one, and "shutout" (a goalie
+                 with 5+ shutouts last season, 15 starts without one; lastSeason is shutouts, drought is starts, price is
                  always null: no book in the feed prices one; graded won on a start with no goal against, void when he
                  did not start). Their tierBar is that bar and surpriseBar is null. Rows come in the card's order: points,
                  goals, assists, two_goals, hat_trick, shutout; then rarity ascending (rarest first); then drought
