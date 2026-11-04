@@ -606,6 +606,26 @@ jobs:
           fi
           exit "$code"
 
+      - name: Fetch PrizePicks hits lines
+        # Cooper, 2026-11-04 ("Add as lines only"): no sportsbook has posted
+        # hits since Oct 27, and PrizePicks (region us_dfs) still does. Its
+        # lines are a pick'em app's, not odds, so the card lists them with
+        # the model's chance and stakes nothing. They go to their own file,
+        # which the card's priced inputs never read. One credit per game
+        # that returns hits; soft, and never a degraded run.
+        if: ${{ inputs.skip_provider_fetch != true }}
+        continue-on-error: true
+        timeout-minutes: 3
+        env:
+          NHL_ODDS_API_KEY: ${{ secrets.NHL_ODDS_API_KEY }}
+          PYTHONPATH: src
+        run: |
+          set +e
+          python scripts/fetch_dfs_hits_lines.py --live --credit-cap 20
+          code=$?
+          if [ "$code" -eq 3 ]; then exit 0; fi
+          exit "$code"
+
       - name: Record what went wrong
         # One place that knows whether the run was degraded, so the summary,
         # the comment, and the exit status cannot disagree about it.

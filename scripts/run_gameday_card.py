@@ -69,6 +69,8 @@ from nhl_betting_lab.reports.gameday_card import (
     build_card,
     save_card,
 )
+from nhl_betting_lab.dfs_hits_lines import build_hits_lines, load_lines as load_hits_lines
+from nhl_betting_lab.dfs_hits_lines import pricing_frame as hits_pricing_frame
 from nhl_betting_lab.stat_sides import build_stat_sides
 from nhl_betting_lab.forward_evidence import LEDGER_FILENAME, write_snapshot
 from nhl_betting_lab.price_movement import apply_movement, movement, opening_snapshot
@@ -478,6 +480,8 @@ def main(argv: list[str] | None = None) -> int:
     # snapshot below freezes only rows that carry an opinion, so nothing is
     # frozen from them and the day stays open for a run with fresh prices.
     priceable = prices.iloc[0:0] if stale else prices
+    hits_lines_frame = load_hits_lines(staging)
+    hits_lines_probabilities: dict[tuple, float] = {}
     probabilities: dict[tuple, float] = {}
     unresolved_names: set[str] = set()
     lineups = TonightLineups()
@@ -675,6 +679,28 @@ def main(argv: list[str] | None = None) -> int:
                     f"{len(props_model.ambiguous_names)} name(s) are shared by "
                     "two priced players and resolve to neither."
                 )
+            # PrizePicks hits lines (Cooper, 2026-11-04, "Add as lines
+            # only"): priced into a map of their own that is never merged
+            # into `probabilities`, so no PrizePicks line can become a
+            # selection, a stake or a frozen opinion.
+            # A failure here is the list's alone: it never blocks the card.
+            if hits_lines_frame is not None:
+                try:
+                    hits_lines_probabilities, _ = price_props(
+                        hits_pricing_frame(
+                            hits_lines_frame,
+                            day=moment.astimezone(LEAGUE_TIMEZONE).date().isoformat(),
+                        ),
+                        props_model,
+                        corrections=corrections,
+                        team_names=team_names,
+                        history=props_history,
+                        rosters=rosters,
+                        saves=saves_inputs,
+                        lineups=lineups,
+                    )
+                except Exception as exc:  # noqa: BLE001 — a list, never a blocker
+                    print(f"::warning::The PrizePicks hits lines could not be priced: {exc}")
         except (KeyError, ValueError) as exc:
             blockers.append(f"The props model could not be fitted: {exc}")
 
@@ -921,6 +947,20 @@ def main(argv: list[str] | None = None) -> int:
     card.stat_sides = sides.rows
     card.stat_sides_removed_by_guard = sides.removed_by_guard
     card.stat_sides_without_opinion = sides.without_opinion
+    hits = build_hits_lines(
+        hits_lines_frame, hits_lines_probabilities, now=moment, day=snapshot_day,
+    )
+    card.hits_lines_built = True
+    card.hits_lines_fetched = hits.fetched
+    card.hits_lines = hits.rows
+    card.hits_lines_removed_by_guard = hits.removed_by_guard
+    card.hits_lines_without_opinion = hits.without_opinion
+    print(
+        f"PrizePicks hits lines for {snapshot_day}: {len(hits.rows)} listed, "
+        f"{hits.removed_by_guard} under way or unconfirmed, "
+        f"{hits.without_opinion} without an opinion"
+        + ("" if hits.fetched else " (no lines file this run)") + "."
+    )
     print(
         f"Stat sides for {snapshot_day}: {len(sides.rows)} game(s), "
         f"{sides.removed_by_guard} under way or unconfirmed, "

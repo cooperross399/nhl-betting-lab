@@ -326,6 +326,14 @@ PYTHONPATH=src .venv/bin/python scripts/probe_low_vig_venues.py \
 # manual-dispatch Hits Source Probe workflow.
 PYTHONPATH=src .venv/bin/python scripts/probe_hits_sources.py \
     --live --credit-cap 30
+
+# Tonight's PrizePicks hits lines (region us_dfs), for the card's unstaked
+# "Hits lines (PrizePicks)" list: each line with the model's chance, no
+# stake, no odds. Writes data/staging/dfs_hits_lines.csv, which the card's
+# priced inputs never read. One credit per game returning hits; Gameday
+# Refresh runs it after the price fetch.
+PYTHONPATH=src .venv/bin/python scripts/fetch_dfs_hits_lines.py \
+    --live --credit-cap 20
 ```
 
 # Team markets, from the bulk endpoint — far cheaper, per snapshot not per event

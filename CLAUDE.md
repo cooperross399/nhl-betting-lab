@@ -3128,6 +3128,18 @@ Re-derive rather than trust if the data has moved.
   strip and the Results season cell print it ("+1.25u at 0.25u a bet").
   Nothing is bet; the card, snapshot, ledger, model, edge bars and staking
   rule are unchanged.
+- **2026-11-04: PrizePicks hits lines are an unstaked list on the card
+  (Cooper chose "Add as lines only").** No sportsbook the lab reaches has
+  quoted hits since the 2026-10-27 card; the Hits Source Probe (run
+  41734366995) found only PrizePicks, region `us_dfs`, a pick'em app whose
+  quotes are not sportsbook odds. Gameday Refresh's "Fetch PrizePicks hits
+  lines" (`scripts/fetch_dfs_hits_lines.py`, soft, cap 20, one credit per
+  game returning hits) writes `data/staging/dfs_hits_lines.csv`, which
+  `_staged_prices` never reads. The card prices those lines into a separate
+  map and lists each with the model's over and under chance under "Hits
+  lines (PrizePicks)" (`nhl_betting_lab.dfs_hits_lines`): no units, no odds,
+  nothing in the fingerprint, snapshot, forward ledger or allowlist; the
+  puck-drop guard applies. PrizePicks is not a book the card may price from.
 ## Contract strings — never change these
 
 Cooper's local scheduled tasks hard-code these. Renaming any of them silently

@@ -126,6 +126,7 @@ from nhl_betting_lab.markets import MARKETS_BY_KEY
 from nhl_betting_lab.models.player_props import player_key
 from nhl_betting_lab.reports.card_pricing import selection_key
 from nhl_betting_lab.season import clean_text
+from nhl_betting_lab.dfs_hits_lines import HitsLines, render_section as render_hits_lines
 from nhl_betting_lab.stat_sides import STAT_SIDE_MIN_WIN, StatSides, render_section as render_stat_sides
 from nhl_betting_lab.models.value import (
     OddsError,
@@ -367,6 +368,15 @@ class GamedayCard:
     stat_sides: list[dict[str, Any]] = field(default_factory=list)
     stat_sides_removed_by_guard: int = 0
     stat_sides_without_opinion: int = 0
+    #: PrizePicks hits lines (Cooper, 2026-11-04, "Add as lines only"): each
+    #: posted hits line with the model's chance of the over and the under
+    #: (`nhl_betting_lab.dfs_hits_lines`). A LIST: no stake, no odds, nothing
+    #: in the fingerprint, the snapshot or the forward ledger.
+    hits_lines_built: bool = False
+    hits_lines_fetched: bool = False
+    hits_lines: list[dict[str, Any]] = field(default_factory=list)
+    hits_lines_removed_by_guard: int = 0
+    hits_lines_without_opinion: int = 0
     notes: list[str] = field(default_factory=list)
     safety: dict[str, bool] = field(
         default_factory=lambda: {
@@ -1425,6 +1435,19 @@ def render_card(card: GamedayCard) -> str:
                     rows=card.stat_sides,
                     removed_by_guard=card.stat_sides_removed_by_guard,
                     without_opinion=card.stat_sides_without_opinion,
+                ),
+                _start_eastern,
+            )
+        )
+
+    if card.hits_lines_built:
+        lines.extend(
+            render_hits_lines(
+                HitsLines(
+                    rows=card.hits_lines,
+                    fetched=card.hits_lines_fetched,
+                    removed_by_guard=card.hits_lines_removed_by_guard,
+                    without_opinion=card.hits_lines_without_opinion,
                 ),
                 _start_eastern,
             )
