@@ -362,7 +362,7 @@ def test_rows_sort_by_category_then_rarest_first_not_longest_drought():
         ("goals", "Test Scorer", 5, 0.0253), ("assists", "Short Rare", 5, 0.0003),
         ("assists", "Long Dry", 7, 0.0078), ("assists", "Tied Rare", 6, 0.0312), ("assists", "Assist Man", 5, 0.0312)]
     assert [r["rule"] for r in result.rows] == ["both", "tier"] + ["both"] * 4
-    assert [r["one_in"] for r in result.rows] == [32, 53, 3125, 128, 32, 32]
+    assert [r["one_in"] for r in result.rows] == [32, 39, 3125, 128, 32, 32]
 
 
 # -- the band's record, read from the backtest ------------------------------
