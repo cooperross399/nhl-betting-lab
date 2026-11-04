@@ -2416,7 +2416,15 @@ Re-derive rather than trust if the data has moved.
   at every floor and bar tried; shutouts at 5+ / 15: 6.7% of 210 starts
   against 11.4% the season before (shorter or longer bars and other floors
   are no better). First shipped at 40+/15, 40+/40 and 4+/15 (-27.8% over
-  576, -66.3% over 1,056, 4.8% of 475). Every row carries its record and the
+  576, -66.3% over 1,056, 4.8% of 475). Then, on Cooper's "test as many
+  seasons as you can", `--history 2009` read the NHL's free game logs for
+  every possible qualifier, 2010-11 to 2025-26 (rates only; no prices before
+  2024-25; Due List Tuning run 41765146539): at every floor and bar a
+  drought leaves the event as likely or less likely than for the same
+  players at any drought. Shipped settings against bar 0: 2+ goals 6.7% vs
+  7.7% (1,776 games), hat tricks 1.1% vs 1.3% (5,436), shutouts 7.0% vs
+  7.3% (1,850 starts); no other cell does better beyond noise, so the
+  settings stand. Every row carries its record and the
   card prints the headline. Still an UNSTAKED list: the model, the edge bar,
   the market list, the staking rule, the snapshot, the forward ledger and the
   registered test are unchanged.

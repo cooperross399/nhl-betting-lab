@@ -365,7 +365,10 @@ BIG_GAMES_HEADLINE = (
     "(95% -47.9% to +2.6%; -24.3% in 2024-25, -21.0% in 2025-26), no demonstrated edge. Hat trick, 40+ at "
     "30+: -58.6% over 1,269 (95% -81.1% to -33.2%), a demonstrated loss at every setting tried. Shutouts, 5+ "
     "last season at 15+ starts without one: 6.7% of 210 starts against 11.4% the season before; no book in "
-    "this feed prices a shutout, so those rows are graded for hits only. Cooper picks from the list."
+    "this feed prices a shutout, so those rows are graded for hits only. Across 16 seasons of NHL game logs "
+    "(2010-11 to 2025-26) a drought never made any of the three likelier than for the same players at any "
+    "drought: 2+ goals 6.7% against 7.7% (1,776 games), hat tricks 1.1% against 1.3% (5,436), shutouts 7.0% "
+    "against 7.3% (1,850 starts). Cooper picks from the list."
 )
 
 
