@@ -61,9 +61,11 @@ games[]
                  line_movement/<day>.csv that held it (one capture, never the day pooled); null when none was captured (a day
                  captured before the capture asked the bulk h2h, or a build with no line_movement restored)
   puckLine       {favorite, line, price, coverProb}
-  total          {open | null, current, overPrice, underPrice, proj, overProb}  — current is the most common line among the
+  total          {open | null, current, overPrice, underPrice, proj, overProb, side}  — current is the most common line among the
                  staged bulk (featured) totals, never an alternate-ladder rung; open is null, because a capture's totals mix
-                 alternate_totals rungs with the featured line and the board does not tell them apart
+                 alternate_totals rungs with the featured line and the board does not tell them apart; side ("over" | "under",
+                 since 2026-11-05) is the side the Totals record grades: the one overProb beats its price on by more
+                 (build_site_json.total_side). A board without it was graded on proj against current.
   regulation     {away, draw, home, prices:{away,draw,home}}
   pick           {kind:"bet"|"lean", market, label, price, betDownTo, edgePct} | null   ← one market per game: the card's highest-edge best bet, or
                  its highest-edge lean only when the game holds no best bet; null on a priced game means nothing cleared the edge bar,
@@ -89,7 +91,7 @@ games[]
   away | home    {abbr, projGoals, final}
   finish         "REG" | "OT" | "SO"
   projWinner     ABBR
-  total          {line, proj, result:"over"|"under"|"push"}
+  total          {line, proj, side:"over"|"under" (the side graded), result:"over"|"under"|"push"}
   priced         the frozen board's `priced` for this game (a board frozen before that flag: whether it carried a moneyline)
   pick           {kind, market, label, price, betDownTo, edgePct, result:"win"|"loss"|"push"} | null  ← null when the board carried no pick for the game;
                  the page renders it "Not priced" unless priced is true, "No play" when it is, and grades neither and shows no price

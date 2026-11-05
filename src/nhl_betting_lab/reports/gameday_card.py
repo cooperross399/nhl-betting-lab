@@ -167,6 +167,30 @@ BEST_BET_PROP_EDGE = 0.12
 LEAN_BAR_OVERRIDES: dict[tuple[str, str], float] = {("points", "over"): 0.03}
 
 
+#: Sides of a market never listed as a lean, with the measurement that says
+#: why (2026-11-05, Cooper: "reevaluate our leans and totals ... I want to
+#: see that record start to turn around"). They are priced, frozen into the
+#: snapshot and settled in the forward ledger as before; the card lists them
+#: with the passes instead of the leans, so the site's leans record stops
+#: carrying them. Points unders: `points` is the one market here measured as
+#: a loss that survives correction (-4.2% over 6,140 card-window wagers,
+#: nine in ten of them unders), and as leans they went 247-315, -22.0u at
+#: 0.25u on the cards of 2026-09-29 to 11-04, the whole of the prop leans'
+#: loss (every other prop lean together: +10.2u).
+LEAN_EXCLUDED_SIDES: dict[tuple[str, str], str] = {
+    ("points", "under"): (
+        "points unders are not listed as leans: measured as a loss on two "
+        "seasons of bought prices (-4.2% over 6,140 wagers) and 247-315 as "
+        "leans this season"
+    ),
+}
+
+
+def lean_excluded_reason(market_key: str, selection: str) -> str | None:
+    """Why this market and side is never listed as a lean, or None."""
+    return LEAN_EXCLUDED_SIDES.get((market_key, str(selection).strip().lower()))
+
+
 def lean_bar(market_key: str, selection: str, default: float) -> float:
     """The edge a selection needs to be listed: `default`, or the lower bar
     `LEAN_BAR_OVERRIDES` gives that market and side."""
@@ -708,6 +732,11 @@ def build_candidates(
             if against:
                 candidate.section = LEANS_SECTION
                 candidate.demotion_reason = against
+        if candidate.section == LEANS_SECTION and lean_excluded_reason(market_key, selection):
+            candidate.section = PASSES_SECTION
+            candidate.demotion_reason = lean_excluded_reason(market_key, selection)
+            passes.append(candidate)
+            continue
         if candidate.section == BEST_BETS_SECTION:
             candidate.suggested_units = TIER_UNITS.get(candidate.tier, 0.1)
             staked.append((key, candidate))
@@ -1373,6 +1402,21 @@ def render_drought_section(card: GamedayCard) -> list[str]:
     return lines
 
 
+def _lean_exclusion_notes(passes: Sequence[Any]) -> list[str]:
+    """One line per `LEAN_EXCLUDED_SIDES` reason that moved a row from the
+    leans to the passes tonight, with how many."""
+    counts: dict[str, int] = {}
+    for row in passes:
+        get = row.get if isinstance(row, Mapping) else (lambda k, r=row: getattr(r, k, None))
+        reason = lean_excluded_reason(str(get("market") or ""), str(get("selection") or ""))
+        if reason and get("demotion_reason") == reason:
+            counts[reason] = counts.get(reason, 0) + 1
+    return [
+        f"{n} cleared the lean bar and are listed with the passes: {reason}.\n"
+        for reason, n in sorted(counts.items())
+    ]
+
+
 def render_card(card: GamedayCard) -> str:
     lines = [
         "# NHL gameday card",
@@ -1421,6 +1465,7 @@ def render_card(card: GamedayCard) -> str:
             [
                 "Leans are recorded and not staked.",
                 "",
+                *_lean_exclusion_notes(card.passes),
                 f"## {PASSES_SECTION}",
                 "",
             ]

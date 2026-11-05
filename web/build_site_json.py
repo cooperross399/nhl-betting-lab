@@ -1029,6 +1029,9 @@ def build_board(day: date, lab: Path, history_dir: Path) -> dict:
                         "underPrice": best_price(prices, provider_home, provider_away, "total_goals", "under", line),
                         "proj": round(eh + ea + m.overtime_rate, 2), "overProb": round(tot["over"], 4),
                     }
+                    side = total_side(row["total"])
+                    if side:
+                        row["total"]["side"] = side
                 row["regulation"] = {
                     "home": round(reg["home"], 4), "draw": round(reg["draw"], 4), "away": round(reg["away"], 4),
                     "prices": {s: best_price(prices, provider_home, provider_away, "regulation_3_way", s) for s in ("home", "draw", "away")},
@@ -1786,6 +1789,31 @@ def load_record(path: Path) -> dict:
     return empty
 
 
+def total_side(total: dict) -> str | None:
+    """The side of the total the board calls: the one whose price the
+    model's chance beats by more (expected return per unit at the best
+    price), or None without both prices and a chance.
+
+    It used to be the projected total against the line, a mean against a
+    line set near the median. Goal counts lean right, so the mean sits above
+    the median, and the projection called the over on 79% of boards while
+    the model's own chance of the over averaged 52%. On the 235 graded
+    boards from 2026-09-30 to 2026-11-04 that rule went 107-125-3, -8.07u at
+    0.25u; this one, replayed on the same frozen boards, 108-124-3, -5.89u.
+    Neither shows an edge: the model's totals have never beaten the price.
+    Boards frozen before this carry no `side` and settle as they were.
+    """
+    p = total.get("overProb")
+    over, under = total.get("overPrice"), total.get("underPrice")
+    if not isinstance(p, (int, float)) or not all(isinstance(x, (int, float)) and abs(x) >= 100 for x in (over, under)):
+        return None
+
+    def ret(prob: float, american: float) -> float:
+        return prob * (1 + (american / 100.0 if american > 0 else 100.0 / abs(american))) - 1
+
+    return "over" if ret(p, over) >= ret(1 - p, under) else "under"
+
+
 def settle(day: date, history_dir: Path, *, processed: Path | None = None) -> dict:
     """Yesterday's frozen board, graded: results.json.
 
@@ -1852,11 +1880,12 @@ def settle(day: date, history_dir: Path, *, processed: Path | None = None) -> di
         if tot:
             total_goals = hs + as_
             res = "push" if total_goals == tot["current"] else "over" if total_goals > tot["current"] else "under"
-            proj_side = "over" if tot["proj"] > tot["current"] else "under"
+            proj_side = tot.get("side") if tot.get("side") in ("over", "under") else (
+                "over" if tot["proj"] > tot["current"] else "under")
             s["totals"]["p" if res == "push" else "w" if res == proj_side else "l"] += 1
             _add_units(s["money"]["totals"], tot.get("overPrice" if proj_side == "over" else "underPrice"),
                        "push" if res == "push" else "win" if res == proj_side else "loss")
-            row["total"] = {"line": tot["current"], "proj": tot["proj"], "result": res}
+            row["total"] = {"line": tot["current"], "proj": tot["proj"], "side": proj_side, "result": res}
         # What the frozen board said about this game's prices, carried onto
         # the results row so the page can say it. A board frozen before the
         # flag existed carries none. Every version of build_board attached

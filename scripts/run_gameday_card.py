@@ -883,8 +883,8 @@ def main(argv: list[str] | None = None) -> int:
     save_learning_report(trust, outputs, generated_at=moment.isoformat())
     print(
         f"Learned from settled results: {learned} opinion(s) adjusted across "
-        f"{len(trust)} market(s)"
-        + "".join(f"; {m} w={t.w:.2f}" for m, t in sorted(trust.items()))
+        f"{sum(':' not in m for m in trust)} market(s), each side apart"
+        + "".join(f"; {m} w={t.w:.2f} a={t.a:+.2f}" for m, t in sorted(trust.items()))
         + "."
     )
 

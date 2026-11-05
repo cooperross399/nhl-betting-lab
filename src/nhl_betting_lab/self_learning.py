@@ -30,7 +30,19 @@ market (team markets before `TEAM_RATINGS_FROM`, goalie saves before
 It moves the card's probabilities AFTER the day's snapshot is frozen, so
 the forward ledger keeps the model's own opinions (what this learns from
 next time) and the 2027-04-25 test scores the same opinions as before. Only
-the card's edges, and so its selections and stakes, move. The constants are
+the card's edges, and so its selections and stakes, move.
+
+Since 2026-11-05 each side of a market is learned apart too (over and
+under, home and away, the puck-line favourite and underdog), pulled toward
+its market's own fit with the same prior, because one market's two sides
+can run opposite ways: points overs and points unders, total-goals overs
+and unders. Walk-forward on the ledger 2026-09-29 to 11-04 (30 days scored
+after a week's warm-up, `scripts/run_self_learning_check.py --by-side`, at
+0.25u a lean): prop leans -6.0u over 1,976 by market, -4.2u over 1,626 by
+side; points-under leans -18.7u over 362 and -7.1u over 187; team leans
++19.9u over 303 and +25.1u over 331. Five weeks: no demonstrated edge.
+
+The constants are
 this lab's choice. `PRIOR_STRENGTH` was picked on the walk-forward in
 `scripts/run_self_learning_check.py` (ledger 2026-09-29 to 10-27, 22 days
 scored after a week's warm-up, best-bet bars): the card as it was +1.2u over
@@ -113,17 +125,46 @@ def learnable_wagers(ledger: pd.DataFrame) -> pd.DataFrame:
     return frame.reset_index(drop=True)
 
 
-def fit_market(wagers: pd.DataFrame, *, prior: float = PRIOR_STRENGTH) -> Trust:
-    """`(a, w)` for one market's wagers, each game weighing one."""
+def side_of(market: str, selection: object, line: object = None) -> str:
+    """The side a selection sits on, for learning each side apart: over or
+    under for anything with a line to go over (props, totals, team totals),
+    home, away or draw otherwise, and for the puck line the favourite's
+    side (-1.5) apart from the underdog's (+1.5)."""
+    s = str(selection or "").strip().lower()
+    if "over" in s:
+        return "over"
+    if "under" in s:
+        return "under"
+    if market == "puck_line":
+        try:
+            return f"{s}_{'fav' if float(line) < 0 else 'dog'}"
+        except (TypeError, ValueError):
+            return s
+    return s
+
+
+def side_key(market: str, side: str) -> str:
+    """The trust table's key for one side of one market."""
+    return f"{market}:{side}"
+
+
+def fit_market(
+    wagers: pd.DataFrame,
+    *,
+    prior: float = PRIOR_STRENGTH,
+    toward: Trust | None = None,
+) -> Trust:
+    """`(a, w)` for one market's wagers, each game weighing one, pulled
+    toward `toward` (the card as it was, unless given)."""
     if wagers.empty:
-        return Trust()
+        return toward or Trust()
     offset = _logit(1.0 / wagers["decimal"].to_numpy())
     d = _logit(wagers["model_probability"].to_numpy()) - offset
     y = (wagers["outcome"] == "won").to_numpy(dtype=float)
     game = wagers["snapshot_date"].astype(str) + "|" + wagers["home_team"].astype(str)
     weight = 1.0 / game.map(game.value_counts()).to_numpy(dtype=float)
     X = np.column_stack([np.ones(len(d)), d])
-    b0 = np.array([0.0, 1.0])
+    b0 = np.array([toward.a, toward.w]) if toward is not None else np.array([0.0, 1.0])
     b = b0.copy()
     for _ in range(50):
         mu = 1.0 / (1.0 + np.exp(-(offset + X @ b)))
@@ -140,14 +181,26 @@ def fit_market(wagers: pd.DataFrame, *, prior: float = PRIOR_STRENGTH) -> Trust:
     )
 
 
-def fit_trust(ledger: pd.DataFrame, *, prior: float = PRIOR_STRENGTH) -> dict[str, Trust]:
+def fit_trust(
+    ledger: pd.DataFrame, *, prior: float = PRIOR_STRENGTH, by_side: bool = True
+) -> dict[str, Trust]:
+    """Each market's trust, keyed by market, and (since 2026-11-05) each
+    side of it, keyed `side_key(market, side)` and pulled toward its
+    market's fit, so a side with few settled games reads as its market."""
     wagers = learnable_wagers(ledger)
     if wagers.empty:
         return {}
-    return {
-        str(market): fit_market(group, prior=prior)
-        for market, group in wagers.groupby("market")
-    }
+    out: dict[str, Trust] = {}
+    for market, group in wagers.groupby("market"):
+        market = str(market)
+        whole = fit_market(group, prior=prior)
+        out[market] = whole
+        if not by_side:
+            continue
+        sides = [side_of(market, sel, line) for sel, line in zip(group["selection"], group["line"])]
+        for side, part in group.groupby(pd.Series(sides, index=group.index)):
+            out[side_key(market, str(side))] = fit_market(part, prior=prior, toward=whole)
+    return out
 
 
 def load_ledger_for_learning(path: Path) -> pd.DataFrame:
@@ -200,7 +253,9 @@ def apply_trust(
             best[key] = price
     moved = 0
     for key, price in best.items():
-        learned = trust.get(str(key[0]))
+        market = str(key[0])
+        selection, line = (key[4], key[5]) if len(key) > 5 else (None, None)
+        learned = trust.get(side_key(market, side_of(market, selection, line))) or trust.get(market)
         if learned is None or (learned.a == 0.0 and learned.w == 1.0):
             continue
         out[key] = adjusted(float(out[key]), price, learned)
@@ -229,7 +284,8 @@ def save_report(trust: Mapping[str, Trust], output_dir: Path, *, generated_at: s
         "|:--|--:|--:|--:|--:|",
     ]
     for market, t in sorted(trust.items()):
-        lines.append(f"| `{market}` | {t.games:,} | {t.wagers:,} | {t.w:.2f} | {t.a:+.3f} |")
+        name = market.replace(":", "` ") if ":" in market else f"{market}`"
+        lines.append(f"| `{name} | {t.games:,} | {t.wagers:,} | {t.w:.2f} | {t.a:+.3f} |")
     lines += [
         "",
         "Applied to the card after the day's snapshot is frozen, so the ledger "

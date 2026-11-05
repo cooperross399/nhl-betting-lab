@@ -3209,6 +3209,39 @@ Re-derive rather than trust if the data has moved.
   price returned -7.6% over 3,001 through 10-18, -5.5% over 1,420 from
   10-19 to 10-27 and -0.2% over 1,120 since 10-28, and the model's 6%+
   overs about -11% since 10-19.
+- **2026-11-05, NOT a defect fix: the leans and the site's Totals record
+  are reworked (Cooper: "reevaluate our leans and totals for NHL on the
+  website. I want to see that record start to turn around").** The site
+  read, through 2026-11-04: team leans 60-95-7, -3.47u; Totals 115-132-3,
+  -8.09u; prop leans 1,115-1,392, -9.46u (all at 0.25u). Three changes:
+  1. **Self-learning learns each side apart** (`self_learning.fit_trust`,
+     keys `market:side` from `side_of`: over/under, home/away/draw, puck-line
+     favourite/underdog), each side pulled toward its market's fit with the
+     same prior of 10, so a thin side reads as its market. Walk-forward
+     (`run_self_learning_check.py --by-side`, ledger 09-29 to 11-04, 30
+     days after a week's warm-up, leans at 0.25u): prop leans -6.0u over
+     1,976 by market, -4.2u over 1,626 by side; team leans +19.9u over 303
+     and +25.1u over 331; best bets +5.4u over 298 and +0.8u over 238 (1u).
+  2. **Points unders are never listed as leans** (`LEAN_EXCLUDED_SIDES`):
+     they go with the passes, reason named, still priced, frozen and settled
+     in the ledger. `points` is the market measured as a loss surviving
+     correction (-4.2% over 6,140 card-window wagers, nine in ten unders),
+     and as leans this season they went 247-315, -22.0u, while every other
+     prop lean together made +10.2u.
+  3. **The site's Totals record grades the model's side**, not the
+     projected total against the line (`build_site_json.total_side`): the
+     side whose price the model's chance beats by more. The projection is a
+     mean against a line set near the median, so it called the over on 79%
+     of boards while the model's chance of the over averaged 52%. Replayed
+     on the 235 graded frozen boards: 107-125-3, -8.07u then; 108-124-3,
+     -5.89u now. The side is frozen on the board (`total.side`); earlier
+     boards keep their grading, so no past record moves.
+  None shows a demonstrated edge, and the totals model has never beaten the
+  price: these stop the records losing on calls the model did not make,
+  they do not promise a profit. The snapshot, forward ledger, model, edge
+  bars, market list and staking rule are unchanged; only the card's
+  self-learned edges (and so its selections) and the listing move.
+
 ## Contract strings — never change these
 
 Cooper's local scheduled tasks hard-code these. Renaming any of them silently
