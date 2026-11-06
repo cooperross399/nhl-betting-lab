@@ -2,8 +2,8 @@ Selections are unchanged since the previous card; this comment was posted on req
 
 # NHL gameday card
 
-- Generated: 2026-11-06T14:01:04+00:00
-- 1 best bet(s), 14 lean(s), 1703 pass(es) across 3 game(s); 0.25 unit(s) staked.
+- Generated: 2026-11-06T14:57:56+00:00
+- 1 best bet(s), 13 lean(s), 1698 pass(es) across 3 game(s); 0.25 unit(s) staked.
 - Included markets: **assists, blocked_shots, goals, moneyline, points, puck_line, regulation_3_way, shots_on_goal, team_total, total_goals**
 - Unit size: $25
 
@@ -17,12 +17,11 @@ Selections are unchanged since the previous card; this comment was posted on req
 
 | Game | Starts | Market | Selection | Model | Edge | Price | Bet down to | Book |
 |:-----|:-------|:-------|:----------|------:|-----:|------:|------------:|:-----|
-| Anaheim Ducks @ Calgary Flames | Nov 6, 8:10 PM ET | `shots_on_goal` | Zayne Parekh under 1.5 | 59.4% | +10.6% | +105 | -114 | Hard Rock Bet |
 | Anaheim Ducks @ Calgary Flames | Nov 6, 8:10 PM ET | `shots_on_goal` | Beckett Sennecke under 2.5 | 57.9% | +9.1% | +105 | -107 | BetMGM |
-| Columbus Blue Jackets @ Buffalo Sabres | Nov 6, 7:10 PM ET | `shots_on_goal` | Denton Mateychuk under 1.5 | 64.0% | +8.4% | -125 | -138 | Courtside |
+| Columbus Blue Jackets @ Buffalo Sabres | Nov 6, 7:10 PM ET | `shots_on_goal` | Denton Mateychuk under 1.5 | 64.9% | +9.0% | -127 | -143 | Bally Bet |
+| Anaheim Ducks @ Calgary Flames | Nov 6, 8:10 PM ET | `shots_on_goal` | Zayne Parekh under 1.5 | 60.5% | +8.5% | -108 | -119 | BetOnline.ag |
 | Columbus Blue Jackets @ Buffalo Sabres | Nov 6, 7:10 PM ET | `shots_on_goal` | Charlie Coyle under 1.5 | 54.7% | +7.1% | +110 | +106 | BetMGM |
 | Columbus Blue Jackets @ Buffalo Sabres | Nov 6, 7:10 PM ET | `shots_on_goal` | Ivan Provorov under 1.5 | 63.2% | +6.7% | -130 | -133 | Bally Bet |
-| San Jose Sharks @ Minnesota Wild | Nov 6, 8:10 PM ET | `blocked_shots` | Olli Maatta under 1.5 | 57.8% | +6.6% | -105 | -107 | Fliff |
 | Anaheim Ducks @ Calgary Flames | Nov 6, 8:10 PM ET | `blocked_shots` | Zach Whitecloud under 1.5 | 61.0% | +6.5% | -120 | -122 | Fliff |
 | Columbus Blue Jackets @ Buffalo Sabres | Nov 6, 7:10 PM ET | `points` | Sean Monahan over 0.5 | 42.8% | +6.4% | +175 | +152 | Bally Bet |
 | Columbus Blue Jackets @ Buffalo Sabres | Nov 6, 7:10 PM ET | `points` | Valeri Nichushkin over 0.5 | 46.2% | +6.2% | +150 | +132 | Hard Rock Bet |
@@ -42,31 +41,31 @@ Leans are recorded and not staked.
 |:-----|:-------|:-------|:----------|------:|-----:|------:|:-----|
 | Anaheim Ducks @ Calgary Flames | Nov 6, 8:10 PM ET | `points` | Zayne Parekh under 0.5 | 65.0% | +7.6% | -135 | theScore Bet |
 | Anaheim Ducks @ Calgary Flames | Nov 6, 8:10 PM ET | `assists` | Zayne Parekh under 0.5 | 74.2% | +7.0% | -205 | Bally Bet |
-| San Jose Sharks @ Minnesota Wild | Nov 6, 8:10 PM ET | `assists` | Ivar Stenberg under 0.5 | 75.7% | +6.9% | -220 | BetMGM |
+| San Jose Sharks @ Minnesota Wild | Nov 6, 8:10 PM ET | `assists` | Ivar Stenberg under 0.5 | 75.8% | +6.6% | -225 | BetMGM |
 | Anaheim Ducks @ Calgary Flames | Nov 6, 8:10 PM ET | `goals` | Sam Colangelo over 0.5 | 16.8% | +5.7% | +800 | Courtside |
 | San Jose Sharks @ Minnesota Wild | Nov 6, 8:10 PM ET | `points` | Ivar Stenberg under 0.5 | 63.1% | +5.7% | -135 | BetMGM |
 | San Jose Sharks @ Minnesota Wild | Nov 6, 8:10 PM ET | `shots_on_goal` | Matt Boldy under 3.5 | 50.9% | +5.5% | +120 | Hard Rock Bet |
+| San Jose Sharks @ Minnesota Wild | Nov 6, 8:10 PM ET | `blocked_shots` | Olli Maatta under 1.5 | 59.9% | +5.4% | -120 | Fliff |
 | Columbus Blue Jackets @ Buffalo Sabres | Nov 6, 7:10 PM ET | `goals` | Valeri Nichushkin over 0.5 | 25.2% | +5.2% | +400 | theScore Bet |
-| Columbus Blue Jackets @ Buffalo Sabres | Nov 6, 7:10 PM ET | `blocked_shots` | Zach Werenski under 1.5 | 55.6% | +4.4% | -105 | Fliff |
-| Columbus Blue Jackets @ Buffalo Sabres | Nov 6, 7:10 PM ET | `shots_on_goal` | Tage Thompson under 3.5 | 50.9% | +4.3% | +115 | Courtside |
+| Columbus Blue Jackets @ Buffalo Sabres | Nov 6, 7:10 PM ET | `shots_on_goal` | Tage Thompson under 3.5 | 51.6% | +5.1% | +115 | Bovada |
 | San Jose Sharks @ Minnesota Wild | Nov 6, 8:10 PM ET | `assists` | Dmitry Orlov under 0.5 | 77.4% | +4.1% | -275 | BetMGM |
 | Anaheim Ducks @ Calgary Flames | Nov 6, 8:10 PM ET | `assists` | Jackson LaCombe under 0.5 | 57.7% | +3.8% | -117 | Bally Bet |
 | Anaheim Ducks @ Calgary Flames | Nov 6, 8:10 PM ET | `shots_on_goal` | Mikael Granlund under 1.5 | 47.5% | +3.6% | +128 | Bally Bet |
 | Anaheim Ducks @ Calgary Flames | Nov 6, 8:10 PM ET | `shots_on_goal` | Yegor Sharangovich under 1.5 | 49.5% | +3.6% | +118 | BetOnline.ag |
 | Columbus Blue Jackets @ Buffalo Sabres | Nov 6, 7:10 PM ET | `shots_on_goal` | Zach Werenski under 2.5 | 50.1% | +3.6% | +115 | theScore Bet |
-| Columbus Blue Jackets @ Buffalo Sabres | Nov 6, 7:10 PM ET | `total_goals` | over 6.5 | 52.2% | +3.4% | +105 | theScore Bet |
+| Columbus Blue Jackets @ Buffalo Sabres | Nov 6, 7:10 PM ET | `shots_on_goal` | Josh Doan over 3.5 | 15.3% | +3.5% | +750 | BetOnline.ag |
+| Columbus Blue Jackets @ Buffalo Sabres | Nov 6, 7:10 PM ET | `total_goals` | over 6.5 | 52.3% | +3.5% | +105 | theScore Bet |
 | Anaheim Ducks @ Calgary Flames | Nov 6, 8:10 PM ET | `points` | Jackson LaCombe under 0.5 | 51.0% | +3.4% | +110 | Bally Bet |
 | Columbus Blue Jackets @ Buffalo Sabres | Nov 6, 7:10 PM ET | `assists` | Valeri Nichushkin over 0.5 | 31.2% | +3.4% | +260 | Hard Rock Bet |
-| Anaheim Ducks @ Calgary Flames | Nov 6, 8:10 PM ET | `puck_line` | home +2.5 | 87.4% | +3.4% | -525 | Courtside |
-| Columbus Blue Jackets @ Buffalo Sabres | Nov 6, 7:10 PM ET | `shots_on_goal` | Josh Doan over 3.5 | 15.5% | +3.4% | +725 | BetOnline.ag |
+| Anaheim Ducks @ Calgary Flames | Nov 6, 8:10 PM ET | `puck_line` | home +2.5 | 87.3% | +3.3% | -525 | Courtside |
+| Columbus Blue Jackets @ Buffalo Sabres | Nov 6, 7:10 PM ET | `blocked_shots` | Zach Werenski under 1.5 | 57.8% | +3.2% | -120 | Fliff |
+| Columbus Blue Jackets @ Buffalo Sabres | Nov 6, 7:10 PM ET | `total_goals` | over 7 | 40.2% | +3.2% | +170 | Bovada |
 | San Jose Sharks @ Minnesota Wild | Nov 6, 8:10 PM ET | `goals` | Macklin Celebrini under 0.5 | 69.8% | +3.1% | -200 | theScore Bet |
-| Columbus Blue Jackets @ Buffalo Sabres | Nov 6, 7:10 PM ET | `total_goals` | over 7 | 40.1% | +3.1% | +170 | Bovada |
 | Anaheim Ducks @ Calgary Flames | Nov 6, 8:10 PM ET | `points` | Zayne Parekh under 1.5 | 94.0% | +3.1% | -1000 | Bally Bet |
 | Columbus Blue Jackets @ Buffalo Sabres | Nov 6, 7:10 PM ET | `shots_on_goal` | Kent Johnson over 3.5 | 13.8% | +3.0% | +825 | BetOnline.ag |
-| Columbus Blue Jackets @ Buffalo Sabres | Nov 6, 7:10 PM ET | `shots_on_goal` | Mathieu Olivier under 1.5 | 58.5% | +2.9% | -125 | Bally Bet |
-| Columbus Blue Jackets @ Buffalo Sabres | Nov 6, 7:10 PM ET | `total_goals` | over 6 | 58.4% | +2.9% | -125 | Bovada |
+| Columbus Blue Jackets @ Buffalo Sabres | Nov 6, 7:10 PM ET | `total_goals` | over 6 | 58.5% | +3.0% | -125 | Bovada |
 
-_1678 further passes not listed._
+_1673 further passes not listed._
 
 These are genuine model judgements about markets that were priced and modelled. They are **not** the same thing as the excluded markets below.
 
@@ -76,7 +75,7 @@ Who the model expects to win each game, from the same team ratings the card pric
 
 | Game | Puck drop | Stats' side | Win chance | Fair | Best price | Book | Against the price |
 |:--|:--|:--|--:|--:|--:|:--|:--|
-| Columbus Blue Jackets @ Buffalo Sabres | Nov 6, 7:10 PM ET | **Buffalo Sabres** | 61.1% | -157 | -165 | theScore Bet | price is 1.2 pts short |
+| Columbus Blue Jackets @ Buffalo Sabres | Nov 6, 7:10 PM ET | **Buffalo Sabres** | 61.2% | -157 | -165 | theScore Bet | price is 1.1 pts short |
 | San Jose Sharks @ Minnesota Wild | Nov 6, 8:10 PM ET | **Minnesota Wild** | 69.3% | -226 | -250 | FanDuel | price is 2.1 pts short |
 | Anaheim Ducks @ Calgary Flames | Nov 6, 8:10 PM ET | **Calgary Flames** | 55.4% | -124 | -125 | Bally Bet | price is 0.1 pts short |
 
@@ -166,6 +165,6 @@ What the evidence actually supports:
 - `data/outputs/props_calibration.md`
 - `data/outputs/what_we_can_claim.md`
 
-Run: https://github.com/cooperross399/nhl-betting-lab/actions/runs/42227500031
+Run: https://github.com/cooperross399/nhl-betting-lab/actions/runs/42236197041
 
 Recommendations only. No bet was placed, no policy was edited, and no market was allowlisted by this run.
