@@ -876,6 +876,20 @@ def _prop_leans_module():
     return module
 
 
+def lean_season_line(leans: dict | None) -> dict | None:
+    """The prop leans' season line for board.json `record.propLeans` and
+    results.json `props.seasonLeans`, from prop_leans.json's graded season:
+    w, l, p, nights, and units and staked at 0.25u a lean. None when the
+    record was not built."""
+    s = (leans or {}).get("season")
+    if not isinstance(s, dict):
+        return None
+    line = {k: s[k] for k in ("w", "l", "p", "void", "units", "staked") if k in s}
+    line["nights"] = int(leans.get("nights") or 0)
+    line["stake"] = 0.25
+    return line
+
+
 def prop_leans_page(lab: Path, ref: str, today: date) -> dict:
     """prop_leans.json: the card's prop leans graded at 0.25u (to win 0.25u on a minus price), season long
     (web/prop_leans.py). A card-feed ref this checkout cannot read writes a
@@ -2826,12 +2840,22 @@ def main(argv: list[str] | None = None) -> int:
         if isinstance(results.get("props"), dict):
             results["props"]["seasonLeans"] = season["propLeans"]
             results["props"].setdefault("season", season["props"])
+    # The prop leans' season line on the Props tab and the Results strip
+    # reads the graded record (prop_leans.json, 0.25u a lean, to win 0.25u
+    # on a minus price), not the nightly boards, which list best bets only
+    # since 2026-10-09 and so never carried the leans (Cooper, 2026-11-08:
+    # "The website isnt showing the prop lean record/profit").
+    leans = prop_leans_page(Path(args.lab), args.card_feed, today) if args.card_feed else None
+    leans_line = lean_season_line(leans)
+    if leans_line is not None:
+        board["record"]["propLeans"] = leans_line
+        if isinstance(results.get("props"), dict):
+            results["props"]["seasonLeans"] = leans_line
     (out / "board.json").write_text(json.dumps(board, indent=1, ensure_ascii=False), encoding="utf-8")
     (out / "results.json").write_text(json.dumps(results, indent=1, ensure_ascii=False), encoding="utf-8")
     (out / "ratings.json").write_text(json.dumps(ratings_page(Path(args.lab)), indent=1, ensure_ascii=False), encoding="utf-8")
     (out / "tracker.json").write_text(json.dumps(tracker(tracked, nights=season["nights"]), indent=1, ensure_ascii=False), encoding="utf-8")
     (out / "record.json").write_text(json.dumps(track_record(today, history, tracked), indent=1, ensure_ascii=False), encoding="utf-8")
-    leans = prop_leans_page(Path(args.lab), args.card_feed, today) if args.card_feed else None
     if leans is not None:
         (out / "prop_leans.json").write_text(json.dumps(leans, indent=1, ensure_ascii=False), encoding="utf-8")
     if leans is None:

@@ -158,6 +158,12 @@ PATCHES: dict[str, list[tuple[str, str]]] = {
             "showScores: false, isTonight: true, isProps: false,",
             'showScores: false, isTonight: this.state.tab !== "props", isProps: this.state.tab === "props",',
         ),
+        # The prop leans' season line with its profit at 0.25u a lean
+        # (build_site_json.lean_season_line; Cooper, 2026-11-08).
+        (
+            'label: "Prop leans", tag: "no stake", record: rec(R.propLeans), units: "", unitsColor: "var(--ink-2)",',
+            'label: "Prop leans", tag: "0.25u each", record: rec(R.propLeans), units: un(R.propLeans.units), unitsColor: col(R.propLeans.units),',
+        ),
     ],
     "Results.dc.html": [
         (
@@ -170,6 +176,10 @@ PATCHES: dict[str, list[tuple[str, str]]] = {
         (
             "state = { vm: null, feedNotice: null, loadedFor: null };",
             f"state = {{ vm: null, feedNotice: null, loadedFor: null, pages: new Set({PAGES}), propsTab: true }};",
+        ),
+        (
+            'sub: RP.seasonLeans.nights ? rate(RP.seasonLeans) : "No night settled yet"',
+            'sub: RP.seasonLeans.nights ? (typeof RP.seasonLeans.units === "number" ? `${sgn(RP.seasonLeans.units)}u at 0.25u a lean · ${rate(RP.seasonLeans)}` : rate(RP.seasonLeans)) : "No night settled yet"',
         ),
     ],
 }

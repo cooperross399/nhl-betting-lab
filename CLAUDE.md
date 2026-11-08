@@ -3140,6 +3140,12 @@ Re-derive rather than trust if the data has moved.
   2,476 listed, 1,079-1,331, 31 void, 35 unmatched (all 2026-10-06), -4.03u
   on 675.45u risked over 2,410 graded (-0.6%). Nothing is bet; the card, snapshot, ledger, model, edge
   bars and staking rule are unchanged.
+  2026-11-08 (Cooper: "The website isnt showing the prop lean
+  record/profit"): the Props tab's "Prop leans" card and the Results
+  strip read the same graded record (`build_site_json.lean_season_line`
+  into `record.propLeans` and `props.seasonLeans`) with its units at 0.25u.
+  They had read the nightly boards, which list prop best bets only since
+  2026-10-09, and printed no profit. `smooth_pages.py` patches both pages.
 
 - **2026-11-03: Record and Tracker are one page, pages no longer jump, and
   the four season records carry a 0.25u profit.** Cooper: "results/season/

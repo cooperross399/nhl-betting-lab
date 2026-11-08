@@ -331,12 +331,12 @@ The Board reads ESPN's public scoreboard (`site.api.espn.com/apis/site/v2/sports
 board.json
 ```
 record.props       {w, l, p, units, nights}  — prop best bets, the season so far
-record.propLeans   {w, l, p, nights}         — prop leans, the season so far (no units)
+record.propLeans   {w, l, p, void, units, staked, nights, stake} — prop leans, the season so far, from prop_leans.json at 0.25u a lean (to win 0.25u on minus odds); built with --card-feed, else the nightly boards' {w, l, p, nights}
 record.dueList     {w, l, p, nights, stake, units, staked} — the Due List (games[].drought), the season so far, tracked as if `stake` (0.25u) were bet on every priced entry (nothing is bet)
 ```
 results.json
 ```
-props.seasonLeans  {w, l, p, nights}
+props.seasonLeans  {w, l, p, void, units, staked, nights, stake} (as record.propLeans)
 dueList            {summary, season, rows[]} | absent (absent hides the section)
   summary          {w, l, p}  — this date
   season           {w, l, p, nights, impliedPct, stake, units, staked, returnPct, byMarket: {points|goals|assists: {w, l, units?}},
