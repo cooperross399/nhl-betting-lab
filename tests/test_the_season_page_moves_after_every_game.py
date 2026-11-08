@@ -76,6 +76,6 @@ def test_publish_site_follows_a_season_sim_that_built():
     assert "Season Sim" in _on(wf)["workflow_run"]["workflows"]
     assert "Gameday Refresh" in _on(wf)["workflow_run"]["workflows"]
     clock = wf["jobs"]["when"]["steps"][0]["run"]
-    assert 'if [ "$TRIGGER" = "Season Sim" ]' in clock
+    assert 'if [ "${TRIGGER:-}" = "Season Sim" ]' in clock
     assert "grep -qx season-sim" in clock
     assert "--workflow season-sim.yml --success-only --no-merge --attempts 2 --limit 60" in text

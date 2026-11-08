@@ -105,20 +105,20 @@ jobs:
           REPO: ${{ github.repository }}
         run: |
           set -u
-          if [ "$TRIGGER" = "Season Sim" ]; then
+          if [ "${TRIGGER:-}" = "Season Sim" ]; then
             # Publish only after a default-branch Season Sim that uploaded a
             # projection; its hourly runs with no new final upload nothing.
             # If the artifact listing cannot be read, publish anyway.
             go=true
-            if [ "$TRIGGER_CONCLUSION" != "success" ] || [ "$TRIGGER_BRANCH" != "$DEFAULT_BRANCH" ]; then
+            if [ "${TRIGGER_CONCLUSION:-}" != "success" ] || [ "${TRIGGER_BRANCH:-}" != "${DEFAULT_BRANCH:-}" ]; then
               go=false
-            elif names=$(gh api "repos/$REPO/actions/runs/$TRIGGER_RUN/artifacts" -q '.artifacts[].name' 2>/dev/null) \
+            elif names=$(gh api "repos/${REPO:-}/actions/runs/${TRIGGER_RUN:-}/artifacts" -q '.artifacts[].name' 2>/dev/null) \
                  && ! printf '%s\n' "$names" | grep -qx season-sim; then
               go=false
             fi
             echo "go=$go" >> "$GITHUB_OUTPUT"
             echo "hold=false" >> "$GITHUB_OUTPUT"
-            echo "Season Sim run $TRIGGER_RUN ($TRIGGER_CONCLUSION, $TRIGGER_BRANCH): publish=$go."
+            echo "Season Sim run ${TRIGGER_RUN:-} (${TRIGGER_CONCLUSION:-}, ${TRIGGER_BRANCH:-}): publish=$go."
             exit 0
           fi
           # Each morning cron fires eight hours before its slot; the offset
