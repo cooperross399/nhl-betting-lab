@@ -66,6 +66,8 @@ def test_the_committed_inputs_name_a_source_and_a_date_for_every_number() -> Non
     awards = _awards()
     data = json.loads(INPUTS.read_text(encoding="utf-8"))
     for award in awards.AWARDS:
+        if award not in data:
+            continue  # the Lady Byng: no book or poll covers it, the voter model ranks it alone
         block = data[award]
         blocks = awards.odds_blocks(block)
         assert blocks
@@ -184,20 +186,29 @@ def test_the_page_renders_the_award_trackers(tmp_path: Path) -> None:
                            award_inputs=inputs)
     builder.check(site)
     voted = site["trophies"]["voted"]
-    assert set(voted) == {"hart", "norris", "selke", "vezina", "calder"}
-    assert voted["vezina"]["rows"] == [] and voted["calder"]["rows"] == []  # no odds or poll on file for them here
+    # An award no book or poll covers here is ranked by the voter model alone;
+    # one the model cannot rate either (no rookies in this league) is left out.
+    assert "calder" not in voted and {"hart", "norris", "selke", "vezina"} <= set(voted)
+    assert voted["vezina"]["weights"] == {"market": 0.0, "poll": 0.0, "model": 1.0}
     hart = {r["name"]: r for r in voted["hart"]["rows"]}
     assert hart[star["name"]]["projP"] is not None and hart[star["name"]]["model"] > 0
     vals = _render(site, tmp_path)
     assert vals["hasVoted"] and vals["hasTrophySection"]
-    assert [v["title"] for v in vals["voted"]] == ["Hart Trophy", "Norris Trophy", "Selke Trophy"]
+    titles = [v["title"] for v in vals["voted"]]
+    assert titles[:2] == ["Hart Trophy", "Norris Trophy"] and "Selke Trophy" in titles and "Vezina Trophy" in titles
     norris = vals["voted"][1]
-    assert any(s["label"] == "Poll: no poll yet." for s in norris["sources"])
-    assert all(v["staleLabel"] for v in vals["voted"])  # inputs dated Oct 1, built Nov 1
+    assert any(s["label"] == "Poll: no media poll yet." for s in norris["sources"])
+    vez = vals["voted"][titles.index("Vezina Trophy")]
+    assert "voter model alone" in vez["sources"][0]["label"] and not vez["staleLabel"]
+    assert all(v["staleLabel"] for v in vals["voted"] if v["key"] != "vezina")  # inputs dated Oct 1, built Nov 1
     assert all(r["share"].endswith("%") for v in vals["voted"] for r in v["rows"])
-    assert "projection" in vals["votedNote"] and all("projection" in v["sub"] for v in vals["voted"])
+    assert "projection" in vals["votedNote"] and all("projection" in v["how"] for v in vals["voted"])
+    # One award shows at a time, the Hart first, picked from a row of tabs.
+    assert vals["award"]["title"] == "Hart Trophy" and [t["label"] for t in vals["awardTabs"]][:2] == ["Hart", "Norris"]
+    assert vals["awardTabs"][0]["selected"] == "true" and all(t["selected"] == "false" for t in vals["awardTabs"][1:])
+    assert vals["award"]["headline"].endswith(".") and all(0 <= r["barW"] <= 100 for r in vals["award"]["rows"])
     page = (WEB / "Season.dc.html").read_text(encoding="utf-8")
-    assert "{{ voted }}" in page and "{{ hasTrophySection }}" in page
+    assert "{{ awardTabs }}" in page and "{{ award.rows }}" in page and "{{ hasTrophySection }}" in page
 
 
 def test_a_build_without_award_inputs_publishes_no_trackers(tmp_path: Path) -> None:
@@ -371,11 +382,13 @@ def test_each_award_is_played_out_in_the_simulated_seasons_and_blended_into_one_
     titles = [v["title"] for v in vals["voted"]]
     assert "Hart Trophy" in titles
     hart_card = vals["voted"][titles.index("Hart Trophy")]
-    assert "simulated award" in hart_card["sub"] and hart_card["modelHead"] == "Sim"
+    assert "our voter model" in hart_card["how"] and "fitted to every ballot" in hart_card["how"]
 
 
 def test_the_committed_inputs_cover_all_five_voted_awards() -> None:
     awards = _awards()
     data = json.loads(INPUTS.read_text(encoding="utf-8"))
     for award in awards.AWARDS:
+        if award == "lady_byng":
+            continue  # no book or poll prices it: the voter model ranks it alone
         assert awards.odds_blocks(data[award]), award

@@ -208,7 +208,7 @@ def fetch_history(cache: Path, seasons: list[str], *, moneypuck_seasons: set[str
                         if q.get("birthDate")}
             except (ValueError, KeyError, TypeError):
                 born = {}
-        berths, games = {}, 82.0
+        berths, games, team_pct = {}, 82.0, {}
         end = (meta.get(s) or {}).get("standingsEnd")
         if end:
             st_path = cache / f"standings_{s}.json"
@@ -218,6 +218,7 @@ def fetch_history(cache: Path, seasons: list[str], *, moneypuck_seasons: set[str
                 except ValueError:
                     table = []
                 flagged = {t["teamAbbrev"]["default"]: (t.get("clinchIndicator") or "") for t in table}
+                team_pct = {t["teamAbbrev"]["default"]: float(t.get("pointPctg") or 0) for t in table}
                 if any(v and v != "e" for v in flagged.values()):
                     berths = {k: bool(v) and v != "e" for k, v in flagged.items()}
                 elif table:
@@ -243,5 +244,5 @@ def fetch_history(cache: Path, seasons: list[str], *, moneypuck_seasons: set[str
                 mp = dict(skaters=got["skaters"], teams=got["teams"])
             goalie_mp = _read_mp_goalies(got["goalies"]) or None
         out[s] = dict(season=s, skaters=summaries[s], goalies=goalies, born=born, prior_gp=prior_gp,
-                      berths=berths, games=games, moneypuck=mp, goalie_mp=goalie_mp)
+                      berths=berths, games=games, team_pct=team_pct, moneypuck=mp, goalie_mp=goalie_mp)
     return out

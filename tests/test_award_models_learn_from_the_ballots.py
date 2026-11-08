@@ -38,7 +38,10 @@ def test_the_ballots_on_file_cover_every_award_with_a_clear_winner_each_season()
         assert len(r["season"]) == 8 and int(r["season"][4:]) == int(r["season"][:4]) + 1
         assert int(r["votes"]) > 0 and r["player"].strip()
         seasons.setdefault(r["award"], set()).add(r["season"])
-    assert {a: len(s) for a, s in seasons.items()} == {"hart": 18, "norris": 9, "selke": 6, "vezina": 14, "calder": 12}
+    # Every award back to 2010-11 (the Hart to 2008-09), the Lady Byng included
+    # (back-filled from Hockey-Reference's awards-voting pages on 2026-11-08).
+    assert {a: len(s) for a, s in seasons.items()} == {"hart": 18, "norris": 16, "selke": 16, "vezina": 16,
+                                                       "calder": 16, "lady_byng": 16}
     winners = {}
     voting = af.load_voting(VOTING)
     for award, by in voting.items():
@@ -56,6 +59,10 @@ def test_the_ballots_on_file_cover_every_award_with_a_clear_winner_each_season()
     assert winners[("selke", "20232024")] == "Aleksander Barkov"
     assert winners[("vezina", "20212022")] == "Igor Shesterkin"
     assert winners[("calder", "20232024")] == "Connor Bedard"
+    assert winners[("norris", "20112012")] == "Erik Karlsson"
+    assert winners[("selke", "20192020")] == "Sean Couturier"
+    assert winners[("calder", "20122013")] == "Jonathan Huberdeau"
+    assert winners[("lady_byng", "20242025")] == "Anže Kopitar"
 
 
 # ---------------------------------------------------------------- the fit
@@ -78,7 +85,7 @@ def _history(rng, seasons: int, truth) -> tuple[dict, dict]:
 
 
 def test_the_fit_learns_how_voters_vote_and_beats_the_old_weights_held_out() -> None:
-    truth = (4.0, 2.5, 1.5, -1.0)
+    truth = (4.0, 2.5, 1.5, -1.0, 0.0, 0.0, 0.0)
     hist, voting = _history(np.random.default_rng(1), 12, truth)
     report = af.fit_all(voting, hist, award_stats, is_rookie)["hart"]
     assert report["ballotNamesUnmatched"] == 0  # the accent-free name meets the ballot's
@@ -131,7 +138,7 @@ def test_fitted_weights_and_games_played_reach_the_simulated_awards() -> None:
     k = name_key(star["name"])
     # He misses most of the season: a fitted model that counts games played marks him down.
     star["proj_gp"] = model["games_per_team"] * 0.25
-    fit = {"hart": dict(used="fitted", beta=[6.0, np.log(4.0), 2.0, 0.0], features=list(af.FEATURES["hart"]),
+    fit = {"hart": dict(used="fitted", beta=[6.0, np.log(4.0), 2.0, 0.0, 0.0, 0.0, 0.0], features=list(af.FEATURES["hart"]),
                         seasons=18, firstSeason="20082009", lastSeason="20252026",
                         heldOut=dict(fittedLoss=1.0, defaultLoss=1.2, fittedWinners=12, defaultWinners=10))}
     shares = simulated_shares(model, result, fit=fit)["hart"]

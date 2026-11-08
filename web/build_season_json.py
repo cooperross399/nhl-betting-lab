@@ -33,7 +33,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-from season_sim.award_fit import fit_all, load_voting  # noqa: E402
+from season_sim.award_fit import fit_all, load_voting, previous_season, vote_shares  # noqa: E402
 from season_sim.fetch import fetch_bundle, fetch_history  # noqa: E402
 from season_sim.live_markets import live_blocks, merge as merge_live  # noqa: E402
 from season_sim.model import build_model, is_rookie, isfinite_all, load_injuries, load_ph_ratings  # noqa: E402
@@ -65,7 +65,8 @@ def season_label(season: str) -> str:
 
 def compose(model: dict, result: dict, notes: dict, colors: dict, *, generated_at: str,
             award_inputs: dict | None = None, award_stats_by_id: dict | None = None,
-            award_fit: dict | None = None, previous: dict | None = None) -> dict:
+            award_fit: dict | None = None, previous: dict | None = None,
+            prior_votes: dict | None = None) -> dict:
     info = model["team_info"]
     players = result["players"]
     goalies_by_team: dict[str, list[dict]] = {}
@@ -93,7 +94,9 @@ def compose(model: dict, result: dict, notes: dict, colors: dict, *, generated_a
                for ab, qs in model["players"].items() for q in qs if not q.get("filler")]
     voted = trackers(award_inputs, skaters, {r["abbrev"]: r["p_playoff"] for r in result["teams"]},
                      today=datetime.fromisoformat(generated_at).date(),
-                     sim=simulated_shares(model, result, stats_by_id, fit=award_fit) if award_inputs else None)
+                     sim=simulated_shares(model, result, stats_by_id, fit=award_fit,
+                                          prior_votes=prior_votes) if award_inputs else None,
+                     goalies=result.get("goalies") or [], games=games)
     history = award_history(previous, voted, generated_at[:10]) if voted else None
     playoffs_in = result.get("playoffs") or {}
     ratings = model.get("ratings") or {}
@@ -243,6 +246,17 @@ def _read_previous(path: str | None) -> dict | None:
         return None
 
 
+def last_seasons_votes(voting_path: Path, season: str) -> dict:
+    """{award: {name key: share}} of last season's ballots, which the award
+    models read (voters remember who they voted for); {} when unreadable."""
+    try:
+        voting = load_voting(voting_path)
+    except (OSError, ValueError, KeyError):
+        return {}
+    prev = previous_season(season)
+    return {a: vote_shares(by.get(prev)) for a, by in voting.items() if by.get(prev)}
+
+
 def fit_award_models(cache: Path, voting_path: Path) -> dict | None:
     """Fit each voted award's model to past ballots; None (the old weights) when that cannot be done."""
     try:
@@ -323,7 +337,7 @@ def main(argv: list[str] | None = None) -> int:
     fit = fit_award_models(Path(args.cache), Path(args.voting)) if award_inputs is not None else None
     site = compose(model, result, notes, _team_colors(), generated_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
                    award_inputs=award_inputs, award_stats_by_id=stats, award_fit=fit,
-                   previous=_read_previous(args.previous))
+                   previous=_read_previous(args.previous), prior_votes=last_seasons_votes(Path(args.voting), model["season"]))
     check(site)
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)

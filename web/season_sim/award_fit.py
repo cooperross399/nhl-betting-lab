@@ -22,6 +22,10 @@ used only when they predict the held-out seasons' ballots better than the old
 ones did, and otherwise the old ones stay. Both the result and the check are
 published, so the page can say which model it ran.
 
+The Lady Byng (2010-11 on) was added on 2026-11-08 with the back-filled
+Norris, Selke, Vezina and Calder ballots, all from Hockey-Reference's
+awards-voting pages.
+
 Goalies' Hart votes and Calder votes are left out of those two fits (the
 Hart and Calder models rate skaters; goalies reach those rankings through
 the odds and polls).
@@ -34,14 +38,30 @@ from pathlib import Path
 
 import numpy as np
 
-#: The features each award model reads, in order.
+#: The features each award model reads, in order. Since 2026-11-08 the races
+#: read what the voters are known to look at beside the box score: whether a
+#: player leads his own club in points and by how much (every skater who won
+#: the Hart since 2010-11 did), his club's record, and his share of this
+#: award's vote last season (voters remember who they voted for). The Selke
+#: reads a forward's scoring in full only up to first-line level
+#: (:data:`OFFENCE_KNEE`), because no scoring leader has won it. No z-score
+#: counts past :data:`Z_CAP` standard deviations.
 FEATURES = {
-    "hart": ("points_vs_leader", "playoffs", "games", "defenseman"),
-    "norris": ("points_pg", "toi", "defence", "games"),
-    "selke": ("defence", "faceoffs", "pk", "puck", "points_pg", "games"),
-    "vezina": ("wins", "gsax", "sv", "games"),
+    "hart": ("points_vs_leader", "playoffs", "games", "defenseman", "team_lead", "team_pct", "prior_vote"),
+    "norris": ("points_pg", "toi", "defence", "games", "team_pct", "prior_vote"),
+    "selke": ("defence", "faceoffs", "pk", "puck", "offence", "games", "prior_vote"),
+    "vezina": ("wins", "gsax", "sv", "games", "team_pct", "prior_vote"),
     "calder": ("points_vs_leader", "defenseman", "games"),
+    "lady_byng": ("points_pg", "pim", "games", "defenseman", "prior_vote"),
 }
+#: No feature counts past this many standard deviations from the field's mean.
+Z_CAP = 3.0
+#: The Selke's offence counts in full up to this z-score (about first-line
+#: scoring among the field) and at :data:`OFFENCE_SLOPE` of the rate beyond.
+OFFENCE_KNEE = 1.0
+OFFENCE_SLOPE = 0.25
+#: A player's lead over his club's next-best scorer, as a log ratio, clipped.
+TEAM_LEAD_CLIP = 1.0
 #: Plain-English names for the page.
 FEATURE_LABELS = {
     "points_vs_leader": "points against the leader's", "playoffs": "club makes the playoffs",
@@ -49,6 +69,9 @@ FEATURE_LABELS = {
     "toi": "ice time", "defence": "5v5 chances allowed against his teammates", "faceoffs": "faceoffs",
     "pk": "penalty-kill time", "puck": "takeaways less giveaways", "wins": "wins",
     "gsax": "goals saved above expected", "sv": "save percentage",
+    "team_lead": "his lead over his club's next-best scorer", "team_pct": "his club's record",
+    "prior_vote": "his share of last season's vote", "offence": "scoring, counted in full up to first-line level",
+    "pim": "penalty minutes a game",
 }
 #: The hand-set models these fits start from (and fall back to): softmax
 #: weights, i.e. the old composite weights times their temperature (2.2), the
@@ -56,11 +79,13 @@ FEATURE_LABELS = {
 #: Hart playoff factor 0.25 + 0.75 x berth, which is log 4 on a berth.
 TEMP = 2.2
 DEFAULTS = {
-    "hart": (6.0, math.log(4.0), 0.0, 0.0),
-    "norris": (TEMP * 0.5, TEMP * 0.2, TEMP * 0.3, 0.0),
-    "selke": (TEMP * 0.3, TEMP * 0.2, TEMP * 0.15, TEMP * 0.1, TEMP * 0.25, 0.0),
-    "vezina": (TEMP * 0.35, TEMP * 0.45, TEMP * 0.2, 0.0),
+    "hart": (6.0, math.log(4.0), 0.0, 0.0, 0.0, 0.0, 0.0),
+    "norris": (TEMP * 0.5, TEMP * 0.2, TEMP * 0.3, 0.0, 0.0, 0.0),
+    "selke": (TEMP * 0.3, TEMP * 0.2, TEMP * 0.15, TEMP * 0.1, TEMP * 0.25, 0.0, 0.0),
+    "vezina": (TEMP * 0.35, TEMP * 0.45, TEMP * 0.2, 0.0, 0.0, 0.0),
     "calder": (6.0, 0.0, 0.0),
+    # The Lady Byng goes to a scorer who is rarely penalised.
+    "lady_byng": (TEMP * 0.5, -TEMP * 0.5, 0.0, -1.0, 0.0),
 }
 #: How hard the fit is pulled toward the old weights.
 RIDGE = 0.05
@@ -68,7 +93,7 @@ RIDGE = 0.05
 #: player who barely played is penalised but not sent to minus infinity.
 GAMES_FLOOR = 0.1
 #: The fields each history season is rebuilt with (the live model's pools).
-POOL = {"hart": 60, "norris": 40, "selke": 80, "calder": 25}
+POOL = {"hart": 60, "norris": 40, "selke": 80, "calder": 25, "lady_byng": 150}
 VEZINA_MIN_SHARE = 0.4
 MIN_GP = 20
 VOTING = Path(__file__).resolve().parents[2] / "data" / "season_sim" / "award_voting.csv"
@@ -101,7 +126,7 @@ def _z(x: np.ndarray) -> np.ndarray:
     var = np.where(have, (x - mean) ** 2, 0.0).sum(axis=-1, keepdims=True) / n
     sd = np.sqrt(var)
     z = np.where(sd > 0, (x - mean) / np.where(sd > 0, sd, 1.0), 0.0)
-    return np.where(have, z, 0.0)
+    return np.clip(np.where(have, z, 0.0), -Z_CAP, Z_CAP)
 
 
 def design(award: str, cols: dict) -> np.ndarray:
@@ -112,7 +137,11 @@ def design(award: str, cols: dict) -> np.ndarray:
     final points, wins or berths). Keys: ``points`` (season total),
     ``games`` (share of games played), ``berth``, ``d`` (1 for a
     defenseman), and the stats ``toi``, ``defence``, ``faceoffs``, ``pk``,
-    ``puck``, ``wins``, ``gsax``, ``sv``, ``points_pg``.
+    ``puck``, ``wins``, ``gsax``, ``sv``, ``points_pg``, ``team_lead`` (log
+    of his points over his club's next-best scorer's), ``team_pct`` (his
+    club's points percentage), ``prior_vote`` (his share of this award's vote
+    last season, 0 when he got none) and ``pim`` (penalty minutes a game).
+    A column the caller does not have counts as average (0 for the raw ones).
     """
     def arr(k: str) -> np.ndarray:
         a = np.asarray(cols[k], dtype=float)
@@ -132,6 +161,15 @@ def design(award: str, cols: dict) -> np.ndarray:
             v = np.log(np.clip(arr("games"), GAMES_FLOOR, 1.0))
         elif f == "defenseman":
             v = arr("d")
+        elif f == "team_lead":
+            v = np.clip(np.nan_to_num(arr("team_lead")), -TEAM_LEAD_CLIP, TEAM_LEAD_CLIP) if "team_lead" in cols else 0.0
+        elif f == "prior_vote":
+            v = np.nan_to_num(arr("prior_vote")) if "prior_vote" in cols else 0.0
+        elif f == "offence":
+            z = _z(arr("points_pg"))
+            v = np.where(z > OFFENCE_KNEE, OFFENCE_KNEE + OFFENCE_SLOPE * (z - OFFENCE_KNEE), z)
+        elif f not in cols:
+            v = 0.0
         else:
             v = _z(arr(f))
         feats.append(np.broadcast_to(v, (S, P)))
@@ -274,14 +312,25 @@ def season_fields(hist: dict, award_stats_fn, is_rookie_fn) -> dict:
             berth=float(any(berth.get(t) for t in teams[-1:])), d=float(q.get("positionCode") == "D"),
             toi=_f(q.get("timeOnIcePerGame")) / 60.0, points_pg=_f(q.get("points"), 0.0) / max(gp, 1.0),
             defence=_f(st.get("defence")), faceoffs=_f(st.get("faceoffs")), pk=_f(st.get("pk")), puck=_f(st.get("puck")),
-            gp=gp, rookie=_rookie(is_rookie_fn, prior_gp.get(q["playerId"], []), born.get(q["playerId"]), season),
+            gp=gp, pim=_f(q.get("penaltyMinutes"), 0.0) / max(gp, 1.0), rookie=_rookie(is_rookie_fn, prior_gp.get(q["playerId"], []), born.get(q["playerId"]), season),
         ))
+    # Each skater's lead over his club's next-best scorer (his last club).
+    team_pct = hist.get("team_pct") or {}
+    by_team: dict[str, list[dict]] = {}
+    for r in rows:
+        if r["teams"]:
+            by_team.setdefault(r["teams"][-1], []).append(r)
+    for r in rows:
+        mates = [m["points"] for m in by_team.get(r["teams"][-1] if r["teams"] else "", []) if m is not r]
+        r["team_lead"] = team_lead(r["points"], max(mates) if mates else 0.0)
+        r["team_pct"] = _f(team_pct.get(r["teams"][-1])) if r["teams"] else float("nan")
     by_pts = sorted(rows, key=lambda r: -r["points"])
     out = {
         "hart": by_pts[:POOL["hart"]],
         "norris": [r for r in by_pts if r["pos"] == "D" and r["gp"] >= MIN_GP and (r["toi"] or 0) >= 17.0][:POOL["norris"]],
         "selke": [r for r in by_pts if r["pos"] == "F" and r["gp"] >= MIN_GP and (r["toi"] or 0) >= 14.0][:POOL["selke"]],
         "calder": [r for r in by_pts if r["rookie"] and r["gp"] >= 1][:POOL["calder"]],
+        "lady_byng": [r for r in by_pts if r["gp"] >= MIN_GP][:POOL["lady_byng"]],
         "_all": rows,
     }
     if not stats:
@@ -295,6 +344,7 @@ def season_fields(hist: dict, award_stats_fn, is_rookie_fn) -> dict:
         gsax = ((m["xGoals"] - m["goals"]) / m["icetime"] * 3600.0) if m and m["icetime"] > 0 else float("nan")
         goalies.append(dict(key=name_key(g.get("goalieFullName") or ""), teams=teams, pos="G", id=g["playerId"],
                             wins=_f(g.get("wins"), 0.0), sv=_f(g.get("savePct")), gsax=gsax,
+                            team_pct=_f(team_pct.get(teams[-1])) if teams else float("nan"),
                             games=min(gs / games, 1.0), gs=gs))
     if mp_g:
         out["vezina"] = [g for g in goalies if g["games"] >= VEZINA_MIN_SHARE]
@@ -302,8 +352,34 @@ def season_fields(hist: dict, award_stats_fn, is_rookie_fn) -> dict:
     return out
 
 
-def fit_data(award: str, ballots: list[dict], fields: dict) -> tuple[tuple[np.ndarray, np.ndarray] | None, int]:
-    """(X, vote shares) for one award in one season, and how many ballot names did not match."""
+def team_lead(points: float, best_mate: float) -> float:
+    """log(his points / his club's next-best scorer's), clipped: + when he leads."""
+    v = math.log(max(float(points), 0.5) / max(float(best_mate), 0.5))
+    return max(-TEAM_LEAD_CLIP, min(TEAM_LEAD_CLIP, v))
+
+
+def vote_shares(ballots: list[dict] | None) -> dict[str, float]:
+    """{name key: share of the season's vote points} for one award's ballots."""
+    tot = sum(b["votes"] for b in ballots or [])
+    out: dict[str, float] = {}
+    for b in ballots or []:
+        k = name_key(b["player"])
+        out[k] = out.get(k, 0.0) + b["votes"] / tot
+    return out if tot > 0 else {}
+
+
+def previous_season(season: str) -> str:
+    y = int(season[:4]) - 1
+    return f"{y}{y + 1}"
+
+
+def fit_data(award: str, ballots: list[dict], fields: dict, prior: dict[str, float] | None = None
+             ) -> tuple[tuple[np.ndarray, np.ndarray] | None, int]:
+    """(X, vote shares) for one award in one season, and how many ballot names did not match.
+
+    ``prior`` is last season's share of this award's vote by name key (an
+    empty dict when that season's ballots are not on file: the feature then
+    reads 0 for everyone, which only weakens it)."""
     pool = list(fields.get(award) or [])
     if len(pool) < 2:
         return None, 0
@@ -325,8 +401,10 @@ def fit_data(award: str, ballots: list[dict], fields: dict) -> tuple[tuple[np.nd
     if tot <= 0:
         return None, missed
     cols = {k: [r.get(k, float("nan")) for r in pool] for k in
-            ("points", "games", "berth", "d", "toi", "defence", "faceoffs", "pk", "puck", "wins", "gsax", "sv", "points_pg")
+            ("points", "games", "berth", "d", "toi", "defence", "faceoffs", "pk", "puck", "wins", "gsax", "sv", "points_pg",
+             "team_lead", "team_pct", "pim")
             if any(k in r for r in pool)}
+    cols["prior_vote"] = [(prior or {}).get(r["key"], 0.0) for r in pool]
     v = np.array([votes.get(id(r), 0.0) / tot for r in pool])
     return (design(award, cols), v), missed
 
@@ -340,7 +418,8 @@ def fit_all(voting: dict, history: dict[str, dict], award_stats_fn, is_rookie_fn
         for season, rows in (voting.get(award) or {}).items():
             if season not in fields:
                 continue
-            got, miss = fit_data(award, rows, fields[season])
+            got, miss = fit_data(award, rows, fields[season],
+                                 vote_shares((voting.get(award) or {}).get(previous_season(season))))
             ballots += len(rows); missed += miss
             if got is not None:
                 data[season] = got

@@ -62,7 +62,7 @@ WEIGHTS = {"market": 0.5, "poll": 0.3, "model": 0.2}
 SIM_WEIGHTS = {"market": 0.45, "poll": 0.2, "model": 0.35}
 #: Candidates the simulation rates per award (the top of each field by
 #: projected points; every starting goalie for the Vezina).
-SIM_POOL = {"hart": 60, "norris": 40, "selke": 80, "calder": 25}
+SIM_POOL = {"hart": 60, "norris": 40, "selke": 80, "calder": 25, "lady_byng": 150}
 #: A goalie rated for the Vezina has at least this share of his club's starts
 #: (a tandem's two halves both qualify).
 VEZINA_MIN_SHARE = 0.4
@@ -91,15 +91,19 @@ STALE_DAYS = 14
 #: Rows published per award.
 ROWS = 10
 
-AWARDS = ("hart", "norris", "selke", "vezina", "calder")
+AWARDS = ("hart", "norris", "selke", "vezina", "calder", "lady_byng")
 LABELS = {"hart": "Hart Trophy", "norris": "Norris Trophy", "selke": "Selke Trophy",
-          "vezina": "Vezina Trophy", "calder": "Calder Trophy"}
+          "vezina": "Vezina Trophy", "calder": "Calder Trophy", "lady_byng": "Lady Byng Trophy"}
+#: What each award is for, in a reader's words.
+FOR = {"hart": "Most valuable player to his team", "norris": "Best defenseman", "selke": "Best defensive forward",
+       "vezina": "Best goalie", "calder": "Best rookie", "lady_byng": "Sportsmanship with skill"}
 SIM_NOTES = {
     "hart": "Sim: in each simulated season, final points over the leader's, to the sixth power, times 0.25 + 0.75 if his club makes the playoffs that season.",
     "norris": "Sim: in each simulated season, final points a game 50%, ice time 20%, 5v5 chances allowed against his teammates 30%.",
     "selke": "Sim: in each simulated season, 5v5 chances allowed against his teammates 30%, final points a game 25%, faceoffs 20%, penalty kill time 15%, takeaways less giveaways 10%.",
     "vezina": "Sim: in each simulated season, final wins 35%, goals saved above expected per 60 45%, save percentage 20%, among goalies with two fifths of their club's starts.",
     "calder": "Sim: in each simulated season, a rookie's final points over the rookie leader's, to the sixth power.",
+    "lady_byng": "Sim: in each simulated season, final points a game against penalty minutes a game.",
 }
 FALLBACK_VEZINA = "No model signal: the simulation did not reach this build, so this tracker is the odds and the poll."
 FALLBACK_CALDER = FALLBACK_VEZINA
@@ -109,6 +113,7 @@ MODEL_NOTES = {
     "selke": "Model: 5v5 chances allowed against his teammates 30%, points 25%, faceoffs 20%, penalty kill time 15%, takeaways less giveaways 10%.",
     "vezina": FALLBACK_VEZINA,
     "calder": FALLBACK_CALDER,
+    "lady_byng": FALLBACK_CALDER,
 }
 #: Notes for a build that has no season-to-date stats (the old projection).
 FALLBACK_NOTES = {
@@ -117,6 +122,7 @@ FALLBACK_NOTES = {
     "selke": "No model signal: no defensive stats reached this build, so this tracker is the odds and the poll.",
     "vezina": "No model signal: the simulation did not reach this build, so this tracker is the odds and the poll.",
     "calder": "No model signal: the simulation did not reach this build, so this tracker is the odds and the poll.",
+    "lady_byng": "No model signal: the simulation did not reach this build.",
 }
 
 
@@ -309,7 +315,8 @@ def award_stats(bundle: dict, *, defence: dict[str, float] | None = None) -> dic
         m_all = mp.get(s, {}).get((pid, "all"))
         m_pk = mp.get(s, {}).get((pid, "4on5"))
         m_ev = mp.get(s, {}).get((pid, "5on5"))
-        out = dict(points=float(q.get("points") or 0) / gp, toi=float(q.get("timeOnIcePerGame") or 0) / 60.0)
+        out = dict(points=float(q.get("points") or 0) / gp, toi=float(q.get("timeOnIcePerGame") or 0) / 60.0,
+                   pim=float(q.get("penaltyMinutes") or 0) / gp)
         if m_all:
             mgp = _f(m_all, "games_played") or gp
             out["faceoffs"] = (_f(m_all, "faceoffsWon") - _f(m_all, "faceoffsLost")) / mgp
@@ -330,8 +337,14 @@ def award_stats(bundle: dict, *, defence: dict[str, float] | None = None) -> dic
         gp_now, now = rates(season, pid)
         gp_prior, before = rates(prior, pid)
         row: dict = dict(gp=max(gp_now, gp_prior if gp_now < MIN_GAMES else 0), gp_now=gp_now)
-        for key in ("points", "toi", "faceoffs", "pk", "puck", "defence"):
+        for key in ("points", "toi", "faceoffs", "pk", "puck", "defence", "pim"):
             row[key] = _blend(now.get(key), gp_now, before.get(key))
+        # The season so far, as it stands, for the page's plain-English line.
+        q = nhl.get(season, {}).get(pid) or {}
+        row["now"] = dict(gp=int(q.get("gamesPlayed") or 0), g=int(q.get("goals") or 0), a=int(q.get("assists") or 0),
+                          p=int(q.get("points") or 0), pim=int(q.get("penaltyMinutes") or 0),
+                          toi=round(float(q.get("timeOnIcePerGame") or 0) / 60.0, 1),
+                          fo=(round(float(q["faceoffWinPct"]), 3) if q.get("faceoffWinPct") not in (None, "") else None))
         if defence and str(pid) in defence:
             row["defence"] = float(defence[str(pid)])
         stats[pid] = row
@@ -353,8 +366,72 @@ def _source(block: dict | None, kind: str, today: date, used: bool | None = None
     return out
 
 
+def _ordinal(n: int) -> str:
+    return f"{n}{'th' if 10 <= n % 100 <= 20 else {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')}"
+
+
+def _sv(x) -> str:
+    return f".{round(float(x) * 1000):03d}" if x is not None else ""
+
+
+def why_line(award: str, player: dict | None, goalie: dict | None, *, mates: list[dict], playoff: float | None,
+             games: float) -> str:
+    """One plain-English line on why a candidate is where he is: the numbers
+    the award's voters look at, as they stand tonight. Facts only."""
+    if award == "vezina":
+        g = (goalie or {}).get("now") or {}
+        if not g.get("gs"):
+            return ""
+        bits = [f"{g.get('w', 0)} wins in {g['gs']} starts"]
+        if g.get("sv") is not None:
+            bits.append(f"{_sv(g['sv'])} save percentage")
+        if (goalie or {}).get("gsax60") is not None:
+            gs = float(goalie["gsax60"])
+            bits.append(f"rated {abs(gs):.2f} goals a game {'better' if gs >= 0 else 'worse'} than an average goalie")
+        return ", ".join(bits)
+    st = (player or {}).get("stats") or {}
+    now = st.get("now") or {}
+    gp = now.get("gp") or 0
+    if not gp:
+        return ""
+    pace = round(now["p"] / gp * games)
+    if award == "hart":
+        bits = [f"{now['p']} points in {gp} games, on pace for {pace}"]
+        others = sorted((m for m in mates if m is not player), key=lambda m: -((m.get("stats") or {}).get("now") or {}).get("p", 0))
+        best = ((others[0].get("stats") or {}).get("now") or {}).get("p", 0) if others else 0
+        if now["p"] > best:
+            bits.append(f"leads his team by {now['p'] - best}")
+        elif now["p"] == best:
+            bits.append("tied for his team's lead")
+        else:
+            bits.append(f"{best - now['p']} behind {others[0]['name'].split(' ')[-1]} on his own team")
+        if playoff is not None:
+            bits.append(f"team {round(playoff * 100)}% to make the playoffs")
+        return ", ".join(bits)
+    if award == "norris":
+        bits = [f"{now['p']} points in {gp} games", f"{now['toi']:.1f} minutes a night"]
+        if st.get("defence") is not None and st["defence"] > 0.02:
+            bits.append("fewer chances against than his teammates")
+        return ", ".join(bits)
+    if award == "selke":
+        bits = []
+        if now.get("fo") is not None:
+            bits.append(f"{round(now['fo'] * 100)}% on faceoffs")
+        if st.get("pk") is not None and st["pk"] >= 1.0:
+            bits.append(f"{st['pk']:.1f} penalty-kill minutes a game")
+        if st.get("defence") is not None and st["defence"] > 0.02:
+            bits.append("fewer chances against than his teammates")
+        bits.append(f"{now['p']} points")
+        return ", ".join(bits)
+    if award == "calder":
+        return f"{now['g']} goals, {now['p']} points in {gp} games, on pace for {pace}"
+    if award == "lady_byng":
+        return f"{now['p']} points and {now['pim']} penalty minutes in {gp} games"
+    return ""
+
+
 def tracker(award: str, inputs: dict, players: list[dict], playoff: dict[str, float], *, today: date,
-            sim: dict | None = None) -> dict:
+            sim: dict | None = None, goalies: list[dict] | None = None, games: float = 84) -> dict:
     """One award's tracker: rows, the sources with their age, the weights used."""
     spec = inputs.get(award) or {}
     blocks, poll_block = odds_blocks(spec), spec.get("poll")
@@ -378,7 +455,16 @@ def tracker(award: str, inputs: dict, players: list[dict], playoff: dict[str, fl
             names.setdefault(name_key(x["name"]), (x["name"], x.get("team")))
     # A field the books and polls have not caught up with: the model's own
     # leaders join it, so a breakout season is on the page before it is priced.
-    if names and (any(p.get("stats") for p in players) or simulated.get("share")):
+    # An award no book or poll covers (the Lady Byng): the model names the field.
+    if not names and model:
+        who = dict(simulated.get("who") or {})
+        by_key0 = {name_key(p["name"]): p for p in players}
+        for k in sorted(model, key=lambda k: -model[k])[:ROWS]:
+            if k in who:
+                names[k] = who[k]
+            elif k in by_key0:
+                names[k] = (by_key0[k]["name"], by_key0[k].get("team"))
+    elif names and (any(p.get("stats") for p in players) or simulated.get("share")):
         by_key = {name_key(p["name"]): p for p in players}
         by_key.update({k: dict(name=n, team=t) for k, (n, t) in (simulated.get("who") or {}).items() if k not in by_key})
         for k in sorted(model, key=lambda k: -model[k])[:MODEL_ADDS]:
@@ -415,13 +501,23 @@ def tracker(award: str, inputs: dict, players: list[dict], playoff: dict[str, fl
             odds=odds_by.get(k), pollRank=poll_rank.get(k), pollPoints=(int(poll_pts[k]) if k in poll_pts else None),
             projP=(round(proj["p"], 1) if proj else None),
         ))
+    goalie_by = {name_key(g["name"]): g for g in goalies or []}
+    team_of: dict[str, list[dict]] = {}
+    for p in players:
+        team_of.setdefault(p.get("team"), []).append(p)
+    for r in rows:
+        k = name_key(r["name"])
+        pl = proj_by.get(k)
+        r["why"] = why_line(award, pl, goalie_by.get(k), mates=team_of.get((pl or {}).get("team"), []),
+                            playoff=playoff.get(r["team"]) if r.get("team") else None, games=games) or None
     rows.sort(key=lambda r: (-r["tracker"], r["name"]))
     sources = [_source(b, "odds", today, used=u) for b, u in zip(blocks, used)]
     sources += [s for s in (_source(poll_block, "poll", today),) if s]
     return dict(
         label=LABELS[award], rows=rows[:ROWS], weights=weights, sources=sources,
         noPoll=poll_block is None,
-        stale=any(s["stale"] for s in sources if s.get("used", True)) or not sources,
+        stale=any(s["stale"] for s in sources if s.get("used", True)) or (not sources and not model),
+        about=FOR[award],
         modelNote=simulated.get("note") or (SIM_NOTES if simulated.get("share") else
                    MODEL_NOTES if any(p.get("stats") for p in players) else FALLBACK_NOTES)[award],
         modelKind="sim" if simulated.get("share") else ("stats" if model else None),
@@ -429,11 +525,13 @@ def tracker(award: str, inputs: dict, players: list[dict], playoff: dict[str, fl
 
 
 def trackers(inputs: dict | None, players: list[dict], playoff: dict[str, float], *, today: date,
-             sim: dict | None = None) -> dict | None:
-    """All three trackers, or None when there is no inputs file."""
+             sim: dict | None = None, goalies: list[dict] | None = None, games: float = 84) -> dict | None:
+    """Every award's tracker, or None when there is no inputs file. An award
+    with no odds, poll or model (the Lady Byng on an old build) is left out."""
     if not inputs:
         return None
-    return {a: tracker(a, inputs, players, playoff, today=today, sim=sim) for a in AWARDS}
+    out = {a: tracker(a, inputs, players, playoff, today=today, sim=sim, goalies=goalies, games=games) for a in AWARDS}
+    return {a: t for a, t in out.items() if t["rows"]}
 
 
 # ----------------------------------------------------------------------
@@ -463,7 +561,7 @@ def _season_label(season: str | None) -> str:
 
 
 def simulated_shares(model: dict, result: dict, stats_by_id: dict | None = None, *, seed: int = 20262028,
-                     fit: dict | None = None) -> dict:
+                     fit: dict | None = None, prior_votes: dict | None = None) -> dict:
     """Every award, simulated: {award: {"share": {key: p}, "who": {key: (name, team)}, "note": str}}.
 
     ``result`` is :func:`season_sim.simulate.simulate`'s; its ``_arrays``
@@ -477,13 +575,18 @@ def simulated_shares(model: dict, result: dict, stats_by_id: dict | None = None,
     report) and on the old hand-set weights otherwise. A player's games
     played (his season so far plus the games he is expected to be fit for)
     is one of the numbers rated, so an injured star loses ground the way he
-    does with voters. Empty when the arrays are missing.
+    does with voters. A skater's lead over his club's next-best scorer and
+    his club's record are read in each simulated season too, and
+    ``prior_votes`` ({award: {name key: share}}) is last season's vote, which
+    voters remember. Empty when the arrays are missing.
     """
     from .award_fit import design, params, shares
     from .simulate import draw_season_totals  # local: keeps this module light for the page tests
 
     arrays = result.get("_arrays") or {}
     gf_rest, playoff = arrays.get("gf_rest"), arrays.get("playoff")
+    team_pts = arrays.get("pts")
+    prior_votes = prior_votes or {}
     if gf_rest is None or playoff is None:
         return {}
     beta = params(fit)
@@ -510,18 +613,38 @@ def simulated_shares(model: dict, result: dict, stats_by_id: dict | None = None,
                 out["who"][k] = (q["name"], t)
         return out
 
-    def skater_cols(chosen: list[tuple[str, dict]]) -> dict:
+    def pct_of(team_idx: list[int]) -> np.ndarray:
+        if team_pts is None:
+            return np.full(len(team_idx), np.nan)
+        return np.asarray(team_pts, dtype=float)[:, team_idx] / (2.0 * season_games)
+
+    def skater_cols(award: str, chosen: list[tuple[str, dict]]) -> dict:
         _, pts = draw_season_totals(rng, chosen, idx, gf_rest, sims)
         gp = np.array([max(float(q.get("proj_gp") or 0.0), 1.0) for _, q in chosen])
         cols = dict(points=pts, points_pg=pts / gp, games=np.minimum(gp / season_games, 1.0),
                     d=np.array([float(q.get("pos") == "D") for _, q in chosen]),
-                    berth=playoff[:, [idx[t] for t, _ in chosen]].astype(float))
-        for k in ("toi", "defence", "faceoffs", "pk", "puck"):
+                    berth=playoff[:, [idx[t] for t, _ in chosen]].astype(float),
+                    team_pct=pct_of([idx[t] for t, _ in chosen]),
+                    prior_vote=np.array([prior_votes.get(award, {}).get(name_key(q["name"]), 0.0) for _, q in chosen]))
+        for k in ("toi", "defence", "faceoffs", "pk", "puck", "pim"):
             cols[k] = np.array([num(stat(q).get(k)) for _, q in chosen])
+        # His lead over his club's next-best scorer in each simulated season:
+        # a teammate also drawn here counts at his drawn total, any other at
+        # his projection.
+        lead = np.zeros_like(pts)
+        for i, (t, q) in enumerate(chosen):
+            drawn = [j for j, (u, r) in enumerate(chosen) if u == t and j != i]
+            others = [float(r["proj_p"]) for r in model["players"].get(t, [])
+                      if not r.get("filler") and r is not q and not any(r is chosen[j][1] for j in drawn)]
+            best = np.full(pts.shape[0], max(others) if others else 0.0)
+            for j in drawn:
+                best = np.maximum(best, pts[:, j])
+            lead[:, i] = np.clip(np.log(np.maximum(pts[:, i], 0.5) / np.maximum(best, 0.5)), -1.0, 1.0)
+        cols["team_lead"] = lead
         return cols
 
     def run(award: str, chosen: list[tuple[str, dict]]) -> None:
-        X = design(award, skater_cols(chosen))
+        X = design(award, skater_cols(award, chosen))
         out[award] = keyed(award, chosen, shares(X, beta[award]).mean(axis=0))
 
     out: dict = {}
@@ -539,6 +662,9 @@ def simulated_shares(model: dict, result: dict, stats_by_id: dict | None = None,
     rookies = [tq for tq in by_p if tq[1].get("rookie")][:SIM_POOL["calder"]]
     if len(rookies) >= 2:
         run("calder", rookies)
+    byng = rated[:SIM_POOL["lady_byng"]]
+    if len(byng) >= 2 and any(stat(q).get("pim") is not None for _, q in byng):
+        run("lady_byng", byng)
     goalies, wins_by = result.get("goalies") or [], arrays.get("goalie_wins") or []
     starters = [(g, w) for g, w in zip(goalies, wins_by) if g.get("share", 0) >= VEZINA_MIN_SHARE]
     if len(starters) >= 2:
@@ -556,6 +682,9 @@ def simulated_shares(model: dict, result: dict, stats_by_id: dict | None = None,
 
         cols = dict(wins=wins, gsax=np.array([num(g.get("gsax60")) for g, _ in starters]),
                     sv=np.array([num(sv(g)) for g, _ in starters]),
+                    team_pct=pct_of([idx[g["team"]] for g, _ in starters]) if all(g.get("team") in idx for g, _ in starters)
+                    else np.full(len(starters), np.nan),
+                    prior_vote=np.array([prior_votes.get("vezina", {}).get(name_key(g["name"]), 0.0) for g, _ in starters]),
                     games=np.array([min(float(g.get("starts") or 0) / season_games, 1.0) for g, _ in starters]))
         share = shares(design("vezina", cols), beta["vezina"]).mean(axis=0)
         out["vezina"] = {"share": {}, "who": {}, "note": _fit_note("vezina", fit)}
