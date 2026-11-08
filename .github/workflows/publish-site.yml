@@ -47,8 +47,12 @@ on:
     # day's first published opinion from the build after the card.
     - cron: "55 2 * * *"
     - cron: "55 3 * * *"
+  # And after every Season Sim that built a projection (it runs hourly and
+  # builds only when a game has gone final), so the Season page and its
+  # award races move after each game (Cooper, 2026-11-08). The `when` job
+  # stands down after a Season Sim run that uploaded nothing.
   workflow_run:
-    workflows: ["Gameday Refresh"]
+    workflows: ["Gameday Refresh", "Season Sim"]
     types: [completed]
   workflow_dispatch:
     inputs:
@@ -92,8 +96,31 @@ jobs:
         id: clock
         env:
           SCHEDULE: ${{ github.event.schedule }}
+          TRIGGER: ${{ github.event.workflow_run.name }}
+          TRIGGER_RUN: ${{ github.event.workflow_run.id }}
+          TRIGGER_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          TRIGGER_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
         run: |
           set -u
+          if [ "$TRIGGER" = "Season Sim" ]; then
+            # Publish only after a default-branch Season Sim that uploaded a
+            # projection; its hourly runs with no new final upload nothing.
+            # If the artifact listing cannot be read, publish anyway.
+            go=true
+            if [ "$TRIGGER_CONCLUSION" != "success" ] || [ "$TRIGGER_BRANCH" != "$DEFAULT_BRANCH" ]; then
+              go=false
+            elif names=$(gh api "repos/$REPO/actions/runs/$TRIGGER_RUN/artifacts" -q '.artifacts[].name' 2>/dev/null) \
+                 && ! printf '%s\n' "$names" | grep -qx season-sim; then
+              go=false
+            fi
+            echo "go=$go" >> "$GITHUB_OUTPUT"
+            echo "hold=false" >> "$GITHUB_OUTPUT"
+            echo "Season Sim run $TRIGGER_RUN ($TRIGGER_CONCLUSION, $TRIGGER_BRANCH): publish=$go."
+            exit 0
+          fi
           # Each morning cron fires eight hours before its slot; the offset
           # is New York's AT the slot, so a run that fires before a daylight
           # saving change and publishes after it still picks the right cron.
@@ -391,8 +418,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -u
+          # --limit 60: Season Sim runs hourly and a run with no new final
+          # uploads nothing; those are passed over.
           if python scripts/restore_state.py --artifact season-sim --dest dist/data \
-               --workflow season-sim.yml --success-only --no-merge --attempts 2; then
+               --workflow season-sim.yml --success-only --no-merge --attempts 2 --limit 60; then
             python - <<'PY'
           import json
           d = json.load(open("dist/data/season.json", encoding="utf-8"))

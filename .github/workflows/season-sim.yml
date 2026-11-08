@@ -19,6 +19,13 @@ name: Season Sim
 on:
   schedule:
     - cron: "5 13 * * *"   # 09:05 New York; finals are in, the site builds at 10:45
+    # Every hour too, so the Season page and every award race move after
+    # each game (Cooper, 2026-11-08: "this should update with every game
+    # played ... for every award"). An hourly run that finds no new final
+    # since the last projection builds nothing and uploads nothing, and
+    # Publish Site, which runs when this workflow completes, publishes only
+    # after a run that uploaded a projection. The 13:05 run always builds.
+    - cron: "35 * * * *"
   workflow_dispatch:
     inputs:
       sims:
@@ -58,7 +65,46 @@ jobs:
           python -m pip install -r requirements.txt
           python -m pip install -e .
 
+      - name: Restore the last projection
+        # Its daily award rankings are carried forward, so each name on the
+        # Season page gets a trend line. Soft: without it the lines start
+        # today. Unpacked where the artifact is rooted, then moved straight
+        # out of dist to the runner's temp directory, so it can never be
+        # handed on in place of today's.
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -u
+          mkdir -p "$RUNNER_TEMP/previous-season"
+          # --limit 60: an hourly run with no new final uploads nothing and is
+          # passed over, and a day holds up to 23 of them between builds.
+          if python scripts/restore_state.py --artifact season-sim --dest dist/data \
+               --workflow season-sim.yml --success-only --no-merge --attempts 2 --limit 60; then
+            mv dist/data/season.json "$RUNNER_TEMP/previous-season/season.json"
+          else
+            echo "::warning::The last season projection could not be restored; the award trend lines start today."
+          fi
+          rm -rf dist/data
+
+      - name: Ask whether a game has gone final since
+        # Only the hourly cron asks; the morning build and a dispatch always
+        # build. Anything this cannot read means build.
+        id: fresh
+        env:
+          SCHEDULE: ${{ github.event.schedule }}
+        run: |
+          set -u
+          if [ "$SCHEDULE" = "35 * * * *" ]; then
+            PREV="$RUNNER_TEMP/previous-season/season.json"
+            python scripts/season_sim_has_new_games.py --previous "$PREV" | tee "$RUNNER_TEMP/fresh.txt"
+            grep -E '^build=(true|false)$' "$RUNNER_TEMP/fresh.txt" | tail -1 >> "$GITHUB_OUTPUT"
+          else
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Restore the card's team ratings
+        if: steps.fresh.outputs.build == 'true'
         # Cooper, 2026-10-26: the season's team strengths come from the same
         # PostHockey-style ratings the card prices on (shooter-adjusted xG
         # with GSAx(sh) and each club's own home ice), which Gameday Refresh
@@ -84,27 +130,8 @@ jobs:
           fi
           rm -rf "$STATE"
 
-      - name: Restore the last projection
-        # Its daily award rankings are carried forward, so each name on the
-        # Season page gets a trend line. Soft: without it the lines start
-        # today. Unpacked where the artifact is rooted, then moved straight
-        # out of dist to the runner's temp directory, so it can never be
-        # handed on in place of today's.
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -u
-          mkdir -p "$RUNNER_TEMP/previous-season"
-          if python scripts/restore_state.py --artifact season-sim --dest dist/data \
-               --workflow season-sim.yml --success-only --no-merge --attempts 2; then
-            mv dist/data/season.json "$RUNNER_TEMP/previous-season/season.json"
-          else
-            echo "::warning::The last season projection could not be restored; the award trend lines start today."
-          fi
-          rm -rf dist/data
-
       - name: Restore past seasons' stats
+        if: steps.fresh.outputs.build == 'true'
         id: history
         # The closed seasons the award models are fitted to (NHL and
         # MoneyPuck tables back to 2005-06). They never change, so they are
@@ -116,6 +143,7 @@ jobs:
           restore-keys: season-sim-award-history-v1-
 
       - name: Build the season projection
+        if: steps.fresh.outputs.build == 'true'
         # Every current input is fetched here, into a cache under data/raw
         # that no workflow restores: a projection built on last week's
         # rosters is worse than none, and the fetch is about ninety small
@@ -134,13 +162,14 @@ jobs:
           test -s dist/data/season.json
 
       - name: Keep past seasons' stats for the next run
-        if: always() && steps.history.outputs.cache-hit != 'true' && hashFiles('data/raw/season_sim/history/**') != ''
+        if: always() && steps.fresh.outputs.build == 'true' && steps.history.outputs.cache-hit != 'true' && hashFiles('data/raw/season_sim/history/**') != ''
         uses: actions/cache/save@v4
         with:
           path: data/raw/season_sim/history
           key: season-sim-award-history-v1-${{ hashFiles('data/season_sim/award_voting.csv') }}
 
       - name: Hand the projection to Publish Site
+        if: steps.fresh.outputs.build == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: season-sim
