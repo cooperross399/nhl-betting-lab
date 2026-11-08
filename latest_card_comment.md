@@ -1,63 +1,129 @@
-Selections are unchanged since the previous card; this comment is here because the run was degraded.
-
-### What went wrong
-
-- The per-event price fetch failed for at least one game (the provider refused or did not answer; the errors are listed in provider_shadow_verification.md), so the props, the regulation three-way and the alternate ladders are missing for those games — absent, not unquoted, and not books declining to post them. If this run froze today's snapshot, it lacks them, and because the day's first snapshot stands, no later run today can add them.
+**Selections changed** since the previous card — 3 best bet(s), 0.75 unit(s) staked.
 
 # NHL gameday card
 
-- Generated: 2026-11-08T14:06:01+00:00
-- 1 best bet(s), 22 lean(s), 222 pass(es) across 6 game(s); 0.25 unit(s) staked.
-- Included markets: **goalie_saves, moneyline, puck_line, total_goals**
+- Generated: 2026-11-08T15:11:19+00:00
+- 3 best bet(s), 83 lean(s), 3398 pass(es) across 6 game(s); 0.75 unit(s) staked.
+- Included markets: **assists, goalie_saves, goals, moneyline, points, puck_line, regulation_3_way, shots_on_goal, team_total, total_goals**
 - Unit size: $25
 
 ## Best bets
 
 | Game | Starts | Market | Selection | Model | Edge | Price | Bet down to | Book | Units |
 |:-----|:-------|:-------|:----------|------:|-----:|------:|------------:|:-----|------:|
-| Florida Panthers @ Boston Bruins | Nov 8, 1:10 PM ET | `puck_line` | home -1.5 | 44.6% | +10.1% | +190 | +181 | FanDuel | 0.25 |
+| Pittsburgh Penguins @ Anaheim Ducks | Nov 8, 8:10 PM ET | `shots_on_goal` | Cutter Gauthier under 4.5 | 69.5% | +12.1% | -135 | -135 | Hard Rock Bet | 0.25 |
+| Florida Panthers @ Boston Bruins | Nov 8, 1:10 PM ET | `puck_line` | home -1.5 | 44.6% | +9.9% | +188 | +182 | Bally Bet | 0.25 |
+| Florida Panthers @ Boston Bruins | Nov 8, 1:10 PM ET | `regulation_3_way` | home | 54.5% | +9.0% | +120 | +120 | Bally Bet | 0.25 |
 
 ## Leans
 
 | Game | Starts | Market | Selection | Model | Edge | Price | Bet down to | Book |
 |:-----|:-------|:-------|:----------|------:|-----:|------:|------------:|:-----|
-| New Jersey Devils @ Toronto Maple Leafs | Nov 8, 7:10 PM ET | `goalie_saves` | Anthony Stolarz over 26.5 | 60.4% | +23.1% | +168 | -119 | FanDuel |
-| New Jersey Devils @ Toronto Maple Leafs | Nov 8, 7:10 PM ET | `goalie_saves` | Anthony Stolarz over 27.5 | 54.5% | +22.3% | +210 | +107 | FanDuel |
-| New Jersey Devils @ Toronto Maple Leafs | Nov 8, 7:10 PM ET | `goalie_saves` | Anthony Stolarz over 25.5 | 66.2% | +21.9% | +126 | -151 | FanDuel |
-| New Jersey Devils @ Toronto Maple Leafs | Nov 8, 7:10 PM ET | `goalie_saves` | Anthony Stolarz over 24.5 | 71.7% | +21.7% | +100 | -160 | BetOnline.ag |
-| New Jersey Devils @ Toronto Maple Leafs | Nov 8, 7:10 PM ET | `goalie_saves` | Anthony Stolarz over 28.5 | 48.7% | +21.7% | +270 | +135 | FanDuel |
-| New Jersey Devils @ Toronto Maple Leafs | Nov 8, 7:10 PM ET | `goalie_saves` | Anthony Stolarz over 29.5 | 42.9% | +20.7% | +350 | +171 | FanDuel |
-| New Jersey Devils @ Toronto Maple Leafs | Nov 8, 7:10 PM ET | `goalie_saves` | Anthony Stolarz over 30.5 | 37.5% | +18.6% | +430 | +218 | FanDuel |
-| New Jersey Devils @ Toronto Maple Leafs | Nov 8, 7:10 PM ET | `goalie_saves` | Anthony Stolarz over 31.5 | 32.3% | +17.6% | +580 | +281 | FanDuel |
-| New Jersey Devils @ Toronto Maple Leafs | Nov 8, 7:10 PM ET | `goalie_saves` | Connor Hellebuyck under 25.5 | 65.9% | +12.6% | -114 | -149 | BetOnline.ag |
+| New Jersey Devils @ Toronto Maple Leafs | Nov 8, 7:10 PM ET | `goalie_saves` | Anthony Stolarz over 27.5 | 57.6% | +19.4% | +162 | -106 | FanDuel |
+| New Jersey Devils @ Toronto Maple Leafs | Nov 8, 7:10 PM ET | `goalie_saves` | Anthony Stolarz over 24.5 | 74.3% | +19.3% | -122 | -160 | BetOnline.ag |
+| New Jersey Devils @ Toronto Maple Leafs | Nov 8, 7:10 PM ET | `goalie_saves` | Anthony Stolarz over 25.5 | 69.7% | +18.7% | -104 | -160 | FanDuel |
+| New Jersey Devils @ Toronto Maple Leafs | Nov 8, 7:10 PM ET | `goalie_saves` | Anthony Stolarz over 26.5 | 63.2% | +18.6% | +124 | -133 | FanDuel |
+| New Jersey Devils @ Toronto Maple Leafs | Nov 8, 7:10 PM ET | `goalie_saves` | Anthony Stolarz over 28.5 | 51.1% | +17.7% | +200 | +122 | FanDuel |
+| New Jersey Devils @ Toronto Maple Leafs | Nov 8, 7:10 PM ET | `goalie_saves` | Anthony Stolarz over 29.5 | 46.1% | +17.6% | +250 | +150 | FanDuel |
+| New Jersey Devils @ Toronto Maple Leafs | Nov 8, 7:10 PM ET | `goalie_saves` | Anthony Stolarz over 30.5 | 39.3% | +15.5% | +320 | +201 | FanDuel |
+| Philadelphia Flyers @ Calgary Flames | Nov 8, 7:10 PM ET | `shots_on_goal` | Zayne Parekh under 1.5 | 63.4% | +15.4% | +108 | -134 | Bally Bet |
+| Vegas Golden Knights @ Buffalo Sabres | Nov 8, 3:40 PM ET | `goalie_saves` | Colten Ellis over 20.5 | 76.3% | +15.3% | -156 | -160 | BetOnline.ag |
+| New Jersey Devils @ Toronto Maple Leafs | Nov 8, 7:10 PM ET | `goalie_saves` | Anthony Stolarz over 31.5 | 34.9% | +14.9% | +400 | +247 | FanDuel |
+| Vegas Golden Knights @ Buffalo Sabres | Nov 8, 3:40 PM ET | `goalie_saves` | Colten Ellis over 24.5 | 51.7% | +13.8% | +164 | +119 | FanDuel |
+| Vegas Golden Knights @ Buffalo Sabres | Nov 8, 3:40 PM ET | `goalie_saves` | Colten Ellis over 22.5 | 64.5% | +13.7% | -103 | -140 | BetOnline.ag |
+| Vegas Golden Knights @ Buffalo Sabres | Nov 8, 3:40 PM ET | `goalie_saves` | Colten Ellis over 23.5 | 58.1% | +13.5% | +124 | -108 | FanDuel |
+| New Jersey Devils @ Toronto Maple Leafs | Nov 8, 7:10 PM ET | `goalie_saves` | Anthony Stolarz over 32.5 | 29.2% | +13.1% | +520 | +332 | FanDuel |
+| Vegas Golden Knights @ Buffalo Sabres | Nov 8, 3:40 PM ET | `goalie_saves` | Colten Ellis over 25.5 | 45.3% | +12.5% | +205 | +155 | FanDuel |
+| Vegas Golden Knights @ Buffalo Sabres | Nov 8, 3:40 PM ET | `goalie_saves` | Colten Ellis over 26.5 | 39.2% | +12.2% | +270 | +202 | FanDuel |
+| Vegas Golden Knights @ Buffalo Sabres | Nov 8, 3:40 PM ET | `goalie_saves` | Colten Ellis over 27.5 | 33.4% | +11.2% | +350 | +265 | FanDuel |
+| Vegas Golden Knights @ Buffalo Sabres | Nov 8, 3:40 PM ET | `goalie_saves` | Colten Ellis over 28.5 | 28.1% | +10.0% | +450 | +352 | FanDuel |
+| Pittsburgh Penguins @ Anaheim Ducks | Nov 8, 8:10 PM ET | `points` | Judd Caulfield over 0.5 | 48.0% | +9.5% | +160 | +123 | theScore Bet |
+| Vegas Golden Knights @ Buffalo Sabres | Nov 8, 3:40 PM ET | `goalie_saves` | Colten Ellis over 29.5 | 23.4% | +8.7% | +580 | +476 | FanDuel |
+| Pittsburgh Penguins @ Anaheim Ducks | Nov 8, 8:10 PM ET | `shots_on_goal` | Cutter Gauthier under 3.5 | 57.4% | +8.6% | +105 | -105 | BetMGM |
+| Florida Panthers @ Boston Bruins | Nov 8, 1:10 PM ET | `shots_on_goal` | Sam Reinhart under 2.5 | 58.4% | +8.4% | +100 | -110 | Hard Rock Bet |
+| Florida Panthers @ Boston Bruins | Nov 8, 1:10 PM ET | `shots_on_goal` | Sam Reinhart under 1.5 | 36.8% | +8.3% | +250 | +225 | theScore Bet |
+| New Jersey Devils @ Toronto Maple Leafs | Nov 8, 7:10 PM ET | `shots_on_goal` | Jack Hughes under 3.5 | 54.7% | +8.2% | +115 | +106 | theScore Bet |
+| Florida Panthers @ Boston Bruins | Nov 8, 1:10 PM ET | `team_total` | home_over 3.5 | 53.5% | +8.0% | +120 | +101 | FanDuel |
 | Florida Panthers @ Boston Bruins | Nov 8, 1:10 PM ET | `moneyline` | home | 65.1% | +7.9% | -134 | -160 | Bally Bet |
+| Pittsburgh Penguins @ Anaheim Ducks | Nov 8, 8:10 PM ET | `points` | Sam Colangelo over 0.5 | 35.2% | +7.8% | +265 | +211 | Bally Bet |
+| Florida Panthers @ Boston Bruins | Nov 8, 1:10 PM ET | `shots_on_goal` | Elias Lindholm under 1.5 | 52.2% | +7.8% | +125 | +117 | Bally Bet |
+| Pittsburgh Penguins @ Anaheim Ducks | Nov 8, 8:10 PM ET | `shots_on_goal` | Beckett Sennecke under 2.5 | 55.0% | +7.4% | +110 | +105 | BetMGM |
+| Tampa Bay Lightning @ Winnipeg Jets | Nov 8, 6:10 PM ET | `goals` | Gabriel Vilardi over 0.5 | 34.9% | +7.1% | +260 | +246 | theScore Bet |
+| Pittsburgh Penguins @ Anaheim Ducks | Nov 8, 8:10 PM ET | `assists` | Sidney Crosby over 0.5 | 52.5% | +7.0% | +120 | +116 | Hard Rock Bet |
 | Philadelphia Flyers @ Calgary Flames | Nov 8, 7:10 PM ET | `goalie_saves` | Dan Vladar under 25.5 | 60.2% | +6.9% | -114 | -118 | BetOnline.ag |
+| Pittsburgh Penguins @ Anaheim Ducks | Nov 8, 8:10 PM ET | `points` | Sidney Crosby over 0.5 | 68.5% | +6.9% | -160 | -160 | theScore Bet |
+| Florida Panthers @ Boston Bruins | Nov 8, 1:10 PM ET | `team_total` | home_over 4.5 | 33.2% | +6.8% | +280 | +238 | FanDuel |
+| Florida Panthers @ Boston Bruins | Nov 8, 1:10 PM ET | `shots_on_goal` | Seth Jones under 1.5 | 48.5% | +6.8% | +140 | +136 | Bovada |
+| Philadelphia Flyers @ Calgary Flames | Nov 8, 7:10 PM ET | `shots_on_goal` | Morgan Frost under 1.5 | 54.9% | +6.8% | +108 | +105 | Bally Bet |
+| Tampa Bay Lightning @ Winnipeg Jets | Nov 8, 6:10 PM ET | `team_total` | home_over 3 | 55.5% | +6.8% | +105 | -108 | BetMGM |
+| Pittsburgh Penguins @ Anaheim Ducks | Nov 8, 8:10 PM ET | `assists` | Evgeni Malkin over 0.5 | 41.2% | +6.7% | +190 | +184 | Hard Rock Bet |
+| Pittsburgh Penguins @ Anaheim Ducks | Nov 8, 8:10 PM ET | `shots_on_goal` | Tristan Luneau under 1.5 | 60.2% | +6.7% | -115 | -118 | Hard Rock Bet |
+| Tampa Bay Lightning @ Winnipeg Jets | Nov 8, 6:10 PM ET | `points` | Gabriel Vilardi over 0.5 | 61.1% | +6.5% | -120 | -138 | theScore Bet |
+| Pittsburgh Penguins @ Anaheim Ducks | Nov 8, 8:10 PM ET | `goals` | Sam Colangelo over 0.5 | 21.2% | +6.4% | +575 | +559 | FanDuel |
+| Pittsburgh Penguins @ Anaheim Ducks | Nov 8, 8:10 PM ET | `assists` | Judd Caulfield over 0.5 | 34.1% | +6.3% | +260 | +256 | Courtside |
+| Pittsburgh Penguins @ Anaheim Ducks | Nov 8, 8:10 PM ET | `goals` | Judd Caulfield over 0.5 | 26.3% | +6.3% | +400 | +393 | Courtside |
+| Florida Panthers @ Boston Bruins | Nov 8, 1:10 PM ET | `team_total` | home_over 3 | 67.1% | +6.3% | -155 | -160 | BetMGM |
+| Tampa Bay Lightning @ Winnipeg Jets | Nov 8, 6:10 PM ET | `total_goals` | over 7 | 43.3% | +6.3% | +170 | +152 | Bovada |
+| Tampa Bay Lightning @ Winnipeg Jets | Nov 8, 6:10 PM ET | `goals` | Brayden Point over 0.5 | 38.4% | +6.2% | +210 | +209 | Hard Rock Bet |
 | Tampa Bay Lightning @ Winnipeg Jets | Nov 8, 6:10 PM ET | `total_goals` | over 6.5 | 54.9% | +6.1% | +105 | -105 | Bally Bet |
-| Tampa Bay Lightning @ Winnipeg Jets | Nov 8, 6:10 PM ET | `moneyline` | home | 48.3% | +4.4% | +128 | +124 | BetOnline.ag |
+| Tampa Bay Lightning @ Winnipeg Jets | Nov 8, 6:10 PM ET | `team_total` | home_over 2.5 | 65.5% | +5.9% | -148 | -160 | Bally Bet |
+| Tampa Bay Lightning @ Winnipeg Jets | Nov 8, 6:10 PM ET | `total_goals` | over 7.5 | 35.1% | +5.7% | +240 | +217 | Bally Bet |
+| Tampa Bay Lightning @ Winnipeg Jets | Nov 8, 6:10 PM ET | `total_goals` | over 5.5 | 65.6% | +5.6% | -150 | -160 | Bally Bet |
+| Tampa Bay Lightning @ Winnipeg Jets | Nov 8, 6:10 PM ET | `points` | Victor Hedman over 0.5 | 36.1% | +5.4% | +225 | +202 | Bally Bet |
+| Tampa Bay Lightning @ Winnipeg Jets | Nov 8, 6:10 PM ET | `team_total` | home_over 3.5 | 43.8% | +5.3% | +160 | +149 | Bally Bet |
+| Tampa Bay Lightning @ Winnipeg Jets | Nov 8, 6:10 PM ET | `total_goals` | over 8.5 | 26.0% | +5.2% | +380 | +345 | FanDuel |
+| Pittsburgh Penguins @ Anaheim Ducks | Nov 8, 8:10 PM ET | `points` | Sidney Crosby over 1.5 | 33.3% | +5.2% | +255 | +230 | FanDuel |
+| Tampa Bay Lightning @ Winnipeg Jets | Nov 8, 6:10 PM ET | `total_goals` | over 6 | 61.4% | +4.9% | -130 | -137 | Bovada |
+| Tampa Bay Lightning @ Winnipeg Jets | Nov 8, 6:10 PM ET | `points` | Brayden Point over 0.5 | 65.5% | +4.7% | -155 | -160 | theScore Bet |
+| Florida Panthers @ Boston Bruins | Nov 8, 1:10 PM ET | `team_total` | home_over 4 | 41.5% | +4.5% | +170 | +164 | BetMGM |
+| Pittsburgh Penguins @ Anaheim Ducks | Nov 8, 8:10 PM ET | `points` | Noah Warren over 0.5 | 31.8% | +4.4% | +265 | +248 | Bally Bet |
 | Florida Panthers @ Boston Bruins | Nov 8, 1:10 PM ET | `total_goals` | over 6.5 | 51.5% | +4.4% | +112 | +109 | FanDuel |
-| Pittsburgh Penguins @ Anaheim Ducks | Nov 8, 8:10 PM ET | `total_goals` | over 7 | 53.1% | +4.3% | +105 | +102 | BetMGM |
+| Pittsburgh Penguins @ Anaheim Ducks | Nov 8, 8:10 PM ET | `total_goals` | over 7 | 53.1% | +4.3% | +105 | +102 | BetAnything |
 | Florida Panthers @ Boston Bruins | Nov 8, 1:10 PM ET | `total_goals` | over 7.5 | 32.1% | +4.3% | +260 | +251 | FanDuel |
+| Philadelphia Flyers @ Calgary Flames | Nov 8, 7:10 PM ET | `points` | Martin Pospisil over 0.5 | 34.6% | +4.3% | +230 | +217 | Bally Bet |
+| Tampa Bay Lightning @ Winnipeg Jets | Nov 8, 6:10 PM ET | `moneyline` | home | 48.3% | +4.2% | +127 | +124 | Courtside |
+| Pittsburgh Penguins @ Anaheim Ducks | Nov 8, 8:10 PM ET | `points` | Alex Killorn over 0.5 | 45.7% | +4.0% | +140 | +135 | theScore Bet |
 | Vegas Golden Knights @ Buffalo Sabres | Nov 8, 3:40 PM ET | `total_goals` | over 6.5 | 54.0% | +4.0% | +100 | -102 | theScore Bet |
+| New Jersey Devils @ Toronto Maple Leafs | Nov 8, 7:10 PM ET | `points` | Nico Hischier over 0.5 | 61.5% | +4.0% | -135 | -140 | theScore Bet |
+| Tampa Bay Lightning @ Winnipeg Jets | Nov 8, 6:10 PM ET | `points` | Brayden Point over 1.5 | 29.0% | +4.0% | +300 | +285 | theScore Bet |
+| Tampa Bay Lightning @ Winnipeg Jets | Nov 8, 6:10 PM ET | `points` | Nikita Kucherov over 1.5 | 45.6% | +4.0% | +140 | +135 | BetMGM |
 | Pittsburgh Penguins @ Anaheim Ducks | Nov 8, 8:10 PM ET | `total_goals` | over 8.5 | 33.3% | +3.9% | +240 | +236 | FanDuel |
+| Tampa Bay Lightning @ Winnipeg Jets | Nov 8, 6:10 PM ET | `team_total` | home_over 4.5 | 24.8% | +3.9% | +380 | +371 | FanDuel |
 | Pittsburgh Penguins @ Anaheim Ducks | Nov 8, 8:10 PM ET | `total_goals` | over 7.5 | 43.2% | +3.9% | +154 | +152 | FanDuel |
 | Florida Panthers @ Boston Bruins | Nov 8, 1:10 PM ET | `total_goals` | over 8.5 | 23.1% | +3.8% | +420 | +412 | FanDuel |
+| Vegas Golden Knights @ Buffalo Sabres | Nov 8, 3:40 PM ET | `total_goals` | over 7 | 42.2% | +3.8% | +160 | +159 | Bovada |
+| Vegas Golden Knights @ Buffalo Sabres | Nov 8, 3:40 PM ET | `points` | Jason Zucker over 0.5 | 41.5% | +3.7% | +165 | +160 | Fanatics |
+| Pittsburgh Penguins @ Anaheim Ducks | Nov 8, 8:10 PM ET | `points` | Drew Helleson over 0.5 | 33.1% | +3.7% | +240 | +233 | Bally Bet |
+| Pittsburgh Penguins @ Anaheim Ducks | Nov 8, 8:10 PM ET | `team_total` | home_over 3.5 | 54.9% | +3.6% | -105 | -105 | BetOnline.ag |
 | New Jersey Devils @ Toronto Maple Leafs | Nov 8, 7:10 PM ET | `moneyline` | home | 46.0% | +3.6% | +136 | +136 | BetOnline.ag |
-| Pittsburgh Penguins @ Anaheim Ducks | Nov 8, 8:10 PM ET | `total_goals` | over 6.5 | 62.7% | +3.5% | -145 | -145 | BetAnything |
+| New Jersey Devils @ Toronto Maple Leafs | Nov 8, 7:10 PM ET | `points` | John Tavares over 0.5 | 58.1% | +3.6% | -120 | -122 | Hard Rock Bet |
+| Pittsburgh Penguins @ Anaheim Ducks | Nov 8, 8:10 PM ET | `total_goals` | over 6.5 | 62.7% | +3.5% | -145 | -145 | Courtside |
+| Philadelphia Flyers @ Calgary Flames | Nov 8, 7:10 PM ET | `points` | Ryan Strome over 0.5 | 39.9% | +3.5% | +175 | +172 | Fanatics |
+| Tampa Bay Lightning @ Winnipeg Jets | Nov 8, 6:10 PM ET | `points` | Gabriel Vilardi over 1.5 | 25.7% | +3.5% | +350 | +341 | Bally Bet |
+| Pittsburgh Penguins @ Anaheim Ducks | Nov 8, 8:10 PM ET | `points` | Evgeni Malkin over 0.5 | 55.8% | +3.5% | -110 | -112 | Fanatics |
+| New Jersey Devils @ Toronto Maple Leafs | Nov 8, 7:10 PM ET | `points` | Timo Meier over 0.5 | 48.5% | +3.1% | +120 | +120 | Courtside |
 
 Stats check, props: a prop is staked only when the model's hit chance clears what the shortest price in its odds bracket would need. These cleared the edge bar without it and are recorded here.
 
-- Connor Hellebuyck under 25.5 (`goalie_saves`): Not confident enough for its odds: the model gives it a 65.9% chance to hit; props priced -135 to -111 need 69.4%. The price clears the edge bar, but the model is not confident enough for its odds bracket. Recorded as a lean and staked at zero.
+- Anthony Stolarz over 28.5 (`goalie_saves`): Not confident enough for its odds: the model gives it a 51.1% chance to hit; props priced +151 to +200 need 51.8%. The price clears the edge bar, but the model is not confident enough for its odds bracket. Recorded as a lean and staked at zero.
+- Zayne Parekh under 1.5 (`shots_on_goal`): Not confident enough for its odds: the model gives it a 63.4% chance to hit; props priced -110 to +110 need 64.4%. The price clears the edge bar, but the model is not confident enough for its odds bracket. Recorded as a lean and staked at zero.
+- Anthony Stolarz over 31.5 (`goalie_saves`): Not confident enough for its odds: the model gives it a 34.9% chance to hit; props priced +301 to +400 need 36.9%. The price clears the edge bar, but the model is not confident enough for its odds bracket. Recorded as a lean and staked at zero.
+- Colten Ellis over 24.5 (`goalie_saves`): Not confident enough for its odds: the model gives it a 51.7% chance to hit; props priced +151 to +200 need 51.8%. The price clears the edge bar, but the model is not confident enough for its odds bracket. Recorded as a lean and staked at zero.
+- Colten Ellis over 23.5 (`goalie_saves`): Not confident enough for its odds: the model gives it a 58.1% chance to hit; props priced +111 to +150 need 59.4%. The price clears the edge bar, but the model is not confident enough for its odds bracket. Recorded as a lean and staked at zero.
+- Anthony Stolarz over 32.5 (`goalie_saves`): Not confident enough for its odds: the model gives it a 29.2% chance to hit; props priced +401 to +600 need 32.0%. The price clears the edge bar, but the model is not confident enough for its odds bracket. Recorded as a lean and staked at zero.
+- Colten Ellis over 26.5 (`goalie_saves`): Not confident enough for its odds: the model gives it a 39.2% chance to hit; props priced +201 to +300 need 45.2%. The price clears the edge bar, but the model is not confident enough for its odds bracket. Recorded as a lean and staked at zero.
 
 Saves, starter check: a saves prop is staked only on the goalie Daily Faceoff lists as tonight's confirmed or likely starter. These cleared the edge bar without it and are recorded here.
 
-- Anthony Stolarz over 26.5 (`goalie_saves`): Not tonight's known starter: Daily Faceoff lists him as the starter but marks it 'no label', not confirmed or likely. Recorded as a lean and staked at zero.
 - Anthony Stolarz over 27.5 (`goalie_saves`): Not tonight's known starter: Daily Faceoff lists him as the starter but marks it 'no label', not confirmed or likely. Recorded as a lean and staked at zero.
-- Anthony Stolarz over 25.5 (`goalie_saves`): Not tonight's known starter: Daily Faceoff lists him as the starter but marks it 'no label', not confirmed or likely. Recorded as a lean and staked at zero.
 - Anthony Stolarz over 24.5 (`goalie_saves`): Not tonight's known starter: Daily Faceoff lists him as the starter but marks it 'no label', not confirmed or likely. Recorded as a lean and staked at zero.
-- Anthony Stolarz over 28.5 (`goalie_saves`): Not tonight's known starter: Daily Faceoff lists him as the starter but marks it 'no label', not confirmed or likely. Recorded as a lean and staked at zero.
+- Anthony Stolarz over 25.5 (`goalie_saves`): Not tonight's known starter: Daily Faceoff lists him as the starter but marks it 'no label', not confirmed or likely. Recorded as a lean and staked at zero.
+- Anthony Stolarz over 26.5 (`goalie_saves`): Not tonight's known starter: Daily Faceoff lists him as the starter but marks it 'no label', not confirmed or likely. Recorded as a lean and staked at zero.
 - Anthony Stolarz over 29.5 (`goalie_saves`): Not tonight's known starter: Daily Faceoff lists him as the starter but marks it 'no label', not confirmed or likely. Recorded as a lean and staked at zero.
 - Anthony Stolarz over 30.5 (`goalie_saves`): Not tonight's known starter: Daily Faceoff lists him as the starter but marks it 'no label', not confirmed or likely. Recorded as a lean and staked at zero.
-- Anthony Stolarz over 31.5 (`goalie_saves`): Not tonight's known starter: Daily Faceoff lists him as the starter but marks it 'no label', not confirmed or likely. Recorded as a lean and staked at zero.
+- Colten Ellis over 20.5 (`goalie_saves`): Not tonight's known starter: Daily Faceoff lists Ukko-Pekka Luukkonen (no label), Adin Hill (no label) for this game, not him. A saves bet on a goalie who does not play is void. Recorded as a lean and staked at zero.
+- Colten Ellis over 22.5 (`goalie_saves`): Not tonight's known starter: Daily Faceoff lists Ukko-Pekka Luukkonen (no label), Adin Hill (no label) for this game, not him. A saves bet on a goalie who does not play is void. Recorded as a lean and staked at zero.
+- Colten Ellis over 25.5 (`goalie_saves`): Not tonight's known starter: Daily Faceoff lists Ukko-Pekka Luukkonen (no label), Adin Hill (no label) for this game, not him. A saves bet on a goalie who does not play is void. Recorded as a lean and staked at zero.
 
 Leans are recorded and not staked.
 
@@ -65,33 +131,33 @@ Leans are recorded and not staked.
 
 | Game | Starts | Market | Selection | Model | Edge | Price | Book |
 |:-----|:-------|:-------|:----------|------:|-----:|------:|:-----|
-| New Jersey Devils @ Toronto Maple Leafs | Nov 8, 7:10 PM ET | `goalie_saves` | Anthony Stolarz over 22.5 | 81.5% | +18.9% | -167 | BetOnline.ag |
-| New Jersey Devils @ Toronto Maple Leafs | Nov 8, 7:10 PM ET | `goalie_saves` | Anthony Stolarz over 32.5 | 27.5% | +15.8% | +750 | FanDuel |
-| New Jersey Devils @ Toronto Maple Leafs | Nov 8, 7:10 PM ET | `goalie_saves` | Anthony Stolarz over 33.5 | 23.2% | +13.4% | +920 | FanDuel |
+| New Jersey Devils @ Toronto Maple Leafs | Nov 8, 7:10 PM ET | `goalie_saves` | Anthony Stolarz over 22.5 | 84.4% | +16.3% | -213 | BetOnline.ag |
+| New Jersey Devils @ Toronto Maple Leafs | Nov 8, 7:10 PM ET | `goalie_saves` | Anthony Stolarz over 33.5 | 25.0% | +11.5% | +640 | FanDuel |
+| New Jersey Devils @ Toronto Maple Leafs | Nov 8, 7:10 PM ET | `goalie_saves` | Anthony Stolarz over 34.5 | 20.3% | +9.8% | +850 | FanDuel |
+| Florida Panthers @ Boston Bruins | Nov 8, 1:10 PM ET | `shots_on_goal` | Seth Jones under 2.5 | 70.4% | +8.2% | -165 | BetMGM |
+| Vegas Golden Knights @ Buffalo Sabres | Nov 8, 3:40 PM ET | `goalie_saves` | Colten Ellis over 30.5 | 19.2% | +7.4% | +750 | FanDuel |
 | Florida Panthers @ Boston Bruins | Nov 8, 1:10 PM ET | `puck_line` | home +1.5 | 85.0% | +7.2% | -350 | Courtside |
-| Florida Panthers @ Boston Bruins | Nov 8, 1:10 PM ET | `puck_line` | home +2.5 | 92.5% | +5.9% | -650 | Courtside |
+| Tampa Bay Lightning @ Winnipeg Jets | Nov 8, 6:10 PM ET | `team_total` | home_over 2 | 80.6% | +5.9% | -295 | BetMGM |
+| New Jersey Devils @ Toronto Maple Leafs | Nov 8, 7:10 PM ET | `goals` | Auston Matthews over 0.5 | 45.9% | +5.9% | +150 | FanDuel |
+| Philadelphia Flyers @ Calgary Flames | Nov 8, 7:10 PM ET | `shots_on_goal` | Yegor Sharangovich under 1.5 | 54.4% | +5.9% | +106 | FanDuel |
+| Philadelphia Flyers @ Calgary Flames | Nov 8, 7:10 PM ET | `assists` | Zayne Parekh under 0.5 | 74.1% | +5.9% | -215 | Bally Bet |
+| Philadelphia Flyers @ Calgary Flames | Nov 8, 7:10 PM ET | `shots_on_goal` | Adam Klapka under 1.5 | 66.6% | +5.8% | -155 | BetMGM |
+| New Jersey Devils @ Toronto Maple Leafs | Nov 8, 7:10 PM ET | `shots_on_goal` | Darren Raddysh under 2.5 | 62.4% | +5.8% | -130 | Hard Rock Bet |
 | New Jersey Devils @ Toronto Maple Leafs | Nov 8, 7:10 PM ET | `puck_line` | home +1.5 | 70.1% | +5.8% | -180 | BetMGM |
-| Florida Panthers @ Boston Bruins | Nov 8, 1:10 PM ET | `puck_line` | home -3.5 | 17.3% | +5.5% | +750 | FanDuel |
-| Tampa Bay Lightning @ Winnipeg Jets | Nov 8, 6:10 PM ET | `puck_line` | home +1.5 | 71.5% | +5.4% | -195 | BetOnline.ag |
-| New Jersey Devils @ Toronto Maple Leafs | Nov 8, 7:10 PM ET | `puck_line` | home +2.5 | 82.5% | +4.7% | -350 | FanDuel |
-| Florida Panthers @ Boston Bruins | Nov 8, 1:10 PM ET | `puck_line` | home -4.5 | 9.6% | +4.4% | +1850 | FanDuel |
-| New Jersey Devils @ Toronto Maple Leafs | Nov 8, 7:10 PM ET | `goalie_saves` | Anthony Stolarz over 34.5 | 19.4% | +4.0% | +550 | BetOnline.ag |
-| Pittsburgh Penguins @ Anaheim Ducks | Nov 8, 8:10 PM ET | `puck_line` | home +2.5 | 86.9% | +4.0% | -485 | Courtside |
-| Florida Panthers @ Boston Bruins | Nov 8, 1:10 PM ET | `total_goals` | over 5.5 | 62.8% | +3.5% | -146 | FanDuel |
-| Florida Panthers @ Boston Bruins | Nov 8, 1:10 PM ET | `total_goals` | over 6 | 57.9% | +3.3% | -120 | BetAnything |
-| Florida Panthers @ Boston Bruins | Nov 8, 1:10 PM ET | `puck_line` | home -2.5 | 28.9% | +3.3% | +290 | Courtside |
-| Pittsburgh Penguins @ Anaheim Ducks | Nov 8, 8:10 PM ET | `puck_line` | home +1.5 | 76.9% | +3.3% | -280 | Courtside |
-| Pittsburgh Penguins @ Anaheim Ducks | Nov 8, 8:10 PM ET | `total_goals` | over 9.5 | 18.8% | +2.9% | +530 | FanDuel |
-| Florida Panthers @ Boston Bruins | Nov 8, 1:10 PM ET | `puck_line` | home -5.5 | 4.5% | +2.8% | +5500 | FanDuel |
-| Florida Panthers @ Boston Bruins | Nov 8, 1:10 PM ET | `total_goals` | over 7 | 39.7% | +2.6% | +170 | Bovada |
-| Pittsburgh Penguins @ Anaheim Ducks | Nov 8, 8:10 PM ET | `total_goals` | over 8 | 37.0% | +2.5% | +190 | Bovada |
-| Florida Panthers @ Boston Bruins | Nov 8, 1:10 PM ET | `total_goals` | over 9.5 | 11.6% | +2.5% | +1000 | FanDuel |
-| Philadelphia Flyers @ Calgary Flames | Nov 8, 7:10 PM ET | `puck_line` | away +2.5 | 87.6% | +2.4% | -575 | Courtside |
-| Pittsburgh Penguins @ Anaheim Ducks | Nov 8, 8:10 PM ET | `total_goals` | over 10.5 | 12.9% | +2.4% | +850 | FanDuel |
-| Vegas Golden Knights @ Buffalo Sabres | Nov 8, 3:40 PM ET | `puck_line` | away +1.5 | 73.6% | +2.2% | -250 | Hard Rock Bet |
-| Pittsburgh Penguins @ Anaheim Ducks | Nov 8, 8:10 PM ET | `puck_line` | home -1.5 | 35.4% | +2.1% | +200 | Bovada |
+| Florida Panthers @ Boston Bruins | Nov 8, 1:10 PM ET | `team_total` | home_over 2.5 | 74.1% | +5.8% | -215 | Bally Bet |
+| Florida Panthers @ Boston Bruins | Nov 8, 1:10 PM ET | `puck_line` | home -3.5 | 17.6% | +5.8% | +750 | FanDuel |
+| Vegas Golden Knights @ Buffalo Sabres | Nov 8, 3:40 PM ET | `goalie_saves` | Colten Ellis over 31.5 | 15.5% | +5.7% | +920 | FanDuel |
+| Tampa Bay Lightning @ Winnipeg Jets | Nov 8, 6:10 PM ET | `shots_on_goal` | Brandon Hagel under 2.5 | 56.9% | +5.7% | -105 | BetMGM |
+| Florida Panthers @ Boston Bruins | Nov 8, 1:10 PM ET | `puck_line` | home +2.5 | 92.7% | +5.6% | -675 | Courtside |
+| Philadelphia Flyers @ Calgary Flames | Nov 8, 7:10 PM ET | `shots_on_goal` | Trevor Zegras under 1.5 | 48.0% | +5.6% | +136 | FanDuel |
+| Florida Panthers @ Boston Bruins | Nov 8, 1:10 PM ET | `shots_on_goal` | Casey Mittelstadt under 1.5 | 63.9% | +5.6% | -140 | theScore Bet |
+| Vegas Golden Knights @ Buffalo Sabres | Nov 8, 3:40 PM ET | `shots_on_goal` | Mitch Marner under 1.5 | 45.6% | +5.6% | +150 | theScore Bet |
+| Florida Panthers @ Boston Bruins | Nov 8, 1:10 PM ET | `assists` | Seth Jones under 0.5 | 62.9% | +5.5% | -135 | BetMGM |
+| Tampa Bay Lightning @ Winnipeg Jets | Nov 8, 6:10 PM ET | `shots_on_goal` | Brandon Hagel under 1.5 | 34.8% | +5.4% | +240 | theScore Bet |
+| Vegas Golden Knights @ Buffalo Sabres | Nov 8, 3:40 PM ET | `assists` | Shea Theodore over 0.5 | 34.7% | +5.3% | +240 | Hard Rock Bet |
+| Vegas Golden Knights @ Buffalo Sabres | Nov 8, 3:40 PM ET | `shots_on_goal` | Jack Quinn under 1.5 | 36.1% | +5.3% | +225 | theScore Bet |
 
-_197 further passes not listed._
+_3373 further passes not listed._
 
 These are genuine model judgements about markets that were priced and modelled. They are **not** the same thing as the excluded markets below.
 
@@ -139,7 +205,7 @@ No sportsbook the lab can reach has posted hits since October 27. PrizePicks sti
 | Tampa Bay Lightning @ Winnipeg Jets | Nov 8, 6:10 PM ET | Alex Iafallo | 1.5 | 40.1% | 59.9% | Under |
 | Tampa Bay Lightning @ Winnipeg Jets | Nov 8, 6:10 PM ET | Brandon Hagel | 0.5 | 41.2% | 58.8% | Under |
 | Tampa Bay Lightning @ Winnipeg Jets | Nov 8, 6:10 PM ET | Zemgus Girgensons | 2.5 | 41.2% | 58.8% | Under |
-| Tampa Bay Lightning @ Winnipeg Jets | Nov 8, 6:10 PM ET | Neal Pionk | 2.5 | 55.2% | 44.8% | Over |
+| Tampa Bay Lightning @ Winnipeg Jets | Nov 8, 6:10 PM ET | Neal Pionk | 3 | 42.3% | 57.7% | Under |
 | Tampa Bay Lightning @ Winnipeg Jets | Nov 8, 6:10 PM ET | Mark Scheifele | 0.5 | 51.4% | 48.6% | Over |
 | Tampa Bay Lightning @ Winnipeg Jets | Nov 8, 6:10 PM ET | Erik Cernak | 2 | 48.8% | 51.2% | Under |
 | Philadelphia Flyers @ Calgary Flames | Nov 8, 7:10 PM ET | Sean Couturier | 1.5 | 18.6% | 81.5% | Under |
@@ -176,7 +242,7 @@ Big games, measured on 2024-25 and 2025-26 (scripts/run_due_list_big_games.py), 
 
 | Player | Team | Opponent | Puck drop | Category | Line | Last season | Drought | Bar reached | Bars (tier / surprise) | Rarity | Line tonight | Goalie faced | Shots in drought | Model | Band record | Best price | Book | Flag |
 |:--|:--|:--|:--|:--|--:|--:|--:|:--|:--|:--|:--|:--|:--|:--|:--|--:|:--|:--|
-| Nikita Kucherov | TBL | WPG | Nov 8, 6:00 PM ET | hat trick | over 2.5 | 44 | 30 | 30 (tier) | tier 30 / surprise - | 1 in 1 for him | F1, PP1 | Stuart Skinner, -4% goals vs expected | - | - | band 40+ @30: -58.6% over 1269 (95% -81.1% to -33.2%) | not posted | - |  |
+| Nikita Kucherov | TBL | WPG | Nov 8, 6:00 PM ET | hat trick | over 2.5 | 44 | 30 | 30 (tier) | tier 30 / surprise - | 1 in 1 for him | F1, PP1 | Stuart Skinner (Likely), -4% goals vs expected | - | model 1% (-0.0 pts) | band 40+ @30: -58.6% over 1269 (95% -81.1% to -33.2%) | +6600 | BetMGM |  |
 
 A list, not bets: no units, no stakes, and none of it is in the best bets above.
 
@@ -184,33 +250,27 @@ A list, not bets: no units, no stakes, and none of it is in the best bets above.
 
 These appeared in the provider's prices and could not be matched to a modelled team or player, so they produced **no selection**. That is not a judgement about them — it is a join that did not land. A fuzzy match would produce a confident price for a bet nobody placed, on a row that looks exactly like a correct one.
 
+- Brayden Yager
 - Christopher Tanev
 - Cole Knuble
 - Frederic Brunet
 - Jack Devine
 - Jake Middleton
+- Jeffrey Viel
 - Jonathan Castagna
+- Maxwell Crozier
 - Nico Myatovic
 - Oliver Bonk
 - Roger McQueen
+- Tyrel Bauer
 - Will Borgen
 - William Stromgren
 - Yegor Chinakhov
 
-## Priced game by game
-
-- `goalie_saves`: Allowlisted, and judged game by game: priced for 3 of 6 game(s), and picked only in those. Not priced in 2026-11-08 Vegas Golden Knights@Buffalo Sabres, 2026-11-08 Tampa Bay Lightning@Winnipeg Jets, 2026-11-09 Pittsburgh Penguins@Anaheim Ducks, so nothing in this market is carded for them; that is an absence, not a pass or a no-value call.
-
 ## Excluded markets
 
-- `assists`: Priced for 4 of 6 games. Picking only where prices happen to exist is a selection effect, not an edge, so the market is excluded rather than half-used. Of the 2 missing game(s), 2 (2026-11-08 Vegas Golden Knights@Buffalo Sabres, 2026-11-08 Tampa Bay Lightning@Winnipeg Jets) are missing because the per-event request failed, not because no book priced them.
-- `blocked_shots`: The provider returned no rows for this market. For 2 of the 6 game(s) (2026-11-08 Vegas Golden Knights@Buffalo Sabres, 2026-11-08 Tampa Bay Lightning@Winnipeg Jets) that is because the per-event request failed, not because no book quotes it: retry those before reading them either way. The rest is an absence, not a price of zero and not a no-value call. Check per-bookmaker coverage including alternate lines before concluding it is not offered.
-- `goals`: Priced for 4 of 6 games. Picking only where prices happen to exist is a selection effect, not an edge, so the market is excluded rather than half-used. Of the 2 missing game(s), 2 (2026-11-08 Vegas Golden Knights@Buffalo Sabres, 2026-11-08 Tampa Bay Lightning@Winnipeg Jets) are missing because the per-event request failed, not because no book priced them.
-- `hits`: The provider returned no rows for this market. For 2 of the 6 game(s) (2026-11-08 Vegas Golden Knights@Buffalo Sabres, 2026-11-08 Tampa Bay Lightning@Winnipeg Jets) that is because the per-event request failed, not because no book quotes it: retry those before reading them either way. The rest is an absence, not a price of zero and not a no-value call. Check per-bookmaker coverage including alternate lines before concluding it is not offered.
-- `points`: Priced for 4 of 6 games. Picking only where prices happen to exist is a selection effect, not an edge, so the market is excluded rather than half-used. Of the 2 missing game(s), 2 (2026-11-08 Vegas Golden Knights@Buffalo Sabres, 2026-11-08 Tampa Bay Lightning@Winnipeg Jets) are missing because the per-event request failed, not because no book priced them.
-- `regulation_3_way`: Priced for 4 of 6 games. Picking only where prices happen to exist is a selection effect, not an edge, so the market is excluded rather than half-used. Of the 2 missing game(s), 2 (2026-11-08 Vegas Golden Knights@Buffalo Sabres, 2026-11-08 Tampa Bay Lightning@Winnipeg Jets) are missing because the per-event request failed, not because no book priced them.
-- `shots_on_goal`: Priced for 4 of 6 games. Picking only where prices happen to exist is a selection effect, not an edge, so the market is excluded rather than half-used. Of the 2 missing game(s), 2 (2026-11-08 Vegas Golden Knights@Buffalo Sabres, 2026-11-08 Tampa Bay Lightning@Winnipeg Jets) are missing because the per-event request failed, not because no book priced them.
-- `team_total`: Priced for 4 of 6 games. Picking only where prices happen to exist is a selection effect, not an edge, so the market is excluded rather than half-used. Of the 2 missing game(s), 2 (2026-11-08 Vegas Golden Knights@Buffalo Sabres, 2026-11-08 Tampa Bay Lightning@Winnipeg Jets) are missing because the per-event request failed, not because no book priced them.
+- `blocked_shots`: The provider returned no rows for this market. That is an absence, not a price of zero and not a no-value call. Check per-bookmaker coverage including alternate lines before concluding it is not offered.
+- `hits`: The provider returned no rows for this market. That is an absence, not a price of zero and not a no-value call. Check per-bookmaker coverage including alternate lines before concluding it is not offered.
 
 An excluded market is **not** a pass, an avoid, or a no-value call, and no price was invented for it.
 
@@ -241,6 +301,6 @@ What the evidence actually supports:
 - `data/outputs/props_calibration.md`
 - `data/outputs/what_we_can_claim.md`
 
-Run: https://github.com/cooperross399/nhl-betting-lab/actions/runs/42486131864
+Run: https://github.com/cooperross399/nhl-betting-lab/actions/runs/42487804260
 
 Recommendations only. No bet was placed, no policy was edited, and no market was allowlisted by this run.
