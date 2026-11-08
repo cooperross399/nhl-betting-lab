@@ -167,7 +167,10 @@ def test_an_award_without_a_poll_says_so_and_old_inputs_are_stale() -> None:
     fresh = awards.tracker("hart", _inputs(day="2026-10-12"), PLAYERS, PLAYOFF, today=date(2026, 10, 26))
     old = awards.tracker("hart", _inputs(day="2026-10-11"), PLAYERS, PLAYOFF, today=date(2026, 10, 26))
     assert not fresh["stale"] and old["stale"]
-    assert all(s["ageDays"] == 15 and s["stale"] for s in old["sources"])
+    assert all(s["ageDays"] == 15 and s["stale"] for s in old["sources"] if s["kind"] == "odds")
+    # A poll fades with age instead of flagging the race stale (2026-11-08).
+    poll = [s for s in old["sources"] if s["kind"] == "poll"]
+    assert poll and not poll[0]["stale"] and poll[0]["used"] and poll[0]["fade"] < 1
     assert awards.trackers(None, PLAYERS, PLAYOFF, today=date(2026, 10, 26)) is None
 
 

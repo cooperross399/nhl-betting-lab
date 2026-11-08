@@ -255,7 +255,7 @@
         </div>
         <div style="display:flex;align-items:baseline;justify-content:space-between;gap:6px 16px;flex-wrap:wrap;border-bottom:2px solid var(--ink);padding-bottom:8px;">
           <div>
-            <div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:24px;text-transform:uppercase;letter-spacing:.02em;">{{ award.title }} <span class="mono" style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--alert);">{{ award.staleLabel }}</span></div>
+            <div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:24px;text-transform:uppercase;letter-spacing:.02em;">{{ award.title }} <span class="mono" style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--alert);">{{ award.staleLabel }}</span><span class="mono" style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--mute);">{{ award.freshLabel }}</span></div>
             <div style="font-size:13px;color:var(--mute);">{{ award.about }}</div>
           </div>
           <div style="font-size:15px;font-weight:600;max-width:520px;">{{ award.headline }}</div>
@@ -523,7 +523,7 @@ class Component extends DCLogic {
     };
     const voted = vt ? ORDER.filter((k) => vt[k] && vt[k].rows && vt[k].rows.length).map((k) => {
       const a = vt[k], w = a.weights || {};
-      const counted = (a.sources || []).filter((src) => src.used !== false);
+      const counted = (a.sources || []).filter((src) => src.kind === "odds" && src.used !== false);
       const oldest = Math.max(...counted.map((src) => (src.ageDays == null ? Infinity : src.ageDays)));
       const books = (a.sources || []).filter((src) => src.kind === "odds" && src.used !== false).length;
       const parts = [["market", books > 1 ? `the odds at ${books} sportsbooks and prediction markets` : "sportsbook odds"], ["poll", "the latest media poll"], ["model", "our voter model"]]
@@ -531,7 +531,7 @@ class Component extends DCLogic {
       const sources = (a.sources || []).map((src) => ({
         label: src.kind === "odds"
           ? `Odds: ${src.book || "a book"}${src.source ? ` via ${src.source}` : ""}, ${day(src.date)}${src.used === false ? ` · ${src.ageDays} d old, not counted` : src.stale ? ` · ${src.ageDays} d old` : ""} ·`
-          : `Poll: ${src.outlet}, ${day(src.date)}${src.voters ? `, ${src.voters} voters` : ""}${src.stale ? ` · ${src.ageDays} d old` : ""} ·`,
+          : `Poll: ${src.outlet}, ${day(src.date)}${src.voters ? `, ${src.voters} voters` : ""}${src.used === false ? " · too old to count" : src.fade != null && src.fade < 1 ? " · counts less as it ages" : src.stale ? ` · ${src.ageDays} d old` : ""} ·`,
         href: src.url || "", link: src.url ? "source" : "",
       }));
       if (!sources.length) sources.push({ label: "No sportsbook or media poll covers this award yet, so the ranking is our voter model alone.", href: "", link: "" });
@@ -562,6 +562,7 @@ class Component extends DCLogic {
       return {
         key: k, title: a.label || k, tab: SHORT[k] || k, about: a.about || ABOUT[k] || "", headline, rows, sources, how,
         staleLabel: a.stale ? (oldest === Infinity ? "Odds undated" : `Odds ${oldest} d old`) : "",
+        freshLabel: !a.stale && d.generatedAt ? `Updated ${F.updated(d.generatedAt)}` : "",
         sub: "a projection of the vote, not a price",
       };
     }) : [];
@@ -630,10 +631,10 @@ class Component extends DCLogic {
     const tabsList = [["Tonight", "Board.dc.html"], ["Props", "Board.dc.html#props"], ["Results", "Results.dc.html"], ["Season", "Season.dc.html"], ["Record", "Record.dc.html"]];
     const tabs = tabsList.map(([label, href]) => ({ label, href, current: label === "Season" ? "page" : undefined, shadow: label === "Season" ? "inset 0 -3px 0 var(--ink)" : "none", color: label === "Season" ? "var(--ink)" : "var(--mute)" }));
     const base = { tabs, themeAttr, otherSports: this.state.otherSports || [], hasNotice: !!this.state.notice, notice: this.state.notice || "" };
-    if (!vm) return { ...base, kicker: "Season simulation", title1: "The whole", title2: "season.", blurb: "", updated: "—", progress: "", stale: false, staleLabel: "", strip: [], divisions: [], conferences: [], leaderBoards: [], teamCards: [], goalies: [], method: [], injuries: [], games: 84, standingsNote: "", scorersNote: "", goaliesNote: "", notesLabel: "", hasRounds: false, roundConfs: [], slots: [], finals: [], hasTrophies: false, trophies: [], roundsNote: "", trophiesNote: "", calderNote: "", voted: [], hasVoted: false, hasTrophySection: false, votedNote: "", awardsIntro: "", awardTabs: [], award: { title: "", about: "", headline: "", staleLabel: "", rows: [], how: "", sources: [] } };
+    if (!vm) return { ...base, kicker: "Season simulation", title1: "The whole", title2: "season.", blurb: "", updated: "—", progress: "", stale: false, staleLabel: "", strip: [], divisions: [], conferences: [], leaderBoards: [], teamCards: [], goalies: [], method: [], injuries: [], games: 84, standingsNote: "", scorersNote: "", goaliesNote: "", notesLabel: "", hasRounds: false, roundConfs: [], slots: [], finals: [], hasTrophies: false, trophies: [], roundsNote: "", trophiesNote: "", calderNote: "", voted: [], hasVoted: false, hasTrophySection: false, votedNote: "", awardsIntro: "", awardTabs: [], award: { title: "", about: "", headline: "", staleLabel: "", freshLabel: "", rows: [], how: "", sources: [] } };
     // One award at a time: the tab picked, else the Hart.
     const list = vm.voted || [];
-    const pick = list.find((v) => v.key === this.state.award) || list[0] || { title: "", about: "", headline: "", staleLabel: "", rows: [], how: "", sources: [] };
+    const pick = list.find((v) => v.key === this.state.award) || list[0] || { title: "", about: "", headline: "", staleLabel: "", freshLabel: "", rows: [], how: "", sources: [] };
     const awardTabs = list.map((v) => ({
       label: v.tab, selected: v.key === pick.key ? "true" : "false",
       bg: v.key === pick.key ? "var(--ink)" : "transparent", fg: v.key === pick.key ? "var(--paper)" : "var(--ink)",

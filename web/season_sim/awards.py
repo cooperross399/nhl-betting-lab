@@ -88,6 +88,25 @@ MIN_GAMES = 5
 MODEL_ADDS = 3
 #: An input older than this is flagged stale on the page.
 STALE_DAYS = 14
+
+#: A media poll is published every few weeks, not daily, so an older poll is
+#: not a stale feed: it counts in full for :data:`POLL_FULL_DAYS`, then its
+#: weight fades in a straight line to nothing at :data:`POLL_GONE_DAYS`, and
+#: its share goes to the odds and the model, which update every build
+#: (Cooper, 2026-11-08: "find a way to make this live and updating every day").
+POLL_FULL_DAYS = 14
+POLL_GONE_DAYS = 45
+
+
+def poll_fade(age: int | None) -> float:
+    """How much of its weight a poll this many days old keeps (0 to 1)."""
+    if age is None:
+        return 0.0
+    if age <= POLL_FULL_DAYS:
+        return 1.0
+    if age >= POLL_GONE_DAYS:
+        return 0.0
+    return round((POLL_GONE_DAYS - age) / (POLL_GONE_DAYS - POLL_FULL_DAYS), 4)
 #: Rows published per award.
 ROWS = 10
 
@@ -441,8 +460,10 @@ def tracker(award: str, inputs: dict, players: list[dict], playoff: dict[str, fl
     poll, poll_rank, poll_pts = _poll(poll_block)
     simulated = (sim or {}).get(award) or {}
     model = dict(simulated.get("share") or {}) or _model(award, players, playoff)
-    base = SIM_WEIGHTS if simulated.get("share") else WEIGHTS
-    have = {"market": bool(market), "poll": bool(poll), "model": bool(model)}
+    base = dict(SIM_WEIGHTS if simulated.get("share") else WEIGHTS)
+    fade = poll_fade(_age_days((poll_block or {}).get("date"), today)) if poll_block else 0.0
+    base["poll"] = base["poll"] * fade
+    have = {"market": bool(market), "poll": bool(poll) and fade > 0, "model": bool(model)}
     wsum = sum(base[k] for k, on in have.items() if on)
     weights = {k: (round(base[k] / wsum, 4) if on and wsum else 0.0) for k, on in have.items()}
 
@@ -512,11 +533,16 @@ def tracker(award: str, inputs: dict, players: list[dict], playoff: dict[str, fl
                             playoff=playoff.get(r["team"]) if r.get("team") else None, games=games) or None
     rows.sort(key=lambda r: (-r["tracker"], r["name"]))
     sources = [_source(b, "odds", today, used=u) for b, u in zip(blocks, used)]
-    sources += [s for s in (_source(poll_block, "poll", today),) if s]
+    poll_src = _source(poll_block, "poll", today)
+    if poll_src:
+        # An aging poll fades rather than flags the race as stale.
+        poll_src.update(stale=False, used=fade > 0, fade=fade)
+        sources.append(poll_src)
     return dict(
         label=LABELS[award], rows=rows[:ROWS], weights=weights, sources=sources,
         noPoll=poll_block is None,
-        stale=any(s["stale"] for s in sources if s.get("used", True)) or (not sources and not model),
+        stale=any(s["stale"] for s in sources if s["kind"] == "odds" and s.get("used", True))
+              or (not any(s["kind"] == "odds" and s.get("used", True) for s in sources) and not model),
         about=FOR[award],
         modelNote=simulated.get("note") or (SIM_NOTES if simulated.get("share") else
                    MODEL_NOTES if any(p.get("stats") for p in players) else FALLBACK_NOTES)[award],

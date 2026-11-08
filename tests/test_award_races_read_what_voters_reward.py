@@ -124,3 +124,19 @@ def test_each_row_says_why_in_plain_english() -> None:
     assert aw.why_line("lady_byng", sk("Jack Hughes", "NJD", 22), None, mates=[], playoff=None, games=84) == \
         "22 points and 4 penalty minutes in 20 games"
     assert aw.why_line("hart", dict(name="X", stats={}), None, mates=[], playoff=None, games=84) == ""
+
+
+def test_an_aging_poll_fades_instead_of_flagging_the_race_stale() -> None:
+    from datetime import date as _date
+
+    assert aw.poll_fade(0) == 1.0 and aw.poll_fade(aw.POLL_FULL_DAYS) == 1.0
+    assert 0 < aw.poll_fade(28) < 1
+    assert aw.poll_fade(aw.POLL_GONE_DAYS) == 0.0 and aw.poll_fade(None) == 0.0
+    spec = {"hart": {
+        "odds": [{"book": "B", "date": "2026-11-07", "lines": [{"name": "Connor McDavid", "team": "EDM", "odds": -150},
+                                                              {"name": "Nathan MacKinnon", "team": "COL", "odds": 400}]}],
+        "poll": {"outlet": "P", "date": "2026-09-01", "entries": [{"name": "Nathan MacKinnon", "team": "COL", "points": 50}]},
+    }}
+    tr = aw.tracker("hart", spec, [], {}, today=_date(2026, 11, 8))
+    poll = [s for s in tr["sources"] if s["kind"] == "poll"][0]
+    assert not tr["stale"] and poll["used"] is False and tr["weights"]["poll"] == 0.0
