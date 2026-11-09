@@ -73,3 +73,10 @@ def test_the_reason_reads_the_price() -> None:
     assert lean_excluded_reason("points", "over", None) is None
     assert lean_excluded_reason("points", "over", "n/a") is None
     assert lean_excluded_reason("goals", "over", 900) is None
+
+
+def test_the_team_lineup_layer_is_off() -> None:
+    """The one layer Layer Scoring cut on the settled live picks (2026-11-09)."""
+    from nhl_betting_lab import lineups
+
+    assert lineups.TEAM_LINEUP_LAYER_ON is False

@@ -58,7 +58,7 @@ from nhl_betting_lab.providers.team_names import (
 )
 from nhl_betting_lab.puck_drop import parse_commence_time
 from nhl_betting_lab.due_context import annotate as annotate_due_list
-from nhl_betting_lab.lineups import TonightLineups, tonight_lineups
+from nhl_betting_lab.lineups import TEAM_LINEUP_LAYER_ON, TonightLineups, tonight_lineups
 from nhl_betting_lab.reports.card_pricing import (
     price_props,
     price_team_markets,
@@ -738,9 +738,18 @@ def main(argv: list[str] | None = None) -> int:
             # Tonight's dressed skaters against the club's usual eighteen,
             # on each skater's offensive rating (`lineups`, 2026-10-25): a
             # missing star takes attack off, one back puts it on.
+            # Off since 2026-11-09 (`lineups.TEAM_LINEUP_LAYER_ON`): the one
+            # layer the settled live picks cut. The factors are still printed.
+            if not TEAM_LINEUP_LAYER_ON:
+                for club, factor in sorted(lineups.attack_factors.items()):
+                    if factor != 1.0:
+                        print(f"{club}: lineup attack x{factor:.3f} not applied (layer off).")
+                for club, factor in sorted(lineups.defence_factors.items()):
+                    if factor != 1.0:
+                        print(f"{club}: lineup defence x{factor:.3f} not applied (layer off).")
             for club, factor in sorted(lineups.attack_factors.items()):
                 rate = team_model.teams.get(club)
-                if rate is None or factor == 1.0:
+                if not TEAM_LINEUP_LAYER_ON or rate is None or factor == 1.0:
                     continue
                 team_model.teams[club] = dataclasses.replace(rate, attack=rate.attack * factor)
                 out = ", ".join(lineups.absent.get(club, [])) or "nobody usual"
@@ -749,7 +758,7 @@ def main(argv: list[str] | None = None) -> int:
             # against relative to his team, from the shift charts.
             for club, factor in sorted(lineups.defence_factors.items()):
                 rate = team_model.teams.get(club)
-                if rate is None or factor == 1.0:
+                if not TEAM_LINEUP_LAYER_ON or rate is None or factor == 1.0:
                     continue
                 team_model.teams[club] = dataclasses.replace(rate, defence=rate.defence * factor)
                 print(f"{club}: defence x{factor:.3f} for tonight's lineup.")

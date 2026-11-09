@@ -60,6 +60,20 @@ MINIMUM_LISTED = 16
 #: The days of logs the role table is fitted on.
 ROLE_HISTORY_DAYS = 400
 
+#: Whether tonight's lineup moves a club's attack and defence in the TEAM
+#: markets (player ratings, their aging and the skater defence). Off since
+#: Cooper's decision of 2026-11-09 ("Yes do all 4"): scored on the settled
+#: live picks (`scripts/run_layer_scoring.py`, Layer Scoring run 42721827449,
+#: 95 games from 2026-10-26 to 11-08) it was the one layer the rule fixed
+#: before the run cut: population B (3.5% team bar, moneyline and totals)
+#: +22.9u over 226 with it against +43.5u over 204 without it (-20.6u over
+#: the 88 wagers it changed, negative in both halves), staked bets -5.9u
+#: over 12 against +2.5u over 19. Every interval spans zero: no demonstrated
+#: edge either way. The factors are still computed and printed, and the
+#: posted lines still decide which skaters get a prop opinion and their ice
+#: time; only the team table is no longer moved. Flip to True to restore it.
+TEAM_LINEUP_LAYER_ON = False
+
 #: Recent games that decide a club's usual eighteen, and the range of the
 #: attack factor tonight's lineup can set.
 SHARE_GAMES = 20
