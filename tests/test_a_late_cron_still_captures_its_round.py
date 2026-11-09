@@ -156,13 +156,46 @@ def test_the_card_crons_land_on_the_slots_the_routines_read() -> None:
     props books post late, and the 22:30 UTC pre-game update (2026-10-21)."""
     document = yaml.safe_load(GAMEDAY.read_text(encoding="utf-8"))
     triggers = document.get("on", document.get(True))
-    lead = int(wfr.ROUND_LEAD.total_seconds() // 60)
     slots = set()
     for entry in triggers["schedule"]:
         minute, hour = entry["cron"].split()[:2]
         assert minute.isdigit() and hour.isdigit(), entry["cron"]
-        slots.add((int(hour) * 60 + int(minute) + lead) % (24 * 60))
-    assert slots == {13 * 60 + 30, 15 * 60, 20 * 60 + 30, 22 * 60 + 30}
+        lead = wfr.CRON_LEADS.get(entry["cron"], wfr.ROUND_LEAD)
+        lead_minutes = int(lead.total_seconds() // 60)
+        slots.add((int(hour) * 60 + int(minute) + lead_minutes) % (24 * 60))
+    # Each slot has a primary on the slot and, since 2026-11-09, a backup 20
+    # minutes after it that stands down when the primary has started.
+    assert slots == {
+        13 * 60 + 30, 13 * 60 + 50, 15 * 60,
+        20 * 60 + 30, 20 * 60 + 50, 22 * 60 + 30, 22 * 60 + 50,
+    }
+
+
+def test_both_wait_legs_cover_the_longest_gameday_lead() -> None:
+    jobs = yaml.safe_load(GAMEDAY.read_text(encoding="utf-8"))["jobs"]
+    budgets = []
+    for name in ("wait", "wait-more"):
+        (step,) = [s for s in jobs[name]["steps"] if "wait_for_round.py" in str(s.get("run", ""))]
+        budgets.append(float(step["run"].split("--budget-minutes")[1].split()[0]))
+    assert timedelta(minutes=sum(budgets)) >= wfr.MAX_LEAD
+
+
+@pytest.mark.parametrize(
+    ("cron", "fired", "slot"),
+    [
+        ("30 2 * 1-4,10-12 *", "2026-11-09T02:30:00", "2026-11-09T13:30:00"),
+        ("30 9 * 1-4,10-12 *", "2026-11-09T09:30:00", "2026-11-09T20:30:00"),
+        ("30 12 * 1-4,10-12 *", "2026-11-09T12:30:00", "2026-11-09T20:50:00"),
+        ("30 11 * 1-4,10-12 *", "2026-11-09T11:30:00", "2026-11-09T22:30:00"),
+        ("30 14 * 1-4,10-12 *", "2026-11-09T14:30:00", "2026-11-09T22:50:00"),
+    ],
+)
+def test_an_early_primary_reaches_its_slot_up_to_ten_hours_late(cron, fired, slot) -> None:
+    for late in (0, 5, 8.6, 10):
+        now = _utc(fired) + timedelta(hours=late)
+        if now >= _utc(slot):
+            continue
+        assert wfr.round_for(cron, now) == _utc(slot)
 
 
 def test_the_card_waits_before_it_asks_whether_it_is_already_published() -> None:
