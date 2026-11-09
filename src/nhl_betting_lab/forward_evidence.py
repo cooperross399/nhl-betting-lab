@@ -102,8 +102,9 @@ DECISION_DATE = "2027-04-25"
 SAMPLE_FLOOR = 3000
 
 #: The two populations the registration can be read to mean, keyed as the
-#: payload carries them. Which one it means is Cooper's decision; until he
-#: makes it, both are computed and neither is the registered statistic.
+#: payload carries them. Which one it means was Cooper's decision, open from
+#: 2026-09-26; on 2026-11-09 he answered "B": the registered statistic is
+#: `population_clears_edge_bar`. Both are still computed, A for reference.
 REGISTERED_POPULATIONS: dict[str, str] = {
     "population_every_opinion": (
         "every settled opinion in every market, whatever its edge"
@@ -120,6 +121,36 @@ REGISTERED_POPULATIONS: dict[str, str] = {
         "backtest measures at and the same filter as the per-market Bets "
         "column. These are not the card's staked bets; the note below says "
         "how they differ"
+    ),
+}
+
+#: Cooper's answer, 2026-11-09, to which population the registration means:
+#: "B". `REFERENCE_POPULATION` is still computed and printed, for reference
+#: only; no registered outcome is ever attached to it.
+REGISTERED_POPULATION = "population_clears_edge_bar"
+REFERENCE_POPULATION = "population_every_opinion"
+POPULATION_DECIDED_ON = "2026-11-09"
+
+#: The registered rule (docs/when_this_ends.md, "The rule"), keyed by how
+#: `_population_statistic` describes the corrected interval. Copied from the
+#: doc's table, never tuned here; read only on or after the decision date,
+#: and only for the registered population.
+REGISTERED_OUTCOMES: dict[str, str] = {
+    "excludes_zero_positive": (
+        "A candidate, on one season. Not a green light: a second season "
+        "confirms or kills it. No stake is placed on one season, ever."
+    ),
+    "spans_zero": (
+        "Stop. No edge after a clean out-of-sample season: archive both "
+        "labs, disable the routines, write the closing note."
+    ),
+    "excludes_zero_negative": (
+        "Stop. Confirmed loser: archive both labs, disable the routines, "
+        "write the closing note."
+    ),
+    "below_floor": (
+        "The test did not run: fewer settled opinions than the floor. "
+        "Diagnose the pipeline. Do not read the number."
     ),
 }
 
@@ -1237,9 +1268,9 @@ def _population_statistic(
     own settled opinions. The interval is widened (Bonferroni) for the
     markets measured, the same family every per-market interval uses.
     `corrected_interval` describes that interval — below the floor,
-    spanning zero, or excluding it on one side — and nothing more: which
-    registered outcome it would be depends on a population nobody has yet
-    chosen. The interval counts the game, not the wager: see
+    spanning zero, or excluding it on one side — and nothing more: the
+    registered outcome is attached by `registered_statistic`, to the
+    registered population only and only from the decision date. The interval counts the game, not the wager: see
     `_interval_on_the_game`.
     """
     count = int(len(rows))
@@ -1300,9 +1331,12 @@ def registered_statistic(
     stakes only best bets, above a higher bar, and stakes nothing past the
     juice limit or the longest price or in a stake-excluded or hard-gated
     market, so B holds opinions the card never staked (sweep 3, A1).
-    Choosing between them is Cooper's decision, not code's, so both are computed the same way, each is
-    counted against the floor in its own settled opinions, and
-    `population_undecided` is True. Neither carries a registered outcome.
+    Choosing between them was Cooper's decision, not code's, open from
+    2026-09-26. On 2026-11-09 he answered "B": `registered_population` is
+    `population_clears_edge_bar`, `population_undecided` is False, and
+    `population_decided_on` records the day. Both are still computed the
+    same way, each counted against the floor in its own settled opinions;
+    A is shown for reference only and never carries a registered outcome.
 
     `settled` is the report's own settled wagers — already collapsed by
     `closing_lines.collapse_to_best`, so both populations count exactly
@@ -1313,17 +1347,23 @@ def registered_statistic(
     payload, as evidence, but the rendered page does not print it: "Do not
     read the number."
 
-    `decision_due` is False before the decision date. Nothing on the page is
-    the decision while the population is undecided, and nothing before that
-    date is the decision whatever the population: "If a mid-season result
-    looks strong, the correct action is nothing."
+    `decision_due` is False before the decision date, and nothing before
+    that date is the decision: "If a mid-season result looks strong, the
+    correct action is nothing." `registered_outcome` is None until then. On
+    or after it, it is the row of the registered rule's table that B's
+    corrected interval falls in (`REGISTERED_OUTCOMES`), read on the ledger
+    as it stands when the report is built.
     """
     clears = clears_edge_bar(settled)
-    return {
+    due = now.date().isoformat() >= DECISION_DATE
+    stat = {
         "decision_date": DECISION_DATE,
-        "decision_due": now.date().isoformat() >= DECISION_DATE,
+        "decision_due": due,
         "sample_floor": SAMPLE_FLOOR,
-        "population_undecided": True,
+        "population_undecided": False,
+        "registered_population": REGISTERED_POPULATION,
+        "reference_population": REFERENCE_POPULATION,
+        "population_decided_on": POPULATION_DECIDED_ON,
         "markets": list(markets),
         "population_every_opinion": _population_statistic(
             settled, markets,
@@ -1333,7 +1373,13 @@ def registered_statistic(
             clears, markets,
             REGISTERED_POPULATIONS["population_clears_edge_bar"],
         ),
+        "registered_outcome": None,
     }
+    if due:
+        stat["registered_outcome"] = stat[REGISTERED_POPULATION][
+            "corrected_interval"
+        ]
+    return stat
 
 
 def build_forward_report(
@@ -1477,8 +1523,9 @@ def _bets_note(subject: str) -> str:
 
 #: How each population is labelled on the page, in the order shown.
 _POPULATION_LABELS = (
-    ("population_every_opinion", "A. Every settled opinion"),
-    ("population_clears_edge_bar", "B. Opinions clearing the edge bar"),
+    ("population_every_opinion", "A. Every settled opinion (reference only)"),
+    ("population_clears_edge_bar",
+     "B. Opinions clearing the edge bar (registered)"),
 )
 
 
@@ -1509,16 +1556,44 @@ def _population_row(label: str, stat: dict, floor: int) -> str:
     )
 
 
-def _registered_section(stat: dict | None) -> list[str]:
-    """Both readings of the registered statistic, side by side, and no
-    outcome attached to either.
+def _decision_paragraph(stat: dict, date: str) -> str:
+    """What the reading means today: nothing before the date; on or after
+    it, the registered rule's row for B, and never anything for A."""
+    if not stat["decision_due"]:
+        return (
+            "**No reading here is the decision.** The decision is read on "
+            f"population B under docs/when_this_ends.md, and it is not due "
+            f"until {date}; a reading before then decides nothing: \"If a "
+            "mid-season result looks strong, the correct action is "
+            "nothing.\" No registered outcome is attached to either "
+            "population before that date, and none is ever attached to A."
+        )
+    outcome = stat.get("registered_outcome")
+    if outcome not in REGISTERED_OUTCOMES:
+        return (
+            "The decision date has arrived. The decision is read on "
+            "population B under docs/when_this_ends.md."
+        )
+    return (
+        "The decision date has arrived. The decision is read on population "
+        "B under docs/when_this_ends.md, on the ledger as it stands in this "
+        f"report. Under the registered rule, B reads: "
+        f"**{REGISTERED_OUTCOMES[outcome]}** A is reference only and carries "
+        "no outcome."
+    )
 
-    The registration is ambiguous on which population it means, so this
-    names the ambiguity, shows each population's definition and its count
-    against the floor, and says in terms that no reading is the decision:
-    not before 2027-04-25, and not after it either until Cooper has decided
-    the population. Below the floor a population's number is not printed
-    ("Do not read the number"); it stays in the JSON as evidence.
+
+def _registered_section(stat: dict | None) -> list[str]:
+    """The registered statistic, population B, with A beside it for
+    reference only.
+
+    The registration was ambiguous on which population it means; Cooper
+    decided on 2026-11-09 that it means B. This names B as registered and A
+    as reference, shows each population's definition and its count against
+    the floor, and says in terms that no reading before 2027-04-25 is the
+    decision. On or after that date it names the registered rule's outcome
+    for B, and never for A. Below the floor a population's number is not
+    printed ("Do not read the number"); it stays in the JSON as evidence.
     """
     if not stat:
         # A payload written before the statistic existed. Say nothing
@@ -1534,15 +1609,14 @@ def _registered_section(stat: dict | None) -> list[str]:
             "\"the forward ledger's pooled return on frozen opinions, one "
             "bet per wager at the best price the card could have taken, "
             "corrected across the markets measured\", against a floor of "
-            f"{floor:,} settled opinions. **The registration is ambiguous on "
-            "which population it means, and Cooper must decide before "
-            f"{date}.** \"Opinions, not bets\" reads as every settled "
-            "opinion (A), which pools both sides of every priced line and so "
-            "carries the whole margin. The words \"a frozen opinion scored "
-            "against the price it was frozen at is the same test\", with the "
-            "edge bar among what the registration freezes, read as the "
-            "opinions clearing the measurement bar (B) — "
-            f"{_not_staked()}; the note under the table says "
+            f"{floor:,} settled opinions. The registration could be read as "
+            "two populations: every settled opinion (A), which pools both "
+            "sides of every priced line and so carries the whole margin, or "
+            "the opinions clearing the measurement bar (B) — "
+            f"{_not_staked()}. **On {POPULATION_DECIDED_ON} "
+            "Cooper decided that the registration means B, the opinions "
+            "clearing the measurement bar. B is the registered statistic; A "
+            "is shown for reference only.** The note under the table says "
             "how the two differ. Both are computed below the same way: "
             "one per wager after the best-price collapse, pooled across "
             "markets, the 95% interval clustered on the game (every rung, "
@@ -1553,19 +1627,7 @@ def _registered_section(stat: dict | None) -> list[str]:
             "its own settled opinions."
         ),
         "",
-        (
-            "**No reading here is the decision.** No registered outcome is "
-            "attached to either population while the population is "
-            "undecided. "
-            + (
-                "The decision date has arrived; the decision waits on "
-                "Cooper's choice of population."
-                if stat["decision_due"]
-                else f"The decision is not due until {date}, and a reading "
-                "before then decides nothing: \"If a mid-season result looks "
-                "strong, the correct action is nothing.\""
-            )
-        ),
+        _decision_paragraph(stat, date),
         "",
         (
             "| Population | Settled opinions | Pooled return "

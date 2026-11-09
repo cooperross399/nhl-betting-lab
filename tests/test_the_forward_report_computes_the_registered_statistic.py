@@ -7,12 +7,14 @@ markets measured", with a floor of 3,000 settled opinions. `build_forward_
 report` produced only per-market figures, so on 2027-04-25 there would have
 been no pooled number and no floor check in the house's own report.
 
-The registration is ambiguous on WHICH opinions. "Opinions, not bets" reads
+The registration was ambiguous on WHICH opinions. "Opinions, not bets" reads
 as every settled opinion (A); "a frozen opinion scored against the price it
 was frozen at is the same test", with the edge bar among what it freezes,
 reads as the opinions clearing the edge bar (B). A pools both sides of every
-line and reads negative from the vig alone. Choosing is Cooper's decision,
-so the report computes both and attaches no registered outcome to either.
+line and reads negative from the vig alone. Choosing was Cooper's decision,
+and on 2026-11-09 he answered "B". The report still computes both, names B
+as the registered population and A as reference only, and attaches the
+registered rule's outcome to B alone, and only from the decision date.
 
 What these tests hold, on ledgers shaped as settlement writes them:
 
@@ -28,10 +30,11 @@ What these tests hold, on ledgers shaped as settlement writes them:
   number"), per population, even when the other one prints;
 * the interval is described from the CORRECTED interval, and a small sample
   never reads as excluding zero;
-* no registered outcome — Stop, candidate, green light, diagnose — is
-  attached to either reading, the page says the population is ambiguous and
-  Cooper decides, and no reading is the decision: before 2027-04-25 it is
-  not due, and on the date it waits on the population;
+* before 2027-04-25 no registered outcome — Stop, candidate, green light,
+  diagnose — is attached to either reading, the page names B as registered
+  (decided 2026-11-09) and A as reference only, and no reading is the
+  decision; on and after the date the registered rule's row is attached to
+  B and never to A;
 * the date and the floor match the registration, and the public site still
   publishes no return with the new key present.
 """
@@ -61,7 +64,7 @@ CLEARS = "population_clears_edge_bar"
 ABOVE = 0.62
 #: Zero edge at +100: an opinion, and below every bar.
 BELOW = 0.5
-#: Registered outcomes: none may be attached to either reading.
+#: Registered outcomes: none may be attached before the decision date.
 OUTCOME_WORDS = ("Stop", "candidate", "green light", "Diagnose",
                  "Confirmed loser", "second season")
 
@@ -115,8 +118,8 @@ def _population_row(section: str, label: str) -> str:
 def _assert_no_outcome(section: str) -> None:
     for word in OUTCOME_WORDS:
         assert word not in section, (
-            f"{word!r} attaches a registered outcome to a reading whose "
-            "population is undecided"
+            f"{word!r} attaches a registered outcome before the decision "
+            "date"
         )
 
 
@@ -127,7 +130,11 @@ def test_an_empty_ledger_carries_both_frames_and_no_number() -> None:
     assert stat["decision_date"] == "2027-04-25"
     assert stat["sample_floor"] == 3000
     assert stat["decision_due"] is False
-    assert stat["population_undecided"] is True
+    assert stat["population_undecided"] is False
+    assert stat["registered_population"] == CLEARS
+    assert stat["reference_population"] == EVERY
+    assert stat["population_decided_on"] == "2026-11-09"
+    assert stat["registered_outcome"] is None
     for key in (EVERY, CLEARS):
         population = stat[key]
         assert population["settled_opinions"] == 0
@@ -328,33 +335,91 @@ def test_above_the_floor_no_outcome_is_attached(
     )
     stat = payload["registered_statistic"]
     assert stat[EVERY]["meets_floor"] is True
-    assert stat["population_undecided"] is True
+    assert stat["population_undecided"] is False
+    assert stat["registered_population"] == CLEARS
+    assert stat["registered_outcome"] is None
     assert stat["decision_due"] is False
 
     section = _section(fe.render_forward_report(payload))
     row = _population_row(section, "A. Every settled opinion")
     assert row.rstrip().endswith(f"| {described} |")
     assert f"{stat[EVERY]['adjusted_low']:+.1%}" in row
-    assert "ambiguous on which population it means" in section
-    assert "Cooper must decide before 2027-04-25" in section
+    assert "On 2026-11-09 Cooper decided that the registration means B" in (
+        " ".join(section.split())
+    )
+    assert "A is shown for reference only" in section
+    assert "ambiguous on which population it means" not in section
+    assert "Cooper must decide" not in section
     assert "No reading here is the decision" in section
     assert "not due until 2027-04-25" in section
+    assert "If a mid-season result looks strong, the correct action is " \
+        "nothing." in " ".join(section.split())
+    assert _population_row(section, "A. Every settled opinion").startswith(
+        "| A. Every settled opinion (reference only) |"
+    )
+    assert _population_row(
+        section, "B. Opinions clearing the edge bar"
+    ).startswith("| B. Opinions clearing the edge bar (registered) |")
     _assert_no_outcome(section)
 
 
-def test_on_the_decision_date_the_decision_waits_on_the_population() -> None:
+@pytest.mark.parametrize(
+    ("wins", "losses", "interval", "words"),
+    [(1520, 1480, "spans_zero", "Stop. No edge"),
+     (928 * 2, 672 * 2, "excludes_zero_positive", "A candidate, on one season"),
+     (1200, 1800, "excludes_zero_negative", "Stop. Confirmed loser"),
+     (10, 10, "below_floor", "Diagnose the pipeline")],
+    ids=["spans", "positive", "negative", "below-floor"],
+)
+def test_on_the_decision_date_the_rule_is_read_on_b(
+    wins: int, losses: int, interval: str, words: str
+) -> None:
+    half_w, half_l = wins // 2, losses // 2
     payload = fe.build_forward_report(
-        _ledger(_market("shots_on_goal", 928, 672)
-                + _market("points", 928, 672, start=10_000)),
+        _ledger(_market("shots_on_goal", half_w, half_l)
+                + _market("points", wins - half_w, losses - half_l,
+                          start=10_000)),
         now=ON_THE_DATE,
     )
     stat = payload["registered_statistic"]
     assert stat["decision_due"] is True
+    assert stat[CLEARS]["corrected_interval"] == interval
+    assert stat["registered_outcome"] == interval
     section = _section(fe.render_forward_report(payload))
+    flat = " ".join(section.split())
     assert "not due until" not in section
-    assert "No reading here is the decision" in section
-    assert "waits on Cooper's choice of population" in section
-    _assert_no_outcome(section)
+    assert "The decision is read on population B under " \
+        "docs/when_this_ends.md" in flat
+    assert words in flat
+    assert "A is reference only and carries no outcome" in flat
+
+
+def test_the_outcome_follows_b_not_a() -> None:
+    # A reads negative (its zero-edge opinions lose), B clears
+    # zero positive: the outcome is B's, never A's.
+    rows = _market("shots_on_goal", 928 * 2, 672 * 2)
+    rows += _market("points", 1000, 2000, p=BELOW, start=10_000)
+    payload = fe.build_forward_report(_ledger(rows), now=ON_THE_DATE)
+    stat = payload["registered_statistic"]
+    assert stat[CLEARS]["corrected_interval"] == "excludes_zero_positive"
+    assert stat[EVERY]["corrected_interval"] != "excludes_zero_positive"
+    assert stat["registered_outcome"] == "excludes_zero_positive"
+
+
+def test_the_outcomes_are_the_registration_s_own_rows() -> None:
+    doc = (PROJECT_ROOT / "docs" / "when_this_ends.md").read_text(
+        encoding="utf-8"
+    )
+    assert "| Corrected interval **excludes zero, positive** | A candidate, " \
+        "on one season |" in doc
+    assert "| Corrected interval **spans zero** |" in doc
+    assert "| Corrected interval **excludes zero, negative** | Confirmed " \
+        "loser |" in doc
+    assert "Diagnose the pipeline. Do not read the number." in doc
+    assert set(fe.REGISTERED_OUTCOMES) == {
+        "excludes_zero_positive", "spans_zero", "excludes_zero_negative",
+        "below_floor",
+    }
 
 
 def test_the_day_before_the_date_is_still_not_due() -> None:

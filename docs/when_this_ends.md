@@ -75,6 +75,20 @@ The instruction for a strong mid-season number still stands; it is now a
 number on a public page, which makes doing nothing harder, and that cost was
 weighed and accepted.
 
+**2026-11-09, Cooper's call: the measurement above means population B.**
+The registered sentence could be read two ways: every settled opinion
+whatever its edge (A), or only the opinions clearing the edge bar (B). Asked
+which, Cooper answered on 2026-11-09 at 14:30 UTC, in one word: "B". So the
+measurement is the forward ledger's pooled return on the settled opinions
+whose edge clears the measurement bar for their market (6% for a prop, 3.5%
+for a team market, the bar the historical backtest measures at; not the
+card's staked best bets), one bet per wager at the best price the card could
+have taken, the interval clustered on the game and corrected across the
+markets measured, and the 3,000-opinion floor counted in those opinions. The
+forward report still prints A beside it, for reference only, and attaches
+the rule's outcome to B alone. The registered text above is not edited; the
+date, the floor and the rule are unchanged.
+
 ## The honest prior
 
 Everything measured so far says this comes back null. The season is worth
