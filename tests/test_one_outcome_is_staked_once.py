@@ -115,6 +115,19 @@ def _ladder_tests_do_not_depend_on_the_prop_confidence_check(monkeypatch):
     monkeypatch.setattr(gameday_card, "prop_confidence_reason", lambda price, probability: "")
 
 
+@pytest.fixture(autouse=True)
+def _ladder_tests_do_not_depend_on_the_listing_rules(monkeypatch):
+    """And for the listing rules on `points` (2026-11-05 and 2026-11-09):
+    an excluded side or a points over past +200 goes to the passes before
+    the collapse runs. They have their own tests in
+    test_points_and_assists_on_the_card.py and
+    test_leans_and_totals_turnaround.py."""
+    from nhl_betting_lab.reports import gameday_card
+
+    monkeypatch.delitem(gameday_card.LEAN_EXCLUDED_SIDES, ("points", "under"), raising=False)
+    monkeypatch.delitem(gameday_card.LEAN_MAX_PRICE, ("points", "over"), raising=False)
+
+
 def _at(hours: float) -> str:
     return (NOW + timedelta(hours=hours)).isoformat().replace("+00:00", "Z")
 
