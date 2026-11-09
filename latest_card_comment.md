@@ -1,10 +1,10 @@
-**Selections changed** since the previous card — 0 best bet(s), 0 unit(s) staked.
+Selections are unchanged since the previous card; this comment was posted on request, and the run was clean.
 
 # NHL gameday card
 
-- Generated: 2026-11-09T13:53:15+00:00
-- 0 best bet(s), 10 lean(s), 1589 pass(es) across 3 game(s); 0 unit(s) staked.
-- Included markets: **assists, blocked_shots, goals, moneyline, points, puck_line, regulation_3_way, shots_on_goal, team_total, total_goals**
+- Generated: 2026-11-09T14:57:04+00:00
+- 0 best bet(s), 7 lean(s), 1604 pass(es) across 3 game(s); 0 unit(s) staked.
+- Included markets: **assists, blocked_shots, goalie_saves, goals, moneyline, points, puck_line, regulation_3_way, shots_on_goal, team_total, total_goals**
 - Unit size: $25
 
 ## Best bets
@@ -15,16 +15,13 @@ _No best bets._
 
 | Game | Starts | Market | Selection | Model | Edge | Price | Bet down to | Book |
 |:-----|:-------|:-------|:----------|------:|-----:|------:|------------:|:-----|
-| New York Rangers @ Edmonton Oilers | Nov 9, 8:10 PM ET | `shots_on_goal` | Pavel Dorofeyev under 2.5 | 58.8% | +7.6% | -105 | -112 | Hard Rock Bet |
-| New York Rangers @ Edmonton Oilers | Nov 9, 8:10 PM ET | `shots_on_goal` | Leon Draisaitl under 3.5 | 62.0% | +7.5% | -120 | -127 | Hard Rock Bet |
-| Philadelphia Flyers @ Vancouver Canucks | Nov 9, 9:40 PM ET | `shots_on_goal` | Linus Karlsson under 1.5 | 59.4% | +6.8% | -111 | -114 | BetMGM |
-| Philadelphia Flyers @ Vancouver Canucks | Nov 9, 9:40 PM ET | `assists` | Brock Boeser over 0.5 | 39.9% | +6.6% | +200 | +195 | BetOnline.ag |
-| Philadelphia Flyers @ Vancouver Canucks | Nov 9, 9:40 PM ET | `shots_on_goal` | Trevor Zegras under 1.5 | 49.9% | +6.5% | +130 | +128 | Courtside |
-| Philadelphia Flyers @ Vancouver Canucks | Nov 9, 9:40 PM ET | `points` | Brock Boeser over 0.5 | 61.3% | +4.8% | -130 | -140 | Hard Rock Bet |
-| New York Rangers @ Edmonton Oilers | Nov 9, 8:10 PM ET | `points` | Leon Draisaitl over 1.5 | 50.0% | +4.1% | +118 | +113 | FanDuel |
-| New York Islanders @ San Jose Sharks | Nov 9, 10:10 PM ET | `total_goals` | over 7 | 41.0% | +4.0% | +170 | +167 | Bovada |
-| Philadelphia Flyers @ Vancouver Canucks | Nov 9, 9:40 PM ET | `points` | Matvei Michkov over 0.5 | 54.6% | +3.3% | -105 | -106 | BetMGM |
-| Philadelphia Flyers @ Vancouver Canucks | Nov 9, 9:40 PM ET | `points` | Brock Boeser over 1.5 | 25.1% | +3.3% | +360 | +354 | FanDuel |
+| New York Rangers @ Edmonton Oilers | Nov 9, 8:10 PM ET | `shots_on_goal` | Leon Draisaitl under 3.5 | 62.1% | +7.6% | -120 | -127 | Hard Rock Bet |
+| New York Rangers @ Edmonton Oilers | Nov 9, 8:10 PM ET | `shots_on_goal` | Pavel Dorofeyev under 2.5 | 58.5% | +7.3% | -105 | -110 | Hard Rock Bet |
+| Philadelphia Flyers @ Vancouver Canucks | Nov 9, 9:40 PM ET | `shots_on_goal` | Linus Karlsson under 1.5 | 59.3% | +6.7% | -111 | -114 | BetMGM |
+| Philadelphia Flyers @ Vancouver Canucks | Nov 9, 9:40 PM ET | `points` | Brock Boeser over 0.5 | 61.3% | +4.8% | -130 | -139 | Hard Rock Bet |
+| New York Islanders @ San Jose Sharks | Nov 9, 10:10 PM ET | `total_goals` | over 7 | 40.1% | +3.7% | +175 | +174 | Bovada |
+| New York Rangers @ Edmonton Oilers | Nov 9, 8:10 PM ET | `points` | Leon Draisaitl over 1.5 | 50.4% | +3.4% | +113 | +112 | BetOnline.ag |
+| Philadelphia Flyers @ Vancouver Canucks | Nov 9, 9:40 PM ET | `points` | Matvei Michkov over 0.5 | 54.5% | +3.3% | -105 | -106 | BetMGM |
 
 Leans are recorded and not staked.
 
@@ -32,33 +29,33 @@ Leans are recorded and not staked.
 
 | Game | Starts | Market | Selection | Model | Edge | Price | Book |
 |:-----|:-------|:-------|:----------|------:|-----:|------:|:-----|
-| New York Islanders @ San Jose Sharks | Nov 9, 10:10 PM ET | `shots_on_goal` | Matthew Schaefer under 3.5 | 68.8% | +6.7% | -164 | BetOnline.ag |
-| New York Rangers @ Edmonton Oilers | Nov 9, 8:10 PM ET | `shots_on_goal` | Adam Fox under 1.5 | 53.4% | +5.8% | +110 | Hard Rock Bet |
-| New York Rangers @ Edmonton Oilers | Nov 9, 8:10 PM ET | `shots_on_goal` | Evan Bouchard under 2.5 | 51.2% | +5.7% | +120 | Hard Rock Bet |
-| Philadelphia Flyers @ Vancouver Canucks | Nov 9, 9:40 PM ET | `shots_on_goal` | Travis Sanheim under 1.5 | 57.4% | +4.5% | -112 | Bally Bet |
-| Philadelphia Flyers @ Vancouver Canucks | Nov 9, 9:40 PM ET | `shots_on_goal` | Jamie Drysdale under 1.5 | 60.9% | +4.4% | -130 | Bally Bet |
-| Philadelphia Flyers @ Vancouver Canucks | Nov 9, 9:40 PM ET | `shots_on_goal` | Tyson Foerster under 2.5 | 65.9% | +4.4% | -160 | Hard Rock Bet |
-| New York Rangers @ Edmonton Oilers | Nov 9, 8:10 PM ET | `shots_on_goal` | Ryan Nugent-Hopkins under 2.5 | 68.0% | +4.4% | -175 | Hard Rock Bet |
-| New York Rangers @ Edmonton Oilers | Nov 9, 8:10 PM ET | `goals` | Zach Hyman over 0.5 | 36.6% | +4.3% | +210 | Courtside |
-| New York Islanders @ San Jose Sharks | Nov 9, 10:10 PM ET | `shots_on_goal` | Michael Misa over 3.5 | 13.8% | +4.3% | +950 | BetOnline.ag |
-| New York Islanders @ San Jose Sharks | Nov 9, 10:10 PM ET | `shots_on_goal` | Michael Misa over 2.5 | 29.2% | +4.2% | +300 | FanDuel |
-| Philadelphia Flyers @ Vancouver Canucks | Nov 9, 9:40 PM ET | `shots_on_goal` | Jake DeBrusk under 2.5 | 60.7% | +4.2% | -130 | Bally Bet |
-| New York Rangers @ Edmonton Oilers | Nov 9, 8:10 PM ET | `goals` | Alex Formenton over 0.5 | 14.6% | +4.1% | +850 | Courtside |
-| Philadelphia Flyers @ Vancouver Canucks | Nov 9, 9:40 PM ET | `shots_on_goal` | Porter Martone under 2.5 | 69.5% | +3.9% | -190 | Hard Rock Bet |
-| New York Islanders @ San Jose Sharks | Nov 9, 10:10 PM ET | `goals` | Tyler Toffoli over 0.5 | 24.7% | +3.9% | +380 | FanDuel |
-| New York Islanders @ San Jose Sharks | Nov 9, 10:10 PM ET | `shots_on_goal` | Simon Holmstrom under 1.5 | 47.2% | +3.7% | +130 | theScore Bet |
-| Philadelphia Flyers @ Vancouver Canucks | Nov 9, 9:40 PM ET | `goals` | Brock Boeser over 0.5 | 37.1% | +3.7% | +200 | Hard Rock Bet |
-| New York Islanders @ San Jose Sharks | Nov 9, 10:10 PM ET | `assists` | Matthew Schaefer under 0.5 | 52.5% | +3.7% | +105 | BetMGM |
-| Philadelphia Flyers @ Vancouver Canucks | Nov 9, 9:40 PM ET | `shots_on_goal` | Porter Martone under 1.5 | 47.1% | +3.6% | +130 | FanDuel |
-| New York Islanders @ San Jose Sharks | Nov 9, 10:10 PM ET | `assists` | Ivar Stenberg under 0.5 | 71.3% | +3.6% | -210 | BetMGM |
-| Philadelphia Flyers @ Vancouver Canucks | Nov 9, 9:40 PM ET | `goals` | Arshdeep Bains over 0.5 | 15.7% | +3.6% | +725 | BetMGM |
-| New York Rangers @ Edmonton Oilers | Nov 9, 8:10 PM ET | `shots_on_goal` | Tye Kartye under 1.5 | 51.1% | +3.5% | +110 | Hard Rock Bet |
-| New York Islanders @ San Jose Sharks | Nov 9, 10:10 PM ET | `total_goals` | over 7.5 | 33.3% | +3.5% | +235 | Bally Bet |
+| New York Islanders @ San Jose Sharks | Nov 9, 10:10 PM ET | `shots_on_goal` | Matthew Schaefer under 3.5 | 68.5% | +6.3% | -165 | BetMGM |
+| Philadelphia Flyers @ Vancouver Canucks | Nov 9, 9:40 PM ET | `shots_on_goal` | Trevor Zegras under 1.5 | 49.8% | +6.0% | +128 | Bally Bet |
+| New York Islanders @ San Jose Sharks | Nov 9, 10:10 PM ET | `shots_on_goal` | Matthew Schaefer under 2.5 | 51.4% | +5.9% | +120 | BetOnline.ag |
+| New York Rangers @ Edmonton Oilers | Nov 9, 8:10 PM ET | `shots_on_goal` | Adam Fox under 1.5 | 53.5% | +5.9% | +110 | Hard Rock Bet |
+| New York Rangers @ Edmonton Oilers | Nov 9, 8:10 PM ET | `shots_on_goal` | Evan Bouchard under 2.5 | 51.3% | +5.8% | +120 | Hard Rock Bet |
+| Philadelphia Flyers @ Vancouver Canucks | Nov 9, 9:40 PM ET | `shots_on_goal` | Jake DeBrusk under 2.5 | 60.1% | +4.5% | -125 | Bally Bet |
+| Philadelphia Flyers @ Vancouver Canucks | Nov 9, 9:40 PM ET | `shots_on_goal` | Travis Sanheim under 1.5 | 57.1% | +4.3% | -112 | Bally Bet |
+| Philadelphia Flyers @ Vancouver Canucks | Nov 9, 9:40 PM ET | `shots_on_goal` | Tyson Foerster under 2.5 | 65.7% | +4.2% | -160 | Hard Rock Bet |
+| Philadelphia Flyers @ Vancouver Canucks | Nov 9, 9:40 PM ET | `shots_on_goal` | Jamie Drysdale under 1.5 | 60.7% | +4.1% | -130 | Bally Bet |
+| New York Rangers @ Edmonton Oilers | Nov 9, 8:10 PM ET | `shots_on_goal` | Ryan Nugent-Hopkins under 2.5 | 67.8% | +4.1% | -175 | Hard Rock Bet |
+| New York Islanders @ San Jose Sharks | Nov 9, 10:10 PM ET | `shots_on_goal` | Michael Misa over 2.5 | 28.8% | +4.1% | +305 | FanDuel |
+| Philadelphia Flyers @ Vancouver Canucks | Nov 9, 9:40 PM ET | `goals` | Arshdeep Bains over 0.5 | 15.5% | +4.1% | +775 | BetMGM |
+| New York Islanders @ San Jose Sharks | Nov 9, 10:10 PM ET | `shots_on_goal` | Michael Misa over 3.5 | 13.6% | +4.0% | +950 | BetOnline.ag |
+| New York Islanders @ San Jose Sharks | Nov 9, 10:10 PM ET | `assists` | Matthew Schaefer under 0.5 | 52.6% | +3.8% | +105 | BetMGM |
+| Philadelphia Flyers @ Vancouver Canucks | Nov 9, 9:40 PM ET | `shots_on_goal` | Porter Martone under 2.5 | 69.2% | +3.7% | -190 | Hard Rock Bet |
+| New York Islanders @ San Jose Sharks | Nov 9, 10:10 PM ET | `assists` | Ivar Stenberg under 0.5 | 71.4% | +3.7% | -210 | BetMGM |
+| Philadelphia Flyers @ Vancouver Canucks | Nov 9, 9:40 PM ET | `goals` | Brock Boeser over 0.5 | 37.0% | +3.7% | +200 | Bally Bet |
+| Philadelphia Flyers @ Vancouver Canucks | Nov 9, 9:40 PM ET | `assists` | Brock Boeser over 0.5 | 41.4% | +3.7% | +165 | Hard Rock Bet |
+| New York Rangers @ Edmonton Oilers | Nov 9, 8:10 PM ET | `goals` | Alex Formenton over 0.5 | 14.7% | +3.6% | +800 | BetOnline.ag |
+| New York Islanders @ San Jose Sharks | Nov 9, 10:10 PM ET | `shots_on_goal` | Simon Holmstrom under 1.5 | 47.0% | +3.5% | +130 | Bovada |
+| New York Islanders @ San Jose Sharks | Nov 9, 10:10 PM ET | `goals` | Tyler Toffoli over 0.5 | 24.7% | +3.5% | +370 | Bally Bet |
+| Philadelphia Flyers @ Vancouver Canucks | Nov 9, 9:40 PM ET | `shots_on_goal` | Filip Hronek under 1.5 | 53.4% | +3.4% | +100 | Hard Rock Bet |
+| Philadelphia Flyers @ Vancouver Canucks | Nov 9, 9:40 PM ET | `goals` | Porter Martone under 0.5 | 77.1% | +3.4% | -280 | FanDuel |
+| Philadelphia Flyers @ Vancouver Canucks | Nov 9, 9:40 PM ET | `shots_on_goal` | Drew O'Connor under 1.5 | 60.7% | +3.4% | -134 | Bally Bet |
 | New York Rangers @ Edmonton Oilers | Nov 9, 8:10 PM ET | `assists` | Mika Zibanejad over 0.5 | 43.4% | +3.4% | +150 | BetOnline.ag |
-| New York Islanders @ San Jose Sharks | Nov 9, 10:10 PM ET | `total_goals` | over 6.5 | 53.1% | +3.4% | +101 | BetOnline.ag |
-| Philadelphia Flyers @ Vancouver Canucks | Nov 9, 9:40 PM ET | `shots_on_goal` | Drew O'Connor under 1.5 | 61.5% | +3.4% | -139 | Bally Bet |
 
-_1564 further passes not listed._
+_1579 further passes not listed._
 
 These are genuine model judgements about markets that were priced and modelled. They are **not** the same thing as the excluded markets below.
 
@@ -68,9 +65,9 @@ Who the model expects to win each game, from the same team ratings the card pric
 
 | Game | Puck drop | Stats' side | Win chance | Fair | Best price | Book | Against the price |
 |:--|:--|:--|--:|--:|--:|:--|:--|
-| New York Rangers @ Edmonton Oilers | Nov 9, 8:10 PM ET | **Edmonton Oilers** | 59.2% | -145 | -150 | Hard Rock Bet | price is 0.8 pts short |
-| Philadelphia Flyers @ Vancouver Canucks | Nov 9, 9:40 PM ET | **Philadelphia Flyers** | 54.8% | -121 | -132 | Courtside | price is 2.1 pts short |
-| New York Islanders @ San Jose Sharks | Nov 9, 10:10 PM ET | **New York Islanders** | 54.6% | -120 | -132 | Courtside | price is 2.3 pts short |
+| New York Rangers @ Edmonton Oilers | Nov 9, 8:10 PM ET | **Edmonton Oilers** | 59.6% | -148 | -150 | Hard Rock Bet | price is 0.4 pts short |
+| Philadelphia Flyers @ Vancouver Canucks | Nov 9, 9:40 PM ET | **Philadelphia Flyers** | 54.4% | -120 | -130 | BetUS | price is 2.1 pts short |
+| New York Islanders @ San Jose Sharks | Nov 9, 10:10 PM ET | **New York Islanders** | 54.1% | -118 | -134 | BetOnline.ag | price is 3.1 pts short |
 
 A list, not bets: no units, no stakes, nothing frozen into the forward ledger. The lab has no measurement showing that backing the stats' side at the market's price makes money.
 
@@ -113,7 +110,7 @@ Big games, measured on 2024-25 and 2025-26 (scripts/run_due_list_big_games.py), 
 
 | Player | Team | Opponent | Puck drop | Category | Line | Last season | Drought | Bar reached | Bars (tier / surprise) | Rarity | Line tonight | Goalie faced | Shots in drought | Model | Band record | Best price | Book | Flag |
 |:--|:--|:--|:--|:--|--:|--:|--:|:--|:--|:--|:--|:--|:--|:--|:--|--:|:--|:--|
-| Macklin Celebrini | SJS | NYI | Nov 9, 10:00 PM ET | hat trick | over 2.5 | 45 | 79 | 30 (tier) | tier 30 / surprise - | 1 in 7 for him | F1, PP1 | Ilya Sorokin, -6% goals vs expected | - | model 1% (-1.2 pts) | band 40+ @30: -58.6% over 1269 (95% -81.1% to -33.2%) | +4000 | Bovada |  |
+| Macklin Celebrini | SJS | NYI | Nov 9, 10:00 PM ET | hat trick | over 2.5 | 45 | 79 | 30 (tier) | tier 30 / surprise - | 1 in 7 for him | F1, PP1 | Ilya Sorokin, -6% goals vs expected | - | model 1% (-0.8 pts) | band 40+ @30: -58.6% over 1269 (95% -81.1% to -33.2%) | +5000 | Bovada |  |
 
 A list, not bets: no units, no stakes, and none of it is in the best bets above.
 
@@ -141,11 +138,11 @@ A list, not bets: no units, no stakes, and none of it is in the best bets above.
 | goals | 88 | 26/71 (37%) | +3.27u over 69 |
 | assists | 182 | 69/181 (38%) | +1.12u over 171 |
 | two_goals | 0 | n/a | n/a |
-| hat_trick | 15 | 0/15 (0%) | -3.75u over 15 |
+| hat_trick | 16 | 0/16 (0%) | -4.00u over 16 |
 | shutout | 0 | n/a | n/a |
-| all | 307 | 109/288 (38%) | +1.00u over 276 |
+| all | 308 | 109/289 (38%) | +0.75u over 277 |
 | model agreed | 17 | 5/17 (29%) | -0.07u over 17 |
-| model disagreed | 13 | 3/13 (23%) | -1.65u over 13 |
+| model disagreed | 14 | 3/14 (21%) | -1.90u over 14 |
 
 Hits count every graded entry; units count entries that had a price, at 0.25u as the site tracks the list. "Model agreed" means the card's own chance beat the listed price; entries listed before Oct 31 recorded no chance and sit in neither row. Nothing here is bet, and a week is far too few to call an edge either way.
 
@@ -164,10 +161,10 @@ These appeared in the provider's prices and could not be matched to a modelled t
 ## Priced game by game
 
 - `blocked_shots`: Allowlisted, and judged game by game: priced for 2 of 3 game(s), and picked only in those. Not priced in 2026-11-10 New York Rangers@Edmonton Oilers, so nothing in this market is carded for them; that is an absence, not a pass or a no-value call.
+- `goalie_saves`: Allowlisted, and judged game by game: priced for 1 of 3 game(s), and picked only in those. Not priced in 2026-11-10 New York Rangers@Edmonton Oilers, 2026-11-10 New York Islanders@San Jose Sharks, so nothing in this market is carded for them; that is an absence, not a pass or a no-value call.
 
 ## Excluded markets
 
-- `goalie_saves`: The provider returned no rows for this market. That is an absence, not a price of zero and not a no-value call. Check per-bookmaker coverage including alternate lines before concluding it is not offered.
 - `hits`: The provider returned no rows for this market. That is an absence, not a price of zero and not a no-value call. Check per-bookmaker coverage including alternate lines before concluding it is not offered.
 
 An excluded market is **not** a pass, an avoid, or a no-value call, and no price was invented for it.
@@ -199,6 +196,6 @@ What the evidence actually supports:
 - `data/outputs/props_calibration.md`
 - `data/outputs/what_we_can_claim.md`
 
-Run: https://github.com/cooperross399/nhl-betting-lab/actions/runs/42627762027
+Run: https://github.com/cooperross399/nhl-betting-lab/actions/runs/42637146045
 
 Recommendations only. No bet was placed, no policy was edited, and no market was allowlisted by this run.
