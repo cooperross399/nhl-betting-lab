@@ -297,7 +297,7 @@ def _tracked(rows: pd.DataFrame) -> tuple[float, float]:
     priced = graded[pd.to_numeric(graded["american_odds"], errors="coerce").notna()] if len(graded) else graded
     if not len(priced):
         return 0.0, 0.0
-    stakes = priced["market"].map(tracked_stake)
+    stakes = priced["market"].map(tracked_stake).astype(float)
     units = float((pd.to_numeric(priced["profit_units"], errors="coerce").fillna(0) * stakes).sum())
     return units, float(stakes.sum())
 
@@ -617,7 +617,7 @@ def _card_stat(rows: pd.DataFrame) -> dict[str, Any]:
     graded = rows[rows["outcome"].isin(["won", "lost"])]
     wagers = graded[pd.to_numeric(graded["american_odds"], errors="coerce").notna()]
     units = float((pd.to_numeric(wagers["profit_units"], errors="coerce").fillna(0)
-                   * wagers["market"].map(tracked_stake)).sum())
+                   * wagers["market"].map(tracked_stake).astype(float)).sum())
     return {
         "listed": int(len(rows)), "graded": int(len(graded)),
         "hits": int((graded["outcome"] == "won").sum()),
