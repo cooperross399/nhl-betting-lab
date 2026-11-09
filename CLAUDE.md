@@ -3270,6 +3270,47 @@ Re-derive rather than trust if the data has moved.
   they do not promise a profit. The snapshot, forward ledger, model, edge
   bars, market list and staking rule are unchanged; only the card's
   self-learned edges (and so its selections) and the listing move.
+- **2026-11-09, NOT a defect fix: points and assists on the card (Cooper's
+  decision of 2026-11-09, "Yes do all 4").** The forward report read
+  `points` -68.4u over 1,434 and `assists` -22.6u over 757: population B
+  (6% bar, one bet per wager at the best frozen price, 1u), reproduced from
+  card-feed's ledger through 2026-11-08. Diagnosis: both losses are the
+  unders (points -58.3u over 1,078, assists -23.7u over 663), where the
+  model holds the under about ten points likelier than it lands (points
+  0.666 against a 0.551 hit rate and a 0.574 price; assists 0.722, 0.617,
+  0.633): the price is near right and the model is not, worst where it
+  disagrees most (edge 9%+) and where the under is not the price's
+  favourite. Everything frozen from 2026-10-22 lost (points unders -13.5%
+  over 527); before it they were level. What the card actually lists,
+  replayed with its self-learning: points unders already nothing (#427);
+  points overs from the 3% lean bar -41.1u over 773, of which longer than
+  +200 -54.3u over 317 (-13.2% to 10-21, -24.0% from 10-22) and +200 or
+  shorter +13.2u over 456; assists unders -15.6u over 130 listed (-6.9% to
+  10-21, -21.9% from). Two changes: **assists unders join points unders in
+  `LEAN_EXCLUDED_SIDES`**, and an excluded side is now neither listed nor
+  staked (a best bet goes to the passes, reason named); and **points overs
+  priced longer than +200 are not listed** (`LEAN_MAX_PRICE`). Replayed,
+  the card's points and assists listing (leans and stakes) goes from -54.8u
+  over 996 (-5.5%, -14.1% to +3.1%) to +14.2u over 548 (+2.6%, -8.8% to
+  +13.9%) at 1u, game-clustered: chosen on the same weeks it is scored on,
+  every interval spans zero, **no demonstrated edge**. The snapshot is frozen before
+  `build_card`, so the forward ledger, population B and the 2027-04-25 test
+  are unchanged, and the report's -68.4u / -22.6u will keep reading what the
+  model thinks, not what the card lists. The model, the edge bars and the
+  market list are unchanged. `tests/test_points_and_assists_on_the_card.py`.
+- **2026-11-09: each layer added from 2026-10-22 is scored on settled live
+  picks (Cooper, "Yes do all 4").** `scripts/run_layer_scoring.py` (the
+  **Layer Scoring** workflow, no credit) takes each layer out alone and
+  reprices the same settled wagers against the same frozen prices and
+  outcomes: team layers from the card's own breakdown frozen on each night's
+  board (`games[].factors`, from 2026-10-26), prop layers from the
+  walk-forward props model with and without the layer, self-learning
+  walk-forward on the ledger. Line movement and posted lines' prop ice time
+  are not scorable from settled data (the snapshot holds the morning's first
+  opinion). The cut rule was fixed in the script before it ran: taking the
+  layer out must improve population B by 2+ points over the wagers either
+  version bets, improve the staked bets, and improve B in both halves of the
+  window. The results and what was cut are in the next entry.
 
 ## Contract strings — never change these
 
