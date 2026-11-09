@@ -1140,15 +1140,28 @@ Re-derive rather than trust if the data has moved.
   edge bar, the market list, the staking rule and the ledger's schema are
   unchanged, and the forward ledger held zero rows on 2026-09-26.
   `tests/test_the_forward_zero_column_reads_the_corrected_interval.py`.
-- **2026-09-26, an open question, not a fix: which population the
+- **2026-09-26, an open question, decided 2026-11-09: which population the
   registered statistic pools.** `docs/when_this_ends.md` decides the lab on
   "the forward ledger's pooled return on frozen opinions, one bet per wager
   at the best price the card could have taken, corrected across the markets
   measured. Opinions, not bets", against a floor of "3,000 settled
-  opinions". That reads two ways: **every settled opinion**, both sides of
-  every line and every rung, with no edge bar; or **only the opinions that
-  clear the shipped edge bar**. It awaits Cooper's decision, and neither reading is the
-  decision until he makes it. The registration itself is not edited.
+  opinions". That reads two ways: **every settled opinion** (A), both sides
+  of every line and every rung, with no edge bar; or **only the opinions
+  that clear the edge bar** (B). It was open from 2026-09-26. **On
+  2026-11-09 (14:30 UTC) Cooper decided it, in his word: "B"**: the
+  registered statistic is population B, the settled opinions clearing the
+  measurement bar (6% prop / 3.5% team, not the card's staked best bets),
+  one bet per wager at the best price, game-clustered, corrected across the
+  markets measured, the floor counted in B's own opinions.
+  `forward_evidence.registered_statistic` now carries
+  `population_undecided: False`, `registered_population`,
+  `reference_population` and `population_decided_on`; the page names B as
+  registered and A as reference only. Before 2027-04-25 no reading is the
+  decision and no outcome is attached; from that date `registered_outcome`
+  is the rule table's row for B's corrected interval, never A's. Counting,
+  intervals, bars, the floor, the model and the ledger are unchanged. The
+  registration itself is not edited; a dated note under it records the
+  answer.
 - **2026-09-26, a defect fix recorded as `docs/when_this_ends.md` requires:
   a close is a price near face-off.** `closing_lines.closing_prices` took the
   last capture strictly before face-off however early it was, so on a night
