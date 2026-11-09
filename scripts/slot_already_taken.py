@@ -102,8 +102,8 @@ def other_jobs(repo: str, run_id: str, since: datetime, token: str) -> list[dict
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--schedule", required=True)
-    parser.add_argument("--run-id", required=True)
-    parser.add_argument("--repo", required=True)
+    parser.add_argument("--run-id", default="")
+    parser.add_argument("--repo", default="")
     args = parser.parse_args(argv)
 
     now = datetime.now(timezone.utc)
@@ -111,6 +111,9 @@ def main(argv: list[str] | None = None) -> int:
         slot = _wait_for_round().round_for(args.schedule, now)
     except ValueError as exc:
         print(f"free ({exc})")
+        return 0
+    if not args.repo or not args.run_id:
+        print("free (no repository or run id to ask about)")
         return 0
     token = os.environ.get("GH_TOKEN", "")
     try:

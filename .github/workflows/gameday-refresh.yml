@@ -217,7 +217,7 @@ jobs:
           # Two crons serve each slot; whichever arrives second stands down
           # once another run's refresh has started for the slot.
           TAKEN=$(python3 scripts/slot_already_taken.py --schedule "${SCHEDULE:-}" \
-            --run-id "${{ github.run_id }}" --repo "${{ github.repository }}" || echo "free")
+            --run-id "${GITHUB_RUN_ID:-}" --repo "${GITHUB_REPOSITORY:-}" || echo "free")
           echo "$TAKEN"
           case "$TAKEN" in
             taken*)
