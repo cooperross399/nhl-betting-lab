@@ -173,7 +173,7 @@ def test_the_due_list_is_tracked_and_never_called_a_bet() -> None:
     list, not the model's pick: the page says so on its card, and the builder
     keeps its rows out of the best bets and their record."""
     page = (PROJECT_ROOT / "web" / "Record.dc.html").read_text(encoding="utf-8")
-    assert 'key === "due" ? `Cooper\'s list · 0.25u an entry (to win 0.25u on minus odds), not bet`' in page
+    assert 'key === "due" ? `Cooper\'s list · 0.25u an entry (hat tricks 0.1u; to win it on minus odds), not bet`' in page
     module = _module()
     night = {"resultsDate": "2026-10-20", "games": [], "props": {"status": "ok", "rows": []},
              "dueList": {"rows": [{"market": "goals", "player": "A", "playerId": 1, "team": "TOR",

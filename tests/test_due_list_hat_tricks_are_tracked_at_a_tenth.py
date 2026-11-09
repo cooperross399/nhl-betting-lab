@@ -51,3 +51,17 @@ def test_the_lab_ledger_tracks_hat_tricks_at_a_tenth() -> None:
     units, staked = df._tracked(ledger)
     assert units == pytest.approx(-0.1 + 0.375 + 1.0)
     assert staked == pytest.approx(0.1 + 0.25 + 0.1)
+
+
+def test_the_published_board_and_results_say_hat_tricks_are_a_tenth() -> None:
+    import importlib.util
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    spec = importlib.util.spec_from_file_location("smooth_pages_for_test", root / "web" / "smooth_pages.py")
+    smooth = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(smooth)
+    for name, times in (("Board.dc.html", 2), ("Results.dc.html", 1)):
+        out = smooth.patch(name, (root / "web" / name).read_text(encoding="utf-8"))
+        assert out.count("tracked at 0.25u each, hat tricks 0.1u") == times
+        assert "tracked at 0.25u each</span>" not in out
