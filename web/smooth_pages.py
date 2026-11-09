@@ -164,6 +164,15 @@ PATCHES: dict[str, list[tuple[str, str]]] = {
             'label: "Prop leans", tag: "no stake", record: rec(R.propLeans), units: "", unitsColor: "var(--ink-2)",',
             'label: "Prop leans", tag: "0.25u each", record: rec(R.propLeans), units: un(R.propLeans.units), unitsColor: col(R.propLeans.units),',
         ),
+        # Due List hat tricks are tracked at 0.1u (Cooper, 2026-11-09).
+        (
+            '<span style="font-family:\'IBM Plex Mono\',monospace;font-size:11px;color:var(--mute);border:1px solid var(--rule);padding:2px 6px;">Not model bets · tracked at 0.25u each</span>',
+            '<span style="font-family:\'IBM Plex Mono\',monospace;font-size:11px;color:var(--mute);border:1px solid var(--rule);padding:2px 6px;">Not model bets · tracked at 0.25u each, hat tricks 0.1u</span>',
+        ),
+        (
+            '<span style="font-family:\'Barlow Condensed\',sans-serif;font-weight:700;font-size:14px;letter-spacing:.14em;text-transform:uppercase;border:1px solid var(--ink);padding:4px 9px;white-space:nowrap;">Not model bets · tracked at 0.25u each</span>',
+            '<span style="font-family:\'Barlow Condensed\',sans-serif;font-weight:700;font-size:14px;letter-spacing:.14em;text-transform:uppercase;border:1px solid var(--ink);padding:4px 9px;white-space:nowrap;">Not model bets · tracked at 0.25u each, hat tricks 0.1u</span>',
+        ),
     ],
     "Results.dc.html": [
         (
@@ -180,6 +189,10 @@ PATCHES: dict[str, list[tuple[str, str]]] = {
         (
             'sub: RP.seasonLeans.nights ? rate(RP.seasonLeans) : "No night settled yet"',
             'sub: RP.seasonLeans.nights ? (typeof RP.seasonLeans.units === "number" ? `${sgn(RP.seasonLeans.units)}u at 0.25u a lean · ${rate(RP.seasonLeans)}` : rate(RP.seasonLeans)) : "No night settled yet"',
+        ),
+        (
+            '<span style="font-family:\'IBM Plex Mono\',monospace;font-size:11px;color:var(--mute);border:1px solid var(--rule);padding:2px 6px;">Not model bets · tracked at 0.25u each</span>',
+            '<span style="font-family:\'IBM Plex Mono\',monospace;font-size:11px;color:var(--mute);border:1px solid var(--rule);padding:2px 6px;">Not model bets · tracked at 0.25u each, hat tricks 0.1u</span>',
         ),
     ],
 }

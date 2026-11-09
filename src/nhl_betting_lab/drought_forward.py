@@ -281,6 +281,25 @@ def _stat(rows: pd.DataFrame) -> dict[str, Any]:
 #: if we bet .25u on each one every night"). The ledger is kept at one unit;
 #: this scales it. Nothing is bet.
 TRACKED_STAKE = 0.25
+#: Categories tracked at another stake (Cooper, 2026-11-09: "hat tricks
+#: should be tracked as .1u bets for the DUE LIST").
+TRACKED_STAKES: dict[str, float] = {"hat_trick": 0.1}
+
+
+def tracked_stake(market: object) -> float:
+    """The notional stake one entry of `market` is tracked at."""
+    return TRACKED_STAKES.get(str(market), TRACKED_STAKE)
+
+
+def _tracked(rows: pd.DataFrame) -> tuple[float, float]:
+    """(units, staked) of the priced, settled rows at each one's tracked stake."""
+    graded = rows[rows["outcome"].isin(["won", "lost", "push"])] if len(rows) else rows
+    priced = graded[pd.to_numeric(graded["american_odds"], errors="coerce").notna()] if len(graded) else graded
+    if not len(priced):
+        return 0.0, 0.0
+    stakes = priced["market"].map(tracked_stake).astype(float)
+    units = float((pd.to_numeric(priced["profit_units"], errors="coerce").fillna(0) * stakes).sum())
+    return units, float(stakes.sum())
 
 
 def build_report(ledger: pd.DataFrame, *, pending_rows: int = 0, outputs_dir: Path | None = None,
@@ -293,6 +312,9 @@ def build_report(ledger: pd.DataFrame, *, pending_rows: int = 0, outputs_dir: Pa
         "categories": {m: _stat(ledger[ledger["market"] == m]) for m in CATEGORIES},
         "overall": _stat(ledger),
         "tracked_stake": TRACKED_STAKE,
+        "tracked_stakes": dict(TRACKED_STAKES),
+        "tracked_units": round(_tracked(ledger)[0], 4),
+        "tracked_staked": round(_tracked(ledger)[1], 4),
         "backfilled_days": sorted((sources.get("backfilled") or {}).keys()),
         "filled_entries": sum(len(v) for v in (sources.get("filled") or {}).values()),
     }
@@ -338,8 +360,11 @@ def render_report(payload: dict[str, Any]) -> str:
     L += ["", f"{payload['pending_rows']} listed row(s) are waiting on their games and are in none of the figures above.", ""]
     stake, overall = payload.get("tracked_stake", TRACKED_STAKE), payload["overall"]
     if overall["units"] is not None:
-        L += [f"**Season, at {stake}u on every priced entry:** {overall['units'] * stake:+.2f}u over "
-              f"{overall['wagers']} wager(s), {overall['wagers'] * stake:.2f}u staked. Nothing is bet; this is the "
+        units = payload.get("tracked_units", overall["units"] * stake)
+        staked = payload.get("tracked_staked", overall["wagers"] * stake)
+        others = ", ".join(f"{m.replace('_', ' ')} at {v}u" for m, v in (payload.get("tracked_stakes") or {}).items())
+        L += [f"**Season, at {stake}u on every priced entry{' (' + others + ')' if others else ''}:** {units:+.2f}u over "
+              f"{overall['wagers']} wager(s), {staked:.2f}u staked. Nothing is bet; this is the "
               "list's record as if it had been.", ""]
     backfilled = payload.get("backfilled_days") or []
     if backfilled:
@@ -591,7 +616,8 @@ def scorecard_week(day: str) -> tuple[str, str]:
 def _card_stat(rows: pd.DataFrame) -> dict[str, Any]:
     graded = rows[rows["outcome"].isin(["won", "lost"])]
     wagers = graded[pd.to_numeric(graded["american_odds"], errors="coerce").notna()]
-    units = float(pd.to_numeric(wagers["profit_units"], errors="coerce").fillna(0).sum()) * TRACKED_STAKE
+    units = float((pd.to_numeric(wagers["profit_units"], errors="coerce").fillna(0)
+                   * wagers["market"].map(tracked_stake).astype(float)).sum())
     return {
         "listed": int(len(rows)), "graded": int(len(graded)),
         "hits": int((graded["outcome"] == "won").sum()),
@@ -637,7 +663,7 @@ def render_scorecard(card: Mapping[str, Any]) -> list[str]:
     lines = [f"## Due List scorecard, {fmt(start)} to {fmt(end)}", ""]
     for label, title in (("week", "Last week"), ("season", "Season")):
         s = card["slices"][label]
-        lines += [f"**{title}**", "", "| | Listed | Hits | Units at 0.25u |", "|:--|--:|--:|--:|"]
+        lines += [f"**{title}**", "", "| | Listed | Hits | Units at 0.25u (hat tricks 0.1u) |", "|:--|--:|--:|--:|"]
         lines += [_line(m, s["categories"][m]) for m in CATEGORIES]
         lines += [_line("all", s["overall"]), _line("model agreed", s["model_agreed"]),
                   _line("model disagreed", s["model_disagreed"]), ""]
