@@ -114,7 +114,7 @@ LOG_COLUMNS = ("game_id", "season", "game_type", "date", "start_time_utc", "play
 
 
 #: The notional 0.25u track's keys on a season record (Cooper, 2026-10-09).
-TRACKING_KEYS = {"stake", "units", "staked", "returnPct", "source"}
+TRACKING_KEYS = {"stake", "stakeByMarket", "units", "staked", "returnPct", "source"}
 
 
 def _count(record: dict) -> dict:

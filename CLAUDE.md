@@ -2327,6 +2327,15 @@ Re-derive rather than trust if the data has moved.
   entry no frozen price covers stays "not posted": graded for the hit rate,
   no units. `tests/test_due_list_is_never_staked.py` became
   `tests/test_due_list_is_tracked_at_a_quarter_unit.py`, by Cooper's request.
+- **2026-11-09: Due List hat tricks are tracked at 0.1u, every other category
+  still at 0.25u.** Cooper: "hat tricks should be tracked as .1u bets for the
+  DUE LIST". Nothing is bet. `drought_forward.TRACKED_STAKES` and
+  `build_site_json.DUE_LIST_STAKES` (`{"hat_trick": 0.1}`) set the exception
+  in both places; `tracked_stake` / `due_stake` read it, and every units and
+  staked figure (results rows, the season record, `record.dueList`, the lab's
+  report and Monday scorecard) counts each entry at its own stake. The record
+  keeps `stake: 0.25` and adds `stakeByMarket`. The pages say "0.25u each,
+  hat tricks 0.1u". `tests/test_due_list_hat_tricks_are_tracked_at_a_tenth_unit.py`.
 - **2026-10-10: the Due List's goals rule changed, on Cooper's word, after
   the tuning research.** Cooper: "leave assists and move goals to 25+ with a
   10-game drought, i still want the 40+ goals at 5-game drought too tho".

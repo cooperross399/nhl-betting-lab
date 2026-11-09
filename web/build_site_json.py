@@ -1992,6 +1992,15 @@ DUE_LIST_LINE = 0.5
 #: out here for the reason USER_AGENT gives.
 DUE_LIST_STAKE = 0.25
 
+#: Categories tracked at a different notional stake: the lab's `drought_forward.TRACKED_STAKES`, spelled out here
+#: (Cooper, 2026-11-09: "hat tricks should be tracked as .1u bets for the DUE LIST").
+DUE_LIST_STAKES: dict[str, float] = {"hat_trick": 0.1}
+
+
+def due_stake(market: object) -> float:
+    """The notional stake one Due List entry is tracked at: DUE_LIST_STAKES for its category, else DUE_LIST_STAKE."""
+    return DUE_LIST_STAKES.get(str(market or ""), DUE_LIST_STAKE)
+
 #: The lab's own Due List ledger and its sources (nhl_betting_lab.drought_forward:
 #: LEDGER_FILENAME, LIST_DIRNAME/SOURCES_FILENAME), restored with the rest of
 #: data/processed in gameday-state.
@@ -2004,21 +2013,21 @@ def win_profit(american: float) -> float:
     return american / 100.0 if american > 0 else 100.0 / -american
 
 
-def due_units(result: str | None, price: object) -> float | None:
-    """One entry's profit at DUE_LIST_STAKE, or None when it was not a wager
+def due_units(result: str | None, price: object, market: object = None) -> float | None:
+    """One entry's profit at its tracked stake (due_stake), or None when it was not a wager
     (no price, a void, or not graded yet). A push returns the stake: 0."""
     if result not in ("win", "loss", "push") or not _is_number(price) or float(price) == 0:
         return None
     if result == "push":
         return 0.0
-    got = record_units(float(price), result)
+    got = record_units(float(price), result, due_stake(market))
     return None if got is None else round(got[0], 4)
 
 
-def due_risk(price: object) -> float:
-    """What one priced Due List entry risks: DUE_LIST_STAKE, or what wins it on a minus price."""
-    got = record_units(float(price), "push") if _is_number(price) else None
-    return got[1] if got is not None else DUE_LIST_STAKE
+def due_risk(price: object, market: object = None) -> float:
+    """What one priced Due List entry risks: its tracked stake, or what wins it on a minus price."""
+    got = record_units(float(price), "push", due_stake(market)) if _is_number(price) else None
+    return got[1] if got is not None else due_stake(market)
 
 
 def read_due_ledger(processed: Path | None) -> tuple[list[dict], dict]:
@@ -2094,9 +2103,9 @@ def due_ledger_season(rows: list[dict], sources: dict) -> dict | None:
         if price is None:
             out["unpriced"] += 1
             continue
-        units = due_units(result, price) or 0.0
+        units = due_units(result, price, market) or 0.0
         out["units"] += units
-        out["staked"] += due_risk(price)
+        out["staked"] += due_risk(price, market)
         out["wagers"] += 1
         out["impliedSum"] += implied(price)
         if market in out["byMarket"]:
@@ -2105,7 +2114,7 @@ def due_ledger_season(rows: list[dict], sources: dict) -> dict | None:
         return None
     season = {k: out[k] for k in ("w", "l", "p")}
     season.update(
-        nights=len(nights), firstDate=min(nights), lastDate=max(nights), stake=DUE_LIST_STAKE,
+        nights=len(nights), firstDate=min(nights), lastDate=max(nights), stake=DUE_LIST_STAKE, stakeByMarket=dict(DUE_LIST_STAKES),
         units=round(out["units"], 2), staked=round(out["staked"], 2), wagers=out["wagers"],
         unpriced=out["unpriced"], void=out["void"],
         byMarket={m: {**v, "units": round(v["units"], 2)} for m, v in out["byMarket"].items()},
@@ -2246,7 +2255,7 @@ def grade_due_list(board: dict, finals: dict, processed: Path | None,
                         line = DUE_LIST_LINE
                     result = "push" if actual == line else "win" if actual > line else "loss"
                     tally["w" if result == "win" else "l" if result == "loss" else "p"] += 1
-                    row.update(actual=actual, result=result, units=due_units(result, row.get("price")))
+                    row.update(actual=actual, result=result, units=due_units(result, row.get("price"), entry.get("market")))
             rows.append(row)
     return {"summary": tally, "rows": rows}
 
@@ -2284,10 +2293,10 @@ def due_list_tallies(rows: list[dict]) -> dict:
                 out["impliedSum"] += implied(float(r["price"]))
                 out["impliedCount"] += 1
             if _is_number(r.get("price")) and result in ("win", "loss", "push"):
-                units = due_units(result, r["price"])
+                units = due_units(result, r["price"], r.get("market"))
                 if units is not None:
                     out["units"] += units
-                    out["staked"] += due_risk(r["price"])
+                    out["staked"] += due_risk(r["price"], r.get("market"))
         elif result is None:
             out["pending"] += 1
     return out
@@ -2472,6 +2481,7 @@ def tracker(rows: list[dict], *, nights: int, generated_at: str | None = None) -
         "lastDate": rows[0]["date"] if rows else None,
         "teamPickDefaultUnits": TEAM_PICK_DEFAULT_UNITS,
         "dueStake": DUE_LIST_STAKE,
+        "dueStakeByMarket": dict(DUE_LIST_STAKES),
         "stake": RECORD_STAKE,
         "stakeRule": TRACKED_STAKE_RULE,
         "overall": _tally(rows),
@@ -2525,15 +2535,16 @@ SEASON_KEYS = ("straightUp", "picks", "leans", "totals")
 RECORD_STAKE = 0.25
 
 
-def record_units(price, outcome: str) -> tuple[float, float] | None:
-    """(profit, risked) of one graded call at RECORD_STAKE, or None without a price.
+def record_units(price, outcome: str, stake: float = None) -> tuple[float, float] | None:
+    """(profit, risked) of one graded call at `stake` (RECORD_STAKE when not given), or None without a price.
 
     A win at +150 pays 0.375u on 0.25u risked; a win at −150 pays 0.25u on
     0.375u risked, and the loss costs the 0.375u. A push returns the stake."""
     if not isinstance(price, (int, float)) or isinstance(price, bool) or not -100000 < price < 100000 or -100 < price < 100:
         return None
-    risk = RECORD_STAKE * abs(price) / 100 if price < 0 else RECORD_STAKE
-    win = RECORD_STAKE if price < 0 else RECORD_STAKE * price / 100
+    stake = RECORD_STAKE if stake is None else stake
+    risk = stake * abs(price) / 100 if price < 0 else stake
+    win = stake if price < 0 else stake * price / 100
     profit = win if outcome == "win" else -risk if outcome == "loss" else 0.0
     return profit, risk
 
@@ -2760,7 +2771,7 @@ def season_record(today: date, history_dir: Path, latest: dict, *, processed: Pa
                 season["money"][key]["nightsWithoutUnits"] = m["nightsWithout"]
     if due["nights"]:
         season["dueList"] = {"w": due["w"], "l": due["l"], "p": due["p"], "nights": due["nights"], "byMarket": due["byMarket"],
-                             "stake": DUE_LIST_STAKE, "units": round(due["units"], 2), "staked": round(due["staked"], 2),
+                             "stake": DUE_LIST_STAKE, "stakeByMarket": dict(DUE_LIST_STAKES), "units": round(due["units"], 2), "staked": round(due["staked"], 2),
                              "source": "boards"}
         if due["impliedCount"]:
             season["dueList"]["impliedPct"] = round(100 * due["impliedSum"] / due["impliedCount"], 1)
