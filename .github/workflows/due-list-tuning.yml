@@ -91,10 +91,14 @@ jobs:
           # cell records from; it is printed between markers for committing.
           python scripts/run_drought_rule_backtest.py > /dev/null || status=$?
           # 2-goal games, hat tricks and shutouts (Cooper, 2026-11-04).
-          python scripts/run_due_list_big_games.py --history 2009 > /dev/null || status=$?
+          python scripts/run_due_list_big_games.py --status "$(TZ=America/New_York date +%F)" > /dev/null || status=$?
           if [ -s data/outputs/due_list_big_games.md ]; then
             cat data/outputs/due_list_big_games.md >> "$GITHUB_STEP_SUMMARY"
             cat data/outputs/due_list_big_games.md
+          fi
+          if [ -s data/outputs/due_list_big_games_status.md ]; then
+            cat data/outputs/due_list_big_games_status.md >> "$GITHUB_STEP_SUMMARY"
+            cat data/outputs/due_list_big_games_status.md
           fi
           if [ -s data/outputs/due_list_big_games_history.md ]; then
             cat data/outputs/due_list_big_games_history.md >> "$GITHUB_STEP_SUMMARY"

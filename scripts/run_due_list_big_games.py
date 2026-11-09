@@ -50,6 +50,7 @@ import requests
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
+from nhl_betting_lab import drought_rule as dr  # noqa: E402
 from nhl_betting_lab.drought_rule import BIG_GAMES, drought_before  # noqa: E402
 from nhl_betting_lab.models.player_props import player_name_aliases  # noqa: E402
 from nhl_betting_lab.season import game_date  # noqa: E402
@@ -312,12 +313,39 @@ def render_history(s: pd.DataFrame, g: pd.DataFrame, first: int, last: int) -> l
     return L + [""]
 
 
+def render_status(logs: pd.DataFrame, day: str) -> list[str]:
+    """Every player over a big game's floor tonight, with his current drought against the bar.
+
+    The list's own rule with the bar set to 0, so it shows who is close as well
+    as who is listed; whether he plays tonight is not checked here.
+    """
+    saved = {c: spec["bar"] for c, spec in BIG_GAMES.items()}
+    try:
+        for spec in BIG_GAMES.values():
+            spec["bar"] = 0
+        q = dr.big_game_qualifiers_entering(logs, day)
+    finally:
+        for c, bar in saved.items():
+            BIG_GAMES[c]["bar"] = bar
+    L = [f"# Due List big games: who is over the floor entering {day}", "",
+         "Every player over the floor, his drought now and the bar he must reach to be listed.", ""]
+    for c, spec in BIG_GAMES.items():
+        x = q[q.market == c].sort_values("drought", ascending=False)
+        L += [f"## {dr.category_label(c)} (floor {spec['floor']}, bar {saved[c]})", "",
+              "| Player | Last season | Drought | Bar | Listed |", "|:--|--:|--:|--:|:--|"]
+        L += [f"| {r.player} | {r.last_season} | {r.drought} | {saved[c]} | {'yes' if r.drought >= saved[c] else 'no'} |"
+              for r in x.itertuples()] or ["| nobody over the floor | | | | |"]
+        L.append("")
+    return L
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--data", type=Path, default=ROOT / "data" / "processed")
     ap.add_argument("--out", type=Path, default=ROOT / "data" / "outputs")
     ap.add_argument("--history", type=int, default=None,
                     help="also read the NHL's game logs from this season's first year (e.g. 2009) and report rates")
+    ap.add_argument("--status", default=None, help="also list who is over each floor entering this league day")
     a = ap.parse_args(argv)
     logs = pd.read_csv(a.data / "player_game_logs.csv")
     s, g = skater_frame(logs), goalie_frame(logs)
@@ -344,6 +372,10 @@ def main(argv: list[str] | None = None) -> int:
     a.out.mkdir(parents=True, exist_ok=True)
     (a.out / "due_list_big_games.md").write_text(text)
     print(text)
+    if a.status:
+        text = "\n".join(render_status(logs, a.status)) + "\n"
+        (a.out / "due_list_big_games_status.md").write_text(text)
+        print(text)
     if a.history is not None:
         last = 2024
         hist = history_logs(a.history, last, ROOT / "data" / "raw" / "nhl" / "big_games_history")

@@ -2442,6 +2442,16 @@ Re-derive rather than trust if the data has moved.
   the market list, the staking rule, the snapshot, the forward ledger and the
   registered test are unchanged.
 
+- **2026-11-09: Due List hat tricks are tracked at 0.1u (Cooper: "hat tricks
+  should be tracked as .1u bets for the DUE LIST", then "back-check and apply
+  the .1u all the previous hat trick wagers on the DUE list also").** Every
+  other Due List entry stays at 0.25u; a hat trick risks 0.1u on a plus price
+  and enough to win 0.1u on a minus one (`build_site_json.DUE_LIST_STAKES`,
+  `due_stake`; the lab's `drought_forward.TRACKED_STAKES`, `tracked_stake`).
+  Every tracked figure is restated from each entry's own price and result, so
+  past hat tricks read at 0.1u too: tracker rows, the season and kept-night
+  tallies, the ledger's season line and the Monday scorecard. Nothing is bet;
+  the card, snapshot, ledger, model and staking rule are unchanged.
 - **2026-10-09: the card's player props are on the public site.** Cooper:
   "player props need to be posting to the website". The pages had rendered a
   `props` block since the 2026-10-07 drop, and `season_record` summed one,
