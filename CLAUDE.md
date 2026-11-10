@@ -3380,7 +3380,9 @@ Re-derive rather than trust if the data has moved.
     rather than showing it as this week's; and every card-feed commit carries
     the report as `latest_layer_scoring.md`. A "cut" is the rule's verdict
     and changes nothing: taking a layer off stays Cooper's call. No credit,
-    no new token holder, no new card-feed writer.
+    no new token holder, no new card-feed writer;
+    `test_no_push_to_this_repository_carries_a_capture_store` now names
+    `latest_layer_scoring.md` among card-feed's files, deliberately.
   - **CLV, read 2026-11-10** (card-feed's `latest_closing_line_value.md`,
     built 2026-11-09 23:47 UTC from the private store and movement chain,
     one bet per wager, intervals clustered by game). It works: 150,143
