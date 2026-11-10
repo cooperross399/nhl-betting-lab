@@ -256,6 +256,38 @@ of hundreds — which is the expected outcome and a perfectly good result.
 for the deployment and line-movement data regardless, so closing this route
 stops the attention, not the tap.
 
+### Checkpoint result (a dated note, not a change to what was registered)
+
+**Read on 2026-11-10, 26 days after the registered date.** Until
+2026-11-10 the scan counted depth only across every day the chain held and
+wrote it only to the run summary, so the window's own number had not been
+read; the fix is recorded in `CLAUDE.md` under that date. Read from Line
+Movement run 42831356579 (2026-11-10, 14:00 UTC round):
+
+| | Day files | Ladders with two or more de-viggable rungs |
+|:--|--:|--:|
+| **Checkpoint window**, 2026-09-29 through 2026-10-15 | 17 | **30,530** |
+| Every capture through 2026-11-10 | 43 | 85,086 |
+| Registered floor | | 2,000 |
+| Two seasons of bought history | | 57 |
+
+**The floor is cleared, about 15 times over, so the route is not closed on
+depth.** The depth is not zero, so it does not read as the 422 fallback.
+The arithmetic above expected a miss by a factor of hundreds; the forward
+alternate ladders are far deeper than the bought history suggested.
+
+As registered, this reads depth and denominators only and never a return.
+The scan has also printed a violation count every round as the
+denominator statement: **0 wagers at or above the 2-point detection floor,
+out of 295,746 comparable wagers** (476,833 comparable rung pairs in
+1,144,939 ladders that carry two or more lines, of 1,890,641 scanned).
+That is a count, not a return, and it decides nothing. What it implies
+under the rules above: the registered test pools the flagged wagers, and
+there are none yet, so its sample floor of 600 and cluster floor of 40
+cannot be met unless violations appear. Nothing is changed because of it.
+Collection continues, and the test is decided on the registration's own
+decision date by the rules above.
+
 ## The failure mode that would fake a closure
 
 A 422 from the provider drops all ten alternate keys and falls back to the

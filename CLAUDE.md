@@ -336,6 +336,32 @@ Re-derive rather than trust if the data has moved.
   (`checkpoint_window`, `ladders_with_two_rungs_by_day`; ladder counts
   only, no price, line or book). No threshold, band, floor, window or date
   moved. `tests/test_the_ladder_checkpoint_reads_its_own_window.py`.
+  **2026-11-10: the depth checkpoint is read, 26 days late, and the route
+  stays open.** The registered checkpoint is 2026-10-15, on depth. (The
+  "2026-12-01 feasibility checkpoint" in the bullet above is the first
+  draft's date, which the registration replaced before the season. Its
+  "December checkpoint" in "Settlement is deferred" is left over from the
+  same draft.) Line Movement run 42831356579: **30,530 ladders with two or
+  more de-viggable rungs in the 17 day files through 2026-10-15**, against
+  the floor of 2,000 (history: 57); 85,086 over all 43 day files. Not
+  zero, so not the 422 fallback. The scan's standing count: **0 violations
+  at or above 2 points in 295,746 comparable wagers** (476,833 rung pairs,
+  1,144,939 ladders with two or more lines). That is a count, not a
+  return. With no flagged wager the registered test has no population, and
+  its 600-sample and 40-cluster floors cannot be met unless violations
+  appear. Nothing changes: collection continues and the test is decided
+  on its date. The result is a dated note in
+  `docs/pre_registered_ladder_coherence.md`.
+  **And the Capture job's timeout is 45 minutes, not 20.** The scan reads
+  every day the chain holds, so it grows with the season: it took 6.4 to
+  15.9 minutes per round on 2026-11-09/10, and the checkpoint run finished
+  about a minute inside 20. Captures and the private push come before the
+  scan, so a timeout would have lost no row, but it would have cancelled
+  the ladder report and every gate after it. **Owner item:** the scan grows
+  linearly with the chain, so 45 minutes will itself run out around
+  midseason. The options are to scan only the new day, to scan once a day,
+  or to vectorise the per-ladder loop. Each is a detector or workflow
+  change, and none is made here.
 - **The oracle ceiling was an outcome filter, not a line-label result.**
   Abstaining above a 2-minute realised rise gives +3.11% [+1.39%, +4.80%] and
   a random-removal placebo reaches only −0.30% (z=8.3), so the cell is

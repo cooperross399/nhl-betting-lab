@@ -126,7 +126,14 @@ jobs:
     needs: wait-more
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # 45, not 20 (2026-11-10). The ladder scan reads every day the chain
+    # holds, so it grows with the season: 6.4 to 15.9 minutes per round on
+    # 2026-11-09/10 over 43 day files, and one round finished about a minute
+    # inside the old 20. Every capture and the private push run before the
+    # scan, so a timeout there would lose no row, but it would cancel the
+    # ladder report and every gate after it. Rounds are two hours apart or
+    # more, so 45 cannot hold the next round's capture.
+    timeout-minutes: 45
     # On the job, not the workflow: runs wait for hours and overlap, and a
     # workflow-level group would keep only one of them pending, cancelling the
     # rounds between. Captures still never run two at once, so a restore
