@@ -248,6 +248,7 @@ def generate_prop_samples(
     position_matchup: bool = False,
     hits_options: frozenset[str] | set[str] = frozenset(),
     scoring_env: bool = False,
+    scoring_options: frozenset[str] | set[str] = frozenset(),
 ) -> tuple[pd.DataFrame, WalkForwardReport]:
     """Price every player-game in the log with a model that could not see it.
 
@@ -268,6 +269,9 @@ def generate_prop_samples(
     form experiment only. `hits_options` names the parts of the hits model
     (`player_props.HITS_OPTIONS`) each refit fits; empty, the default, prices
     hits as every committed measurement did, and the card fits them all.
+    `scoring_options` names the points and assists fixes
+    (`player_props.SCORING_OPTIONS`) each refit fits; empty, the default,
+    prices them as every committed measurement did.
     """
     wanted = {
         key: tuple(float(line) for line in values)
@@ -315,7 +319,9 @@ def generate_prop_samples(
             window_start = window_end + timedelta(days=1)
             continue
         try:
-            model = PlayerPropsModel(hits_options=hits_options).fit(
+            model = PlayerPropsModel(
+                hits_options=hits_options, scoring_options=scoring_options
+            ).fit(
                 history.drop(columns=["_date"])
             )
         except (KeyError, ValueError):
