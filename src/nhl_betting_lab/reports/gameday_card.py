@@ -183,12 +183,57 @@ LEAN_EXCLUDED_SIDES: dict[tuple[str, str], str] = {
         "seasons of bought prices (-4.2% over 6,140 wagers) and 247-315 as "
         "leans this season"
     ),
+    # Cooper's decision of 2026-11-09 ("Yes do all 4"): assists unders join
+    # points unders. On the settled forward ledger (2026-09-29 to 11-08) the
+    # model held them about ten points likelier than they landed (0.722
+    # against 0.617 in population B, where the price said 0.633), population
+    # B's assists unders returned -3.6% over 663, and the leans the card
+    # listed, replayed with its self-learning, -12.0% over 130, losing in
+    # both halves of the season (-6.9% to 10-21, -21.9% from 10-22). Unlike
+    # the lean bar, this also withholds a best bet's stake.
+    ("assists", "under"): (
+        "assists unders are neither listed nor staked: the model has held "
+        "them about ten points likelier than they landed this season "
+        "(population B -3.6% over 663; as listed leans -12.0% over 130)"
+    ),
 }
 
 
-def lean_excluded_reason(market_key: str, selection: str) -> str | None:
-    """Why this market and side is never listed as a lean, or None."""
-    return LEAN_EXCLUDED_SIDES.get((market_key, str(selection).strip().lower()))
+#: The longest price at which a market and side is listed, by Cooper's
+#: decision of 2026-11-09 ("Yes do all 4"). Points overs listed from the 3%
+#: lean bar (`LEAN_BAR_OVERRIDES`) and priced longer than +200 lost in both
+#: halves of the season, replayed with the card's self-learning: -54.3u
+#: over 317 at 1u (-13.2% to 10-21, -24.0% from 10-22), while those at +200
+#: or shorter made +13.2u over 456. Long overs are where the favourite-
+#: longshot bias and a count model's overstated tails meet, which is why
+#: the card already passes anything past +600.
+LEAN_MAX_PRICE: dict[tuple[str, str], float] = {("points", "over"): 200.0}
+
+
+def lean_excluded_reason(
+    market_key: str, selection: str, price: float | None = None
+) -> str | None:
+    """Why this market and side (at this price) is never listed, or None.
+
+    A side in `LEAN_EXCLUDED_SIDES` is never listed and never staked; a side
+    in `LEAN_MAX_PRICE` is not listed above its cap."""
+    side = (market_key, str(selection).strip().lower())
+    reason = LEAN_EXCLUDED_SIDES.get(side)
+    if reason:
+        return reason
+    cap = LEAN_MAX_PRICE.get(side)
+    try:
+        longer = cap is not None and price is not None and float(price) > cap
+    except (TypeError, ValueError):
+        longer = False
+    if longer:
+        return (
+            f"{side[0]} {side[1]}s priced longer than +{cap:.0f} are not "
+            "listed: as leans this season they lost in both halves "
+            "(-54.3u over 317 at 1u) while the shorter ones made +13.2u "
+            "over 456"
+        )
+    return None
 
 
 def lean_bar(market_key: str, selection: str, default: float) -> float:
@@ -732,9 +777,11 @@ def build_candidates(
             if against:
                 candidate.section = LEANS_SECTION
                 candidate.demotion_reason = against
-        if candidate.section == LEANS_SECTION and lean_excluded_reason(market_key, selection):
+        excluded = lean_excluded_reason(market_key, selection, price)
+        if candidate.section in (LEANS_SECTION, BEST_BETS_SECTION) and excluded:
             candidate.section = PASSES_SECTION
-            candidate.demotion_reason = lean_excluded_reason(market_key, selection)
+            candidate.suggested_units = 0.0
+            candidate.demotion_reason = excluded
             passes.append(candidate)
             continue
         if candidate.section == BEST_BETS_SECTION:
@@ -1408,7 +1455,9 @@ def _lean_exclusion_notes(passes: Sequence[Any]) -> list[str]:
     counts: dict[str, int] = {}
     for row in passes:
         get = row.get if isinstance(row, Mapping) else (lambda k, r=row: getattr(r, k, None))
-        reason = lean_excluded_reason(str(get("market") or ""), str(get("selection") or ""))
+        reason = lean_excluded_reason(
+            str(get("market") or ""), str(get("selection") or ""), get("american_odds")
+        )
         if reason and get("demotion_reason") == reason:
             counts[reason] = counts.get(reason, 0) + 1
     return [

@@ -3270,6 +3270,84 @@ Re-derive rather than trust if the data has moved.
   they do not promise a profit. The snapshot, forward ledger, model, edge
   bars, market list and staking rule are unchanged; only the card's
   self-learned edges (and so its selections) and the listing move.
+- **2026-11-09, NOT a defect fix: points and assists on the card (Cooper's
+  decision of 2026-11-09, "Yes do all 4").** The forward report read
+  `points` -68.4u over 1,434 and `assists` -22.6u over 757: population B
+  (6% bar, one bet per wager at the best frozen price, 1u), reproduced from
+  card-feed's ledger through 2026-11-08. Diagnosis: both losses are the
+  unders (points -58.3u over 1,078, assists -23.7u over 663), where the
+  model holds the under about ten points likelier than it lands (points
+  0.666 against a 0.551 hit rate and a 0.574 price; assists 0.722, 0.617,
+  0.633): the price is near right and the model is not, worst where it
+  disagrees most (edge 9%+) and where the under is not the price's
+  favourite. Everything frozen from 2026-10-22 lost (points unders -13.5%
+  over 527); before it they were level. What the card actually lists,
+  replayed with its self-learning: points unders already nothing (#427);
+  points overs from the 3% lean bar -41.1u over 773, of which longer than
+  +200 -54.3u over 317 (-13.2% to 10-21, -24.0% from 10-22) and +200 or
+  shorter +13.2u over 456; assists unders -15.6u over 130 listed (-6.9% to
+  10-21, -21.9% from). Two changes: **assists unders join points unders in
+  `LEAN_EXCLUDED_SIDES`**, and an excluded side is now neither listed nor
+  staked (a best bet goes to the passes, reason named); and **points overs
+  priced longer than +200 are not listed** (`LEAN_MAX_PRICE`). Replayed,
+  the card's points and assists listing (leans and stakes) goes from -54.8u
+  over 996 (-5.5%, -14.1% to +3.1%) to +14.2u over 548 (+2.6%, -8.8% to
+  +13.9%) at 1u, game-clustered: chosen on the same weeks it is scored on,
+  every interval spans zero, **no demonstrated edge**. The snapshot is frozen before
+  `build_card`, so the forward ledger, population B and the 2027-04-25 test
+  are unchanged, and the report's -68.4u / -22.6u will keep reading what the
+  model thinks, not what the card lists. The model, the edge bars and the
+  market list are unchanged. `tests/test_points_and_assists_on_the_card.py`.
+- **2026-11-09: each layer added from 2026-10-22 is scored on settled live
+  picks (Cooper, "Yes do all 4").** `scripts/run_layer_scoring.py` (the
+  **Layer Scoring** workflow, no credit) takes each layer out alone and
+  reprices the same settled wagers against the same frozen prices and
+  outcomes: team layers from the card's own breakdown frozen on each night's
+  board (`games[].factors`, from 2026-10-26), prop layers from the
+  walk-forward props model with and without the layer, self-learning
+  walk-forward on the ledger. Line movement and posted lines' prop ice time
+  are not scorable from settled data (the snapshot holds the morning's first
+  opinion). The cut rule was fixed in the script before it ran: taking the
+  layer out must improve population B by 2+ points over the wagers either
+  version bets, improve the staked bets, and improve B in both halves of the
+  window. The results and what was cut are in the next entry.
+- **2026-11-09, NOT a defect fix: the lineup layer is taken off the team
+  markets (Cooper's decision of 2026-11-09, "Yes do all 4", by the rule
+  above).** Layer Scoring run 42721827449, settled wagers frozen 2026-10-22
+  to 11-08, one bet per wager at the best frozen price, 1u, game-clustered
+  ("contribution" = units with the layer minus without, over the wagers
+  either version bets; B = 6% prop / 3.5% team bar; staked = the card's
+  stake rules). Team layers on 95 games with a frozen breakdown (3 of 98
+  did not match the ledger and were left out), moneyline and totals: B with
+  every layer +22.9u over 226, staked -5.9u over 12.
+  | Layer | B contribution | Staked contribution | Verdict |
+  |:--|--:|--:|:--|
+  | Own home ice (#344) | +5.0u (45 changed) | 0.0u | keep |
+  | Last-five form, team (#345) | +8.0u (168) | -12.0u | keep |
+  | Rest and travel (#346) | -1.9u (25) | -1.8u | keep, too few |
+  | Lineup ratings, aging, defence (#353-#356) | -20.6u (88), both halves | -8.4u | **cut** |
+  | Starting goalies, team (#351) | -29.6u (111), +2.9 / -32.6 | +2.2u | keep |
+  | Referee crews (#346) | 0.0u (0 changed) | 0.0u | keep, too few |
+  | PostHockey 50/50 blend (#350) | +2.7u (35) | +1.3u | keep |
+  | Last-five form, props (#345) | -54.5u (1,204), -90.9 / +36.5 | +2.9u | keep |
+  | Matchup by position, props (#346) | -26.0u (271), both halves | -0.7u | keep (-1.1 pts, under the 2-point bar) |
+  | Self-learning by side (#383, #427) | +90.9u (2,174) | +14.3u | keep |
+  Props by the walk-forward model (56,674 wagers matched, correlation 0.996
+  with the frozen probability, mean gap 1.6 points): B with every layer
+  -163.3u over 2,210 (-7.4%, -14.1% to -0.6%), staked +12.6u over 98. Every
+  layer's with-and-without intervals overlap and every staked interval spans
+  zero: **no demonstrated edge** for or against any layer. Not scorable from
+  settled data, so kept: line movement, posted lines' prop ice time, the
+  base shooter- and score-adjusted xG ratings (no "off" exists), and the
+  referees on props. **The cut:** `lineups.TEAM_LINEUP_LAYER_ON = False`;
+  the lineup attack and defence factors are still computed and printed, the
+  breakdown's lineup step reads zero, and posted lines still decide which
+  skaters get a prop opinion. This changes the team-market opinions frozen
+  from the next card, as the 2026-10-21 switches did; `TEAM_RATINGS_FROM`
+  is not moved, so the 2027-04-25 team verdict pools both (Cooper's call to
+  set aside). Starting goalies and props form lost most in population B but
+  not consistently, so the rule keeps them; the next scoring will say
+  whether that holds.
 
 - **2026-11-09: every Gameday Refresh slot has two crons, and runs once
   (Cooper: "Yes do all 4").** GitHub started the 05:30 card cron up to 8.6

@@ -407,6 +407,11 @@ PYTHONPATH=src .venv/bin/python scripts/run_saves_model_study.py
 # had settled before it, against the card as it was.
 PYTHONPATH=src .venv/bin/python scripts/run_self_learning_check.py --ledger data/processed/forward_evidence.csv
 
+# Which model layers added from 2026-10-22 help on the settled live picks?
+# Takes each layer out alone and reprices the same settled wagers against the
+# same frozen prices (Layer Scoring workflow runs it in CI, no credit).
+PYTHONPATH=src .venv/bin/python scripts/run_layer_scoring.py --history-dir dist/data/history
+
 # Does the dialled-in hits model (rink scorer, measured shrinkage, recency,
 # own-games spread) price hits better? Walk-forward on outcomes and on the
 # bought hits prices, overs and unders apart (Hits Model Study workflow).
