@@ -127,8 +127,9 @@ HITS_OPTIONS = frozenset({"rink", "shrinkage", "recency", "dispersion"})
 #: shots distribution far too wide: the forward ledger's 4,039 settled shots
 #: player-nights put r near 21.
 SOG_OPTIONS = frozenset({"dispersion", "shrinkage"})
-#: What the card fits. Empty until `scripts/run_sog_model_study.py` passes
-#: its rule (`docs/sog_dispersion_decision_rule.md`).
+#: What the card fits. Empty: on 2026-11-10 the candidate failed its rule
+#: (`docs/sog_dispersion_decision_rule.md`): log-likelihood up, but -62.4u on
+#: the bought card-window prices against +133.7u for the baseline.
 SOG_CARD_OPTIONS: frozenset[str] = frozenset()
 
 
