@@ -117,6 +117,20 @@ PP_SENSITIVE_STATS = frozenset({"points", "goals", "assists"})
 #: piled probability on 0 and 1 hits, and so under-priced every over.
 HITS_OPTIONS = frozenset({"rink", "shrinkage", "recency", "dispersion"})
 
+#: Shots on goal's own-games spread (2026-11-10, the shots-over study), built
+#: as the hits model's: ``dispersion`` measures the negative-binomial spread
+#: inside each player's own games (method of moments around his own mean), so
+#: the gap between one shooter and another is not counted as game noise; and
+#: ``shrinkage`` sets each position group's shrinkage of the shot rate from
+#: the real spread of shot rates over that noise, bounded by
+#: `SOG_SHRINKAGE_RANGE`. The whole-column spread (r about 4.4) made every
+#: shots distribution far too wide: the forward ledger's 4,039 settled shots
+#: player-nights put r near 21.
+SOG_OPTIONS = frozenset({"dispersion", "shrinkage"})
+#: What the card fits. Empty until `scripts/run_sog_model_study.py` passes
+#: its rule (`docs/sog_dispersion_decision_rule.md`).
+SOG_CARD_OPTIONS: frozenset[str] = frozenset()
+
 
 def normalize_player_name(name: object) -> str:
     """A comparison key that removes representation without inventing identity.
@@ -337,8 +351,14 @@ class PlayerPropsModel:
     HITS_SHRINKAGE_RANGE = (3_000.0, 70_000.0)
     #: Games a skater needs to count toward the measured spread.
     HITS_MEASURE_GAMES = 30
+    #: Bounds on the measured shots shrinkage, in seconds of ice time.
+    SOG_SHRINKAGE_RANGE = (3_000.0, 70_000.0)
 
-    def __init__(self, hits_options: frozenset[str] | set[str] | None = None) -> None:
+    def __init__(
+        self,
+        hits_options: frozenset[str] | set[str] | None = None,
+        sog_options: frozenset[str] | set[str] | None = None,
+    ) -> None:
         #: Which parts of the hits model are fitted; the card fits all of
         #: them. The walk-forward passes an empty set by default, so every
         #: committed measurement stands as it was made.
@@ -348,6 +368,17 @@ class PlayerPropsModel:
         unknown = self.hits_options - HITS_OPTIONS
         if unknown:
             raise ValueError(f"Unknown hits options {sorted(unknown)}; known {sorted(HITS_OPTIONS)}")
+        #: Which parts of the shots spread are fitted (`SOG_OPTIONS`). None is
+        #: what the card fits (`SOG_CARD_OPTIONS`); the walk-forward passes an
+        #: empty set by default.
+        self.sog_options = frozenset(
+            SOG_CARD_OPTIONS if sog_options is None else sog_options
+        )
+        unknown = self.sog_options - SOG_OPTIONS
+        if unknown:
+            raise ValueError(f"Unknown shots options {sorted(unknown)}; known {sorted(SOG_OPTIONS)}")
+        #: Position group -> measured shots shrinkage, seconds of ice time.
+        self.sog_shrinkage_seconds: dict[str, float] = {}
         #: Rink -> hits scorer factor (1.0 is the league). Keyed by the home
         #: club, whose rink it is.
         self.hits_rink_factors: dict[str, float] = {}
@@ -459,6 +490,7 @@ class PlayerPropsModel:
         self._fit_venue_factors(skaters)
         self._fit_skaters(skaters)
         self._fit_hits(skaters)
+        self._fit_sog(skaters)
         self._fit_goalies(goalies)
         self.opponent_shot_factors = fit_opponent_shot_factors(frame)
         self.team_form = team_form_factors(team_game_totals(frame))
@@ -600,6 +632,10 @@ class PlayerPropsModel:
             measured = self._hits_within_player_dispersion(regulars)
             if measured is not None:
                 self.dispersion["hits"] = measured
+        if "dispersion" in self.sog_options:
+            measured = self._within_player_dispersion(regulars, "shots_on_goal")
+            if measured is not None:
+                self.dispersion["shots_on_goal"] = measured
         starters = goalies[goalies["toi_seconds"] >= 1800]
         self.dispersion[GOALIE_STAT] = measure_dispersion(
             starters[GOALIE_SETTLEMENT_COLUMN].tolist()
@@ -738,6 +774,38 @@ class PlayerPropsModel:
             )
         self.report.skaters_priced = len(self.skaters)
 
+    def _within_player_dispersion(
+        self, regulars: pd.DataFrame, stat: str
+    ) -> Dispersion | None:
+        """`stat`'s negative-binomial spread inside each player's own games.
+
+        The hits spread's method of moments with no rink: each game's
+        expected count is the player's own mean over his games here, so one
+        player's level against another's is not counted as noise. 1/r =
+        sum((x - mu)^2 * n/(n-1) - mu) / sum(mu^2), over players with
+        `HITS_MEASURE_GAMES` or more games. None when fewer than 20 players.
+        """
+        rows = regulars[["player_id", stat]].copy()
+        rows[stat] = rows[stat].astype(float)
+        counts = rows.groupby("player_id")[stat].transform("size")
+        rows = rows[counts >= self.HITS_MEASURE_GAMES]
+        if rows["player_id"].nunique() < 20:
+            return None
+        n = rows.groupby("player_id")[stat].transform("size").astype(float)
+        mu = rows.groupby("player_id")[stat].transform("mean")
+        x = rows[stat]
+        excess = float((((x - mu) ** 2) * n / (n - 1.0) - mu).sum())
+        scale = float((mu**2).sum())
+        mean = float(x.mean())
+        if scale <= 0 or mean <= 0:
+            return None
+        inverse_r = excess / scale
+        if inverse_r <= 0:
+            return Dispersion(mean=mean, variance=mean, samples=len(rows))
+        return Dispersion(
+            mean=mean, variance=mean + mean * mean * inverse_r, samples=len(rows)
+        )
+
     def _hits_within_player_dispersion(self, regulars: pd.DataFrame) -> Dispersion | None:
         """Hits' negative-binomial spread inside each player's own games.
 
@@ -826,11 +894,59 @@ class PlayerPropsModel:
             per60["hits"] = baseline + weight * (raw - baseline)
             self.skaters[player_id] = replace(rates, per60=per60)
 
+    def _fit_sog(self, skaters: pd.DataFrame) -> None:
+        """Refit every priced skater's shot rate at the measured shrinkage
+        (`SOG_OPTIONS` ``shrinkage``); without it the rate stays as
+        `_fit_skaters` fitted it."""
+        self.sog_shrinkage_seconds = {}
+        if "shrinkage" not in self.sog_options or not self.skaters:
+            return
+        stat = "shots_on_goal"
+        shrink = {
+            group: self._measured_shrinkage(
+                skaters, group, stat, bounds=self.SOG_SHRINKAGE_RANGE
+            )
+            for group in ("F", "D")
+        }
+        self.sog_shrinkage_seconds = shrink
+        sums = skaters.groupby("player_id").agg(
+            count=(stat, "sum"), seconds=("toi_seconds", "sum")
+        )
+        for player_id, rates in list(self.skaters.items()):
+            if player_id not in sums.index:
+                continue
+            seconds = float(sums.at[player_id, "seconds"])
+            if seconds <= 0:
+                continue
+            baseline = self.baselines.get(rates.group, {}).get(stat, 0.0)
+            k = shrink.get(rates.group, float(self.SHRINKAGE_SECONDS))
+            weight = seconds / (seconds + k)
+            raw = float(sums.at[player_id, "count"]) / seconds * 3600.0
+            per60 = dict(rates.per60)
+            per60[stat] = baseline + weight * (raw - baseline)
+            self.skaters[player_id] = replace(rates, per60=per60)
+
     def _measured_hits_shrinkage(self, skaters: pd.DataFrame, group: str) -> float:
-        low, high = self.HITS_SHRINKAGE_RANGE
+        return self._measured_shrinkage(
+            skaters, group, "hits", bounds=self.HITS_SHRINKAGE_RANGE
+        )
+
+    def _measured_shrinkage(
+        self,
+        skaters: pd.DataFrame,
+        group: str,
+        stat: str,
+        *,
+        bounds: tuple[float, float],
+    ) -> float:
+        """Empirical-Bayes shrinkage in seconds: phi * m / tau^2, where tau^2
+        is the spread of per-second rates beyond the noise each player's ice
+        time implies, phi the variance-to-mean of `stat`'s dispersion at a
+        typical game's count. Bounded by `bounds`."""
+        low, high = bounds
         rows = skaters[skaters["group"] == group]
         per_player = rows.groupby("player_id").agg(
-            hits=("hits", "sum"), seconds=("toi_seconds", "sum"), games=("hits", "size")
+            hits=(stat, "sum"), seconds=("toi_seconds", "sum"), games=(stat, "size")
         )
         per_player = per_player[
             (per_player["games"] >= self.HITS_MEASURE_GAMES) & (per_player["seconds"] > 0)
@@ -842,9 +958,9 @@ class PlayerPropsModel:
         mean = float(per_player["hits"].sum() / seconds.sum())
         if mean <= 0:
             return float(self.SHRINKAGE_SECONDS)
-        # Game-to-game noise beyond Poisson: the hits dispersion's
+        # Game-to-game noise beyond Poisson: the stat's dispersion's
         # variance-to-mean at a typical game's count.
-        dispersion = self.dispersion.get("hits")
+        dispersion = self.dispersion.get(stat)
         per_game = float(per_player["hits"].sum() / per_player["games"].sum())
         r = dispersion.r if dispersion is not None else None
         phi = 1.0 + (per_game / r if r else 0.0)
