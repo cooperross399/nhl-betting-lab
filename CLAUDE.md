@@ -3563,6 +3563,46 @@ Re-derive rather than trust if the data has moved.
   frozen before `build_card`, so the forward ledger and the 2027-04-25 test
   are unchanged; only stakes move. The model, the edge bars, the market list
   and the stats, bracket and starter checks are unchanged.
+  **Same day, Cooper's decision (via the coordinator): `shots_on_goal`
+  overs take no CLV bump.** Since 2026-10-28 the forward ledger's
+  population B `shots_on_goal` overs hit 14.8% where the model said 26.7%
+  (310 wagers, -93.1u at 1u, best frozen price), so a market verdict must
+  not size them up while the over model is wrong.
+  `clv_staking.BUMP_HELD_SIDES` holds (`shots_on_goal`, `over`) at x1 (a cut
+  below x1 still applies) and the row's `stake_reason` names the hold; the
+  unders keep x1.5. It lifts when the over model is fixed. Stakes only.
+  **The diagnosis, and why no fix shipped** (card-feed's ledger through
+  2026-11-09, one wager per selection at the best frozen price, 1u, read
+  directly from the ledger's `edge`; this count gives 319 overs at -50.5u
+  since 10-28, where the coordinator's read was 310 at -93.1u). Population B
+  overs since 10-28: hit 16.0% against 19.0% implied and 26.8% modelled;
+  before 10-28 they made +84.3u over 628. Two causes, measured on 4,039
+  settled shots player-nights whose ladder fixes the model's mean and
+  spread (every one fits NB with r = 4.37, the one league-wide spread):
+  (1) **the spread is far too wide.** The mean is calibrated (predicted
+  2.15, actual 2.14), but realised excess variance gives 1/r = 0.047 (r
+  about 21, the same in both halves) against the model's 0.229, because the
+  spread is measured on the whole column, counting player-to-player
+  differences as game noise (the defect hits' own-games spread fixed). A
+  thinner spread scores better out of sample: log-likelihood per
+  player-game +0.019 [+0.014, +0.024] at r = 20 (Poisson +0.016). It inflates
+  every high-rung over: across all opinions the model gave 5.5+ overs 5.8%
+  where 4.5% landed. (2) **the overs it picks are where its mean runs
+  high.** On the over player-nights population B picked, the model's mean
+  beat the realised count by 0.27 shots (175, to 10-21), 0.38 (69, 10-22 to
+  10-27) and 0.50 (139, from 10-28); on the unders it fell short by 0.20 to
+  0.27. Regressing the count on the model's mean and the de-vigged market's,
+  the model's carries 0.20 and the market's 0.91. **Neither repair fixes
+  the settled overs.** Re-priced on the frozen prices at r = 20, population
+  B overs since 10-28 go from -21.9u over 313 to -40.1u over 289 (-13.9%
+  [-38.0%, +10.3%]); since 09-29 from +54.2u to +9.8u. Moving the mean
+  toward the market by the weight fitted before 10-28 (0.30) helps the
+  log-likelihood (+0.010 from 10-28) and leaves 16 overs, all lost: shrinking
+  toward the market is raising the bar, as recorded above. Every interval
+  spans zero: no demonstrated edge either way. So the hold stays, the model
+  is unchanged, and the spread is an open defect: a within-player spread for
+  shots (as hits has) needs its walk-forward measurement on the bought
+  prices before it ships, since a thinner spread lost units here.
 - **2026-11-10: picks first listed by the afternoon and pre-game re-prices
   do not demonstrably trail the morning card, so nothing changed.** Cooper
   asked whether later picks are worse ("ALL"). `scripts/run_pick_timing.py`,

@@ -143,3 +143,42 @@ def test_late_picks_trail_only_on_a_clear_interval_with_enough_picks() -> None:
     assert few["late_trails"] is False
     many = pick_timing.summarise(rows("morning", 0.05, 100, 0) + rows("afternoon", -0.05, 80, 1000))
     assert many["late_trails"] is True and "roi" in many["trails_on"]
+
+
+def test_shots_on_goal_overs_keep_x1_while_the_over_model_is_held() -> None:
+    """Cooper, 2026-11-10: a shots_on_goal CLV bump is not applied to the
+    over side until the over model is fixed; the under still takes it, and a
+    cut below x1 still applies to the over."""
+    beats = {"generated_at": "x", "markets": {"shots_on_goal": _row(2213, 300, 0.0266, 0.0439)}}
+    multiplier, why = clv_staking.stake_multiplier("shots_on_goal", beats, "over")
+    assert multiplier == 1.0 and "held at x1" in why and "over model" in why
+    assert clv_staking.stake_multiplier("shots_on_goal", beats, "under")[0] == 1.5
+    assert clv_staking.stake_multiplier("shots_on_goal", beats)[0] == 1.5
+    spans = {"generated_at": "x", "markets": {"shots_on_goal": _row(521, 100, -0.004, 0.02)}}
+    assert clv_staking.stake_multiplier("shots_on_goal", spans, "over")[0] == 0.5
+
+
+def test_the_card_holds_a_shots_over_at_its_tier_stake() -> None:
+    from nhl_betting_lab.reports.card_pricing import selection_key
+    from nhl_betting_lab.reports.gameday_card import BEST_BETS_SECTION, build_candidates
+
+    rows = []
+    for player, selection in (("Sam Reinhart", "over"), ("Brad Marchand", "under")):
+        rows.append({
+            "date": "2026-11-10", "commence_time": "2026-11-11T00:00:00Z",
+            "home_team": "Boston Bruins", "away_team": "Florida Panthers",
+            "market": "shots_on_goal", "player": player, "selection": selection,
+            "line": 2.5, "american_odds": -105, "book": "Book",
+        })
+    prices = pd.DataFrame(rows)
+    probabilities = {}
+    for row in prices.itertuples():
+        key = selection_key(row, market="shots_on_goal", selection=row.selection, line=2.5)
+        probabilities[key] = 0.80
+    table = {"generated_at": "x", "markets": {"shots_on_goal": _row(2213, 300, 0.0266, 0.0439)}}
+    sized, _ = build_candidates(prices, probabilities, clv_table=table)
+    by_side = {c.selection: c for c in sized if c.section == BEST_BETS_SECTION}
+    assert set(by_side) == {"over", "under"}
+    assert by_side["over"].suggested_units == TIER_UNITS[by_side["over"].tier]
+    assert "held at x1" in by_side["over"].stake_reason
+    assert by_side["under"].suggested_units == round(TIER_UNITS[by_side["under"].tier] * 1.5, 3)
