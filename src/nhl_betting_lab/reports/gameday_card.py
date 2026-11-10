@@ -122,6 +122,8 @@ from nhl_betting_lab.drought_rule import record_text as drought_record_text
 from nhl_betting_lab.drought_rule import shots_text as drought_shots_text
 from nhl_betting_lab.due_context import goalie_text as drought_goalie_text
 from nhl_betting_lab.due_context import line_text as drought_line_text
+from nhl_betting_lab.clv_staking import note_lines as clv_note_lines
+from nhl_betting_lab.clv_staking import stake_multiplier
 from nhl_betting_lab.market_eligibility import EligibilityReport
 from nhl_betting_lab.markets import MARKETS_BY_KEY
 from nhl_betting_lab.models.player_props import player_key
@@ -393,6 +395,9 @@ class Candidate:
     #: bet, the card's edge bar for a lean. None on a pass, and when no price
     #: the card would take clears. Display only: nothing reads it to decide.
     bet_down_to: int | None = None
+    #: How closing-line value sized this best bet's stake, when it moved it
+    #: (`clv_staking.stake_multiplier`, Cooper 2026-11-10). Empty otherwise.
+    stake_reason: str = ""
 
     def as_row(self) -> dict[str, Any]:
         return dict(self.__dict__)
@@ -649,6 +654,7 @@ def build_candidates(
     juice_limit: int = MAX_DEFAULT_JUICE,
     max_price: int = MAX_DEFAULT_PRICE,
     goalie_starters: GoalieStarters | None = None,
+    clv_table: Mapping[str, Any] | None = None,
 ) -> tuple[list[Candidate], list[Candidate]]:
     """Split priced rows into `(selections, passes)`.
 
@@ -667,6 +673,10 @@ def build_candidates(
     A `goalie_saves` best bet is staked only on the goalie `goalie_starters`
     names as tonight's starter (`data.starting_goalies`). None means nothing
     is known about starters, and every saves stake is withheld.
+
+    `clv_table` (`clv_staking.load_table`) sizes each best bet's tier stake
+    by its market's measured closing-line value (Cooper, 2026-11-10). None
+    leaves every stake at its tier's.
     """
     starters = goalie_starters if goalie_starters is not None else GoalieStarters(
         unknown="No starting-goalie listing was given to the card."
@@ -789,7 +799,11 @@ def build_candidates(
             passes.append(candidate)
             continue
         if candidate.section == BEST_BETS_SECTION:
-            candidate.suggested_units = TIER_UNITS.get(candidate.tier, 0.1)
+            multiplier, why = stake_multiplier(market_key, clv_table)
+            candidate.suggested_units = round(
+                TIER_UNITS.get(candidate.tier, 0.1) * multiplier, 3
+            )
+            candidate.stake_reason = why
             staked.append((key, candidate))
         selections.append(candidate)
 
@@ -897,6 +911,8 @@ def build_card(
     allowlisted_markets: Sequence[str] | None = None,
     scheduled_games: int | None = None,
     goalie_starters: GoalieStarters | None = None,
+    clv_table: Mapping[str, Any] | None = None,
+    clv_note: str = "",
 ) -> GamedayCard:
     """Assemble the card, or explain why there is not one.
 
@@ -937,7 +953,7 @@ def build_card(
             "pass, an avoid, or a no-value call."
         )
 
-    card.notes = _standing_notes(juice_limit)
+    card.notes = _standing_notes(juice_limit) + clv_note_lines(clv_table, clv_note)
 
     if card.blockers:
         card.nothing_to_card = why_nothing_to_card(
@@ -954,7 +970,7 @@ def build_card(
     ].copy()
     selections, passes = build_candidates(
         usable, probabilities, juice_limit=juice_limit,
-        goalie_starters=goalie_starters,
+        goalie_starters=goalie_starters, clv_table=clv_table,
     )
 
     guarded = apply_puck_drop_guard(
