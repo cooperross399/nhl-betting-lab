@@ -86,7 +86,9 @@ def test_the_moneyline_moves_toward_posthockey_and_the_total_stays() -> None:
 def test_the_card_reads_it_and_gameday_refresh_fetches_it() -> None:
     card = (ROOT / "scripts" / "run_gameday_card.py").read_text(encoding="utf-8")
     assert "posthockey.tonight_targets(" in card
-    assert "team_model.pregame_weight = posthockey.BLEND_WEIGHT" in card
+    # Since 2026-11-10 the weight is fitted every card, shrunk toward BLEND_WEIGHT.
+    assert "posthockey.fit_blend_weight(" in card
+    assert 'team_model.pregame_weight = blend_fit["weight"]' in card
     workflow = (ROOT / ".github" / "workflows" / "gameday-refresh.yml").read_text(encoding="utf-8")
     fetch = workflow.index("python scripts/fetch_posthockey_pregame.py")
     assert fetch < workflow.index("python scripts/run_gameday_card.py")

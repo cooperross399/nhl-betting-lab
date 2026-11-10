@@ -108,7 +108,8 @@ def league_game_table(logs: pd.DataFrame, games: pd.DataFrame | None = None) -> 
     of every measured stat, and (from `games`, when given) total goals."""
     columns = ["game_id", "date", *MEASURED_STATS, TEAM_GOALS]
     parts = []
-    if logs is not None and not logs.empty:
+    needed = {"game_id", "date", "role", *MEASURED_STATS}
+    if logs is not None and not logs.empty and needed <= set(logs.columns):
         skaters = _regular(logs)
         skaters = skaters[skaters["role"].astype(str) == "skater"].copy()
         if not skaters.empty:
@@ -117,7 +118,9 @@ def league_game_table(logs: pd.DataFrame, games: pd.DataFrame | None = None) -> 
             skaters["date"] = skaters["date"].astype(str).str[:10]
             parts.append(skaters.groupby(["game_id", "date"])[list(MEASURED_STATS)].sum())
     table = pd.concat(parts, axis=1) if parts else pd.DataFrame()
-    if games is not None and not games.empty:
+    if games is not None and not games.empty and {
+        "game_id", "date", "home_goals", "away_goals"
+    } <= set(games.columns):
         reg = _regular(games).copy()
         reg["home_goals"] = pd.to_numeric(reg["home_goals"], errors="coerce")
         reg["away_goals"] = pd.to_numeric(reg["away_goals"], errors="coerce")
@@ -209,7 +212,10 @@ def team_multiplier(env: EnvReading, model) -> float:
     teams = list(getattr(model, "teams", {}).values())
     attack = sum(t.attack for t in teams) / len(teams) if teams else 1.0
     defence = sum(t.defence for t in teams) / len(teams) if teams else 1.0
-    level = float(model.league_goals_per_game) * attack * defence
+    try:
+        level = float(getattr(model, "league_goals_per_game", 0.0)) * attack * defence
+    except (TypeError, ValueError):
+        return 1.0
     if level <= 0:
         return 1.0
     target = env.reference[TEAM_GOALS] * env.ratio[TEAM_GOALS]

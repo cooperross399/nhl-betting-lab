@@ -591,10 +591,15 @@ def main(argv: list[str] | None = None) -> int:
     # The league's scoring environment (Cooper, 2026-11-10, "All"): the last
     # three weeks' scoring against the games the models are fitted on,
     # shrunk, moves the scoring props and the team total (`scoring_env`).
-    environment = scoring_env.reading(
-        scoring_env.league_game_table(logs, games),
-        moment.astimezone(LEAGUE_TIMEZONE).date().isoformat(),
-    )
+    # A table it cannot read moves nothing and never blocks the card.
+    try:
+        environment = scoring_env.reading(
+            scoring_env.league_game_table(logs, games),
+            moment.astimezone(LEAGUE_TIMEZONE).date().isoformat(),
+        )
+    except (KeyError, ValueError, TypeError) as exc:
+        print(f"::warning::The scoring environment could not be read ({exc}); it moves nothing.")
+        environment = scoring_env.EnvReading()
     print(f"Scoring environment: {environment.describe()}.")
     environment_report: dict = {"reading": dataclasses.asdict(environment), "active": environment.active}
     if logs.empty:
@@ -666,7 +671,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Lineups: {lineups.describe()}.")
             props_model.game_factors = crews
             props_model.scoring_env = scoring_env.props_multipliers(
-                environment, props_model.team_form
+                environment, getattr(props_model, "team_form", None)
             )
             environment_report["props"] = dict(props_model.scoring_env)
             if props_model.scoring_env:
@@ -803,10 +808,16 @@ def main(argv: list[str] | None = None) -> int:
             )
             # The weight is refitted every card on the blended games that
             # have settled (Cooper, 2026-11-10, "All"), shrunk toward 0.5.
-            blend_fit = posthockey.fit_blend_weight(
-                processed, games, team_names,
-                before=moment.astimezone(LEAGUE_TIMEZONE).date().isoformat(),
-            )
+            try:
+                blend_fit = posthockey.fit_blend_weight(
+                    processed, games, team_names,
+                    before=moment.astimezone(LEAGUE_TIMEZONE).date().isoformat(),
+                )
+            except Exception as exc:  # noqa: BLE001 - the prior stands, never a blocker
+                print(f"::warning::The PostHockey blend weight could not be fitted ({exc}).")
+                blend_fit = posthockey.fit_blend_weight(
+                    processed, games.iloc[0:0], {}, before="", ledger=pd.DataFrame()
+                )
             team_model.pregame_weight = blend_fit["weight"]
             outputs.mkdir(parents=True, exist_ok=True)
             (outputs / posthockey.BLEND_REPORT_JSON).write_text(
