@@ -3479,6 +3479,32 @@ Re-derive rather than trust if the data has moved.
   not set aside (Cooper's call). The edge bars, market list and staking
   rule are unchanged.
 
+- **2026-11-10, a defect fix, site only: the season simulator gives a
+  goalie who is out today no remaining starts.** The Season page split each
+  club's remaining starts by its goalie depth chart and knew a goalie was
+  hurt only when the weekly hand-kept `data/season_sim/roster_notes.json`
+  said so, and it read the NHL's season roster, which keeps a goalie gone to
+  injured reserve, the minors or another club. Any such goalie the notes had
+  not caught kept his usual share of every remaining game, so the club's
+  projected goaltending, and the playoff and standings odds, were his. Season
+  Sim now reads who is out today, free and with no account
+  (`season_sim.fetch.fetch_availability`): each club's current NHL roster
+  (`roster/{ab}/current`), Daily Faceoff's injured-reserve groups (the lab's
+  `line_combinations` parser) and its starting goalies (`starting_goalies`).
+  `season_sim.model.goalie_availability` marks a goalie out when Daily
+  Faceoff lists him on injured reserve (or an out status; day-to-day is not)
+  or his club's current roster answered without him; the notes' return date
+  stands where they give one, and otherwise he starts nothing for the rest
+  of the horizon. A goalie listed as tonight's confirmed, likely or expected
+  starter is back whatever else says; "Unconfirmed" is not enough. His
+  starts go to the club's healthy goalies by their usual share, and a
+  healthy goalie with no usual share (a call-up behind an injured pair) now
+  takes a night no weighted goalie can play, where the injured pair used to.
+  A source that does not answer moves nobody and is named in a run warning;
+  the moves are printed in a "Goalie availability" notice. The card, the
+  snapshot, the forward ledger, the model, the edge bars and the staking
+  rule are untouched. `tests/test_season_sim_gives_injured_goalies_no_starts.py`.
+
 ## Contract strings — never change these
 
 Cooper's local scheduled tasks hard-code these. Renaming any of them silently
