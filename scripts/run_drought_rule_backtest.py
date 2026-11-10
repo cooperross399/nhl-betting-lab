@@ -75,9 +75,10 @@ SHOTS_BUCKETS = ((f"SHIPPED, shots up (>= {SHOTS_UP:g}x usual)", SHOTS_UP, np.in
                  (f"SHIPPED, shots down (< {SHOTS_DOWN:g}x)", -np.inf, SHOTS_DOWN))
 BOOTSTRAPS = 1000
 RULE_SENTENCE = (
-    "A skater with 70+ points, 25+ goals or 60+ assists last regular season is listed in that category when "
-    "his drought reaches either the tier bar from last season's total (points 100+ -> 3, 85-99 -> 4, 70-84 -> 5; "
-    "goals 40+ -> 5, 25-39 -> 10; assists 60+ -> 3) or, for points and assists, the "
+    "A skater with 60+ points, 20+ goals or 40+ assists last regular season is listed in that category when "
+    "his drought reaches either the tier bar from last season's total (points 100+ -> 2, 85-99 -> 3, 70-84 -> 4, "
+    "60-69 -> 5; goals 40+ -> 4, 25-39 -> 8, 20-24 -> 10; assists 60+ -> 3, 40-59 -> 4) or, for points and "
+    "assists, the "
     f"surprise bar from his own prior-season hit rate p, the smallest n with (1 - p)^n <= {SURPRISE_LEVEL}; "
     "the wager is the over 0.5."
 )

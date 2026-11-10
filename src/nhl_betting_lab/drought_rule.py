@@ -352,23 +352,23 @@ CATEGORY_LABELS = {"points": "points", "goals": "goals", "assists": "assists",
 #: The big games' measured records, card window, 2024-25 and 2025-26, best
 #: price, flat stake, 95% interval bootstrapped over nights, at the shipped
 #: floor and bar: `scripts/run_due_list_big_games.py`, Due List Tuning run
-#: 41759820070 (2026-11-04). A shutout has no price, so no record.
+#: 42830129381 (2026-11-10, after the floors and bars were widened for more
+#: picks). A shutout has no price, so no record.
 BIG_GAMES_RECORDS: dict[tuple[str, str], dict[str, Any]] = {
-    ("two_goals", "40+"): {"wagers": 391, "roi": -0.236, "ci_low": -0.479, "ci_high": 0.026},
+    ("two_goals", "35+"): {"wagers": 1285, "roi": -0.368, "ci_low": -0.506, "ci_high": -0.218},
     ("hat_trick", "40+"): {"wagers": 1269, "roi": -0.586, "ci_low": -0.811, "ci_high": -0.332},
 }
-#: One line for the card, from the same run.
+#: One line for the card, from the same runs.
 BIG_GAMES_HEADLINE = (
-    "Big games, measured on 2024-25 and 2025-26 (scripts/run_due_list_big_games.py), with the floor and bar "
-    "picked from that sweep as the least bad: no setting makes any of them likelier than the player's own rate. "
-    "2+ goals, 40+ goal scorers 20+ games without one: hit 7.7% against 10.7% implied, -23.6% over 391 "
-    "(95% -47.9% to +2.6%; -24.3% in 2024-25, -21.0% in 2025-26), no demonstrated edge. Hat trick, 40+ at "
-    "30+: -58.6% over 1,269 (95% -81.1% to -33.2%), a demonstrated loss at every setting tried. Shutouts, 5+ "
-    "last season at 15+ starts without one: 6.7% of 210 starts against 11.4% the season before; no book in "
-    "this feed prices a shutout, so those rows are graded for hits only. Across 16 seasons of NHL game logs "
-    "(2010-11 to 2025-26) a drought never made any of the three likelier than for the same players at any "
-    "drought: 2+ goals 6.7% against 7.7% (1,776 games), hat tricks 1.1% against 1.3% (5,436), shutouts 7.0% "
-    "against 7.3% (1,850 starts). Cooper picks from the list."
+    "Big games, measured on 2024-25 and 2025-26 (scripts/run_due_list_big_games.py): no setting makes any of "
+    "them likelier than the player's own rate. Widened on 2026-11-10 for more picks (Cooper). 2+ goals, 35+ goal "
+    "scorers 15+ games without one: hit 6.0% against 9.5% implied, -36.8% over 1,285 (95% -50.6% to -21.8%; "
+    "-43.4% in 2024-25, -30.5% in 2025-26), a demonstrated loss. Hat trick, 40+ at 30+: -58.6% over 1,269 "
+    "(95% -81.1% to -33.2%), a demonstrated loss at every setting tried. Shutouts, 4+ last season at 12+ starts "
+    "without one: 5.2% of 656 starts at 10+ and 4.8% of 475 at 15+, against 9.7% to 9.8% the season before; no "
+    "book in this feed prices a shutout, so those rows are graded for hits only. Across 16 seasons of NHL game "
+    "logs (2010-11 to 2025-26, at the earlier, stricter settings) a drought never made any of the three likelier "
+    "than for the same players at any drought. Cooper picks from the list."
 )
 
 
