@@ -3691,7 +3691,11 @@ Re-derive rather than trust if the data has moved.
   folded name (accents, case, punctuation) when exactly one player has it.
   Dylan Larkin, suspended off DET's roster, moved from `out` to `returning`
   with his birth date (1996-07-30). A share that still matches no rostered
-  goalie now names the club's rostered goalies in its warning.
+  goalie now names the club's rostered goalies in its warning. The first run with it
+  (42848058246) named both remaining shares as stale notes, not spellings:
+  CHI rosters Spencer Knight and Drew Commesso (Söderblom's 0.35 moved to
+  Commesso), NJD rosters Hellebuyck and Allen (Poirier's 0.08 moved to
+  Allen).
 
 ## Contract strings — never change these
 
