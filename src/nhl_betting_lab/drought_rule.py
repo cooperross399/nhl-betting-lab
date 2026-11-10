@@ -63,13 +63,13 @@ from nhl_betting_lab.season import clean_text, row_game_date, season_id
 #: Assists moved from 30+ to 60+ on 2026-10-31 (Cooper, "Yes, 60+ assists
 #: only"): the 30-59 bands lost on two bought seasons and on the list's own
 #: first three weeks; 60+ at 3 was the one assists band that made money.
-THRESHOLDS = {"points": 70, "goals": 25, "assists": 60}
+THRESHOLDS = {"points": 60, "goals": 20, "assists": 40}
 #: The tier bar: (floor of last season's total, drought that lists him), best
 #: band first. The last floor of each category is the base qualifier.
 TIERS: dict[str, tuple[tuple[int, int], ...]] = {
-    "points": ((100, 3), (85, 4), (70, 5)),
-    "goals": ((40, 5), (25, 10)),
-    "assists": ((60, 3),),
+    "points": ((100, 2), (85, 3), (70, 4), (60, 5)),
+    "goals": ((40, 4), (25, 8), (20, 10)),
+    "assists": ((60, 3), (40, 4)),
 }
 #: The surprise bar's level: the smallest drought with (1 - p)^n <= this.
 SURPRISE_LEVEL = 0.05
@@ -340,9 +340,9 @@ def qualifiers_entering(logs: pd.DataFrame, day: str) -> pd.DataFrame:
 #: is the provider market and line its best price is read from; a shutout
 #: has no market any book in this lab's feed quotes, so it is never priced.
 BIG_GAMES: dict[str, dict[str, Any]] = {
-    "two_goals": {"role": "skater", "count": 2, "line": 1.5, "price": ("goals", 1.5), "floor": 40, "bar": 20},
+    "two_goals": {"role": "skater", "count": 2, "line": 1.5, "price": ("goals", 1.5), "floor": 35, "bar": 15},
     "hat_trick": {"role": "skater", "count": 3, "line": 2.5, "price": ("goals", 2.5), "floor": 40, "bar": 30},
-    "shutout": {"role": "goalie", "count": 1, "line": 0.5, "price": None, "floor": 5, "bar": 15},
+    "shutout": {"role": "goalie", "count": 1, "line": 0.5, "price": None, "floor": 4, "bar": 12},
 }
 #: Every category the list carries, in its order on the card.
 CATEGORIES = (*THRESHOLDS, *BIG_GAMES)
