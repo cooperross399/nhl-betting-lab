@@ -7,7 +7,9 @@ name: Season Sim
 # Publish Site's 14:45 UTC build. It reads public endpoints only — the NHL
 # API for standings, rosters, schedules and season-to-date stats, MoneyPuck
 # for expected goals — and the hand-kept availability list under
-# data/season_sim/roster_notes.json — plus the card's own team ratings,
+# data/season_sim/roster_notes.json, with who is out today (each club's
+# current NHL roster, and Daily Faceoff's injured-reserve groups and starting
+# goalies, free and with no account) — plus the card's own team ratings,
 # restored from Gameday Refresh's state. It fetches no odds, spends no credit,
 # pushes no branch, edits no policy, and places no bet.
 #

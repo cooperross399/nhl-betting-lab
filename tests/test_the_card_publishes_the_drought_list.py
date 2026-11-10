@@ -74,8 +74,10 @@ def test_a_card_with_no_prices_still_publishes_the_list_with_not_posted(tmp_path
 
     assert card["card_generated"] is False and card["blockers"], "no prices: the card is blocked"
     assert [(r["player"], r["market"], r["drought"], r["last_season"], r["team"], r["opponent"], r["american_odds"])
-            for r in card["drought_rows"]] == [("Skater 1", "assists", 5, 64, "TOR", "BOS", None)]
-    row = card["drought_rows"][0]
+            for r in card["drought_rows"]] == [("Skater 1", "points", 5, 64, "TOR", "BOS", None),
+                                               ("Skater 1", "assists", 5, 64, "TOR", "BOS", None)], (
+        "64 assists are 64 points: since 2026-11-10 the 60-69 points band lists him too")
+    row = card["drought_rows"][1]
     assert (row["tier_bar"], row["surprise_bar"], row["hit_rate"], row["rarity"], row["rule"], row["band"]) == (
         3, 5, 0.5, 0.0312, "both", "60+")
     committed = json.loads((Path(__file__).resolve().parents[1] / "data" / "outputs" / "drought_rule_backtest.json")
@@ -91,11 +93,12 @@ def test_a_card_with_no_prices_still_publishes_the_list_with_not_posted(tmp_path
     assert "Backtest" in section.splitlines()[2], "one headline line under the heading"
     assert "Drought rule" not in markdown
     listed = json.loads((tmp_path / "outputs" / "drought_list.json").read_text(encoding="utf-8"))
-    assert listed["day"] == "2026-10-15" and listed["rows"][0]["american_odds"] is None
-    assert listed["rows"][0]["rule"] == "both" and listed["rows"][0]["cell_record"]["wagers"] == bucket["wagers"]
+    assist_row = next(r for r in listed["rows"] if r["market"] == "assists")
+    assert listed["day"] == "2026-10-15" and assist_row["american_odds"] is None
+    assert assist_row["rule"] == "both" and assist_row["cell_record"]["wagers"] == bucket["wagers"]
     recorded = pd.read_csv(tmp_path / "processed" / "drought_list" / "2026-10-15.csv")
-    assert recorded.player.tolist() == ["Skater 1"] and recorded.american_odds.isna().all()
-    assert "Due List for 2026-10-15: 1 row(s), 1 with no price posted" in out
+    assert recorded.player.tolist() == ["Skater 1", "Skater 1"] and recorded.american_odds.isna().all()
+    assert "Due List for 2026-10-15: 2 row(s), 2 with no price posted" in out
 
 
 def test_a_staged_price_shows_with_its_book(tmp_path, raw_dirs, capsys) -> None:
@@ -105,7 +108,7 @@ def test_a_staged_price_shows_with_its_book(tmp_path, raw_dirs, capsys) -> None:
 
     _, card, _ = base._run(tmp_path, capsys, "--raw-dir", str(raw_dirs))
 
-    row = card["drought_rows"][0]
+    row = next(r for r in card["drought_rows"] if r["market"] == "assists")
     assert (row["player"], row["american_odds"], row["book"], row["heavy_juice"]) == ("Skater 1", 175, "FanDuel", False)
     assert "+175" in (tmp_path / "outputs" / "gameday_card.md").read_text(encoding="utf-8")
 

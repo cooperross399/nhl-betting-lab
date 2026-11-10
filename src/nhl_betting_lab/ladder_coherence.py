@@ -61,7 +61,7 @@ sign. The forward test is registered in
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import pandas as pd
 
@@ -343,6 +343,13 @@ class LadderScan:
     comparable_wagers: int = 0
     duplicate_rows_collapsed: int = 0
     violations: int = 0
+    #: `ladders_with_two_rungs`, split by the value of the column named as
+    #: `depth_by` in `find_violations` (the capture's day file, in the
+    #: runner). Empty unless asked for. It exists because the registered
+    #: checkpoint reads the depth of "the first seventeen days", and a
+    #: cumulative count read after 2026-10-15 cannot answer that; see
+    #: `scripts/run_ladder_coherence.py`.
+    depth_by: dict[str, int] = field(default_factory=dict)
 
     def summary_line(self) -> str:
         if not self.ladders:
@@ -381,6 +388,7 @@ def find_violations(
     prices: pd.DataFrame,
     *,
     key: Iterable[str] = LADDER_KEY,
+    depth_by: str | None = None,
 ) -> tuple[pd.DataFrame, LadderScan]:
     """Scan a price table for books contradicting their own ladders.
 
@@ -392,10 +400,17 @@ def find_violations(
 
     The scan report is returned beside the rows because a violation count
     without its denominator is not a result.
+
+    `depth_by`, when given, names a column whose value is constant inside a
+    ladder (the runner tags each row with its capture's day file, and one
+    ladder is one book at one instant, so it never spans two files); the
+    registered depth is then also counted per value in `scan.depth_by`. It
+    only counts: it changes no grouping, no rung and no violation.
     """
     columns = list(key)
     scan = LadderScan()
-    missing = [name for name in (*columns, "line", "selection", "american_odds")
+    missing = [name for name in (*columns, "line", "selection", "american_odds",
+                                 *((depth_by,) if depth_by else ()))
                if name not in prices.columns]
     if missing:
         raise ValueError(
@@ -438,6 +453,9 @@ def find_violations(
         # for any two lines — see `LadderScan`.
         if len(deviggable) >= 2:
             scan.ladders_with_two_rungs += 1
+            if depth_by is not None:
+                tag = str(frame[depth_by].iloc[0])
+                scan.depth_by[tag] = scan.depth_by.get(tag, 0) + 1
         scan.comparable_pairs += sum(
             1
             for low in priced

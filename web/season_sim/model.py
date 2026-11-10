@@ -18,8 +18,9 @@ from __future__ import annotations
 import csv
 import json
 import math
+import unicodedata
 from collections import defaultdict
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 LEAGUE_GPG = 3.08          # goals per team-game excluding shootout deciders, 2025-26
@@ -185,6 +186,11 @@ def _remaining_starts(weights: dict, returns: dict, games: list[dict]) -> dict:
     for g in games:
         fit = {k: w for k, w in weights.items() if _fit_on(returns.get(k), g["date"])}
         tot = sum(fit.values())
+        if tot <= 0 and fit:
+            # only goalies with no usual share are fit (a call-up behind an
+            # injured pair): they split the night evenly, never the injured
+            fit = dict.fromkeys(fit, 1.0)
+            tot = float(len(fit))
         if tot <= 0:
             fit, tot = weights, sum(weights.values())
         if tot <= 0:
@@ -192,6 +198,115 @@ def _remaining_starts(weights: dict, returns: dict, games: list[dict]) -> dict:
         for k, w in fit.items():
             starts[k] += w / tot
     return starts
+
+
+#: Daily Faceoff's team abbreviations where they differ from the NHL's.
+DF_TEAM_ALIASES = {"TB": "TBL", "NJ": "NJD", "LA": "LAK", "SJ": "SJS", "UTAH": "UTA", "UTH": "UTA",
+                   "VEG": "VGK", "LV": "VGK", "MON": "MTL", "WAS": "WSH", "CLB": "CBJ", "CLS": "CBJ",
+                   "NAS": "NSH", "CAL": "CGY", "WIN": "WPG", "ARI": "UTA"}
+
+#: Daily Faceoff injury statuses that mean out for now. Day-to-day is not.
+OUT_STATUSES = frozenset({"ir", "ltir", "ir-nr", "ir-lt", "out", "injured reserve",
+                          "long-term injured reserve", "suspended", "inj", "injured"})
+
+#: Statuses that mean he may play any night: never out, whatever group the
+#: site files him in.
+DAY_TO_DAY_STATUSES = frozenset({"dtd", "day-to-day", "day to day", "gtd", "game-time decision",
+                                 "questionable", "probable"})
+
+#: Starting-goalie labels that say he is starting tonight. "Unconfirmed" is
+#: the site's guess from the rotation and can name a goalie who is hurt.
+STARTER_STRENGTHS = frozenset({"confirmed", "likely", "expected"})
+
+
+def _norm_name(name: str) -> str:
+    folded = unicodedata.normalize("NFKD", str(name or "")).encode("ascii", "ignore").decode()
+    return "".join(ch for ch in folded.casefold() if ch.isalnum())
+
+
+def goalie_availability(availability: dict | None, goalies: dict[str, list[dict]], returns: dict,
+                        asof: date) -> tuple[dict, list[str]]:
+    """Which goalies are out today, from free sources, as ``returns`` entries.
+
+    ``goalies`` maps team -> [{id, name}] (the sim's goalie list for the club,
+    the hand-kept returners included); ``returns`` is what the hand-kept notes
+    already say, (team, id) -> return date / "season" / None. A goalie is OUT
+    when Daily Faceoff puts him in a club's injured-reserve group or gives him
+    an out injury status, or when the club's current NHL roster answered and
+    does not list him. An out goalie keeps the notes' expected return date
+    when they give one; otherwise he is out for the rest of the horizon
+    ("season"). A goalie Daily Faceoff lists as tonight's confirmed, likely or
+    expected starter is back, whatever any other source says.
+
+    Returns the (team, id) -> return entries to lay over ``returns`` and one
+    line per goalie it moved, for the log.
+    """
+    if not availability:
+        return {}, []
+    by_name: dict[str, list[tuple[str, int]]] = defaultdict(list)
+    for ab, gs in goalies.items():
+        for g in gs:
+            by_name[_norm_name(g["name"])].append((ab, g["id"]))
+
+    def find(name: str, team: str) -> tuple[str, int] | None:
+        cands = by_name.get(_norm_name(name)) or []
+        team = DF_TEAM_ALIASES.get(str(team or "").strip().upper(), str(team or "").strip().upper())
+        on_team = [c for c in cands if c[0] == team]
+        if len(on_team) == 1:
+            return on_team[0]
+        return cands[0] if len(cands) == 1 else None
+
+    out: dict[tuple[str, int], str] = {}
+    for row in availability.get("df_players") or []:
+        group = str(row.get("group_identifier") or "").strip().casefold()
+        status = str(row.get("injury_status") or "").strip().casefold()
+        if status in DAY_TO_DAY_STATUSES:
+            # Daily Faceoff files day-to-day players in its injury group too;
+            # a goalie listed DTD on 2026-11-10 (John Gibson) lost every start
+            continue
+        if not (group.startswith("ir") or status in OUT_STATUSES):
+            continue
+        key = find(row.get("player", ""), row.get("team_abbreviation", ""))
+        if key is not None:
+            out[key] = "Daily Faceoff lists him " + (f"as {status.upper()}" if status else "on injured reserve")
+    current = availability.get("current") or {}
+    for ab, gs in goalies.items():
+        ids = current.get(ab)
+        if not ids:  # the roster did not answer, or answered with nobody
+            continue
+        held = set(ids)
+        for g in gs:
+            if g["id"] not in held:
+                out.setdefault((ab, g["id"]), f"not on the {ab} current NHL roster")
+    back: dict[tuple[str, int], str] = {}
+    earliest = (asof - timedelta(days=1)).isoformat()
+    for row in availability.get("df_starters") or []:
+        if str(row.get("strength") or "").strip().casefold() not in STARTER_STRENGTHS:
+            continue
+        day = str(row.get("date") or "")[:10]
+        if day and day < earliest:
+            continue
+        key = find(row.get("goalie", ""), "")
+        if key is not None:
+            back[key] = f"Daily Faceoff lists him as {day or 'tonight'}'s {row.get('strength')} starter"
+
+    updates: dict[tuple[str, int], str | None] = {}
+    said: list[str] = []
+    names = {(ab, g["id"]): g["name"] for ab, gs in goalies.items() for g in gs}
+    for key, why in sorted(back.items()):
+        if returns.get(key) is not None or key in out:
+            updates[key] = None
+            said.append(f"{names[key]} ({key[0]}): starts from today, {why}")
+    for key, why in sorted(out.items()):
+        if key in back:
+            continue
+        noted = returns.get(key)
+        if noted is None:
+            updates[key] = "season"
+            said.append(f"{names[key]} ({key[0]}): no starts for the rest of the season, {why} and no return date is noted")
+        else:
+            said.append(f"{names[key]} ({key[0]}): out until {noted}, {why}")
+    return updates, said
 
 
 # ----------------------------------------------------------------------
@@ -321,6 +436,15 @@ def build_model(bundle: dict, injuries: dict, *, starter_shares: dict, ph_rating
                                                    born=entry["born"]))
             on_roster.add((ab, pid))
         returns[(ab, pid)] = entry.get("return")
+
+    # ---------------- goalies out today, from the free sources (2026-11-10)
+    # The hand-kept notes are updated weekly; a goalie hurt since then, or one
+    # sent down or moved, kept his share of the remaining starts. Daily
+    # Faceoff's injured-reserve groups and the clubs' current NHL rosters say
+    # who is out today; the notes' return date stands where they give one.
+    avail_updates, availability = goalie_availability(
+        bundle.get("availability"), {ab: r["goalies"] for ab, r in rosters.items()}, returns, asof)
+    returns.update(avail_updates)
 
     prospect_toi = {p["name"]: float(p["toi"]) for p in injuries.get("prospects", [])}
 
@@ -578,7 +702,7 @@ def build_model(bundle: dict, injuries: dict, *, starter_shares: dict, ph_rating
     return dict(
         asof=asof.isoformat(), season=season, games_per_team=games_total, state=state,
         teams=teams, team_info=team_info, players=players, goalies=goalies,
-        unknown=unknown, league_gpg=LEAGUE_GPG, home_ice=home_ice or {}, k_team_update=k_team_update,
+        unknown=unknown, availability=availability, league_gpg=LEAGUE_GPG, home_ice=home_ice or {}, k_team_update=k_team_update,
         ratings=dict(ph_weight=ph_weight if home_ice is not None else 0.0, ph_status=ph_status,
                      ph_through=(ph_ratings or {}).get("last_game_date") if home_ice is not None else None),
     )

@@ -1170,12 +1170,13 @@ def build_board(day: date, lab: Path, history_dir: Path) -> dict:
 
 #: The rule in one sentence (Cooper, 2026-10-07 evening; it replaces the flat
 #: 5-game rule shipped in #307). Two bars, and a drought at EITHER lists him.
-DROUGHT_RULE_SENTENCE = ("Cooper's Due List, an unstaked list he picks from: a skater with 70+ points, 25+ goals or 60+ assists "
+DROUGHT_RULE_SENTENCE = ("Cooper's Due List, an unstaked list he picks from: a skater with 60+ points, 20+ goals or 40+ assists "
                          "last regular season whose drought in that category has reached either bar, the tier bar his total sets "
-                         "(points 100+ → 3, 85-99 → 4, 70-84 → 5; goals 40+ → 5, 25-39 → 10; assists 60+ → 3) or, for points "
+                         "(points 100+ → 2, 85-99 → 3, 70-84 → 4, 60-69 → 5; goals 40+ → 4, 25-39 → 8, 20-24 → 10; "
+                         "assists 60+ → 3, 40-59 → 4) or, for points "
                          "and assists, his own equal-surprise bar, the shortest drought with no more than a 5% chance at his "
-                         "last-season hit rate; and, for the big games, a 40+ goal scorer 20 games without 2+ goals or 30 "
-                         "without a hat trick, or a goalie with 5+ shutouts 15 starts without one.")
+                         "last-season hit rate; and, for the big games, a 35+ goal scorer 15 games without 2+ goals, a 40+ "
+                         "goal scorer 30 without a hat trick, or a goalie with 4+ shutouts 12 starts without one.")
 
 #: What a listed row carries beyond the #307 fields, as the card's
 #: drought_list.json spells it -> as this board spells it. Each is read, never

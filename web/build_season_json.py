@@ -307,6 +307,11 @@ def main(argv: list[str] | None = None) -> int:
     model = build_model(bundle, notes, starter_shares=notes.get("goalieShares", {}), ph_ratings=ph, ph_weight=args.ph_weight)
     for line in model["unknown"]:
         print(f"::warning::roster_notes.json names a player the stats API does not know: {line}")
+    avail = bundle.get("availability") or {}
+    for line in avail.get("said") or []:
+        print(f"::warning::Goalie availability: {line}")
+    print("::notice title=Goalie availability::" + ("%0A".join(model.get("availability") or [])
+                                                     or "no goalie moved by today's injury and roster lists"))
     status = model["ratings"]["ph_status"]
     print(f"Team ratings: {status}" + ("" if ph else f" ({why})"))
     if not model["ratings"]["ph_weight"]:

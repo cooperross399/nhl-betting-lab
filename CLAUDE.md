@@ -322,6 +322,20 @@ Re-derive rather than trust if the data has moved.
   damaged tip copy: it keeps the repaired file beside it as an `unmerged/`
   sidecar and exits 2 (see "Merging a sidecar"). Whether to add a repair
   procedure is still Cooper's call.
+  **2026-11-10: the checkpoint's depth is read over its own window, and
+  printed in the log.** A defect fix the registration permits. The scan
+  counted only the depth across every day the chain holds, so read after
+  2026-10-15 it could not say what "the first seventeen days" carried; and
+  it wrote the registered depth only to the step summary and the
+  `ladder-coherence` artifact, while the job log printed every other count.
+  Reading the overdue checkpoint from the job log found the number missing.
+  `find_violations(..., depth_by=)` now splits the registered depth by the
+  capture's day file in the same pass (no second scan, no count changes),
+  and the runner prints the whole chain's depth and the window's (day files
+  through 2026-10-15) to the log, the report and the JSON
+  (`checkpoint_window`, `ladders_with_two_rungs_by_day`; ladder counts
+  only, no price, line or book). No threshold, band, floor, window or date
+  moved. `tests/test_the_ladder_checkpoint_reads_its_own_window.py`.
 - **The oracle ceiling was an outcome filter, not a line-label result.**
   Abstaining above a 2-minute realised rise gives +3.11% [+1.39%, +4.80%] and
   a random-removal placebo reaches only −0.30% (z=8.3), so the cell is
@@ -2442,6 +2456,24 @@ Re-derive rather than trust if the data has moved.
   the market list, the staking rule, the snapshot, the forward ledger and the
   registered test are unchanged.
 
+- **2026-11-10: the Due List is widened for more picks every day (Cooper:
+  "i want more picks on the due list everyday").** Every bar moves one step:
+  points 60+ (100+ @2, 85-99 @3, 70-84 @4, 60-69 @5), goals 20+ (40+ @4,
+  25-39 @8, 20-24 @10), assists 40+ (60+ @3, 40-59 @4), the surprise bar
+  unchanged; 2+ goals at 35+ and 15 games, shutouts at 4+ and 12 starts; hat
+  tricks unchanged. Measured (Due List Tuning on #444, card window, either bar,
+  best price, flat stake, 95% interval bootstrapped over nights): points
+  -3.5% over 574 (was 311), goals -6.9% over 1,631 (was 537), assists -5.6%
+  over 988 (was 184), about three times as many wagers. No category's
+  interval sits above zero: **no demonstrated edge**, and two new bands are
+  demonstrated losses on their own (goals 20-24 @10 -19.0% over 659, assists
+  40-59 @4 -9.3% over 804); 2+ goals at 35+/15 is -36.8% over 1,285. Entering
+  2026-11-10, 5 skaters league-wide were past the new 2+ goals bar and 3
+  goalies past the new shutout bar, where none were past the old ones. Cooper picks from the list; each row still shows
+  its band's record. Still an UNSTAKED list: the model, the edge bar, the
+  market list, the staking rule, the snapshot, the forward ledger and the
+  registered test are unchanged, and nights already recorded are not rebuilt.
+
 - **2026-11-09: Due List hat tricks are tracked at 0.1u (Cooper: "hat tricks
   should be tracked as .1u bets for the DUE LIST", then "back-check and apply
   the .1u all the previous hat trick wagers on the DUE list also").** Every
@@ -3526,6 +3558,37 @@ Re-derive rather than trust if the data has moved.
   re-price additions would have been leans. They did not, so the re-prices
   stake as before. The report reruns every Gameday Refresh, and the question
   is Cooper's to reopen when it moves.
+- **2026-11-10, a defect fix, site only: the season simulator gives a
+  goalie who is out today no remaining starts.** The Season page split each
+  club's remaining starts by its goalie depth chart and knew a goalie was
+  hurt only when the weekly hand-kept `data/season_sim/roster_notes.json`
+  said so, and it read the NHL's season roster, which keeps a goalie gone to
+  injured reserve, the minors or another club. Any such goalie the notes had
+  not caught kept his usual share of every remaining game, so the club's
+  projected goaltending, and the playoff and standings odds, were his. Season
+  Sim now reads who is out today, free and with no account
+  (`season_sim.fetch.fetch_availability`): each club's current NHL roster
+  (`roster/{ab}/current`), Daily Faceoff's injured-reserve groups (the lab's
+  `line_combinations` parser) and its starting goalies (`starting_goalies`).
+  `season_sim.model.goalie_availability` marks a goalie out when Daily
+  Faceoff lists him on injured reserve (or an out status; day-to-day is not)
+  or his club's current roster answered without him; the notes' return date
+  stands where they give one, and otherwise he starts nothing for the rest
+  of the horizon. A goalie listed as tonight's confirmed, likely or expected
+  starter is back whatever else says; "Unconfirmed" is not enough. His
+  starts go to the club's healthy goalies by their usual share, and a
+  healthy goalie with no usual share (a call-up behind an injured pair) now
+  takes a night no weighted goalie can play, where the injured pair used to.
+  A source that does not answer moves nobody and is named in a run warning;
+  the moves are printed in a "Goalie availability" notice. The card, the
+  snapshot, the forward ledger, the model, the edge bars and the staking
+  rule are untouched. `tests/test_season_sim_gives_injured_goalies_no_starts.py`.
+  **Same day, the first live run (Season Sim 42832549612) showed Daily
+  Faceoff files day-to-day players in its injury group too**, so John Gibson
+  (DET, listed DTD) lost every remaining start. A day-to-day, game-time or
+  questionable status is now never out, whatever group he is filed in. The
+  same run moved six goalies onto their noted return dates (Lyon, Andersen,
+  Gustavsson, Shesterkin, Merzlikins, Demko), as the notes already had them.
 
 ## Contract strings — never change these
 

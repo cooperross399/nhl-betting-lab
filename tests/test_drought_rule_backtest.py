@@ -32,9 +32,9 @@ def test_drought_carries_across_the_season_boundary_and_uses_last_seasons_record
 
 
 def test_qualifying_bars_are_the_ones_cooper_set():
-    assert drb.THRESHOLDS == {"points": 70, "goals": 25, "assists": 60}, "assists 30+ until 2026-10-31"
-    assert drb.TIERS == {"points": ((100, 3), (85, 4), (70, 5)), "goals": ((40, 5), (25, 10)),
-                         "assists": ((60, 3),)}
+    assert drb.THRESHOLDS == {"points": 60, "goals": 20, "assists": 40}, "70 / 25 / 60 until 2026-11-10"
+    assert drb.TIERS == {"points": ((100, 2), (85, 3), (70, 4), (60, 5)), "goals": ((40, 4), (25, 8), (20, 10)),
+                         "assists": ((60, 3), (40, 4))}
     assert drb.SURPRISE_MARKETS == ("points", "assists"), "goals left the surprise bar on 2026-10-10"
     assert drb.SURPRISE_LEVEL == 0.05
     assert drb.FLAT_DROUGHT == 5, "the #307 rule's bar, kept so the history buckets read the same"
@@ -56,8 +56,8 @@ def _wagers() -> pd.DataFrame:
         _wager("2024-11-03", 65, 40, 4),   # C: 60+ (tier 3), p .5 (surprise 5): the tier bar only, past it
         _wager("2024-11-04", 70, 40, 5),   # D: 60+ (tier 3), p .5 (surprise 5): both bars, the surprise one exactly
         _wager("2024-11-05", 70, 40, 6),   # E: 60+, p .5: both bars, past both
-        _wager("2024-11-06", 35, 60, 3),   # F: 35 assists, under 60 since 2026-10-31: not a qualifier
-        _wager("2024-11-07", 50, 60, 4),   # G: 50 assists, under 60: not a qualifier
+        _wager("2024-11-06", 35, 60, 3),   # F: 35 assists, under 40: not a qualifier
+        _wager("2024-11-07", 38, 60, 4),   # G: 38 assists, under 40: not a qualifier
         _wager("2024-11-08", 20, 10, 10),  # H: not a qualifier, however long the drought
         _wager("2024-11-09", 60, 0, 3),    # I: p = 0: the surprise bar is undefined; the tier bar lists him
     ])
@@ -70,7 +70,7 @@ def test_each_wager_is_labelled_with_its_band_and_both_bars():
     assert w.loc["2024-11-03", ["tier_bar", "surprise_bar", "either_bar"]].tolist() == [3, 5, 3]
     assert w.loc["2024-11-04", ["band", "tier_bar", "surprise_bar", "either_bar"]].tolist() == ["60+", 3, 5, 3]
     assert pd.isna(w.loc["2024-11-06", "band"]) and pd.isna(w.loc["2024-11-06", "tier_bar"]), "35 assists: no band"
-    assert pd.isna(w.loc["2024-11-07", "band"]), "50 assists: no band since 2026-10-31"
+    assert pd.isna(w.loc["2024-11-07", "band"]), "38 assists: under the 40-59 band"
     assert not w.loc["2024-11-08", "qualifies"] and pd.isna(w.loc["2024-11-08", "band"])
     assert pd.isna(w.loc["2024-11-08", "tier_bar"]) and w.loc["2024-11-08", "either_bar"] == 23, (
         "a non-qualifier has no tier bar; his surprise bar (p = 0.125) exists, and `qualifies` keeps him out of every bucket")
@@ -80,16 +80,16 @@ def test_each_wager_is_labelled_with_its_band_and_both_bars():
 
 def test_a_goals_wager_has_no_surprise_bar_and_lists_on_its_tier_bar_alone():
     goals = pd.DataFrame([
-        _wager("2024-12-01", 45, 70, 4, market="goals"),   # 40+ (tier 5), p .875: no surprise bar, so not listed at 4
-        _wager("2024-12-02", 45, 70, 5, market="goals"),   # listed at 5
-        _wager("2024-12-03", 30, 40, 9, market="goals"),   # 25-39 (tier 10): not listed at 9
-        _wager("2024-12-04", 30, 40, 10, market="goals"),  # listed at 10
-        _wager("2024-12-05", 24, 40, 30, market="goals"),  # under 25: never
+        _wager("2024-12-01", 45, 70, 3, market="goals"),   # 40+ (tier 4), p .875: no surprise bar, so not listed at 3
+        _wager("2024-12-02", 45, 70, 4, market="goals"),   # listed at 4
+        _wager("2024-12-03", 30, 40, 7, market="goals"),   # 25-39 (tier 8): not listed at 7
+        _wager("2024-12-04", 30, 40, 8, market="goals"),   # listed at 8
+        _wager("2024-12-05", 19, 40, 30, market="goals"),  # under 20: never
     ])
     w = drb.label_bars(goals).set_index("date")
 
     assert w.surprise_bar.isna().all(), "goals left the surprise bar on 2026-10-10"
-    assert w.tier_bar.tolist()[:4] == [5, 5, 10, 10] and w.band.tolist()[:4] == ["40+", "40+", "25-39", "25-39"]
+    assert w.tier_bar.tolist()[:4] == [4, 4, 8, 8] and w.band.tolist()[:4] == ["40+", "40+", "25-39", "25-39"]
     assert w.qualifies.tolist() == [True, True, True, True, False]
     assert w.either_bar.tolist()[:4] == w.tier_bar.tolist()[:4]
     listed = [b for b in drb.measure(drb.label_bars(goals))["buckets"] if b["bucket"] == "SHIPPED: either bar" and b["season"] == "both"]
@@ -121,10 +121,10 @@ def test_the_json_keeps_its_keys_and_names_the_tiers_the_level_and_the_rule():
 
     assert set(payload) == {"generated_at", "thresholds", "min_drought", "tiers", "surprise_level", "rule",
                             "accounting", "buckets", "goal_sweep"}
-    assert payload["tiers"] == {"points": [[100, 3], [85, 4], [70, 5]], "goals": [[40, 5], [25, 10]],
-                                "assists": [[60, 3]]}
+    assert payload["tiers"] == {"points": [[100, 2], [85, 3], [70, 4], [60, 5]], "goals": [[40, 4], [25, 8], [20, 10]],
+                                "assists": [[60, 3], [40, 4]]}
     assert payload["surprise_level"] == 0.05 and payload["min_drought"] == 5
-    assert "either" in payload["rule"] and "(1 - p)^n <= 0.05" in payload["rule"] and "100+ -> 3" in payload["rule"]
+    assert "either" in payload["rule"] and "(1 - p)^n <= 0.05" in payload["rule"] and "100+ -> 2" in payload["rule"]
     text = drb.render(result, {"card": {"graded": 9}}, "now")
     assert text.startswith("# Due List backtest") and "## Headline (card window, the shipped rule: either bar)" in text
     assert "| assists | 5 | 5 |" in text, "the headline row is the SHIPPED bucket"

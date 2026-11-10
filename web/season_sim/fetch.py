@@ -69,11 +69,13 @@ def _stats_url(kind: str, season: str, sort: str) -> str:
     )
 
 
-def fetch_bundle(cache: Path, *, season: str = SEASON, today: date | None = None) -> dict:
+def fetch_bundle(cache: Path, *, season: str = SEASON, today: date | None = None,
+                 availability: bool = True) -> dict:
     """Fetch every input and return the parsed bundle.
 
     ``today`` dates the standings request (the league date whose standings are
-    wanted); it defaults to the current UTC date.
+    wanted); it defaults to the current UTC date. ``availability`` also reads
+    who is out right now (``fetch_availability``); it never fails the build.
     """
     today = today or datetime.now(timezone.utc).date()
     cache = Path(cache)
@@ -130,7 +132,95 @@ def fetch_bundle(cache: Path, *, season: str = SEASON, today: date | None = None
         today=today, season=season, teams=teams, standings_now=now,
         standings_prior=prior,
         rosters=rosters, schedules=schedules, skaters=skaters, goalies=goalies, moneypuck=moneypuck,
+        availability=fetch_availability(cache, teams) if availability else None,
     )
+
+
+#: Daily Faceoff's pages: each club's line combinations (its injured-reserve
+#: group names who is out) and tonight's starting goalies. The lab already
+#: reads both (``nhl_betting_lab.data.line_combinations`` and
+#: ``.starting_goalies``); the sim reads them for availability only.
+DF_TEAM_PAGE = "https://www.dailyfaceoff.com/teams/{slug}/line-combinations"
+DF_STARTERS_PAGE = "https://www.dailyfaceoff.com/starting-goalies"
+DF_SEED_SLUG = "toronto-maple-leafs"
+DF_POLITE_SECONDS = 1.0
+
+
+def _get_text(url: str) -> str:  # pragma: no cover - network
+    resp = requests.get(url, headers={"User-Agent": USER_AGENT}, timeout=TIMEOUT)
+    resp.raise_for_status()
+    return resp.text
+
+
+def _current_roster(cache: Path, ab: str) -> list[int] | None:  # pragma: no cover - network
+    path = cache / "roster_current" / f"{ab}.json"
+    ok = _get(f"{NHL}/roster/{ab}/current", path, required=False, ttl_hours=1)
+    data = json.loads(path.read_text()) if ok and path.exists() else None
+    if not isinstance(data, dict):
+        return None
+    return [int(p["id"]) for grp in ("forwards", "defensemen", "goalies")
+            for p in data.get(grp) or [] if isinstance(p, dict) and "id" in p]
+
+
+def fetch_availability(cache: Path, teams: list[str], *, get_text=_get_text, current_roster=_current_roster,
+                       polite_seconds: float = DF_POLITE_SECONDS) -> dict:
+    """Who is out right now, from free sources with no account. Soft: a source
+    that does not answer is left out and named in ``said``.
+
+    * ``current``: each club's CURRENT roster ids from the NHL API
+      (``roster/{ab}/current``), or None when it did not answer. The bundle's
+      season roster keeps a goalie who has since gone to injured reserve, the
+      minors or another club; the current one is today's.
+    * ``df_players``: Daily Faceoff's line-combination rows, one per player per
+      group, with its injured-reserve group and injury status.
+    * ``df_starters``: Daily Faceoff's starting-goalie listings for tonight.
+    """
+    cache = Path(cache)
+    said: list[str] = []
+    current: dict[str, list[int] | None] = {}
+    for ab in teams:
+        try:
+            current[ab] = current_roster(cache, ab)
+        except Exception as exc:  # noqa: BLE001 - one club's roster
+            said.append(f"current roster {ab} not read ({type(exc).__name__})")
+            current[ab] = None
+    missing = [ab for ab, ids in current.items() if ids is None]
+    if missing:
+        said.append(f"NHL current roster not read for {', '.join(missing)}")
+    try:
+        from nhl_betting_lab.data.line_combinations import rows_from_page, team_slugs
+        from nhl_betting_lab.data.starting_goalies import parse_page
+    except ImportError as exc:  # pragma: no cover - PYTHONPATH without src
+        said.append(f"Daily Faceoff parsers not importable ({exc})")
+        return dict(current=current, df_players=None, df_starters=None, said=said)
+    stamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    df_players: list[dict] | None = None
+    df_starters: list[dict] | None = None
+    try:
+        seed = get_text(DF_TEAM_PAGE.format(slug=DF_SEED_SLUG))
+        slugs = team_slugs(seed)
+        df_players, lost = [], []
+        for slug in slugs:
+            try:
+                if slug == DF_SEED_SLUG:
+                    html = seed
+                else:
+                    if polite_seconds > 0:
+                        time.sleep(polite_seconds)
+                    html = get_text(DF_TEAM_PAGE.format(slug=slug))
+                df_players.extend(rows_from_page(html, retrieved_at=stamp))
+            except Exception as exc:  # noqa: BLE001 - one club's page
+                lost.append(f"{slug} ({type(exc).__name__})")
+        if lost:
+            said.append(f"Daily Faceoff line combinations not read for {len(lost)} club(s): {', '.join(lost)}")
+    except Exception as exc:  # noqa: BLE001 - the site, on a bad day
+        said.append(f"Daily Faceoff line combinations not read ({type(exc).__name__}: {exc})")
+        df_players = None
+    try:
+        df_starters = parse_page(get_text(DF_STARTERS_PAGE), retrieved_at=stamp)
+    except Exception as exc:  # noqa: BLE001 - the site, on a bad day
+        said.append(f"Daily Faceoff starting goalies not read ({type(exc).__name__}: {exc})")
+    return dict(current=current, df_players=df_players, df_starters=df_starters, said=said)
 
 
 #: The first season the award fits rebuild; earlier seasons' games are read
