@@ -849,6 +849,37 @@ jobs:
         run: |
           python scripts/fetch_posthockey_pregame.py
 
+      - name: Restore the weekly layer scorecard
+        # The newest Layer Scoring report (Cooper, 2026-11-10): the Monday
+        # card's "Layer scorecard" section reads it, and card-feed carries it
+        # as latest_layer_scoring.md. Aggregate only, and soft: with none,
+        # the Monday card says no layer scoring is on hand.
+        if: always()
+        continue-on-error: true
+        timeout-minutes: 3
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PYTHONPATH: src
+        run: |
+          set -u
+          SCORES="$RUNNER_TEMP/layer-scoring"
+          rm -rf "$SCORES"
+          mkdir -p "$SCORES" data/outputs
+          rm -f data/outputs/layer_scoring.md data/outputs/layer_scoring.json
+          if python scripts/restore_state.py --artifact layer-scoring --dest "$SCORES" \
+              --workflow layer-scoring.yml --success-only --no-merge --attempts 2 --limit 5; then
+            for name in layer_scoring.md layer_scoring.json; do
+              if [ -f "$SCORES/$name" ]; then
+                cp "$SCORES/$name" "data/outputs/$name"
+              fi
+            done
+          fi
+          if [ -s data/outputs/layer_scoring.json ]; then
+            echo "Layer scorecard restored."
+          else
+            echo "No layer scoring report could be restored."
+          fi
+
       - name: Render the card
         id: card
         if: always()
@@ -1377,6 +1408,13 @@ jobs:
             ENTRIES=$(printf '%s\n100644 blob %s\tlatest_closing_line_value.md' \
               "$ENTRIES" "$BLOB_CLV")
           fi
+          # The weekly layer scoring (2026-11-10), restored before the card:
+          # aggregate units and intervals per model layer, no price.
+          if [ -f data/outputs/layer_scoring.md ]; then
+            BLOB_LAYERS=$(git hash-object -w data/outputs/layer_scoring.md)
+            ENTRIES=$(printf '%s\n100644 blob %s\tlatest_layer_scoring.md' \
+              "$ENTRIES" "$BLOB_LAYERS")
+          fi
           # One file per snapshot day under forward_evidence/, not one
           # forward_evidence.csv: on 2026-10-21 the single file reached
           # 100.66 MB, GitHub refused the push, and the day's card never
@@ -1443,6 +1481,8 @@ jobs:
             data/outputs/forward_evidence.md
             data/outputs/forward_evidence.json
             data/outputs/closing_line_value.md
+            data/outputs/layer_scoring.md
+            data/outputs/layer_scoring.json
           if-no-files-found: warn
           retention-days: 30
 

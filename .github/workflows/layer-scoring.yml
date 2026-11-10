@@ -3,11 +3,21 @@ name: Layer Scoring
 # Scores each model layer added from 2026-10-22 on the settled live picks
 # (Cooper, 2026-11-09: "Yes do all 4"). See scripts/run_layer_scoring.py.
 #
-# It fetches no odds, spends no credit, places no bet, pushes nothing,
-# uploads nothing, edits no policy and records nothing the card reads. The
-# result is aggregate (bets, units, ROI, intervals) and goes to the run
-# summary and the log only.
+# Weekly since 2026-11-10 (Cooper: "All"): every Monday at 00:30 UTC, which
+# is Sunday evening in New York, so even a start eight hours late finishes
+# well before the 13:30 UTC card. Gameday Refresh restores the newest
+# `layer-scoring` artifact, the Monday card carries a "Layer scorecard"
+# section (`nhl_betting_lab.layer_scorecard`), and card-feed carries the full
+# report as latest_layer_scoring.md.
+#
+# It fetches no odds, spends no credit, places no bet, pushes nothing, edits
+# no policy and changes nothing the card prices or stakes: the scorecard is a
+# report, and cutting a layer stays a human call. It uploads only its own
+# report (`layer-scoring`: layer_scoring.md and .json), which is aggregate
+# (bets, units, ROI, intervals), never a price, line or book.
 on:
+  schedule:
+    - cron: "30 0 * * 1"
   workflow_dispatch:
   pull_request:
     paths:
@@ -75,3 +85,14 @@ jobs:
             cat data/outputs/layer_scoring.md >> "$GITHUB_STEP_SUMMARY"
           fi
           exit "$status"
+
+      - name: Keep the report for the Monday card
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: layer-scoring
+          path: |
+            data/outputs/layer_scoring.md
+            data/outputs/layer_scoring.json
+          if-no-files-found: warn
+          retention-days: 30

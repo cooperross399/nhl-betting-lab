@@ -267,7 +267,7 @@ def test_one_game_cannot_bound_an_interval_however_many_rows_it_has(tmp_path) ->
 
     assert code == 0
     assert "matched to a closing price: **100**" in rendered
-    for view, until in (("opinions", "## All bets"), ("bets", "## By market")):
+    for view, until in (("opinions", "## All bets"), ("bets", "## The card's best-bet bar")):
         section = _section(rendered, f"## All {view}", until)
         cells = _table_row(section)
         assert "too small to bound an interval" in section, section
@@ -563,7 +563,7 @@ def test_every_table_prints_the_games_behind_each_row() -> None:
     header = next(line for line in rendered.splitlines() if line.startswith("| Rows |"))
     assert [c.strip() for c in header.strip().strip("|").split("|")][-1] == "Games"
     opinions_row = _table_row(_section(rendered, "## All opinions", "## All bets"))
-    bets_row = _table_row(_section(rendered, "## All bets", "## By market"))
+    bets_row = _table_row(_section(rendered, "## All bets", "## The card's best-bet bar"))
     assert (opinions_row[0], opinions_row[-1]) == (str(len(rows)), "30")
     bets = rows[rows["is_bet"]]
     assert (bets_row[0], bets_row[-1]) == (str(len(bets)), str(bets["game"].nunique()))
