@@ -26,6 +26,7 @@ from datetime import date, timedelta
 import numpy as np
 import pandas as pd
 
+from nhl_betting_lab import scoring_env as scoring_env_module
 from nhl_betting_lab.rest import played_previous_day
 from nhl_betting_lab.models.player_props import (
     GOALIE_SETTLEMENT_COLUMN,
@@ -246,6 +247,7 @@ def generate_prop_samples(
     team_form: bool = False,
     position_matchup: bool = False,
     hits_options: frozenset[str] | set[str] = frozenset(),
+    scoring_env: bool = False,
 ) -> tuple[pd.DataFrame, WalkForwardReport]:
     """Price every player-game in the log with a model that could not see it.
 
@@ -255,6 +257,9 @@ def generate_prop_samples(
     `position_matchup=True` keeps the opponent concession split by position
     group (`opponent_group_factors`); False prices on the all-skater table,
     as every committed measurement did.
+    `scoring_env=True` prices each night with the league's scoring
+    environment from games before it (`scoring_env`), as the card does from
+    2026-11-10; False, the default, prices without it.
 
     `use_rest=False` prices with the schedule ignored, which exists so the two
     policies can be compared on identical prices — the comparison that decides
@@ -288,6 +293,11 @@ def generate_prop_samples(
     all_logs = all_logs.dropna(subset=["_date"])
     b2b = _team_b2b_flags(logs) if use_rest else {}
     totals = team_game_totals(all_logs.drop(columns=["_date"])) if team_form else None
+    env_table = (
+        scoring_env_module.league_game_table(all_logs.drop(columns=["_date"]))
+        if scoring_env
+        else None
+    )
 
     first = frame["_date"].min()
     last = frame["_date"].max()
@@ -324,9 +334,15 @@ def generate_prop_samples(
             (frame["_date"] >= window_start) & (frame["_date"] <= window_end)
         ]
         for _, log in window.iterrows():
-            if totals is not None and log["_date"] != form_night:
+            if (totals is not None or env_table is not None) and log["_date"] != form_night:
                 form_night = log["_date"]
-                model.team_form = team_form_factors(totals, before=form_night.isoformat())
+                if totals is not None:
+                    model.team_form = team_form_factors(totals, before=form_night.isoformat())
+                if env_table is not None:
+                    model.scoring_env = scoring_env_module.props_multipliers(
+                        scoring_env_module.reading(env_table, form_night.isoformat()),
+                        model.team_form,
+                    )
             player_id = int(log["player_id"])
             role = str(log["role"])
             if role == "goalie" and int(
