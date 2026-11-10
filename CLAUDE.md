@@ -3615,6 +3615,26 @@ Re-derive rather than trust if the data has moved.
   questionable status is now never out, whatever group he is filed in. The
   same run moved six goalies onto their noted return dates (Lyon, Andersen,
   Gustavsson, Shesterkin, Merzlikins, Demko), as the notes already had them.
+- **2026-11-10, a performance fix the ladder registration permits: the
+  ladder scan is incremental.** `run_ladder_coherence.py` rescanned every
+  day file the chain holds on every Line Movement round (6.4-15.9 minutes
+  by 2026-11-10 over 43 days, growing; #447 raised the job to 45 minutes).
+  With `--cache-dir` it keeps each readable day's counts in
+  `ladder_scan_cache.json`, keyed on the day file's name, the SHA-256 of its
+  bytes and the detector's fingerprint (the script, `ladder_coherence.py`,
+  `closing_lines.py`, `stores.py`, `models/value.py`, pandas and numpy
+  versions), and reads only new or changed days; a damaged day is never
+  cached, so it is read and named every run. One round appends to one day
+  file and a ladder is one book at one instant, so every count is a sum over
+  days, and the report, JSON, checkpoint window, per-day depth, violations,
+  `unreadable_captures` and the `--fail-on-day` exit are byte for byte a
+  full scan's (`tests/test_the_ladder_scan_is_incremental.py`, against the
+  old concatenated scan). Line Movement keeps the cache in
+  `$RUNNER_TEMP/ladder-scan-cache` through `actions/cache` (`ladder-scan-`
+  keys): counts and hashes only, no price, line, book, player or event, and
+  no upload names it. A synthetic 20-day, 237k-row chain: 23 s full, 0.0 s
+  warm, 1.4 s with today's file changed. No threshold, band, floor, date or
+  registered count moved.
 - **2026-11-10: Season Sim's restore warnings were the step scripts, not
   failures, and three roster-note names are matched. Site only.** Run
   42837197651's log carried "The last season projection could not be
