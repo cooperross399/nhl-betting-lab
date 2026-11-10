@@ -254,7 +254,10 @@ def main(argv: list[str] | None = None) -> int:
                 "over": _summary([b.profit for b in bets if str(b.selection).lower() == "over"]),
                 "under": _summary([b.profit for b in bets if str(b.selection).lower() == "under"]),
             },
+            # A row priced Poisson carries no r, so the median is over the
+            # rows that still carry one, and the Poisson share is printed beside it.
             "median_r": float(r_values.median()) if r_values.notna().any() else None,
+            "poisson_share": float(r_values.isna().mean()),
             "mean_predicted": float(frame["mean"].mean()),
             "mean_actual": float(frame["actual"].mean()),
             "samples": int(len(frame)),
@@ -305,16 +308,17 @@ def main(argv: list[str] | None = None) -> int:
         "",
         "## On outcomes (walk-forward, cached history)",
         "",
-        "| Variant | Log-likelihood per player-game vs baseline (95%, games) | Median r | Mean predicted / actual |",
-        "|:--|:--|--:|:--|",
+        "| Variant | Log-likelihood per player-game vs baseline (95%, games) | Rows priced Poisson | "
+        "Median r of the rest | Mean predicted / actual |",
+        "|:--|:--|--:|--:|:--|",
     ]
     for name, _ in VARIANTS:
         r = results[name]
         ll = r["log_likelihood"]
-        med = "Poisson" if r["median_r"] is None or not math.isfinite(r["median_r"]) else f"{r['median_r']:.1f}"
+        med = "none" if r["median_r"] is None or not math.isfinite(r["median_r"]) else f"{r['median_r']:.1f}"
         out.append(
             f"| {LABELS[name]} | {ll['paired_vs_old']:+.4f} [{ll['low']:+.4f}, {ll['high']:+.4f}] over "
-            f"{ll['n']:,} | {med} | {r['mean_predicted']:.3f} / {r['mean_actual']:.3f} |"
+            f"{ll['n']:,} | {r['poisson_share']:.1%} | {med} | {r['mean_predicted']:.3f} / {r['mean_actual']:.3f} |"
         )
     out += ["", "### Calibration by line: mean predicted over / share over", "",
             "| Variant | " + " | ".join(f"over {line}" for line in DEFAULT_LINES[MARKET]) + " |",

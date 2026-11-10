@@ -437,6 +437,12 @@ PYTHONPATH=src .venv/bin/python scripts/run_scoring_environment.py --history-dir
 # bought hits prices, overs and unders apart (Hits Model Study workflow).
 PYTHONPATH=src .venv/bin/python scripts/run_hits_model_study.py
 
+# Does shots on goal's own-games spread (and its measured shrinkage) price
+# shots better? Walk-forward on outcomes, calibration by line, the bought
+# card-window prices, and a forward-ledger replay, under the rule fixed in
+# docs/sog_dispersion_decision_rule.md (Shots Model Study workflow, no credit).
+PYTHONPATH=src .venv/bin/python scripts/run_sog_model_study.py
+
 # Which Due List settings are best? Searches the qualifier, drought bar and
 # price window, scores each season's winner on the other season, and runs the
 # same search on no-edge simulations. Changes no setting (Due List Tuning
