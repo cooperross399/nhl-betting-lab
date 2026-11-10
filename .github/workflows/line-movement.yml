@@ -405,6 +405,27 @@ jobs:
             exit 1
           }
 
+      - name: Restore the ladder scan's per-day counts
+        # INCREMENTAL SINCE 2026-11-10. The scan read every day the chain
+        # holds on every round (6.4 to 15.9 minutes by early November,
+        # growing with the season); it now keeps each readable day's counts,
+        # keyed on the day file's content hash and the detector's
+        # fingerprint, and reads only new or changed days. The report and
+        # JSON are byte for byte a full scan's
+        # (tests/test_the_ladder_scan_is_incremental.py).
+        #
+        # COUNTS AND HASHES ONLY, under the runner's temp directory, which no
+        # upload may name: no price, line, book, player or event goes into
+        # it, so the Actions cache carries nothing the private chain holds. A
+        # miss (the first round, or an evicted cache) is a full scan, never a
+        # failure.
+        if: always()
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ runner.temp }}/ladder-scan-cache
+          key: ladder-scan-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: ladder-scan-
+
       - name: Scan the captured ladders
         # The 2026-10-15 checkpoint in docs/pre_registered_ladder_coherence.md
         # reads rung DEPTH, and this puts that number in every run summary
@@ -450,7 +471,11 @@ jobs:
         run: |
           SCAN_EXIT=0
           DAY=$(TZ=America/New_York date +%F)
-          python scripts/run_ladder_coherence.py --fail-on-day "$DAY" || SCAN_EXIT=$?
+          CACHE_ARGS=()
+          if [ -n "${RUNNER_TEMP:-}" ]; then
+            CACHE_ARGS=(--cache-dir "$RUNNER_TEMP/ladder-scan-cache")
+          fi
+          python scripts/run_ladder_coherence.py --fail-on-day "$DAY" "${CACHE_ARGS[@]}" || SCAN_EXIT=$?
           if [ -f data/outputs/ladder_coherence.json ]; then
             DEPTH=$(python -c "import json;print(json.load(open('data/outputs/ladder_coherence.json')).get('ladders_with_two_rungs',0))")
             LADDERS=$(python -c "import json;print(json.load(open('data/outputs/ladder_coherence.json')).get('ladders',0))")
@@ -473,6 +498,13 @@ jobs:
             echo "### Ladder scan wrote no report" >> "$GITHUB_STEP_SUMMARY"
           fi
           exit "$SCAN_EXIT"
+
+      - name: Keep the ladder scan's per-day counts for the next round
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ runner.temp }}/ladder-scan-cache
+          key: ladder-scan-${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: Keep the ladder scan
         # Its own artifact, for the reason above: it lives under data/outputs.
