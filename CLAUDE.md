@@ -3629,7 +3629,7 @@ Re-derive rather than trust if the data has moved.
      over 355, unders +129.1u over 8,970); candidate **-62.4u over 8,279,
      -0.75% [-2.86%, +1.35%]** (overs -88.9u over 5,918, -1.50% [-4.00%,
      +0.99%]; unders +26.5u over 2,361). The thinner spread turns the card
-     from 96% unders to 71% overs, mostly at 1.5 and 2.5, and those overs
+     from 96% unders to 71% overs, and those overs
      lose.
   3. **Ledger replay passes** (33,505 of 33,574 settled shots wagers from
      09-29 re-priced, refit weekly; correlation 0.994 with the frozen
