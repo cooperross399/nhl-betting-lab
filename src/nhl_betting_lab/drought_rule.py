@@ -1,15 +1,17 @@
 """Cooper's Due List, in one place, for the evidence and for the card.
 
 The rule (Cooper, 2026-10-07 evening; it replaces the flat 5-game rule shipped
-that morning in #307): a skater with 70+ points, 25+ goals or 60+ assists LAST
+that morning in #307; widened 2026-11-10): a skater with 60+ points, 20+ goals or 40+ assists LAST
 regular season is listed in that category when his current drought (regular-
 season games he dressed for without one in that category, carried across the
 season boundary) reaches EITHER of two bars. The better the player, the
 shorter the drought:
 
 1. The TIER bar, from last season's total in the category (`TIERS`):
-   points 100+ -> 3, 85-99 -> 4, 70-84 -> 5; goals 40+ -> 5, 25-39 -> 10;
-   assists 60+ -> 3. (Goals until 2026-10-10: 30+ to qualify, 40+ -> 3,
+   points 100+ -> 2, 85-99 -> 3, 70-84 -> 4, 60-69 -> 5; goals 40+ -> 4,
+   25-39 -> 8, 20-24 -> 10; assists 60+ -> 3, 40-59 -> 4. (Until 2026-11-10,
+   when Cooper asked for more picks every day: points 70+ at 3/4/5, goals 40+
+   -> 5 and 25-39 -> 10, assists 60+ -> 3 only. Goals until 2026-10-10: 30+ to qualify, 40+ -> 3,
    35-39 -> 4, 30-34 -> 5, plus the surprise bar. Assists until 2026-10-31:
    30+ to qualify, 60+ -> 3, 45-59 -> 4, 30-44 -> 5.)
 2. The SURPRISE bar (equal surprise, points and assists only:
@@ -63,6 +65,8 @@ from nhl_betting_lab.season import clean_text, row_game_date, season_id
 #: Assists moved from 30+ to 60+ on 2026-10-31 (Cooper, "Yes, 60+ assists
 #: only"): the 30-59 bands lost on two bought seasons and on the list's own
 #: first three weeks; 60+ at 3 was the one assists band that made money.
+#: Widened on 2026-11-10 (Cooper: "i want more picks on the due list
+#: everyday"): 60+ points, 20+ goals, 40+ assists, with shorter droughts.
 THRESHOLDS = {"points": 60, "goals": 20, "assists": 40}
 #: The tier bar: (floor of last season's total, drought that lists him), best
 #: band first. The last floor of each category is the base qualifier.

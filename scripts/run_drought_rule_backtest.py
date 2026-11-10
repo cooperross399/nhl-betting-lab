@@ -1,11 +1,11 @@
 """Measure the Due List rule against bought prop prices.
 
 The rule (Cooper, 2026-10-07 evening; goals changed 2026-10-10): a skater who
-produced 70+ points, 25+ goals or 60+ assists LAST regular season is listed in
+produced 60+ points, 20+ goals or 40+ assists LAST regular season (widened 2026-11-10) is listed in
 that category when his current drought (straight regular-season games dressed
 without one in it) reaches EITHER bar: the TIER bar from last season's total
-(points 100+ -> 3, 85-99 -> 4, 70-84 -> 5; goals 40+ -> 5, 25-39 -> 10;
-assists 60+ -> 3; assists were 30+ until 2026-10-31) or, for points and assists only,
+(points 100+ -> 2, 85-99 -> 3, 70-84 -> 4, 60-69 -> 5; goals 40+ -> 4, 25-39 -> 8,
+20-24 -> 10; assists 60+ -> 3, 40-59 -> 4) or, for points and assists only,
 the SURPRISE bar from his own prior-season hit rate p (the smallest n with
 (1 - p)^n <= 0.05). The wager measured
 is the over 0.5 in that category (1+ point, anytime goal, 1+ assist). The flat
