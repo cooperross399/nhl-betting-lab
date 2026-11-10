@@ -2456,6 +2456,24 @@ Re-derive rather than trust if the data has moved.
   the market list, the staking rule, the snapshot, the forward ledger and the
   registered test are unchanged.
 
+- **2026-11-10: the Due List is widened for more picks every day (Cooper:
+  "i want more picks on the due list everyday").** Every bar moves one step:
+  points 60+ (100+ @2, 85-99 @3, 70-84 @4, 60-69 @5), goals 20+ (40+ @4,
+  25-39 @8, 20-24 @10), assists 40+ (60+ @3, 40-59 @4), the surprise bar
+  unchanged; 2+ goals at 35+ and 15 games, shutouts at 4+ and 12 starts; hat
+  tricks unchanged. Measured (Due List Tuning on #444, card window, either bar,
+  best price, flat stake, 95% interval bootstrapped over nights): points
+  -3.5% over 574 (was 311), goals -6.9% over 1,631 (was 537), assists -5.6%
+  over 988 (was 184), about three times as many wagers. No category's
+  interval sits above zero: **no demonstrated edge**, and two new bands are
+  demonstrated losses on their own (goals 20-24 @10 -19.0% over 659, assists
+  40-59 @4 -9.3% over 804); 2+ goals at 35+/15 is -36.8% over 1,285. Entering
+  2026-11-10, 5 skaters league-wide were past the new 2+ goals bar and 3
+  goalies past the new shutout bar, where none were past the old ones. Cooper picks from the list; each row still shows
+  its band's record. Still an UNSTAKED list: the model, the edge bar, the
+  market list, the staking rule, the snapshot, the forward ledger and the
+  registered test are unchanged, and nights already recorded are not rebuilt.
+
 - **2026-11-09: Due List hat tricks are tracked at 0.1u (Cooper: "hat tricks
   should be tracked as .1u bets for the DUE LIST", then "back-check and apply
   the .1u all the previous hat trick wagers on the DUE list also").** Every

@@ -45,9 +45,11 @@ def test_a_night_before_the_first_recorded_list_is_rebuilt_and_priced_at_the_car
     notes = df.backfill_lists(logs=make_logs(), rosters=ROSTERS, starts=_starts(), team_names=TEAM_NAMES,
                               today="2026-10-10", snapshots=snapshots, processed_dir=tmp_path)
 
-    rebuilt = pd.read_csv(tmp_path / "drought_list" / f"{DAY}.csv").set_index("player")
+    rebuilt = pd.read_csv(tmp_path / "drought_list" / f"{DAY}.csv")
     # Every game of the night is listed: the guard is asked before the first face-off.
-    assert {"Assist Man", "Test Scorer", "Point Man"} <= set(rebuilt.index), notes
+    assert {"Assist Man", "Test Scorer", "Point Man"} <= set(rebuilt.player), notes
+    # Assist Man is listed in points and assists (2026-11-10); the frozen price is the assists one.
+    rebuilt = rebuilt[rebuilt.market != "points"].set_index("player")
     assert rebuilt.loc["Assist Man", "american_odds"] == 180 and rebuilt.loc["Assist Man", "book"] == "FanDuel"
     assert pd.isna(rebuilt.loc["Test Scorer", "american_odds"]), "no frozen price is never filled in"
     sources = df.load_sources(tmp_path)

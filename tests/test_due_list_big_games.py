@@ -49,7 +49,7 @@ def make_logs() -> pd.DataFrame:
     # His last 2+ game is the hat trick, 44 games before tonight's 2025 tail + this season.
     rows += skater_games(1, "Sniper Guy", 20252026, "2025-10-10", [3] + [1] * 42)
     rows += skater_games(1, "Sniper Guy", 20262027, "2026-10-10", [0] * 20, offset=100)
-    # Plinker: 30 goals last season, never a multi-goal game: below the 40 floor for both.
+    # Plinker: 30 goals last season, never a multi-goal game: below the 35 and 40 floors.
     rows += skater_games(2, "Plinker Guy", 20252026, "2025-10-10", [1] * 30)
     rows += skater_games(2, "Plinker Guy", 20262027, "2026-10-10", [0] * 30, offset=100)
     # Wall: 5 shutouts in 50 starts last season, then 16 starts without one, plus a relief
@@ -89,7 +89,7 @@ def test_elite_scorer_on_a_drought_is_listed_for_two_goals_and_a_hat_trick() -> 
     assert hat["drought"] == 62 and hat["line"] == 2.5
     assert two["tier_bar"] == TWO["bar"] and hat["tier_bar"] == HAT["bar"]
     assert two["hit_rate"] == round(1 / 43, 3), "last season's share of games with 2+ goals"
-    assert two["cell_record"] == dr.BIG_GAMES_RECORDS[("two_goals", "40+")]
+    assert two["cell_record"] == dr.BIG_GAMES_RECORDS[("two_goals", "35+")]
     assert ("Plinker Guy", "two_goals") not in rows and ("Plinker Guy", "hat_trick") not in rows
 
 
