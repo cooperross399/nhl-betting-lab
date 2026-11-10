@@ -70,24 +70,20 @@ jobs:
       - name: Restore the last projection
         # Its daily award rankings are carried forward, so each name on the
         # Season page gets a trend line. Soft: without it the lines start
-        # today. Unpacked where the artifact is rooted, then moved straight
-        # out of dist to the runner's temp directory, so it can never be
-        # handed on in place of today's.
+        # today. Unpacked into a temporary directory beside the target, then
+        # moved into the runner's temp directory, never under dist, so it can
+        # never be handed on in place of today's. restore_state.py --limit 60: an
+        # hourly run with no new final uploads nothing and is passed over,
+        # and a day holds up to 23 of them between builds.
+        #
+        # The warning lives in scripts/season_sim_inputs.py, not here
+        # (2026-11-10): GitHub prints this block at the top of the step's
+        # log, so a warning written in it appeared in every run's log,
+        # restored or not.
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          set -u
-          mkdir -p "$RUNNER_TEMP/previous-season"
-          # --limit 60: an hourly run with no new final uploads nothing and is
-          # passed over, and a day holds up to 23 of them between builds.
-          if python scripts/restore_state.py --artifact season-sim --dest dist/data \
-               --workflow season-sim.yml --success-only --no-merge --attempts 2 --limit 60; then
-            mv dist/data/season.json "$RUNNER_TEMP/previous-season/season.json"
-          else
-            echo "::warning::The last season projection could not be restored; the award trend lines start today."
-          fi
-          rm -rf dist/data
+        run: python scripts/season_sim_inputs.py previous --into "$RUNNER_TEMP/previous-season"
 
       - name: Ask whether a game has gone final since
         # Only the hourly cron asks; the morning build and a dispatch always
@@ -115,22 +111,13 @@ jobs:
         # projection builds on its own ratings without it, says so in the
         # log and on the page, and a ratings file more than a few days older
         # than the standings is ignored by the model, not blended.
+        # As above, the warning lives in scripts/season_sim_inputs.py, which
+        # unpacks gameday-state into a temporary directory and keeps only
+        # the ratings file.
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          set -u
-          STATE=/tmp/gameday-state
-          mkdir -p "$STATE" data/processed
-          if python scripts/restore_state.py --artifact gameday-state --dest /tmp/gameday-state \
-               --workflow gameday-refresh.yml --no-merge --attempts 2 \
-             && [ -s "$STATE/processed/shadow_team_ratings.json" ]; then
-            cp "$STATE/processed/shadow_team_ratings.json" data/processed/
-            python -c "import json; d = json.load(open('data/processed/shadow_team_ratings.json')); print('Card ratings through', d['last_game_date'])"
-          else
-            echo "::warning::The card's team ratings could not be restored; the season is simulated on its own ratings."
-          fi
-          rm -rf "$STATE"
+        run: python scripts/season_sim_inputs.py ratings --into data/processed
 
       - name: Restore past seasons' stats
         if: steps.fresh.outputs.build == 'true'

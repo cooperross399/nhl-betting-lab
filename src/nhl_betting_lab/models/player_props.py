@@ -132,6 +132,40 @@ SOG_OPTIONS = frozenset({"dispersion", "shrinkage"})
 #: the bought card-window prices against +133.7u for the baseline.
 SOG_CARD_OPTIONS: frozenset[str] = frozenset()
 
+#: The points and assists fixes (Cooper, 2026-11-10: the model holds the
+#: points and assists unders about ten points likelier than they land). On
+#: the forward ledger the model's points and assists means ran 7.6% and 12.3%
+#: below what the players produced, worst for the highest-rated players
+#: (assists: actual = 1.20 x predicted), while goals sat level. Each part is a
+#: name so the walk-forward can price any subset against the old model.
+#:
+#: ``shrinkage``: a skater's points and assists rates are shrunk toward his
+#: position by an amount measured from the real spread of those rates
+#: (empirical Bayes, as `hits` does) rather than the 70,000 seconds every stat
+#: shares. Playmaking separates players more than the shared figure allows,
+#: so it pulled the league's best passers toward an average forward.
+#: ``pp_centred``: the power-play proxy multiplier is centred on 1.0 for
+#: points and assists. Uncentred it is 1 + 1.4 x (share - 0.12), and most
+#: skaters take far less than 12% of their club's power-play goals, so it
+#: took up to 12% off nearly every skater's rate, a rate already measured
+#: with his power-play production inside it.
+SCORING_OPTIONS = frozenset({"shrinkage", "pp_centred"})
+
+#: What the card fits: nothing. Measured walk-forward on 2023-24 to 2026-27
+#: (Points Model Study run 42841943839, `scripts/run_points_model_study.py`),
+#: no part passed the rule fixed before the run: neither improved 2026-27's
+#: log-likelihood for both markets with an interval above zero, and each
+#: widened the gap between the model and the hit rate on at least one side.
+#: The under bias on the card is selection, not the mean: across every
+#: opinion the old model's points under is level (0.700 model, 0.696 hit,
+#: 112,078 player-games), and every variant still holds the 6%-bar unders
+#: about ten points too likely. Kept so the parts can be measured again.
+SHIPPED_SCORING_OPTIONS: frozenset[str] = frozenset()
+
+#: The stats `SCORING_OPTIONS` act on. Goals are left alone: on the forward
+#: ledger the goals mean sat within 2% of what landed.
+SCORING_OPTION_STATS: tuple[str, ...] = ("points", "assists")
+
 
 def normalize_player_name(name: object) -> str:
     """A comparison key that removes representation without inventing identity.
@@ -355,9 +389,17 @@ class PlayerPropsModel:
     #: Bounds on the measured shots shrinkage, in seconds of ice time.
     SOG_SHRINKAGE_RANGE = (3_000.0, 70_000.0)
 
+    #: Bounds on the measured points and assists shrinkage, seconds of ice
+    #: time. The upper bound is the shared figure, so the measurement can only
+    #: ever trust a player's own record more, never less.
+    SCORING_SHRINKAGE_RANGE = (3_000.0, 70_000.0)
+    #: Games a skater needs to count toward the measured spread.
+    SCORING_MEASURE_GAMES = 30
+
     def __init__(
         self,
         hits_options: frozenset[str] | set[str] | None = None,
+        scoring_options: frozenset[str] | set[str] | None = None,
         sog_options: frozenset[str] | set[str] | None = None,
     ) -> None:
         #: Which parts of the hits model are fitted; the card fits all of
@@ -380,6 +422,22 @@ class PlayerPropsModel:
             raise ValueError(f"Unknown shots options {sorted(unknown)}; known {sorted(SOG_OPTIONS)}")
         #: Position group -> measured shots shrinkage, seconds of ice time.
         self.sog_shrinkage_seconds: dict[str, float] = {}
+        #: Which points/assists fixes are fitted (`SCORING_OPTIONS`); the
+        #: card fits `SHIPPED_SCORING_OPTIONS`, the walk-forward none unless
+        #: asked, so every committed measurement stands.
+        self.scoring_options = frozenset(
+            SHIPPED_SCORING_OPTIONS if scoring_options is None else scoring_options
+        )
+        unknown = self.scoring_options - SCORING_OPTIONS
+        if unknown:
+            raise ValueError(
+                f"Unknown scoring options {sorted(unknown)}; known {sorted(SCORING_OPTIONS)}"
+            )
+        #: Position group -> stat -> measured shrinkage, seconds of ice time.
+        self.scoring_shrinkage_seconds: dict[str, dict[str, float]] = {}
+        #: Position group -> the ice-time-weighted mean of the raw power-play
+        #: multiplier, which `pp_centred` divides out for points and assists.
+        self.pp_centre: dict[str, float] = {}
         #: Rink -> hits scorer factor (1.0 is the league). Keyed by the home
         #: club, whose rink it is.
         self.hits_rink_factors: dict[str, float] = {}
@@ -490,6 +548,7 @@ class PlayerPropsModel:
         self._fit_opponent_group_factors(skaters)
         self._fit_venue_factors(skaters)
         self._fit_skaters(skaters)
+        self._fit_scoring(skaters)
         self._fit_hits(skaters)
         self._fit_sog(skaters)
         self._fit_goalies(goalies)
@@ -806,6 +865,105 @@ class PlayerPropsModel:
         return Dispersion(
             mean=mean, variance=mean + mean * mean * inverse_r, samples=len(rows)
         )
+    def _fit_scoring(self, skaters: pd.DataFrame) -> None:
+        """Refit points and assists as `scoring_options` says.
+
+        `pp_centred`: per position group, the ice-time-weighted mean of the
+        raw power-play multiplier over the priced skaters, which
+        `pp_multiplier` divides out for points and assists, so the proxy moves
+        a first-unit regular up and a player who never sees the power play
+        down without moving the group's level.
+        `shrinkage`: per group and stat, sampling noise over the real spread
+        of per-second rates among skaters with `SCORING_MEASURE_GAMES` or
+        more games (`_measured_shrinkage`), in place of `SHRINKAGE_SECONDS`.
+        """
+        self.pp_centre = {}
+        self.scoring_shrinkage_seconds = {}
+        if not self.skaters:
+            return
+        if "pp_centred" in self.scoring_options:
+            for group in ("F", "D"):
+                priced = [r for r in self.skaters.values() if r.group == group]
+                seconds = sum(float(r.toi_seconds) for r in priced)
+                if seconds <= 0:
+                    continue
+                centre = sum(
+                    self._raw_pp_multiplier(r.pp_share) * float(r.toi_seconds)
+                    for r in priced
+                ) / seconds
+                if centre > 0:
+                    self.pp_centre[group] = centre
+        if "shrinkage" not in self.scoring_options:
+            return
+        sums = skaters.groupby("player_id")[["toi_seconds", *SCORING_OPTION_STATS]].sum()
+        for group in ("F", "D"):
+            self.scoring_shrinkage_seconds[group] = {
+                stat: self._measured_shrinkage(
+                    skaters, group, stat, self.SCORING_SHRINKAGE_RANGE,
+                    self.SCORING_MEASURE_GAMES,
+                )
+                for stat in SCORING_OPTION_STATS
+            }
+        for player_id, rates in list(self.skaters.items()):
+            if player_id not in sums.index:
+                continue
+            seconds = float(sums.at[player_id, "toi_seconds"])
+            if seconds <= 0:
+                continue
+            per60 = dict(rates.per60)
+            for stat in SCORING_OPTION_STATS:
+                baseline = self.baselines.get(rates.group, {}).get(stat, 0.0)
+                k = self.scoring_shrinkage_seconds.get(rates.group, {}).get(
+                    stat, float(self.SHRINKAGE_SECONDS)
+                )
+                weight = seconds / (seconds + k)
+                raw = float(sums.at[player_id, stat]) / seconds * 3600.0
+                per60[stat] = baseline + weight * (raw - baseline)
+            self.skaters[player_id] = replace(rates, per60=per60)
+
+    def _measured_shrinkage(
+        self,
+        skaters: pd.DataFrame,
+        group: str,
+        stat: str,
+        bounds: tuple[float, float],
+        minimum_games: int,
+    ) -> float:
+        """Empirical-Bayes shrinkage for one stat, in seconds of ice time.
+
+        Among skaters with `minimum_games` or more games, the spread of their
+        per-second rates minus the sampling noise expected at each one's ice
+        time (Poisson noise times the stat's dispersion) is the real spread
+        tau^2, and the shrinkage is phi * m / tau^2, held to `bounds`.
+        `SHRINKAGE_SECONDS` when too few skaters to measure.
+        """
+        low, high = bounds
+        rows = skaters[skaters["group"] == group]
+        per_player = rows.groupby("player_id").agg(
+            count=(stat, "sum"), seconds=("toi_seconds", "sum"), games=(stat, "size")
+        )
+        per_player = per_player[
+            (per_player["games"] >= minimum_games) & (per_player["seconds"] > 0)
+        ]
+        if len(per_player) < 20:
+            return float(self.SHRINKAGE_SECONDS)
+        rate = per_player["count"] / per_player["seconds"]
+        seconds = per_player["seconds"].astype(float)
+        mean = float(per_player["count"].sum() / seconds.sum())
+        if mean <= 0:
+            return float(self.SHRINKAGE_SECONDS)
+        # Game-to-game noise beyond Poisson: the stat's dispersion's
+        # variance-to-mean at a typical game's count.
+        dispersion = self.dispersion.get(stat)
+        per_game = float(per_player["count"].sum() / per_player["games"].sum())
+        r = dispersion.r if dispersion is not None else None
+        phi = 1.0 + (per_game / r if r else 0.0)
+        spread = float(np.average((rate - mean) ** 2, weights=seconds))
+        noise = float(np.average(phi * mean / seconds, weights=seconds))
+        tau2 = spread - noise
+        if tau2 <= 0:
+            return high
+        return float(min(max(phi * mean / tau2, low), high))
 
     def _hits_within_player_dispersion(self, regulars: pd.DataFrame) -> Dispersion | None:
         """Hits' negative-binomial spread inside each player's own games.
@@ -905,7 +1063,7 @@ class PlayerPropsModel:
         stat = "shots_on_goal"
         shrink = {
             group: self._measured_shrinkage(
-                skaters, group, stat, bounds=self.SOG_SHRINKAGE_RANGE
+                skaters, group, stat, self.SOG_SHRINKAGE_RANGE, self.HITS_MEASURE_GAMES
             )
             for group in ("F", "D")
         }
@@ -929,48 +1087,8 @@ class PlayerPropsModel:
 
     def _measured_hits_shrinkage(self, skaters: pd.DataFrame, group: str) -> float:
         return self._measured_shrinkage(
-            skaters, group, "hits", bounds=self.HITS_SHRINKAGE_RANGE
+            skaters, group, "hits", self.HITS_SHRINKAGE_RANGE, self.HITS_MEASURE_GAMES
         )
-
-    def _measured_shrinkage(
-        self,
-        skaters: pd.DataFrame,
-        group: str,
-        stat: str,
-        *,
-        bounds: tuple[float, float],
-    ) -> float:
-        """Empirical-Bayes shrinkage in seconds: phi * m / tau^2, where tau^2
-        is the spread of per-second rates beyond the noise each player's ice
-        time implies, phi the variance-to-mean of `stat`'s dispersion at a
-        typical game's count. Bounded by `bounds`."""
-        low, high = bounds
-        rows = skaters[skaters["group"] == group]
-        per_player = rows.groupby("player_id").agg(
-            hits=(stat, "sum"), seconds=("toi_seconds", "sum"), games=(stat, "size")
-        )
-        per_player = per_player[
-            (per_player["games"] >= self.HITS_MEASURE_GAMES) & (per_player["seconds"] > 0)
-        ]
-        if len(per_player) < 20:
-            return float(self.SHRINKAGE_SECONDS)
-        rate = per_player["hits"] / per_player["seconds"]
-        seconds = per_player["seconds"].astype(float)
-        mean = float(per_player["hits"].sum() / seconds.sum())
-        if mean <= 0:
-            return float(self.SHRINKAGE_SECONDS)
-        # Game-to-game noise beyond Poisson: the stat's dispersion's
-        # variance-to-mean at a typical game's count.
-        dispersion = self.dispersion.get(stat)
-        per_game = float(per_player["hits"].sum() / per_player["games"].sum())
-        r = dispersion.r if dispersion is not None else None
-        phi = 1.0 + (per_game / r if r else 0.0)
-        spread = float(np.average((rate - mean) ** 2, weights=seconds))
-        noise = float(np.average(phi * mean / seconds, weights=seconds))
-        tau2 = spread - noise
-        if tau2 <= 0:
-            return high
-        return float(min(max(phi * mean / tau2, low), high))
 
     def hits_rink_factor(self, arena: object) -> float:
         """Tonight's rink's hits scorer factor; 1.0 when it is not fitted."""
@@ -1079,7 +1197,15 @@ class PlayerPropsModel:
         # A player taking a fifth of his team's power-play goals is a first-unit
         # regular; one taking none is not. Mapped through a shallow curve and
         # then clamped, because the proxy is noisy.
-        raw = 1.0 + 1.4 * (rates.pp_share - 0.12)
+        multiplier = self._raw_pp_multiplier(rates.pp_share)
+        if stat in SCORING_OPTION_STATS and "pp_centred" in self.scoring_options:
+            centre = self.pp_centre.get(rates.group)
+            if centre:
+                multiplier /= centre
+        return multiplier
+
+    def _raw_pp_multiplier(self, share: float) -> float:
+        raw = 1.0 + 1.4 * (float(share) - 0.12)
         low, high = self.PP_MULTIPLIER_RANGE
         return min(max(raw, low), high)
 
