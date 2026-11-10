@@ -197,7 +197,13 @@ def test_nothing_reads_a_public_copy(tmp_path: Path) -> None:
     assert scripts == ["scripts/private_closing_store.py", "scripts/private_movement_chain.py",
                        "scripts/run_closing_line_value.py"]
     assert not (tmp_path / "records" / "gh.log").exists()
-    assert not (tmp_path / "records" / "git.log").exists()
+    # The one git call is the pick-timing report's fetch of this repository's
+    # own card-feed branch (aggregate cards only, never a capture). The stub
+    # refuses it, so the report is skipped with a warning and the step passes.
+    calls = _read(tmp_path, "git.log").splitlines()
+    assert calls == ["fetch --no-tags --quiet origin "
+                     "+refs/heads/card-feed:refs/remotes/origin/card-feed"]
+    assert "pick-timing report was not built" in result.stdout
 
 
 def test_the_chain_is_scored_beside_a_store_not_instead_of_it(tmp_path: Path) -> None:
