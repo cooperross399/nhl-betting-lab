@@ -51,6 +51,24 @@ from datetime import datetime, timedelta, timezone
 #: two hours spare; the account-wide worst, 7.38 h, was a 06:00 UTC cron.
 ROUND_LEAD = timedelta(hours=8)
 
+#: Gameday Refresh crons whose lead is not `ROUND_LEAD` (2026-11-09). GitHub
+#: started the 05:30 card cron up to 8.6 h late and skipped the 12:30
+#: afternoon cron outright on 2026-11-09, so every Gameday Refresh slot now
+#: has two crons: a primary fired 11 hours ahead, and the old 8-hour cron
+#: kept as a backup aimed 20 minutes after the slot, by when the primary's
+#: refresh has started and `slot_already_taken.py` stands the backup down.
+CRON_LEADS = {
+    "30 2 * 1-4,10-12 *": timedelta(hours=11),  # 13:30 card
+    "30 5 * 1-4,10-12 *": timedelta(hours=8, minutes=20),  # 13:50 backup
+    "30 9 * 1-4,10-12 *": timedelta(hours=11),  # 20:30 afternoon update
+    "30 12 * 1-4,10-12 *": timedelta(hours=8, minutes=20),  # 20:50 backup
+    "30 11 * 1-4,10-12 *": timedelta(hours=11),  # 22:30 pre-game update
+    "30 14 * 1-4,10-12 *": timedelta(hours=8, minutes=20),  # 22:50 backup
+}
+
+#: The longest lead any cron carries; two wait jobs must cover it.
+MAX_LEAD = max([ROUND_LEAD, *CRON_LEADS.values()])
+
 #: The furthest ahead a hand-started run may be told to wait: two jobs of at
 #: most six hours each, less the time the capture itself needs.
 MAX_AT_AHEAD = timedelta(hours=11)
@@ -65,7 +83,7 @@ def round_for(schedule: str, now: datetime) -> datetime:
     fired = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
     if fired > now:
         fired -= timedelta(days=1)
-    return fired + ROUND_LEAD
+    return fired + CRON_LEADS.get(" ".join(fields), ROUND_LEAD)
 
 
 def parse_at(value: str, now: datetime) -> datetime:

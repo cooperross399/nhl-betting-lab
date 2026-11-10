@@ -3271,6 +3271,21 @@ Re-derive rather than trust if the data has moved.
   bars, market list and staking rule are unchanged; only the card's
   self-learned edges (and so its selections) and the listing move.
 
+- **2026-11-09: every Gameday Refresh slot has two crons, and runs once
+  (Cooper: "Yes do all 4").** GitHub started the 05:30 card cron up to 8.6
+  hours late and never ran the 12:30 cron behind the 20:30 afternoon update
+  on 2026-11-09. Each slot now has a primary cron fired 11 hours ahead
+  (`30 2`, `30 9`, `30 11` for 13:30, 20:30 and 22:30 UTC) and keeps its old
+  cron as a backup aimed 20 minutes after the slot (`30 5`, `30 12`, `30 14`
+  now wait to 13:50, 20:50 and 22:50; `wait_for_round.CRON_LEADS`); the 15:00
+  backup is unchanged. The precheck first asks
+  `scripts/slot_already_taken.py` whether another run's "Gameday Refresh" job
+  started no earlier than 30 minutes before the slot and is running or
+  succeeded, a hand dispatch included, and stands down if so; anything it
+  cannot read counts as free. No cap, gate, card rule or contract string
+  changed; a day both crons arrive and the check misses can cost one extra
+  re-price.
+
 ## Contract strings — never change these
 
 Cooper's local scheduled tasks hard-code these. Renaming any of them silently

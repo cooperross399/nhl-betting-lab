@@ -53,8 +53,18 @@ on:
     # the routines that read the card and at the first 17:00 ET face-off.
     # Lateness up to eight hours now costs nothing. Moving a slot means
     # moving its cron to eight hours before it.
+    #
+    # TWO CRONS A SLOT (2026-11-09). Lateness reached 8.6 h on the 05:30
+    # cron, and on 2026-11-09 the 12:30 cron never ran at all, so the 20:30
+    # update was lost. Each slot now has a primary fired 11 hours ahead and
+    # the old 8-hour cron as a backup aimed 20 minutes after the slot
+    # (`wait_for_round.CRON_LEADS`); the precheck stands the backup down when
+    # another run's refresh already started for the slot
+    # (scripts/slot_already_taken.py).
+    - cron: "30 2 * 1-4,10-12 *"
     - cron: "30 5 * 1-4,10-12 *"
     - cron: "0 7 * 1-4,10-12 *"
+    - cron: "30 9 * 1-4,10-12 *"
     # 20:30 UTC (4:30 PM EDT, 3:30 PM EST): the afternoon update. Books post
     # blocked shots, hits and goalie saves late in the day; at the 13:30 card
     # they were priced for 0-3 games of most slates, and on the one afternoon
@@ -65,6 +75,7 @@ on:
     # and the day's first frozen snapshot still stands, so the forward ledger
     # is the morning's. Up to 646 credits a run at the 640 cap.
     - cron: "30 12 * 1-4,10-12 *"
+    - cron: "30 11 * 1-4,10-12 *"
     # 22:30 UTC (6:30 PM EDT, 5:30 PM EST): the pre-game update (Cooper,
     # 2026-10-21, "a re-price closer to puck drop"). Morning skates are over,
     # most starting goalies are confirmed and the posted lines are final, so
@@ -203,14 +214,25 @@ jobs:
             echo "Manual run: never skipped."
             exit 0
           fi
+          # Two crons serve each slot; whichever arrives second stands down
+          # once another run's refresh has started for the slot.
+          TAKEN=$(python3 scripts/slot_already_taken.py --schedule "${SCHEDULE:-}" \
+            --run-id "${GITHUB_RUN_ID:-}" --repo "${GITHUB_REPOSITORY:-}" || echo "free")
+          echo "$TAKEN"
+          case "$TAKEN" in
+            taken*)
+              echo "already=true" >> "$GITHUB_OUTPUT"
+              exit 0
+              ;;
+          esac
           # The afternoon update exists to re-price a slate whose morning
           # card is already out, so a clean morning card never stands it down.
-          if [ "${SCHEDULE:-}" = "30 12 * 1-4,10-12 *" ]; then
+          if [ "${SCHEDULE:-}" = "30 12 * 1-4,10-12 *" ] || [ "${SCHEDULE:-}" = "30 9 * 1-4,10-12 *" ]; then
             echo "already=false" >> "$GITHUB_OUTPUT"
             echo "Afternoon update: never skipped."
             exit 0
           fi
-          if [ "${SCHEDULE:-}" = "30 14 * 1-4,10-12 *" ]; then
+          if [ "${SCHEDULE:-}" = "30 14 * 1-4,10-12 *" ] || [ "${SCHEDULE:-}" = "30 11 * 1-4,10-12 *" ]; then
             echo "already=false" >> "$GITHUB_OUTPUT"
             echo "Pre-game update: never skipped."
             exit 0
