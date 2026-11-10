@@ -57,6 +57,19 @@ SPANS = "no demonstrated CLV"
 LOSES = "loses to the close"
 THIN = "too few to judge"
 
+#: (market, side) whose CLV bump is held at x1. A cut below x1 still applies.
+#: Cooper's decision of 2026-11-10 (via the coordinator): since 2026-10-28
+#: the forward ledger's population B `shots_on_goal` overs hit 14.8% where
+#: the model said 26.7% (310 wagers, -93.1u at 1u, best frozen price), so a
+#: market-level CLV verdict must not size the overs up until the over model
+#: is fixed.
+BUMP_HELD_SIDES: dict[tuple[str, str], str] = {
+    ("shots_on_goal", "over"): (
+        "`shots_on_goal` overs keep x1 until the over model is fixed: since "
+        "2026-10-28 they hit 14.8% against a model 26.7% (310 wagers, -93.1u)"
+    ),
+}
+
 
 def market_table(report: Mapping[str, Any], *, generated: str) -> dict[str, Any]:
     """The per-market CLV of the bets (population B), from `build_clv_report`."""
@@ -153,9 +166,12 @@ def load_table(
     return table, ""
 
 
-def stake_multiplier(market: str, table: Mapping[str, Any] | None) -> tuple[float, str]:
+def stake_multiplier(
+    market: str, table: Mapping[str, Any] | None, selection: str = ""
+) -> tuple[float, str]:
     """(multiplier, reason) for a best bet in `market`. 1.0 and "" when the
-    table says nothing about it."""
+    table says nothing about it. A side in `BUMP_HELD_SIDES` never goes
+    above x1, and its reason says so."""
     if not table:
         return 1.0, ""
     row = (table.get("markets") or {}).get(market)
@@ -164,6 +180,9 @@ def stake_multiplier(market: str, table: Mapping[str, Any] | None) -> tuple[floa
     verdict, multiplier = classify(row)
     if multiplier == 1.0:
         return 1.0, ""
+    held = BUMP_HELD_SIDES.get((market, str(selection or "").lower()))
+    if held and multiplier > 1.0:
+        return 1.0, f"CLV: `{market}` {verdict} (x{multiplier:g}) held at x1; {held}"
     return multiplier, (
         f"CLV: `{market}` {verdict} ({_pct(row.get('mean_clv'))} over "
         f"{int(row.get('wagers') or 0):,} bets, [{_pct(row.get('low'))}, "

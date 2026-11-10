@@ -3563,6 +3563,14 @@ Re-derive rather than trust if the data has moved.
   frozen before `build_card`, so the forward ledger and the 2027-04-25 test
   are unchanged; only stakes move. The model, the edge bars, the market list
   and the stats, bracket and starter checks are unchanged.
+  **Same day, Cooper's decision (via the coordinator): `shots_on_goal`
+  overs take no CLV bump.** Since 2026-10-28 the forward ledger's
+  population B `shots_on_goal` overs hit 14.8% where the model said 26.7%
+  (310 wagers, -93.1u at 1u, best frozen price), so a market verdict must
+  not size them up while the over model is wrong.
+  `clv_staking.BUMP_HELD_SIDES` holds (`shots_on_goal`, `over`) at x1 (a cut
+  below x1 still applies) and the row's `stake_reason` names the hold; the
+  unders keep x1.5. It lifts when the over model is fixed. Stakes only.
 - **2026-11-10: picks first listed by the afternoon and pre-game re-prices
   do not demonstrably trail the morning card, so nothing changed.** Cooper
   asked whether later picks are worse ("ALL"). `scripts/run_pick_timing.py`,
