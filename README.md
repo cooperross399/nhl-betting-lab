@@ -437,6 +437,12 @@ PYTHONPATH=src .venv/bin/python scripts/run_scoring_environment.py --history-dir
 # bought hits prices, overs and unders apart (Hits Model Study workflow).
 PYTHONPATH=src .venv/bin/python scripts/run_hits_model_study.py
 
+# Does shots on goal's own-games spread (and its measured shrinkage) price
+# shots better? Walk-forward on outcomes, calibration by line, the bought
+# card-window prices, and a forward-ledger replay, under the rule fixed in
+# docs/sog_dispersion_decision_rule.md (Shots Model Study workflow, no credit).
+PYTHONPATH=src .venv/bin/python scripts/run_sog_model_study.py
+
 # Do a centred power-play proxy or a measured shrinkage fix the low points
 # and assists means? Walk-forward on outcomes, the bought prices and the
 # forward ledger, by side, against a rule fixed in the script

@@ -3603,6 +3603,45 @@ Re-derive rather than trust if the data has moved.
   is unchanged, and the spread is an open defect: a within-player spread for
   shots (as hits has) needs its walk-forward measurement on the bought
   prices before it ships, since a thinner spread lost units here.
+  **Same day: that within-player spread was built and measured, and it
+  fails its rule, so the card and the hold are unchanged.**
+  `player_props.SOG_OPTIONS` = {`dispersion`, `shrinkage`}: shots' spread
+  measured inside each player's own games (the hits method of moments, no
+  rink), with the shot rate's empirical-Bayes shrinkage measured against it
+  (bounds 3,000-70,000 s). Off in the walk-forward by default and off on the
+  card (`SOG_CARD_OPTIONS` empty). The rule was fixed before the run
+  (`docs/sog_dispersion_decision_rule.md`): out-of-sample log-likelihood up
+  with its interval above zero, AND units on the bought card-window prices
+  not below zero nor below the baseline, AND the same on the forward-ledger
+  replay. Shots Model Study runs 42847594029 and 42849637805 (identical
+  numbers):
+  1. **Log-likelihood passes**: +0.0114 per player-game [+0.0102, +0.0126]
+     over 133,358 walk-forward player-games (spread alone +0.0045
+     [+0.0035, +0.0056]). Measured inside players' own games, shots are no
+     wider than Poisson: 95.7% of rows price Poisson (the rest are early
+     refits short of 20 players with 30 games, which keep r = 4.4).
+     Calibration of the over, predicted / observed: 1.5 0.450 / 0.445
+     baseline, 0.472 candidate; 2.5 0.249 / 0.233, 0.247; 3.5 0.130 / 0.111,
+     0.116; 4.5 0.066 / 0.049, 0.050. So the thinner spread fixes the
+     high-line tail and overstates 1.5.
+  2. **Bought card-window prices fail** (6% bar, one bet per wager):
+     baseline **+133.7u over 9,325, +1.43% [-0.65%, +3.52%]** (overs +4.6u
+     over 355, unders +129.1u over 8,970); candidate **-62.4u over 8,279,
+     -0.75% [-2.86%, +1.35%]** (overs -88.9u over 5,918, -1.50% [-4.00%,
+     +0.99%]; unders +26.5u over 2,361). The thinner spread turns the card
+     from 96% unders to 71% overs, and those overs
+     lose.
+  3. **Ledger replay passes** (33,505 of 33,574 settled shots wagers from
+     09-29 re-priced, refit weekly; correlation 0.994 with the frozen
+     probability; population B): baseline +10.3u over 2,221, +0.46% [-5.96%,
+     +6.89%], overs -90.4u over 623 (hit 19.3%, modelled 28.2%); candidate
+     +28.3u over 2,269, +1.25% [-3.71%, +6.20%], overs -40.4u over 1,425
+     (hit 43.1%, modelled 53.0%), unders +68.6u over 844.
+  Every interval spans zero: no demonstrated edge for either. It fails
+  condition 2, so nothing moves on the card and the x1 hold on
+  `shots_on_goal` overs stays. Its overs still overstate their chance by
+  about ten points on the ledger, which is cause (2) above, the mean, and
+  a spread cannot fix that.
 - **2026-11-10: picks first listed by the afternoon and pre-game re-prices
   do not demonstrably trail the morning card, so nothing changed.** Cooper
   asked whether later picks are worse ("ALL"). `scripts/run_pick_timing.py`,
