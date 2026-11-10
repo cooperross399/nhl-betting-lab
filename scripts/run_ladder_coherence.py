@@ -60,6 +60,18 @@ CAPTURE_MOMENT = "captured_at"
 #: What every day file must carry for its rows to be scanned: the ladder
 #: identity except its moment, and the rung itself. The moment is checked on
 #: its own, because a file may carry it as `snapshot` or as `captured_at`.
+#: The column each row is tagged with: the stem of the day file it came
+#: from (the league day `capture_line_movement.py` appended it to).
+CAPTURE_DAY = "capture_day"
+
+#: The registered feasibility checkpoint, copied from
+#: `docs/pre_registered_ladder_coherence.md` and never moved: on 2026-10-15,
+#: the route is closed unless the first seventeen days (2026-09-29 through
+#: 2026-10-15) carried at least 2,000 ladders with two or more de-viggable
+#: rungs. The window is the day files named on or before this date.
+CHECKPOINT_DAY = "2026-10-15"
+CHECKPOINT_DEPTH_FLOOR = 2_000
+
 REQUIRED_COLUMNS: tuple[str, ...] = (
     *(name for name in LADDER_KEY if name != "snapshot"),
     "line",
@@ -173,7 +185,7 @@ def load_captures(
         frame = frame[~team_market_rows(frame)]
         if frame.empty:
             continue
-        frames.append(frame)
+        frames.append(frame.assign(**{CAPTURE_DAY: path.stem}))
         read.append(path.name)
     if not frames:
         return pd.DataFrame(), read
@@ -207,6 +219,27 @@ def _say_unreadable(damaged: list[dict]) -> None:
             "other day is still counted, and the report names this one.",
             file=sys.stderr,
         )
+
+
+def checkpoint_window(depth_by_day: dict[str, int], files: list[str]) -> dict:
+    """The registered depth over the day files on or before the checkpoint.
+
+    Day files are named by their league day (`YYYY-MM-DD.csv`), so the
+    window is read off the name, as the registration words it ("the first
+    seventeen days"). A file with no de-viggable ladder still counts as a
+    capture read in the window.
+    """
+    in_window = [name for name in files if Path(name).stem <= CHECKPOINT_DAY]
+    depth = sum(
+        count for day, count in depth_by_day.items() if day <= CHECKPOINT_DAY
+    )
+    return {
+        "through": CHECKPOINT_DAY,
+        "captures": len(in_window),
+        "ladders_with_two_rungs": int(depth),
+        "floor": CHECKPOINT_DEPTH_FLOOR,
+        "clears_floor": bool(depth >= CHECKPOINT_DEPTH_FLOOR),
+    }
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -276,8 +309,25 @@ def main(argv: list[str] | None = None) -> int:
         return exit_code
 
     prices = with_ladder_moment(prices)
-    found, scan = find_violations(prices[prices["line"].notna()].copy())
+    found, scan = find_violations(
+        prices[prices["line"].notna()].copy(), depth_by=CAPTURE_DAY
+    )
     print(scan.summary_line())
+    checkpoint = checkpoint_window(scan.depth_by, files)
+    # THE REGISTERED NUMBERS GO TO THE LOG, NOT ONLY TO THE RUN SUMMARY.
+    # Until 2026-11-10 the depth reached only the step summary and the
+    # `ladder-coherence` artifact, neither of which a reader without
+    # download access can open, while the log printed every count but the
+    # registered one; and only the cumulative depth was counted, which after
+    # 2026-10-15 cannot say what the first seventeen days held.
+    print(
+        f"Registered depth (ladders with two or more de-viggable rungs): "
+        f"{scan.ladders_with_two_rungs} across all {len(files)} capture(s); "
+        f"{checkpoint['ladders_with_two_rungs']} in the checkpoint window "
+        f"(day files through {CHECKPOINT_DAY}, {checkpoint['captures']} "
+        f"capture(s)), against the registered floor of "
+        f"{CHECKPOINT_DEPTH_FLOOR:,}."
+    )
 
     by_class = (
         found["ladder_class"].value_counts().to_dict() if not found.empty else {}
@@ -297,6 +347,10 @@ def main(argv: list[str] | None = None) -> int:
         "by_class": {name: int(by_class.get(name, 0)) for name, _ in LADDER_CLASSES},
         # Each day file left out of every count above, with the reason.
         "unreadable_captures": damaged,
+        # The registered depth inside the checkpoint's own window, and per
+        # day file: counts of ladders only, no price, line or book.
+        "checkpoint_window": checkpoint,
+        "ladders_with_two_rungs_by_day": dict(sorted(scan.depth_by.items())),
     }
     (outputs / "ladder_coherence.json").write_text(
         json.dumps(record, indent=2) + "\n", encoding="utf-8"
@@ -324,6 +378,11 @@ def main(argv: list[str] | None = None) -> int:
         f"- **Ladders with two or more de-viggable rungs: {depth}** — the "
         "2026-10-15 checkpoint reads this. Two seasons of bought history "
         "produced 57.",
+        f"- **In the checkpoint window** (day files through {CHECKPOINT_DAY}, "
+        f"{checkpoint['captures']} capture(s)): "
+        f"{checkpoint['ladders_with_two_rungs']}, against the registered "
+        f"floor of {CHECKPOINT_DEPTH_FLOOR:,}. This is the number the "
+        "registration reads; the line above is every capture since.",
         f"- {scan.summary_line()}",
         "",
     ]
