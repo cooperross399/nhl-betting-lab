@@ -437,6 +437,12 @@ PYTHONPATH=src .venv/bin/python scripts/run_scoring_environment.py --history-dir
 # bought hits prices, overs and unders apart (Hits Model Study workflow).
 PYTHONPATH=src .venv/bin/python scripts/run_hits_model_study.py
 
+# Do a centred power-play proxy or a measured shrinkage fix the low points
+# and assists means? Walk-forward on outcomes, the bought prices and the
+# forward ledger, by side, against a rule fixed in the script
+# (Points Model Study workflow, no credit). Neither shipped on 2026-11-10.
+PYTHONPATH=src .venv/bin/python scripts/run_points_model_study.py
+
 # Which Due List settings are best? Searches the qualifier, drought bar and
 # price window, scores each season's winner on the other season, and runs the
 # same search on no-edge simulations. Changes no setting (Due List Tuning

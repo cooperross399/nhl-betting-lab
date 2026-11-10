@@ -3655,6 +3655,49 @@ Re-derive rather than trust if the data has moved.
   questionable status is now never out, whatever group he is filed in. The
   same run moved six goalies onto their noted return dates (Lyon, Andersen,
   Gustavsson, Shesterkin, Merzlikins, Demko), as the notes already had them.
+- **2026-11-10: the points and assists under bias was diagnosed, two fixes
+  were measured, and neither ships (Cooper's request of 2026-11-10; a
+  measurement, not a defect fix; the card, snapshot, forward ledger and
+  2027-04-25 test are unchanged).** The 2026-11-09 entry found population B
+  holding the points under at 0.666 against a 0.551 hit rate. Read off the
+  forward ledger's own frozen opinions (every settled opinion, both sides,
+  no bar), all priced as Poisson: points mean 0.558 against 0.600 landed
+  over 6,454 player-games (-7.6%), assists 0.378 against 0.424 over 5,126
+  (-12.3%, actual = 1.20 x predicted), goals 0.179 against 0.183 over 8,914;
+  once the mean is scaled to what landed the Pearson dispersion is 1.02 and
+  0.99, so the shape is right and the level low. Two candidate causes, built
+  as `player_props.SCORING_OPTIONS` (`pp_centred`: the power-play proxy,
+  1 + 1.4 x (share - 0.12), averages about 0.94 for forwards, so it trims
+  nearly every skater's rate; `shrinkage`: an empirical-Bayes shrinkage for
+  points and assists in place of the shared 70,000 seconds). Measured by
+  `scripts/run_points_model_study.py` (**Points Model Study** run
+  42841943839; walk-forward 2023-24 to 2026-27 priced as the card prices,
+  with form, matchup by position and the scoring environment; 133,358
+  player-games, 9,358 in 2026-27) under a rule fixed before the run (both
+  markets: log-likelihood gain above zero pooled AND in 2026-27, and no
+  wider model-to-hit gap on either side at over 0.5). **No variant passed:**
+  pooled log-likelihood per player-game vs old, points +0.0004
+  [+0.0000, +0.0007] centred, +0.0005 [+0.0000, +0.0009] shrinkage, +0.0008
+  [+0.0003, +0.0014] both; in 2026-27 alone every points interval spans zero
+  (both +0.0017 [-0.0002, +0.0037]); centring and shrinkage widened the
+  under gap, both together the over gap (points overs 0.612 model / 0.592
+  hit against 0.591 / 0.608). **The diagnosis: the bias on the card is
+  selection, not the mean.** Across every walk-forward opinion the old
+  model's points under is level (leans under: 0.700 model, 0.696 hit,
+  112,078 player-games; assists 0.768 / 0.762, 130,788). Selected at the 6%
+  bar the gap is about ten points in every variant: bought prices (`card`
+  window) points unders old 0.622 model / 0.513 hit / 0.530 price over
+  6,534, -3.5% [-6.1%, -0.9%]; both fixes 0.633 / 0.527 / 0.544 over 2,794,
+  -3.4% [-7.3%, +0.6%]; forward ledger points unders old 0.668 / 0.519 /
+  0.575 over 1,037, -11.2% [-18.2%, -4.1%]; both 0.678 / 0.531 / 0.587 over
+  599, -10.4% [-18.4%, -2.5%]. Where the model disagrees with the price it is
+  the model that is wrong, as `docs/why_the_model_has_no_edge.md` already
+  measured; a level fix moves which wagers clear the bar, not that. So
+  `SHIPPED_SCORING_OPTIONS` is empty, the parts stay for a later measurement,
+  and **`LEAN_EXCLUDED_SIDES` should keep the points and assists unders**:
+  nothing here corrects them. Uncorrected, three variants on one dataset;
+  every price interval cited for a fix spans zero or sits below it: no
+  demonstrated edge.
 - **2026-11-10, a performance fix the ladder registration permits: the
   ladder scan is incremental.** `run_ladder_coherence.py` rescanned every
   day file the chain holds on every Line Movement round (6.4-15.9 minutes
