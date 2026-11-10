@@ -209,6 +209,11 @@ DF_TEAM_ALIASES = {"TB": "TBL", "NJ": "NJD", "LA": "LAK", "SJ": "SJS", "UTAH": "
 OUT_STATUSES = frozenset({"ir", "ltir", "ir-nr", "ir-lt", "out", "injured reserve",
                           "long-term injured reserve", "suspended", "inj", "injured"})
 
+#: Statuses that mean he may play any night: never out, whatever group the
+#: site files him in.
+DAY_TO_DAY_STATUSES = frozenset({"dtd", "day-to-day", "day to day", "gtd", "game-time decision",
+                                 "questionable", "probable"})
+
 #: Starting-goalie labels that say he is starting tonight. "Unconfirmed" is
 #: the site's guess from the rotation and can name a goalie who is hurt.
 STARTER_STRENGTHS = frozenset({"confirmed", "likely", "expected"})
@@ -255,6 +260,10 @@ def goalie_availability(availability: dict | None, goalies: dict[str, list[dict]
     for row in availability.get("df_players") or []:
         group = str(row.get("group_identifier") or "").strip().casefold()
         status = str(row.get("injury_status") or "").strip().casefold()
+        if status in DAY_TO_DAY_STATUSES:
+            # Daily Faceoff files day-to-day players in its injury group too;
+            # a goalie listed DTD on 2026-11-10 (John Gibson) lost every start
+            continue
         if not (group.startswith("ir") or status in OUT_STATUSES):
             continue
         key = find(row.get("player", ""), row.get("team_abbreviation", ""))
