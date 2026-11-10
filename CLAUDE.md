@@ -3563,6 +3563,46 @@ Re-derive rather than trust if the data has moved.
   frozen before `build_card`, so the forward ledger and the 2027-04-25 test
   are unchanged; only stakes move. The model, the edge bars, the market list
   and the stats, bracket and starter checks are unchanged.
+  **Same day, Cooper's decision (via the coordinator): `shots_on_goal`
+  overs take no CLV bump.** Since 2026-10-28 the forward ledger's
+  population B `shots_on_goal` overs hit 14.8% where the model said 26.7%
+  (310 wagers, -93.1u at 1u, best frozen price), so a market verdict must
+  not size them up while the over model is wrong.
+  `clv_staking.BUMP_HELD_SIDES` holds (`shots_on_goal`, `over`) at x1 (a cut
+  below x1 still applies) and the row's `stake_reason` names the hold; the
+  unders keep x1.5. It lifts when the over model is fixed. Stakes only.
+  **The diagnosis, and why no fix shipped** (card-feed's ledger through
+  2026-11-09, one wager per selection at the best frozen price, 1u, read
+  directly from the ledger's `edge`; this count gives 319 overs at -50.5u
+  since 10-28, where the coordinator's read was 310 at -93.1u). Population B
+  overs since 10-28: hit 16.0% against 19.0% implied and 26.8% modelled;
+  before 10-28 they made +84.3u over 628. Two causes, measured on 4,039
+  settled shots player-nights whose ladder fixes the model's mean and
+  spread (every one fits NB with r = 4.37, the one league-wide spread):
+  (1) **the spread is far too wide.** The mean is calibrated (predicted
+  2.15, actual 2.14), but realised excess variance gives 1/r = 0.047 (r
+  about 21, the same in both halves) against the model's 0.229, because the
+  spread is measured on the whole column, counting player-to-player
+  differences as game noise (the defect hits' own-games spread fixed). A
+  thinner spread scores better out of sample: log-likelihood per
+  player-game +0.019 [+0.014, +0.024] at r = 20 (Poisson +0.016). It inflates
+  every high-rung over: across all opinions the model gave 5.5+ overs 5.8%
+  where 4.5% landed. (2) **the overs it picks are where its mean runs
+  high.** On the over player-nights population B picked, the model's mean
+  beat the realised count by 0.27 shots (175, to 10-21), 0.38 (69, 10-22 to
+  10-27) and 0.50 (139, from 10-28); on the unders it fell short by 0.20 to
+  0.27. Regressing the count on the model's mean and the de-vigged market's,
+  the model's carries 0.20 and the market's 0.91. **Neither repair fixes
+  the settled overs.** Re-priced on the frozen prices at r = 20, population
+  B overs since 10-28 go from -21.9u over 313 to -40.1u over 289 (-13.9%
+  [-38.0%, +10.3%]); since 09-29 from +54.2u to +9.8u. Moving the mean
+  toward the market by the weight fitted before 10-28 (0.30) helps the
+  log-likelihood (+0.010 from 10-28) and leaves 16 overs, all lost: shrinking
+  toward the market is raising the bar, as recorded above. Every interval
+  spans zero: no demonstrated edge either way. So the hold stays, the model
+  is unchanged, and the spread is an open defect: a within-player spread for
+  shots (as hits has) needs its walk-forward measurement on the bought
+  prices before it ships, since a thinner spread lost units here.
 - **2026-11-10: picks first listed by the afternoon and pre-game re-prices
   do not demonstrably trail the morning card, so nothing changed.** Cooper
   asked whether later picks are worse ("ALL"). `scripts/run_pick_timing.py`,
@@ -3658,6 +3698,43 @@ Re-derive rather than trust if the data has moved.
   nothing here corrects them. Uncorrected, three variants on one dataset;
   every price interval cited for a fix spans zero or sits below it: no
   demonstrated edge.
+- **2026-11-10, a performance fix the ladder registration permits: the
+  ladder scan is incremental.** `run_ladder_coherence.py` rescanned every
+  day file the chain holds on every Line Movement round (6.4-15.9 minutes
+  by 2026-11-10 over 43 days, growing; #447 raised the job to 45 minutes).
+  With `--cache-dir` it keeps each readable day's counts in
+  `ladder_scan_cache.json`, keyed on the day file's name, the SHA-256 of its
+  bytes and the detector's fingerprint (the script, `ladder_coherence.py`,
+  `closing_lines.py`, `stores.py`, `models/value.py`, pandas and numpy
+  versions), and reads only new or changed days; a damaged day is never
+  cached, so it is read and named every run. One round appends to one day
+  file and a ladder is one book at one instant, so every count is a sum over
+  days, and the report, JSON, checkpoint window, per-day depth, violations,
+  `unreadable_captures` and the `--fail-on-day` exit are byte for byte a
+  full scan's (`tests/test_the_ladder_scan_is_incremental.py`, against the
+  old concatenated scan). Line Movement keeps the cache in
+  `$RUNNER_TEMP/ladder-scan-cache` through `actions/cache` (`ladder-scan-`
+  keys): counts and hashes only, no price, line, book, player or event, and
+  no upload names it. A synthetic 20-day, 237k-row chain: 23 s full, 0.0 s
+  warm, 1.4 s with today's file changed. No threshold, band, floor, date or
+  registered count moved.
+- **2026-11-10: Season Sim's restore warnings were the step scripts, not
+  failures, and three roster-note names are matched. Site only.** Run
+  42837197651's log carried "The last season projection could not be
+  restored" and "The card's team ratings could not be restored" because both
+  sentences sat in the steps' `run:` blocks, which GitHub prints at the top
+  of every step log; that run had restored both (projection from run
+  42832549612, card ratings through 2026-11-09, blended at 0.50), and none
+  of the 40 runs before it had failed either. Both restores are now
+  `scripts/season_sim_inputs.py` (`previous`, `ratings`; the same
+  `restore_state.py` calls), which prints a warning only when it happens.
+  The roster-note warnings were real: start shares were compared with the
+  roster's spelling exactly ("Arvid Soderblom", "Rémi Poirier"), and skater
+  and goalie names likewise; `season_sim/model.py` now falls back to the
+  folded name (accents, case, punctuation) when exactly one player has it.
+  Dylan Larkin, suspended off DET's roster, moved from `out` to `returning`
+  with his birth date (1996-07-30). A share that still matches no rostered
+  goalie now names the club's rostered goalies in its warning.
 
 ## Contract strings — never change these
 

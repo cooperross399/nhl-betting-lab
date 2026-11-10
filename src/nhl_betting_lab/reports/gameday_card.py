@@ -799,7 +799,7 @@ def build_candidates(
             passes.append(candidate)
             continue
         if candidate.section == BEST_BETS_SECTION:
-            multiplier, why = stake_multiplier(market_key, clv_table)
+            multiplier, why = stake_multiplier(market_key, clv_table, selection)
             candidate.suggested_units = round(
                 TIER_UNITS.get(candidate.tier, 0.1) * multiplier, 3
             )
