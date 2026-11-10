@@ -136,8 +136,16 @@ HITS_OPTIONS = frozenset({"rink", "shrinkage", "recency", "dispersion"})
 #: with his power-play production inside it.
 SCORING_OPTIONS = frozenset({"shrinkage", "pp_centred"})
 
-#: What the card fits. The walk-forward fits none unless asked.
-SHIPPED_SCORING_OPTIONS = SCORING_OPTIONS
+#: What the card fits: nothing. Measured walk-forward on 2023-24 to 2026-27
+#: (Points Model Study run 42841943839, `scripts/run_points_model_study.py`),
+#: no part passed the rule fixed before the run: neither improved 2026-27's
+#: log-likelihood for both markets with an interval above zero, and each
+#: widened the gap between the model and the hit rate on at least one side.
+#: The under bias on the card is selection, not the mean: across every
+#: opinion the old model's points under is level (0.700 model, 0.696 hit,
+#: 112,078 player-games), and every variant still holds the 6%-bar unders
+#: about ten points too likely. Kept so the parts can be measured again.
+SHIPPED_SCORING_OPTIONS: frozenset[str] = frozenset()
 
 #: The stats `SCORING_OPTIONS` act on. Goals are left alone: on the forward
 #: ledger the goals mean sat within 2% of what landed.
