@@ -29,6 +29,8 @@ from nhl_betting_lab.data.build_datasets import load_player_logs, load_team_game
 from nhl_betting_lab.models.saves_context import SavesInputs
 from nhl_betting_lab.data.nhl_api import current_birth_dates, current_rosters
 from nhl_betting_lab.data.starting_goalies import load_starters
+from nhl_betting_lab.layer_scorecard import load_scorecard as load_layer_scorecard
+from nhl_betting_lab.layer_scorecard import render_scorecard as render_layer_scorecard
 from nhl_betting_lab.drought_forward import build_scorecard, load_ledger, record_list, render_scorecard
 from nhl_betting_lab.drought_rule import (
     SITE_LIST_FILENAME,
@@ -1089,6 +1091,12 @@ def main(argv: list[str] | None = None) -> int:
             )
         except (KeyError, ValueError, OSError) as exc:
             print(f"::warning::The Due List scorecard could not be built: {exc}")
+        # The layer scorecard (Cooper, 2026-11-10): the weekly Layer Scoring
+        # run's verdict on each model layer, restored by Gameday Refresh.
+        try:
+            card.layer_scorecard = render_layer_scorecard(load_layer_scorecard(outputs), snapshot_day)
+        except (KeyError, ValueError, TypeError, OSError) as exc:
+            print(f"::warning::The layer scorecard could not be rendered: {exc}")
     if drought.removed_by_guard:
         card.drought_notes.append(
             f"{drought.removed_by_guard} qualifier(s) are not listed: their game has started or "

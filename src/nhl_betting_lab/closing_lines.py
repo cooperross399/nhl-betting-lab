@@ -769,6 +769,7 @@ def clv_rows(
                 "selection": str(getattr(row, "selection", "")),
                 "player": str(getattr(row, "player", "") or ""),
                 "edge": float(getattr(row, "edge", 0.0) or 0.0),
+                "model_probability": _probability(getattr(row, "model_probability", None)),
                 "taken_odds": float(getattr(row, "american_odds")),
                 "closing_odds": float(close["american_odds"]),
                 "closing_book": str(close["book"]),
@@ -780,6 +781,99 @@ def clv_rows(
             }
         )
     return pd.DataFrame(rows), counts
+
+
+def _probability(value: object) -> float | None:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if math.isfinite(number) else None
+
+
+def clears_best_bet_bar(
+    market_key: object, edge: object, american_odds: object, probability: object
+) -> bool:
+    """Would the card's stake rules, as far as a frozen opinion can show
+    them, have staked this row? (2026-11-10, Cooper asked whether the
+    staked picks beat the close.)
+
+    Applies what the snapshot row carries: the best-bet edge
+    (`BEST_BET_PROP_EDGE` / `BEST_BET_EDGE`), the price window
+    (`MAX_DEFAULT_JUICE` to `+MAX_DEFAULT_PRICE`, both inclusive), the
+    stake-excluded markets, the 40% win-chance floor on a moneyline side,
+    and a prop's odds-bracket floor (`prop_confidence_reason`). It cannot
+    apply what the row does not carry: the self-learned edge the card
+    stakes on (applied after the snapshot is frozen), the win-chance floor
+    on a puck line or regulation side (it reads the moneyline chance), the
+    saves starter check, the late-lean rules, one stake per outcome, and
+    whether that day's card was blocked or the market eligible. So it is
+    the card's best-bet bar applied to the frozen opinions, an
+    approximation of the bets the card stakes and never a list of them.
+    """
+    from nhl_betting_lab.config import MAX_DEFAULT_JUICE, MAX_DEFAULT_PRICE
+    from nhl_betting_lab.markets import MARKETS_BY_KEY
+    from nhl_betting_lab.reports.gameday_card import (
+        BEST_BET_EDGE,
+        BEST_BET_PROP_EDGE,
+        STAKE_EXCLUDED_MARKETS,
+        prop_confidence_reason,
+    )
+    from nhl_betting_lab.stat_sides import STAT_SIDE_MIN_WIN
+
+    key = str(market_key).strip()
+    market = MARKETS_BY_KEY.get(key)
+    is_prop = market is not None and market.is_prop
+    try:
+        edge_value = float(edge)
+        odds = float(american_odds)
+    except (TypeError, ValueError):
+        return False
+    if not (math.isfinite(edge_value) and math.isfinite(odds)):
+        return False
+    if edge_value < (BEST_BET_PROP_EDGE if is_prop else BEST_BET_EDGE) - 1e-12:
+        return False
+    if odds < MAX_DEFAULT_JUICE or odds > MAX_DEFAULT_PRICE:
+        return False
+    if key in STAKE_EXCLUDED_MARKETS:
+        return False
+    chance = _probability(probability)
+    if key == "moneyline" and (chance is None or chance < STAT_SIDE_MIN_WIN):
+        return False
+    if is_prop:
+        if chance is None or prop_confidence_reason(odds, chance):
+            return False
+    return True
+
+
+#: The words the report heads its third view with.
+BEST_BAR_VIEW = "best-bet bar"
+
+
+def best_bet_bar_note() -> str:
+    """What the best-bet-bar view is, built from the constants it reads."""
+    from nhl_betting_lab.config import MAX_DEFAULT_JUICE, MAX_DEFAULT_PRICE
+    from nhl_betting_lab.reports.gameday_card import (
+        BEST_BET_EDGE,
+        BEST_BET_PROP_EDGE,
+        STAKE_EXCLUDED_MARKETS,
+    )
+    from nhl_betting_lab.stat_sides import STAT_SIDE_MIN_WIN
+
+    excluded = ", ".join(f"`{m}`" for m in sorted(STAKE_EXCLUDED_MARKETS))
+    return (
+        "The opinions that clear the card's best-bet bar as far as a frozen "
+        f"opinion shows it: an edge of {_percent(BEST_BET_PROP_EDGE)} for a "
+        f"prop or {_percent(BEST_BET_EDGE)} for a team market, priced "
+        f"{MAX_DEFAULT_JUICE} to +{MAX_DEFAULT_PRICE}, not in {excluded}, a "
+        f"moneyline side the model gives at least {STAT_SIDE_MIN_WIN:.0%}, and "
+        "a prop clearing its odds-bracket floor. It approximates the bets "
+        "the card stakes and is not a list of them: the card stakes on the "
+        "self-learned edge, applied after the snapshot is frozen, and also "
+        "applies the win-chance floor to puck lines and regulation sides, the "
+        "saves starter check and one stake per outcome, none of which a "
+        "frozen row carries."
+    )
 
 
 def _game_of(frame: pd.DataFrame) -> list[tuple[str, str, str]]:
@@ -1133,9 +1227,33 @@ def build_clv_report(
     rows["is_bet"] = [
         _is_bet(row.market, row.edge) for row in rows.itertuples()
     ]
+    rows["is_best_bar"] = [
+        clears_best_bet_bar(
+            row.market, row.edge, row.taken_odds, row.model_probability
+        )
+        for row in rows.itertuples()
+    ]
     bets = rows[rows["is_bet"]]
+    best = rows[rows["is_best_bar"]]
     counts["bets_matched"] = int(len(bets))
     counts["bets_no_close"] = staked_total - int(len(bets))
+    best_total = 0
+    if not collapsed.empty:
+        best_total = int(
+            sum(
+                1
+                for row in collapsed.itertuples()
+                if clears_best_bet_bar(
+                    getattr(row, "market", ""),
+                    getattr(row, "edge", None),
+                    getattr(row, "american_odds", None),
+                    getattr(row, "model_probability", None),
+                )
+            )
+        )
+    counts["best_bar"] = best_total
+    counts["best_bar_matched"] = int(len(best))
+    counts["best_bar_no_close"] = best_total - int(len(best))
 
     markets = sorted({str(value) for value in rows["market"]})
     looks = max(1, len(markets))
@@ -1149,11 +1267,16 @@ def build_clv_report(
             **_summarise(bets),
             "no_close": counts.get("bets_no_close", 0),
         },
+        "best_bar": {
+            **_summarise(best),
+            "no_close": counts.get("best_bar_no_close", 0),
+        },
     }
     for market, subset in rows.groupby("market"):
         report["markets"][str(market)] = {
             "opinions": _summarise(subset, looks=looks),
             "bets": _summarise(subset[subset["is_bet"]], looks=looks),
+            "best_bar": _summarise(subset[subset["is_best_bar"]], looks=looks),
         }
     return report
 
@@ -1472,17 +1595,28 @@ def render_clv(report: dict, *, generated: str = "") -> str:
             ]
         return "\n".join(lines)
 
-    for view in ("opinions", "bets"):
-        summary = report["overall"][view]
+    for view in ("opinions", "bets", "best_bar"):
+        summary = report["overall"].get(view)
+        if summary is None:
+            continue
         unmatched = summary.get("no_close", 0)
+        if view == "best_bar":
+            heading = "## The card's best-bet bar"
+            noun = "opinion"
+            intro = [best_bet_bar_note(), ""]
+        else:
+            heading = f"## All {view}"
+            noun = view[:-1]
+            intro = []
         lines += [
-            f"## All {view}",
+            heading,
             "",
+            *intro,
             _row(*TABLE_COLUMNS),
             _row(*(["---"] * len(TABLE_COLUMNS))),
             _row(*_summary_cells(summary)),
             "",
-            f"{unmatched} {view[:-1]}(s) had no closing price and are not in "
+            f"{unmatched} {noun}(s) had no closing price and are not in "
             "this table.",
             "",
         ]
@@ -1542,12 +1676,14 @@ def render_clv(report: dict, *, generated: str = "") -> str:
         _row(*(["---"] * len(header))),
     ]
     for market in sorted(report["markets"]):
-        for view in ("opinions", "bets"):
-            summary = report["markets"][market][view]
+        for view in ("opinions", "bets", "best_bar"):
+            summary = report["markets"][market].get(view)
+            if summary is None:
+                continue
             lines.append(
                 _row(
                     f"`{market}`",
-                    view,
+                    BEST_BAR_VIEW if view == "best_bar" else view,
                     *_summary_cells(summary, corrected=corrected),
                 )
             )
@@ -1567,6 +1703,7 @@ def render_clv(report: dict, *, generated: str = "") -> str:
         "  three-way is excluded entirely because a three-outcome market",
         "  cannot be de-vigged as a pair.",
         "- **Bets**: " + measurement_bar_note(),
+        f"- **{BEST_BAR_VIEW[0].upper() + BEST_BAR_VIEW[1:]}**: " + best_bet_bar_note(),
         "- **Games** is the sample each interval counts. A thousand rows",
         "  from ten games are ten games of evidence, not a thousand.",
         "- Positive CLV with a losing record is variance against us; a",

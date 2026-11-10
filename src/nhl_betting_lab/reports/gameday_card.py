@@ -446,6 +446,10 @@ class GamedayCard:
     drought_headline: str = ""
     #: The Due List scorecard, as markdown lines, on Mondays only (2026-10-31).
     due_scorecard: list[str] = field(default_factory=list)
+    #: The layer scorecard (`nhl_betting_lab.layer_scorecard`), as markdown
+    #: lines, on Mondays only (2026-11-10). Reports what each model layer did
+    #: on settled picks; it changes no price, selection or stake.
+    layer_scorecard: list[str] = field(default_factory=list)
     #: Stat sides (Cooper, 2026-10-10): each priced game's model-favoured
     #: moneyline side and its win chance (`nhl_betting_lab.stat_sides`). A
     #: LIST like the Due List: nothing here is a best bet, a lean, a pass, a
@@ -1577,6 +1581,7 @@ def render_card(card: GamedayCard) -> str:
         )
 
     lines.extend(render_drought_section(card))
+    lines.extend(card.layer_scorecard)
 
     if card.unresolved_names:
         shown = card.unresolved_names[:20]

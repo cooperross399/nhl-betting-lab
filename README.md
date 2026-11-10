@@ -409,7 +409,10 @@ PYTHONPATH=src .venv/bin/python scripts/run_self_learning_check.py --ledger data
 
 # Which model layers added from 2026-10-22 help on the settled live picks?
 # Takes each layer out alone and reprices the same settled wagers against the
-# same frozen prices (Layer Scoring workflow runs it in CI, no credit).
+# same frozen prices. The Layer Scoring workflow runs it every Monday at
+# 00:30 UTC (and on dispatch), no credit; Gameday Refresh restores its
+# `layer-scoring` artifact, the Monday card carries a "Layer scorecard"
+# section, and card-feed carries the report as latest_layer_scoring.md.
 PYTHONPATH=src .venv/bin/python scripts/run_layer_scoring.py --history-dir dist/data/history
 
 # How far has league scoring moved, does a three-week move persist, what does
@@ -527,7 +530,11 @@ pulls the private movement chain beside it, and scores the union of the two
 into `data/outputs/closing_line_value.md`: beat-the-close rate, CLV%, and the
 de-vigged expected value at the closing line, for opinions and for bets
 separately (a "bet" there, as in the forward-evidence report, is an opinion
-clearing the 6% prop / 3.5% team measurement bar, not a bet the card staked), with every interval clustered by game (one game's sides, rungs
+clearing the 6% prop / 3.5% team measurement bar, not a bet the card staked),
+and for the opinions clearing the card's best-bet bar as far as a frozen row
+shows it (12% prop / 9% team, -160 to +600, no `points`, a moneyline side at
+40%+ to win, a prop clearing its odds-bracket floor; it approximates the
+staked bets and is not a list of them), with every interval clustered by game (one game's sides, rungs
 and players are not independent trials). The report is aggregate: counts,
 rates and intervals, never a price, a line or a book. It is the earliest honest
 signal that the model is finding something — and it is not profit, which the

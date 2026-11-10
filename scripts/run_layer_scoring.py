@@ -65,11 +65,13 @@ import json
 import math
 import sys
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
+from nhl_betting_lab.layer_scorecard import LAYER_LABELS, REPORT_JSON, REPORT_MD
 from nhl_betting_lab.config import MIN_EDGE, MIN_PROP_EDGE, OUTPUTS_DIR, PROCESSED_DIR
 from nhl_betting_lab.stats import clustered_mean_interval
 
@@ -82,20 +84,6 @@ PRICE_LOW, PRICE_HIGH = -160.0, 600.0
 CUT_ROI_POINTS = 0.02
 TOO_FEW = 30
 TEAM_LAYERS = ("home_ice", "form", "rest", "lineup", "goalies", "referees", "posthockey")
-LAYER_LABELS = {
-    "home_ice": "Each team's own home ice (#344)",
-    "form": "Last-five team form, team markets (#345)",
-    "rest": "Rest and travel (#346)",
-    "lineup": "Posted lineup: player ratings, aging, skater defence (#346, #353, #354, #356)",
-    "goalies": "Tonight's starting goalies, team markets (#351)",
-    "referees": "Referee crews (#346, #348)",
-    "posthockey": "PostHockey pre-game blend, 50/50 (#350)",
-    "team_form_props": "Last-five team form, props (#345)",
-    "position_matchup": "Matchup by position, props (#346)",
-    "self_learning": "Self-learning, by side (#383, #427)",
-}
-REPORT_MD = "layer_scoring.md"
-REPORT_JSON = "layer_scoring.json"
 
 
 def implied(american: float) -> float:
@@ -415,7 +403,8 @@ def main(argv: list[str] | None = None) -> int:
     team_names = load_team_name_map(processed_dir=args.processed_dir)
     results: dict = {}
     notes: dict = {"settled_wagers": int(len(wagers)), "window_from": WINDOW_FROM,
-                   "last_night": str(wagers["snapshot_date"].max()) if len(wagers) else ""}
+                   "last_night": str(wagers["snapshot_date"].max()) if len(wagers) else "",
+                   "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
 
     team, notes["team"] = team_counterfactuals(wagers, args.history_dir, team_names)
     if not team.empty:

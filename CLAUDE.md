@@ -3363,6 +3363,50 @@ Re-derive rather than trust if the data has moved.
   cannot read counts as free. No cap, gate, card rule or contract string
   changed; a day both crons arrive and the check misses can cost one extra
   re-price.
+- **2026-11-10: the layers are re-scored every Monday, and the CLV report
+  reads the card's best-bet bar (Cooper: "All").** Report only; nothing the
+  card prices, selects or stakes moves, and no snapshot or ledger row
+  changes.
+  - **Layer scorecard.** Layer Scoring (`scripts/run_layer_scoring.py`, #438)
+    now runs on a cron, `30 0 * * 1` (Monday 00:30 UTC, Sunday evening in
+    New York, so a start eight hours late still finishes before the 13:30
+    UTC card), and keeps `layer_scoring.md` / `.json` as the `layer-scoring`
+    artifact (30 days, aggregate only). Gameday Refresh's soft "Restore the
+    weekly layer scorecard" step lays the newest one into `data/outputs`
+    before the card; the Monday card carries a "Layer scorecard" section
+    (`nhl_betting_lab.layer_scorecard`: per layer, population B with it, its
+    contribution in units, wagers changed, the staked contribution and the
+    rule's verdict), naming a missing report, or one more than 8 days old,
+    rather than showing it as this week's; and every card-feed commit carries
+    the report as `latest_layer_scoring.md`. A "cut" is the rule's verdict
+    and changes nothing: taking a layer off stays Cooper's call. No credit,
+    no new token holder, no new card-feed writer;
+    `test_no_push_to_this_repository_carries_a_capture_store` now names
+    `latest_layer_scoring.md` among card-feed's files, deliberately.
+  - **CLV, read 2026-11-10** (card-feed's `latest_closing_line_value.md`,
+    built 2026-11-09 23:47 UTC from the private store and movement chain,
+    one bet per wager, intervals clustered by game). It works: 150,143
+    opinions, 142,215 matched to a close, 7,928 without one (7,689 with no
+    capture within 150 minutes of face-off), 1,706 not yet played.
+    **All opinions**: beat the close 45.5% [44.9%, 46.1%] (tied 43,472),
+    mean CLV +0.12% [-0.03%, +0.27%] over 271 games: no demonstrated edge;
+    EV at the close -4.5% [-4.6%, -4.4%]. **Population B** (6% prop / 3.5%
+    team bar): 6,413 matched over 270 games, beat 63.0% [60.7%, 65.2%],
+    mean CLV **+2.66% [+1.93%, +3.39%]**, interval above zero, while EV at
+    the close is -1.3% [-2.1%, -0.6%]: these opinions are taken at better
+    prices than the close (both best-of-books), but priced against the
+    de-vigged close they are still worth less than nothing. By market (family-wise, 12 markets), B's CLV
+    excludes zero for `shots_on_goal` +3.53% (2,213), `goals` +2.36% (223)
+    and `assists` +1.15% (732); `puck_line` +1.08% (283) touches zero; the
+    rest span it. The report had no view of the staked bets, so it now
+    carries a third, **the card's best-bet bar** (`closing_lines.
+    clears_best_bet_bar`: 12% prop / 9% team, -160 to +600, no `points`, a
+    moneyline side at 40%+, a prop clearing its odds-bracket floor), overall
+    and by market. It approximates the staked bets and is not a list of
+    them: the card stakes on the self-learned edge (applied after the
+    snapshot), and the frozen row cannot show the puck-line and regulation
+    win-chance floor, the saves starter check or one stake per outcome. Its
+    first figures come with the next Gameday Refresh run.
 
 - **2026-11-10, NOT a defect fix: the league scoring environment moves the
   scoring props and the team total (Cooper: "All").** The models' rates are
