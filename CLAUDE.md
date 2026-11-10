@@ -322,6 +322,20 @@ Re-derive rather than trust if the data has moved.
   damaged tip copy: it keeps the repaired file beside it as an `unmerged/`
   sidecar and exits 2 (see "Merging a sidecar"). Whether to add a repair
   procedure is still Cooper's call.
+  **2026-11-10: the checkpoint's depth is read over its own window, and
+  printed in the log.** A defect fix the registration permits. The scan
+  counted only the depth across every day the chain holds, so read after
+  2026-10-15 it could not say what "the first seventeen days" carried; and
+  it wrote the registered depth only to the step summary and the
+  `ladder-coherence` artifact, while the job log printed every other count.
+  Reading the overdue checkpoint from the job log found the number missing.
+  `find_violations(..., depth_by=)` now splits the registered depth by the
+  capture's day file in the same pass (no second scan, no count changes),
+  and the runner prints the whole chain's depth and the window's (day files
+  through 2026-10-15) to the log, the report and the JSON
+  (`checkpoint_window`, `ladders_with_two_rungs_by_day`; ladder counts
+  only, no price, line or book). No threshold, band, floor, window or date
+  moved. `tests/test_the_ladder_checkpoint_reads_its_own_window.py`.
 - **The oracle ceiling was an outcome filter, not a line-label result.**
   Abstaining above a 2-minute realised rise gives +3.11% [+1.39%, +4.80%] and
   a random-removal placebo reaches only −0.30% (z=8.3), so the cell is
