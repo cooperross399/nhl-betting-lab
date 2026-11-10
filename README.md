@@ -415,6 +415,12 @@ PYTHONPATH=src .venv/bin/python scripts/run_self_learning_check.py --ledger data
 # section, and card-feed carries the report as latest_layer_scoring.md.
 PYTHONPATH=src .venv/bin/python scripts/run_layer_scoring.py --history-dir dist/data/history
 
+# How far has league scoring moved, does a three-week move persist, what does
+# the scoring-environment factor do to the settled ledger's bets, and what
+# PostHockey blend weight do the settled games support? Information only; the
+# card fits both itself (Scoring Environment Study workflow, no credit).
+PYTHONPATH=src .venv/bin/python scripts/run_scoring_environment.py --history-dir dist/data/history
+
 # Does the dialled-in hits model (rink scorer, measured shrinkage, recency,
 # own-games spread) price hits better? Walk-forward on outcomes and on the
 # bought hits prices, overs and unders apart (Hits Model Study workflow).

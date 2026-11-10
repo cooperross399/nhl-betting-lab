@@ -1,0 +1,81 @@
+name: Scoring Environment Study
+
+# Measures the league's scoring drift, replays the scoring-environment
+# factor on the settled ledger and fits the PostHockey blend weight on the
+# frozen boards (Cooper, 2026-11-10: "All"). See
+# scripts/run_scoring_environment.py.
+#
+# It fetches no odds, spends no credit, places no bet, pushes nothing,
+# uploads nothing, edits no policy and records nothing the card reads. The
+# result is aggregate (bets, units, ROI, intervals) and goes to the run
+# summary and the log only.
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "scripts/run_scoring_environment.py"
+      - ".github/workflows/scoring-environment.yml"
+      - "src/nhl_betting_lab/scoring_env.py"
+      - "src/nhl_betting_lab/posthockey.py"
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: scoring-environment
+  cancel-in-progress: false
+
+jobs:
+  measure:
+    name: Scoring Environment Study
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install project
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install -e .
+
+      - name: Restore the ledger, the logs and the frozen boards
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -u
+          python scripts/restore_state.py --artifact gameday-state --dest data \
+            --workflow gameday-refresh.yml --no-merge --refuse-unreachable --attempts 3 || {
+            echo "::error::GitHub could not be reached to restore gameday-state."
+            exit 1
+          }
+          mkdir -p dist/data/history
+          python scripts/restore_state.py --artifact site-history --dest dist/data/history \
+            --workflow publish-site.yml --success-only --no-merge --refuse-unreachable --attempts 3 || {
+            echo "::error::GitHub could not be reached to restore site-history."
+            exit 1
+          }
+          PYTHONPATH=src python scripts/build_datasets.py || true
+
+      - name: Measure the drift and the blend weight
+        env:
+          PYTHONPATH: src
+        run: |
+          set -u
+          status=0
+          python scripts/run_scoring_environment.py --history-dir dist/data/history || status=$?
+          if [ -s data/outputs/scoring_environment_study.md ]; then
+            cat data/outputs/scoring_environment_study.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit "$status"

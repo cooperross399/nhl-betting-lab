@@ -3408,6 +3408,77 @@ Re-derive rather than trust if the data has moved.
     win-chance floor, the saves starter check or one stake per outcome. Its
     first figures come with the next Gameday Refresh run.
 
+- **2026-11-10, NOT a defect fix: the league scoring environment moves the
+  scoring props and the team total (Cooper: "All").** The models' rates are
+  fitted on every game the logs hold, so a league-wide rise in scoring never
+  reached an expected count. `nhl_betting_lab.scoring_env` reads, from games
+  before tonight, the league's per-game rate over the last `ENV_DAYS` (21)
+  days against every regular-season game before tonight (the fit window),
+  keeps games / (games + `ENV_SHRINKAGE_GAMES` (150)) of the move, and
+  multiplies goals, assists, points and shots on goal (`ENV_STATS`; blocks,
+  hits and saves are untouched) by that target over the model's own level,
+  clamped 0.90-1.12. Last-five team form's league-wide part (the mean
+  club's for x against) is divided out, so a league rise already in form
+  is not counted twice. The team model's expected goals are scaled
+  (`TeamModel.environment`) so its league total (fitted total x mean attack
+  x mean defence) reads the target; the factor breakdown copies the model,
+  so it applies at every step. Off by default (`PlayerPropsModel.scoring_env`
+  empty, `TeamModel.environment` 1.0, `generate_prop_samples(scoring_env=False)`),
+  so every committed measurement stands. The card writes
+  `data/outputs/scoring_environment.md`. **Measured** (Scoring Environment
+  Study run 42729446405, `scripts/run_scoring_environment.py`): total goals
+  a game 6.21 before 10-19 (84 games), 6.34 from 10-19 to 10-27 (62), 6.73
+  from 10-28 (84), against 6.20 over the 4,218-game fit window; skater
+  assists 10.21 -> 11.63 and points 16.30 -> 18.31 over the same periods,
+  while shots on goal (54.3 -> 54.9) and blocks did not rise and sit below
+  the fit window (57.4, 30.0). Read for the 2026-11-10 card (142 games):
+  total goals x1.029, goals x1.031, assists x1.039, points x1.036, shots
+  x0.982 before the form adjustment. **Persistence argues against it for the
+  scoring stats:** on 51 weekly readings in earlier seasons, the share of a
+  three-week move that carried into the next two weeks was 0.19 for total
+  goals [-0.11, 0.54], 0.13 goals, 0.02 assists, 0.06 points, every
+  interval spanning zero (implied shrinkage 600-6,900 games), against 0.98
+  [0.85, 1.13] for shots, 1.14 blocks and 0.85 hits (largely season-to-season
+  counting shifts). The 150-game shrinkage is Cooper's call to move, not a
+  measured optimum. Price replay on the settled ledger since 2026-10-07
+  (approximate: each frozen chance inverted to a Poisson mean, scaled,
+  re-read; totals moved by target over the fit window), one bet per wager
+  at the best frozen price, game-clustered: population B props +34.4u over
+  3,971, +0.9% [-5.4%, +7.1%], against -3.2u over 3,918 without (+37.6u on
+  345 changed wagers, +17.3 / +20.3 by half; shots +45.6u, goals +10.0u,
+  points -3.9u, assists -14.0u); staked props -5.8u over 135 against -3.6u
+  over 133; totals population B +24.6u over 449 against +10.3u over 360.
+  Every interval spans zero: **no demonstrated edge.** For context, the
+  ledger's population B points unders from 10-28 hit 50.0% against a
+  model 65.9% (314 wagers, -44.8u), and shots overs 14.8% against 26.7%
+  (310, -93.1u).
+- **2026-11-10, NOT a defect fix: the PostHockey blend weight is refitted
+  every card (Cooper: "All").** `posthockey.BLEND_WEIGHT` = 0.5 was never
+  tested. `posthockey.fit_blend_weight` now fits the weight w minimising the
+  log loss of own + w x (PostHockey - own) over w in 0..1 on every blended
+  game settled before the card, shrinks it toward 0.5 by games / (games +
+  `BLEND_SHRINKAGE_GAMES` (200)) and bounds it to 0..1; the card writes
+  `data/outputs/posthockey_blend.md`/`.json`. Its sources: the card's own
+  record from now on (`data/processed/posthockey_blend.csv`, the factor
+  breakdown's step before the blend, the target and the weight, first row
+  per game), and before that the forward ledger's frozen home moneyline read
+  back at 0.5 (own = 2 x frozen - the day's first PostHockey read; approximate,
+  the card blended on the goals split). **Measured** (same run): the card's
+  own refit, 98 settled games 2026-10-26 to 11-08 (all ledger backfill), best
+  0.46, in force **0.487**; log loss 0.6343 card alone, 0.6318 at 0.5, 0.6354
+  PostHockey alone. On the frozen site boards' exact breakdown, 95 games
+  10-27 to 11-08: best 0.77, bootstrap 95% [0.00, 1.00], 0.72 before 11-01
+  (39) and 0.79 from it (56), shrunk 0.587; log loss 0.6323 at 0, 0.6263 at
+  0.5, 0.6254 at 0.77. The two sources disagree and both intervals cover
+  the whole range: the data cannot tell the weight apart from 0.5. Replayed
+  on the ledger's moneyline at 0.77, population B -0.7u over 23 against
+  -4.3u over 20 (23 changed: too few to judge). **No demonstrated edge.**
+- **Both are applied before the snapshot is frozen**, so from the
+  2026-11-10 card the forward ledger's prop and team opinions carry them,
+  as last-five form and the other 2026-10-21 layers did. Earlier rows are
+  not set aside (Cooper's call). The edge bars, market list and staking
+  rule are unchanged.
+
 ## Contract strings — never change these
 
 Cooper's local scheduled tasks hard-code these. Renaming any of them silently

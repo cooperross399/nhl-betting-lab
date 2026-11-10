@@ -382,6 +382,11 @@ class PlayerPropsModel:
         #: factor}, set by the card (`referees.tonight_factors`); it scales
         #: goals, assists and points. Empty moves nothing.
         self.game_factors: dict[frozenset, float] = {}
+        #: The league's scoring environment (Cooper, 2026-11-10): {stat:
+        #: multiplier on every skater's expected count}, set by the card
+        #: (`scoring_env.props_multipliers`). Empty, the default, moves
+        #: nothing; the walk-forward sets it only when asked.
+        self.scoring_env: dict[str, float] = {}
         #: Names two priced players share, which resolve to neither on their
         #: own. Some are recoverable with a team; see `_index_names`.
         self.ambiguous_names: tuple[str, ...] = ()
@@ -1031,6 +1036,7 @@ class PlayerPropsModel:
                 stat, team=team if team else rates.team, opponent=str(opponent)
             )
             * self.crew_multiplier(stat, team if team else rates.team, opponent)
+            * float(self.scoring_env.get(stat, 1.0))
             * (
                 self.hits_rink_factor(
                     (team if team else rates.team)

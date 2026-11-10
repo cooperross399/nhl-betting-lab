@@ -182,6 +182,11 @@ class TeamModel:
         #: total stays, so the puck line and team totals follow.
         self.pregame_targets: dict[tuple[str, str], float] = {}
         self.pregame_weight = 0.0
+        #: The league's scoring environment (Cooper, 2026-11-10), a
+        #: multiplier on both sides' expected goals that puts the league
+        #: total at the recent level (`scoring_env.team_multiplier`), set by
+        #: the card. 1.0, the default, moves nothing.
+        self.environment = 1.0
         self.report = TeamModelReport()
 
     def fit(self, games: pd.DataFrame) -> "TeamModel":
@@ -461,7 +466,8 @@ class TeamModel:
                 home_goals, away_goals, target, self.pregame_weight
             )
         crew = self.game_factors.get(frozenset({str(home_team), str(away_team)}), 1.0)
-        return home_goals * crew, away_goals * crew
+        scale = crew * float(self.environment or 1.0)
+        return home_goals * scale, away_goals * scale
 
     def scoreline_matrix(
         self,

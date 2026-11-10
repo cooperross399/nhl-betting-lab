@@ -84,6 +84,7 @@ from nhl_betting_lab.self_learning import (
 )
 from nhl_betting_lab.referees import tonight_factors
 from nhl_betting_lab import posthockey
+from nhl_betting_lab import scoring_env
 from nhl_betting_lab.factor_breakdown import ratings_form, slate_breakdowns
 from nhl_betting_lab.season import (
     EXPECTED_CLUBS,
@@ -589,6 +590,20 @@ def main(argv: list[str] | None = None) -> int:
         processed, moment.astimezone(LEAGUE_TIMEZONE).date().isoformat(), games
     )
     print(f"Referee crews: {len(crews)} game(s) moved by tonight's crew.")
+    # The league's scoring environment (Cooper, 2026-11-10, "All"): the last
+    # three weeks' scoring against the games the models are fitted on,
+    # shrunk, moves the scoring props and the team total (`scoring_env`).
+    # A table it cannot read moves nothing and never blocks the card.
+    try:
+        environment = scoring_env.reading(
+            scoring_env.league_game_table(logs, games),
+            moment.astimezone(LEAGUE_TIMEZONE).date().isoformat(),
+        )
+    except (KeyError, ValueError, TypeError) as exc:
+        print(f"::warning::The scoring environment could not be read ({exc}); it moves nothing.")
+        environment = scoring_env.EnvReading()
+    print(f"Scoring environment: {environment.describe()}.")
+    environment_report: dict = {"reading": dataclasses.asdict(environment), "active": environment.active}
     if logs.empty:
         blockers.append(
             "No player logs on disk, so no prop can be priced. Run "
@@ -657,6 +672,16 @@ def main(argv: list[str] | None = None) -> int:
             )
             print(f"Lineups: {lineups.describe()}.")
             props_model.game_factors = crews
+            props_model.scoring_env = scoring_env.props_multipliers(
+                environment, getattr(props_model, "team_form", None)
+            )
+            environment_report["props"] = dict(props_model.scoring_env)
+            if props_model.scoring_env:
+                print(
+                    "Scoring environment on props: "
+                    + ", ".join(f"{s} x{f:.3f}" for s, f in sorted(props_model.scoring_env.items()))
+                    + "."
+                )
             prop_probabilities, unresolved = price_props(
                 priceable,
                 props_model,
@@ -783,11 +808,36 @@ def main(argv: list[str] | None = None) -> int:
             team_model.pregame_targets = posthockey.tonight_targets(
                 processed, moment.astimezone(LEAGUE_TIMEZONE).date().isoformat()
             )
-            team_model.pregame_weight = posthockey.BLEND_WEIGHT
+            # The weight is refitted every card on the blended games that
+            # have settled (Cooper, 2026-11-10, "All"), shrunk toward 0.5.
+            try:
+                blend_fit = posthockey.fit_blend_weight(
+                    processed, games, team_names,
+                    before=moment.astimezone(LEAGUE_TIMEZONE).date().isoformat(),
+                )
+            except Exception as exc:  # noqa: BLE001 - the prior stands, never a blocker
+                print(f"::warning::The PostHockey blend weight could not be fitted ({exc}).")
+                blend_fit = posthockey.fit_blend_weight(
+                    processed, games.iloc[0:0], {}, before="", ledger=pd.DataFrame()
+                )
+            team_model.pregame_weight = blend_fit["weight"]
+            outputs.mkdir(parents=True, exist_ok=True)
+            (outputs / posthockey.BLEND_REPORT_JSON).write_text(
+                json.dumps(blend_fit, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+            )
+            (outputs / posthockey.BLEND_REPORT_MD).write_text(
+                posthockey.render_blend_report(blend_fit), encoding="utf-8"
+            )
             print(
                 f"PostHockey pre-game: {len(team_model.pregame_targets)} game(s) "
-                f"blended {posthockey.BLEND_WEIGHT:.0%} toward its win probability."
+                f"blended {team_model.pregame_weight:.1%} toward its win probability "
+                f"(fitted on {blend_fit['games']} settled game(s), best {blend_fit['raw']:.2f}, "
+                f"shrunk toward {posthockey.BLEND_WEIGHT})."
             )
+            # The league's scoring environment on the expected total.
+            team_model.environment = scoring_env.team_multiplier(environment, team_model)
+            environment_report["team_total"] = team_model.environment
+            print(f"Scoring environment on team totals: x{team_model.environment:.3f}.")
             team_probabilities, unresolved = price_team_markets(
                 priceable, team_model, team_names=team_names,
                 history=team_history,
@@ -811,8 +861,25 @@ def main(argv: list[str] | None = None) -> int:
             except Exception as exc:  # noqa: BLE001 - descriptive only
                 print(f"::warning::The game-page breakdown was not built: {exc}")
                 team_factors = []
+            # Each blended game's own number and target, for the next
+            # cards' weight fit. A reproduction records nothing.
+            if not args.now:
+                recorded = posthockey.record_blend(
+                    processed, team_factors, team_model.pregame_targets,
+                    team_model.pregame_weight, moment.isoformat(),
+                )
+                print(f"PostHockey blend record: {recorded} new game(s).")
         except (KeyError, ValueError) as exc:
             blockers.append(f"The team model could not be fitted: {exc}")
+
+    outputs.mkdir(parents=True, exist_ok=True)
+    (outputs / scoring_env.REPORT_JSON).write_text(
+        json.dumps(environment_report, indent=2, sort_keys=True, default=str) + "\n",
+        encoding="utf-8",
+    )
+    (outputs / scoring_env.REPORT_MD).write_text(
+        scoring_env.render_card_report(environment_report), encoding="utf-8"
+    )
 
     if unresolved_names:
         preview = ", ".join(sorted(unresolved_names)[:8])
