@@ -3536,6 +3536,12 @@ Re-derive rather than trust if the data has moved.
   the moves are printed in a "Goalie availability" notice. The card, the
   snapshot, the forward ledger, the model, the edge bars and the staking
   rule are untouched. `tests/test_season_sim_gives_injured_goalies_no_starts.py`.
+  **Same day, the first live run (Season Sim 42832549612) showed Daily
+  Faceoff files day-to-day players in its injury group too**, so John Gibson
+  (DET, listed DTD) lost every remaining start. A day-to-day, game-time or
+  questionable status is now never out, whatever group he is filed in. The
+  same run moved six goalies onto their noted return dates (Lyon, Andersen,
+  Gustavsson, Shesterkin, Merzlikins, Demko), as the notes already had them.
 
 ## Contract strings — never change these
 

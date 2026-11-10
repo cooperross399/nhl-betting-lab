@@ -106,6 +106,13 @@ def test_an_unconfirmed_listing_does_not_bring_him_back() -> None:
     assert updates == {("VAN", 1): "season"}
 
 
+def test_a_day_to_day_goalie_in_the_injury_group_keeps_his_starts() -> None:
+    # Daily Faceoff files day-to-day players in its "ir" group too; the first
+    # live run (2026-11-10) took every remaining start from John Gibson on it
+    avail = _avail(df_players=[_ir("Andrei Vasilevskiy", "TB", status="DTD")])
+    assert goalie_availability(avail, GOALIES, {}, ASOF) == ({}, [])
+
+
 def test_names_match_without_accents() -> None:
     avail = _avail(df_players=[_ir("Jakub Dobes", "MON")])
     updates, _ = goalie_availability(avail, GOALIES, {}, ASOF)
