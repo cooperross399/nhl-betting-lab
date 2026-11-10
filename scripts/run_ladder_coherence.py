@@ -29,15 +29,34 @@ each run restores the newest copy, so a day damaged in October is still
 damaged in March: were every damaged file to fail the run, one bad day would turn
 every later run of the season red, and the red X that reports uncollectable
 line units or scratch lists would be lost under one that nothing clears.
+
+With `--cache-dir DIR` (the Line Movement job passes one under the runner's
+temp directory and keeps it between rounds in the Actions cache), each
+readable day file's counts are kept in `DIR/ladder_scan_cache.json`, keyed on
+the file's name, the SHA-256 of its bytes and the detector's fingerprint (the
+source of every module the scan's arithmetic runs through, and the pandas and
+numpy versions), so a later run scans only the day files that are new or
+changed. Until 2026-11-10 every round rescanned every day the chain holds:
+6.4 to 15.9 minutes per round by early November, growing with the season. A
+ladder is one book at one instant and one round appends to one day file, so
+no ladder spans two files and every count is a sum over days. The report, the
+JSON, the checkpoint window, the unreadable list and the exit are what a full
+scan writes, byte for byte (`tests/test_the_ladder_scan_is_incremental.py`).
+The cache holds counts and hashes only: no price, line, book or player. A
+damaged day is never cached, so it is read, and named, on every run.
 """
 
 from __future__ import annotations
 
 import argparse
+import dataclasses
+import hashlib
 import json
+import os
 import sys
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 from nhl_betting_lab.closing_lines import team_market_rows
@@ -46,6 +65,7 @@ from nhl_betting_lab.ladder_coherence import (
     DETECTION_FLOOR,
     LADDER_CLASSES,
     LADDER_KEY,
+    LadderScan,
     find_violations,
 )
 from nhl_betting_lab.stores import existing_row_count
@@ -139,50 +159,10 @@ def load_captures(
     frames = []
     read: list[str] = []
     for path in paths:
-        try:
-            frame = pd.read_csv(path, low_memory=False)
-        except (
-            OSError,
-            UnicodeDecodeError,
-            pd.errors.EmptyDataError,
-            pd.errors.ParserError,
-        ) as error:
-            damaged[path.name] = f"{type(error).__name__}: {error}".strip()
+        frame, reason = read_day(path)
+        if reason is not None:
+            damaged[path.name] = reason
             continue
-        # The floor comes from the file, not the parse: stray quotes make
-        # pandas swallow rows into one field without an error.
-        rows_on_disk = existing_row_count(path)
-        if len(frame) < rows_on_disk:
-            damaged[path.name] = (
-                f"holds {rows_on_disk} row(s) and parses to only {len(frame)}"
-            )
-            continue
-        missing = [name for name in REQUIRED_COLUMNS if name not in frame.columns]
-        if "snapshot" not in frame.columns and CAPTURE_MOMENT not in frame.columns:
-            # With no instant on its rows, any grouping would be a guess, and
-            # a guessed moment merges two captures into one deeper ladder.
-            missing.append(f"{CAPTURE_MOMENT} (or snapshot)")
-        if missing:
-            # Checked before emptiness, so a truncated header with no rows
-            # (`captured_at,commence`) is named, as `load_movement_captures`
-            # names it: the capture never writes a header it cannot fill.
-            damaged[path.name] = f"missing column(s): {', '.join(missing)}"
-            continue
-        # THE BULK REQUEST'S ROWS ARE NOT A LADDER'S. Since the capture
-        # added the bulk moneyline, puck line and total to each round, a
-        # day file holds a featured `total_goals` line per book beside that
-        # book's `alternate_totals` rungs, under the same `captured_at` and
-        # spelled the same way. They came from a different request, seconds
-        # or a minute from the per-event one, and the registration compares
-        # "one book, one moment, two rungs" and never two moments; left in,
-        # a main line that moved between the two requests would read as the
-        # book contradicting its own ladder, and the featured rung would add
-        # to the depth the 2026-10-15 checkpoint reads, which was registered
-        # on the ladders alone. So they are dropped here, by the request they
-        # came from (`team_market_rows`), and the scan reads what it read
-        # before they existed. (The bulk moneyline has no line and the puck
-        # line no over/under, so neither was ever a rung either way.)
-        frame = frame[~team_market_rows(frame)]
         if frame.empty:
             continue
         frames.append(frame.assign(**{CAPTURE_DAY: path.stem}))
@@ -190,6 +170,56 @@ def load_captures(
     if not frames:
         return pd.DataFrame(), read
     return pd.concat(frames, ignore_index=True), read
+
+
+def read_day(path: Path) -> tuple[pd.DataFrame | None, str | None]:
+    """One day file's ladder rows, or None and the reason it is damaged.
+
+    The rows are the file's with the bulk request's dropped. An empty frame
+    is a day with nothing to scan (header only, or bulk rows only), which is
+    not damage. `load_captures` names every shape that is.
+    """
+    try:
+        frame = pd.read_csv(path, low_memory=False)
+    except (
+        OSError,
+        UnicodeDecodeError,
+        pd.errors.EmptyDataError,
+        pd.errors.ParserError,
+    ) as error:
+        return None, f"{type(error).__name__}: {error}".strip()
+    # The floor comes from the file, not the parse: stray quotes make
+    # pandas swallow rows into one field without an error.
+    rows_on_disk = existing_row_count(path)
+    if len(frame) < rows_on_disk:
+        return None, (
+            f"holds {rows_on_disk} row(s) and parses to only {len(frame)}"
+        )
+    missing = [name for name in REQUIRED_COLUMNS if name not in frame.columns]
+    if "snapshot" not in frame.columns and CAPTURE_MOMENT not in frame.columns:
+        # With no instant on its rows, any grouping would be a guess, and
+        # a guessed moment merges two captures into one deeper ladder.
+        missing.append(f"{CAPTURE_MOMENT} (or snapshot)")
+    if missing:
+        # Checked before emptiness, so a truncated header with no rows
+        # (`captured_at,commence`) is named, as `load_movement_captures`
+        # names it: the capture never writes a header it cannot fill.
+        return None, f"missing column(s): {', '.join(missing)}"
+    # THE BULK REQUEST'S ROWS ARE NOT A LADDER'S. Since the capture
+    # added the bulk moneyline, puck line and total to each round, a
+    # day file holds a featured `total_goals` line per book beside that
+    # book's `alternate_totals` rungs, under the same `captured_at` and
+    # spelled the same way. They came from a different request, seconds
+    # or a minute from the per-event one, and the registration compares
+    # "one book, one moment, two rungs" and never two moments; left in,
+    # a main line that moved between the two requests would read as the
+    # book contradicting its own ladder, and the featured rung would add
+    # to the depth the 2026-10-15 checkpoint reads, which was registered
+    # on the ladders alone. So they are dropped here, by the request they
+    # came from (`team_market_rows`), and the scan reads what it read
+    # before they existed. (The bulk moneyline has no line and the puck
+    # line no over/under, so neither was ever a rung either way.)
+    return frame[~team_market_rows(frame)], None
 
 
 def _unreadable_lines(damaged: list[dict]) -> list[str]:
@@ -219,6 +249,189 @@ def _say_unreadable(damaged: list[dict]) -> None:
             "other day is still counted, and the report names this one.",
             file=sys.stderr,
         )
+
+
+CACHE_FILENAME = "ladder_scan_cache.json"
+
+#: The counts one scan returns, each a sum over day files: every integer
+#: field of `LadderScan`, read off the class so a count added there is
+#: cached and summed without a second list to forget. (`depth_by` is a
+#: per-day split, merged on its own.)
+SCAN_COUNTS: tuple[str, ...] = tuple(
+    field.name for field in dataclasses.fields(LadderScan)
+    if field.name != "depth_by"
+)
+
+#: Every module whose code decides a day's counts. Their bytes, with the
+#: pandas and numpy versions, make the fingerprint a cached count is keyed
+#: on, so changing any of them (a detector fix, a loader fix) rescans every
+#: day rather than trusting a count the new code might not reproduce.
+_FINGERPRINT_SOURCES: tuple[str, ...] = (
+    "ladder_coherence.py",
+    "closing_lines.py",
+    "stores.py",
+    "models/value.py",
+)
+
+
+def detector_fingerprint() -> str:
+    """A digest of the code and libraries a day's counts depend on."""
+    import nhl_betting_lab
+
+    package = Path(nhl_betting_lab.__file__).resolve().parent
+    digest = hashlib.sha256()
+    digest.update(Path(__file__).resolve().read_bytes())
+    for name in _FINGERPRINT_SOURCES:
+        digest.update(name.encode("utf-8"))
+        digest.update((package / name).read_bytes())
+    digest.update(f"pandas {pd.__version__} numpy {np.__version__}".encode())
+    return digest.hexdigest()
+
+
+def _file_sha256(path: Path) -> str | None:
+    """The file's content hash, or None when it cannot be read (it is then
+    read the ordinary way, which names the damage)."""
+    digest = hashlib.sha256()
+    try:
+        with path.open("rb") as handle:
+            for block in iter(lambda: handle.read(1 << 20), b""):
+                digest.update(block)
+    except OSError:
+        return None
+    return digest.hexdigest()
+
+
+def scan_day(frame: pd.DataFrame, day: str, *, snapshot_elsewhere: bool) -> dict:
+    """One readable, non-empty day's counts, as the full scan counts them.
+
+    `snapshot_elsewhere` reproduces the one way the concatenated scan let a
+    file's columns reach another file's rows: when any scanned day carries a
+    `snapshot` column, `with_ladder_moment` leaves the concatenation alone and
+    every day without one reads its moment as blank. The capture never
+    writes `snapshot`, so this is False on every real run; it is kept so the
+    two scans cannot disagree even then.
+    """
+    frame = frame.assign(**{CAPTURE_DAY: day})
+    if snapshot_elsewhere and "snapshot" not in frame.columns:
+        frame = frame.assign(snapshot=np.nan)
+    else:
+        frame = with_ladder_moment(frame)
+    found, scan = find_violations(
+        frame[frame["line"].notna()].copy(), depth_by=CAPTURE_DAY
+    )
+    by_class = (
+        found["ladder_class"].value_counts().to_dict() if not found.empty else {}
+    )
+    return {
+        **{name: int(getattr(scan, name)) for name in SCAN_COUNTS},
+        "by_class": {name: int(by_class.get(name, 0)) for name, _ in LADDER_CLASSES},
+        "depth_by": {str(k): int(v) for k, v in scan.depth_by.items()},
+    }
+
+
+def _load_cache(directory: Path | None, fingerprint: str) -> dict:
+    """The cached days, or nothing when absent, unreadable or another
+    fingerprint's. A cache is a convenience: any doubt rescans."""
+    if directory is None:
+        return {}
+    try:
+        payload = json.loads((directory / CACHE_FILENAME).read_text("utf-8"))
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(payload, dict) or payload.get("fingerprint") != fingerprint:
+        return {}
+    days = payload.get("days")
+    return days if isinstance(days, dict) else {}
+
+
+def _save_cache(directory: Path | None, fingerprint: str, days: dict) -> None:
+    """Best effort: a cache that cannot be written costs the next run time,
+    never a count."""
+    if directory is None:
+        return
+    try:
+        directory.mkdir(parents=True, exist_ok=True)
+        partial = directory / f".{CACHE_FILENAME}.tmp"
+        partial.write_text(
+            json.dumps({"fingerprint": fingerprint, "days": days},
+                       indent=1, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        os.replace(partial, directory / CACHE_FILENAME)
+    except OSError as error:
+        print(f"::warning::Ladder scan cache not written ({error}); the next "
+              "run scans every day again.", file=sys.stderr)
+
+
+def scan_captures(
+    directory: Path,
+    *,
+    unreadable: dict[str, str],
+    cache_dir: Path | None = None,
+) -> tuple[dict | None, list[str], dict]:
+    """Every day's counts summed, the day files read, and what was reused.
+
+    Returns None for the counts when no day could be scanned (the report's
+    empty states). A day is read only when it is not in the cache under its
+    current content hash; every damaged day is read, and named, every time.
+    """
+    fingerprint = detector_fingerprint()
+    cached = _load_cache(cache_dir, fingerprint)
+    paths = sorted(directory.glob("*.csv")) if directory.is_dir() else []
+    entries: dict[str, dict] = {}
+    frames: dict[str, pd.DataFrame] = {}
+    reused = 0
+    for path in paths:
+        digest = _file_sha256(path)
+        hit = cached.get(path.name)
+        if digest is not None and isinstance(hit, dict) and hit.get("sha256") == digest:
+            entries[path.name] = hit
+            reused += 1
+            continue
+        frame, reason = read_day(path)
+        if reason is not None:
+            unreadable[path.name] = reason
+            continue
+        entries[path.name] = {
+            "sha256": digest,
+            "empty": bool(frame.empty),
+            "has_snapshot": "snapshot" in frame.columns,
+            "counts": {},
+        }
+        if not frame.empty:
+            frames[path.name] = frame
+    files = [name for name in sorted(entries) if not entries[name]["empty"]]
+    snapshot_elsewhere = any(entries[name]["has_snapshot"] for name in files)
+    variant = "snapshot_elsewhere" if snapshot_elsewhere else "own_moment"
+    totals: dict | None = None
+    for name in files:
+        entry = entries[name]
+        counts = entry["counts"].get(variant)
+        if counts is None:
+            frame = frames.get(name)
+            if frame is None:
+                frame, reason = read_day(directory / name)
+                if reason is not None:  # changed under us since it was hashed
+                    unreadable[name] = reason
+                    del entries[name]
+                    continue
+            counts = scan_day(frame, Path(name).stem,
+                              snapshot_elsewhere=snapshot_elsewhere)
+            entry["counts"][variant] = counts
+        if totals is None:
+            totals = {key: 0 for key in SCAN_COUNTS}
+            totals["by_class"] = {cls: 0 for cls, _ in LADDER_CLASSES}
+            totals["depth_by"] = {}
+        for key in SCAN_COUNTS:
+            totals[key] += counts[key]
+        for cls, value in counts["by_class"].items():
+            totals["by_class"][cls] += value
+        for day, value in counts["depth_by"].items():
+            totals["depth_by"][day] = totals["depth_by"].get(day, 0) + value
+    files = [name for name in files if name in entries]
+    _save_cache(cache_dir, fingerprint,
+                {name: e for name, e in entries.items() if e.get("sha256")})
+    return totals, files, {"reused": reused, "scanned": len(paths) - reused}
 
 
 def checkpoint_window(depth_by_day: dict[str, int], files: list[str]) -> dict:
@@ -253,11 +466,24 @@ def main(argv: list[str] | None = None) -> int:
         "in that day's file exits 2; an earlier damaged day is named as a "
         "warning. Omitted, any damaged file exits 2.",
     )
+    parser.add_argument(
+        "--cache-dir",
+        default=None,
+        help="Keep each readable day's counts here, keyed on its content "
+        "hash and the detector's fingerprint, and scan only new or changed "
+        "days. Counts and hashes only. Omitted, every day is scanned.",
+    )
     args = parser.parse_args(argv)
 
     directory = Path(args.processed_dir) / MOVEMENT_DIRNAME
     unreadable: dict[str, str] = {}
-    prices, files = load_captures(directory, unreadable=unreadable)
+    cache_dir = Path(args.cache_dir) if args.cache_dir else None
+    totals, files, reuse = scan_captures(
+        directory, unreadable=unreadable, cache_dir=cache_dir
+    )
+    if cache_dir is not None:
+        print(f"Ladder scan: {reuse['reused']} day file(s) reused from the "
+              f"cache, {reuse['scanned']} read.")
     own_file = f"{args.fail_on_day}.csv" if args.fail_on_day else None
     damaged = [
         {"name": name, "reason": reason,
@@ -271,7 +497,7 @@ def main(argv: list[str] | None = None) -> int:
     outputs = Path(args.output_dir)
     outputs.mkdir(parents=True, exist_ok=True)
 
-    if prices.empty:
+    if totals is None:
         if damaged:
             # Never "Nothing has been captured yet ... not a fault" over a
             # list of captured days that could not be read.
@@ -308,10 +534,8 @@ def main(argv: list[str] | None = None) -> int:
             print("Nothing captured yet; wrote the empty-state report.")
         return exit_code
 
-    prices = with_ladder_moment(prices)
-    found, scan = find_violations(
-        prices[prices["line"].notna()].copy(), depth_by=CAPTURE_DAY
-    )
+    scan = LadderScan(**{name: totals[name] for name in SCAN_COUNTS})
+    scan.depth_by = dict(totals["depth_by"])
     print(scan.summary_line())
     checkpoint = checkpoint_window(scan.depth_by, files)
     # THE REGISTERED NUMBERS GO TO THE LOG, NOT ONLY TO THE RUN SUMMARY.
@@ -329,9 +553,7 @@ def main(argv: list[str] | None = None) -> int:
         f"{CHECKPOINT_DEPTH_FLOOR:,}."
     )
 
-    by_class = (
-        found["ladder_class"].value_counts().to_dict() if not found.empty else {}
-    )
+    by_class = totals["by_class"]
     record = {
         "captures": len(files),
         "ladders": scan.ladders,
