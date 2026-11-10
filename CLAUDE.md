@@ -3615,6 +3615,23 @@ Re-derive rather than trust if the data has moved.
   questionable status is now never out, whatever group he is filed in. The
   same run moved six goalies onto their noted return dates (Lyon, Andersen,
   Gustavsson, Shesterkin, Merzlikins, Demko), as the notes already had them.
+- **2026-11-10: Season Sim's restore warnings were the step scripts, not
+  failures, and three roster-note names are matched. Site only.** Run
+  42837197651's log carried "The last season projection could not be
+  restored" and "The card's team ratings could not be restored" because both
+  sentences sat in the steps' `run:` blocks, which GitHub prints at the top
+  of every step log; that run had restored both (projection from run
+  42832549612, card ratings through 2026-11-09, blended at 0.50), and none
+  of the 40 runs before it had failed either. Both restores are now
+  `scripts/season_sim_inputs.py` (`previous`, `ratings`; the same
+  `restore_state.py` calls), which prints a warning only when it happens.
+  The roster-note warnings were real: start shares were compared with the
+  roster's spelling exactly ("Arvid Soderblom", "Rémi Poirier"), and skater
+  and goalie names likewise; `season_sim/model.py` now falls back to the
+  folded name (accents, case, punctuation) when exactly one player has it.
+  Dylan Larkin, suspended off DET's roster, moved from `out` to `returning`
+  with his birth date (1996-07-30). A share that still matches no rostered
+  goalie now names the club's rostered goalies in its warning.
 
 ## Contract strings — never change these
 

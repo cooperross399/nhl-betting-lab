@@ -224,6 +224,50 @@ def _norm_name(name: str) -> str:
     return "".join(ch for ch in folded.casefold() if ch.isalnum())
 
 
+class _NameIndex:
+    """Player ids by full name, exact first, then by the folded name
+    (accents, case and punctuation dropped) when it names one player only.
+
+    The notes are typed by hand and the stats API spells names as the NHL
+    does, so "Arvid Soderblom" must find "Arvid Söderblom"; two players who
+    fold to one name (the two Elias Petterssons) are never guessed between.
+    """
+
+    def __init__(self, pairs) -> None:
+        self.exact: dict[str, int] = {}
+        folded: dict[str, set[int]] = defaultdict(set)
+        for name, pid in pairs:
+            self.exact[name] = pid
+            folded[_norm_name(name)].add(pid)
+        self.folded = {key: next(iter(ids)) for key, ids in folded.items() if len(ids) == 1}
+
+    def get(self, name: str):
+        if name in self.exact:
+            return self.exact[name]
+        return self.folded.get(_norm_name(name))
+
+
+def _match_shares(shares: dict[str, float], roster_names: list[str]) -> tuple[dict[str, float], list[str]]:
+    """Start shares keyed on the roster's spelling, and the names that match
+    no rostered goalie (exactly, or on a folded name only one goalie has)."""
+    by_fold: dict[str, list[str]] = defaultdict(list)
+    for name in roster_names:
+        by_fold[_norm_name(name)].append(name)
+    matched: dict[str, float] = {}
+    missing: list[str] = []
+    for name, share in shares.items():
+        if name in roster_names:
+            target = name
+        else:
+            candidates = by_fold.get(_norm_name(name), [])
+            target = candidates[0] if len(candidates) == 1 else None
+        if target is None:
+            missing.append(name)
+        else:
+            matched[target] = matched.get(target, 0.0) + share
+    return matched, missing
+
+
 def goalie_availability(availability: dict | None, goalies: dict[str, list[dict]], returns: dict,
                         asof: date) -> tuple[dict, list[str]]:
     """Which goalies are out today, from free sources, as ``returns`` entries.
@@ -374,8 +418,8 @@ def build_model(bundle: dict, injuries: dict, *, starter_shares: dict, ph_rating
     for s, rows in bundle["goalies"].items():
         for q in rows:
             gl[q["playerId"]][s] = q
-    name_to_skater = {q["skaterFullName"]: pid for pid, ss in sk.items() for q in ss.values()}
-    name_to_goalie = {q["goalieFullName"]: pid for pid, ss in gl.items() for q in ss.values()}
+    name_to_skater = _NameIndex((q["skaterFullName"], pid) for pid, ss in sk.items() for q in ss.values())
+    name_to_goalie = _NameIndex((q["goalieFullName"], pid) for pid, ss in gl.items() for q in ss.values())
 
     prior_season = seasons[1]
     prior = role_prior(bundle["skaters"][prior_season])
@@ -600,12 +644,14 @@ def build_model(bundle: dict, injuries: dict, *, starter_shares: dict, ph_rating
             d_xgf += f * share; d_xga += a * share
         gps = [project_goalie(g) for g in rosters[ab]["goalies"]]
         shares = dict(starter_shares.get(ab, {}))
-        names = {g["name"] for g in gps}
-        missing = [n for n in shares if n not in names]
+        # The notes are typed by hand ("Arvid Soderblom") and the roster
+        # spells the name as the NHL does ("Arvid Söderblom"), so a share
+        # is matched on the folded name when the exact one is not there,
+        # and only to a single goalie (2026-11-10).
+        shares, missing = _match_shares(shares, [g["name"] for g in gps])
         if missing:
-            unknown.extend(f"{n} (start share, {ab})" for n in missing)
-            for n in missing:
-                shares.pop(n)
+            listed = ", ".join(g["name"] for g in gps) or "none"
+            unknown.extend(f"{n} (start share, {ab}; its rostered goalies: {listed})" for n in missing)
         if not shares:
             # no depth chart: split starts by last season's starts, else evenly
             weights_g = {g["name"]: max((g["last"] or {}).get("gs", 0), 1) for g in gps}
