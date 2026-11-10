@@ -809,7 +809,7 @@ def clears_best_bet_bar(
     saves starter check, the late-lean rules, one stake per outcome, and
     whether that day's card was blocked or the market eligible. So it is
     the card's best-bet bar applied to the frozen opinions, an
-    approximation of the staked bets and never a list of them.
+    approximation of the bets the card stakes and never a list of them.
     """
     from nhl_betting_lab.config import MAX_DEFAULT_JUICE, MAX_DEFAULT_PRICE
     from nhl_betting_lab.markets import MARKETS_BY_KEY
@@ -867,8 +867,8 @@ def best_bet_bar_note() -> str:
         f"prop or {_percent(BEST_BET_EDGE)} for a team market, priced "
         f"{MAX_DEFAULT_JUICE} to +{MAX_DEFAULT_PRICE}, not in {excluded}, a "
         f"moneyline side the model gives at least {STAT_SIDE_MIN_WIN:.0%}, and "
-        "a prop clearing its odds-bracket floor. It approximates the card's "
-        "staked bets and is not a list of them: the card stakes on the "
+        "a prop clearing its odds-bracket floor. It approximates the bets "
+        "the card stakes and is not a list of them: the card stakes on the "
         "self-learned edge, applied after the snapshot is frozen, and also "
         "applies the win-chance floor to puck lines and regulation sides, the "
         "saves starter check and one stake per outcome, none of which a "

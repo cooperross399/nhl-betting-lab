@@ -862,18 +862,11 @@ jobs:
           PYTHONPATH: src
         run: |
           set -u
-          SCORES="$RUNNER_TEMP/layer-scoring"
-          rm -rf "$SCORES"
-          mkdir -p "$SCORES" data/outputs
+          mkdir -p data/outputs
           rm -f data/outputs/layer_scoring.md data/outputs/layer_scoring.json
-          if python scripts/restore_state.py --artifact layer-scoring --dest "$SCORES" \
-              --workflow layer-scoring.yml --success-only --no-merge --attempts 2 --limit 5; then
-            for name in layer_scoring.md layer_scoring.json; do
-              if [ -f "$SCORES/$name" ]; then
-                cp "$SCORES/$name" "data/outputs/$name"
-              fi
-            done
-          fi
+          # Copies the artifact's two files over data/outputs and nothing else.
+          python scripts/restore_state.py --artifact layer-scoring --dest data/outputs \
+            --workflow layer-scoring.yml --success-only --no-merge --attempts 2 --limit 5 || true
           if [ -s data/outputs/layer_scoring.json ]; then
             echo "Layer scorecard restored."
           else

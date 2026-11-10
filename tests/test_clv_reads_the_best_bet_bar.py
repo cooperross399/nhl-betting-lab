@@ -63,7 +63,7 @@ def test_the_bar_reads_the_cards_own_constants() -> None:
     assert cl.clears_best_bet_bar("total_goals", BEST_BET_EDGE, 100, 0.6)
     assert not cl.clears_best_bet_bar("total_goals", BEST_BET_EDGE - 0.001, 100, 0.6)
     note = cl.best_bet_bar_note()
-    assert "approximates the card's staked bets and is not a list of them" in note
+    assert "approximates the bets the card stakes and is not a list of them" in note
 
 
 def test_the_report_carries_the_best_bet_bar_view(tmp_path: Path) -> None:
