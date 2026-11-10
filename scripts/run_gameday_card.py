@@ -24,6 +24,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from nhl_betting_lab.clv_staking import load_table as load_clv_table
 from nhl_betting_lab.config import OUTPUTS_DIR, PROCESSED_DIR, STAGING_DIR
 from nhl_betting_lab.data.build_datasets import load_player_logs, load_team_games
 from nhl_betting_lab.models.saves_context import SavesInputs
@@ -995,6 +996,14 @@ def main(argv: list[str] | None = None) -> int:
             f"Starting goalies: {len(starters.listings)} team listing(s), "
             f"fetched {starters.retrieved_at}."
         )
+    # Stakes sized by each market's measured closing-line value (Cooper,
+    # 2026-11-10). The table is aggregate only, written by the last run's
+    # CLV step; a missing or stale one moves no stake.
+    clv_table, clv_note = load_clv_table(processed, now=moment)
+    print(
+        f"Closing-line staking: {len(clv_table['markets'])} market(s) measured."
+        if clv_table else f"Closing-line staking: {clv_note}"
+    )
     card = build_card(
         prices,
         probabilities,
@@ -1005,6 +1014,8 @@ def main(argv: list[str] | None = None) -> int:
         allowlisted_markets=allowlisted,
         scheduled_games=still_to_play,
         goalie_starters=starters,
+        clv_table=clv_table,
+        clv_note=clv_note,
     )
     card.team_ratings = team_ratings
     card.team_factors = team_factors

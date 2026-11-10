@@ -1103,6 +1103,17 @@ jobs:
           # skip the clean-up below; the status is kept and returned instead.
           CLV_STATUS=0
           python scripts/run_closing_line_value.py "${SOURCES[@]}" || CLV_STATUS=$?
+          # Best bets by the run that first listed them (morning card,
+          # afternoon update, pre-game update), from the card history on the
+          # public card-feed branch, the ledger and the same closes: Cooper,
+          # 2026-11-10. Aggregate only, and soft: it never changes this
+          # step's exit.
+          if git fetch --no-tags --quiet origin +refs/heads/card-feed:refs/remotes/origin/card-feed 2>/dev/null; then
+            python scripts/run_pick_timing.py --card-feed origin/card-feed "${SOURCES[@]}" \
+              || echo "::warning::The pick-timing report could not be built this run."
+          else
+            echo "::warning::card-feed could not be fetched, so the pick-timing report was not built."
+          fi
           rm -rf "$STORE_DIR" "$CHAIN_DIR"
           if [ -n "$STORE_FAULT" ]; then
             echo "::error::$STORE_FAULT; $SCORED."
@@ -1401,6 +1412,13 @@ jobs:
             ENTRIES=$(printf '%s\n100644 blob %s\tlatest_closing_line_value.md' \
               "$ENTRIES" "$BLOB_CLV")
           fi
+          # Best bets by the run that first listed them (2026-11-10):
+          # aggregate counts, returns and CLV intervals, no price.
+          if [ -f data/outputs/pick_timing.md ]; then
+            BLOB_TIMING=$(git hash-object -w data/outputs/pick_timing.md)
+            ENTRIES=$(printf '%s\n100644 blob %s\tlatest_pick_timing.md' \
+              "$ENTRIES" "$BLOB_TIMING")
+          fi
           # The weekly layer scoring (2026-11-10), restored before the card:
           # aggregate units and intervals per model layer, no price.
           if [ -f data/outputs/layer_scoring.md ]; then
@@ -1474,6 +1492,9 @@ jobs:
             data/outputs/forward_evidence.md
             data/outputs/forward_evidence.json
             data/outputs/closing_line_value.md
+            data/outputs/clv_by_market.json
+            data/outputs/pick_timing.md
+            data/outputs/pick_timing.json
             data/outputs/layer_scoring.md
             data/outputs/layer_scoring.json
           if-no-files-found: warn

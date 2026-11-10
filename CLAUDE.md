@@ -3537,6 +3537,53 @@ Re-derive rather than trust if the data has moved.
   not set aside (Cooper's call). The edge bars, market list and staking
   rule are unchanged.
 
+- **2026-11-10, NOT a defect fix: best-bet stakes lean on measured CLV per
+  market (Cooper, on the two proposals of that morning: "ALL").** Cooper's
+  standing rule is that factors he asks for go live on the card. The CLV
+  step of Gameday Refresh now also writes `clv_by_market.json`
+  (`nhl_betting_lab.clv_staking.market_table`), an aggregate table of the
+  CLV report's **Bets view** (population B), per market: wagers, games, mean
+  CLV, its plain 95% game-clustered interval (not corrected across markets),
+  beat rate, verdict and stake multiplier. No price, line or book. The next
+  card reads it (`load_table`, from `data/processed`, carried in
+  gameday-state) and multiplies each best bet's tier units: **x1.5** where the
+  interval sits above zero ("beats the close"), **x0.5** where it spans zero
+  ("no demonstrated CLV"), **x0.25** where it sits below zero, and **x1**
+  under 200 wagers or 30 games ("too few to judge"). A missing, unreadable
+  or over-4-day-old table changes nothing and the card says so. Each staked
+  row names its multiplier (`stake_reason`), and the card's notes print the
+  table. First table (dispatch run 42829927916, through 2026-11-09): beats
+  the close: shots_on_goal (2,244 bets), points (1,412), assists (740),
+  team_total (521), puck_line (283), goals (223); no demonstrated CLV:
+  total_goals (408, x0.5); too few to judge: goalie_saves (174),
+  regulation_3_way (176), hits (120), blocked_shots (86), moneyline (80).
+  Points stays never staked (`STAKE_EXCLUDED_MARKETS` applies first), so its
+  x1.5 moves nothing. **CLV is not a return: beating the close is a
+  measured leading indicator and no demonstrated edge.** The snapshot is
+  frozen before `build_card`, so the forward ledger and the 2027-04-25 test
+  are unchanged; only stakes move. The model, the edge bars, the market list
+  and the stats, bracket and starter checks are unchanged.
+- **2026-11-10: picks first listed by the afternoon and pre-game re-prices
+  do not demonstrably trail the morning card, so nothing changed.** Cooper
+  asked whether later picks are worse ("ALL"). `scripts/run_pick_timing.py`,
+  run inside the CLV step (it needs the private store; it writes aggregates
+  only to `pick_timing.md`/`.json`, and card-feed gets
+  `latest_pick_timing.md`), attributes each best bet on card-feed's card
+  history to the run that first listed it (UTC hour: morning 10-18,
+  afternoon 18-22, pre-game otherwise) and scores it at the card's price,
+  1u flat, settled by the forward ledger and, for rows the ledger lacks, the
+  box-score logs by its own rules. Dispatch run 42829927916, 126 cards, 428
+  picks: morning 275 (267 settled, 134-130-3, **+6.79% [-7.79%, +21.37%]**;
+  mean CLV **+3.75% [+2.89%, +4.61%]** over 250 with a close); afternoon 141
+  (135 settled, -8.86% [-30.44%, +12.72%]; CLV +3.03% [+1.16%, +4.91%] over
+  52); pre-game 12 (+11.69%; CLV -0.42% over 8). Late minus morning: CLV
+  **-1.18% [-3.06%, +0.69%]** over 60 late picks, return **-13.98% [-39.75%,
+  +11.80%]** over 147: **no demonstrated difference** on either. The rule,
+  fixed before the reading: late additions trail when, with 50+ late picks,
+  the difference's interval sits wholly below zero for CLV or return; then
+  re-price additions would have been leans. They did not, so the re-prices
+  stake as before. The report reruns every Gameday Refresh, and the question
+  is Cooper's to reopen when it moves.
 - **2026-11-10, a defect fix, site only: the season simulator gives a
   goalie who is out today no remaining starts.** The Season page split each
   club's remaining starts by its goalie depth chart and knew a goalie was

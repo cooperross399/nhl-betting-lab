@@ -167,6 +167,17 @@ PYTHONPATH=src .venv/bin/python scripts/run_forward_evidence.py
 # Score every frozen opinion against the market's last word before puck drop.
 # Offline: it reads the capture store, fetches nothing, spends nothing.
 PYTHONPATH=src .venv/bin/python scripts/run_closing_line_value.py
+# It also writes clv_by_market.json (data/processed and data/outputs): the
+# bets' CLV per market, aggregate only, which the next card sizes each best
+# bet's stake on (x1.5 above zero, x0.5 spanning, x0.25 below, unchanged under
+# 200 bets or 30 games; nhl_betting_lab.clv_staking, Cooper 2026-11-10).
+
+# Best bets by the run that first listed them (morning card, afternoon update,
+# pre-game update): results from the ledger, CLV from the captures. Reads the
+# card history on card-feed; aggregate only. Gameday Refresh runs it inside
+# the CLV step, the one step that may read the private store.
+git fetch origin +refs/heads/card-feed:refs/remotes/origin/card-feed
+PYTHONPATH=src .venv/bin/python scripts/run_pick_timing.py --card-feed origin/card-feed
 
 # Decide whether the card is worth an email and write the comment body.
 PYTHONPATH=src .venv/bin/python scripts/post_card_to_issue.py --out comment.md

@@ -31,6 +31,7 @@ from nhl_betting_lab.closing_lines import (
     save_clv_report,
     unreadable_store_report,
 )
+from nhl_betting_lab.clv_staking import market_table, save_table
 from nhl_betting_lab.config import OUTPUTS_DIR, PROCESSED_DIR
 from nhl_betting_lab.forward_evidence import load_ledger, read_snapshot, snapshots_dir
 
@@ -275,6 +276,17 @@ def main(argv: list[str] | None = None) -> int:
     path = save_clv_report(
         report, output_dir=Path(args.output_dir), generated=generated
     )
+    # The per-market table the next card sizes its stakes on (Cooper,
+    # 2026-11-10). Aggregate only: counts, means and intervals, no price,
+    # line or book. data/processed carries it to the next run.
+    table = market_table(report, generated=generated)
+    for written in save_table(table, processed, Path(args.output_dir)):
+        print(f"  CLV staking table: {written}")
+    for market, row in table["markets"].items():
+        print(
+            f"  {market}: {row['verdict']} over {row['wagers']} bet(s), "
+            f"stake x{row['multiplier']:g}"
+        )
     counts = report.get("counts", {})
     print(
         f"Matched {counts.get('matched', 0)} of {counts.get('opinions', 0)} "
