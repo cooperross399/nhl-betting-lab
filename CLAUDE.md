@@ -3850,6 +3850,45 @@ Re-derive rather than trust if the data has moved.
   hanging API. Other callers of `nhl_api` see no breaker. A healthy run asks
   and caches exactly what it did. `tests/test_the_nhl_fetch_stops_asking_a_dead_api.py`.
 
+- **2026-11-11: a stricter rule for `shots_on_goal` overs was tested on
+  past prices and none passed, so the card is unchanged (Cooper's decision
+  of 2026-11-10, "ALL" on a card: "test a stricter rule for shots overs and
+  only switch it on if it passes on past prices").** Three candidates and
+  the rule were fixed and committed before any result was read
+  (`docs/sog_over_rule_decision_rule.md`): `bar` (shots overs need a 12%
+  edge), `cap` (no shots over longer than +200) and `exclude` (no shots
+  overs). A candidate's improvement D is minus the units of the population-B
+  overs it removes (R), 1u flat at the best price, one bet per wager,
+  game-clustered intervals. It passes only if D > 0 on the bought
+  card-window prices pooled and in both seasons, D > 0 on the forward
+  ledger from 2026-10-22 pooled and in both halves, R's ledger return sits
+  wholly below zero with a Bonferroni interval across the three, and R
+  holds 30+ wagers on each source. `scripts/run_sog_over_rule_study.py`,
+  Shots Model Study run 42956259408 (`study: over_rule`, #459):
+  - **Bought prices** (`card` window, 9.5 hours, walk-forward with the
+    card's layers, 6% bar): 11,467 shots bets, unders +143.9u over 11,204
+    (+1.3% [-0.7%, +3.2%]); overs **-9.8u over 263, -3.7% [-16.5%,
+    +9.1%]** (2024-25 -5.1u over 65, 2025-26 -4.7u over 198). `bar` removes
+    258 (-13.1u, D +13.1u; +6.3u and +6.8u by season); `cap` removes none
+    (no selected over priced past +200); `exclude` D +9.8u.
+  - **Forward ledger** (population B shots from 2026-10-22, 1,205 wagers;
+    unders +17.3u over 716, +2.4% [-5.5%, +10.3%]): overs **+0.3u over
+    489, +0.1% [-35.6%, +35.7%]**, hit 17.8% against a modelled 27.4%
+    (first half to 10-31 +11.8u over 278, second -11.5u over 211). `bar`
+    removes 462 at -0.2u (D +0.2u; halves -8.6u and +8.8u); `cap` removes
+    421 at +4.4u (D -4.4u); `exclude` D -0.3u (halves -11.8u and +11.5u).
+    Every corrected interval on R spans zero (`bar` -45.1% to +45.0%).
+  **No candidate passes**: `bar` and `exclude` improve history in both
+  seasons but not the ledger in both halves, and nothing is demonstrated;
+  `cap` fails everywhere. Every interval spans zero: no demonstrated edge
+  either way. The shots overs still land about ten points under their
+  modelled chance, but they are priced long enough that population B's
+  overs since 10-22 broke even at 1u (the -93.1u from 10-28 quoted above
+  was a different count; the diagnosis entry's own count read -50.5u over
+  319). Nothing moved: the model, the card's bars, caps and listing,
+  `clv_staking.BUMP_HELD_SIDES` (shots overs still held at x1), the
+  snapshot, the forward ledger and the 2027-04-25 test.
+
 ## Contract strings — never change these
 
 Cooper's local scheduled tasks hard-code these. Renaming any of them silently
