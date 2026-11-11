@@ -60,7 +60,7 @@ from nhl_betting_lab.stats import (
     ROI_TABLE_HEADER,
     RoiInterval,
     detection_table,
-    roi_interval,
+    clustered_mean_interval,
 )
 
 
@@ -455,6 +455,7 @@ def measure_prices(
         ] = (float(row.model_probability), bool(row.outcome), bool(row.push))
 
     returns: list[float] = []
+    games: list[tuple[str, str | None, str | None]] = []
     wins = pushes = 0
     for row, home, away in rows:
         try:
@@ -500,6 +501,11 @@ def measure_prices(
                     accounting.get("below_threshold", 0) + 1
                 )
             continue
+        # The game the wager settles on: league date, home, away, the key
+        # the forward report clusters on. Both sides of a moneyline, every
+        # line of a total and every puck line of one game settle on one
+        # final score, so they are one draw, not several.
+        games.append((key[0], home, away))
         if push:
             returns.append(0.0)
             pushes += 1
@@ -508,7 +514,13 @@ def measure_prices(
         wins += 1 if won else 0
     if not returns:
         return None
-    return roi_interval(returns, wins=wins, pushes=pushes, looks=looks)
+    # Clustered on the game (2026-11-10): `roi_interval` counted every wager
+    # as an independent draw. This is that interval exactly when every game
+    # holds one wager, and never narrower; the point estimate, the wagers
+    # and the family (`looks`) are unchanged.
+    return clustered_mean_interval(
+        returns, games, wins=wins, pushes=pushes, looks=looks
+    )
 
 
 def lines_outside_the_grid(prices: pd.DataFrame) -> dict[str, list[float]]:
