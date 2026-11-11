@@ -78,8 +78,8 @@ from nhl_betting_lab.stats import (
     NO_DEMONSTRATED_EDGE,
     ROI_TABLE_HEADER,
     RoiInterval,
+    clustered_mean_interval,
     detection_table,
-    roi_interval,
 )
 
 
@@ -123,6 +123,14 @@ class PlacedBet:
     #: needs this to be on the ROI's basis. Not written to the bets CSV,
     #: whose columns stay as they were.
     push_probability: float = 0.0
+    #: The game the bet settles on: (home, away, league game date), the key
+    #: `forward_evidence._game_of` clusters on, with each club resolved
+    #: through the team-name map where it can be. Every rung, side and
+    #: player of one game settles on one boxscore, so the intervals count
+    #: games, not bets (`_game_clusters`). Empty when the price row names
+    #: no team and carries no event id; such a bet is its own cluster. Not
+    #: written to the bets CSV.
+    game: tuple = ()
 
 
 @dataclass
@@ -623,6 +631,7 @@ def run_backtest(
                 profit=profit,
                 book=str(getattr(row, "book", "")),
                 push_probability=distribution.push_probability(line),
+                game=_game_of_row(row, date_text, team_map),
             )
         )
 
@@ -644,32 +653,38 @@ def run_backtest(
         )
         report.looks = looks
         report.family = family
-        report.overall = roi_interval(
-            [bet.profit for bet in report.bets],
-            wins=sum(1 for bet in report.bets if bet.won),
-            pushes=sum(1 for bet in report.bets if bet.push),
-            looks=looks,
-            family=family,
+        # Every interval counts the game, not the bet (2026-11-10). The
+        # best-price collapse leaves one bet per wager, but every rung of a
+        # ladder, both sides of a line and every player of one game settle on
+        # one boxscore, so counting each bet as an independent draw made every
+        # interval too narrow. `clustered_mean_interval` is the old interval
+        # exactly when every game holds one bet and is never narrower; the
+        # point estimate, the bets and the family are unchanged.
+        clusters = _game_clusters(report.bets)
+        report.overall = _interval(
+            report.bets, clusters, looks=looks, family=family
         )
         for market in markets:
-            subset = [bet for bet in report.bets if bet.market == market]
-            report.by_market[market] = roi_interval(
-                [bet.profit for bet in subset],
-                wins=sum(1 for bet in subset if bet.won),
-                pushes=sum(1 for bet in subset if bet.push),
+            chosen = [i for i, bet in enumerate(report.bets) if bet.market == market]
+            report.by_market[market] = _interval(
+                [report.bets[i] for i in chosen],
+                [clusters[i] for i in chosen],
                 looks=looks,
                 family=family,
             )
-        report.by_side = {
-            side: roi_interval(
-                [bet.profit for bet in report.bets if _side_of(bet) == side],
-                wins=sum(
-                    1 for bet in report.bets if _side_of(bet) == side and bet.won
-                ),
-            )
-            for side in ("over", "under")
-            if any(_side_of(bet) == side for bet in report.bets)
-        }
+        by_side: dict[str, RoiInterval] = {}
+        for side in ("over", "under"):
+            chosen = [
+                i for i, bet in enumerate(report.bets) if _side_of(bet) == side
+            ]
+            if chosen:
+                # Wins only, as before: this table never carried pushes.
+                by_side[side] = clustered_mean_interval(
+                    [report.bets[i].profit for i in chosen],
+                    [clusters[i] for i in chosen],
+                    wins=sum(1 for i in chosen if report.bets[i].won),
+                )
+        report.by_side = by_side
 
     # A market this run measured is not unmeasurable, whatever an older probe
     # concluded. `hits` was recorded as "not offered in any of 256 events" and
@@ -690,6 +705,50 @@ def run_backtest(
             "here rather than printed beside the measurement refuting it."
         )
     return report
+
+
+def _game_of_row(
+    row: Any, date_text: str, team_map: Mapping[str, str] | None
+) -> tuple:
+    """(home, away, league game date) for a price row, or () if unknown.
+
+    Each label is resolved through the team-name map where it can be, so
+    two spellings of one club are one game; an unresolved label is kept
+    as written. A row naming neither club falls back to its provider event
+    id, and a row with neither is left unclustered (its own draw).
+    """
+    labels = []
+    for column in ("home_team", "away_team"):
+        label = clean_text(getattr(row, column, ""))
+        resolved = resolve_team(label, team_map) if label and team_map else None
+        labels.append(resolved or label)
+    if labels[0] or labels[1]:
+        return (labels[0], labels[1], date_text)
+    event = clean_text(getattr(row, "provider_event_id", ""))
+    return ("event", event, date_text) if event else ()
+
+
+def _game_clusters(bets: list[PlacedBet]) -> list[object]:
+    """The cluster each bet's interval counts it in: its game, or the bet
+    itself when the game is unknown (which is the old, unclustered row)."""
+    return [
+        bet.game if bet.game else ("bet", index)
+        for index, bet in enumerate(bets)
+    ]
+
+
+def _interval(
+    bets: list[PlacedBet], clusters: list[object], *, looks: int, family: str
+) -> RoiInterval:
+    """Flat-stake ROI over `bets`, its interval clustered on `clusters`."""
+    return clustered_mean_interval(
+        [bet.profit for bet in bets],
+        clusters,
+        wins=sum(1 for bet in bets if bet.won),
+        pushes=sum(1 for bet in bets if bet.push),
+        looks=looks,
+        family=family,
+    )
 
 
 def _side_of(bet: PlacedBet) -> str:
@@ -924,7 +983,21 @@ def render_backtest(report: BacktestReport) -> str:
                 MARKETS_BY_KEY[market].label if market in MARKETS_BY_KEY else market
             )
             lines.append(interval.as_row(f"`{market}` ({label})"))
-        lines.extend(["", "### What each row means", ""])
+        lines.extend(
+            [
+                "",
+                (
+                    "Every interval counts the game, not the bet: every rung, "
+                    "side and player of one game settles on one boxscore, so "
+                    "the bets of a game are one draw (clustered on home, away "
+                    "and league game date). It is the per-bet interval exactly "
+                    "when every game holds one bet, and never narrower."
+                ),
+                "",
+                "### What each row means",
+                "",
+            ]
+        )
         for market, interval in report.by_market.items():
             lines.append(f"- `{market}`: {interval.verdict()}")
 
@@ -1213,7 +1286,7 @@ def save_backtest(
     csv_path = directory / BACKTEST_CSV_FILENAME
     pd.DataFrame(
         [
-            {k: v for k, v in bet.__dict__.items() if k != "push_probability"}
+            {k: v for k, v in bet.__dict__.items() if k not in ("push_probability", "game")}
             for bet in report.bets
         ]
     ).to_csv(

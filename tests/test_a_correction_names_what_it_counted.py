@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import json
 import re
+from datetime import date, timedelta
 from pathlib import Path
 
 import pandas as pd
@@ -42,9 +43,6 @@ from nhl_betting_lab.reports.player_props_backtest import (
 
 TEAM_MAP = {"carolina hurricanes": "CAR", "ottawa senators": "OTT"}
 
-#: 7:10pm ET on 2025-01-05 is 00:10Z on the 6th.
-COMMENCE = "2025-01-06T00:10:00Z"
-
 #: What the two-market fixture's family must be called wherever it is stated.
 FAMILY = "3 figures measured on the same data (2 markets and the overall figure)"
 
@@ -57,14 +55,20 @@ def _name(index: int) -> str:
 
 
 def _wagers(market: str, wins: int, losses: int, *, first: int) -> tuple[list, list]:
-    """`wins + losses` wagers on distinct players, over 0.5 at +100, one book."""
+    """`wins + losses` wagers on distinct players, over 0.5 at +100, one book.
+
+    Each wager is its own game (its own night of CAR v OTT): the backtest's
+    intervals count the game, not the wager (2026-11-10), so 400 wagers in
+    one game would be one draw and no interval could be bounded."""
     prices, samples = [], []
     for index in range(first, first + wins + losses):
         player = _name(index)
+        night = date(2025, 1, 5) + timedelta(days=index)
+        commence = f"{night + timedelta(days=1)}T00:10:00Z"
         prices.append(
             {
-                "date": "2025-01-05", "commence_time": COMMENCE,
-                "provider_event_id": "evt-car-ott",
+                "date": str(night), "commence_time": commence,
+                "provider_event_id": f"evt-car-ott-{index}",
                 "home_team": "Carolina Hurricanes", "away_team": "Ottawa Senators",
                 "market": market, "player": player, "selection": "over",
                 "line": 0.5, "american_odds": 100, "book": "DraftKings",
@@ -72,7 +76,7 @@ def _wagers(market: str, wins: int, losses: int, *, first: int) -> tuple[list, l
         )
         samples.append(
             {
-                "date": "2025-01-05", "market": market, "player": player,
+                "date": str(night), "market": market, "player": player,
                 "player_id": 8_470_000 + index, "team": "CAR", "mean": 1.2,
                 "dispersion_r": None,
                 "actual": 1.0 if index - first < wins else 0.0,
