@@ -28,7 +28,7 @@ import re
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -264,6 +264,78 @@ def schedule_lists_the_season(payload: Any) -> bool:
     return False
 
 
+#: How long a cached club schedule of a season still being played is served
+#: before it is asked again. Six hours, so a game postponed on the day
+#: (`gameScheduleState` PPD, which `season._is_scheduled` reads) reaches the
+#: cache by the next Gameday Refresh slot at most one slot late: the 13:30
+#: UTC card refetches what the previous evening wrote, the 20:30 re-price
+#: refetches the morning's, and the 15:00 backup and 22:30 pre-game update
+#: are served the copy from an hour or two before.
+CLUB_SCHEDULE_MAX_AGE = timedelta(hours=6)
+
+#: The key a cached club schedule carries its fetch instant under. Added to
+#: the file, never to the payload returned: callers see the API's answer.
+SCHEDULE_STAMP = "fetched_at"
+
+
+def _schedule_fetched_at(cached: Any) -> datetime | None:
+    """When a cached club schedule was fetched, or None when it cannot say."""
+    if not isinstance(cached, dict):
+        return None
+    stamp = str(cached.get(SCHEDULE_STAMP) or "").strip()
+    if not stamp:
+        return None
+    try:
+        moment = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    return moment.astimezone(timezone.utc)
+
+
+def stamped_club_schedule(payload: Any, *, now: datetime | None = None) -> Any:
+    """`payload` as the cache writes it: a JSON object gains its fetch
+    instant under `SCHEDULE_STAMP`; anything else is returned unchanged."""
+    if not isinstance(payload, dict):
+        return payload
+    moment = now or datetime.now(timezone.utc)
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    stamped = {k: v for k, v in payload.items() if k != SCHEDULE_STAMP}
+    stamped[SCHEDULE_STAMP] = moment.astimezone(timezone.utc).isoformat()
+    return stamped
+
+
+def club_schedule_is_fresh(
+    cached: Any, season_id: int, *, now: datetime | None = None
+) -> bool:
+    """Whether a cached club schedule may be served instead of asked again.
+
+    * A season that had closed when the file was fetched (fetched on or
+      after `registry_closes_on`, 1 August of its second year) cannot change
+      any more, and is served for good.
+    * A season still being played when it was fetched is served only while
+      the file is younger than `CLUB_SCHEDULE_MAX_AGE`: postponements and
+      reschedules move `gameScheduleState` and start times mid-season, and
+      the card's preseason screen and slate read both.
+    * A file with no readable fetch instant (every file written before
+      2026-11-10, and any copy restored from an older artifact) cannot show
+      either, and is asked again once, which stamps it.
+    """
+    fetched = _schedule_fetched_at(cached)
+    if fetched is None:
+        return False
+    if fetched.date() >= registry_closes_on(season_id):
+        return True
+    moment = now or datetime.now(timezone.utc)
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    age = moment.astimezone(timezone.utc) - fetched
+    # A stamp in the future (a skewed clock) proves nothing about freshness.
+    return timedelta(0) <= age < CLUB_SCHEDULE_MAX_AGE
+
+
 def fetch_club_season_schedule(
     team: str,
     season_id: int,
@@ -271,6 +343,7 @@ def fetch_club_season_schedule(
     requester: Requester | None = None,
     raw_dir: Path | None = None,
     refresh: bool = False,
+    now: datetime | None = None,
 ) -> CacheEntry:
     """Every game one club plays in one season, scheduled or completed.
 
@@ -300,6 +373,16 @@ def fetch_club_season_schedule(
     * a fetched one is returned (counted ok: the API did answer) and never
       written, so it cannot replace a schedule already cached, even on a
       refresh, and cannot become the file every later run is served.
+
+    **A cached schedule is served only while it is fresh**
+    (`club_schedule_is_fresh`, since 2026-11-10). It used to be served for
+    good, which was harmless only because CI never kept one: gameday-state
+    did not carry `data/raw/nhl/club_schedule`, so every Gameday Refresh run
+    asked all 32 clubs for all four seasons, 128 requests. Now the cache is
+    carried, a closed season is served for good, and the season being played
+    is asked again once its copy is `CLUB_SCHEDULE_MAX_AGE` old, so a
+    postponement still reaches the screen. The file carries its fetch
+    instant under `fetched_at`; the returned payload never does.
     """
     abbrev = str(team).strip().upper()
     if not TEAM_PATTERN.fullmatch(abbrev):
@@ -309,11 +392,15 @@ def fetch_club_season_schedule(
         raise NhlApiError(f"{season_id!r} is not an eight-digit NHL season id.")
     path = _cache_root(raw_dir) / "club_schedule" / f"{abbrev}_{season}.json"
 
+    moment = now or datetime.now(timezone.utc)
     if not refresh:
         cached = _read_cache(path)
-        if schedule_lists_the_season(cached):
+        if schedule_lists_the_season(cached) and club_schedule_is_fresh(
+            cached, season, now=moment
+        ):
+            served = {k: v for k, v in cached.items() if k != SCHEDULE_STAMP}
             return CacheEntry(
-                path=path, payload=cached, from_cache=True, complete=False
+                path=path, payload=served, from_cache=True, complete=False
             )
 
     payload = _get_json(
@@ -328,7 +415,7 @@ def fetch_club_season_schedule(
     if not schedule_lists_the_season(payload):
         # The answer, returned and never written: no season, not the season.
         return CacheEntry(path=path, payload=payload, from_cache=False, complete=False)
-    _write_cache(path, payload)
+    _write_cache(path, stamped_club_schedule(payload, now=moment))
     return CacheEntry(path=path, payload=payload, from_cache=False, complete=False)
 
 

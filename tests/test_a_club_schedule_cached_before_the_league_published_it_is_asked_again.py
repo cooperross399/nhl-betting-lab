@@ -113,7 +113,8 @@ def test_a_cached_schedule_listing_no_regular_season_game_is_asked_again(
 
     assert first.from_cache is False
     assert first.payload == PUBLISHED
-    assert json.loads(_path(tmp_path).read_text(encoding="utf-8")) == PUBLISHED
+    written = json.loads(_path(tmp_path).read_text(encoding="utf-8"))
+    assert {k: v for k, v in written.items() if k != "fetched_at"} == PUBLISHED
     assert second.from_cache is True
     assert second.payload == PUBLISHED
     assert len(requester.calls) == 1, "a published schedule was asked for twice"

@@ -113,12 +113,15 @@ def _round_robin() -> list[Game]:
 
 
 def _cache(raw: Path, schedule: list[Game], bad: dict[str, Any]) -> Path:
-    """Every club's own file, written by the production cache writer; a club
-    in `bad` gets that body instead of its schedule."""
+    """Every club's own file, written by the production cache writer and
+    stamped as fetched now (`stamped_club_schedule`); a club in `bad` gets
+    that body instead of its schedule."""
     directory = raw / "nhl" / "club_schedule"
     for club in CLUBS:
         body = bad[club] if club in bad else _own_games(schedule, club)
-        nhl_api._write_cache(directory / f"{club}_{SEASON}.json", body)
+        nhl_api._write_cache(
+            directory / f"{club}_{SEASON}.json", nhl_api.stamped_club_schedule(body)
+        )
     return directory
 
 

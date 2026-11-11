@@ -3778,6 +3778,27 @@ Re-derive rather than trust if the data has moved.
   CHI rosters Spencer Knight and Drew Commesso (Söderblom's 0.35 moved to
   Commesso), NJD rosters Hellebuyck and Allen (Poirier's 0.08 moved to
   Allen).
+- **2026-11-10: club schedules are carried between Gameday Refresh runs,
+  and a cached one is refreshed once stale** (the #270 owner item).
+  `fetch_club_season_schedule` served any cached schedule for good and
+  `fetch_nhl_data` never asks it to refresh, while gameday-state did not
+  carry `data/raw/nhl/club_schedule`, so every run started cold and asked
+  32 clubs x 4 seasons = 128 requests. gameday-state now uploads the folder
+  (free public schedule, no price), and each file carries its fetch instant
+  under `fetched_at` (the returned payload never does).
+  `nhl_api.club_schedule_is_fresh` serves a season fetched on or after its
+  close (1 August of its second year, the registry's boundary) for good,
+  the season being played only while its copy is under
+  `CLUB_SCHEDULE_MAX_AGE` (6 hours), and an unstamped file never (asked once,
+  then stamped). So a run asks 0 or 32 instead of 128: the 13:30 card and
+  the 20:30 re-price refetch the current season, the 15:00 backup and 22:30
+  pre-game update are served it, and a PPD (#239) reaches the screen at most
+  one slot late. A failed refresh still raises and is counted; the stale
+  file stays on disk for the screen. #237's rule stands: a cached copy's
+  `gameState` is not believed. Line Movement, Provider Market Discovery and
+  New Market Prices run `--schedules-only` on cold runners and are
+  unchanged. No card, snapshot, ledger row, gate, cap or credit moves.
+  `tests/test_club_schedules_are_carried_and_refreshed_when_stale.py`.
 
 ## Contract strings — never change these
 

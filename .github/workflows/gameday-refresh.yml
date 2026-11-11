@@ -1148,6 +1148,14 @@ jobs:
         # per book, in a public artifact for 90 days like the rest of this
         # state. Not the bought historical stores, which this runner never
         # holds (see "Rebuild the measurement reports").
+        #
+        # data/raw/nhl/club_schedule (since 2026-11-10): the 32 clubs'
+        # schedules for each of the four seasons the fetch reads: the NHL's
+        # free public schedule, no price, line or book. Without it every run
+        # asked for all 128 again. A closed season's copy is now served for
+        # good and the season being played is asked again once its copy is
+        # six hours old (`nhl_api.club_schedule_is_fresh`), so a game
+        # postponed on the day still reaches the preseason screen.
         id: state
         if: always()
         continue-on-error: true
@@ -1157,6 +1165,7 @@ jobs:
           path: |
             data/raw/nhl/boxscore
             data/raw/nhl/registry
+            data/raw/nhl/club_schedule
             data/processed
             data/outputs/gameday_card.json
             data/outputs/prop_calibration_samples.csv
