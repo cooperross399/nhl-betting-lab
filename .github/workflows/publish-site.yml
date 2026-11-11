@@ -9,8 +9,10 @@ name: Publish Site
 # It reads the lab's outputs from the latest `gameday-state` artifact and the
 # NHL's public schedule API, then hands the built folder to GitHub Pages
 # through the Pages deployment API. It pushes to NO branch, holds read-only
-# access to repository contents (see the permissions block below), fetches no
-# odds, spends no credits, edits no policy, and places no bet.
+# access to repository contents (see the permissions block below), edits no
+# policy, and places no bet. Since 2026-11-11 a run not started by Gameday
+# Refresh asks the bulk team markets for today's slate (about 6 credits) so
+# the 7 AM board carries today's odds; nothing else here fetches odds.
 #
 # That sentence is deliberately phrased without the two-word grant it is
 # disclaiming. `test_no_workflow_grants_write_access_to_contents` greps every
@@ -260,6 +262,37 @@ jobs:
             exit 1
           }
 
+      - name: Fetch this morning's team odds for the board
+        # Cooper, 2026-11-11: "the website needs to have live odds and be
+        # fully running by 7am daily". The 7 AM board is built on the lab's
+        # last state, last night's re-price, whose staged prices are for
+        # yesterday's games, so today's board showed no odds until the 9:40
+        # card. This asks the bulk team markets (moneyline, puck line, totals;
+        # about 6 credits, no per-event fetch and so no props) for today's
+        # slate and stages them where the board reads prices. A run started
+        # by a finished Gameday Refresh already carries that run's prices
+        # and asks nothing. The card, its snapshot and the forward ledger
+        # never read this runner. Soft: on any failure the board is built as
+        # before, and the day's later publishes carry the card's prices.
+        if: ${{ github.event_name != 'workflow_run' }}
+        continue-on-error: true
+        env:
+          NHL_ODDS_API_KEY: ${{ secrets.NHL_ODDS_API_KEY }}
+          PYTHONPATH: src
+        run: |
+          set +e
+          python scripts/run_provider_shadow.py --live --overwrite-staging \
+            --horizon-days 1 --output-dir "$RUNNER_TEMP/odds-reports"
+          code=$?
+          if [ "$code" -eq 3 ]; then
+            echo "::notice::No NHL games are on the board today, so there were no odds to fetch."
+            exit 0
+          fi
+          if [ "$code" -ne 0 ]; then
+            echo "::warning::This morning's odds could not be fetched (exit $code); the board shows the odds it last had."
+          fi
+          exit "$code"
+
       - name: Restore cached play-by-play
         # The NHL play-by-play the team ratings are built from. Shadow Stats
         # and this workflow save it; a cold cache is about four thousand
@@ -490,5 +523,6 @@ jobs:
         if: always()
         run: |
           echo "This job built the public site from the NHL schedule and the lab's outputs."
-          echo "It fetched no odds, spent no credit, pushed no branch, edited no policy,"
+          echo "Its only odds are today's bulk team markets (about 6 credits), asked on"
+          echo "runs not started by Gameday Refresh. It pushed no branch, edited no policy,"
           echo "and placed no bet."
