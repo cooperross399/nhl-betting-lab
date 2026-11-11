@@ -210,3 +210,28 @@ def test_a_game_with_no_totals_call_is_not_graded(tmp_path, monkeypatch) -> None
     game["total"]["side"] = "over"
     (tmp_path / f"{day.isoformat()}.json").write_text(json.dumps({"phase": "regular", "games": [game]}))
     assert site.settle(day, tmp_path)["summary"]["totals"] == {"w": 0, "l": 1, "p": 0}
+
+
+def test_a_game_total_under_needs_two_strong_defences() -> None:
+    """Cooper, 2026-11-11: "focus on games with elite goalies/great defenses"."""
+    row = _total_row("under", 6.5)
+    key = selection_key(SimpleNamespace(**row), market="total_goals", selection="under", line=6.5)
+    frame = pd.DataFrame([row])
+    listed, _ = build_candidates(frame, {key: 0.57}, strong_defence=lambda home, away: True)
+    assert len(listed) == 1
+    listed, passes = build_candidates(frame, {key: 0.57}, strong_defence=lambda home, away: False)
+    assert not listed
+    assert passes[0].demotion_reason == card.STRONG_DEFENCE_REASON
+    over = _total_row("over", 6.5)
+    okey = selection_key(SimpleNamespace(**over), market="total_goals", selection="over", line=6.5)
+    listed, _ = build_candidates(pd.DataFrame([over]), {okey: 0.57}, strong_defence=lambda h, a: False)
+    assert len(listed) == 1
+
+
+def test_strong_defences_are_the_better_half() -> None:
+    spec = importlib.util.spec_from_file_location("run_gameday_card_defence", ROOT / "scripts" / "run_gameday_card.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    teams = {c: SimpleNamespace(defence=d) for c, d in (("A", 0.9), ("B", 1.0), ("C", 1.1), ("D", 1.2))}
+    assert module.strong_defences(teams) == {"A", "B"}
+    assert module.strong_defences({}) == set()

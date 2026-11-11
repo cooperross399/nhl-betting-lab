@@ -4031,6 +4031,19 @@ Re-derive rather than trust if the data has moved.
   `build_card`, so the forward ledger, population B and the 2027-04-25 test
   are unchanged; the model, the market list and the self-learning fit are
   unchanged. `tests/test_leans_and_totals_turnaround.py`.
+  **Then, the same morning (Cooper: "focus on games with elite
+  goalies/great defenses"):** a game-total under is also listed only where
+  both teams' defence factor, with tonight's listed starter applied, is at
+  or below the league median (`run_gameday_card.strong_defences`,
+  `gameday_card.STRONG_DEFENCE_REASON`); the card prints which clubs
+  qualify. Measured on goals against to date (the ledger's team totals,
+  teams with 5+ games), it points the other way: the card's unders in games
+  between two above-median defences went 0-20 over 6 games (-20.0u at 1u),
+  the rest 20-26 (+8.2u); on the main line those games' unders landed 44%
+  over 45 games against 46% elsewhere, because the market had already set
+  their totals lower (6.03 against 6.32). Wired in on Cooper's word; no
+  demonstrated edge either way. The site's Totals call applies the line and
+  edge rule only, since the board carries no defence rating.
 
 ## Contract strings — never change these
 

@@ -92,7 +92,7 @@ from __future__ import annotations
 
 import json
 import math
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from types import SimpleNamespace
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -232,6 +232,16 @@ LEAN_MAX_PRICE: dict[tuple[str, str], float] = {("points", "over"): 200.0}
 #: an edge of 6% or more (twice the team lean bar), and at most one per game
 #: (`_one_under_per_game`). Chosen on the weeks it is scored on, and every
 #: interval spans zero: no demonstrated edge.
+#: Then (Cooper, 2026-11-11: "focus on games with elite goalies/great
+#: defenses") an under is listed only where both teams' defence, with
+#: tonight's listed starter in it, rates in the better half of the league
+#: (`strong_defence`, built by the card from the team model). Measured on
+#: goals against to date, it points the other way: the card's unders in games
+#: between two above-median defences went 0-20 over 6 games (-20.0u at 1u),
+#: the others 20-26 (+8.2u), and on the main line those games' unders landed
+#: 44% (45 games) against 46% elsewhere, because the market had already set
+#: their totals lower (6.03 against 6.32). Wired in on Cooper's word; no
+#: demonstrated edge either way.
 TOTAL_UNDER_LINES: tuple[float, ...] = (5.5, 6.5)
 TOTAL_UNDER_MIN_EDGE = 0.06
 ONE_UNDER_PER_GAME = (
@@ -240,8 +250,17 @@ ONE_UNDER_PER_GAME = (
 )
 
 
-def total_under_reason(line: Any, edge: Any) -> str | None:
-    """Why a game-total under at this line and edge is not listed, or None."""
+STRONG_DEFENCE_REASON = (
+    "game-total unders are listed only where both teams' defence, with "
+    "tonight's starting goalie, rates in the better half of the league"
+)
+
+
+def total_under_reason(line: Any, edge: Any, strong_defences: bool | None = None) -> str | None:
+    """Why a game-total under at this line and edge is not listed, or None.
+
+    `strong_defences` False (the card could not show both defences in the
+    better half) withholds it; None applies no defence test."""
     try:
         value = float(line)
     except (TypeError, ValueError):
@@ -261,6 +280,8 @@ def total_under_reason(line: Any, edge: Any) -> str | None:
             "listed: the card's unders went 22-47-4 this season (-10.2u at "
             "1u) while scoring ran above the market"
         )
+    if strong_defences is False:
+        return STRONG_DEFENCE_REASON
     return None
 
 
@@ -271,6 +292,7 @@ def lean_excluded_reason(
     *,
     line: Any = None,
     edge: Any = None,
+    strong_defences: bool | None = None,
 ) -> str | None:
     """Why this market and side (at this price) is never listed, or None.
 
@@ -282,7 +304,7 @@ def lean_excluded_reason(
     if reason:
         return reason
     if side == ("total_goals", "under"):
-        return total_under_reason(line, edge)
+        return total_under_reason(line, edge, strong_defences)
     cap = LEAN_MAX_PRICE.get(side)
     try:
         longer = cap is not None and price is not None and float(price) > cap
@@ -715,6 +737,7 @@ def build_candidates(
     max_price: int = MAX_DEFAULT_PRICE,
     goalie_starters: GoalieStarters | None = None,
     clv_table: Mapping[str, Any] | None = None,
+    strong_defence: Callable[[str, str], bool] | None = None,
 ) -> tuple[list[Candidate], list[Candidate]]:
     """Split priced rows into `(selections, passes)`.
 
@@ -852,7 +875,10 @@ def build_candidates(
                 candidate.section = LEANS_SECTION
                 candidate.demotion_reason = against
         excluded = lean_excluded_reason(
-            market_key, selection, price, line=line, edge=edge
+            market_key, selection, price, line=line, edge=edge,
+            strong_defences=(
+                None if strong_defence is None else bool(strong_defence(home, away))
+            ),
         )
         if candidate.section in (LEANS_SECTION, BEST_BETS_SECTION) and excluded:
             candidate.section = PASSES_SECTION
@@ -1006,6 +1032,7 @@ def build_card(
     goalie_starters: GoalieStarters | None = None,
     clv_table: Mapping[str, Any] | None = None,
     clv_note: str = "",
+    strong_defence: Callable[[str, str], bool] | None = None,
 ) -> GamedayCard:
     """Assemble the card, or explain why there is not one.
 
@@ -1064,6 +1091,7 @@ def build_card(
     selections, passes = build_candidates(
         usable, probabilities, juice_limit=juice_limit,
         goalie_starters=goalie_starters, clv_table=clv_table,
+        strong_defence=strong_defence,
     )
 
     guarded = apply_puck_drop_guard(
@@ -1580,6 +1608,8 @@ def _lean_exclusion_notes(passes: Sequence[Any]) -> list[str]:
             str(get("market") or ""), str(get("selection") or ""), get("american_odds"),
             line=get("line"), edge=get("edge"),
         )
+        if get("demotion_reason") == STRONG_DEFENCE_REASON:
+            reason = STRONG_DEFENCE_REASON
         if reason and get("demotion_reason") == reason:
             counts[reason] = counts.get(reason, 0) + 1
     return [
