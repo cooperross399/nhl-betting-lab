@@ -491,8 +491,8 @@
       },
       {
         "book": "Sports Interaction",
-        "date": "2026-11-10",
-        "source": "canadasportsbetting.ca, Calder Trophy odds (page updated November 10, 2026; table note 'last updated on Nov 10, 2026'; odds courtesy of Sports Interaction; the analysis text gives Fowler +170 and McKenna +280 'as of Nov 9', table used)",
+        "date": "2026-11-11",
+        "source": "canadasportsbetting.ca, Calder Trophy odds (page updated November 11, 2026; table note 'last updated on Nov 11, 2026'; odds courtesy of Sports Interaction; the analysis text gives Fowler +170 and McKenna +280 'as of Nov 9', table used)",
         "url": "https://www.canadasportsbetting.ca/betting-odds/nhl/awards/rookie-of-the-year.html",
         "lines": [
           {"name": "Jacob Fowler", "american": 140},
@@ -510,11 +510,9 @@
           {"name": "Konsta Helenius", "team": "BUF", "american": 10000},
           {"name": "Viggo Bjorck", "team": "WPG", "american": 10000},
           {"name": "Victor Eklund", "team": "NYI", "american": 12500},
-          {"name": "Adam Jiricek", "american": 20000},
           {"name": "Alberts Smits", "team": "NYR", "american": 20000},
           {"name": "Roger McQueen", "team": "ANA", "american": 20000},
-          {"name": "Oliver Bonk", "american": 30000},
-          {"name": "Theo Lindstein", "american": 30000}
+          {"name": "Oliver Bonk", "american": 30000}
         ]
       }
     ],
