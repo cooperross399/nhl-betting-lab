@@ -309,6 +309,37 @@ def _started_warning(dropped: int, moment: datetime) -> str:
     )
 
 
+def _drop_after(
+    events: Sequence[Mapping[str, Any]], starts_by: datetime | None
+) -> tuple[list[Any], int]:
+    """The events facing off no later than `starts_by`, and how many were
+    dropped; every event when `starts_by` is None. Shared by both fetches.
+
+    For a round that exists to close a few early starts (Line Movement's
+    15:30 UTC round, 2026-11-11): the per-event cap spends 38 credits on
+    every event in scope, and an evening game is closed by the evening
+    rounds, so asking it at 15:30 buys a price no close can use. Run after
+    `_drop_started`, so every event here carries a parseable start.
+    """
+    if starts_by is None:
+        return list(events), 0
+    kept = []
+    for event in events:
+        start = parse_commence_time(event.get("commence_time"))
+        if start is not None and start <= starts_by:
+            kept.append(event)
+    return kept, len(events) - len(kept)
+
+
+def _after_warning(dropped: int, starts_by: datetime) -> str:
+    return (
+        f"{dropped} event(s) face off after "
+        f"{starts_by.isoformat(timespec='seconds')}, beyond this round's "
+        "lead, and were not asked about. A later round closes them; their "
+        "markets are absent from this round, not empty."
+    )
+
+
 def _line_of(outcome: Mapping[str, Any]) -> float | None:
     point = outcome.get("point")
     if point is None:
@@ -343,6 +374,9 @@ class FetchResult:
     #: Events dropped before any cap was applied because their game had
     #: started, or its start time could not be confirmed (`_drop_started`).
     events_already_started: int = 0
+    #: Events dropped before any cap was applied because they face off after
+    #: the caller's `starts_by` (`_drop_after`).
+    events_after_window: int = 0
 
     def summary_line(self) -> str:
         return (
@@ -688,6 +722,7 @@ class OddsApiProvider:
         league_days: Sequence[str] | None = None,
         max_events: int = 0,
         now: datetime | None = None,
+        starts_by: datetime | None = None,
     ) -> FetchResult:
         """Bulk team markets for the whole slate.
 
@@ -717,6 +752,9 @@ class OddsApiProvider:
         uses. The slate is derived from these rows, so a started game kept
         here and skipped there would read as every per-event market missing
         one game.
+
+        `starts_by` must be the per-event fetch's too: games facing off after
+        it are dropped after the started-game filter (`_drop_after`).
         """
         self._require_credential()
         moment = _fetch_moment(now)
@@ -843,6 +881,14 @@ class OddsApiProvider:
             result.events_already_started = started
             result.events_seen = len(events)
             result.warnings.append(_started_warning(started, moment))
+        # The per-event fetch's `starts_by`, so both describe one slate. The
+        # bulk endpoint bills per market whatever it returns, so this saves
+        # no credit; it keeps the round's rows to the games it is for.
+        events, after = _drop_after(events, starts_by)
+        if after:
+            result.events_after_window = after
+            result.events_seen = len(events)
+            result.warnings.append(_after_warning(after, starts_by))
         if max_events:
             # The eligibility gate and the coverage report both derive the
             # slate from the staged rows, so a bulk fetch of the whole board
@@ -865,6 +911,12 @@ class OddsApiProvider:
                 "already started, or carried no start time that could be "
                 "confirmed, so no team-market price was taken. Nothing was "
                 "guessed; the markets stay absent."
+            )
+        elif not result.rows and result.events_after_window and not events:
+            result.warnings.append(
+                f"Every one of the {result.events_after_window} event(s) left "
+                "in the fetch window faces off after this round's lead, so no "
+                "team-market price was taken. A later round closes them."
             )
         elif not result.rows and result.events_not_regular_season and not events:
             # Not the books' silence: the window held only games the card
@@ -902,6 +954,7 @@ class OddsApiProvider:
         fetched_at: str = "",
         league_days: Sequence[str] | None = None,
         now: datetime | None = None,
+        starts_by: datetime | None = None,
     ) -> FetchResult:
         """Per-event player props, under a hard credit cap.
 
@@ -940,6 +993,10 @@ class OddsApiProvider:
         sort first, and until 2026-09-26 the 15:00 UTC backup run spent its
         budget on an afternoon game in progress, which the puck-drop guard
         then quarantined, while the evening games went unpriced.
+
+        `starts_by` (default None, no bound) drops, before the screen and the
+        cap, every event facing off after it: Line Movement's early-afternoon
+        round asks only the games it can close (`_drop_after`).
         """
         self._require_credential()
         moment = _fetch_moment(now)
@@ -986,6 +1043,14 @@ class OddsApiProvider:
             result.events_already_started = started
             result.events_seen = len(events)
             result.warnings.append(_started_warning(started, moment))
+        # `starts_by` (None: no bound) drops every event facing off after it,
+        # before the screen and the cap, so a round meant for the early
+        # starts spends nothing on the evening slate (`_drop_after`).
+        events, after = _drop_after(events, starts_by)
+        if after:
+            result.events_after_window = after
+            result.events_seen = len(events)
+            result.warnings.append(_after_warning(after, starts_by))
         # Ordered by start time, so "the first N events" means the same N
         # events here and in the bulk fetch. Truncating two differently
         # ordered lists to the same length is how a coverage table ends up

@@ -3,7 +3,9 @@ name: Shots Model Study
 # Does shots on goal's own-games spread price shots better, walk-forward on
 # outcomes, against the bought card-window prices, and replayed on the
 # forward ledger? The ship rule is docs/sog_dispersion_decision_rule.md.
-# See scripts/run_sog_model_study.py.
+# See scripts/run_sog_model_study.py. With `study: over_rule` it runs
+# scripts/run_sog_over_rule_study.py instead: would a stricter rule for shots
+# overs have helped, under docs/sog_over_rule_decision_rule.md?
 #
 # It fetches no odds, spends no credit, places no bet, pushes nothing,
 # uploads nothing and edits no policy. The bought prices are restored onto
@@ -11,11 +13,21 @@ name: Shots Model Study
 # summary and log only.
 on:
   workflow_dispatch:
+    inputs:
+      study:
+        description: "spread (own-games spread) or over_rule (stricter shots-over rule)"
+        type: choice
+        options:
+          - spread
+          - over_rule
+        default: spread
   pull_request:
     paths:
       - "scripts/run_sog_model_study.py"
+      - "scripts/run_sog_over_rule_study.py"
       - ".github/workflows/sog-model-study.yml"
       - "docs/sog_dispersion_decision_rule.md"
+      - "docs/sog_over_rule_decision_rule.md"
 
 permissions:
   contents: read
@@ -74,12 +86,19 @@ jobs:
       - name: Measure every shots variant
         env:
           PYTHONPATH: src
+          STUDY: ${{ github.event.inputs.study || 'spread' }}
         run: |
           set -u
           status=0
-          python scripts/run_sog_model_study.py || status=$?
-          if [ -s data/outputs/sog_model_study.md ]; then
-            cat data/outputs/sog_model_study.md >> "$GITHUB_STEP_SUMMARY"
+          if [ "$STUDY" = "over_rule" ]; then
+            report=data/outputs/sog_over_rule_study.md
+            python scripts/run_sog_over_rule_study.py || status=$?
+          else
+            report=data/outputs/sog_model_study.md
+            python scripts/run_sog_model_study.py || status=$?
+          fi
+          if [ -s "$report" ]; then
+            cat "$report" >> "$GITHUB_STEP_SUMMARY"
           fi
           # The bought prices leave the workspace before the job ends.
           rm -f data/processed/historical_prop_prices.csv

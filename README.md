@@ -261,6 +261,11 @@ PYTHONPATH=src .venv/bin/python scripts/rebuild_price_files.py
 # data/processed/line_movement/ — never staging, never the ledger.
 PYTHONPATH=src .venv/bin/python scripts/capture_line_movement.py --live \
     --credit-cap 600
+# The 15:30 UTC round asks only the games facing off within 150 minutes
+# (the afternoon starts no other round can close); a night without one
+# spends nothing.
+PYTHONPATH=src .venv/bin/python scripts/capture_line_movement.py --live \
+    --credit-cap 600 --max-lead-minutes 150
 
 # Capture who is NOT playing, and when that became knowable. Free: the NHL's
 # own API, no provider credits. Runs in the same job as the price capture so
@@ -450,6 +455,12 @@ PYTHONPATH=src .venv/bin/python scripts/run_hits_model_study.py
 # docs/sog_dispersion_decision_rule.md (Shots Model Study workflow, no credit).
 PYTHONPATH=src .venv/bin/python scripts/run_sog_model_study.py
 
+# Would a stricter rule for shots on goal overs (a 12% bar, a +200 cap, or no
+# overs) have helped, on the bought card-window prices and the forward ledger
+# from 2026-10-22? Rule fixed in docs/sog_over_rule_decision_rule.md (Shots
+# Model Study workflow, `study: over_rule`, no credit).
+PYTHONPATH=src .venv/bin/python scripts/run_sog_over_rule_study.py
+
 # Do a centred power-play proxy or a measured shrinkage fix the low points
 # and assists means? Walk-forward on outcomes, the bought prices and the
 # forward ledger, by side, against a rule fixed in the script
@@ -624,7 +635,7 @@ bought the window again and uploaded a thin copy as the newest carrier.
 | Provider Market Discovery | on demand; once on 15 October, which asks the three bulk markets only (props, ladders and candidates need a dispatch) | yes, capped |
 | Historical Props Purchase | on demand only, never scheduled | yes, capped, required cap |
 | Venue Probe | on demand only, never scheduled | yes, capped, required cap |
-| Line Movement Capture | five rounds daily in season (14:00, 18:00, 21:00, 23:00, 01:00 UTC): each cron fires eight hours early and `scripts/wait_for_round.py` holds the run until its round, because GitHub starts scheduled runs hours late; by hand, now or at a set `at` time | yes, capped |
+| Line Movement Capture | six rounds daily in season (14:00, 15:30, 18:00, 21:00, 23:00, 01:00 UTC; the 15:30 round asks only games facing off within 150 minutes, so a night with no afternoon game costs it nothing): each cron fires eight hours early (eleven for 15:30) and `scripts/wait_for_round.py` holds the run until its round, because GitHub starts scheduled runs hours late; by hand, now or at a set `at` time | yes, capped |
 | Experiment Refresh | weekly; after the bought prices expire from CI (2026-11-29), it skips the experiments with a notice | no |
 | Publish Site | daily, and after each Gameday Refresh | no |
 | Season Sim | daily at 13:05 UTC, before the site builds; on demand | no |

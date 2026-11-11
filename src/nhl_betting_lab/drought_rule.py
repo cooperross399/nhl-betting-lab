@@ -790,6 +790,28 @@ def record_text(row: Mapping[str, Any]) -> str:
             f"(95% {record['ci_low'] * 100:+.1f}% to {record['ci_high'] * 100:+.1f}%)")
 
 
+#: The flag a row carries when its band lost in testing (Cooper, 2026-11-10).
+LOST_IN_TESTING_FLAG = "lost in testing"
+
+
+def lost_in_testing(row: Mapping[str, Any]) -> bool:
+    """True when the row's band record sits wholly below zero: its 95% interval's top is under 0.
+
+    Read from the row's own `cell_record` (the committed backtest), never a
+    hard-coded list, so a band that stops losing stops being flagged when the
+    backtest is regenerated. A row with no record is never flagged. A flag
+    only: the row stays on the list (Cooper, 2026-11-10: "All three").
+    """
+    record = row.get("cell_record")
+    if not isinstance(record, Mapping):
+        return False
+    try:
+        high = float(record["ci_high"])
+    except (KeyError, TypeError, ValueError):
+        return False
+    return high == high and high < 0
+
+
 def shots_text(row: Mapping[str, Any]) -> str:
     """"shots up: 3.4 a game vs 2.9 usual", or "-" when either rate is missing."""
     d, u = row.get("drought_sog"), row.get("usual_sog")

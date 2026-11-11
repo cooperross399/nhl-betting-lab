@@ -1216,8 +1216,10 @@ Re-derive rather than trust if the data has moved.
   19:00 EDT start's best close is the 21:00 round, 120 minutes out, and
   from 1 October every 19:00, 19:30 and 22:00 ET start, EDT or EST, has a
   round within 120 minutes when the rounds run on time. **Some starts can
-  never close under today's crons**: 13:00, 13:30, 14:00 and 17:00 EDT;
-  12:00, 12:30, 13:00, 16:00 and 23:00 EST. On 29-30 September only the
+  never close under today's crons**: 17:00 EDT; 16:00 and 23:00 EST
+  (listed at the NHL time; until the 15:30 UTC round of 2026-11-11, below,
+  this list also held 13:00, 13:30 and 14:00 EDT and 12:00, 12:30 and 13:00
+  EST). On 29-30 September only the
   18:00 and 23:00 rounds are scheduled, so on both days every start from
   17:00 to 19:00 EDT has none (and, with no 14:00 round, every start up to
   14:00 EDT), and on the 29th so do 22:00, 22:30 and 23:00 EDT; the 30th's
@@ -1229,9 +1231,10 @@ Re-derive rather than trust if the data has moved.
   and 22:00 EST past 120, and 19:30 EDT never, its fallback round sitting
   exactly 150 minutes out. A round at about 15:30-16:00 UTC would close the
   12:00-14:00 ET starts above (12:00, 12:30 and 13:00 EST; 13:00, 13:30 and
-  14:00 EDT) at 38 credits an event. It would not close 17:00 EDT or 16:00
+  14:00 EDT) at 38 credits an event; Cooper approved one on 2026-11-10 and
+  it runs from 2026-11-11 (below). It does not close 17:00 EDT or 16:00
   EST (both 21:00 UTC, whose nearest round is 18:00, 180 minutes out) or
-  23:00 EST. Adding one is Cooper's credit decision; no cron changed. CLV is a report, not the 2027-04-25
+  23:00 EST. CLV is a report, not the 2027-04-25
   measurement, so no opinion, ledger row or decision figure moves.
   `tests/test_a_close_is_a_price_near_face_off.py`.
 - **2026-09-26 (#235): a damaged line-movement day is named in the CLV
@@ -2525,6 +2528,21 @@ Re-derive rather than trust if the data has moved.
   pinned by `tests/test_plus_money_props_are_tracked_smaller.py`). Team picks
   stay 0.25u. Nothing is bet; the card, snapshot, ledger, model, edge bars
   and staking rule are unchanged.
+- **2026-11-10: the Due List shows each row's tracked size, tags a band
+  that lost in testing, and keeps a live record by group (Cooper chose "All
+  three").** Each row on the card ("Tracked at") and the site (`stake`, a
+  "Tracked at" fact) shows the notional size the season record counts it at
+  (`drought_forward.tracked_stake` / `build_site_json.prop_stake`). A row
+  whose band's committed backtest interval sits wholly below zero is flagged
+  "lost in testing" (`drought_rule.lost_in_testing`, read from the row's own
+  `cell_record`, never a hard-coded list; today goals 20-24 @10, -19.0% over
+  659, and assists 40-59 @4, -9.3% over 804) and stays on the list. Due List
+  tracker rows carry their `band` (kept nights take it from their frozen
+  board, `with_due_bands`), tracker.json gains `byDueGroup`, and the Record
+  page a "Due List by group" table. The board patches live in
+  `web/smooth_pages.py` (Board is a pinned shared page). Still an UNSTAKED
+  list: the model, the edge bars, the market list, the staking rule, the
+  snapshot, the forward ledger and the registered test are unchanged.
 - **2026-10-09: the card's player props are on the public site.** Cooper:
   "player props need to be posting to the website". The pages had rendered a
   `props` block since the 2026-10-07 drop, and `season_record` summed one,
@@ -3897,6 +3915,48 @@ Re-derive rather than trust if the data has moved.
   `points` remains a loss that survives correction and does not replicate,
   and `blocked_shots` a gain that survives correction in both pooled
   windows and in neither season alone.
+- **2026-11-11: an early-afternoon Line Movement round closes the
+  afternoon starts (Cooper's credit approval, 2026-11-10: "ALL" on a card
+  reading "Afternoon check: Afternoon games get scored on beating the
+  closing line, at roughly 38 credits per afternoon game").** Under the
+  14:00, 18:00, 21:00, 23:00 and 01:00 UTC rounds, 13:00, 13:30 and 14:00
+  EDT and 12:00, 12:30 and 13:00 EST starts had no capture within
+  `CLOSE_MAX_LEAD` (150 minutes), so their opinions always landed in
+  `no_close_not_near_face_off`. A sixth round now runs at **15:30 UTC**:
+  cron `30 4 * 1-4,10-12 *`, fired eleven hours ahead (an entry in
+  `wait_for_round.CRON_LEADS`, as Gameday Refresh's primaries are), because
+  GitHub has started crons here up to 8.6 h late and a 12:30 EDT or 11:30
+  EST start listed ten minutes late (16:40 UTC) loses its close once the
+  round is 70 minutes late. One cron, as every Line Movement round has:
+  Line Movement has no slot check, so a backup cron would buy the
+  afternoon games twice whenever both arrived; a skipped run costs that
+  day's afternoon closes. "Capture prices" reads the cron and passes
+  `--max-lead-minutes 150` (dispatch input `max_lead_minutes` for a hand
+  run): both fetches drop every event facing off after the capture plus
+  150 minutes (`odds_api` `starts_by`, `_drop_after`), so only the
+  12:00-14:00 ET games are asked, at 38 credits each, under the same
+  600 cap. The bulk team request (about 6 credits, billed whatever it
+  returns) is asked only when such a game is in scope, or, when the events
+  list failed, when the cached schedule lists one (`ask_team_markets`). A
+  night with no afternoon game reads the free events list and spends
+  nothing. A board missing a scheduled afternoon game is still a lost round
+  (exit 2): `regular_season_games_still_to_play(starting_by=)` counts only
+  games inside the lead, so the evening slate never turns it red.
+  **What now cannot close, on time:** listed at the NHL time, 17:00 EDT and
+  16:00 and 23:00 EST; listed ten minutes late, 16:30 EDT and 15:30, 22:30
+  and 23:00 EST. **Cost, estimated, not counted:** the 2026-27 club
+  schedules were not reachable from the session that built this. The
+  2026-09-30 sweep found 81 of 1,344 games with no close at the NHL time,
+  most of them in the window this round covers; with the 12:00-12:30 ET
+  starts it also asks, about 75-90 games a season at 38 credits is about
+  2,900-3,400 credits, plus about 6 for the bulk request on each of some
+  45-55 afternoon days, so **about 3,200-3,800 credits a full season**,
+  less for the rest of this one, at most 600 a round. The round's log says
+  "This round asks only games facing off by ..." and the provider summary
+  line gives the spend. The capture, the deployment and line-combination
+  captures, the private push and the ladder scan run as in every round. No
+  bound, close rule, report, card, snapshot or ledger row changed.
+  `tests/test_the_afternoon_round_asks_only_afternoon_games.py`.
 
 ## Contract strings — never change these
 
