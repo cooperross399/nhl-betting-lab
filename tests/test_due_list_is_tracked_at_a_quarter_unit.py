@@ -138,14 +138,14 @@ def test_the_season_comes_from_the_labs_ledger_with_its_backfilled_nights(tmp_pa
     assert (charlie["price"], charlie["priceSource"], charlie["units"]) == (120, "card", 0.3)
 
     season = results["dueList"]["season"]
-    # Won: +0.50, +0.25, +0.30. Lost: -0.275 (-110, to win 0.25), -0.25. Risked:
-    # 0.25 + 0.275 + 0.375 + 0.25 + 0.25 = 1.40.
+    # Won: +0.30 (+200 at 0.15u, Cooper 2026-11-10), +0.25, +0.30. Lost: -0.275
+    # (-110, to win 0.25), -0.25. Risked: 0.15 + 0.275 + 0.375 + 0.25 + 0.25 = 1.30.
     assert (season["w"], season["l"], season["p"], season["nights"]) == (3, 3, 0, 2)
     assert (season["wagers"], season["unpriced"], season["void"]) == (5, 1, 1)
-    assert season["units"] == pytest.approx(0.525, abs=0.006) and season["staked"] == 1.4
+    assert season["units"] == pytest.approx(0.325, abs=0.006) and season["staked"] == 1.3
     assert season["backfilledNights"] == [earlier] and season["cardPriced"] == 1 and season["source"] == "ledger"
     assert board["record"]["dueList"] == {"w": 3, "l": 3, "p": 0, "nights": 2, "stake": 0.25,
-                                          "units": season["units"], "staked": 1.4}
+                                          "units": season["units"], "staked": 1.3}
 
 
 def test_due_list_entries_are_never_picks_or_props(tmp_path: Path, monkeypatch) -> None:

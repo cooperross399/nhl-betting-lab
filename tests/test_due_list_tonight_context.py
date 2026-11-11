@@ -168,13 +168,14 @@ def test_the_scorecard_counts_the_week_and_the_season_at_a_quarter_unit() -> Non
     card = build_scorecard(ledger, "2026-11-02")
     week, season = card["slices"]["week"], card["slices"]["season"]
 
-    assert week["overall"] == {"listed": 3, "graded": 3, "hits": 2, "wagers": 2, "units": 0.25}
-    assert week["categories"]["goals"]["units"] == 0.5 and week["categories"]["points"]["units"] is None
-    assert week["model_agreed"]["units"] == 0.5 and week["model_disagreed"]["units"] == -0.25
-    assert season["overall"]["listed"] == 5 and season["overall"]["units"] == round((2 - 1 - 1 + 1.1) * 0.25, 2)
+    # The +200 goals win is tracked at 0.15u (Cooper, 2026-11-10): +0.30.
+    assert week["overall"] == {"listed": 3, "graded": 3, "hits": 2, "wagers": 2, "units": 0.05}
+    assert week["categories"]["goals"]["units"] == 0.3 and week["categories"]["points"]["units"] is None
+    assert week["model_agreed"]["units"] == 0.3 and week["model_disagreed"]["units"] == -0.25
+    assert season["overall"]["listed"] == 5 and season["overall"]["units"] == round(2 * 0.15 + (-1 - 1 + 1.1) * 0.25, 2)
     text = "\n".join(render_scorecard(card))
     assert "## Due List scorecard, Sun Oct 25 to Sat Oct 31" in text
-    assert "| all | 3 | 2/3 (67%) | +0.25u over 2 |" in text
+    assert "| all | 3 | 2/3 (67%) | +0.05u over 2 |" in text
 
 
 def test_the_card_carries_the_scorecard_and_the_new_columns() -> None:

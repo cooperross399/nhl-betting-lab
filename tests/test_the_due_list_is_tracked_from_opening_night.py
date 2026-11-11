@@ -91,6 +91,7 @@ def test_an_unpriced_entry_takes_the_cards_frozen_price_even_after_it_settled(tm
 
     payload = df.build_report(df.load_ledger(tmp_path), outputs_dir=tmp_path, sources=df.load_sources(tmp_path))
     text = df.render_report(payload)
-    assert payload["filled_entries"] == 1 and "at 0.25u on every priced entry" in text
-    # Three priced wagers at a quarter unit: +0.425, +0.3125, -0.25.
-    assert "+0.49u over 3 wager(s), 0.75u staked" in text
+    assert payload["filled_entries"] == 1 and "on every priced entry" in text
+    # Three priced wagers: +0.425 and +0.3125 at a quarter unit, and a loss
+    # priced +200 or longer at 0.15u (Cooper, 2026-11-10): -0.15.
+    assert "+0.59u over 3 wager(s), 0.65u staked" in text

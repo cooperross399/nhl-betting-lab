@@ -192,10 +192,28 @@ def win_profit(american: float) -> float:
     return american / 100.0 if american > 0 else 100.0 / abs(american)
 
 
+#: Plus-money props are tracked smaller, by price (Cooper, 2026-11-10):
+#: +200 to +500 0.15u, +501 to +1500 0.1u, longer 0.05u, everything else
+#: LEAN_STAKE. The same brackets as build_site_json.PROP_STAKE_BRACKETS.
+LEAN_STAKE_BRACKETS = ((500, 0.15), (1500, 0.1))
+LEAN_STAKE_LONGEST = 0.05
+
+
+def stake(price: float) -> float:
+    """The notional stake of one lean at `price`."""
+    if price < 200:
+        return LEAN_STAKE
+    for longest, amount in LEAN_STAKE_BRACKETS:
+        if price <= longest:
+            return amount
+    return LEAN_STAKE_LONGEST
+
+
 def risk(price: float) -> float:
     """Cooper, 2026-11-03: "0.25u per bet. to win 0.25u for -odds". A plus
-    price risks LEAN_STAKE; a minus price risks what wins LEAN_STAKE."""
-    return LEAN_STAKE if price > 0 else LEAN_STAKE * abs(price) / 100.0
+    price risks its stake (by price since 2026-11-10); a minus price risks
+    what wins LEAN_STAKE."""
+    return stake(price) if price > 0 else LEAN_STAKE * abs(price) / 100.0
 
 
 def _units(result: str, price: float) -> float:
@@ -283,7 +301,8 @@ def build(repo: Path, ref: str, *, today: date, directory=None, abbr=None,
         "stake": LEAN_STAKE,
         "source": "card-feed: each league day's first card that lists a prop lean, settled by the forward ledger",
         "note": ("Leans are props the card lists but does not bet. This is what 0.25u on every one would have done "
-                 "(on a minus price, enough to win 0.25u), at the price the card listed. Nothing here was bet."),
+                 "(on a minus price, enough to win 0.25u; +200 to +500 at 0.15u, +501 to +1500 at 0.1u, longer at "
+                 "0.05u), at the price the card listed. Nothing here was bet."),
         "firstDate": graded_nights[0]["date"] if graded_nights else None,
         "lastDate": graded_nights[-1]["date"] if graded_nights else None,
         "nights": len(graded_nights),

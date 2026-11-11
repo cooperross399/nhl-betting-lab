@@ -332,7 +332,7 @@ board.json
 ```
 record.props       {w, l, p, units, nights}  — prop best bets, the season so far
 record.propLeans   {w, l, p, void, units, staked, nights, stake} — prop leans, the season so far, from prop_leans.json at 0.25u a lean (to win 0.25u on minus odds); built with --card-feed, else the nightly boards' {w, l, p, nights}
-record.dueList     {w, l, p, nights, stake, units, staked} — the Due List (games[].drought), the season so far, tracked as if `stake` (0.25u) were bet on every priced entry, hat tricks at 0.1u (nothing is bet)
+record.dueList     {w, l, p, nights, stake, units, staked} — the Due List (games[].drought), the season so far, tracked as if `stake` (0.25u) were bet on every priced entry, plus-money entries smaller by price (`stakes`; nothing is bet)
 ```
 results.json
 ```
@@ -343,7 +343,7 @@ dueList            {summary, season, rows[]} | absent (absent hides the section)
                     source ("ledger"|"boards"), and from the ledger: firstDate, lastDate, wagers, unpriced, void,
                     backfilledNights[], cardPriced}
                    impliedPct = mean implied probability of the posted prices graded (optional)
-                   units = profit as if `stake` (0.25u, to win 0.25u on a minus price) were bet on every priced entry, each category in `stakes` at its own stake (hat_trick 0.1u since 2026-11-09, applied to every past entry); staked = what that risked
+                   units = profit as if `stake` (0.25u, to win 0.25u on a minus price) were bet on every priced entry, an entry priced +200 or longer at the stake `stakes` gives its price ([{from, to, stake}]: +200 to +500 0.15u, +501 to +1500 0.1u, longer 0.05u, since 2026-11-10 and applied to every past entry; it replaced the hat-trick 0.1u of 2026-11-09); staked = what that risked
                    source "ledger": read from data/processed/drought_forward.csv (the lab's Due List ledger) and
                    data/processed/drought_list/sources.json; source "boards": summed from the frozen boards
   rows[]           the board's drought entry (player, team, opp, market, line, lastSeason, drought, price, book, heavyJuice)
@@ -407,7 +407,7 @@ settled night's `bets` (`tracker_rows`), kept in `history/settled/<day>.json`.
   returnPct}`. Every split adds back to `overall` except `byTeam` (a total
   counts under both clubs) and `byPropType`/`byPlayer` (props or players only).
 - `nights`, `firstDate`, `lastDate`, `teamPickDefaultUnits` (unused since
-  2026-11-04), `dueStake`, `dueStakes` (categories tracked at another stake: hat_trick 0.1, to win 0.1u on a minus price), `stake` (0.25) and `stakeRule`.
+  2026-11-04), `dueStake`, `dueStakes` and `propStakes` (the price brackets every tracked prop is staked at: [{from, to, stake}], +200 to +500 0.15u, +501 to +1500 0.1u, longer than +1500 0.05u; Due List entries, prop best bets and prop leans, past rows included; team picks stay 0.25u), `stake` (0.25) and `stakeRule`.
 
 Since 2026-11-04 (Cooper: "every bet weve tracked on the website in records
 and stuff is all .25u or to win .25u for -odds") every row is staked at 0.25u

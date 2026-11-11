@@ -287,9 +287,9 @@
         <div style="border:1px solid var(--ink);padding:16px 18px;">
           <h2 id="read-h" style="margin:0;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:16px;letter-spacing:.14em;text-transform:uppercase;">How to read this</h2>
           <ul style="margin:10px 0 0;padding-left:18px;font-size:14px;line-height:1.55;color:var(--ink-2);display:flex;flex-direction:column;gap:6px;text-wrap:pretty;">
-            <li>Every bet on this page is counted the same way: 0.25u on plus odds, or enough to win 0.25u on minus odds, whatever size the card gave it that night.</li>
-            <li>The Due List is Cooper's own list, not the model's picks. It is counted the same way, 0.25u an entry (to win 0.25u on minus odds), except hat tricks at 0.1u; nothing is actually bet.</li>
-            <li>Prop leans are picks the card listed but did not bet. They are tracked at 0.25u each (enough to win 0.25u on minus odds), apart from the bets.</li>
+            <li>Every bet on this page is counted the same way: 0.25u on plus odds, or enough to win 0.25u on minus odds, whatever size the card gave it that night. Player props priced longer are counted smaller: +200 to +500 at 0.15u, +501 to +1500 at 0.1u, and longer than +1500 at 0.05u.</li>
+            <li>The Due List is Cooper's own list, not the model's picks. It is counted the same way, 0.25u an entry (to win 0.25u on minus odds), less at +200 and longer; nothing is actually bet.</li>
+            <li>Prop leans are picks the card listed but did not bet. They are tracked at 0.25u each (enough to win 0.25u on minus odds), less at +200 and longer, apart from the bets.</li>
             <li>A few bets is not much to go on. A team at +3u after 11 bets can be back to zero after one bad week, so faded rows have under 10 bets.</li>
           </ul>
         </div>
@@ -360,8 +360,8 @@ class Component extends DCLogic {
     // Cumulative series by date, oldest first.
     const series = (rs) => { const by = new Map(); for (const r of rs) by.set(r.date, (by.get(r.date) || 0) + (r.units || 0)); const ds = [...by.keys()].sort(); let c = 0; return ds.map((dt) => ({ date: dt, v: (c += by.get(dt)) })); };
     const spark = (rs) => { const s = series(rs); if (s.length < 2) return { points: "", zeroY: "24" }; const vs = s.map((p) => p.v), lo = Math.min(0, ...vs), hi = Math.max(0, ...vs), span = hi - lo || 1; const Y = (v) => 44 - ((v - lo) / span) * 40; return { points: s.map((p, i) => `${((i / (s.length - 1)) * 110).toFixed(1)},${Y(p.v).toFixed(1)}`).join(" "), zeroY: Y(0).toFixed(1) }; };
-    const LS = LZ && LZ.season, leanNote = LS ? `Listed, not bet · 0.25u each (to win 0.25u on minus odds)${LS.void ? ` · ${LS.void} void` : ""}${LS.unmatched ? ` · ${LS.unmatched} not graded` : ""}${LS.pending ? ` · ${LS.pending} waiting` : ""}` : "Listed, not bet · 0.25u each (to win 0.25u on minus odds)";
-    const cards = GROUPS.map(([key, label]) => { const rs = all.filter((r) => r.group === key), o = agg(rs), sp = spark(rs); return { label, units: rs.length ? u2(o.units) : "—", color: rs.length ? colorOf(o.units) : "var(--mute)", sub: rs.length ? `${rec(o)} · ${o.bets} bets` : "No bets graded yet", note: key === "due" ? `Cooper's list · 0.25u an entry (hat tricks 0.1u; to win it on minus odds), not bet` : key === "leans" ? leanNote : key === "team" ? "Winners, spreads and totals" : "Player bets like shots and points", ...sp }; });
+    const LS = LZ && LZ.season, leanNote = LS ? `Listed, not bet · 0.25u each (less at +200 and longer; to win 0.25u on minus odds)${LS.void ? ` · ${LS.void} void` : ""}${LS.unmatched ? ` · ${LS.unmatched} not graded` : ""}${LS.pending ? ` · ${LS.pending} waiting` : ""}` : "Listed, not bet · 0.25u each (less at +200 and longer; to win 0.25u on minus odds)";
+    const cards = GROUPS.map(([key, label]) => { const rs = all.filter((r) => r.group === key), o = agg(rs), sp = spark(rs); return { label, units: rs.length ? u2(o.units) : "—", color: rs.length ? colorOf(o.units) : "var(--mute)", sub: rs.length ? `${rec(o)} · ${o.bets} bets` : "No bets graded yet", note: key === "due" ? `Cooper's list · 0.25u an entry (less at +200 and longer; to win it on minus odds), not bet` : key === "leans" ? leanNote : key === "team" ? "Winners, spreads and totals" : "Player bets like shots and points", ...sp }; });
 
     // Filter
     const f = this.state.filter, rows = f === "all" ? bets : all.filter((r) => r.group === f);
