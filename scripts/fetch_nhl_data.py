@@ -85,10 +85,10 @@ def _not_yet_played(game: dict, *, now: datetime, state_is_live: bool) -> bool:
     skipped when its start is after now, or when a schedule fetched live this
     run says `FUT` or `PRE`.
 
-    A CACHED club schedule's state is not believed: `fetch_nhl_data` fetches
-    a club schedule once and serves it from cache after that, so its
-    `gameState` is whatever it was in August, and trusting it would skip
-    every game of the season. Its start time is believed, because a start
+    A CACHED club schedule's state is not believed: a copy of the season
+    being played is served for up to `CLUB_SCHEDULE_MAX_AGE` (six hours,
+    since 2026-11-10; for good before that), so its `gameState` can be a
+    game that has since finished, and trusting it would skip that final. Its start time is believed, because a start
     time moves rarely and only later (a postponement), which errs toward
     fetching. Anything unclear is fetched: a wasted call costs a
     quarter-second; a missed final costs a game of history.

@@ -120,7 +120,8 @@ def _write_club_schedule(raw: Path, games: list[dict]) -> None:
     """Every club's schedule, cached as `fetch_club_season_schedule` left it."""
     for team in load_script().TEAMS:
         nhl_api._write_cache(
-            raw / "nhl" / "club_schedule" / f"{team}_{SEASON}.json", {"games": games}
+            raw / "nhl" / "club_schedule" / f"{team}_{SEASON}.json",
+            nhl_api.stamped_club_schedule({"games": games}),
         )
 
 
@@ -267,7 +268,7 @@ def test_one_club_saying_future_does_not_outvote_one_that_does_not(
         start = FUTURE if index else PAST
         nhl_api._write_cache(
             raw / "nhl" / "club_schedule" / f"{team}_{SEASON}.json",
-            {"games": [_game(2026020001, start=start)]},
+            nhl_api.stamped_club_schedule({"games": [_game(2026020001, start=start)]}),
         )
     requester = _requester([], {2026020001})
 
