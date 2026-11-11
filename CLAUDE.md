@@ -3850,6 +3850,54 @@ Re-derive rather than trust if the data has moved.
   hanging API. Other callers of `nhl_api` see no breaker. A healthy run asks
   and caches exactly what it did. `tests/test_the_nhl_fetch_stops_asking_a_dead_api.py`.
 
+- **2026-11-11: the saved backtests, rebuilt on game-counted intervals
+  (Cooper, 2026-11-10: "ALL"). A measurement, not a re-attestation: the
+  committed reports under `data/outputs` still carry the old figures, and
+  the receipts pin them by checksum until Cooper re-attests.** The
+  **Backtest Rerun** workflow (#458; dispatch only, no credit, nothing
+  committed) restores the bought prices from Historical Props Purchase's
+  artifacts, rebuilds the prop store from the raw cache (the carrier's CSV
+  is the clobbered 2,675,428-row store, which measured 8,069 `late` bets;
+  6,252 cached responses rebuild 3,802,164 rows; the team store is used as
+  bought), regenerates the walk-forward samples on the current code
+  (807,428 predictions, 3,943 games), and uploads only aggregate .md/.json.
+  `run_player_props_backtest.py --interval-comparison` prints each figure
+  per bet and per game on the same bets, so the counting is the only
+  difference. Figures from the pull-request run 42957679774 (bets, ROI,
+  corrected interval per game; per bet in brackets):
+  `late` (4.07h): all props 26,158 over 2,614 games, -0.29%, -2.30% ..
+  +1.72% (-1.96% .. +1.38%); `points` 6,252, -4.42%, -8.21% .. -0.64%
+  (-7.82% .. -1.03%), survives; `blocked_shots` 4,362, +4.97%, +0.60% ..
+  +9.34% (+0.66% .. +9.28%), survives; `shots_on_goal` 9,456 +1.25%,
+  `assists` 3,794 -1.31%, `goalie_saves` 1,727 -2.47%, `goals` 567 -7.25%,
+  all spanning zero both ways. `card` (9.57h): all props 28,583, -0.03%,
+  -1.95% .. +1.89%; `points` 6,194, -4.15%, -7.97% .. -0.34% (-7.60% ..
+  -0.71%), survives; `blocked_shots` 3,071, +8.06%, +2.84% .. +13.29%
+  (unchanged: the game error fell below the bet error, so the bet error
+  holds), survives; `shots_on_goal` 9,326 +1.42%, `assists` 3,778 -0.84%,
+  `hits` 5,250 -1.24%, `goals` 850 -3.33%, `goalie_saves` 114 -5.49%, all
+  spanning zero. Seasons (`late`): 2024-25 13,604 bets +1.05%, nothing
+  survives (`blocked_shots` +4.88% over 2,754, corrected -0.67% .. +10.42%);
+  2025-26 12,554 bets -1.74%, `points` -5.50% over 3,491 survives (-10.53%
+  .. -0.47%). Replication: nothing survives on 2024-25, so every market is
+  untestable, as committed. Team (`late`, per game): moneyline -5.8% over
+  1,066 (-14.4% .. +2.8%), puck line -3.7% over 1,248 (-10.1% .. +2.6%),
+  totals -3.2% over 1,390 (-11.9% .. +5.5%), every interval spanning zero;
+  the team wagers moved from 954 / 1,117 / 1,216 because the team samples
+  were regenerated on the current code, so the team change is not the
+  counting alone. **No survives-correction verdict moved, in either window,
+  either season or any team market.** The one interval that changed sides
+  is uncorrected: the 2025-26 pooled `late` figure read -3.49% .. -0.00%
+  per bet and -3.91% .. +0.42% per game, and it never survived correction.
+  Counting the game widened the pooled intervals about 1.2x and the
+  per-market ones barely: the bets inside one game are mostly different
+  players and markets. Bets differ from the committed 25,911 / 28,287
+  because of the 2026-09-25 key fix, #244's dedupe and the regenerated
+  samples; no verdict turns on it. **No demonstrated edge**, as before:
+  `points` remains a loss that survives correction and does not replicate,
+  and `blocked_shots` a gain that survives correction in both pooled
+  windows and in neither season alone.
+
 ## Contract strings — never change these
 
 Cooper's local scheduled tasks hard-code these. Renaming any of them silently
