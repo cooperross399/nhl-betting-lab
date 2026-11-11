@@ -4009,6 +4009,55 @@ Re-derive rather than trust if the data has moved.
   `clv_staking.BUMP_HELD_SIDES` (shots overs still held at x1), the
   snapshot, the forward ledger and the 2027-04-25 test.
 
+- **2026-11-11, NOT a defect fix: game-total unders are listed only at 5.5
+  or 6.5, with a 6% edge, one per game (Cooper: "the totals portion of the
+  model needs to be reevaluated. it loses the most", then "i dont want
+  unders completely gone just reevaluate when we select them and at what
+  number (6.5, 6, or 5.5)").** Read off card-feed's card history and forward
+  ledger, 2026-09-29 to 11-09, best price, 1u: the total unders the card
+  listed went **22-47-4, -10.2u over 73**, while its total overs went
+  161-195-22, **+54.2u over 378**; population B's unders -28.3u over 77, its
+  overs +53.1u over 356. By line, the unders listed at 6 went 3-10-3 (-6.3u;
+  population B 2-14), at 5.5 5-12 (-4.3u), at 6.5 7-12 (-4.7u), and the
+  alternate rungs (3.5 to 5, and 7) were long prices that mostly missed; in
+  18 games the card listed two unders on one total. By edge, under 6% went
+  19-37-4 (-3.5u) and 6% or more 3-10 (-6.7u). On the main line the model's
+  disagreement with the de-vigged price carries no information (logistic
+  weight 0.16, 95% -0.92 to 1.26, 285 games). The unders broke with the
+  scoring rise: main-line unders landed about 52% through 10-18 and about
+  42% after, at 6.5 to 6.7 goals a game. The scoring-environment layer of
+  2026-11-10 now prices that rise; scaling each listed under's model total
+  by 1.03 leaves 10 of the 73 above the lean bar. The rule
+  (`gameday_card.TOTAL_UNDER_LINES`, `TOTAL_UNDER_MIN_EDGE`,
+  `total_under_reason`, `_one_under_per_game`): a game-total under is
+  listed or staked only on a 5.5 or 6.5 line (never 6, where the losses sat
+  on a push-able line), only with an edge of 6% or more, and at most one per
+  game (the highest edge). Anything else goes to the passes, reason named.
+  Overs are unchanged. The site's Totals record follows the card:
+  `web/build_site_json.total_side` calls the under only under the same rule
+  and otherwise makes no call (`"none"`), so `settle()` grades nothing for
+  that game; replayed on the main lines at 0.25u the over calls went 101-93,
+  +0.90u against 143-142, -1.56u for every call. Boards already graded keep
+  their grading. No line, edge band or subset of the unders made money, the
+  rule was chosen on the weeks it is scored on, and every interval spans
+  zero: **no demonstrated edge**. The snapshot is frozen before
+  `build_card`, so the forward ledger, population B and the 2027-04-25 test
+  are unchanged; the model, the market list and the self-learning fit are
+  unchanged. `tests/test_leans_and_totals_turnaround.py`.
+  **Then, the same morning (Cooper: "focus on games with elite
+  goalies/great defenses"):** a game-total under is also listed only where
+  both teams' defence factor, with tonight's listed starter applied, is at
+  or below the league median (`run_gameday_card.strong_defences`,
+  `gameday_card.STRONG_DEFENCE_REASON`); the card prints which clubs
+  qualify. Measured on goals against to date (the ledger's team totals,
+  teams with 5+ games), it points the other way: the card's unders in games
+  between two above-median defences went 0-20 over 6 games (-20.0u at 1u),
+  the rest 20-26 (+8.2u); on the main line those games' unders landed 44%
+  over 45 games against 46% elsewhere, because the market had already set
+  their totals lower (6.03 against 6.32). Wired in on Cooper's word; no
+  demonstrated edge either way. The site's Totals call applies the line and
+  edge rule only, since the board carries no defence rating.
+
 ## Contract strings — never change these
 
 Cooper's local scheduled tasks hard-code these. Renaming any of them silently

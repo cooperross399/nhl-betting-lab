@@ -20,6 +20,8 @@ import argparse
 import dataclasses
 import json
 from datetime import date, datetime, timezone
+from collections.abc import Mapping
+from typing import Any
 from pathlib import Path
 
 import pandas as pd
@@ -205,6 +207,22 @@ def _under_way(start: str, moment: datetime) -> bool:
     in `slate_games_with_schedule`: ambiguity counts as a game to card."""
     begins = parse_commence_time(start)
     return begins is not None and begins <= moment
+
+
+def strong_defences(teams: Mapping[str, Any]) -> set[str]:
+    """The clubs whose defence factor (goals against, tonight's starter in
+    it; lower is better) is at or below the league median."""
+    values = {
+        club: float(getattr(rate, "defence"))
+        for club, rate in teams.items()
+        if getattr(rate, "defence", None) is not None
+    }
+    if not values:
+        return set()
+    ordered = sorted(values.values())
+    middle = len(ordered) // 2
+    median = ordered[middle] if len(ordered) % 2 else (ordered[middle - 1] + ordered[middle]) / 2
+    return {club for club, value in values.items() if value <= median}
 
 
 def _listed_starters(
@@ -733,6 +751,10 @@ def main(argv: list[str] | None = None) -> int:
             blockers.append(f"The props model could not be fitted: {exc}")
 
     team_ratings, ratings_detail = "", ""
+    # Cooper, 2026-11-11: "focus on games with elite goalies/great defenses".
+    # Filled once tonight's starters are in the team table; empty, a
+    # game-total under is not listed (gameday_card.STRONG_DEFENCE_REASON).
+    strong_defence_clubs: set[str] = set()
     team_factors: list[dict] = []
     if games.empty:
         blockers.append(
@@ -801,6 +823,11 @@ def main(argv: list[str] | None = None) -> int:
             ):
                 print(line)
             goalie_teams = dict(getattr(team_model, "teams", {}))
+            strong_defence_clubs = strong_defences(goalie_teams)
+            print(
+                "Defences in the league's better half tonight (starter included): "
+                + (", ".join(sorted(strong_defence_clubs)) or "none")
+            )
             team_model.game_factors = crews
             # PostHockey's pre-game win probability (Cooper, 2026-10-25),
             # from scripts/fetch_posthockey_pregame.py: the moneyline moves
@@ -1016,6 +1043,9 @@ def main(argv: list[str] | None = None) -> int:
         goalie_starters=starters,
         clv_table=clv_table,
         clv_note=clv_note,
+        strong_defence=lambda home, away: all(
+            resolve_team(team, team_names) in strong_defence_clubs for team in (home, away)
+        ),
     )
     card.team_ratings = team_ratings
     card.team_factors = team_factors

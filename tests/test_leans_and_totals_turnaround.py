@@ -17,6 +17,7 @@ from types import SimpleNamespace
 
 import pandas as pd
 
+from nhl_betting_lab.reports import gameday_card as card
 from nhl_betting_lab.reports.card_pricing import selection_key
 from nhl_betting_lab.reports.gameday_card import (
     LEANS_SECTION,
@@ -126,6 +127,111 @@ def test_the_total_side_is_the_better_return_not_the_projection() -> None:
     # Projected 6.6 against 6.5 calls the over on the old rule; the model's
     # chance of the over is 48%, and the under at -105 is the better return.
     total = {"current": 6.5, "proj": 6.6, "overProb": 0.48, "overPrice": -115, "underPrice": -105}
-    assert site.total_side(total) == "under"
+    # Since 2026-11-11 an under short of the card's 6% bar is no totals call.
+    assert site.total_side(total) == site.NO_TOTAL_CALL
     assert site.total_side({**total, "overProb": 0.56}) == "over"
     assert site.total_side({**total, "underPrice": None}) is None
+
+
+def _total_row(selection: str, line: float = 6.5) -> dict:
+    return {
+        "date": "2026-11-11", "commence_time": "2026-11-12T00:00:00Z",
+        "provider_event_id": "evt", "home_team": "Toronto Maple Leafs",
+        "away_team": "New York Rangers", "market": "total_goals", "player": "",
+        "selection": selection, "line": line, "american_odds": 100, "book": "BetMGM",
+        "fetched_at": "2026-11-11T13:00:00Z",
+    }
+
+
+def _cards(rows_and_probs):
+    rows = [r for r, _ in rows_and_probs]
+    probs = {
+        selection_key(SimpleNamespace(**r), market="total_goals", selection=r["selection"], line=r["line"]): p
+        for r, p in rows_and_probs
+    }
+    return build_candidates(pd.DataFrame(rows), probs)
+
+
+def test_a_game_total_under_needs_a_half_goal_line_and_a_six_point_edge() -> None:
+    """2026-11-11: unders stay, listed only at 5.5 or 6.5 with a 6% edge."""
+    for line in (5.5, 6.5):
+        selections, _ = _cards([(_total_row("under", line), 0.57)])
+        assert len(selections) == 1, line
+    for line, prob, words in ((6.5, 0.55, "need a 6% edge"), (6.0, 0.70, "only at 5.5 or 6.5"),
+                              (4.5, 0.70, "only at 5.5 or 6.5")):
+        selections, passes = _cards([(_total_row("under", line), prob)])
+        assert not selections
+        (candidate,) = passes
+        assert candidate.section == PASSES_SECTION
+        assert words in candidate.demotion_reason
+
+
+def test_one_game_total_under_per_game() -> None:
+    selections, passes = _cards([(_total_row("under", 5.5), 0.58), (_total_row("under", 6.5), 0.62)])
+    (kept,) = selections
+    assert kept.line == 6.5
+    (dropped,) = passes
+    assert dropped.line == 5.5 and dropped.demotion_reason == card.ONE_UNDER_PER_GAME
+
+
+def test_a_game_total_over_is_unchanged() -> None:
+    selections, _ = _cards([(_total_row("over", 6.0), 0.55)])
+    assert len(selections) == 1
+
+
+def test_the_site_and_the_card_share_the_under_rule() -> None:
+    site = _site()
+    assert site.TOTAL_UNDER_LINES == card.TOTAL_UNDER_LINES
+    assert site.TOTAL_UNDER_MIN_EDGE == card.TOTAL_UNDER_MIN_EDGE
+    total = {"current": 6.5, "proj": 6.0, "overProb": 0.40, "overPrice": -115, "underPrice": -105}
+    assert site.total_side(total) == "under"
+    assert site.total_side({**total, "current": 6.0}) == site.NO_TOTAL_CALL
+
+
+def test_a_game_with_no_totals_call_is_not_graded(tmp_path, monkeypatch) -> None:
+    import json
+    from datetime import date
+
+    site = _site()
+    day = date(2026, 11, 11)
+    game = {"id": "1", "startUtc": "2026-11-12T00:00:00Z",
+            "home": {"abbr": "TOR", "projGoals": 3.0}, "away": {"abbr": "NYR", "projGoals": 3.2},
+            "total": {"current": 6.5, "proj": 6.2, "side": site.NO_TOTAL_CALL,
+                      "overPrice": -110, "underPrice": -110}}
+    (tmp_path / f"{day.isoformat()}.json").write_text(json.dumps({"phase": "regular", "games": [game]}))
+    final = {"id": 1, "gameState": "OFF", "homeTeam": {"score": 2}, "awayTeam": {"score": 3}}
+    monkeypatch.setattr(site, "schedule_for", lambda d: [final])
+    results = site.settle(day, tmp_path)
+    assert results["summary"]["totals"] == {"w": 0, "l": 0, "p": 0}
+    assert results["summary"]["money"]["totals"]["staked"] == 0.0
+    (row,) = results["games"]
+    assert "total" not in row
+    # An over call on the same game is graded as before.
+    game["total"]["side"] = "over"
+    (tmp_path / f"{day.isoformat()}.json").write_text(json.dumps({"phase": "regular", "games": [game]}))
+    assert site.settle(day, tmp_path)["summary"]["totals"] == {"w": 0, "l": 1, "p": 0}
+
+
+def test_a_game_total_under_needs_two_strong_defences() -> None:
+    """Cooper, 2026-11-11: "focus on games with elite goalies/great defenses"."""
+    row = _total_row("under", 6.5)
+    key = selection_key(SimpleNamespace(**row), market="total_goals", selection="under", line=6.5)
+    frame = pd.DataFrame([row])
+    listed, _ = build_candidates(frame, {key: 0.57}, strong_defence=lambda home, away: True)
+    assert len(listed) == 1
+    listed, passes = build_candidates(frame, {key: 0.57}, strong_defence=lambda home, away: False)
+    assert not listed
+    assert passes[0].demotion_reason == card.STRONG_DEFENCE_REASON
+    over = _total_row("over", 6.5)
+    okey = selection_key(SimpleNamespace(**over), market="total_goals", selection="over", line=6.5)
+    listed, _ = build_candidates(pd.DataFrame([over]), {okey: 0.57}, strong_defence=lambda h, a: False)
+    assert len(listed) == 1
+
+
+def test_strong_defences_are_the_better_half() -> None:
+    spec = importlib.util.spec_from_file_location("run_gameday_card_defence", ROOT / "scripts" / "run_gameday_card.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    teams = {c: SimpleNamespace(defence=d) for c, d in (("A", 0.9), ("B", 1.0), ("C", 1.1), ("D", 1.2))}
+    assert module.strong_defences(teams) == {"A", "B"}
+    assert module.strong_defences({}) == set()
