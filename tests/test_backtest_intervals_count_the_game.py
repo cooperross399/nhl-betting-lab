@@ -208,3 +208,36 @@ def test_team_one_line_a_game_is_the_old_interval() -> None:
     returns = [1.0 if o else -1.0 for o in samples["outcome"]]
     plain = roi_interval(returns, looks=4)
     assert (interval.low, interval.high) == (plain.low, plain.high)
+
+
+def test_the_comparison_sets_the_per_bet_interval_beside_the_games() -> None:
+    """`interval_comparison` (the 2026-11-11 rerun) reads the same bets two
+    ways: per bet as before 2026-11-10, per game as the report prints. The
+    per-game half is the report's own figure, the per-bet half is
+    `roi_interval`, and nothing but bounds and counts is written."""
+    samples, prices = _null_slate(random.Random(11), games=30, players=4)
+    report = _run(samples, prices)
+    comparison = bt.interval_comparison(report)
+    overall = comparison["overall"]
+    plain = roi_interval(
+        [bet.profit for bet in report.bets],
+        wins=sum(1 for bet in report.bets if bet.won),
+        looks=report.looks,
+        family=report.family,
+    )
+    assert overall["bets"] == 120 and overall["games"] == 30
+    assert overall["roi"] == pytest.approx(report.overall.roi)
+    assert (overall["per_bet"]["low"], overall["per_bet"]["high"]) == (
+        plain.low,
+        plain.high,
+    )
+    assert (overall["per_game"]["low"], overall["per_game"]["high"]) == (
+        report.overall.low,
+        report.overall.high,
+    )
+    market = comparison["by_market"]["shots_on_goal"]
+    assert market["per_game"]["survives_correction"] == (
+        report.by_market["shots_on_goal"].survives_correction
+    )
+    assert "player" not in str(comparison).lower()
+    assert "american_odds" not in str(comparison)

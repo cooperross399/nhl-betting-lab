@@ -109,6 +109,13 @@ PYTHONPATH=src .venv/bin/python scripts/run_replication.py \
     --discovery data/outputs/player_props_backtest_2025-26.json \
     --test data/outputs/player_props_backtest_2024-25.json
 
+# The same bets with each interval counted per bet and per game, side by side
+# (aggregate JSON; the report itself is unchanged). The Backtest Rerun
+# workflow rebuilds every saved backtest report this way on the bought prices,
+# uploading only the aggregate reports, and commits nothing.
+PYTHONPATH=src .venv/bin/python scripts/run_player_props_backtest.py --phase late \
+    --interval-comparison data/outputs/rerun/intervals_late.json
+
 # Team markets, calibrated and priced -> data/outputs/team_markets_measurement.md
 PYTHONPATH=src .venv/bin/python scripts/run_team_markets_measurement.py
 
