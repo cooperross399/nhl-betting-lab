@@ -468,6 +468,9 @@ jobs:
         # needs far less: the heavy first-of-season runs (600 new boxscores
         # plus every schedule, roster and registry) took 6 to 11 minutes on
         # 2026-08-25..28, and a steady-season run fetches about a dozen games.
+        # Since 2026-11-10 the fetch also stops asking after five requests in
+        # a row fail on every attempt (`nhl_api.CircuitBreaker`), so an outage
+        # costs about 1 minute on fast 5xx and about 11 on a hanging API.
         # Either way the step fails, and "Record what went wrong" calls a
         # failed or cancelled fetch degraded, so the 15:00 backup runs.
         id: results
