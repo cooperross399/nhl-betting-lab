@@ -36,7 +36,11 @@ from nhl_betting_lab.providers.team_names import (
     UnresolvedTeamsError,
     load_team_name_map,
 )
-from nhl_betting_lab.reports.player_props_backtest import run_backtest, save_backtest
+from nhl_betting_lab.reports.player_props_backtest import (
+    interval_comparison,
+    run_backtest,
+    save_backtest,
+)
 from nhl_betting_lab.season import game_date
 
 
@@ -113,6 +117,15 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--processed-dir", default=str(PROCESSED_DIR))
     parser.add_argument("--output-dir", default=str(OUTPUTS_DIR))
+    parser.add_argument(
+        "--interval-comparison",
+        default="",
+        help=(
+            "Also write a JSON setting each figure's interval counted per bet "
+            "beside the one counted per game, on the same bets (aggregate "
+            "only). The report itself is unchanged."
+        ),
+    )
     args = parser.parse_args(argv)
 
     processed = Path(args.processed_dir)
@@ -245,6 +258,15 @@ def main(argv: list[str] | None = None) -> int:
         print(f"::error::{error}", file=sys.stderr)
         return 2
     paths = save_backtest(report, output_dir=outputs, label=args.label)
+    if args.interval_comparison:
+        comparison = Path(args.interval_comparison)
+        comparison.parent.mkdir(parents=True, exist_ok=True)
+        comparison.write_text(
+            json.dumps(interval_comparison(report), indent=2, sort_keys=True)
+            + "\n",
+            encoding="utf-8",
+        )
+        paths["interval_comparison"] = str(comparison)
     print(report.summary_line())
     for market, interval in report.by_market.items():
         print(f"  {market}: {interval.verdict()}")

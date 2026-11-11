@@ -80,6 +80,7 @@ from nhl_betting_lab.stats import (
     RoiInterval,
     clustered_mean_interval,
     detection_table,
+    roi_interval,
 )
 
 
@@ -749,6 +750,64 @@ def _interval(
         looks=looks,
         family=family,
     )
+
+
+def interval_comparison(report: "BacktestReport") -> dict[str, Any]:
+    """Each figure's interval counted per bet and per game, side by side.
+
+    Same bets, same point estimate, same family: the only difference is
+    whether every bet is an independent draw (`roi_interval`, the counting
+    before 2026-11-10) or the bets of one game are one draw (what the report
+    now prints). Aggregate only: counts, returns and bounds, no price, line,
+    book or player. Written for the 2026-11-11 rerun of the committed
+    reports, so a verdict that moved can be read as the counting that moved
+    it and nothing else.
+    """
+    clusters = _game_clusters(report.bets)
+
+    def bounds(interval: RoiInterval) -> dict[str, Any]:
+        return {
+            "low": interval.low,
+            "high": interval.high,
+            "adjusted_low": interval.adjusted_low,
+            "adjusted_high": interval.adjusted_high,
+            "includes_zero": interval.includes_zero,
+            "survives_correction": interval.survives_correction,
+        }
+
+    def row(chosen: list[int], clustered: RoiInterval | None) -> dict[str, Any]:
+        subset = [report.bets[i] for i in chosen]
+        per_bet = roi_interval(
+            [bet.profit for bet in subset],
+            wins=sum(1 for bet in subset if bet.won),
+            pushes=sum(1 for bet in subset if bet.push),
+            looks=report.looks,
+            family=report.family,
+        )
+        return {
+            "bets": per_bet.bets,
+            "games": len({clusters[i] for i in chosen}),
+            "roi": per_bet.roi,
+            "profit": per_bet.profit,
+            "per_bet": bounds(per_bet),
+            "per_game": bounds(clustered) if clustered is not None else None,
+        }
+
+    everything = list(range(len(report.bets)))
+    return {
+        "phase": report.phase,
+        "phase_hours": report.phase_hours,
+        "looks": report.looks,
+        "family": report.family,
+        "overall": row(everything, report.overall),
+        "by_market": {
+            market: row(
+                [i for i, bet in enumerate(report.bets) if bet.market == market],
+                interval,
+            )
+            for market, interval in report.by_market.items()
+        },
+    }
 
 
 def _side_of(bet: PlacedBet) -> str:
