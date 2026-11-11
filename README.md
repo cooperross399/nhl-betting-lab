@@ -443,6 +443,12 @@ PYTHONPATH=src .venv/bin/python scripts/run_hits_model_study.py
 # docs/sog_dispersion_decision_rule.md (Shots Model Study workflow, no credit).
 PYTHONPATH=src .venv/bin/python scripts/run_sog_model_study.py
 
+# Would a stricter rule for shots on goal overs (a 12% bar, a +200 cap, or no
+# overs) have helped, on the bought card-window prices and the forward ledger
+# from 2026-10-22? Rule fixed in docs/sog_over_rule_decision_rule.md (Shots
+# Model Study workflow, `study: over_rule`, no credit).
+PYTHONPATH=src .venv/bin/python scripts/run_sog_over_rule_study.py
+
 # Do a centred power-play proxy or a measured shrinkage fix the low points
 # and assists means? Walk-forward on outcomes, the bought prices and the
 # forward ledger, by side, against a rule fixed in the script
