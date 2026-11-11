@@ -174,6 +174,19 @@ PATCHES: dict[str, list[tuple[str, str]]] = {
             '<span style="font-family:\'Barlow Condensed\',sans-serif;font-weight:700;font-size:14px;letter-spacing:.14em;text-transform:uppercase;border:1px solid var(--ink);padding:4px 9px;white-space:nowrap;">Not model bets · tracked at 0.25u each</span>',
             '<span style="font-family:\'Barlow Condensed\',sans-serif;font-weight:700;font-size:14px;letter-spacing:.14em;text-transform:uppercase;border:1px solid var(--ink);padding:4px 9px;white-space:nowrap;">Not model bets · 0.25u each, less at +200 and longer</span>',
         ),
+        # Each Due List row shows the size the season record tracks it at,
+        # and a band that lost in testing is tagged (Cooper, 2026-11-10:
+        # "All three"; build_site_json.drought_for_game stake, lostInTesting).
+        (
+            'const meta = [bar != null ? `bar ${bar} · ${x.rule}` : "", forHim].filter(Boolean).join(" · ");',
+            'const meta = [x.lostInTesting === true ? "⚠ lost in testing" : "", bar != null ? `bar ${bar} · ${x.rule}` : "", forHim].filter(Boolean).join(" · ");',
+        ),
+        (
+            'chance != null ? { label: "Model\'s chance"',
+            'typeof x.stake === "number" ? { label: "Tracked at", value: `${x.stake}u`, sub: "on the season record" } : null,\n'
+            '        x.lostInTesting === true ? { label: "Warning", value: "Lost in testing", sub: "this group lost money on past seasons" } : null,\n'
+            '        chance != null ? { label: "Model\'s chance"',
+        ),
     ],
     "Results.dc.html": [
         (

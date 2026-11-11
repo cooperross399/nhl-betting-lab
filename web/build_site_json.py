@@ -891,7 +891,8 @@ def lean_season_line(leans: dict | None) -> dict | None:
 
 
 def prop_leans_page(lab: Path, ref: str, today: date) -> dict:
-    """prop_leans.json: the card's prop leans graded at 0.25u (to win 0.25u on a minus price), season long
+    """prop_leans.json: the card's prop leans graded at 0.25u (to win 0.25u on a minus price;
+    +200 and longer smaller, prop_leans.stake), season long
     (web/prop_leans.py). A card-feed ref this checkout cannot read writes a
     file that says so, with no record, never an empty one."""
     module = _prop_leans_module()
@@ -1306,6 +1307,15 @@ def drought_note(lab: Path, listed: bool) -> str:
     return note
 
 
+def lost_in_testing(record: dict | None) -> bool:
+    """True when a published cell record's 95% interval sits wholly below zero
+    (highPct under 0): the band lost in testing. The lab's own rule
+    (drought_rule.lost_in_testing), read off the site's percent form."""
+    if not isinstance(record, dict) or not _is_number(record.get("highPct")):
+        return False
+    return float(record["highPct"]) < 0
+
+
 def drought_for_game(listed: dict | None, home: str, away: str, started: bool) -> list[dict]:
     """The listed players of one game, in the card's order, in the shape web/SCHEMA.md names.
 
@@ -1335,6 +1345,10 @@ def drought_for_game(listed: dict | None, home: str, away: str, started: bool) -
             "rule": rule if isinstance(rule, str) and rule in DROUGHT_RULES else None,
             "band": band if isinstance(band, str) and band else None,
             "cellRecord": cell_record(r.get("cell_record")),
+            # What the season record tracks it at, and a band that lost in
+            # testing (Cooper, 2026-11-10: "All three"). Information only.
+            "stake": prop_stake(odds) if _is_number(odds) else None,
+            "lostInTesting": lost_in_testing(cell_record(r.get("cell_record"))),
             **{site: _text(r.get(card)) for card, site in DROUGHT_TEXT_FIELDS},
             "lineMove": r.get("line_move") if r.get("line_move") in DROUGHT_LINE_MOVES else None,
             "oppGoalieBackup": r.get("opp_goalie_backup") if isinstance(r.get("opp_goalie_backup"), bool) else None,
@@ -2441,7 +2455,58 @@ def tracker_rows(results: dict) -> list[dict]:
                     "side": "over", "line": r.get("line") if r.get("line") is not None else DUE_LIST_LINE,
                     "player": r.get("player"), "playerId": r.get("playerId"), "team": r.get("team"),
                     "opp": r.get("opp"), "price": float(r["price"]), "result": r["result"],
+                    **({"band": r["band"]} if isinstance(r.get("band"), str) and r["band"] else {}),
                     "staked": 0.0, "units": 0.0}))
+    return out
+
+
+def due_group(row: dict) -> str | None:
+    """A Due List row's group, "goals:20-24": its category and the band it
+    was listed in that night (its last-season total), or None without one."""
+    if row.get("group") != "due" or not isinstance(row.get("band"), str) or not row["band"]:
+        return None
+    return f"{row.get('market')}:{row['band']}"
+
+
+def due_group_label(row: dict) -> str:
+    """"Goals · 20-24 last season"."""
+    return f"{row.get('propType') or row.get('market')} · {row.get('band')} last season"
+
+
+def due_bands(frozen: Path) -> dict[tuple[str, str], str]:
+    """{(player id or name, market): band} off a frozen board's Due List, for
+    a kept night whose rows were saved before they carried the band
+    (2026-11-10). A board that cannot be read gives nothing."""
+    try:
+        board = json.loads(frozen.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return {}
+    out: dict[tuple[str, str], str] = {}
+    for g in (board.get("games") or []) if isinstance(board, dict) else []:
+        for e in (g.get("drought") or []) if isinstance(g, dict) else []:
+            if isinstance(e, dict) and isinstance(e.get("band"), str) and e["band"]:
+                out.setdefault((_due_who(e), str(e.get("market"))), e["band"])
+    return out
+
+
+def _due_who(entry: dict) -> str:
+    player_id = entry.get("playerId")
+    return str(player_id) if player_id not in (None, "") else f"name:{str(entry.get('player') or '').strip().lower()}"
+
+
+def with_due_bands(bets: list, frozen: Path) -> list:
+    """A kept night's rows, each Due List row missing its band given the one
+    its frozen board listed it in. Nothing else changes."""
+    if not any(isinstance(r, dict) and r.get("group") == "due" and not r.get("band") for r in bets):
+        return bets
+    bands = due_bands(frozen)
+    out = []
+    for r in bets:
+        if isinstance(r, dict) and r.get("group") == "due" and not r.get("band"):
+            band = bands.get((_due_who(r), str(r.get("market"))))
+            if band:
+                r = {**r, "band": band}
+        out.append(r)
     return out
 
 
@@ -2527,6 +2592,9 @@ def tracker(rows: list[dict], *, nights: int, generated_at: str | None = None) -
         "byTeam": _grouped(rows, team_key, lambda r, k: k),
         "byPlayer": _grouped(rows, player_key, lambda r, k: f"{r.get('player')} ({r.get('team') or '—'})"),
         "byPrice": _grouped(rows, lambda r: [_price_band(r["price"])], lambda r, k: k),
+        # The Due List by group, live (Cooper, 2026-11-10): category and the
+        # band each entry was listed in that night.
+        "byDueGroup": _grouped(rows, lambda r: [due_group(r)], lambda r, k: due_group_label(r)),
         "byMonth": sorted(_grouped(rows, lambda r: [(r["date"] or "")[:7] or None], lambda r, k: k),
                           key=lambda g: g["key"]),
         "rows": rows,
@@ -2727,6 +2795,8 @@ def season_record(today: date, history_dir: Path, latest: dict, *, processed: Pa
             night = night_record(latest)
         elif kept_night is not None:
             night = kept_night
+            if isinstance(night.get("bets"), list):
+                night["bets"] = with_due_bands(night["bets"], path)
             # Restated at today's stakes (props by price since 2026-11-10,
             # back-dated on Cooper's word): the kept tally's units are
             # recomputed from its own priced rows.
@@ -2916,7 +2986,7 @@ def main(argv: list[str] | None = None) -> int:
     elif leans.get("season"):
         s = leans["season"]
         print(f"prop leans: {s['w']}-{s['l']}-{s['p']} ({s['void']} void, {s['pending']} pending, "
-              f"{s['unmatched']} unmatched) over {leans['nights']} nights, {s['units']:+.2f}u at 0.25u (to win 0.25u on minus prices).")
+              f"{s['unmatched']} unmatched) over {leans['nights']} nights, {s['units']:+.2f}u at 0.25u (to win 0.25u on minus prices; +200 and longer smaller).")
     else:
         print(f"::warning::prop leans not built: {leans.get('note')}")
     print(f"board {today}: {len(board['games'])} games ({board['phase']}); results {today - timedelta(days=1)}: {len(results['games'])} settled.")

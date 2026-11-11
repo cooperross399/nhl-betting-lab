@@ -2525,6 +2525,21 @@ Re-derive rather than trust if the data has moved.
   pinned by `tests/test_plus_money_props_are_tracked_smaller.py`). Team picks
   stay 0.25u. Nothing is bet; the card, snapshot, ledger, model, edge bars
   and staking rule are unchanged.
+- **2026-11-10: the Due List shows each row's tracked size, tags a band
+  that lost in testing, and keeps a live record by group (Cooper chose "All
+  three").** Each row on the card ("Tracked at") and the site (`stake`, a
+  "Tracked at" fact) shows the notional size the season record counts it at
+  (`drought_forward.tracked_stake` / `build_site_json.prop_stake`). A row
+  whose band's committed backtest interval sits wholly below zero is flagged
+  "lost in testing" (`drought_rule.lost_in_testing`, read from the row's own
+  `cell_record`, never a hard-coded list; today goals 20-24 @10, -19.0% over
+  659, and assists 40-59 @4, -9.3% over 804) and stays on the list. Due List
+  tracker rows carry their `band` (kept nights take it from their frozen
+  board, `with_due_bands`), tracker.json gains `byDueGroup`, and the Record
+  page a "Due List by group" table. The board patches live in
+  `web/smooth_pages.py` (Board is a pinned shared page). Still an UNSTAKED
+  list: the model, the edge bars, the market list, the staking rule, the
+  snapshot, the forward ledger and the registered test are unchanged.
 - **2026-10-09: the card's player props are on the public site.** Cooper:
   "player props need to be posting to the website". The pages had rendered a
   `props` block since the 2026-10-07 drop, and `season_record` summed one,
