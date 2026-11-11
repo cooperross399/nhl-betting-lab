@@ -75,6 +75,25 @@ jobs:
             fi
             echo "$file: $(wc -l < "data/processed/$file") lines"
           done
+          # The carrier's prop CSV is the store the second window clobbered
+          # (2,675,428 rows, 132,573 of them four-hour; it measures about
+          # 8,000 late-window bets where the raw cache gives about 26,000).
+          # The raw responses are the evidence, so the prop store is rebuilt
+          # from them by the current code, as CLAUDE.md records (3,804,233
+          # rows). The TEAM store is not rebuilt: a rebuilt team store
+          # stamps the provider's returned time and is not the purchased
+          # one, so the raw-dir handed over holds the prop cache alone.
+          mkdir -p "$RUNNER_TEMP/props-only"
+          ln -s "$GITHUB_WORKSPACE/data/raw/historical_props" "$RUNNER_TEMP/props-only/historical_props"
+          echo "cached prop responses: $(find data/raw/historical_props -name '*.json' | wc -l)"
+          PYTHONPATH=src python scripts/rebuild_price_files.py --raw-dir "$RUNNER_TEMP/props-only"
+          rm -rf "$RUNNER_TEMP/props-only"
+          rows=$(($(wc -l < data/processed/historical_prop_prices.csv) - 1))
+          echo "historical_prop_prices.csv after the rebuild: $rows rows"
+          if [ "$rows" -lt 3500000 ]; then
+            echo "::error::The rebuilt prop store holds $rows rows where the full raw cache gives about 3.8 million, so the cache that restored is partial. Measuring it would report a thinned window as the backtest."
+            exit 1
+          fi
           PYTHONPATH=src python scripts/build_datasets.py || true
           # Checked, not trusted: kept only when they record the verdict in
           # this checkout and priced every game in the logs, rebuilt otherwise.
@@ -120,7 +139,12 @@ jobs:
               echo
             done
           } >> "$GITHUB_STEP_SUMMARY"
-          for file in data/outputs/rerun/*.json; do
+          # In the log as well, which can be read where the artifact's
+          # storage host cannot be reached.
+          for file in data/outputs/player_props_backtest*.md \
+                      data/outputs/team_markets_measurement.md \
+                      data/outputs/replication.md data/outputs/what_we_can_claim.md \
+                      data/outputs/rerun/*.json; do
             echo "::group::$file"
             cat "$file"
             echo "::endgroup::"
