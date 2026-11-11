@@ -435,11 +435,14 @@ def _key_of(row) -> tuple:
 #: meet it.
 #:
 #: What `.github/workflows/line-movement.yml` can meet: its in-season rounds
-#: run at 14:00, 18:00, 21:00, 23:00 and 01:00 UTC. Each cron fires eight
-#: hours before its round and the run waits for it
+#: run at 14:00, 15:30, 18:00, 21:00, 23:00 and 01:00 UTC. Each cron fires
+#: eight hours before its round (eleven for 15:30) and the run waits for it
 #: (scripts/wait_for_round.py), because GitHub starts scheduled runs hours
 #: late; on 2026-09-29/30 every round's prices were stamped 43-50 seconds
-#: after it.
+#: after it. The 15:30 round (2026-11-11, Cooper's credit approval of
+#: 2026-11-10) asks only the games facing off within this bound of it
+#: (`capture_line_movement.py --max-lead-minutes 150`), at 38 credits a
+#: game: the evening rounds close the rest.
 #:
 #: FACE-OFF HERE IS THE PROVIDER'S `commence_time`, NOT THE NHL'S START, and
 #: the two differ. Over 2,459 events of the bought 2024-25 and 2025-26 team
@@ -476,12 +479,17 @@ def _key_of(row) -> tuple:
 #:
 #: What it cannot meet, on a normal night with every round on time,
 #: sweeping every half hour from 11:00 to 23:00 ET. Listed at the NHL time,
-#: 13:00, 13:30, 14:00 and 17:00 EDT and 12:00, 12:30, 13:00, 16:00 and
-#: 23:00 EST have NO round within the bound. Listed ten minutes late, the
-#: set is 12:30, 13:00, 13:30 and 16:30 EDT and 11:30, 12:00, 12:30, 15:30,
-#: 22:30 and 23:00 EST. So 14:00 and 17:00 EDT and 13:00 and 16:00 EST close
-#: (ten minutes out) only when listed late, and 12:30 and 16:30 EDT and
-#: 11:30, 15:30 and 22:30 EST only when listed on time.
+#: 17:00 EDT and 16:00 and 23:00 EST have NO round within the bound. Listed
+#: ten minutes late, the set is 16:30 EDT and 15:30, 22:30 and 23:00 EST.
+#: So 17:00 EDT and 16:00 EST close (ten minutes out, on the 21:00 round)
+#: only when listed late, and 16:30 EDT and 15:30 and 22:30 EST only when
+#: listed on time. Until the 15:30 round (2026-11-11) the NHL-time set also
+#: held 13:00, 13:30 and 14:00 EDT and 12:00, 12:30 and 13:00 EST, and the
+#: late-listed set 12:30, 13:00 and 13:30 EDT and 11:30, 12:00 and 12:30
+#: EST. The round's least slack is a 12:30 EDT or 11:30 EST start listed
+#: late (16:40 UTC): it loses its close if the round runs 70 minutes late.
+#: Its 14:00 EDT and 13:00 EST starts (18:00 UTC) sit 150 minutes out, at
+#: the bound, inclusive, and a capture never lands before its round.
 #:
 #: On the whole 2026-27 schedule (1,344 games, api-web.nhle.com), 1,263 have
 #: a close if every game is listed at the NHL time: mean lead 84 minutes.
@@ -491,17 +499,19 @@ def _key_of(row) -> tuple:
 #: 2026-09-30 and not adopted. It closes about 1,284 games under any
 #: listing, fresher (mean 52 against 69 minutes at 58%), but no more of
 #: them, and fewer than today's rounds once most games are listed late.
+#: Those counts predate the 15:30 round, which adds the 12:00-14:00 ET
+#: starts above (estimated, not counted: the schedule was not reachable
+#: when it was added).
 #:
-#: Opening week (29-30 September) runs the same five rounds from
+#: Opening week (29-30 September) runs the five other rounds (no 15:30) from
 #: 2026-09-29, the 01:00 UTC round on 1 October closing 30 September's late
 #: starts; before that it ran only 18:00 and 23:00 UTC. Games with no close
 #: near face-off have their opinions counted under
-#: `no_close_not_near_face_off`, never scored. An extra round around
-#: 15:30-16:00 UTC would close the late-morning and early-afternoon starts
-#: above. It would still leave 17:00 EDT and 16:00 EST listed at the NHL
-#: time, 16:30 EDT, 15:30 EST and 22:30 EST listed late, and 23:00 EST
-#: either way, each needing a round of its own. Every extra round spends credits, so it is
-#: Cooper's decision. The bound itself is a judgement, and Cooper may
+#: `no_close_not_near_face_off`, never scored. The starts still left
+#: (17:00 EDT and 16:00 EST listed at the NHL time, 16:30 EDT, 15:30 EST and
+#: 22:30 EST listed late, and 23:00 EST either way) would each need a round
+#: of their own. Every extra round spends credits, so it is Cooper's
+#: decision. The bound itself is a judgement, and Cooper may
 #: revise it.
 CLOSE_MAX_LEAD = timedelta(minutes=150)
 

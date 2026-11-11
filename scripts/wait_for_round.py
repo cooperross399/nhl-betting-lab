@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Hold a scheduled run until the round it was scheduled for.
 
-Used by Line Movement Capture (rounds 14:00, 18:00, 21:00, 23:00, 01:00 UTC)
+Used by Line Movement Capture (rounds 14:00, 15:30, 18:00, 21:00, 23:00,
+01:00 UTC)
 and Gameday Refresh (the 13:30 card and the 15:00 backup).
 
     python scripts/wait_for_round.py --schedule "0 15 * 1-4,10-12 *"
@@ -64,6 +65,12 @@ CRON_LEADS = {
     "30 12 * 1-4,10-12 *": timedelta(hours=8, minutes=20),  # 20:50 backup
     "30 11 * 1-4,10-12 *": timedelta(hours=11),  # 22:30 pre-game update
     "30 14 * 1-4,10-12 *": timedelta(hours=8, minutes=20),  # 22:50 backup
+    # Line Movement's early-afternoon round (2026-11-11): 04:30 + 11 h =
+    # 15:30 UTC. Eleven, not eight, because a start it alone closes (12:30
+    # EDT listed ten minutes late) loses its close 70 minutes after the
+    # round, and GitHub has started crons here up to 8.6 h late. No other
+    # workflow fires at 04:30, so the key is Line Movement's alone.
+    "30 4 * 1-4,10-12 *": timedelta(hours=11),  # 15:30 Line Movement round
 }
 
 #: The longest lead any cron carries; two wait jobs must cover it.

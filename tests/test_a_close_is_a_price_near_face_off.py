@@ -129,13 +129,15 @@ def _in_season_rounds() -> list[int]:
     """Minutes past midnight UTC of every in-season Line Movement round, read
     from the workflow itself so a moved cron moves this test with it.
 
-    Each cron fires `ROUND_LEAD` before its round and the run waits for the
-    round (scripts/wait_for_round.py), so the round is the cron plus the lead.
+    Each cron fires its lead before its round (`ROUND_LEAD`, or the cron's
+    entry in `CRON_LEADS`: eleven hours for the 15:30 round) and the run
+    waits for the round (scripts/wait_for_round.py), so the round is the
+    cron plus the lead.
 
     In-season means every day of the month (day-of-month `*`); the opening-
     week crons name days and are not the regular schedule.
     """
-    lead = int(_wait_for_round().ROUND_LEAD.total_seconds() // 60)
+    wfr = _wait_for_round()
     document = yaml.safe_load(
         (WORKFLOWS / "line-movement.yml").read_text(encoding="utf-8")
     )
@@ -146,6 +148,8 @@ def _in_season_rounds() -> list[int]:
         minute, hour, day, _month, _weekday = str(entry["cron"]).split()
         if day != "*":
             continue
+        lead = wfr.CRON_LEADS.get(str(entry["cron"]), wfr.ROUND_LEAD)
+        lead = int(lead.total_seconds() // 60)
         rounds.append((int(hour) * 60 + int(minute) + lead) % (24 * 60))
     assert rounds, "no in-season cron was read from line-movement.yml"
     return sorted(set(rounds))
@@ -160,11 +164,12 @@ def _wait_for_round():
 
 
 def test_the_rounds_are_the_ones_the_bound_was_written_for() -> None:
-    """The workflow's crons, plus the wait, land on 14:00, 18:00, 21:00,
-    23:00 and 01:00 UTC: the rounds `CLOSE_MAX_LEAD`'s comment reasons from.
-    A cron left at its round would put every round eight hours late."""
+    """The workflow's crons, plus the wait, land on 14:00, 15:30, 18:00,
+    21:00, 23:00 and 01:00 UTC: the rounds `CLOSE_MAX_LEAD`'s comment
+    reasons from. A cron left at its round would put every round eight
+    hours late. 15:30 is the early-afternoon round of 2026-11-11."""
     assert _in_season_rounds() == sorted(
-        h * 60 for h in (14, 18, 21, 23, 1)
+        [h * 60 for h in (14, 18, 21, 23, 1)] + [15 * 60 + 30]
     )
 
 
@@ -216,6 +221,50 @@ def test_the_bound_is_what_the_capture_schedule_can_meet(listed_late_by) -> None
             f"nearest round {nearest} minutes out, beyond the bound, so it "
             "could never close"
         )
+
+
+def _starts_with_no_close(rounds: list[int], zone_offset: int, listed_late_by: int) -> list[str]:
+    """ET half-hours from 11:00 to 23:00 whose nearest round is beyond the
+    bound, the sweep `CLOSE_MAX_LEAD`'s comment reports."""
+    missing = []
+    for minutes in range(11 * 60, 23 * 60 + 1, 30):
+        start = (minutes + zone_offset * 60 + listed_late_by) % (24 * 60)
+        if timedelta(minutes=_leads(start, rounds)[0]) > cl.CLOSE_MAX_LEAD:
+            missing.append(f"{minutes // 60}:{minutes % 60:02d}")
+    return missing
+
+
+def test_only_the_starts_the_comment_names_can_never_close() -> None:
+    """With the 15:30 UTC round (2026-11-11) the early-afternoon starts
+    close: 13:00, 13:30 and 14:00 EDT and 12:00, 12:30 and 13:00 EST at the
+    NHL time, and 12:30, 13:00 and 13:30 EDT and 11:30, 12:00 and 12:30
+    EST listed ten minutes late. What is left is what `CLOSE_MAX_LEAD`'s comment and
+    CLAUDE.md list."""
+    rounds = _in_season_rounds()
+    assert _starts_with_no_close(rounds, 4, 0) == ["17:00"]
+    assert _starts_with_no_close(rounds, 4, 10) == ["16:30"]
+    assert _starts_with_no_close(rounds, 5, 0) == ["16:00", "23:00"]
+    assert _starts_with_no_close(rounds, 5, 10) == ["15:30", "22:30", "23:00"]
+
+
+def test_the_afternoon_round_asks_only_what_it_can_close() -> None:
+    """The 15:30 round's capture is bounded by the close bound itself, read
+    off its own cron, so it spends credits only on games it can close."""
+    document = yaml.safe_load(
+        (WORKFLOWS / "line-movement.yml").read_text(encoding="utf-8")
+    )
+    (step,) = [
+        s for s in document["jobs"]["capture"]["steps"]
+        if "capture_line_movement.py" in str(s.get("run", ""))
+    ]
+    bound = int(cl.CLOSE_MAX_LEAD.total_seconds() // 60)
+    assert (
+        "--max-lead-minutes \"${{ github.event.schedule == "
+        f"'30 4 * 1-4,10-12 *' && '{bound}' || inputs.max_lead_minutes }}}}\""
+    ) in step["run"]
+    assert _wait_for_round().round_for(
+        "30 4 * 1-4,10-12 *", datetime(2026, 11, 14, 9, 0, tzinfo=timezone.utc)
+    ) == datetime(2026, 11, 14, 15, 30, tzinfo=timezone.utc)
 
 
 def test_a_live_price_does_not_rescue_a_stale_one() -> None:

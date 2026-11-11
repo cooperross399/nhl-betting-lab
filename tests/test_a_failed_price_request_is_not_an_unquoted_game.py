@@ -636,7 +636,10 @@ def test_a_round_that_turned_the_price_step_red_still_reaches_the_private_chain(
     than start a thin chain holding only this round. No workflow passes the
     first-seed flag, so the keeper's own words are refused here too."""
     _, capture = _named(LINE_MOVEMENT, "Capture prices")
-    block = _render(capture["run"], {"inputs.credit_cap || '600'": "600"})
+    block = _render(capture["run"], {
+        "inputs.credit_cap || '600'": "600",
+        "github.event.schedule == '30 4 * 1-4,10-12 *' && '150' || inputs.max_lead_minutes": "",
+    })
     step_argv = _argv(block)
     assert step_argv[:2] == ["python", "scripts/capture_line_movement.py"], block
     # The capture names no folder, so it writes its default; the keeper must
@@ -724,7 +727,10 @@ def test_the_price_step_is_red_only_when_failed_requests_left_nothing(
     """End to end: the real script's exit, through the step's own block."""
     code, _, _, _, _ = _movement(tmp_path, monkeypatch, per_event)
     _, step = _named(LINE_MOVEMENT, "Capture prices")
-    block = _render(step["run"], {"inputs.credit_cap || '600'": "600"})
+    block = _render(step["run"], {
+        "inputs.credit_cap || '600'": "600",
+        "github.event.schedule == '30 4 * 1-4,10-12 *' && '150' || inputs.max_lead_minutes": "",
+    })
 
     assert _run_step(block, tmp_path, code)[0] == outcome, f"script exit {code}"
 
