@@ -3778,6 +3778,19 @@ Re-derive rather than trust if the data has moved.
   CHI rosters Spencer Knight and Drew Commesso (Söderblom's 0.35 moved to
   Commesso), NJD rosters Hellebuyck and Allen (Poirier's 0.08 moved to
   Allen).
+- **2026-11-10, a defect fix: the NHL fetch stops asking a dead API (the
+  #270 owner item).** An outage cost every request four attempts (30-second
+  timeouts, 2+4+8 seconds of backoff), about 160 live requests before any
+  boxscore, so it spent the whole 18 minutes Gameday Refresh gives "Fetch
+  results". `fetch_nhl_data.py` now installs `nhl_api.CircuitBreaker`: after
+  `CIRCUIT_BREAKER_THRESHOLD` (5) requests in a row fail on every attempt
+  (unreachable, or 429/5xx), nothing more is asked this run. Any answer from
+  the API, a 404 included, resets the count. A request not asked counts as
+  failed, a `::warning::` names how many were skipped, and the fetch exits 1,
+  so the datasets are rebuilt on the cache and the run is degraded as
+  before. Worst case now about 1 minute on fast 5xx and about 11 on a
+  hanging API. Other callers of `nhl_api` see no breaker. A healthy run asks
+  and caches exactly what it did. `tests/test_the_nhl_fetch_stops_asking_a_dead_api.py`.
 
 ## Contract strings — never change these
 
