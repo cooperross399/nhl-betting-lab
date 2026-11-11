@@ -1708,7 +1708,7 @@ Re-derive rather than trust if the data has moved.
   estimate, populations, bars and ledger schema are unchanged, and the ledger
   held no settled rows. A market whose bets all come from one game reads
   `-inf% .. +inf%` until a second settles. The props backtest and team
-  measurement still use the unclustered interval (an owner item). Three
+  measurement still used the unclustered interval until 2026-11-10 (below). Three
   wording fixes rode along: the CLV "not yet played" line no longer says
   "staked"; the measurement-bar note says games the puck-drop guard withheld
   at the freeze are in neither population; the goalie void sentences are built
@@ -3799,6 +3799,41 @@ Re-derive rather than trust if the data has moved.
   New Market Prices run `--schedules-only` on cold runners and are
   unchanged. No card, snapshot, ledger row, gate, cap or credit moves.
   `tests/test_club_schedules_are_carried_and_refreshed_when_stale.py`.
+- **2026-11-10, a defect fix recorded as `docs/when_this_ends.md`
+  requires: the props backtest and the team measurement count the game,
+  not the wager.** #258 left both on `stats.roi_interval` over the
+  collapsed wagers, which treats every rung, side and player of one game as
+  an independent draw though all settle on one boxscore. Both now use
+  `stats.clustered_mean_interval` on (home, away, league game date), the
+  forward report's key (props: each club resolved through the team-name
+  map; a row naming no club falls back to its event id, else is its own
+  draw), with the same family (`looks`). It is the old interval exactly
+  when every game holds one wager and never narrower, so a market can stop
+  surviving correction but never start; point estimates, bets, counts,
+  windows and the `by_side` table's contents are unchanged
+  (`clustered_mean_interval` now carries `wins`/`pushes`). In a null of 40
+  games x 6 skaters sharing a game shock at fair prices, the per-bet
+  interval excluded zero in 44% of 300 runs and the clustered one in 7%,
+  2.5x as wide. Not measured on the bought prices (not on disk here).
+  **No committed report under `data/outputs` was regenerated and no
+  verdict was re-decided**; the receipts pin them by checksum, and
+  regenerating them is Cooper's call.
+  `tests/test_backtest_intervals_count_the_game.py`. The fixture of
+  `tests/test_a_correction_names_what_it_counted.py` put 800 wagers in one
+  game; each now has its own night, or no interval could be bounded.
+- **2026-11-10, a defect fix: the NHL fetch stops asking a dead API (the
+  #270 owner item).** An outage cost every request four attempts (30-second
+  timeouts, 2+4+8 seconds of backoff), about 160 live requests before any
+  boxscore, so it spent the whole 18 minutes Gameday Refresh gives "Fetch
+  results". `fetch_nhl_data.py` now installs `nhl_api.CircuitBreaker`: after
+  `CIRCUIT_BREAKER_THRESHOLD` (5) requests in a row fail on every attempt
+  (unreachable, or 429/5xx), nothing more is asked this run. Any answer from
+  the API, a 404 included, resets the count. A request not asked counts as
+  failed, a `::warning::` names how many were skipped, and the fetch exits 1,
+  so the datasets are rebuilt on the cache and the run is degraded as
+  before. Worst case now about 1 minute on fast 5xx and about 11 on a
+  hanging API. Other callers of `nhl_api` see no breaker. A healthy run asks
+  and caches exactly what it did. `tests/test_the_nhl_fetch_stops_asking_a_dead_api.py`.
 
 ## Contract strings — never change these
 

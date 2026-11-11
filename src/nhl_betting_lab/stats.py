@@ -256,10 +256,15 @@ def clustered_mean_interval(
     values: Sequence[float],
     clusters: Sequence[object],
     *,
+    wins: int = 0,
+    pushes: int = 0,
     looks: int = 1,
     family: str = "",
 ) -> RoiInterval:
     """`roi_interval`, with the rows of one cluster counted as one draw.
+
+    `wins` and `pushes` are carried onto the result unchanged, as
+    `roi_interval` carries them; they play no part in the interval.
 
     `clusters` names each value's cluster, in the same order: the game, when
     every side, ladder rung and player of one game moves with that game's
@@ -292,7 +297,9 @@ def clustered_mean_interval(
             f"{len(rows)} value(s) and {len(keys)} cluster label(s): each "
             "value needs the cluster it came from."
         )
-    plain = roi_interval(rows, looks=looks, family=family)
+    plain = roi_interval(
+        rows, wins=wins, pushes=pushes, looks=looks, family=family
+    )
     residuals: dict[object, float] = {}
     for key, value in zip(keys, rows):
         residuals[key] = residuals.get(key, 0.0) + (value - plain.roi)
@@ -307,6 +314,8 @@ def clustered_mean_interval(
             roi=plain.roi,
             low=float("-inf"),
             high=float("inf"),
+            wins=wins,
+            pushes=pushes,
             looks=looks,
             family=family,
         )
@@ -321,6 +330,8 @@ def clustered_mean_interval(
         roi=plain.roi,
         low=plain.roi - Z95 * clustered,
         high=plain.roi + Z95 * clustered,
+        wins=wins,
+        pushes=pushes,
         looks=looks,
         standard_error=clustered,
         family=family,

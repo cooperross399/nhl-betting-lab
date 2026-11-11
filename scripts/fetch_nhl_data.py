@@ -23,12 +23,14 @@ from datetime import date, datetime, timedelta, timezone
 
 from nhl_betting_lab.config import DEFAULT_SEASONS, REGULAR_SEASON_GAME_TYPE
 from nhl_betting_lab.data.nhl_api import (
+    CircuitBreaker,
     NhlApiError,
     fetch_boxscore,
     fetch_club_roster,
     fetch_club_season_schedule,
     fetch_player_registry,
     fetch_schedule_day,
+    install_circuit_breaker,
     schedule_lists_the_season,
 )
 
@@ -183,6 +185,32 @@ def _game_ids_for_dates(
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Run the fetch behind a circuit breaker (`nhl_api.CircuitBreaker`).
+
+    An NHL outage used to cost every request its four attempts: about 160
+    live requests before any boxscore, so the whole 18 minutes Gameday
+    Refresh gives this step. After `CIRCUIT_BREAKER_THRESHOLD` requests fail
+    in a row the rest of the run asks nothing; each request not asked counts
+    as failed, a `::warning::` names how many, and the run exits 1, so the
+    datasets are rebuilt on the cache and the run is degraded.
+    """
+    breaker = CircuitBreaker()
+    install_circuit_breaker(breaker)
+    try:
+        code = _main(argv)
+    finally:
+        install_circuit_breaker(None)
+    if breaker.open:
+        print(
+            f"::warning::The NHL API failed {breaker.threshold} requests in a "
+            f"row, so the fetch stopped asking: {breaker.skipped} live "
+            "request(s) were skipped. The cached results stand."
+        )
+        return 1
+    return code
+
+
+def _main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--seasons",

@@ -79,6 +79,64 @@ def _default_requester(url: str, **kwargs: Any) -> Any:
     return requests.get(url, **kwargs)
 
 
+#: Consecutive requests that must fail, each after all its retries, before
+#: the circuit breaker stops asking. Five: one bad request or a short blip
+#: never trips it, and on an API that hangs five requests cost about eleven
+#: minutes (4 x 30 s timeouts + 14 s backoff each), inside the 18 minutes
+#: Gameday Refresh gives the fetch.
+CIRCUIT_BREAKER_THRESHOLD = 5
+
+
+class CircuitOpenError(NhlApiError):
+    """Not asked: the circuit breaker is open after an outage this run."""
+
+
+class CircuitBreaker:
+    """Stops live requests after `threshold` consecutive outage failures.
+
+    An outage failure is a request that could not be reached or answered with
+    a retryable status (429 or 5xx) on every attempt. Any answer from the API,
+    a 404 included, proves it is up and resets the count. Once open it stays
+    open for the run: every later request raises `CircuitOpenError` without
+    touching the network, and `skipped` counts them.
+    """
+
+    def __init__(self, threshold: int = CIRCUIT_BREAKER_THRESHOLD) -> None:
+        if threshold < 1:
+            raise ValueError("A circuit breaker needs a threshold of 1 or more.")
+        self.threshold = threshold
+        self.consecutive_failures = 0
+        self.skipped = 0
+        self.open = False
+
+    def check(self) -> None:
+        if self.open:
+            self.skipped += 1
+            raise CircuitOpenError(
+                "Not asked: the NHL API failed "
+                f"{self.threshold} requests in a row this run."
+            )
+
+    def record_success(self) -> None:
+        self.consecutive_failures = 0
+
+    def record_failure(self) -> None:
+        self.consecutive_failures += 1
+        if self.consecutive_failures >= self.threshold:
+            self.open = True
+
+
+#: Installed by `fetch_nhl_data.py` for its run; None everywhere else, so no
+#: other caller's behaviour changes.
+_circuit_breaker: CircuitBreaker | None = None
+
+
+def install_circuit_breaker(breaker: CircuitBreaker | None) -> None:
+    """Make every `_get_json` call consult `breaker` (None removes it)."""
+    global _circuit_breaker
+    _circuit_breaker = breaker
+
+
 @dataclass(frozen=True)
 class CacheEntry:
     """One cached response and how it got there."""
@@ -136,6 +194,9 @@ def _get_json(
     # function at import and silently ignores the patch, which is how a suite
     # ends up spending half a minute asleep.
     wait = sleeper if sleeper is not None else time.sleep
+    breaker = _circuit_breaker
+    if breaker is not None:
+        breaker.check()
     delay = INITIAL_BACKOFF_SECONDS
     last: str = ""
     for attempt in range(1, MAX_ATTEMPTS + 1):
@@ -144,11 +205,20 @@ def _get_json(
         except (requests.RequestException, OSError, TimeoutError) as exc:
             last = f"The NHL API could not be reached ({type(exc).__name__})."
             if attempt == MAX_ATTEMPTS:
+                if breaker is not None:
+                    breaker.record_failure()
                 raise NhlApiError(last) from exc
             wait(delay)
             delay *= 2
             continue
         status = int(getattr(response, "status_code", 0) or 0)
+        if breaker is not None:
+            if status in RETRYABLE_STATUSES:
+                if attempt == MAX_ATTEMPTS:
+                    breaker.record_failure()
+            else:
+                # Any other answer, 404 included, means the API is up.
+                breaker.record_success()
         if status == 200:
             try:
                 return response.json()
