@@ -29,7 +29,10 @@ name: Line Movement Capture
 # millions. The cap is still hard, because an unbounded fetch is how a quota
 # becomes a bill. Each round also asks the bulk moneyline, puck line and total
 # once for the whole slate (3 markets x 2 regions, about 6 credits, outside
-# the per-event cap), so those opinions get a closing price too.
+# the per-event cap), so those opinions get a closing price too. The 15:30
+# UTC round is the exception: it asks only the games facing off within 150
+# minutes (38 credits each) and the bulk request only when one is on the
+# board, so a night with no afternoon game costs it nothing.
 on:
   schedule:
     # Through the day and across every time zone's puck drop, so a line has
@@ -37,18 +40,34 @@ on:
     #
     # EACH CRON FIRES EIGHT HOURS BEFORE ITS ROUND, and the run waits for the
     # round (the `wait` jobs below; scripts/wait_for_round.py). The rounds
-    # are 14:00, 18:00, 21:00, 23:00 and 01:00 UTC. GitHub starts this
+    # are 14:00, 15:30, 18:00, 21:00, 23:00 and 01:00 UTC. GitHub starts this
     # repository's scheduled runs hours late (3.5-4.2 h on 2026-09-24,
     # 5.5-6.0 h on 2026-09-28), and a cron written at its round landed at or
     # after 7pm ET face-off, so no evening game could close; the 23:00 round
     # landed past midnight in New York and captured the wrong day. Lateness
-    # up to eight hours now costs nothing. Moving a round means moving its
-    # cron to eight hours before it.
+    # up to eight hours now costs nothing (eleven for the 15:30 round).
+    # Moving a round means moving its cron to eight hours before it (or
+    # changing its entry in `wait_for_round.CRON_LEADS`).
     - cron: "0 6 * 1-4,10-12 *"
     - cron: "0 10 * 1-4,10-12 *"
     - cron: "0 13 * 1-4,10-12 *"
     - cron: "0 15 * 1-4,10-12 *"
     - cron: "0 17 * 1-4,10-12 *"
+    # THE EARLY-AFTERNOON ROUND, 15:30 UTC (2026-11-11, Cooper's credit
+    # approval of 2026-11-10). It fires ELEVEN hours ahead, at 04:30, like
+    # Gameday Refresh's primaries (`wait_for_round.CRON_LEADS`): GitHub has
+    # started this account's crons up to 8.6 h late, and this round has the
+    # least slack of any (a 12:30 EDT start listed ten minutes late closes
+    # only on it, 70 minutes after it). It asks only the games facing off
+    # within `closing_lines.CLOSE_MAX_LEAD` (150 minutes) of the capture
+    # (`--max-lead-minutes 150` in "Capture prices", read off this cron), so
+    # it closes the 13:00-14:00 EDT and 12:00-13:00 EST starts no other round
+    # can, at 38 credits a game. A night with no such game spends nothing:
+    # the events list is free and the bulk team request is skipped. One
+    # cron, as every other round here has: a missed run costs that day's
+    # afternoon closes, and a second cron with no slot check would buy the
+    # afternoon games twice on every day both arrive.
+    - cron: "30 4 * 1-4,10-12 *"
     # Opening week does not wait for October, and it gets every round: the
     # 17:00 cron on 30 September is the 01:00 round on 1 October, which
     # closes 30 September's late starts. One cron per round: the wait reads
@@ -69,6 +88,13 @@ on:
         description: >-
           UTC time to capture at, as HH:MM or 2026-09-29T21:30Z (at most 11
           hours ahead). Blank captures now.
+        type: string
+        required: false
+        default: ""
+      max_lead_minutes:
+        description: >-
+          Ask only games facing off within this many minutes of the capture
+          (the early-afternoon round uses 150). Blank asks the whole slate.
         type: string
         required: false
         default: ""
@@ -256,12 +282,18 @@ jobs:
         # (and, if it fails, the seal) still runs.
         # tests/test_a_failed_price_request_is_not_an_unquoted_game.py holds
         # both rules.
+        #
+        # The early-afternoon round (cron "30 4", 15:30 UTC) asks only the
+        # games facing off within 150 minutes (`--max-lead-minutes`); every
+        # other round asks the whole slate (an empty bound is none). A
+        # dispatch may set the bound.
         env:
           NHL_ODDS_API_KEY: ${{ secrets.NHL_ODDS_API_KEY }}
           PYTHONPATH: src
         run: |
           python scripts/capture_line_movement.py --live \
-            --credit-cap "${{ inputs.credit_cap || '600' }}"
+            --credit-cap "${{ inputs.credit_cap || '600' }}" \
+            --max-lead-minutes "${{ github.event.schedule == '30 4 * 1-4,10-12 *' && '150' || inputs.max_lead_minutes }}"
 
       - name: Capture deployment
         id: deployment
