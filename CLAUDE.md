@@ -2510,6 +2510,21 @@ Re-derive rather than trust if the data has moved.
   past hat tricks read at 0.1u too: tracker rows, the season and kept-night
   tallies, the ledger's season line and the Monday scorecard. Nothing is bet;
   the card, snapshot, ledger, model and staking rule are unchanged.
+- **2026-11-10: plus-money props are tracked smaller on the site, by price
+  (Cooper: "goal scorers/props +200 to +500 are going to be .15u wagers and
+  go back and edit any previous wagers also. Anything +501 to +1500 is .1u
+  and +1500 or greater is .05u", then ".25u for the others like usual").**
+  Every tracked prop (Due List entries, prop best bets, prop leans) priced
+  +200 to +500 is 0.15u, +501 to +1500 0.1u (+1500 itself is read as 0.1u),
+  longer 0.05u; anything shorter stays 0.25u, to win 0.25u on minus odds.
+  It replaces the Due List hat-trick 0.1u of 2026-11-09. Each row is restated
+  from its own price and result, so every past wager reads at the new stake:
+  tracker.json, the season and kept-night tallies, prop_leans.json, the lab's
+  Due List season line and Monday scorecard (`build_site_json.prop_stake`,
+  `prop_leans.stake`, `drought_forward.tracked_stake`; one set of brackets,
+  pinned by `tests/test_plus_money_props_are_tracked_smaller.py`). Team picks
+  stay 0.25u. Nothing is bet; the card, snapshot, ledger, model, edge bars
+  and staking rule are unchanged.
 - **2026-10-09: the card's player props are on the public site.** Cooper:
   "player props need to be posting to the website". The pages had rendered a
   `props` block since the 2026-10-07 drop, and `season_record` summed one,

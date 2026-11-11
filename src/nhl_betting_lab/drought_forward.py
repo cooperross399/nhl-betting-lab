@@ -281,14 +281,36 @@ def _stat(rows: pd.DataFrame) -> dict[str, Any]:
 #: if we bet .25u on each one every night"). The ledger is kept at one unit;
 #: this scales it. Nothing is bet.
 TRACKED_STAKE = 0.25
-#: Categories tracked at another stake (Cooper, 2026-11-09: "hat tricks
-#: should be tracked as .1u bets for the DUE LIST").
-TRACKED_STAKES: dict[str, float] = {"hat_trick": 0.1}
+#: Plus-money entries are tracked smaller, by price (Cooper, 2026-11-10:
+#: "+200 to +500 are going to be .15u wagers ... +501 to +1500 is .1u and
+#: +1500 or greater is .05u", ".25u for the others like usual"). Each pair
+#: is (longest price, stake); longer than +1500 is TRACKED_STAKE_LONGEST.
+#: It replaces the hat-trick 0.1u of 2026-11-09 and restates every past
+#: entry. The site's `build_site_json.PROP_STAKE_BRACKETS` is the same.
+TRACKED_STAKE_BRACKETS: tuple[tuple[int, float], ...] = ((500, 0.15), (1500, 0.1))
+TRACKED_STAKE_LONGEST = 0.05
+#: Kept for readers of the old name: no category has its own stake now.
+TRACKED_STAKES: dict[str, float] = {}
+TRACKED_STAKE_RULE = "0.25u; +200 to +500 0.15u, +501 to +1500 0.1u, longer 0.05u"
 
 
-def tracked_stake(market: object) -> float:
-    """The notional stake one entry of `market` is tracked at."""
-    return TRACKED_STAKES.get(str(market), TRACKED_STAKE)
+def tracked_stake(market: object = None, price: object = None) -> float:
+    """The notional stake one entry at `price` is tracked at; `market` no longer changes it."""
+    try:
+        value = float(price)
+    except (TypeError, ValueError):
+        return TRACKED_STAKE
+    if value != value or value < 200:
+        return TRACKED_STAKE
+    for longest, stake in TRACKED_STAKE_BRACKETS:
+        if value <= longest:
+            return stake
+    return TRACKED_STAKE_LONGEST
+
+
+def _stakes(rows: pd.DataFrame) -> pd.Series:
+    return pd.Series([tracked_stake(price=p) for p in pd.to_numeric(rows["american_odds"], errors="coerce")],
+                     index=rows.index, dtype=float)
 
 
 def _tracked(rows: pd.DataFrame) -> tuple[float, float]:
@@ -297,7 +319,7 @@ def _tracked(rows: pd.DataFrame) -> tuple[float, float]:
     priced = graded[pd.to_numeric(graded["american_odds"], errors="coerce").notna()] if len(graded) else graded
     if not len(priced):
         return 0.0, 0.0
-    stakes = priced["market"].map(tracked_stake).astype(float)
+    stakes = _stakes(priced)
     units = float((pd.to_numeric(priced["profit_units"], errors="coerce").fillna(0) * stakes).sum())
     return units, float(stakes.sum())
 
@@ -312,7 +334,7 @@ def build_report(ledger: pd.DataFrame, *, pending_rows: int = 0, outputs_dir: Pa
         "categories": {m: _stat(ledger[ledger["market"] == m]) for m in CATEGORIES},
         "overall": _stat(ledger),
         "tracked_stake": TRACKED_STAKE,
-        "tracked_stakes": dict(TRACKED_STAKES),
+        "tracked_stake_rule": TRACKED_STAKE_RULE,
         "tracked_units": round(_tracked(ledger)[0], 4),
         "tracked_staked": round(_tracked(ledger)[1], 4),
         "backfilled_days": sorted((sources.get("backfilled") or {}).keys()),
@@ -362,8 +384,8 @@ def render_report(payload: dict[str, Any]) -> str:
     if overall["units"] is not None:
         units = payload.get("tracked_units", overall["units"] * stake)
         staked = payload.get("tracked_staked", overall["wagers"] * stake)
-        others = ", ".join(f"{m.replace('_', ' ')} at {v}u" for m, v in (payload.get("tracked_stakes") or {}).items())
-        L += [f"**Season, at {stake}u on every priced entry{' (' + others + ')' if others else ''}:** {units:+.2f}u over "
+        rule = payload.get("tracked_stake_rule") or f"{stake}u"
+        L += [f"**Season, at {rule} on every priced entry:** {units:+.2f}u over "
               f"{overall['wagers']} wager(s), {staked:.2f}u staked. Nothing is bet; this is the "
               "list's record as if it had been.", ""]
     backfilled = payload.get("backfilled_days") or []
@@ -617,7 +639,7 @@ def _card_stat(rows: pd.DataFrame) -> dict[str, Any]:
     graded = rows[rows["outcome"].isin(["won", "lost"])]
     wagers = graded[pd.to_numeric(graded["american_odds"], errors="coerce").notna()]
     units = float((pd.to_numeric(wagers["profit_units"], errors="coerce").fillna(0)
-                   * wagers["market"].map(tracked_stake).astype(float)).sum())
+                   * _stakes(wagers)).sum()) if len(wagers) else 0.0
     return {
         "listed": int(len(rows)), "graded": int(len(graded)),
         "hits": int((graded["outcome"] == "won").sum()),
@@ -663,7 +685,7 @@ def render_scorecard(card: Mapping[str, Any]) -> list[str]:
     lines = [f"## Due List scorecard, {fmt(start)} to {fmt(end)}", ""]
     for label, title in (("week", "Last week"), ("season", "Season")):
         s = card["slices"][label]
-        lines += [f"**{title}**", "", "| | Listed | Hits | Units at 0.25u (hat tricks 0.1u) |", "|:--|--:|--:|--:|"]
+        lines += [f"**{title}**", "", "| | Listed | Hits | Units (0.25u; +200 and longer smaller) |", "|:--|--:|--:|--:|"]
         lines += [_line(m, s["categories"][m]) for m in CATEGORIES]
         lines += [_line("all", s["overall"]), _line("model agreed", s["model_agreed"]),
                   _line("model disagreed", s["model_disagreed"]), ""]

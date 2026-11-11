@@ -1644,7 +1644,7 @@ def grade_props(board: dict, finals: dict, processed: Path | None) -> dict:
             # 2026-11-04), whatever the card staked; `units` stays the card's.
             price = _real(row.get("price"))
             result = row["result"]
-            got = record_units(price, result) if result in ("win", "loss") else None
+            got = record_units(price, result, stake=prop_stake(price)) if result in ("win", "loss") else None
             if got is not None:
                 row["profitUnits"] = round(got[0], 2)
             elif result in ("push", "void"):
@@ -1992,15 +1992,46 @@ DUE_LIST_LINE = 0.5
 #: Nothing is bet. It is the lab's `drought_forward.TRACKED_STAKE`, spelled
 #: out here for the reason USER_AGENT gives.
 DUE_LIST_STAKE = 0.25
-#: Categories tracked at another stake, as the lab's
-#: `drought_forward.TRACKED_STAKES` (Cooper, 2026-11-09: "hat tricks should
-#: be tracked as .1u bets for the DUE LIST"). To win it on a minus price.
-DUE_LIST_STAKES = {"hat_trick": 0.1}
+#: Plus-money props are tracked at a smaller stake, by price (Cooper,
+#: 2026-11-10: "goal scorers/props +200 to +500 are going to be .15u wagers
+#: and go back and edit any previous wagers also. Anything +501 to +1500 is
+#: .1u and +1500 or greater is .05u", then ".25u for the others like usual").
+#: Each pair is (longest price in the bracket, stake); +1500 itself reads
+#: 0.1u, the range he named first. Longer than +1500 is PROP_STAKE_LONGEST.
+#: It replaces the hat-trick 0.1u of 2026-11-09 and applies to every
+#: tracked prop (Due List entries, prop best bets, prop leans), past ones
+#: included. The lab's `drought_forward.TRACKED_STAKE_BRACKETS` is the same.
+PROP_STAKE_BRACKETS = ((199, None), (500, 0.15), (1500, 0.1))
+PROP_STAKE_LONGEST = 0.05
+#: Kept for readers of the old name: no category has its own stake now.
+DUE_LIST_STAKES: dict = {}
 
 
-def due_stake(market: object) -> float:
-    """The notional stake one Due List entry of `market` is tracked at."""
-    return DUE_LIST_STAKES.get(str(market), DUE_LIST_STAKE)
+def prop_stake(price: object) -> float:
+    """The notional stake one tracked prop at `price` is tracked at: 0.25u
+    (to win it on a minus price) up to +199, then by PROP_STAKE_BRACKETS."""
+    if not _is_number(price) or float(price) < 200:
+        return DUE_LIST_STAKE
+    for longest, stake in PROP_STAKE_BRACKETS:
+        if float(price) <= longest:
+            return DUE_LIST_STAKE if stake is None else stake
+    return PROP_STAKE_LONGEST
+
+
+def prop_stake_rule() -> list[dict]:
+    """PROP_STAKE_BRACKETS as published: [{from, to, stake}], to None for the longest."""
+    out, low = [], None
+    for longest, stake in PROP_STAKE_BRACKETS:
+        out.append({"from": low, "to": longest, "stake": DUE_LIST_STAKE if stake is None else stake})
+        low = longest + 1
+    out.append({"from": low, "to": None, "stake": PROP_STAKE_LONGEST})
+    return out
+
+
+def due_stake(market: object = None, price: object = None) -> float:
+    """The notional stake one Due List entry is tracked at: by its price
+    (prop_stake); `market` no longer changes it."""
+    return prop_stake(price)
 
 #: The lab's own Due List ledger and its sources (nhl_betting_lab.drought_forward:
 #: LEDGER_FILENAME, LIST_DIRNAME/SOURCES_FILENAME), restored with the rest of
@@ -2021,14 +2052,14 @@ def due_units(result: str | None, price: object, market: object = None) -> float
         return None
     if result == "push":
         return 0.0
-    got = record_units(float(price), result, stake=due_stake(market))
+    got = record_units(float(price), result, stake=due_stake(market, price))
     return None if got is None else round(got[0], 4)
 
 
 def due_risk(price: object, market: object = None) -> float:
     """What one priced Due List entry risks: its stake (due_stake), or what wins it on a minus price."""
-    got = record_units(float(price), "push", stake=due_stake(market)) if _is_number(price) else None
-    return got[1] if got is not None else due_stake(market)
+    got = record_units(float(price), "push", stake=due_stake(market, price)) if _is_number(price) else None
+    return got[1] if got is not None else due_stake(market, price)
 
 
 def read_due_ledger(processed: Path | None) -> tuple[list[dict], dict]:
@@ -2115,7 +2146,7 @@ def due_ledger_season(rows: list[dict], sources: dict) -> dict | None:
         return None
     season = {k: out[k] for k in ("w", "l", "p")}
     season.update(
-        nights=len(nights), firstDate=min(nights), lastDate=max(nights), stake=DUE_LIST_STAKE, stakes=dict(DUE_LIST_STAKES),
+        nights=len(nights), firstDate=min(nights), lastDate=max(nights), stake=DUE_LIST_STAKE, stakes=prop_stake_rule(),
         units=round(out["units"], 2), staked=round(out["staked"], 2), wagers=out["wagers"],
         unpriced=out["unpriced"], void=out["void"],
         byMarket={m: {**v, "units": round(v["units"], 2)} for m, v in out["byMarket"].items()},
@@ -2350,13 +2381,14 @@ PRICE_BANDS = ((-10_000, -151, "−150 and shorter"), (-150, -111, "−149 to �
 #: bet weve tracked on the website in records and stuff is all .25u or to
 #: win .25u for -odds"): RECORD_STAKE risked on a plus price, enough to win
 #: it on a minus price. The card's own stake stays on the card and the board.
-TRACKED_STAKE_RULE = "0.25u, to win 0.25u on a minus price (Due List hat tricks 0.1u)"
+TRACKED_STAKE_RULE = ("0.25u, to win 0.25u on a minus price; props +200 to +500 0.15u, "
+                      "+501 to +1500 0.1u, longer than +1500 0.05u")
 
 
 def restake(row: dict) -> dict:
     """One tracker row restated at RECORD_STAKE (to win it on a minus price),
     from its own price and result: a row kept at the card's stake reads the same."""
-    stake = due_stake(row.get("market")) if row.get("group") == "due" else RECORD_STAKE
+    stake = prop_stake(row.get("price")) if row.get("group") in ("due", "props", "leans") else RECORD_STAKE
     got = record_units(row.get("price"), row.get("result"), stake=stake)
     if got is None:
         return row
@@ -2483,7 +2515,8 @@ def tracker(rows: list[dict], *, nights: int, generated_at: str | None = None) -
         "lastDate": rows[0]["date"] if rows else None,
         "teamPickDefaultUnits": TEAM_PICK_DEFAULT_UNITS,
         "dueStake": DUE_LIST_STAKE,
-        "dueStakes": dict(DUE_LIST_STAKES),
+        "dueStakes": prop_stake_rule(),
+        "propStakes": prop_stake_rule(),
         "stake": RECORD_STAKE,
         "stakeRule": TRACKED_STAKE_RULE,
         "overall": _tally(rows),
@@ -2694,7 +2727,7 @@ def season_record(today: date, history_dir: Path, latest: dict, *, processed: Pa
             night = night_record(latest)
         elif kept_night is not None:
             night = kept_night
-            # Restated at today's stakes (hat tricks 0.1u since 2026-11-09,
+            # Restated at today's stakes (props by price since 2026-11-10,
             # back-dated on Cooper's word): the kept tally's units are
             # recomputed from its own priced rows.
             if isinstance(night.get("dueList"), dict) and isinstance(night.get("bets"), list):
@@ -2780,7 +2813,7 @@ def season_record(today: date, history_dir: Path, latest: dict, *, processed: Pa
                 season["money"][key]["nightsWithoutUnits"] = m["nightsWithout"]
     if due["nights"]:
         season["dueList"] = {"w": due["w"], "l": due["l"], "p": due["p"], "nights": due["nights"], "byMarket": due["byMarket"],
-                             "stake": DUE_LIST_STAKE, "stakes": dict(DUE_LIST_STAKES), "units": round(due["units"], 2), "staked": round(due["staked"], 2),
+                             "stake": DUE_LIST_STAKE, "stakes": prop_stake_rule(), "units": round(due["units"], 2), "staked": round(due["staked"], 2),
                              "source": "boards"}
         if due["impliedCount"]:
             season["dueList"]["impliedPct"] = round(100 * due["impliedSum"] / due["impliedCount"], 1)
