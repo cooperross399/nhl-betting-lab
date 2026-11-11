@@ -1,144 +1,84 @@
-**Selections changed** since the previous card — 2 best bet(s), 0.5 unit(s) staked.
+**Selections changed** since the previous card — 0 best bet(s), 0 unit(s) staked.
 
 # NHL gameday card
 
-- Generated: 2026-11-10T22:42:54+00:00
-- 2 best bet(s), 71 lean(s), 4617 pass(es) across 7 game(s); 0.5 unit(s) staked.
-- Included markets: **assists, blocked_shots, goalie_saves, goals, moneyline, points, puck_line, regulation_3_way, shots_on_goal, team_total, total_goals**
+- Generated: 2026-11-11T13:44:09+00:00
+- 0 best bet(s), 26 lean(s), 3158 pass(es) across 6 game(s); 0 unit(s) staked.
+- Included markets: **assists, goals, moneyline, points, puck_line, regulation_3_way, shots_on_goal, team_total, total_goals**
 - Unit size: $25
 
 ## Best bets
 
-| Game | Starts | Market | Selection | Model | Edge | Price | Bet down to | Book | Units |
-|:-----|:-------|:-------|:----------|------:|-----:|------:|------------:|:-----|------:|
-| Florida Panthers @ Columbus Blue Jackets | Nov 10, 7:40 PM ET | `team_total` | home_over 3 | 64.5% | +13.3% | -105 | -124 | BetMGM | 0.375 |
-| Florida Panthers @ Columbus Blue Jackets | Nov 10, 7:40 PM ET | `total_goals` | over 6 | 62.7% | +12.7% | +100 | -116 | BetUS | 0.125 |
+_No best bets._
 
 ## Leans
 
 | Game | Starts | Market | Selection | Model | Edge | Price | Bet down to | Book |
 |:-----|:-------|:-------|:----------|------:|-----:|------:|------------:|:-----|
-| Florida Panthers @ Columbus Blue Jackets | Nov 10, 7:40 PM ET | `team_total` | home_over 3.5 | 51.0% | +12.5% | +160 | +111 | FanDuel |
-| Florida Panthers @ Columbus Blue Jackets | Nov 10, 7:40 PM ET | `total_goals` | over 7 | 44.8% | +12.5% | +210 | +143 | Bovada |
-| Florida Panthers @ Columbus Blue Jackets | Nov 10, 7:40 PM ET | `team_total` | home_over 2.5 | 71.7% | +12.0% | -148 | -160 | FanDuel |
-| Florida Panthers @ Columbus Blue Jackets | Nov 10, 7:40 PM ET | `total_goals` | over 7.5 | 36.2% | +11.2% | +300 | +207 | FanDuel |
-| Florida Panthers @ Columbus Blue Jackets | Nov 10, 7:40 PM ET | `team_total` | home_over 4.5 | 31.1% | +10.7% | +390 | +263 | FanDuel |
-| Washington Capitals @ Ottawa Senators | Nov 10, 7:10 PM ET | `shots_on_goal` | Ryan Leonard under 1.5 | 50.3% | +10.6% | +152 | +126 | BetOnline.ag |
-| Florida Panthers @ Columbus Blue Jackets | Nov 10, 7:40 PM ET | `total_goals` | over 5.5 | 66.5% | +10.6% | -127 | -160 | Courtside |
-| Florida Panthers @ Columbus Blue Jackets | Nov 10, 7:40 PM ET | `total_goals` | over 6.5 | 56.0% | +10.5% | +120 | -110 | FanDuel |
-| Florida Panthers @ Columbus Blue Jackets | Nov 10, 7:40 PM ET | `team_total` | home_over 4 | 38.8% | +10.2% | +250 | +184 | BetMGM |
-| Colorado Avalanche @ Toronto Maple Leafs | Nov 10, 7:10 PM ET | `shots_on_goal` | Darren Raddysh under 2.5 | 64.6% | +10.1% | -120 | -141 | BetMGM |
-| New Jersey Devils @ Winnipeg Jets | Nov 10, 7:10 PM ET | `shots_on_goal` | Jack Hughes under 3.5 | 57.7% | +10.1% | +110 | -107 | theScore Bet |
-| New Jersey Devils @ Winnipeg Jets | Nov 10, 7:10 PM ET | `shots_on_goal` | Jack Hughes under 2.5 | 38.2% | +9.7% | +250 | +211 | theScore Bet |
-| Florida Panthers @ Columbus Blue Jackets | Nov 10, 7:40 PM ET | `total_goals` | over 8.5 | 27.0% | +9.1% | +460 | +326 | FanDuel |
-| Colorado Avalanche @ Toronto Maple Leafs | Nov 10, 7:10 PM ET | `shots_on_goal` | Devon Toews under 1.5 | 52.3% | +8.9% | +130 | +116 | Courtside |
-| Florida Panthers @ Columbus Blue Jackets | Nov 10, 7:40 PM ET | `moneyline` | home | 56.7% | +8.6% | +108 | -113 | BetOnline.ag |
-| Nashville Predators @ Los Angeles Kings | Nov 10, 10:10 PM ET | `team_total` | home_over 3.5 | 52.1% | +8.2% | +128 | +106 | BetOnline.ag |
-| Nashville Predators @ Los Angeles Kings | Nov 10, 10:10 PM ET | `shots_on_goal` | Quinton Byfield under 2.5 | 61.7% | +8.2% | -115 | -125 | Hard Rock Bet |
-| Colorado Avalanche @ Toronto Maple Leafs | Nov 10, 7:10 PM ET | `regulation_3_way` | away | 58.2% | +8.2% | +100 | -120 | Bally Bet |
-| Nashville Predators @ Los Angeles Kings | Nov 10, 10:10 PM ET | `goalie_saves` | Anton Forsberg under 24.5 | 58.2% | +8.2% | +100 | -109 | Hard Rock Bet |
-| Florida Panthers @ Columbus Blue Jackets | Nov 10, 7:40 PM ET | `regulation_3_way` | home | 45.5% | +7.8% | +165 | +138 | Bally Bet |
-| Washington Capitals @ Ottawa Senators | Nov 10, 7:10 PM ET | `points` | Alex Ovechkin over 0.5 | 47.8% | +7.8% | +150 | +124 | Fanatics |
-| Colorado Avalanche @ Toronto Maple Leafs | Nov 10, 7:10 PM ET | `blocked_shots` | Devon Toews under 1.5 | 66.9% | +7.8% | -145 | -156 | Fliff |
-| Florida Panthers @ Columbus Blue Jackets | Nov 10, 7:40 PM ET | `goals` | Dmitri Voronkov over 0.5 | 22.4% | +7.5% | +575 | +512 | Fanatics |
-| Nashville Predators @ Los Angeles Kings | Nov 10, 10:10 PM ET | `shots_on_goal` | Quinton Byfield under 1.5 | 36.9% | +7.5% | +240 | +224 | theScore Bet |
-| Nashville Predators @ Los Angeles Kings | Nov 10, 10:10 PM ET | `regulation_3_way` | home | 51.9% | +7.5% | +125 | +107 | BetMGM |
-| Nashville Predators @ Los Angeles Kings | Nov 10, 10:10 PM ET | `puck_line` | home -1.5 | 41.2% | +7.5% | +196 | +165 | BetUS |
-| Nashville Predators @ Los Angeles Kings | Nov 10, 10:10 PM ET | `moneyline` | home | 62.9% | +7.4% | -125 | -146 | BetUS |
-| Florida Panthers @ Columbus Blue Jackets | Nov 10, 7:40 PM ET | `shots_on_goal` | Mathieu Olivier under 1.5 | 57.8% | +7.1% | -103 | -107 | Bally Bet |
-| Colorado Avalanche @ Toronto Maple Leafs | Nov 10, 7:10 PM ET | `shots_on_goal` | Darren Raddysh under 1.5 | 42.8% | +7.1% | +180 | +172 | theScore Bet |
-| Nashville Predators @ Los Angeles Kings | Nov 10, 10:10 PM ET | `shots_on_goal` | Mavrik Bourque under 2.5 | 66.2% | +7.1% | -145 | -151 | Bovada |
-| Nashville Predators @ Los Angeles Kings | Nov 10, 10:10 PM ET | `team_total` | home_over 4.5 | 32.1% | +7.1% | +300 | +251 | Bovada |
-| Florida Panthers @ Columbus Blue Jackets | Nov 10, 7:40 PM ET | `shots_on_goal` | Ivan Provorov under 1.5 | 59.4% | +7.0% | -110 | -114 | Courtside |
-| Detroit Red Wings @ St Louis Blues | Nov 10, 8:10 PM ET | `shots_on_goal` | Lucas Raymond under 2.5 | 60.5% | +7.0% | -115 | -119 | Bovada |
-| Detroit Red Wings @ St Louis Blues | Nov 10, 8:10 PM ET | `shots_on_goal` | Lucas Raymond under 1.5 | 37.7% | +6.9% | +225 | +216 | theScore Bet |
-| Nashville Predators @ Los Angeles Kings | Nov 10, 10:10 PM ET | `team_total` | home_over 3 | 65.0% | +6.6% | -140 | -159 | BetMGM |
-| Florida Panthers @ Columbus Blue Jackets | Nov 10, 7:40 PM ET | `shots_on_goal` | Charlie Coyle under 1.5 | 54.2% | +6.6% | +110 | +108 | Courtside |
-| Washington Capitals @ Ottawa Senators | Nov 10, 7:10 PM ET | `assists` | Dylan Cozens over 0.5 | 38.3% | +6.6% | +215 | +210 | Fanatics |
-| New Jersey Devils @ Winnipeg Jets | Nov 10, 7:10 PM ET | `goals` | Gabriel Vilardi over 0.5 | 35.0% | +6.5% | +250 | +245 | Bally Bet |
-| Colorado Avalanche @ Toronto Maple Leafs | Nov 10, 7:10 PM ET | `shots_on_goal` | T.J. Hughes under 1.5 | 44.7% | +6.3% | +160 | +159 | theScore Bet |
-| Nashville Predators @ Los Angeles Kings | Nov 10, 10:10 PM ET | `shots_on_goal` | Mavrik Bourque under 1.5 | 41.9% | +6.2% | +180 | +179 | BetMGM |
-| Washington Capitals @ Ottawa Senators | Nov 10, 7:10 PM ET | `goals` | Alex Ovechkin over 0.5 | 30.4% | +6.0% | +310 | +310 | Bally Bet |
-| Florida Panthers @ Columbus Blue Jackets | Nov 10, 7:40 PM ET | `puck_line` | home -1.5 | 35.3% | +5.9% | +240 | +215 | Bovada |
-| Nashville Predators @ Los Angeles Kings | Nov 10, 10:10 PM ET | `total_goals` | over 6.5 | 52.3% | +5.8% | +115 | +105 | theScore Bet |
-| New Jersey Devils @ Winnipeg Jets | Nov 10, 7:10 PM ET | `moneyline` | home | 49.7% | +5.7% | +127 | +117 | Bovada |
-| Washington Capitals @ Ottawa Senators | Nov 10, 7:10 PM ET | `points` | Dylan Cozens over 0.5 | 53.2% | +5.6% | +110 | +100 | Fanatics |
-| Nashville Predators @ Los Angeles Kings | Nov 10, 10:10 PM ET | `total_goals` | over 7 | 40.0% | +5.5% | +190 | +174 | Bovada |
-| Nashville Predators @ Los Angeles Kings | Nov 10, 10:10 PM ET | `total_goals` | over 7.5 | 33.1% | +5.3% | +260 | +239 | Bally Bet |
-| Nashville Predators @ Los Angeles Kings | Nov 10, 10:10 PM ET | `team_total` | home_over 4 | 39.6% | +5.2% | +190 | +177 | BetMGM |
-| Nashville Predators @ Los Angeles Kings | Nov 10, 10:10 PM ET | `total_goals` | over 6 | 58.6% | +5.1% | -115 | -122 | BetUS |
-| Florida Panthers @ Columbus Blue Jackets | Nov 10, 7:40 PM ET | `points` | Valeri Nichushkin over 0.5 | 49.5% | +5.1% | +125 | +115 | theScore Bet |
-| Florida Panthers @ Columbus Blue Jackets | Nov 10, 7:40 PM ET | `points` | Sean Monahan over 0.5 | 50.4% | +5.0% | +120 | +111 | Courtside |
-| New Jersey Devils @ Winnipeg Jets | Nov 10, 7:10 PM ET | `team_total` | home_over 2.5 | 65.6% | +4.9% | -154 | -160 | FanDuel |
-| Nashville Predators @ Los Angeles Kings | Nov 10, 10:10 PM ET | `total_goals` | over 5.5 | 63.4% | +4.9% | -141 | -149 | Bally Bet |
-| New Jersey Devils @ Winnipeg Jets | Nov 10, 7:10 PM ET | `points` | Gabriel Vilardi over 0.5 | 61.4% | +4.9% | -130 | -140 | FanDuel |
-| Colorado Avalanche @ Toronto Maple Leafs | Nov 10, 7:10 PM ET | `puck_line` | away -1.5 | 44.7% | +4.7% | +150 | +143 | Bally Bet |
-| New Jersey Devils @ Winnipeg Jets | Nov 10, 7:10 PM ET | `regulation_3_way` | home | 38.0% | +4.6% | +200 | +191 | Bally Bet |
-| New Jersey Devils @ Winnipeg Jets | Nov 10, 7:10 PM ET | `team_total` | home_over 3.5 | 43.5% | +4.5% | +156 | +150 | FanDuel |
-| Minnesota Wild @ Montréal Canadiens | Nov 10, 7:10 PM ET | `total_goals` | over 7 | 40.2% | +4.5% | +180 | +173 | Bovada |
-| Minnesota Wild @ Montréal Canadiens | Nov 10, 7:10 PM ET | `total_goals` | over 6.5 | 52.2% | +4.3% | +109 | +106 | BetOnline.ag |
-| Minnesota Wild @ Montréal Canadiens | Nov 10, 7:10 PM ET | `total_goals` | over 6 | 58.7% | +4.1% | -120 | -123 | BetMGM |
-| Colorado Avalanche @ Toronto Maple Leafs | Nov 10, 7:10 PM ET | `team_total` | home_under 3 | 62.3% | +4.0% | -140 | -142 | BetMGM |
-| Minnesota Wild @ Montréal Canadiens | Nov 10, 7:10 PM ET | `total_goals` | over 5.5 | 63.1% | +3.9% | -145 | -147 | Hard Rock Bet |
-| New Jersey Devils @ Winnipeg Jets | Nov 10, 7:10 PM ET | `team_total` | home_over 3 | 56.2% | +3.8% | -110 | -111 | BetMGM |
-| New Jersey Devils @ Winnipeg Jets | Nov 10, 7:10 PM ET | `total_goals` | over 6.5 | 54.4% | +3.7% | -103 | -103 | Courtside |
-| Colorado Avalanche @ Toronto Maple Leafs | Nov 10, 7:10 PM ET | `team_total` | home_under 2.5 | 48.0% | +3.6% | +125 | +125 | Courtside |
-| New Jersey Devils @ Winnipeg Jets | Nov 10, 7:10 PM ET | `puck_line` | home -1.5 | 27.7% | +3.6% | +315 | +314 | Fliff |
-| Washington Capitals @ Ottawa Senators | Nov 10, 7:10 PM ET | `total_goals` | over 7.5 | 33.4% | +3.6% | +235 | +235 | Bally Bet |
-| Washington Capitals @ Ottawa Senators | Nov 10, 7:10 PM ET | `points` | Fabian Zetterlund over 0.5 | 42.7% | +3.5% | +155 | +152 | Fanatics |
-| Nashville Predators @ Los Angeles Kings | Nov 10, 10:10 PM ET | `points` | Corey Perry over 0.5 | 40.4% | +3.5% | +171 | +168 | BetOnline.ag |
-| Washington Capitals @ Ottawa Senators | Nov 10, 7:10 PM ET | `points` | Aliaksei Protas over 0.5 | 41.8% | +3.3% | +160 | +158 | Fanatics |
-| Washington Capitals @ Ottawa Senators | Nov 10, 7:10 PM ET | `points` | Dylan Strome over 0.5 | 60.2% | +3.3% | -132 | -133 | theScore Bet |
-
-One stake per outcome: where a ladder priced one outcome at several lines, one rung is staked and the rest are recorded here.
-
-- home_over 3.5 (`team_total`): One stake per outcome: the stake went to home_over 3 at -105 (edge +13.3%, 0.375 unit(s)). This rung is the same opinion at another line, so it is recorded as a lean and staked at zero.
-- over 7 (`total_goals`): One stake per outcome: the stake went to over 6 at +100 (edge +12.7%, 0.125 unit(s)). This rung is the same opinion at another line, so it is recorded as a lean and staked at zero.
-- home_over 2.5 (`team_total`): One stake per outcome: the stake went to home_over 3 at -105 (edge +13.3%, 0.375 unit(s)). This rung is the same opinion at another line, so it is recorded as a lean and staked at zero.
-- over 7.5 (`total_goals`): One stake per outcome: the stake went to over 6 at +100 (edge +12.7%, 0.125 unit(s)). This rung is the same opinion at another line, so it is recorded as a lean and staked at zero.
-- home_over 4.5 (`team_total`): One stake per outcome: the stake went to home_over 3 at -105 (edge +13.3%, 0.375 unit(s)). This rung is the same opinion at another line, so it is recorded as a lean and staked at zero.
-- over 5.5 (`total_goals`): One stake per outcome: the stake went to over 6 at +100 (edge +12.7%, 0.125 unit(s)). This rung is the same opinion at another line, so it is recorded as a lean and staked at zero.
-- over 6.5 (`total_goals`): One stake per outcome: the stake went to over 6 at +100 (edge +12.7%, 0.125 unit(s)). This rung is the same opinion at another line, so it is recorded as a lean and staked at zero.
-- home_over 4 (`team_total`): One stake per outcome: the stake went to home_over 3 at -105 (edge +13.3%, 0.375 unit(s)). This rung is the same opinion at another line, so it is recorded as a lean and staked at zero.
-- over 8.5 (`total_goals`): One stake per outcome: the stake went to over 6 at +100 (edge +12.7%, 0.125 unit(s)). This rung is the same opinion at another line, so it is recorded as a lean and staked at zero.
+| New York Rangers @ Calgary Flames | Nov 11, 7:40 PM ET | `shots_on_goal` | Zayne Parekh under 1.5 | 60.9% | +11.4% | +102 | -121 | BetOnline.ag |
+| Tampa Bay Lightning @ Buffalo Sabres | Nov 11, 7:10 PM ET | `shots_on_goal` | Brandon Hagel under 2.5 | 52.6% | +10.1% | +135 | +115 | Hard Rock Bet |
+| Utah Mammoth @ Vegas Golden Knights | Nov 11, 9:40 PM ET | `assists` | Shea Theodore over 0.5 | 38.2% | +9.6% | +250 | +211 | BetOnline.ag |
+| Nashville Predators @ Anaheim Ducks | Nov 11, 10:10 PM ET | `shots_on_goal` | Cutter Gauthier under 3.5 | 54.9% | +9.4% | +120 | +105 | FanDuel |
+| Philadelphia Flyers @ Edmonton Oilers | Nov 11, 9:10 PM ET | `shots_on_goal` | Leon Draisaitl under 3.5 | 66.1% | +8.6% | -135 | -150 | Courtside |
+| Nashville Predators @ Anaheim Ducks | Nov 11, 10:10 PM ET | `shots_on_goal` | Beckett Sennecke under 2.5 | 53.2% | +7.7% | +120 | +113 | Hard Rock Bet |
+| Utah Mammoth @ Vegas Golden Knights | Nov 11, 9:40 PM ET | `shots_on_goal` | Mitch Marner under 2.5 | 68.4% | +7.6% | -155 | -160 | BetMGM |
+| Tampa Bay Lightning @ Buffalo Sabres | Nov 11, 7:10 PM ET | `shots_on_goal` | Charle-Edouard D'Astous under 1.5 | 58.2% | +7.0% | -105 | -109 | Hard Rock Bet |
+| Utah Mammoth @ Vegas Golden Knights | Nov 11, 9:40 PM ET | `points` | Shea Theodore over 0.5 | 42.6% | +6.9% | +180 | +153 | Courtside |
+| Utah Mammoth @ Vegas Golden Knights | Nov 11, 9:40 PM ET | `shots_on_goal` | Logan Cooley under 2.5 | 65.9% | +6.7% | -145 | -149 | Hard Rock Bet |
+| Pittsburgh Penguins @ San Jose Sharks | Nov 11, 10:10 PM ET | `assists` | Sidney Crosby over 0.5 | 54.3% | +6.7% | +110 | +108 | Fanatics |
+| Nashville Predators @ Anaheim Ducks | Nov 11, 10:10 PM ET | `points` | Judd Caulfield over 0.5 | 42.5% | +6.5% | +178 | +154 | BetOnline.ag |
+| Utah Mammoth @ Vegas Golden Knights | Nov 11, 9:40 PM ET | `shots_on_goal` | Nick Schmaltz under 1.5 | 48.1% | +6.4% | +140 | +138 | Courtside |
+| Utah Mammoth @ Vegas Golden Knights | Nov 11, 9:40 PM ET | `shots_on_goal` | Mikhail Sergachev under 1.5 | 47.7% | +6.2% | +141 | +140 | BetOnline.ag |
+| Nashville Predators @ Anaheim Ducks | Nov 11, 10:10 PM ET | `shots_on_goal` | Tristan Luneau under 1.5 | 61.4% | +6.2% | -123 | -123 | BetOnline.ag |
+| Pittsburgh Penguins @ San Jose Sharks | Nov 11, 10:10 PM ET | `points` | Tyler Toffoli over 0.5 | 45.3% | +5.3% | +150 | +137 | Courtside |
+| Philadelphia Flyers @ Edmonton Oilers | Nov 11, 9:10 PM ET | `puck_line` | away +1.5 | 63.2% | +5.0% | -139 | -147 | Caesars |
+| Pittsburgh Penguins @ San Jose Sharks | Nov 11, 10:10 PM ET | `points` | Mason Marchment over 0.5 | 49.7% | +4.2% | +120 | +115 | Hard Rock Bet |
+| Tampa Bay Lightning @ Buffalo Sabres | Nov 11, 7:10 PM ET | `points` | Jason Zucker over 0.5 | 42.6% | +4.2% | +160 | +153 | Bally Bet |
+| Philadelphia Flyers @ Edmonton Oilers | Nov 11, 9:10 PM ET | `points` | Owen Tippett over 0.5 | 41.2% | +4.1% | +170 | +163 | Fanatics |
+| Utah Mammoth @ Vegas Golden Knights | Nov 11, 9:40 PM ET | `total_goals` | over 7 | 42.3% | +3.8% | +160 | +158 | Bovada |
+| Philadelphia Flyers @ Edmonton Oilers | Nov 11, 9:10 PM ET | `points` | Zach Hyman over 0.5 | 52.6% | +3.8% | +105 | +102 | theScore Bet |
+| Tampa Bay Lightning @ Buffalo Sabres | Nov 11, 7:10 PM ET | `total_goals` | over 7.5 | 36.5% | +3.7% | +205 | +203 | Bally Bet |
+| Nashville Predators @ Anaheim Ducks | Nov 11, 10:10 PM ET | `points` | Steven Stamkos over 0.5 | 64.4% | +3.6% | -155 | -159 | theScore Bet |
+| Tampa Bay Lightning @ Buffalo Sabres | Nov 11, 7:10 PM ET | `total_goals` | over 7 | 45.3% | +3.6% | +140 | +140 | Bovada |
+| Utah Mammoth @ Vegas Golden Knights | Nov 11, 9:40 PM ET | `points` | William Karlsson over 0.5 | 43.6% | +3.6% | +150 | +147 | Bally Bet |
 
 Leans are recorded and not staked.
 
-1 cleared the lean bar and are listed with the passes: assists unders are neither listed nor staked: the model has held them about ten points likelier than they landed this season (population B -3.6% over 663; as listed leans -12.0% over 130).
+2 cleared the lean bar and are listed with the passes: points overs priced longer than +200 are not listed: as leans this season they lost in both halves (-54.3u over 317 at 1u) while the shorter ones made +13.2u over 456.
 
-10 cleared the lean bar and are listed with the passes: points overs priced longer than +200 are not listed: as leans this season they lost in both halves (-54.3u over 317 at 1u) while the shorter ones made +13.2u over 456.
+1 cleared the lean bar and are listed with the passes: points unders are not listed as leans: measured as a loss on two seasons of bought prices (-4.2% over 6,140 wagers) and 247-315 as leans this season.
 
 ## Passes / notable avoids
 
 | Game | Starts | Market | Selection | Model | Edge | Price | Book |
 |:-----|:-------|:-------|:----------|------:|-----:|------:|:-----|
-| Washington Capitals @ Ottawa Senators | Nov 10, 7:10 PM ET | `shots_on_goal` | Ryan Leonard under 2.5 | 73.7% | +10.7% | -170 | Bovada |
-| Florida Panthers @ Columbus Blue Jackets | Nov 10, 7:40 PM ET | `team_total` | home_over 2 | 85.7% | +9.2% | -325 | BetMGM |
-| New Jersey Devils @ Winnipeg Jets | Nov 10, 7:10 PM ET | `shots_on_goal` | Jack Hughes under 4.5 | 70.8% | +8.5% | -165 | Hard Rock Bet |
-| Florida Panthers @ Columbus Blue Jackets | Nov 10, 7:40 PM ET | `points` | Dmitri Voronkov over 0.5 | 37.9% | +8.5% | +240 | Fanatics |
-| Nashville Predators @ Los Angeles Kings | Nov 10, 10:10 PM ET | `team_total` | home_over 2.5 | 72.7% | +7.8% | -185 | Bovada |
-| Florida Panthers @ Columbus Blue Jackets | Nov 10, 7:40 PM ET | `team_total` | home_over 5.5 | 16.3% | +7.2% | +1000 | FanDuel |
-| New Jersey Devils @ Winnipeg Jets | Nov 10, 7:10 PM ET | `puck_line` | home +2.5 | 83.2% | +6.4% | -330 | Fliff |
-| Florida Panthers @ Columbus Blue Jackets | Nov 10, 7:40 PM ET | `assists` | Seth Jones under 0.5 | 60.9% | +6.4% | -120 | Courtside |
-| Florida Panthers @ Columbus Blue Jackets | Nov 10, 7:40 PM ET | `total_goals` | over 5 | 81.3% | +6.3% | -300 | Bovada |
-| Florida Panthers @ Columbus Blue Jackets | Nov 10, 7:40 PM ET | `team_total` | home_over 1.5 | 88.1% | +6.2% | -450 | BetMGM |
-| Florida Panthers @ Columbus Blue Jackets | Nov 10, 7:40 PM ET | `puck_line` | home +1.5 | 77.3% | +6.2% | -245 | Bovada |
-| Florida Panthers @ Columbus Blue Jackets | Nov 10, 7:40 PM ET | `total_goals` | over 9.5 | 14.3% | +6.2% | +1140 | FanDuel |
-| Nashville Predators @ Los Angeles Kings | Nov 10, 10:10 PM ET | `puck_line` | home +1.5 | 82.3% | +6.1% | -320 | Courtside |
-| New Jersey Devils @ Winnipeg Jets | Nov 10, 7:10 PM ET | `puck_line` | home +1.5 | 71.6% | +6.0% | -190 | theScore Bet |
-| New Jersey Devils @ Winnipeg Jets | Nov 10, 7:10 PM ET | `goals` | Jack Hughes under 0.5 | 66.0% | +6.0% | -150 | theScore Bet |
-| New Jersey Devils @ Winnipeg Jets | Nov 10, 7:10 PM ET | `goalie_saves` | Jake Allen under 25.5 | 65.0% | +5.9% | -145 | Hard Rock Bet |
-| Washington Capitals @ Ottawa Senators | Nov 10, 7:10 PM ET | `shots_on_goal` | Jordan Kyrou over 2.5 | 40.5% | +5.8% | +188 | FanDuel |
-| Nashville Predators @ Los Angeles Kings | Nov 10, 10:10 PM ET | `blocked_shots` | Brady Skjei under 1.5 | 60.4% | +5.8% | -120 | Fliff |
-| Washington Capitals @ Ottawa Senators | Nov 10, 7:10 PM ET | `shots_on_goal` | Jordan Kyrou over 3.5 | 23.6% | +5.7% | +460 | FanDuel |
-| Florida Panthers @ Columbus Blue Jackets | Nov 10, 7:40 PM ET | `assists` | Sean Monahan over 0.5 | 36.0% | +5.7% | +230 | BetMGM |
-| Colorado Avalanche @ Toronto Maple Leafs | Nov 10, 7:10 PM ET | `goalie_saves` | Mackenzie Blackwood under 24.5 | 58.0% | +5.6% | -110 | Hard Rock Bet |
-| Washington Capitals @ Ottawa Senators | Nov 10, 7:10 PM ET | `shots_on_goal` | Cole Hutson under 1.5 | 59.1% | +5.6% | -115 | Bovada |
-| Washington Capitals @ Ottawa Senators | Nov 10, 7:10 PM ET | `assists` | Alex Ovechkin over 0.5 | 27.6% | +5.4% | +350 | BetOnline.ag |
-| New Jersey Devils @ Winnipeg Jets | Nov 10, 7:10 PM ET | `shots_on_goal` | Cole Perfetti under 1.5 | 37.6% | +5.4% | +210 | theScore Bet |
-| Washington Capitals @ Ottawa Senators | Nov 10, 7:10 PM ET | `goals` | Jordan Kyrou over 0.5 | 32.0% | +5.4% | +275 | BetMGM |
+| New York Rangers @ Calgary Flames | Nov 11, 7:40 PM ET | `points` | Zayne Parekh under 0.5 | 70.3% | +9.3% | -156 | BetOnline.ag |
+| Philadelphia Flyers @ Edmonton Oilers | Nov 11, 9:10 PM ET | `goals` | Michael Bunting over 0.5 | 21.1% | +8.6% | +700 | Courtside |
+| New York Rangers @ Calgary Flames | Nov 11, 7:40 PM ET | `assists` | Zayne Parekh under 0.5 | 78.5% | +7.9% | -240 | Courtside |
+| Philadelphia Flyers @ Edmonton Oilers | Nov 11, 9:10 PM ET | `shots_on_goal` | Ryan Nugent-Hopkins under 2.5 | 70.4% | +7.4% | -170 | Hard Rock Bet |
+| Tampa Bay Lightning @ Buffalo Sabres | Nov 11, 7:10 PM ET | `shots_on_goal` | Brandon Hagel under 3.5 | 71.5% | +7.2% | -180 | theScore Bet |
+| Nashville Predators @ Anaheim Ducks | Nov 11, 10:10 PM ET | `shots_on_goal` | Cutter Gauthier under 4.5 | 70.2% | +7.2% | -170 | Hard Rock Bet |
+| Pittsburgh Penguins @ San Jose Sharks | Nov 11, 10:10 PM ET | `points` | Sidney Crosby over 1.5 | 35.0% | +6.4% | +250 | FanDuel |
+| Philadelphia Flyers @ Edmonton Oilers | Nov 11, 9:10 PM ET | `puck_line` | away +2.5 | 77.5% | +6.1% | -250 | FanDuel |
+| Utah Mammoth @ Vegas Golden Knights | Nov 11, 9:40 PM ET | `shots_on_goal` | Victor Olofsson under 1.5 | 50.3% | +5.8% | +125 | Courtside |
+| Philadelphia Flyers @ Edmonton Oilers | Nov 11, 9:10 PM ET | `shots_on_goal` | Ryan Nugent-Hopkins under 1.5 | 48.8% | +5.7% | +132 | Bally Bet |
+| Pittsburgh Penguins @ San Jose Sharks | Nov 11, 10:10 PM ET | `goals` | Sidney Crosby over 0.5 | 40.2% | +5.7% | +190 | BetMGM |
+| Utah Mammoth @ Vegas Golden Knights | Nov 11, 9:40 PM ET | `shots_on_goal` | Tomas Hertl under 1.5 | 47.3% | +5.7% | +140 | BetMGM |
+| Pittsburgh Penguins @ San Jose Sharks | Nov 11, 10:10 PM ET | `points` | Sidney Crosby over 0.5 | 71.1% | +5.6% | -190 | Courtside |
+| Tampa Bay Lightning @ Buffalo Sabres | Nov 11, 7:10 PM ET | `shots_on_goal` | Tage Thompson under 3.5 | 63.0% | +5.5% | -135 | Bovada |
+| Nashville Predators @ Anaheim Ducks | Nov 11, 10:10 PM ET | `assists` | Judd Caulfield over 0.5 | 29.3% | +5.5% | +320 | Courtside |
+| New York Rangers @ Calgary Flames | Nov 11, 7:40 PM ET | `shots_on_goal` | Matvei Gridin under 1.5 | 47.0% | +5.4% | +140 | BetMGM |
+| Philadelphia Flyers @ Edmonton Oilers | Nov 11, 9:10 PM ET | `shots_on_goal` | Connor McDavid under 3.5 | 64.5% | +5.3% | -145 | Hard Rock Bet |
+| Utah Mammoth @ Vegas Golden Knights | Nov 11, 9:40 PM ET | `shots_on_goal` | Tomas Hertl under 2.5 | 70.2% | +5.3% | -185 | Courtside |
+| Utah Mammoth @ Vegas Golden Knights | Nov 11, 9:40 PM ET | `shots_on_goal` | Nick Schmaltz under 2.5 | 71.3% | +5.2% | -195 | Hard Rock Bet |
+| Pittsburgh Penguins @ San Jose Sharks | Nov 11, 10:10 PM ET | `shots_on_goal` | Tommy Novak under 1.5 | 48.7% | +5.2% | +130 | Courtside |
+| Nashville Predators @ Anaheim Ducks | Nov 11, 10:10 PM ET | `goals` | Nils Hoglander over 0.5 | 16.6% | +5.1% | +775 | BetMGM |
+| New York Rangers @ Calgary Flames | Nov 11, 7:40 PM ET | `shots_on_goal` | Matvei Gridin under 2.5 | 69.9% | +5.0% | -185 | Bovada |
+| Philadelphia Flyers @ Edmonton Oilers | Nov 11, 9:10 PM ET | `shots_on_goal` | Evan Bouchard under 2.5 | 56.8% | +4.9% | -108 | FanDuel |
+| Philadelphia Flyers @ Edmonton Oilers | Nov 11, 9:10 PM ET | `shots_on_goal` | Connor McDavid under 2.5 | 47.3% | +4.8% | +135 | Bally Bet |
+| Tampa Bay Lightning @ Buffalo Sabres | Nov 11, 7:10 PM ET | `goals` | Brandon Hagel under 0.5 | 70.2% | +4.7% | -190 | theScore Bet |
 
-_4592 further passes not listed._
+_3133 further passes not listed._
 
 These are genuine model judgements about markets that were priced and modelled. They are **not** the same thing as the excluded markets below.
 
@@ -148,13 +88,12 @@ Who the model expects to win each game, from the same team ratings the card pric
 
 | Game | Puck drop | Stats' side | Win chance | Fair | Best price | Book | Against the price |
 |:--|:--|:--|--:|--:|--:|:--|:--|
-| Colorado Avalanche @ Toronto Maple Leafs | Nov 10, 7:10 PM ET | **Colorado Avalanche** | 67.0% | -203 | -162 | Bally Bet | price is 5.2 pts long, under the bar |
-| Minnesota Wild @ Montréal Canadiens | Nov 10, 7:10 PM ET | **Minnesota Wild** | 52.1% | -109 | -122 | Courtside | price is 2.8 pts short |
-| New Jersey Devils @ Winnipeg Jets | Nov 10, 7:10 PM ET | **New Jersey Devils** | 50.2% | -101 | -139 | Courtside | price is 7.9 pts short |
-| Washington Capitals @ Ottawa Senators | Nov 10, 7:10 PM ET | **Ottawa Senators** | 50.1% | -100 | -101 | BetOnline.ag | price is 0.1 pts short |
-| Florida Panthers @ Columbus Blue Jackets | Nov 10, 7:40 PM ET | **Columbus Blue Jackets** | 56.7% | -131 | +108 | BetOnline.ag | price is 8.6 pts long, under the bar |
-| Detroit Red Wings @ St Louis Blues | Nov 10, 8:10 PM ET | **St Louis Blues** | 61.2% | -158 | -137 | Bovada | price is 3.4 pts long, under the bar |
-| Nashville Predators @ Los Angeles Kings | Nov 10, 10:10 PM ET | **Los Angeles Kings** | 62.9% | -170 | -125 | BetUS | price is 7.4 pts long, under the bar |
+| Tampa Bay Lightning @ Buffalo Sabres | Nov 11, 7:10 PM ET | **Tampa Bay Lightning** | 53.9% | -117 | -122 | Courtside | price is 1.1 pts short |
+| New York Rangers @ Calgary Flames | Nov 11, 7:40 PM ET | **New York Rangers** | 53.9% | -117 | -140 | BetUS | price is 4.4 pts short |
+| Philadelphia Flyers @ Edmonton Oilers | Nov 11, 9:10 PM ET | **Edmonton Oilers** | 62.3% | -165 | -200 | BetOnline.ag | price is 4.4 pts short |
+| Utah Mammoth @ Vegas Golden Knights | Nov 11, 9:40 PM ET | **Vegas Golden Knights** | 58.2% | -139 | -122 | Courtside | price is 3.2 pts long, under the bar |
+| Nashville Predators @ Anaheim Ducks | Nov 11, 10:10 PM ET | **Anaheim Ducks** | 60.2% | -152 | -134 | FanDuel | price is 3.0 pts long, under the bar |
+| Pittsburgh Penguins @ San Jose Sharks | Nov 11, 10:10 PM ET | **Pittsburgh Penguins** | 56.5% | -130 | -132 | Courtside | price is 0.4 pts short |
 
 A list, not bets: no units, no stakes, nothing frozen into the forward ledger. The lab has no measurement showing that backing the stats' side at the market's price makes money.
 
@@ -164,34 +103,28 @@ No sportsbook the lab can reach has posted hits since October 27. PrizePicks sti
 
 | Game | Puck drop | Player | Line | Over | Under | Model leans |
 |:--|:--|:--|--:|--:|--:|:--|
-| Colorado Avalanche @ Toronto Maple Leafs | Nov 10, 7:10 PM ET | Nick Paul | 2 | 16.7% | 83.3% | Under |
-| Washington Capitals @ Ottawa Senators | Nov 10, 7:10 PM ET | Ryan Leonard | 2 | 26.8% | 73.2% | Under |
-| Colorado Avalanche @ Toronto Maple Leafs | Nov 10, 7:10 PM ET | Brandon Duhaime | 2.5 | 27.4% | 72.6% | Under |
-| New Jersey Devils @ Winnipeg Jets | Nov 10, 7:10 PM ET | Brenden Dillon | 2.5 | 32.6% | 67.4% | Under |
-| Washington Capitals @ Ottawa Senators | Nov 10, 7:10 PM ET | Tom Wilson | 3 | 34.1% | 65.9% | Under |
-| Colorado Avalanche @ Toronto Maple Leafs | Nov 10, 7:10 PM ET | Noah Juulsen | 2.5 | 34.7% | 65.3% | Under |
-| Washington Capitals @ Ottawa Senators | Nov 10, 7:10 PM ET | Shane Pinto | 1.5 | 37.9% | 62.1% | Under |
-| New Jersey Devils @ Winnipeg Jets | Nov 10, 7:10 PM ET | Neal Pionk | 2.5 | 38.3% | 61.7% | Under |
-| Washington Capitals @ Ottawa Senators | Nov 10, 7:10 PM ET | Dylan Cozens | 3 | 41.0% | 59.0% | Under |
-| Minnesota Wild @ Montréal Canadiens | Nov 10, 7:10 PM ET | Yakov Trenin | 5 | 41.1% | 58.9% | Under |
-| Washington Capitals @ Ottawa Senators | Nov 10, 7:10 PM ET | Matt Roy | 2 | 41.3% | 58.7% | Under |
-| Colorado Avalanche @ Toronto Maple Leafs | Nov 10, 7:10 PM ET | Dakota Joshua | 3 | 57.8% | 42.2% | Over |
-| New Jersey Devils @ Winnipeg Jets | Nov 10, 7:10 PM ET | Mario Ferraro | 1.5 | 45.3% | 54.7% | Under |
-| New Jersey Devils @ Winnipeg Jets | Nov 10, 7:10 PM ET | Jesper Boqvist | 1.5 | 46.4% | 53.6% | Under |
-| Washington Capitals @ Ottawa Senators | Nov 10, 7:10 PM ET | Drake Batherson | 1.5 | 47.0% | 52.9% | Under |
-| New Jersey Devils @ Winnipeg Jets | Nov 10, 7:10 PM ET | Cole Koepke | 2.5 | 48.1% | 51.9% | Under |
-| New Jersey Devils @ Winnipeg Jets | Nov 10, 7:10 PM ET | Timo Meier | 1.5 | 49.8% | 50.2% | Under |
-| Minnesota Wild @ Montréal Canadiens | Nov 10, 7:10 PM ET | Blake Coleman | 2 | 50.1% | 49.9% | Over |
-| Florida Panthers @ Columbus Blue Jackets | Nov 10, 7:40 PM ET | Garnet Hathaway | 4.5 | 21.5% | 78.5% | Under |
-| Florida Panthers @ Columbus Blue Jackets | Nov 10, 7:40 PM ET | Cole Sillinger | 2 | 21.8% | 78.2% | Under |
-| Florida Panthers @ Columbus Blue Jackets | Nov 10, 7:40 PM ET | Brady Tkachuk | 3.5 | 33.9% | 66.1% | Under |
-| Florida Panthers @ Columbus Blue Jackets | Nov 10, 7:40 PM ET | Mathieu Olivier | 3 | 56.0% | 44.0% | Over |
-| Detroit Red Wings @ St Louis Blues | Nov 10, 8:10 PM ET | Alexey Toropchenko | 2.5 | 35.2% | 64.8% | Under |
-| Detroit Red Wings @ St Louis Blues | Nov 10, 8:10 PM ET | Ross Johnston | 3.5 | 43.4% | 56.6% | Under |
-| Detroit Red Wings @ St Louis Blues | Nov 10, 8:10 PM ET | Jake Neighbours | 2.5 | 47.8% | 52.2% | Under |
-| Nashville Predators @ Los Angeles Kings | Nov 10, 10:10 PM ET | Adam Edstrom | 4 | 24.9% | 75.1% | Under |
-| Nashville Predators @ Los Angeles Kings | Nov 10, 10:10 PM ET | Scott Laughton | 2.5 | 36.8% | 63.2% | Under |
-| Nashville Predators @ Los Angeles Kings | Nov 10, 10:10 PM ET | Alex Laferriere | 3 | 54.6% | 45.4% | Over |
+| Tampa Bay Lightning @ Buffalo Sabres | Nov 11, 7:10 PM ET | Beck Malenstyn | 4 | 26.7% | 73.4% | Under |
+| Tampa Bay Lightning @ Buffalo Sabres | Nov 11, 7:10 PM ET | Peyton Krebs | 2.5 | 47.8% | 52.2% | Under |
+| Tampa Bay Lightning @ Buffalo Sabres | Nov 11, 7:10 PM ET | Zemgus Girgensons | 2.5 | 48.9% | 51.1% | Under |
+| New York Rangers @ Calgary Flames | Nov 11, 7:40 PM ET | Will Cuylle | 5 | 11.5% | 88.5% | Under |
+| New York Rangers @ Calgary Flames | Nov 11, 7:40 PM ET | Noah Laba | 2.5 | 20.9% | 79.1% | Under |
+| New York Rangers @ Calgary Flames | Nov 11, 7:40 PM ET | Martin Pospisil | 5.5 | 23.9% | 76.1% | Under |
+| New York Rangers @ Calgary Flames | Nov 11, 7:40 PM ET | Tye Kartye | 2.5 | 67.4% | 32.6% | Over |
+| New York Rangers @ Calgary Flames | Nov 11, 7:40 PM ET | Zach Whitecloud | 1.5 | 42.9% | 57.1% | Under |
+| Philadelphia Flyers @ Edmonton Oilers | Nov 11, 9:10 PM ET | Simon Benoit | 2.5 | 40.2% | 59.8% | Under |
+| Philadelphia Flyers @ Edmonton Oilers | Nov 11, 9:10 PM ET | Trent Frederic | 2.5 | 53.2% | 46.8% | Over |
+| Philadelphia Flyers @ Edmonton Oilers | Nov 11, 9:10 PM ET | Owen Tippett | 2 | 46.9% | 53.0% | Under |
+| Utah Mammoth @ Vegas Golden Knights | Nov 11, 9:40 PM ET | Nic Dowd | 2.5 | 19.2% | 80.8% | Under |
+| Utah Mammoth @ Vegas Golden Knights | Nov 11, 9:40 PM ET | MacKenzie Weegar | 2.5 | 41.8% | 58.2% | Under |
+| Utah Mammoth @ Vegas Golden Knights | Nov 11, 9:40 PM ET | Brayden McNabb | 1.5 | 57.4% | 42.6% | Over |
+| Utah Mammoth @ Vegas Golden Knights | Nov 11, 9:40 PM ET | Jack McBain | 3.5 | 45.0% | 55.0% | Under |
+| Utah Mammoth @ Vegas Golden Knights | Nov 11, 9:40 PM ET | Jeremy Lauzon | 4 | 54.4% | 45.6% | Over |
+| Utah Mammoth @ Vegas Golden Knights | Nov 11, 9:40 PM ET | Marc Gatcomb | 3.5 | 52.5% | 47.5% | Over |
+| Nashville Predators @ Anaheim Ducks | Nov 11, 10:10 PM ET | Adam Edstrom | 3.5 | 24.4% | 75.6% | Under |
+| Pittsburgh Penguins @ San Jose Sharks | Nov 11, 10:10 PM ET | Connor Dewar | 1.5 | 39.4% | 60.6% | Under |
+| Pittsburgh Penguins @ San Jose Sharks | Nov 11, 10:10 PM ET | Kiefer Sherwood | 5 | 46.6% | 53.4% | Under |
+| Nashville Predators @ Anaheim Ducks | Nov 11, 10:10 PM ET | Tim Washe | 2.5 | 47.9% | 52.1% | Under |
+| Pittsburgh Penguins @ San Jose Sharks | Nov 11, 10:10 PM ET | Macklin Celebrini | 0.5 | 49.0% | 51.0% | Under |
 
 A list, not bets: no units, no stakes, nothing frozen into the forward ledger. Measured on real prices, the hits model has no demonstrated edge.
 
@@ -203,53 +136,43 @@ Backtest of the shipped rule (either bar) on 2024-25 and 2025-26 bought prices, 
 
 Big games, measured on 2024-25 and 2025-26 (scripts/run_due_list_big_games.py): no setting makes any of them likelier than the player's own rate. Widened on 2026-11-10 for more picks (Cooper). 2+ goals, 35+ goal scorers 15+ games without one: hit 6.0% against 9.5% implied, -36.8% over 1,285 (95% -50.6% to -21.8%; -43.4% in 2024-25, -30.5% in 2025-26), a demonstrated loss. Hat trick, 40+ at 30+: -58.6% over 1,269 (95% -81.1% to -33.2%), a demonstrated loss at every setting tried. Shutouts, 4+ last season at 12+ starts without one: 5.2% of 656 starts at 10+ and 4.8% of 475 at 15+, against 9.7% to 9.8% the season before; no book in this feed prices a shutout, so those rows are graded for hits only. Across 16 seasons of NHL game logs (2010-11 to 2025-26, at the earlier, stricter settings) a drought never made any of the three likelier than for the same players at any drought. Cooper picks from the list.
 
-| Player | Team | Opponent | Puck drop | Category | Line | Last season | Drought | Bar reached | Bars (tier / surprise) | Rarity | Line tonight | Goalie faced | Shots in drought | Model | Band record | Best price | Book | Flag |
-|:--|:--|:--|:--|:--|--:|--:|--:|:--|:--|:--|:--|:--|:--|:--|:--|--:|:--|:--|
-| Tom Wilson | WSH | OTT | Nov 10, 7:00 PM ET | points | over 0.5 | 62 | 11 | 5 (both) | tier 5 / surprise 4 | 1 in 22,094 for him | F2, PP1 | backup Samuel Ersson (Confirmed), +2% goals vs expected | shots steady: 2.0 a game vs 2.1 usual | model 49% (+0.1 pts) | band 60-69 @5: -11.9% over 110 (95% -30.7% to +5.3%) | +105 | theScore Bet |  |
-| Alex Ovechkin | WSH | OTT | Nov 10, 7:00 PM ET | points | over 0.5 | 64 | 7 | 5 (both) | tier 5 / surprise 4 | 1 in 263 for him | F3, PP1 | backup Samuel Ersson (Confirmed), +2% goals vs expected | shots down: 2.1 a game vs 2.9 usual | model 48% (+7.8 pts) | band 60-69 @5: -11.9% over 110 (95% -30.7% to +5.3%) | +150 | Fanatics |  |
-| Alex DeBrincat | DET | STL | Nov 10, 8:00 PM ET | points | over 0.5 | 85 | 3 | 3 (both) | tier 3 / surprise 3 | 1 in 23 for him | F1, PP1 | Joel Hofer (Confirmed), -6% goals vs expected | shots up: 3.7 a game vs 3.5 usual | model 62% (+1.8 pts) | band 85-99 @3: +2.1% over 75 (95% -17.0% to +18.7%) | -150 | BetMGM |  |
-| Darren Raddysh | TOR | COL | Nov 10, 7:00 PM ET | goals | over 0.5 | 22 | 20 | 10 (tier) | tier 10 / surprise - | 1 in 416 for him | D1, PP1 | Mackenzie Blackwood (Confirmed), -5% goals vs expected | shots steady: 2.5 a game vs 2.6 usual | model 10% (-5.0 pts) | band 20-24 @10: -19.0% over 659 (95% -32.0% to -4.3%) | +550 | FanDuel |  |
-| Tom Wilson | WSH | OTT | Nov 10, 7:00 PM ET | goals | over 0.5 | 30 | 11 | 8 (tier) | tier 8 / surprise - | 1 in 86 for him | F2, PP1 | backup Samuel Ersson (Confirmed), +2% goals vs expected | shots steady: 2.0 a game vs 2.1 usual | model 28% (+1.0 pts) | band 25-39 @8: +5.9% over 646 (95% -6.0% to +20.2%) | +275 | Bally Bet |  |
-| Matthew Knies | CBJ | FLA | Nov 10, 7:30 PM ET | goals | over 0.5 | 23 | 14 | 10 (tier) | tier 10 / surprise - | 1 in 47 for him | F1, PP1 | Jacob Markstrom (Confirmed), -0% goals vs expected | shots down: 1.2 a game vs 1.8 usual | model 27% (+2.1 pts) | band 20-24 @10: -19.0% over 659 (95% -32.0% to -4.3%) | +310 | FanDuel |  |
-| Alex Ovechkin | WSH | OTT | Nov 10, 7:00 PM ET | goals | over 0.5 | 32 | 10 | 8 (tier) | tier 8 / surprise - | 1 in 32 for him | F3, PP1 | backup Samuel Ersson (Confirmed), +2% goals vs expected | shots down: 1.8 a game vs 2.9 usual | model 30% (+6.0 pts) | band 25-39 @8: +5.9% over 646 (95% -6.0% to +20.2%) | +310 | Bally Bet |  |
-| Gabriel Vilardi | WPG | NJD | Nov 10, 7:00 PM ET | goals | over 0.5 | 30 | 8 | 8 (tier) | tier 8 / surprise - | 1 in 21 for him | F1, PP1 | Jake Allen (Confirmed), -2% goals vs expected | shots up: 2.0 a game vs 1.8 usual | model 35% (+6.5 pts) | band 25-39 @8: +5.9% over 646 (95% -6.0% to +20.2%) | +250 | Bally Bet |  |
-| Juraj Slafkovský | MTL | MIN | Nov 10, 7:00 PM ET | goals | over 0.5 | 30 | 8 | 8 (tier) | tier 8 / surprise - | 1 in 21 for him | F1, PP1 | Jesper Wallstedt (Confirmed), -7% goals vs expected | shots steady: 2.1 a game vs 2.2 usual | model 28% (+0.6 pts) | band 25-39 @8: +5.9% over 646 (95% -6.0% to +20.2%) | +270 | FanDuel |  |
-| Mavrik Bourque | NSH | LAK | Nov 10, 10:00 PM ET | goals | over 0.5 | 20 | 13 | 10 (tier) | tier 10 / surprise - | 1 in 17 for him | F1, PP1 | Anton Forsberg (Confirmed), -3% goals vs expected | shots up: 1.9 a game vs 1.8 usual | model 20% (-1.8 pts) | band 20-24 @10: -19.0% over 659 (95% -32.0% to -4.3%) | +350 | Bally Bet |  |
-| Filip Forsberg | NSH | LAK | Nov 10, 10:00 PM ET | goals | over 0.5 | 40 | 4 | 4 (tier) | tier 4 / surprise - | 1 in 9 for him | F2, PP1 | Anton Forsberg (Confirmed), -3% goals vs expected | shots down: 2.0 a game vs 3.0 usual | model 35% (+0.5 pts) | band 40+ @4: -7.7% over 326 (95% -21.0% to +6.4%) | +188 | Bally Bet |  |
-| Alex DeBrincat | DET | STL | Nov 10, 8:00 PM ET | assists | over 0.5 | 44 | 5 | 4 (tier) | tier 4 / surprise 6 | 1 in 15 for him | F1, PP1 | Joel Hofer (Confirmed), -6% goals vs expected | shots up: 3.6 a game vs 3.5 usual | model 40% (+2.7 pts) | band 40-59 @4: -9.3% over 804 (95% -18.3% to -0.6%) | +165 | BetMGM |  |
-| Mark Scheifele | WPG | NJD | Nov 10, 7:00 PM ET | 2+ goals | over 1.5 | 36 | 28 | 15 (tier) | tier 15 / surprise - | 1 in 12 for him | F1, PP1 | Jake Allen (Confirmed), -2% goals vs expected | - | model 7% (+1.0 pts) | band 35+ @15: -36.8% over 1285 (95% -50.6% to -21.8%) | +1600 | Bovada |  |
-| Steven Stamkos | NSH | LAK | Nov 10, 10:00 PM ET | hat trick | over 2.5 | 42 | 49 | 30 (tier) | tier 30 / surprise - | 1 in 3 for him | F1, PP1 | Anton Forsberg (Confirmed), -3% goals vs expected | - | model 2% (-0.0 pts) | band 40+ @30: -58.6% over 1269 (95% -81.1% to -33.2%) | +6000 | Bovada |  |
-| Filip Forsberg | NSH | LAK | Nov 10, 10:00 PM ET | hat trick | over 2.5 | 40 | 67 | 30 (tier) | tier 30 / surprise - | 1 in 2 for him | F2, PP1 | Anton Forsberg (Confirmed), -3% goals vs expected | - | model 1% (-0.2 pts) | band 40+ @30: -58.6% over 1269 (95% -81.1% to -33.2%) | +7500 | theScore Bet |  |
-| Cole Caufield | MTL | MIN | Nov 10, 7:00 PM ET | hat trick | over 2.5 | 51 | 30 | 30 (tier) | tier 30 / surprise - | 1 in 2 for him | F1, PP1 | Jesper Wallstedt (Confirmed), -7% goals vs expected | - | model 2% (+0.1 pts) | band 40+ @30: -58.6% over 1269 (95% -81.1% to -33.2%) | +5500 | Courtside |  |
-| Alex DeBrincat | DET | STL | Nov 10, 8:00 PM ET | hat trick | over 2.5 | 41 | 258 | 30 (tier) | tier 30 / surprise - | 1 in 1 for him | F1, PP1 | Joel Hofer (Confirmed), -6% goals vs expected | - | model 1% (-0.1 pts) | band 40+ @30: -58.6% over 1269 (95% -81.1% to -33.2%) | +7500 | theScore Bet |  |
-| Nathan MacKinnon | COL | TOR | Nov 10, 7:00 PM ET | hat trick | over 2.5 | 53 | 180 | 30 (tier) | tier 30 / surprise - | 1 in 1 for him | F1, PP1 | Sergei Bobrovsky (Confirmed), -1% goals vs expected | - | model 2% (-0.3 pts) | band 40+ @30: -58.6% over 1269 (95% -81.1% to -33.2%) | +4500 | Courtside |  |
-| Jesper Wallstedt | MIN | MTL | Nov 10, 7:00 PM ET | shutout | no goal against | 4 | 39 | 12 (tier) | tier 12 / surprise - | 1 in 154 for him | - | - | - | - | no record | not posted | - |  |
-| John Gibson | DET | STL | Nov 10, 8:00 PM ET | shutout | no goal against | 4 | 25 | 12 (tier) | tier 12 / surprise - | 1 in 8 for him | - | - | - | - | no record | not posted | - |  |
-| Sergei Bobrovsky | TOR | COL | Nov 10, 7:00 PM ET | shutout | no goal against | 4 | 16 | 12 (tier) | tier 12 / surprise - | 1 in 4 for him | - | - | - | - | no record | not posted | - |  |
+| Player | Team | Opponent | Puck drop | Category | Line | Last season | Drought | Bar reached | Bars (tier / surprise) | Rarity | Line tonight | Goalie faced | Shots in drought | Model | Band record | Best price | Book | Tracked at | Flag |
+|:--|:--|:--|:--|:--|--:|--:|--:|:--|:--|:--|:--|:--|:--|:--|:--|--:|:--|--:|:--|
+| Lawson Crouse | UTA | VGK | Nov 11, 9:30 PM ET | goals | over 0.5 | 24 | 14 | 10 (tier) | tier 10 / surprise - | 1 in 67 for him | F2 | Carter Hart, -2% goals vs expected | shots down: 1.3 a game vs 1.8 usual | model 17% (-0.1 pts) | band 20-24 @10: -19.0% over 659 (95% -32.0% to -4.3%) | +480 | Bally Bet | 0.15u | lost in testing (band interval below zero) |
+| Mavrik Bourque | NSH | ANA | Nov 11, 10:00 PM ET | goals | over 0.5 | 20 | 14 | 10 (tier) | tier 10 / surprise - | 1 in 21 for him | F1, PP1 | backup Laurent Brossoit, -2% goals vs expected | shots up: 2.1 a game vs 1.8 usual | model 21% (-3.2 pts) | band 20-24 @10: -19.0% over 659 (95% -32.0% to -4.3%) | +310 | Bally Bet | 0.15u | lost in testing (band interval below zero) |
+| Travis Konecny | PHI | EDM | Nov 11, 9:00 PM ET | assists | over 0.5 | 41 | 4 | 4 (tier) | tier 4 / surprise 5 | 1 in 11 for him | F2, PP2 | backup Tristan Jarry, +0% goals vs expected | shots down: 1.5 a game vs 2.2 usual | model 36% (+2.6 pts) | band 40-59 @4: -9.3% over 804 (95% -18.3% to -0.6%) | +200 | BetOnline.ag | 0.15u | lost in testing (band interval below zero) |
+| Ryan McLeod | BUF | TBL | Nov 11, 7:00 PM ET | assists | over 0.5 | 40 | 4 | 4 (tier) | tier 4 / surprise 6 | 1 in 8 for him | F3, PP2 | Andrei Vasilevskiy, -5% goals vs expected | shots steady: 1.0 a game vs 1.1 usual | model 27% (-2.8 pts) | band 40-59 @4: -9.3% over 804 (95% -18.3% to -0.6%) | +235 | Bally Bet | 0.15u | lost in testing (band interval below zero) |
+| Pavel Dorofeyev | NYR | CGY | Nov 11, 7:30 PM ET | 2+ goals | over 1.5 | 37 | 34 | 15 (tier) | tier 15 / surprise - | 1 in 21 for him | F2, PP1 | backup Devin Cooley, -4% goals vs expected | - | model 6% (-0.5 pts) | band 35+ @15: -36.8% over 1285 (95% -50.6% to -21.8%) | +1400 | Courtside | 0.1u | lost in testing (band interval below zero) |
+| Dylan Guenther | UTA | VGK | Nov 11, 9:30 PM ET | 2+ goals | over 1.5 | 40 | 17 | 15 (tier) | tier 15 / surprise - | 1 in 4 for him | F3, PP1; game-time decision | Carter Hart, -2% goals vs expected | - | model 5% (-1.2 pts) | band 35+ @15: -36.8% over 1285 (95% -50.6% to -21.8%) | +1500 | Hard Rock Bet | 0.1u | lost in testing (band interval below zero) |
+| Macklin Celebrini | SJS | PIT | Nov 11, 10:00 PM ET | hat trick | over 2.5 | 45 | 80 | 30 (tier) | tier 30 / surprise - | 1 in 7 for him | F1, PP1 | backup Sergei Murashov, +1% goals vs expected | - | model 1% (-0.8 pts) | band 40+ @30: -58.6% over 1269 (95% -81.1% to -33.2%) | +4500 | Courtside | 0.05u | lost in testing (band interval below zero) |
+| Steven Stamkos | NSH | ANA | Nov 11, 10:00 PM ET | hat trick | over 2.5 | 42 | 50 | 30 (tier) | tier 30 / surprise - | 1 in 3 for him | F1, PP1 | backup Laurent Brossoit, -2% goals vs expected | - | model 2% (+0.2 pts) | band 40+ @30: -58.6% over 1269 (95% -81.1% to -33.2%) | +6000 | theScore Bet | 0.05u | lost in testing (band interval below zero) |
+| Filip Forsberg | NSH | ANA | Nov 11, 10:00 PM ET | hat trick | over 2.5 | 40 | 68 | 30 (tier) | tier 30 / surprise - | 1 in 2 for him | F2, PP1 | backup Laurent Brossoit, -2% goals vs expected | - | model 1% (-0.2 pts) | band 40+ @30: -58.6% over 1269 (95% -81.1% to -33.2%) | +7000 | DraftKings | 0.05u | lost in testing (band interval below zero) |
+| Dylan Guenther | UTA | VGK | Nov 11, 9:30 PM ET | hat trick | over 2.5 | 40 | 56 | 30 (tier) | tier 30 / surprise - | 1 in 2 for him | F3, PP1; game-time decision | Carter Hart, -2% goals vs expected | - | model 1% (-0.6 pts) | band 40+ @30: -58.6% over 1269 (95% -81.1% to -33.2%) | +8000 | Bovada | 0.05u | lost in testing (band interval below zero) |
+| Nikita Kucherov | TBL | BUF | Nov 11, 7:00 PM ET | hat trick | over 2.5 | 44 | 31 | 30 (tier) | tier 30 / surprise - | 1 in 1 for him | F1, PP1 | Ukko-Pekka Luukkonen, -3% goals vs expected | - | model 2% (-0.1 pts) | band 40+ @30: -58.6% over 1269 (95% -81.1% to -33.2%) | +6000 | Bovada | 0.05u | lost in testing (band interval below zero) |
 
-A list, not bets: no units, no stakes, and none of it is in the best bets above.
+A list, not bets: no units, no stakes, and none of it is in the best bets above. "Tracked at" is the notional size the site's Due List record counts it at (0.25u, less at +200 and longer); "lost in testing" marks a band whose backtest interval sits below zero.
 
 ## Names that could not be matched
 
 These appeared in the provider's prices and could not be matched to a modelled team or player, so they produced **no selection**. That is not a judgement about them — it is a join that did not land. A fuzzy match would produce a confident price for a bet nobody placed, on a row that looks exactly like a correct one.
 
-- Brayden Yager
-- Christopher Tanev
-- Cole McWard
-- David Spacek
-- Jack Devine
-- Jack Williams
-- Kenny Connors
-- Riley Tufte
-- Ryan Tverberg
-- Sammy Blais
-- Tyrel Bauer
+- Alex Wennberg
+- Artem Duda
+- Dmitriy Simashev
+- Dmitry Simashev
+- Eric Pohlkamp
+- Jake Middleton
+- Jeffrey Viel
+- Maxwell Crozier
+- Nico Myatovic
+- Roger McQueen
 - Vitali Pinchuk
-- William Wallinder
-- Zack Bolduc
+- Yegor Chinakhov
 
 ## Excluded markets
 
+- `blocked_shots`: The provider returned no rows for this market. That is an absence, not a price of zero and not a no-value call. Check per-bookmaker coverage including alternate lines before concluding it is not offered.
+- `goalie_saves`: The provider returned no rows for this market. That is an absence, not a price of zero and not a no-value call. Check per-bookmaker coverage including alternate lines before concluding it is not offered.
 - `hits`: The provider returned no rows for this market. That is an absence, not a price of zero and not a no-value call. Check per-bookmaker coverage including alternate lines before concluding it is not offered.
 
 An excluded market is **not** a pass, an avoid, or a no-value call, and no price was invented for it.
@@ -271,7 +194,7 @@ An excluded market is **not** a pass, an avoid, or a no-value call, and no price
 - Leans are recorded and not staked. The smallest edges are mostly estimation error, and in the EPL lab they lost.
 - One outcome is staked once. Where an alternate ladder prices the same outcome at several lines, the highest-edge rung is staked and the rest are recorded as leans naming it. This is not a per-game, per-slate or bankroll cap; there is none.
 - No edge here is a demonstrated edge. See `data/outputs/what_we_can_claim.md` for what the evidence actually supports.
-- Stakes are sized by each market's closing-line value (Cooper, 2026-11-10): x1.5 where the bets' 95% game-clustered CLV interval sits above zero, x0.5 where it spans zero, x0.25 below it, unchanged under 200 bets or 30 games. Table of 2026-11-10T20:46: `assists` x1.5 (beats the close, +1.18% over 740); `blocked_shots` x1 (too few to judge, +0.76% over 86); `goalie_saves` x1 (too few to judge, +7.85% over 174); `goals` x1.5 (beats the close, +2.36% over 223); `hits` x1 (too few to judge, +1.07% over 120); `moneyline` x1 (too few to judge, +0.55% over 80); `points` x1.5 (beats the close, +3.65% over 1,412); `puck_line` x1.5 (beats the close, +1.08% over 283); `regulation_3_way` x1 (too few to judge, +0.62% over 176); `shots_on_goal` x1.5 (beats the close, +3.52% over 2,244); `team_total` x1.5 (beats the close, +0.85% over 521); `total_goals` x0.5 (no demonstrated CLV, +0.70% over 408). Beating the close is not a demonstrated edge.
+- Stakes are sized by each market's closing-line value (Cooper, 2026-11-10): x1.5 where the bets' 95% game-clustered CLV interval sits above zero, x0.5 where it spans zero, x0.25 below it, unchanged under 200 bets or 30 games. Table of 2026-11-10T22:44: `assists` x1.5 (beats the close, +1.18% over 740); `blocked_shots` x1 (too few to judge, +0.76% over 86); `goalie_saves` x1 (too few to judge, +7.85% over 174); `goals` x1.5 (beats the close, +2.36% over 223); `hits` x1 (too few to judge, +1.07% over 120); `moneyline` x1 (too few to judge, +0.55% over 80); `points` x1.5 (beats the close, +3.65% over 1,412); `puck_line` x1.5 (beats the close, +1.08% over 283); `regulation_3_way` x1 (too few to judge, +0.62% over 176); `shots_on_goal` x1.5 (beats the close, +3.52% over 2,244); `team_total` x1.5 (beats the close, +0.85% over 521); `total_goals` x0.5 (no demonstrated CLV, +0.70% over 408). Beating the close is not a demonstrated edge.
 
 
 ---
@@ -282,6 +205,6 @@ What the evidence actually supports:
 - `data/outputs/props_calibration.md`
 - `data/outputs/what_we_can_claim.md`
 
-Run: https://github.com/cooperross399/nhl-betting-lab/actions/runs/42878091180
+Run: https://github.com/cooperross399/nhl-betting-lab/actions/runs/42997636345
 
 Recommendations only. No bet was placed, no policy was edited, and no market was allowlisted by this run.
