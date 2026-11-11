@@ -267,6 +267,11 @@ games[].drought  [] on every regular-season game — Cooper's Due List (2026-10-
                               regressed, minus 1: +0.06 is 6% more goals than the shots were worth. Information only.
                  rule         "tier" | "surprise" | "both" | null — which bars his drought has reached
                  band         string | null — the tier band label: "100+", "85-99", "70-84", "40+", ..., "60+", "45-59", "30-44"
+                 stake        number | null — what the season record tracks this entry at, by its price
+                              (build_site_json.prop_stake: 0.25u, +200 to +500 0.15u, +501 to +1500 0.1u, longer 0.05u);
+                              null with no price. Information only (2026-11-10).
+                 lostInTesting  bool — the band's cellRecord interval sits wholly below zero (highPct < 0); the
+                              page tags the row. The row stays on the list (2026-11-10).
                  cellRecord   {wagers, returnPct, lowPct, highPct} | null — that band's measured record from
                               data/outputs/drought_rule_backtest.json (card window, both seasons, bucket "TIER <band> @<bar>"):
                               wagers, the return and its 95% interval as percents rounded to 1 dp (the card's roi, ci_low,
@@ -400,10 +405,14 @@ settled night's `bets` (`tracker_rows`), kept in `history/settled/<day>.json`.
 - `rows[]`: `{date, group: "team"|"props"|"due", market, price, result:
   "win"|"loss"|"push", staked, units}` plus, for a team pick, `label`, `team`
   (the side picked, null for a total), `opp` and `teams` [away, home]; for a prop or Due List entry, `propType`, `side`,
-  `line`, `player`, `playerId`, `team`, `opp`. Newest first. Leans, voids,
+  `line`, `player`, `playerId`, `team`, `opp`; a Due List entry also `band`
+  (the last-season band it was listed in that night, when its board carried
+  one; kept nights saved before 2026-11-10 take it from their frozen board). Newest first. Leans, voids,
   unpriced Due List entries and ungraded rows are never rows.
 - `overall`, and `byGroup`, `byMarket`, `byPropType`, `byTeam`, `byPlayer`,
-  `byPrice`, `byMonth`: `{key, label, w, l, p, bets, staked, units,
+  `byPrice`, `byMonth`, `byDueGroup` (Due List entries by category and
+  band, key "goals:20-24", label "Goals · 20-24 last season"; Due rows
+  without a band are in no group): `{key, label, w, l, p, bets, staked, units,
   returnPct}`. Every split adds back to `overall` except `byTeam` (a total
   counts under both clubs) and `byPropType`/`byPlayer` (props or players only).
 - `nights`, `firstDate`, `lastDate`, `teamPickDefaultUnits` (unused since

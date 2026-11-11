@@ -31,7 +31,8 @@ INFO_KEYS = {"droughtShots", "usualShots", "modelChance", "modelEdge"}
 #: 2026-10-31 (round two): tonight's posted line and unit, and the goalie he faces.
 CONTEXT_KEYS = {"lineTonight", "ppTonight", "lineBefore", "ppBefore", "lineMove", "status",
                 "oppGoalie", "oppGoalieStatus", "oppGoalieBackup", "oppGoalieVsExpected"}
-SCHEMA_KEYS = ({"player", "playerId", "team", "market", "line", "lastSeason", "drought", "price", "book", "heavyJuice"}
+SCHEMA_KEYS = ({"player", "playerId", "team", "market", "line", "lastSeason", "drought", "price", "book", "heavyJuice",
+                "stake", "lostInTesting"}
                | BAR_KEYS | INFO_KEYS | CONTEXT_KEYS)
 #: The same fields as the card's drought_list.json spells them.
 CARD_BAR_FIELDS = ("tier_bar", "surprise_bar", "hit_rate", "rarity", "one_in", "rule", "band", "cell_record")
@@ -98,7 +99,7 @@ def test_every_regular_season_game_carries_the_array_in_the_schemas_shape(lab, t
     # record in percent (roi 0.105 -> 10.5), under keys that are not the forward
     # return's spellings.
     assert by["TOR"][0] == {"player": "Assist Man", "playerId": 8471111, "team": "TOR", "market": "assists", "line": 0.5,
-                            "lastSeason": 31, "drought": 7, "price": 170, "book": "DraftKings", "heavyJuice": False,
+                            "lastSeason": 31, "drought": 7, "price": 170, "book": "DraftKings", "heavyJuice": False, "stake": 0.25, "lostInTesting": False,
                             "tierBar": 5, "surpriseBar": 7, "hitRate": 0.35, "rarity": 0.049, "oneIn": 20, "rule": "both", "band": "30-44",
                             "cellRecord": {"wagers": 184, "returnPct": 10.5, "lowPct": -1.7, "highPct": 23.9},
                             "droughtShots": None, "usualShots": None, "modelChance": None, "modelEdge": None,
