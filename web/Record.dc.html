@@ -411,6 +411,7 @@ class Component extends DCLogic {
     const byPropType = groupBy(rows.filter((r) => r.group !== "team"), (r) => `${r.market}:${r.side || ""}`, (k, r) => `${r.propType || r.market} · ${r.side || ""}`.trim());
     const band = (p) => (p <= -200 ? "−200 and shorter" : p < -110 ? "−199 to −111" : p <= 110 ? "−110 to +110" : p < 200 ? "+111 to +199" : "+200 and longer");
     const byPrice = groupBy(rows, (r) => band(r.price), (k) => k), byMonth = groupBy(rows, (r) => r.date.slice(0, 7), (k) => new Date(`${k}-15T12:00:00Z`).toLocaleString(undefined, { month: "long", year: "numeric" }));
+    const byDueGroup = groupBy(rows.filter((r) => r.group === "due" && typeof r.band === "string" && r.band), (r) => `${r.market}:${r.band}`, (k, r) => `${r.propType || r.market} · ${r.band} last season`);
     const byMarketTeam = groupBy(rows.filter((r) => r.group === "team"), (r) => r.market, (k) => k);
     const byKind = groupBy(rows, (r) => (r.group === "team" ? `team:${r.market}` : `${r.market}:${r.side || ""}`), (k, r) => (r.group === "team" ? r.market : `${r.propType || r.market} ${r.side || ""}`.trim()));
     const tables = [
@@ -418,6 +419,8 @@ class Component extends DCLogic {
       mkTable("by-team", "By team", byTeam, { logos: true, noun: "teams", extra: "A game total counts under both teams." }),
       ...(byPlayer.length ? [mkTable("by-player", "By player", byPlayer, { search: true, noun: "players" })] : []),
       mkTable("by-month", "By month", byMonth, { noun: "months" }),
+      // The Due List by group, live (Cooper, 2026-11-10): its category and the band it was listed in that night.
+      ...(byDueGroup.length ? [mkTable("by-due-group", "Due List by group", byDueGroup, { noun: "groups", extra: "Grouped by category and last season's total. A group that lost in testing is tagged on the board." })] : []),
     ];
 
     // Do our win chances come true? The board's published win chances against

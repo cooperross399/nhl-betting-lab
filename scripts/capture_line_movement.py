@@ -25,6 +25,14 @@ moneyline, puck line and total (`fetch_team_markets`, about 6 credits a
 round: 3 markets x 2 regions, outside the per-event cap). Both land in the
 same day file and the closing-line store, so a moneyline, puck-line or total
 opinion can meet a closing price (`capture_team_markets`).
+
+`--max-lead-minutes N` (2026-11-11) bounds a round to the games facing off
+within N minutes of it: the workflow's early-afternoon round passes
+`closing_lines.CLOSE_MAX_LEAD` (150), so it asks only the starts it can
+close, roughly 12:00-14:00 ET. A night with no such game asks nothing that
+bills: the events list is free, no per-event request is made, and the bulk
+team request (6 credits whatever it returns) is skipped too
+(`ask_team_markets`).
 """
 
 from __future__ import annotations
@@ -109,6 +117,7 @@ def capture_team_markets(
     league_days: list[str],
     keep_event,
     now: datetime,
+    starts_by: datetime | None = None,
 ) -> list[dict]:
     """The bulk moneyline, puck line and total for this round, or no rows.
 
@@ -148,6 +157,7 @@ def capture_team_markets(
             keep_event=keep_event,
             league_days=league_days,
             now=now,
+            starts_by=starts_by,
         )
     except EmptySlateError as exc:
         print(f"No team markets to capture: {exc}")
@@ -168,6 +178,41 @@ def capture_team_markets(
     for warning in team.warnings:
         print(f"  warning: {warning}")
     return list(team.rows)
+
+
+def _lead_minutes(text: str) -> int | None:
+    """`--max-lead-minutes`: a whole number of minutes, or empty for no bound
+    (the workflow passes an empty value on every round but 15:30)."""
+    if not str(text).strip():
+        return None
+    return int(text)
+
+
+def ask_team_markets(
+    result, *, starts_by: datetime | None, league_days: list[str], now: datetime
+) -> bool:
+    """Whether this round asks the bulk team markets.
+
+    Always, in an ordinary round. In a round bounded by `starts_by` (the
+    early-afternoon round), only when a game facing off by then is in
+    scope: the bulk request bills its 6 credits whatever it returns, so on a
+    night with no afternoon game it would buy the evening board's prices
+    eight hours early, which the evening rounds buy again. The per-event
+    fetch's slate decides (`events_seen`, counted after the window, the
+    started-game drop, the lead and the screen). When that fetch did not
+    finish (`result` is None), the cached schedule decides, so a failed
+    events list still keeps an afternoon game's moneyline close.
+    """
+    if starts_by is None:
+        return True
+    if result is not None:
+        return result.events_seen > 0
+    return (
+        regular_season_games_still_to_play(
+            league_days, not_started_by=now, starting_by=starts_by
+        )
+        > 0
+    )
 
 
 def capture_path(day: str, *, processed_dir: Path | None = None) -> Path:
@@ -192,10 +237,24 @@ def main(argv: list[str] | None = None) -> int:
         default=1,
         help="League game dates to capture, starting today.",
     )
+    parser.add_argument(
+        "--max-lead-minutes",
+        type=_lead_minutes,
+        nargs="?",
+        const=None,
+        default=None,
+        help=(
+            "Ask only games facing off within this many minutes of the "
+            "capture (the early-afternoon round passes 150). Empty or "
+            "omitted: the whole window."
+        ),
+    )
     args = parser.parse_args(argv)
 
     if args.live and args.credit_cap <= 0:
         parser.error("--live requires a positive --credit-cap.")
+    if args.max_lead_minutes is not None and args.max_lead_minutes <= 0:
+        parser.error("--max-lead-minutes must be positive.")
 
     processed = Path(args.processed_dir)
     load_provider_env()
@@ -243,6 +302,17 @@ def main(argv: list[str] | None = None) -> int:
     # check below, so a game facing off between two readings of the clock
     # cannot be dropped by one and counted by the other.
     now = datetime.fromisoformat(captured_at)
+    starts_by = (
+        now + timedelta(minutes=args.max_lead_minutes)
+        if args.max_lead_minutes is not None
+        else None
+    )
+    if starts_by is not None:
+        print(
+            f"This round asks only games facing off by "
+            f"{starts_by.isoformat(timespec='seconds')} "
+            f"({args.max_lead_minutes} minutes from now)."
+        )
     result = None
     lost_exit = 0
     try:
@@ -253,6 +323,7 @@ def main(argv: list[str] | None = None) -> int:
             fetched_at=captured_at,
             league_days=league_days,
             now=now,
+            starts_by=starts_by,
         )
     except EmptySlateError as exc:
         # Not a fault, and not a red run: the league does not play every
@@ -265,12 +336,22 @@ def main(argv: list[str] | None = None) -> int:
     # After the per-event fetch, whatever it did, so a lost per-event round
     # still keeps the moneyline, puck line and total, and a failed team fetch
     # costs the per-event round nothing (`capture_team_markets`).
-    team_rows = capture_team_markets(
-        provider,
-        league_days=league_days,
-        keep_event=screen,
-        now=now,
-    )
+    if ask_team_markets(
+        result, starts_by=starts_by, league_days=league_days, now=now
+    ):
+        team_rows = capture_team_markets(
+            provider,
+            league_days=league_days,
+            keep_event=screen,
+            now=now,
+            starts_by=starts_by,
+        )
+    else:
+        print(
+            "No game faces off within this round's lead, so the bulk team "
+            "markets were not asked and no credit was spent on them."
+        )
+        team_rows = []
     per_event_rows = list(result.rows) if result is not None else []
     # Written before any exit is decided, so every rule below keeps what
     # came back from either fetch.
@@ -341,7 +422,7 @@ def main(argv: list[str] | None = None) -> int:
         # the per-event board (/events) is the one missing the games.
         if result.events_seen == 0:
             scheduled = regular_season_games_still_to_play(
-                league_days, not_started_by=now
+                league_days, not_started_by=now, starting_by=starts_by
             )
             if scheduled:
                 print(

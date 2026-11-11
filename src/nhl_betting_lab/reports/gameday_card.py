@@ -119,6 +119,7 @@ from nhl_betting_lab.drought_rule import price_text as drought_price_text
 from nhl_betting_lab.drought_rule import rarity_text as drought_rarity_text
 from nhl_betting_lab.drought_rule import model_text as drought_model_text
 from nhl_betting_lab.drought_rule import record_text as drought_record_text
+from nhl_betting_lab.drought_rule import LOST_IN_TESTING_FLAG, lost_in_testing as drought_lost_in_testing
 from nhl_betting_lab.drought_rule import shots_text as drought_shots_text
 from nhl_betting_lab.due_context import goalie_text as drought_goalie_text
 from nhl_betting_lab.due_context import line_text as drought_line_text
@@ -1440,11 +1441,17 @@ def render_drought_section(card: GamedayCard) -> list[str]:
         lines += [
             "| Player | Team | Opponent | Puck drop | Category | Line | Last season | Drought | Bar reached "
             "| Bars (tier / surprise) | Rarity | Line tonight | Goalie faced | Shots in drought | Model | Band record "
-            "| Best price | Book | Flag |",
-            "|:--|:--|:--|:--|:--|--:|--:|--:|:--|:--|:--|:--|:--|:--|:--|:--|--:|:--|:--|",
+            "| Best price | Book | Tracked at | Flag |",
+            "|:--|:--|:--|:--|:--|--:|--:|--:|:--|:--|:--|:--|:--|:--|:--|:--|--:|:--|--:|:--|",
         ]
+        from nhl_betting_lab.drought_forward import tracked_stake
         for row in card.drought_rows:
-            flag = "heavy juice (shorter than -160)" if row.get("heavy_juice") else ""
+            flags = (["heavy juice (shorter than -160)"] if row.get("heavy_juice") else []) \
+                + ([f"{LOST_IN_TESTING_FLAG} (band interval below zero)"] if drought_lost_in_testing(row) else [])
+            flag = "; ".join(flags)
+            odds = row.get("american_odds")
+            priced = odds is not None and not (isinstance(odds, float) and odds != odds)
+            tracked = f"{tracked_stake(price=odds):g}u" if priced else "-"
             lines.append(
                 f"| {row.get('player')} | {row.get('team')} | {row.get('opponent')} "
                 f"| {_start_eastern(row)} | {drought_category_label(row.get('market'))} "
@@ -1453,9 +1460,11 @@ def render_drought_section(card: GamedayCard) -> list[str]:
                 f"| {drought_bars_text(row)} | {drought_rarity_text(row)} | {drought_line_text(row)} "
                 f"| {drought_goalie_text(row)} | {drought_shots_text(row)} "
                 f"| {drought_model_text(row)} | {drought_record_text(row)} "
-                f"| {drought_price_text(row)} | {row.get('book') or '-'} | {flag} |"
+                f"| {drought_price_text(row)} | {row.get('book') or '-'} | {tracked} | {flag} |"
             )
-        lines += ["", "A list, not bets: no units, no stakes, and none of it is in the best bets above.", ""]
+        lines += ["", "A list, not bets: no units, no stakes, and none of it is in the best bets above. "
+                  "\"Tracked at\" is the notional size the site's Due List record counts it at (0.25u, "
+                  "less at +200 and longer); \"lost in testing\" marks a band whose backtest interval sits below zero.", ""]
     else:
         lines += ["_Nobody on tonight's slate qualifies._", ""]
     lines += [f"- {note}" for note in card.drought_notes]

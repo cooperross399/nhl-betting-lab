@@ -221,7 +221,11 @@ def scheduled_regular_season_starts(
 
 
 def regular_season_games_still_to_play(
-    days, *, not_started_by: datetime | None = None, raw_dir=None
+    days,
+    *,
+    not_started_by: datetime | None = None,
+    starting_by: datetime | None = None,
+    raw_dir=None,
 ) -> int:
     """Regular-season games the cached NHL club schedules list on `days`.
 
@@ -234,6 +238,11 @@ def regular_season_games_still_to_play(
     that has moved on from it is not missing it. An unreadable face-off
     counts, as it does for the card (`_under_way` in run_gameday_card.py):
     ambiguity is a game still to play.
+
+    With `starting_by`, a game whose scheduled face-off is after that moment
+    is not counted: Line Movement's early-afternoon round asks only the
+    games facing off within its lead, so a board without the evening games
+    in that window is not missing them. An unreadable face-off still counts.
 
     Moved here from `run_provider_shadow.py` (#257) so the two scripts that
     read the provider's board on a game day judge an empty one by one rule:
@@ -253,6 +262,10 @@ def regular_season_games_still_to_play(
         if not_started_by is not None:
             begins = parse_commence_time(start)
             if begins is not None and begins <= not_started_by:
+                continue
+        if starting_by is not None:
+            begins = parse_commence_time(start)
+            if begins is not None and begins > starting_by:
                 continue
         count += 1
     return count
