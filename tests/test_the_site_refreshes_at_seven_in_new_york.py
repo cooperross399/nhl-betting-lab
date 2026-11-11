@@ -120,3 +120,23 @@ def test_only_the_publishing_morning_run_waits_and_nothing_cancels_the_wait() ->
     assert publish["needs"] == ["when", "wait-more"]
     assert "!cancelled()" in publish["if"]
     assert "needs.when.outputs.go == 'true'" in publish["if"]
+
+
+def test_the_seven_am_board_fetches_todays_team_odds_softly() -> None:
+    """Cooper, 2026-11-11: live odds on the site by 7 AM. The 7 AM run's
+    restored state holds last night's prices, for yesterday's games, so the
+    publish job asks the bulk team markets itself: never per-event props,
+    never on a run a Gameday Refresh started (that run's prices are fresh),
+    and never able to stop the board being built. It must run before the
+    board is built."""
+    steps = _workflow()["jobs"]["publish"]["steps"]
+    names = [s.get("name", "") for s in steps]
+    (step,) = [s for s in steps if s.get("name") == "Fetch this morning's team odds for the board"]
+    assert step.get("continue-on-error") is True
+    assert "workflow_run" in step["if"] and "!=" in step["if"]
+    run = step["run"]
+    assert "run_provider_shadow.py --live" in run
+    assert "--props" not in run
+    assert "--output-dir \"$RUNNER_TEMP/" in run
+    assert names.index(step["name"]) > names.index("Restore the lab's latest state")
+    assert names.index(step["name"]) < names.index("Build today's board and yesterday's results")

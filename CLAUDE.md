@@ -3227,6 +3227,16 @@ Re-derive rather than trust if the data has moved.
   from the lock". Publish Site now fetches `refs/tags/<tag>` first and a
   branch of that name only when no tag exists (`v12.1` was a branch);
   Design Drop's fan-out fetches the tag only.
+  **2026-11-11: the 7 AM board carries today's odds.** Cooper: "the
+  website needs to have live odds and be fully running by 7am daily". The
+  7 AM build restored last night's re-price, whose staged prices are for
+  yesterday's games, so today's games showed no odds until the 9:40 card.
+  Every Publish Site run not started by Gameday Refresh now asks the bulk
+  team markets for today (`run_provider_shadow.py --live`, no `--props`,
+  about 6 credits; at most three such runs a day) into the runner's
+  `data/staging`, before the board is built. Soft: a failure builds the
+  board as before. The card, snapshot and ledger never read that runner.
+  Cooper's request is the approval for this scheduled spend.
 
 - **2026-11-02: one tab bar on every page, and smoother tab switches.**
   Cooper: the Season tab dropped Tracker and Record and showed an Archive tab

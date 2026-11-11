@@ -102,8 +102,10 @@ OFFLINE_SCRIPTS = frozenset({"restore_state.py", "site_history_floor.py"})
 #: own failure path. `run_shadow_stats.py --fetch` asks api-web.nhle.com for
 #: the play-by-play of every final game not yet cached in the checkout's own
 #: team_games.csv (not this chain's), under a `timeout 10m`; its step allows
-#: a failure.
-STUBBED_SCRIPTS = frozenset({"run_shadow_stats.py"})
+#: a failure. `run_provider_shadow.py --live` (since 2026-11-11) asks The
+#: Odds API for today's team markets; its step allows a failure too, so the
+#: stub also proves a failed odds fetch still builds the board.
+STUBBED_SCRIPTS = frozenset({"run_shadow_stats.py", "run_provider_shadow.py"})
 STUB = (
     "import sys\n"
     "print('The chain does not run this script: it reaches the network.', file=sys.stderr)\n"
@@ -467,6 +469,7 @@ class PublishSite:
         self.world = {"DEPLOYED_INDEX": (LIVE_INDEX, self.live.as_uri())}
         expressions = {
             "${{ github.token }}": "not-a-token",
+            "${{ secrets.NHL_ODDS_API_KEY }}": "not-a-key",
             "${{ inputs.start_history_afresh && 'true' || 'false' }}": "true" if afresh else "false",
             "${{ inputs.fold_history_from_run || '' }}": fold,
         }
