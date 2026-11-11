@@ -1818,6 +1818,16 @@ def load_record(path: Path) -> dict:
     return empty
 
 
+#: The board's totals side where the model sides with an under the card
+#: would not list: no call, and nothing graded into the Totals record.
+NO_TOTAL_CALL = "none"
+#: The card's rule for a game-total under (gameday_card.TOTAL_UNDER_LINES and
+#: TOTAL_UNDER_MIN_EDGE), copied here because the site imports nothing from
+#: the lab; tests/test_leans_and_totals_turnaround.py holds the two equal.
+TOTAL_UNDER_LINES = (5.5, 6.5)
+TOTAL_UNDER_MIN_EDGE = 0.06
+
+
 def total_side(total: dict) -> str | None:
     """The side of the total the board calls: the one whose price the
     model's chance beats by more (expected return per unit at the best
@@ -1840,7 +1850,21 @@ def total_side(total: dict) -> str | None:
     def ret(prob: float, american: float) -> float:
         return prob * (1 + (american / 100.0 if american > 0 else 100.0 / abs(american))) - 1
 
-    return "over" if ret(p, over) >= ret(1 - p, under) else "under"
+    if ret(p, over) >= ret(1 - p, under):
+        return "over"
+    # Since 2026-11-11 the board calls the under only where the card would
+    # list it: on a 5.5 or 6.5 line, with the model's chance beating the
+    # under's price by 6 points or more. Otherwise it makes no totals call
+    # and the Totals record grades nothing for that game. Replayed on the
+    # ledger's main lines at 0.25u (2026-09-29 to 11-09, 285 games): every
+    # call 143-142, -1.56u; the over calls alone 101-93, +0.90u. No
+    # demonstrated edge either way.
+    line = total.get("current")
+    implied_under = 1.0 / (1 + (under / 100.0 if under > 0 else 100.0 / abs(under)))
+    on_line = isinstance(line, (int, float)) and any(abs(line - x) < 1e-9 for x in TOTAL_UNDER_LINES)
+    if on_line and (1 - p) - implied_under >= TOTAL_UNDER_MIN_EDGE:
+        return "under"
+    return NO_TOTAL_CALL
 
 
 def settle(day: date, history_dir: Path, *, processed: Path | None = None) -> dict:
@@ -1906,7 +1930,7 @@ def settle(day: date, history_dir: Path, *, processed: Path | None = None) -> di
                "away": {"abbr": aa, "projGoals": g["away"]["projGoals"], "final": as_},
                "home": {"abbr": ha, "projGoals": g["home"]["projGoals"], "final": hs}}
         tot = g.get("total")
-        if tot:
+        if tot and tot.get("side") != NO_TOTAL_CALL:
             total_goals = hs + as_
             res = "push" if total_goals == tot["current"] else "over" if total_goals > tot["current"] else "under"
             proj_side = tot.get("side") if tot.get("side") in ("over", "under") else (

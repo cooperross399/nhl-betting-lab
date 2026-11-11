@@ -65,7 +65,10 @@ games[]
                  staged bulk (featured) totals, never an alternate-ladder rung; open is null, because a capture's totals mix
                  alternate_totals rungs with the featured line and the board does not tell them apart; side ("over" | "under",
                  since 2026-11-05) is the side the Totals record grades: the one overProb beats its price on by more
-                 (build_site_json.total_side). A board without it was graded on proj against current.
+                 (build_site_json.total_side). A board without it was graded on proj against current. Since 2026-11-11
+                 side is "under" only on a 5.5 or 6.5 line with the under's edge at 6 points or more (the card's
+                 rule for game-total unders), and "none" where the model sides with any other under: the board
+                 makes no totals call there and the game is not graded into the Totals record.
   regulation     {away, draw, home, prices:{away,draw,home}}
   pick           {kind:"bet"|"lean", market, label, price, betDownTo, edgePct} | null   ← one market per game: the card's highest-edge best bet, or
                  its highest-edge lean only when the game holds no best bet; null on a priced game means nothing cleared the edge bar,
