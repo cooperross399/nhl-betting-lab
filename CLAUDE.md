@@ -3867,7 +3867,6 @@ Re-derive rather than trust if the data has moved.
   before. Worst case now about 1 minute on fast 5xx and about 11 on a
   hanging API. Other callers of `nhl_api` see no breaker. A healthy run asks
   and caches exactly what it did. `tests/test_the_nhl_fetch_stops_asking_a_dead_api.py`.
-
 - **2026-11-11: the saved backtests, rebuilt on game-counted intervals
   (Cooper, 2026-11-10: "ALL"). A measurement, not a re-attestation: the
   committed reports under `data/outputs` still carry the old figures, and
