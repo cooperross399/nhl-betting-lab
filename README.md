@@ -186,6 +186,13 @@ PYTHONPATH=src .venv/bin/python scripts/run_closing_line_value.py
 git fetch origin +refs/heads/card-feed:refs/remotes/origin/card-feed
 PYTHONPATH=src .venv/bin/python scripts/run_pick_timing.py --card-feed origin/card-feed
 
+# The weekly review's scorecard (Cooper, 2026-11-12): best bets a day, the
+# staked record by market and side, and every opinion on the self-learned
+# edge, walk-forward, flagged by side when it loses or wins in both halves.
+# Offline, aggregate only. --ledger takes card-feed's forward_evidence/ folder
+# (or one CSV); it defaults to data/processed/forward_evidence.csv.
+PYTHONPATH=src .venv/bin/python scripts/run_weekly_review.py --card-feed origin/card-feed
+
 # Decide whether the card is worth an email and write the comment body.
 PYTHONPATH=src .venv/bin/python scripts/post_card_to_issue.py --out comment.md
 ```
