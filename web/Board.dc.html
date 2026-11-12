@@ -785,11 +785,13 @@ class Component extends DCLogic {
       const untallied = "Not tallied yet · each day is on Results";
       const picks = kept(r.picks) ? r.picks : typeof r.settled === "number" && typeof r.won === "number" ? { w: r.won, l: Math.max(0, r.settled - r.won - (r.void || 0)) } : null;
       const pending = typeof r.pending === "number" && r.pending ? ` · ${r.pending} pending` : "";
+      // Units under a record when the builder publishes them (CBB: tracker stakes, 2026-11-12); a record without them reads as before.
+      const u = (x) => (x && typeof x.units === "number" ? ` · ${x.units > 0 ? "+" : x.units < 0 ? "−" : ""}${Math.abs(x.units).toFixed(2)}u` : "");
       vm.strip = [
-        { label: "Best bets · season", value: picks ? F.recStr(picks) : "—", sub: picks ? `${F.winRate(picks.w, picks.l)}${pending}` : untallied, fine: "" },
+        { label: "Best bets · season", value: picks ? F.recStr(picks) : "—", sub: picks ? `${F.winRate(picks.w, picks.l)}${u(picks)}${pending}` : untallied, fine: "" },
         { label: epl ? "Favoured side · season" : "Straight up · season", value: kept(r.straightUp) ? F.recStr(r.straightUp) : "—", sub: kept(r.straightUp) ? `${F.winRate(r.straightUp.w, r.straightUp.l)} of ${epl ? "matches" : "games"}` : untallied, fine: "" },
         { label: epl ? "Total 2.5 · season" : "Totals · season", value: kept(r.totals) ? F.recStr(r.totals) : "—", sub: kept(r.totals) ? "model side of the line" : untallied, fine: "" },
-        { label: "Leans · season", value: kept(r.leans) ? F.recStr(r.leans) : "—", sub: kept(r.leans) ? "tracked only, no bet" : untallied, fine: "" },
+        { label: "Leans · season", value: kept(r.leans) ? F.recStr(r.leans) : "—", sub: kept(r.leans) ? (typeof r.leans.units === "number" ? `${F.winRate(r.leans.w, r.leans.l)}${u(r.leans)} · tracked, no bet` : "tracked only, no bet") : untallied, fine: "" },
       ];
     }
     const fairOf = (p) => (typeof p === "number" && p > 0 && p < 1 ? F.fmtOdds(Math.round(p >= 0.5 ? -100 * p / (1 - p) : 100 * (1 - p) / p)) : "—");
