@@ -4074,6 +4074,36 @@ Re-derive rather than trust if the data has moved.
   demonstrated edge either way. The site's Totals call applies the line and
   edge rule only, since the board carries no defence rating.
 
+- **2026-11-12: a weekly upgrade review, and its scorecard (Cooper: "I
+  want this to become a weekly task where you analyze the entire model, the
+  lineup, and the nhl section of website and you find improvements ... Then
+  you auto implement them", then "Go ahead and do a run now").** A routine
+  runs it every Tuesday. `scripts/run_weekly_review.py`
+  (`nhl_betting_lab.weekly_review`, offline, no credit) reads every card on
+  card-feed and the forward ledger and writes `data/outputs/weekly_review.md`
+  and `.json`: best bets and units a day, the staked record by market and
+  side for the last week and the season (at 1u and at the card's stake), and
+  every opinion on the self-learned edge, walk-forward, one bet per wager at
+  the best frozen price, split at the median day, a side flagged only with
+  20+ wagers losing or winning in both halves. Aggregates only: no price,
+  line, book or player. **The first run (ledger 2026-10-06 to 11-11), and why
+  nothing on the card moved:** best bets fell from about 15-25 a day to 1-4
+  from 2026-10-28, when self-learning began shrinking edges (2 today, 0.25u);
+  staked best bets read +19.6u over 324 at 1u for the season (+7.29u at the
+  card's stakes), +8.75u over 195 to 10-21, +13.39u over 87 from 10-22 to
+  10-27, and -2.52u over 42 since 10-28. Flags: `points` under -30.8u over
+  216 (already never listed or staked), `blocked_shots` under -8.8u over 109
+  (-8.1% [-25.1%, +9.2%]; the bought card window measured blocks at +7.9%
+  over 3,026, and the CLV report's best-bet bar reads blocks' EV at the close
+  -6.0% over 86), `shots_on_goal` under +20.9u over 572 (+3.7% [-5.8%,
+  +12.7%]). A walk-forward sweep of the prop best-bet bar on the learned
+  edge was not monotone (12%: -0.2u over 85; 10%: -5.4u over 157; 9%: +13.5u
+  over 213; 6%: +37.4u over 536). Every interval spans zero: **no
+  demonstrated edge**, so no bar, side or market moved, and the blocks-under
+  and volume leads are read again next week. The model, edge bars, market
+  list, staking rule, snapshot, forward ledger and registered test are
+  unchanged.
+
 ## Contract strings — never change these
 
 Cooper's local scheduled tasks hard-code these. Renaming any of them silently
