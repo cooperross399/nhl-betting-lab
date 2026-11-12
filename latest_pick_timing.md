@@ -1,15 +1,15 @@
 # Picks by the run that first listed them
 
-- Generated: 2026-11-12T20:45:43+00:00
+- Generated: 2026-11-12T22:47:06+00:00
 - Source: every card on card-feed (`latest_card_comment.md` history); results from the forward ledger, at the card's listed price, one unit flat; CLV against the close from the private capture store.
 - Every interval is 95%, clustered by game. Aggregate only: no price, line, book or player.
 
 | Run | Picks | Settled | W-L-P | Return | With a close | Beat / lost to close | Mean CLV |
 |:----|------:|--------:|:------|:-------|-------------:|:---------------------|:---------|
 | Morning card (13:30 / 15:00 UTC) | 277 | 269 | 134-132-3 | +6.00% [-8.58%, +20.57%] | 252 | 155 / 50 | +3.74% [+2.88%, +4.59%] |
-| Afternoon update (20:30 UTC) | 142 | 136 | 57-79-0 | -9.53% [-31.00%, +11.93%] | 53 | 25 / 6 | +3.04% [+1.20%, +4.88%] |
+| Afternoon update (20:30 UTC) | 144 | 136 | 57-79-0 | -9.53% [-31.00%, +11.93%] | 53 | 25 / 6 | +3.04% [+1.20%, +4.88%] |
 | Pre-game update (22:30 UTC) | 12 | 12 | 6-6-0 | +11.69% [-61.57%, +84.94%] | 8 | 1 / 3 | -0.42% [-1.39%, +0.55%] |
-| Afternoon and pre-game together | 154 | 148 | 63-85-0 | -7.81% [-28.97%, +13.34%] | 61 | 26 / 9 | +2.58% [+0.94%, +4.22%] |
+| Afternoon and pre-game together | 156 | 148 | 63-85-0 | -7.81% [-28.97%, +13.34%] | 61 | 26 / 9 | +2.58% [+0.94%, +4.22%] |
 
 ## Late additions against the morning card
 
