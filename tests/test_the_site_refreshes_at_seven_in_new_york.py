@@ -152,7 +152,9 @@ def test_the_seven_am_board_fetches_todays_team_odds_softly() -> None:
     names = [s.get("name", "") for s in steps]
     (step,) = [s for s in steps if s.get("name") == "Fetch this morning's team odds for the board"]
     assert step.get("continue-on-error") is True
-    assert "workflow_run" in step["if"] and "!=" in step["if"]
+    # Only a publish started by Gameday Refresh, which carries that run's
+    # fresh prices, skips the fetch; Season Sim's hourly publishes must not.
+    assert "github.event.workflow_run.name != 'Gameday Refresh'" in step["if"]
     run = step["run"]
     assert "run_provider_shadow.py --live" in run
     assert "--props" not in run

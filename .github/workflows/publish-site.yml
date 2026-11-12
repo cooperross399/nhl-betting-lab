@@ -284,10 +284,13 @@ jobs:
         # about 6 credits, no per-event fetch and so no props) for today's
         # slate and stages them where the board reads prices. A run started
         # by a finished Gameday Refresh already carries that run's prices
-        # and asks nothing. The card, its snapshot and the forward ledger
-        # never read this runner. Soft: on any failure the board is built as
-        # before, and the day's later publishes carry the card's prices.
-        if: ${{ github.event_name != 'workflow_run' }}
+        # and asks nothing. Every other publish asks too, including the
+        # hourly ones Season Sim starts: until 2026-11-12 those skipped the
+        # fetch and rebuilt the board on last night's prices, so the odds the
+        # 7 AM run published vanished an hour later. The card, its snapshot
+        # and the forward ledger never read this runner. Soft: on any failure
+        # the board is built as before.
+        if: ${{ github.event.workflow_run.name != 'Gameday Refresh' }}
         continue-on-error: true
         env:
           NHL_ODDS_API_KEY: ${{ secrets.NHL_ODDS_API_KEY }}
