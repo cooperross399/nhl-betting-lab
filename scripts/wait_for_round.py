@@ -71,6 +71,10 @@ CRON_LEADS = {
     # round, and GitHub has started crons here up to 8.6 h late. No other
     # workflow fires at 04:30, so the key is Line Movement's alone.
     "30 4 * 1-4,10-12 *": timedelta(hours=11),  # 15:30 Line Movement round
+    # Publish Site's 7 AM New York primaries (2026-11-12): the 03:55 cron
+    # started 8 h 3 min late that morning. Publish Site alone fires at :55.
+    "55 23 * * *": timedelta(hours=11),  # 10:55 UTC, 7 AM EDT
+    "55 0 * * *": timedelta(hours=11),  # 11:55 UTC, 7 AM EST
 }
 
 #: The longest lead any cron carries; two wait jobs must cover it.
