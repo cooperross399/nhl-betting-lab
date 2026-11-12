@@ -362,8 +362,30 @@ function cbbResults(data) {
       ...resultPick(g.pick) };
   });
   return { ...common(data, sport), kicker: `${data.season} Men's College Basketball · ${data.resultsDate ? F.fmtDateOnly(data.resultsDate) : ""}`, dateShort: data.resultsDate ? F.fmtDateOnly(data.resultsDate) : "",
-    strip: [{ label: "Straight up", value: F.recStr(s.straightUp || { w: 0, l: 0 }) }, picksCell(s), { label: "Against the spread", value: F.recStr(s.ats || { w: 0, l: 0, p: 0 }) }],
+    strip: cbbResultsStrip(s, data.seasonRecord),
     games, count: games.length, isEmpty: games.length === 0, notice: data.notice || "No games were settled for this date.", vsLabel: "Projected score vs final" };
+}
+
+// The CBB Results strip, with the units under the best-bet and lean records
+// (each lab's publish step adds the strip's sub line to Results.dc.html)
+// (Cooper, 2026-11-12: "the unit profit tracked under each record"): the
+// night's units, then the season's record and units when the file carries a
+// settled season. The units are the CBB tracker's stakes (0.25u, to win 0.25u
+// on a minus price; the NHL Due List ladder from +200), written onto
+// results.json by the CBB lab. A record the file carries no units for shows
+// none, never 0.00u.
+const unitsOf = (r) => (r && typeof r.units === "number" ? `${r.units > 0 ? "+" : r.units < 0 ? "−" : ""}${Math.abs(r.units).toFixed(2)}u` : "");
+function unitsLine(night, season, key) {
+  const n = unitsOf(night[key]), all = season && season.nights && season[key] ? season[key] : null;
+  // A word joiner either side of each dash, so a narrow cell wraps between the parts and never inside a record.
+  const s = all ? `season ${F.recStr(all).replace(/–/g, "\u2060–\u2060")}${unitsOf(all) ? `, ${unitsOf(all)}` : ""}` : "";
+  return [n && `${n} on the night`, s].filter(Boolean).join(" · ");
+}
+function cbbResultsStrip(s, season) {
+  return [{ label: "Straight up", value: F.recStr(s.straightUp || { w: 0, l: 0 }) },
+    { ...picksCell(s), sub: unitsLine(s, season, "picks") },
+    { label: "Leans", value: F.recStr(s.leans || { w: 0, l: 0, p: 0 }), sub: unitsLine(s, season, "leans") },
+    { label: "Against the spread", value: F.recStr(s.ats || { w: 0, l: 0, p: 0 }) }];
 }
 
 // Only "push" is a Push. This mapped every result it did not recognise --

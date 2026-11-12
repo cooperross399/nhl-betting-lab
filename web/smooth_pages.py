@@ -189,13 +189,9 @@ PATCHES: dict[str, list[tuple[str, str]]] = {
         ),
     ],
     "Results.dc.html": [
-        (
-            """<div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:44px;line-height:1;margin-top:8px;">{{ c.value }}</div>
-        </div>""",
-            """<div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:44px;line-height:1;margin-top:8px;">{{ c.value }}</div>
-          <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--ink-2);margin-top:6px;">{{ c.sub }}</div>
-        </div>""",
-        ),
+        # The strip's sub line is in the shared Results page itself since
+        # betting-lab-shared v14 (the CBB units under each record), so it is
+        # no longer patched in here.
         (
             "state = { vm: null, feedNotice: null, loadedFor: null };",
             f"state = {{ vm: null, feedNotice: null, loadedFor: null, pages: new Set({PAGES}), propsTab: true }};",
