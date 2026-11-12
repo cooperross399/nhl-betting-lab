@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import importlib.util
 import subprocess
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -24,6 +24,8 @@ ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github" / "workflows" / "publish-site.yml"
 EDT_CRON = "55 2 * * *"
 EST_CRON = "55 3 * * *"
+EDT_PRIMARY = "55 23 * * *"
+EST_PRIMARY = "55 0 * * *"
 
 
 def _workflow() -> dict:
@@ -56,18 +58,19 @@ def _decide(tmp_path: Path, schedule: str, offset: str) -> dict[str, str]:
 def test_both_seven_am_crons_are_scheduled_beside_the_existing_one() -> None:
     on = _workflow().get("on", _workflow().get(True))
     crons = [c["cron"] for c in on["schedule"]]
-    assert crons == ["45 14 * * *", EDT_CRON, EST_CRON]
+    assert crons == ["45 14 * * *", EDT_CRON, EST_CRON, EDT_PRIMARY, EST_PRIMARY]
     assert "workflow_run" in on and "workflow_dispatch" in on
 
 
 @pytest.mark.parametrize(
     "offset, publishes",
-    [("-0400", EDT_CRON), ("-0500", EST_CRON)],
+    [("-0400", (EDT_CRON, EDT_PRIMARY)), ("-0500", (EST_CRON, EST_PRIMARY))],
 )
-def test_exactly_one_morning_cron_publishes_on_each_offset(tmp_path: Path, offset: str, publishes: str) -> None:
-    for cron in (EDT_CRON, EST_CRON):
+def test_exactly_one_morning_slot_publishes_on_each_offset(tmp_path: Path, offset: str, publishes: tuple) -> None:
+    # Each slot has an eleven-hour primary and an eight-hour backup.
+    for cron in (EDT_CRON, EST_CRON, EDT_PRIMARY, EST_PRIMARY):
         decided = _decide(tmp_path, cron, offset)
-        if cron == publishes:
+        if cron in publishes:
             assert decided == {"go": "true", "hold": "true"}, (cron, offset)
         else:
             assert decided == {"go": "false", "hold": "false"}, (cron, offset)
@@ -86,6 +89,8 @@ def test_the_gate_reads_new_yorks_offset_at_the_slot_not_at_the_fire() -> None:
     assert 'date -d "$slot UTC" +%z' in script
     assert '"55 2 * * *") want="-0400"; slot="10:55"' in script
     assert '"55 3 * * *") want="-0500"; slot="11:55"' in script
+    assert '"55 23 * * *") want="-0400"; slot="10:55"' in script
+    assert '"55 0 * * *") want="-0500"; slot="11:55"' in script
 
 
 def _wait_for_round():
@@ -102,6 +107,20 @@ def test_the_wait_ends_at_the_slot_the_gate_names(cron: str, slot: tuple[int, in
     target = _wait_for_round().round_for(cron, started)
     assert (target.hour, target.minute) == slot
     assert target.date() == started.date()
+
+
+@pytest.mark.parametrize("cron, started, slot", [
+    # The EDT primary fires at 23:55 the evening before; started 8 h late.
+    (EDT_PRIMARY, datetime(2026, 11, 3, 7, 55, tzinfo=timezone.utc), datetime(2026, 11, 3, 10, 55, tzinfo=timezone.utc)),
+    # The EST primary fires at 00:55; started on time and 8 h late.
+    (EST_PRIMARY, datetime(2026, 11, 12, 0, 56, tzinfo=timezone.utc), datetime(2026, 11, 12, 11, 55, tzinfo=timezone.utc)),
+    (EST_PRIMARY, datetime(2026, 11, 12, 8, 58, tzinfo=timezone.utc), datetime(2026, 11, 12, 11, 55, tzinfo=timezone.utc)),
+])
+def test_the_eleven_hour_primaries_wait_for_the_same_slot(cron: str, started: datetime, slot: datetime) -> None:
+    wfr = _wait_for_round()
+    assert wfr.round_for(cron, started) == slot
+    # Two wait legs of 340 minutes cover the longest lead.
+    assert timedelta(minutes=2 * 340) >= wfr.MAX_LEAD
 
 
 def test_only_the_publishing_morning_run_waits_and_nothing_cancels_the_wait() -> None:

@@ -3237,6 +3237,12 @@ Re-derive rather than trust if the data has moved.
   `data/staging`, before the board is built. Soft: a failure builds the
   board as before. The card, snapshot and ledger never read that runner.
   Cooper's request is the approval for this scheduled spend.
+  **2026-11-12: an eleven-hour primary for each 7 AM slot.** The 03:55
+  UTC cron started at 11:58, eight hours and three minutes late, and the
+  site published at 7:05. Publish Site now also fires at 23:55 and 00:55
+  UTC (`wait_for_round.CRON_LEADS`, eleven hours ahead), as Gameday
+  Refresh's slots do; the eight-hour crons stay as backups, and when both
+  arrive the publish job's group lets one finish.
 
 - **2026-11-02: one tab bar on every page, and smoother tab switches.**
   Cooper: the Season tab dropped Tracker and Record and showed an Archive tab
