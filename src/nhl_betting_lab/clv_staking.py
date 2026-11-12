@@ -190,6 +190,23 @@ def stake_multiplier(
     )
 
 
+#: Sizes Cooper named on 2026-11-12, on seeing 0.125u and 0.375u on the card:
+#: "just do .15 and .35 instead".
+STAKE_SIZES = {0.125: 0.15, 0.375: 0.35}
+
+
+def round_stake(units: float) -> float:
+    """A best bet's units after the CLV multiplier, as a size Cooper uses:
+    0.125 is 0.15 and 0.375 is 0.35 (his words), anything else the nearest
+    0.05, never under 0.05. A tier's own stake (0.5, 0.25, 0.1) is unchanged."""
+    units = round(float(units), 4)
+    if units <= 0:
+        return 0.0
+    if units in STAKE_SIZES:
+        return STAKE_SIZES[units]
+    return max(0.05, round(round(units / 0.05) * 0.05, 2))
+
+
 def _pct(value: Any) -> str:
     number = _finite(value)
     return "n/a" if number is None else f"{number:+.2%}"

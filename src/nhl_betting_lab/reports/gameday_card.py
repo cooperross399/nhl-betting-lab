@@ -124,7 +124,7 @@ from nhl_betting_lab.drought_rule import shots_text as drought_shots_text
 from nhl_betting_lab.due_context import goalie_text as drought_goalie_text
 from nhl_betting_lab.due_context import line_text as drought_line_text
 from nhl_betting_lab.clv_staking import note_lines as clv_note_lines
-from nhl_betting_lab.clv_staking import stake_multiplier
+from nhl_betting_lab.clv_staking import round_stake, stake_multiplier
 from nhl_betting_lab.market_eligibility import EligibilityReport
 from nhl_betting_lab.markets import MARKETS_BY_KEY
 from nhl_betting_lab.models.player_props import player_key
@@ -888,8 +888,8 @@ def build_candidates(
             continue
         if candidate.section == BEST_BETS_SECTION:
             multiplier, why = stake_multiplier(market_key, clv_table, selection)
-            candidate.suggested_units = round(
-                TIER_UNITS.get(candidate.tier, 0.1) * multiplier, 3
+            candidate.suggested_units = round_stake(
+                TIER_UNITS.get(candidate.tier, 0.1) * multiplier
             )
             candidate.stake_reason = why
             staked.append((key, candidate))
