@@ -72,7 +72,7 @@ def test_the_card_sizes_a_best_bet_by_its_market(tmp_path) -> None:
     sized, _ = build_candidates(prices, probabilities, clv_table=table)
     assert plain[0].section == sized[0].section == BEST_BETS_SECTION
     assert plain[0].suggested_units == TIER_UNITS[plain[0].tier]
-    assert sized[0].suggested_units == round(plain[0].suggested_units * 0.5, 3)
+    assert sized[0].suggested_units == clv_staking.round_stake(plain[0].suggested_units * 0.5)
     assert "no demonstrated CLV" in sized[0].stake_reason
 
 
@@ -181,4 +181,16 @@ def test_the_card_holds_a_shots_over_at_its_tier_stake() -> None:
     assert set(by_side) == {"over", "under"}
     assert by_side["over"].suggested_units == TIER_UNITS[by_side["over"].tier]
     assert "held at x1" in by_side["over"].stake_reason
-    assert by_side["under"].suggested_units == round(TIER_UNITS[by_side["under"].tier] * 1.5, 3)
+    assert by_side["under"].suggested_units == clv_staking.round_stake(TIER_UNITS[by_side["under"].tier] * 1.5)
+
+
+def test_scaled_stakes_are_the_sizes_cooper_named() -> None:
+    """Cooper, 2026-11-12: "just do .15 and .35 instead" of 0.125u and 0.375u."""
+    assert clv_staking.round_stake(0.25 * 0.5) == 0.15
+    assert clv_staking.round_stake(0.25 * 1.5) == 0.35
+    for tier in TIER_UNITS.values():
+        assert clv_staking.round_stake(tier) == tier
+    assert clv_staking.round_stake(0.5 * 1.5) == 0.75
+    assert clv_staking.round_stake(0.25 * 0.25) == 0.05
+    assert clv_staking.round_stake(0.1 * 0.25) == 0.05
+    assert clv_staking.round_stake(0.0) == 0.0

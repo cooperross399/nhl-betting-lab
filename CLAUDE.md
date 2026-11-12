@@ -4104,6 +4104,15 @@ Re-derive rather than trust if the data has moved.
   list, staking rule, snapshot, forward ledger and registered test are
   unchanged.
 
+- **2026-11-12: a CLV-scaled stake is rounded to a size Cooper uses (Cooper,
+  seeing 0.125u and 0.375u on the card: "what is the .125u and .375u. that
+  is never a quantity we discussed", then "just do .15 and .35 instead").**
+  `clv_staking.round_stake` turns the tier stake times the 2026-11-10 CLV
+  multiplier into 0.15 for 0.125 and 0.35 for 0.375 (his words), anything
+  else to the nearest 0.05 and never under 0.05; a tier's own stake (0.5,
+  0.25, 0.1) is unchanged. Stakes only: the model, edge bars, market list,
+  multipliers, snapshot, forward ledger and registered test are unchanged.
+
 ## Contract strings — never change these
 
 Cooper's local scheduled tasks hard-code these. Renaming any of them silently
