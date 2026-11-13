@@ -382,9 +382,10 @@ function unitsLine(night, season, key) {
   return [n && `${n} on the night`, s].filter(Boolean).join(" · ");
 }
 function cbbResultsStrip(s, season) {
-  return [{ label: "Straight up", value: F.recStr(s.straightUp || { w: 0, l: 0 }) },
+  return [{ label: "Straight up", value: F.recStr(s.straightUp || { w: 0, l: 0 }), sub: unitsLine(s, season, "straightUp") },
     { ...picksCell(s), sub: unitsLine(s, season, "picks") },
     { label: "Leans", value: F.recStr(s.leans || { w: 0, l: 0, p: 0 }), sub: unitsLine(s, season, "leans") },
+    { label: "Totals", value: F.recStr(s.totals || { w: 0, l: 0, p: 0 }), sub: unitsLine(s, season, "totals") },
     { label: "Against the spread", value: F.recStr(s.ats || { w: 0, l: 0, p: 0 }) }];
 }
 
