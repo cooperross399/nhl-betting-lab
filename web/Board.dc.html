@@ -791,6 +791,7 @@ class Component extends DCLogic {
         { label: "Best bets · season", value: picks ? F.recStr(picks) : "—", sub: picks ? `${F.winRate(picks.w, picks.l)}${u(picks)}${pending}` : untallied, fine: "" },
         { label: epl ? "Favoured side · season" : "Straight up · season", value: kept(r.straightUp) ? F.recStr(r.straightUp) : "—", sub: kept(r.straightUp) ? `${F.winRate(r.straightUp.w, r.straightUp.l)} of ${epl ? "matches" : "games"}${u(r.straightUp)}` : untallied, fine: "" },
         { label: epl ? "Total 2.5 · season" : "Totals · season", value: kept(r.totals) ? F.recStr(r.totals) : "—", sub: kept(r.totals) ? `model side of the line${u(r.totals)}` : untallied, fine: "" },
+        ...(epl ? [] : [{ label: "Spread · season", value: kept(r.ats) ? F.recStr(r.ats) : "—", sub: kept(r.ats) ? `model side of the spread${u(r.ats)}` : untallied, fine: "" }]),
         { label: "Leans · season", value: kept(r.leans) ? F.recStr(r.leans) : "—", sub: kept(r.leans) ? (typeof r.leans.units === "number" ? `${F.winRate(r.leans.w, r.leans.l)}${u(r.leans)} · tracked, no bet` : "tracked only, no bet") : untallied, fine: "" },
       ];
     }
