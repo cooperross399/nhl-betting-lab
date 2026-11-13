@@ -161,3 +161,20 @@ def test_the_seven_am_board_fetches_todays_team_odds_softly() -> None:
     assert "--output-dir \"$RUNNER_TEMP/" in run
     assert names.index(step["name"]) > names.index("Restore the lab's latest state")
     assert names.index(step["name"]) < names.index("Build today's board and yesterday's results")
+
+
+def test_a_pages_502_is_asked_again_before_the_run_fails():
+    """2026-11-13: the 7 AM publish built today's board and lost it to a
+    GitHub Pages 502 on the deploy. The deploy is asked three times; the
+    first two may fail, the last may not."""
+    steps = _workflow()["jobs"]["publish"]["steps"]
+    deploys = [s for s in steps if str(s.get("uses", "")).startswith("actions/deploy-pages")]
+    assert len(deploys) == 3
+    assert deploys[0].get("continue-on-error") is True and "if" not in deploys[0]
+    assert deploys[1].get("continue-on-error") is True
+    assert "steps.deployment.outcome == 'failure'" in deploys[1]["if"]
+    assert not deploys[2].get("continue-on-error")
+    assert "steps.deployment_retry.outcome == 'failure'" in deploys[2]["if"]
+    env = _workflow()["jobs"]["publish"]["environment"]
+    for id_ in ("deployment", "deployment_retry", "deployment_last"):
+        assert f"steps.{id_}.outputs.page_url" in env["url"]
