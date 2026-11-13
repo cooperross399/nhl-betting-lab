@@ -386,7 +386,7 @@ function cbbResultsStrip(s, season) {
     { ...picksCell(s), sub: unitsLine(s, season, "picks") },
     { label: "Leans", value: F.recStr(s.leans || { w: 0, l: 0, p: 0 }), sub: unitsLine(s, season, "leans") },
     { label: "Totals", value: F.recStr(s.totals || { w: 0, l: 0, p: 0 }), sub: unitsLine(s, season, "totals") },
-    { label: "Against the spread", value: F.recStr(s.ats || { w: 0, l: 0, p: 0 }) }];
+    { label: "Against the spread", value: F.recStr(s.ats || { w: 0, l: 0, p: 0 }), sub: unitsLine(s, season, "ats") }];
 }
 
 // Only "push" is a Push. This mapped every result it did not recognise --
