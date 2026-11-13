@@ -206,7 +206,7 @@ jobs:
     timeout-minutes: 30
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: ${{ steps.deployment.outputs.page_url || steps.deployment_retry.outputs.page_url || steps.deployment_last.outputs.page_url }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -532,7 +532,32 @@ jobs:
           path: dist
 
       - name: Deploy to GitHub Pages
+        # GitHub Pages answers a deployment with a 502 now and then: on
+        # 2026-11-13 the 7 AM publish built today's board, odds and all, and
+        # lost it to "Failed to create deployment (status: 502)". The
+        # deploy is asked again after a pause, twice; only the last failure
+        # fails the run.
         id: deployment
+        continue-on-error: true
+        uses: actions/deploy-pages@v4
+
+      - name: Pause before asking Pages again
+        if: ${{ steps.deployment.outcome == 'failure' }}
+        run: sleep 45
+
+      - name: Deploy to GitHub Pages, second try
+        id: deployment_retry
+        if: ${{ steps.deployment.outcome == 'failure' }}
+        continue-on-error: true
+        uses: actions/deploy-pages@v4
+
+      - name: Pause before the last try
+        if: ${{ steps.deployment.outcome == 'failure' && steps.deployment_retry.outcome == 'failure' }}
+        run: sleep 90
+
+      - name: Deploy to GitHub Pages, last try
+        id: deployment_last
+        if: ${{ steps.deployment.outcome == 'failure' && steps.deployment_retry.outcome == 'failure' }}
         uses: actions/deploy-pages@v4
 
       - name: Report the outcome

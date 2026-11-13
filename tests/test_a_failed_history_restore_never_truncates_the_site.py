@@ -479,6 +479,8 @@ class PublishSite:
         for step in _steps():
             if failed and "always()" not in str(step.get("if", "")):
                 continue
+            if "steps.deployment.outcome == 'failure'" in str(step.get("if", "")):
+                continue  # the modelled deploy never fails, so its retries never run
             ok = self._step(step, work, env, expressions, day, outcome, after_build)
             if not ok and not step.get("continue-on-error"):
                 failed = True
