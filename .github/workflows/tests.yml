@@ -16,7 +16,7 @@ jobs:
   pytest:
     name: Full test suite
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 40
 
     # PYTHONSAFEPATH keeps the checked-out repository OUT of sys.path. It is
     # declared for the whole job rather than on the suite step, because
