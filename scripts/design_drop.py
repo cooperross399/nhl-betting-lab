@@ -201,6 +201,74 @@ def locked(root: Path = ROOT) -> set[str]:
     return {"web/" + str(name) for name in files}
 
 
+def _smooth_pages():
+    spec = importlib.util.spec_from_file_location("smooth_pages", WEB / "smooth_pages.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+#: What publishing adds to a page and a source copy never holds. A drop built
+#: from the live site's copies (the 2026-11-14 modern-redesign drop was) carries
+#: all of it, and every lab's suite then refuses the pages, though nothing in
+#: them is wrong but where they were copied from.
+SNIPPET_LINES = (
+    '<meta name="color-scheme"',
+    '<meta name="theme-color"',
+    "<style>html,body{",
+    "<style>@media (max-width:719px){header>nav",
+    "<script>(function(){var d=document.documentElement;d.classList.add('sp-wait')",
+    '<script type="speculationrules">',
+    '<link rel="preconnect" href="https://unpkg.com"',
+    '<link rel="preconnect" href="https://fonts.googleapis.com">',
+    '<link rel="preconnect" href="https://fonts.gstatic.com"',
+    '<link rel="preload" as="script" href="https://unpkg.com/',
+)
+URL_IMPORT = re.compile(r'import\(new URL\("(\./lib/[A-Za-z0-9_-]+\.js)", location\.href\)\.href\)')
+
+
+def unpublish(path: str, text: str, current: str | None = None) -> tuple[str, list[str]]:
+    """Turn a published copy of a page back into its source form: drop the
+    block `web/smooth_pages.py` adds after `<meta charset>`, put back the plain
+    `import("./lib/x.js")`, undo this lab's publish-time patches, and put back
+    the Tracker/Archive tab the publish removes (copied from `current`, the
+    checkout's own copy of the file). A source copy comes back unchanged.
+    Returns (text, what was undone)."""
+    sp = _smooth_pages()
+    undone = []
+    lines = text.split("\n")
+    if sp.MARK in lines:
+        start = lines.index(sp.MARK)
+        end = start + 1
+        while end < len(lines) and lines[end].startswith(SNIPPET_LINES):
+            end += 1
+        del lines[start:end]
+        text = "\n".join(lines)
+        undone.append("publish snippet")
+    text, n = URL_IMPORT.subn(r'import("\1")', text)
+    if n:
+        undone.append(f"{n} URL import(s)")
+    name = path.removeprefix("web/")
+    for old, new in reversed(sp.PATCHES.get(name, [])):
+        if text.count(new) == 1 and text.count(old) == new.count(old):
+            text = text.replace(new, old)
+            undone.append("patch")
+    tab = sp.NO_TRACKER_TAB.get(name)
+    if tab is not None and current and not tab.search(text):
+        found = list(tab.finditer(current))
+        if len(found) == 1:
+            m = found[0]
+            for width in (120, 80, 50, 30):
+                before = current[max(0, m.start() - width):m.start()]
+                after = current[m.end():m.end() + 1]
+                if text.count(before + after) == 1:
+                    at = text.index(before + after) + len(before)
+                    text = text[:at] + m.group(0) + text[at:]
+                    undone.append("tracker tab")
+                    break
+    return text, undone
+
+
 def intake(zip_path: Path, root: Path = ROOT, skip_locked: bool = False) -> tuple[list[str], list[str]]:
     """Write a drop's page files, from a zip or a tarball, under `root`.
     Returns (written, skipped): anything outside `ALLOWED`, the lock (Design
@@ -223,7 +291,14 @@ def intake(zip_path: Path, root: Path = ROOT, skip_locked: bool = False) -> tupl
             continue
         target = root / path
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(read())
+        body = read()
+        if path.endswith((".dc.html", ".js")):
+            current = target.read_text(encoding="utf-8") if target.is_file() else None
+            text, undone = unpublish(path, body.decode("utf-8"), current)
+            if undone:
+                print(f"::notice file={path}::a published copy; undid {', '.join(undone)}")
+                body = text.encode("utf-8")
+        target.write_bytes(body)
         written.append(path)
     return written, skipped
 
