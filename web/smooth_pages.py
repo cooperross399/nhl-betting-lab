@@ -170,9 +170,11 @@ PATCHES: dict[str, list[tuple[str, str]]] = {
             '<span style="font-family:\'IBM Plex Mono\',monospace;font-size:11px;color:var(--mute);border:1px solid var(--rule);padding:2px 6px;">Not model bets · tracked at 0.25u each</span>',
             '<span style="font-family:\'IBM Plex Mono\',monospace;font-size:11px;color:var(--mute);border:1px solid var(--rule);padding:2px 6px;">Not model bets · 0.25u each, less at +200 and longer</span>',
         ),
+        # The tail only, so the patch holds whichever font the label is set in
+        # (the 2026-11-14 redesign moved it from Barlow Condensed to Inter).
         (
-            '<span style="font-family:\'Barlow Condensed\',sans-serif;font-weight:700;font-size:14px;letter-spacing:.14em;text-transform:uppercase;border:1px solid var(--ink);padding:4px 9px;white-space:nowrap;">Not model bets · tracked at 0.25u each</span>',
-            '<span style="font-family:\'Barlow Condensed\',sans-serif;font-weight:700;font-size:14px;letter-spacing:.14em;text-transform:uppercase;border:1px solid var(--ink);padding:4px 9px;white-space:nowrap;">Not model bets · 0.25u each, less at +200 and longer</span>',
+            'padding:4px 9px;white-space:nowrap;">Not model bets · tracked at 0.25u each</span>',
+            'padding:4px 9px;white-space:nowrap;">Not model bets · 0.25u each, less at +200 and longer</span>',
         ),
         # Each Due List row shows the size the season record tracks it at,
         # and a band that lost in testing is tagged (Cooper, 2026-11-10:
