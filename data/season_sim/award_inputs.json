@@ -190,19 +190,19 @@
     "odds": [
       {
         "book": "BET99",
-        "date": "2026-10-29",
-        "source": "Covers, Norris Trophy odds (odds as of 10-29, page updated Oct 29, 2026, 08:14 AM ET)",
+        "date": "2026-11-13",
+        "source": "Covers, Norris Trophy odds (odds as of 11-13, page updated Nov 13, 2026, 01:11 PM ET; teams from the table's logos)",
         "url": "https://www.covers.com/nhl/norris-trophy-odds",
         "lines": [
-          {"name": "Evan Bouchard", "team": "EDM", "american": 150},
-          {"name": "Quinn Hughes", "team": "MIN", "american": 320},
-          {"name": "Cale Makar", "team": "COL", "american": 500},
-          {"name": "Lane Hutson", "team": "MTL", "american": 1200},
-          {"name": "Matthew Schaefer", "team": "NYI", "american": 1400},
-          {"name": "Zach Werenski", "team": "CBJ", "american": 1400},
-          {"name": "Rasmus Dahlin", "team": "BUF", "american": 1600},
+          {"name": "Evan Bouchard", "team": "EDM", "american": -115},
+          {"name": "Quinn Hughes", "team": "MIN", "american": 190},
+          {"name": "Lane Hutson", "team": "MTL", "american": 600},
+          {"name": "Cale Makar", "team": "COL", "american": 675},
+          {"name": "Matthew Schaefer", "team": "NYI", "american": 850},
           {"name": "Adam Fox", "team": "NYR", "american": 1600},
-          {"name": "Cole Hutson", "team": "WSH", "american": 2900},
+          {"name": "Cole Hutson", "team": "WSH", "american": 2250},
+          {"name": "Rasmus Dahlin", "team": "BUF", "american": 2400},
+          {"name": "Zach Werenski", "team": "CBJ", "american": 2900},
           {"name": "Jake Sanderson", "team": "OTT", "american": 3000}
         ]
       },
