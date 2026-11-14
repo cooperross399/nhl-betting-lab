@@ -65,7 +65,6 @@ export function pageTabs(sport, pages, current, tab) {
     tab("Results", "Results.dc.html", current === "results"),
     ...(has("season") ? [tab("Season", "Season.dc.html", current === "season")] : []),
     ...(has("record") ? [tab("Record", "Record.dc.html", current === "record")] : []),
-    ...(has("tracker") ? [tab("Tracker", "Tracker.dc.html", current === "tracker")] : [tab("Archive", "Archive.dc.html", current === "archive")]),
   ];
 }
 
@@ -198,11 +197,12 @@ function nhlBoard(data) {
   const untallied = "No night settled yet · each night is on Results";
   const nights = typeof season.nights === "number" ? `${season.nights} night${season.nights === 1 ? "" : "s"}` : "";
   const missed = season.missingNights ? ` · ${season.missingNights} not yet settled` : "";
+  const pl = (key, alt) => { const m = r.season && r.season.money && r.season.money[key]; return m && typeof m.units === "number" ? `${m.units > 0.004 ? "+" : m.units < -0.004 ? "−" : ""}${Math.abs(m.units).toFixed(2)}u at ${m.stake ?? 0.25}u a bet` : alt; };
   const strip = [
-    { label: "Best bets · season", value: kept(r.picks) ? F.recStr(r.picks) : dash, sub: kept(r.picks) ? `${F.winRate(r.picks.w || 0, r.picks.l || 0)} · ${nights}${missed}` : untallied, fine: "" },
-    { label: "Straight up · season", value: kept(r.straightUp) ? F.recStr(r.straightUp) : dash, sub: kept(r.straightUp) ? `${F.winRate(r.straightUp.w || 0, r.straightUp.l || 0)} of games` : untallied, fine: "" },
-    { label: "Totals · season", value: kept(r.totals) ? F.recStr(r.totals) : dash, sub: kept(r.totals) ? "model side of the line" : untallied, fine: "" },
-    { label: "Leans · season", value: kept(r.leans) ? F.recStr(r.leans) : dash, sub: kept(r.leans) ? "recorded, not staked" : untallied, fine: "" },
+    { label: "Best bets · season", value: kept(r.picks) ? F.recStr(r.picks) : dash, sub: kept(r.picks) ? pl("picks", `${F.winRate(r.picks.w || 0, r.picks.l || 0)} · ${nights}${missed}`) : untallied, fine: "" },
+    { label: "Straight up · season", value: kept(r.straightUp) ? F.recStr(r.straightUp) : dash, sub: kept(r.straightUp) ? pl("straightUp", `${F.winRate(r.straightUp.w || 0, r.straightUp.l || 0)} of games`) : untallied, fine: "" },
+    { label: "Totals · season", value: kept(r.totals) ? F.recStr(r.totals) : dash, sub: kept(r.totals) ? pl("totals", "model side of the line") : untallied, fine: "" },
+    { label: "Leans · season", value: kept(r.leans) ? F.recStr(r.leans) : dash, sub: kept(r.leans) ? pl("leans", "recorded, not staked") : untallied, fine: "" },
   ];
   return { ...common(data, sport), kicker: `${data.season} NHL · ${data.boardDate ? F.fmtDateOnly(data.boardDate) : ""}`, title: ["Tonight's", "Board."],
     blurb: "Projected scores, win probabilities and market prices for tonight's slate.", strip, groups: [...byDay.values()].map((d) => ({ ...d, countLabel: `${d.games.length} game${d.games.length === 1 ? "" : "s"}` })),
@@ -256,7 +256,7 @@ function nhlResults(data) {
     strip: [{ label: "Straight up", value: F.recStr(s.straightUp || { w: 0, l: 0 }) }, picksCell(s), { label: "Totals", value: F.recStr(s.totals || { w: 0, l: 0, p: 0 }) },
       // The season's best bets beside the night's, when the file carries a
       // season that has settled at least one night.
-      ...(data.seasonRecord && data.seasonRecord.nights && data.seasonRecord.picks ? [{ label: "Best bets · season", value: F.recStr(data.seasonRecord.picks) }] : [])],
+      ...(data.seasonRecord && data.seasonRecord.nights && data.seasonRecord.picks ? [{ label: "Best bets · season", value: F.recStr(data.seasonRecord.picks), ...((m) => (m && typeof m.units === "number" ? { sub: `${m.units > 0.004 ? "+" : m.units < -0.004 ? "−" : ""}${Math.abs(m.units).toFixed(2)}u at ${m.stake ?? 0.25}u a bet` } : {}))((data.seasonRecord.money || {}).picks) }] : [])],
     games, count: games.length, isEmpty: games.length === 0, notice: data.notice || "No games were settled for this date.", vsLabel: "Projected score vs final" };
 }
 
@@ -344,7 +344,7 @@ function cbbBoard(data) {
   const strip = ms.slice(0, 3).map((m) => ({ label: `${m.label} · ROI`, value: `${F.fmtSigned(m.roiPct)}%`, sub: `${m.bets} bets · 95% ${F.fmtSigned(m.ciLowPct)}% to ${F.fmtSigned(m.ciHighPct)}%`, fine: m.verdict || "no demonstrated edge" }));
   while (strip.length < 3) strip.push({ label: "ROI", value: dash, sub: "No settled opinions yet", fine: "" });
   strip.push({ label: "Time to an answer", value: (r.opinionsSoFar ?? 0).toLocaleString(), sub: `of ${(r.opinionsNeeded ?? 10000).toLocaleString()} settled opinions needed`, fine: typeof r.clvPoints === "number" ? `CLV ${F.fmtSigned(r.clvPoints, 2)} pts` : "" });
-  return { ...common(data, sport), kicker: `${data.season} Men's College Basketball · ${data.slateDate ? F.fmtDateOnly(data.slateDate) : ""}${data.cardSlot ? ` · ${data.cardSlot} card` : ""}`, title: ["Tonight's", "Board."],
+  return { ...common(data, sport), kicker: `${data.season} Men's College Basketball · ${data.slateDate ? F.fmtDateOnly(data.slateDate) : ""}`, title: ["Tonight's", "Board."],
     blurb: "Projected scores, win probabilities and market prices for tonight's carded games.",
     strip, groups: order.filter((k) => bySlot.has(k)).map((k) => bySlot.get(k)).map((d) => ({ ...d, countLabel: `${d.games.length} game${d.games.length === 1 ? "" : "s"}` })),
     summary: `Showing ${(data.games || []).length} games · ${bets} best bets · ${leans} leans`, unit };
