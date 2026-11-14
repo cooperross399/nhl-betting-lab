@@ -12,7 +12,7 @@
   <title>Season — Maverick Hightower</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
     /* One look per site: NHL dark, EPL gray, CBB white. EPL and CBB darken with the phone's dark mode. */
     :root, html[data-sport="nhl"] { color-scheme: dark; --paper:#14151a; --ink:#f1efe9; --ink-2:#d2d0ca; --mute:#a3a6b1; --mute-2:#80838e; --rule:#3a3d49; --rule-2:#262832; --on-ink:#3a3d49; --alert:#f08a72; --on-alert:#14151a; --win:#5cc196; --on-win:#14151a; --desk:#0d0e12; }
@@ -21,12 +21,13 @@
     @media (prefers-color-scheme: dark) { html[data-sport="epl"] { color-scheme: dark; --paper:#2a2c32; --ink:#ecebe7; --ink-2:#cfcec9; --mute:#a9abb4; --mute-2:#878a94; --rule:#474a53; --rule-2:#363840; --on-ink:#474a53; --alert:#f29077; --on-alert:#1b1c20; --win:#62c79c; --on-win:#1b1c20; --desk:#212328; } html[data-sport="cbb"] { color-scheme: dark; --paper:#0f1a2b; --ink:#eef1f6; --ink-2:#cdd4e0; --mute:#9ba6b8; --mute-2:#7a869a; --rule:#2b3a52; --rule-2:#1c2a3f; --on-ink:#2b3a52; --alert:#f08a72; --on-alert:#0f1a2b; --win:#5cc196; --on-win:#0f1a2b; --desk:#0a1220; } }
     html[data-sport="epl"] [data-theme="dark"] { color-scheme: dark; --paper:#2a2c32; --ink:#ecebe7; --ink-2:#cfcec9; --mute:#a9abb4; --mute-2:#878a94; --rule:#474a53; --rule-2:#363840; --on-ink:#474a53; --alert:#f29077; --on-alert:#1b1c20; --win:#62c79c; --on-win:#1b1c20; --desk:#212328; }
     html[data-sport="cbb"] [data-theme="dark"] { color-scheme: dark; --paper:#0f1a2b; --ink:#eef1f6; --ink-2:#cdd4e0; --mute:#9ba6b8; --mute-2:#7a869a; --rule:#2b3a52; --rule-2:#1c2a3f; --on-ink:#2b3a52; --alert:#f08a72; --on-alert:#0f1a2b; --win:#5cc196; --on-win:#0f1a2b; --desk:#0a1220; }
-    html, body { margin: 0; padding: 0; background: var(--paper); color: var(--ink); font-family: "IBM Plex Sans", Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+    html, body { margin: 0; padding: 0; background: var(--paper); color: var(--ink); font-family: "Inter", Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+    [style*="Playfair Display"], .cond { font-variant-numeric: lining-nums; }
     * { box-sizing: border-box; }
     a { color: var(--ink); text-decoration: none; }
     a:hover { color: var(--ink-2); text-decoration: underline; text-underline-offset: 3px; }
     .mono { font-family: "IBM Plex Mono", monospace; font-variant-numeric: tabular-nums; }
-    .cond { font-family: "Barlow Condensed", sans-serif; }
+    .cond { font-family:"Playfair Display",Georgia,serif; }
     .srow { display: grid; grid-template-columns: 28px minmax(150px, 1.6fr) 64px 150px 82px 74px 96px 56px 64px; gap: 0 10px; align-items: center; padding: 9px 0; font-size: 13px; }
     .shead { color: var(--mute); font-family: "IBM Plex Mono", monospace; font-size: 10px; letter-spacing: .1em; text-transform: uppercase; border-bottom: 1px solid var(--ink); }
     .srow > span { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -41,21 +42,55 @@
     .meter { display: inline-flex; align-items: center; justify-content: flex-end; gap: 6px; white-space: nowrap; }
     .meter > span:first-child { display: inline-block; width: 40px; height: 6px; background: var(--rule-2); flex: none; }
     .meter span i { display: block; height: 100%; background: var(--ink); }
-    .chip { width: 30px; height: 30px; border-radius: 50%; flex: none; display: grid; place-items: center; font-family: "Barlow Condensed", sans-serif; font-weight: 800; font-size: 11px; letter-spacing: .02em; }
+    .chip { position: relative; overflow: hidden; width: 30px; height: 30px; border-radius: 50%; flex: none; display: grid; place-items: center; font-family:"Inter",sans-serif; font-weight: 800; font-size: 11px; letter-spacing: .02em; }
     @media (max-width: 720px) { .srow, .grow { font-size: 12px; } }
   </style>
-  <meta name="theme-color" content="#14151a">
+  <meta name="theme-color" content="#0e1013">
   <script>(function(){var m=/^(nhl|epl|cbb)\./.exec(location.hostname),d=document.documentElement;d.setAttribute("data-sport",m?m[1]:(d.getAttribute("data-sport")||"nhl"));})();</script>
+  <style id="mh-modern">
+    /* Modern App theme (2026-11-13): one dark slate look for all three sites, electric-blue accent, rounded cards, pill tabs. */
+    html, html [data-theme], html[data-sport], html[data-sport] [data-theme] {
+      color-scheme: dark;
+      --paper:#0e1013 !important; --ink:#f3f4f6 !important; --ink-2:#c9cdd5 !important; --mute:#8d93a0 !important; --mute-2:#6b7180 !important;
+      --rule:#262a33 !important; --rule-2:#1c1f26 !important; --on-ink:#262a33 !important;
+      --alert:#f87171 !important; --on-alert:#0e1013 !important; --win:#34d399 !important; --on-win:#0e1013 !important; --desk:#0a0b0e !important;
+      --accent:#3b82f6; --accent-2:#60a5fa; --card:#171a20; --logo-disc:#f1f3f6;
+    }
+    html, body { background:#0e1013 !important; }
+    /* Hard white rules become soft dividers */
+    [style*="solid var(--ink)"] { border-color: var(--rule) !important; }
+    html body header[style*="border-top:4px"], html body header[style*="border-top: 4px"] { border-top:0 !important; padding-top:16px !important; }
+    /* Boxes become rounded cards */
+    [style*="border:1px solid var(--"], [style*="border: 1px solid var(--"] { border-radius:12px; }
+    /* Inverse blocks (best bets, MH mark, selected buttons) use the accent */
+    [style*="background:var(--ink)"], [style*="background: var(--ink)"] { background: var(--accent) !important; color:#fff !important; border-color: var(--accent) !important; border-radius:10px; }
+    [style*="background:var(--ink)"] *, [style*="background: var(--ink)"] * { color:#fff; }
+    /* Pill tabs */
+    html body nav[aria-label="Board sections"] { border-bottom:1px solid var(--rule) !important; gap:6px; padding:10px 0; background:rgba(14,16,19,.92) !important; backdrop-filter: blur(8px); }
+    html body nav[aria-label="Board sections"] a { flex:0 0 auto !important; max-width:none !important; min-height:38px !important; padding:0 16px !important; border-radius:999px; box-shadow:none !important; text-transform:none !important; letter-spacing:0 !important; font-size:14px !important; font-weight:600 !important; color: var(--mute) !important; }
+    html body nav[aria-label="Board sections"] a:hover { background: var(--card); color: var(--ink) !important; text-decoration:none; }
+    html body nav[aria-label="Board sections"] a[aria-current="page"] { background: var(--accent) !important; color:#fff !important; }
+    html body nav[aria-label="Board sections"] a[aria-current="page"] * { color:#fff !important; }
+    /* Team logos sit on a light disc so dark logos stay visible */
+    img[style*="object-fit:contain"], img[style*="object-fit: contain"], img.team-logo { background: var(--logo-disc) !important; }
+    /* Cards: stat strip, score tiles, game blocks */
+    section[style*="210px"] { gap:12px !important; border-bottom:0 !important; padding:10px 0 6px; }
+    section[style*="210px"] div[style*="border-bottom"] { background:var(--card); border:1px solid var(--rule) !important; border-radius:14px; padding:18px 20px !important; }
+    button[style*="scroll-snap-align"] { background:var(--card) !important; border-radius:12px !important; }
+    article[id][style*="scroll-margin"], article[style*="340px"] { background:var(--card); border:1px solid var(--rule) !important; border-radius:16px; padding:4px 20px 8px !important; margin:14px 0; box-shadow:0 8px 24px rgba(0,0,0,.28); }
+    a:focus-visible, button:focus-visible { outline-color: var(--accent) !important; }
+    ::selection { background: rgba(59,130,246,.35); }
+  </style>
 </helmet>
 <div data-screen-label="Season" data-theme="{{ themeAttr }}" style="min-height:100vh;background:var(--paper);color:var(--ink);">
   <div style="max-width:1240px;margin:0 auto;padding:0 clamp(16px,3vw,24px) 80px;">
 
     <header style="border-top:4px solid var(--ink);padding:10px 0 4px;display:flex;align-items:center;justify-content:space-between;gap:12px 16px;flex-wrap:wrap;">
       <a href="https://maverickhightower.com/" style="display:flex;align-items:center;gap:12px;">
-        <span style="width:36px;height:36px;background:var(--ink);color:var(--paper);display:grid;place-items:center;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:18px;letter-spacing:.04em;">MH</span>
+        <span style="width:36px;height:36px;background:var(--ink);color:var(--paper);display:grid;place-items:center;font-family:'Inter',sans-serif;font-weight:800;font-size:18px;letter-spacing:.04em;">MH</span>
         <span style="display:flex;flex-direction:column;line-height:1.1;">
           <span style="font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute);">Maverick Hightower</span>
-          <span style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:22px;letter-spacing:.02em;text-transform:uppercase;">NHL Projections</span>
+          <span style="font-family:'Playfair Display',Georgia,serif;font-weight:700;font-size:22px;letter-spacing:-.01em;">NHL Projections</span>
         </span>
       </a>
       <nav aria-label="Site" style="display:flex;gap:0 18px;font-size:13px;letter-spacing:.1em;text-transform:uppercase;font-weight:500;flex-wrap:wrap;">
@@ -75,7 +110,7 @@
     <section style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:24px 40px;align-items:end;padding:40px 0 28px;border-bottom:1px solid var(--ink);">
       <div style="min-width:0;grid-column:1 / -1;">
         <div style="font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute);margin-bottom:10px;">{{ kicker }}</div>
-        <h1 style="margin:0;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:clamp(56px,9vw,112px);line-height:.9;letter-spacing:-.01em;text-transform:uppercase;">{{ title1 }}<br>{{ title2 }}</h1>
+        <h1 style="margin:0;font-family:'Playfair Display',Georgia,serif;font-weight:800;font-size:clamp(56px,9vw,112px);line-height:.9;letter-spacing:-.01em;">{{ title1 }}<br>{{ title2 }}</h1>
       </div>
       <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;line-height:1.7;color:var(--mute);display:flex;flex-wrap:wrap;gap:4px 24px;align-items:baseline;">
         <span style="text-transform:uppercase;letter-spacing:.1em;white-space:nowrap;">Updated</span>
@@ -89,7 +124,7 @@
 
     <sc-if value="{{ hasNotice }}" hint-placeholder-val="{{ false }}">
       <div style="display:grid;grid-template-columns:auto minmax(0,1fr);gap:20px;align-items:start;padding:18px 0;border-bottom:1px solid var(--ink);">
-        <span style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:14px;letter-spacing:.14em;text-transform:uppercase;background:var(--ink);color:var(--paper);padding:5px 9px;">Note</span>
+        <span style="font-family:'Inter',sans-serif;font-weight:700;font-size:14px;letter-spacing:.14em;text-transform:uppercase;background:var(--ink);color:var(--paper);padding:5px 9px;">Note</span>
         <p style="margin:0;font-size:15px;line-height:1.5;color:var(--ink-2);max-width:760px;text-wrap:pretty;">{{ notice }}</p>
       </div>
     </sc-if>
@@ -98,7 +133,7 @@
       <sc-for list="{{ strip }}" as="c" hint-placeholder-count="4">
         <div style="padding:22px 0;border-bottom:1px solid var(--rule);">
           <div style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute);">{{ c.label }}</div>
-          <div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:44px;line-height:1;margin-top:8px;">{{ c.value }}</div>
+          <div style="font-family:'Playfair Display',Georgia,serif;font-weight:700;font-size:44px;line-height:1;margin-top:8px;">{{ c.value }}</div>
           <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--ink-2);margin-top:6px;">{{ c.sub }}</div>
           <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--mute);margin-top:4px;text-transform:uppercase;letter-spacing:.08em;">{{ c.fine }}</div>
         </div>
@@ -108,12 +143,12 @@
     <!-- Standings -->
     <section style="padding-top:44px;">
       <div style="display:flex;align-items:baseline;justify-content:space-between;gap:16px;flex-wrap:wrap;border-bottom:3px solid var(--ink);padding-bottom:10px;">
-        <h2 style="margin:0;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:34px;line-height:1;text-transform:uppercase;letter-spacing:.01em;">Projected standings</h2>
+        <h2 style="margin:0;font-family:'Playfair Display',Georgia,serif;font-weight:700;font-size:34px;line-height:1;letter-spacing:-.01em;">Projected standings</h2>
         <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--mute);">{{ standingsNote }}</div>
       </div>
       <sc-for list="{{ divisions }}" as="d" hint-placeholder-count="4">
         <div style="display:flex;align-items:baseline;gap:14px;padding:26px 0 6px;">
-          <h3 style="margin:0;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:26px;text-transform:uppercase;letter-spacing:.02em;">{{ d.name }}</h3>
+          <h3 style="margin:0;font-family:'Playfair Display',Georgia,serif;font-weight:700;font-size:26px;letter-spacing:-.01em;">{{ d.name }}</h3>
           <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--mute);">{{ d.conf }}</span>
         </div>
         <div class="tblwrap">
@@ -125,7 +160,7 @@
               <div class="srow" style="{{ t.rowStyle }}">
                 <span class="mono" style="color:var(--mute);">{{ t.rank }}</span>
                 <span style="display:flex;align-items:center;gap:10px;">
-                  <span class="chip" style="background:{{ t.color }};color:{{ t.fg }};">{{ t.abbr }}</span>
+                  <span class="chip" style="background:{{ t.color }};color:{{ t.fg }};">{{ t.abbr }}<img class="team-logo" src="./logos/{{ t.abbr }}.png" alt="" loading="lazy" style="position:absolute;inset:0;width:100%;height:100%;object-fit:contain;padding:3px;"></span>
                   <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;"><span style="font-weight:600;">{{ t.name }}</span> <span class="mono" style="font-size:11px;color:var(--mute);">{{ t.record }}</span></span>
                 </span>
                 <span class="cond r" style="font-size:22px;font-weight:700;">{{ t.pts }}</span>
@@ -148,12 +183,12 @@
     <!-- Playoff odds by conference -->
     <section style="padding-top:44px;">
       <div style="display:flex;align-items:baseline;justify-content:space-between;gap:16px;flex-wrap:wrap;border-bottom:3px solid var(--ink);padding-bottom:10px;">
-        <h2 style="margin:0;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:34px;line-height:1;text-transform:uppercase;letter-spacing:.01em;">Playoff odds</h2>
+        <h2 style="margin:0;font-family:'Playfair Display',Georgia,serif;font-weight:700;font-size:34px;line-height:1;letter-spacing:-.01em;">Playoff odds</h2>
       </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,460px),1fr));gap:0 40px;">
         <sc-for list="{{ conferences }}" as="c" hint-placeholder-count="2">
           <div style="min-width:0;">
-            <h3 style="margin:26px 0 6px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:26px;text-transform:uppercase;letter-spacing:.02em;">{{ c.name }}</h3>
+            <h3 style="margin:26px 0 6px;font-family:'Playfair Display',Georgia,serif;font-weight:700;font-size:26px;letter-spacing:-.01em;">{{ c.name }}</h3>
             <div class="tblwrap"><div style="min-width:440px;">
               <div style="display:grid;grid-template-columns:28px minmax(120px,1fr) 64px 64px 64px 64px 64px;gap:0 8px;padding:8px 0;" class="shead">
                 <span>#</span><span>Team</span><span class="r">Pts</span><span class="r">Playoffs</span><span class="r">Div</span><span class="r">Conf #1</span><span class="r">Pres.</span>
@@ -161,7 +196,7 @@
               <sc-for list="{{ c.rows }}" as="t" hint-placeholder-count="16">
                 <div style="display:grid;grid-template-columns:28px minmax(120px,1fr) 64px 64px 64px 64px 64px;gap:0 8px;padding:7px 0;font-size:13px;align-items:center;{{ t.rowStyle }}">
                   <span class="mono" style="color:var(--mute);">{{ t.rank }}</span>
-                  <span style="display:flex;align-items:center;gap:8px;min-width:0;"><span class="chip" style="width:24px;height:24px;font-size:9px;background:{{ t.color }};color:{{ t.fg }};">{{ t.abbr }}</span><span style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ t.short }}</span></span>
+                  <span style="display:flex;align-items:center;gap:8px;min-width:0;"><span class="chip" style="width:24px;height:24px;font-size:9px;background:{{ t.color }};color:{{ t.fg }};">{{ t.abbr }}<img class="team-logo" src="./logos/{{ t.abbr }}.png" alt="" loading="lazy" style="position:absolute;inset:0;width:100%;height:100%;object-fit:contain;padding:3px;"></span><span style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ t.short }}</span></span>
                   <span class="mono r">{{ t.pts }}</span>
                   <span class="mono r" style="font-weight:600;">{{ t.playoff }}</span>
                   <span class="mono r">{{ t.div }}</span>
@@ -179,13 +214,13 @@
     <sc-if value="{{ hasRounds }}" hint-placeholder-val="{{ true }}">
     <section style="padding-top:44px;">
       <div style="display:flex;align-items:baseline;justify-content:space-between;gap:16px;flex-wrap:wrap;border-bottom:3px solid var(--ink);padding-bottom:10px;">
-        <h2 style="margin:0;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:34px;line-height:1;text-transform:uppercase;letter-spacing:.01em;">Playoffs, round by round</h2>
+        <h2 style="margin:0;font-family:'Playfair Display',Georgia,serif;font-weight:700;font-size:34px;line-height:1;letter-spacing:-.01em;">Playoffs, round by round</h2>
         <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--mute);">{{ roundsNote }}</div>
       </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,460px),1fr));gap:0 40px;">
         <sc-for list="{{ roundConfs }}" as="c" hint-placeholder-count="2">
           <div style="min-width:0;">
-            <h3 style="margin:26px 0 6px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:26px;text-transform:uppercase;letter-spacing:.02em;">{{ c.name }}</h3>
+            <h3 style="margin:26px 0 6px;font-family:'Playfair Display',Georgia,serif;font-weight:700;font-size:26px;letter-spacing:-.01em;">{{ c.name }}</h3>
             <div class="tblwrap"><div style="min-width:440px;">
               <div style="display:grid;grid-template-columns:28px minmax(120px,1fr) 64px 64px 64px 64px 64px;gap:0 8px;padding:8px 0;" class="shead">
                 <span>#</span><span>Team</span><span class="r">Playoffs</span><span class="r">Win R1</span><span class="r">Conf final</span><span class="r">Final</span><span class="r">Cup</span>
@@ -193,7 +228,7 @@
               <sc-for list="{{ c.rows }}" as="t" hint-placeholder-count="16">
                 <div style="display:grid;grid-template-columns:28px minmax(120px,1fr) 64px 64px 64px 64px 64px;gap:0 8px;padding:7px 0;font-size:13px;align-items:center;border-bottom:1px solid var(--rule-2);">
                   <span class="mono" style="color:var(--mute);">{{ t.rank }}</span>
-                  <span style="display:flex;align-items:center;gap:8px;min-width:0;"><span class="chip" style="width:24px;height:24px;font-size:9px;background:{{ t.color }};color:{{ t.fg }};">{{ t.abbr }}</span><span style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ t.short }}</span></span>
+                  <span style="display:flex;align-items:center;gap:8px;min-width:0;"><span class="chip" style="width:24px;height:24px;font-size:9px;background:{{ t.color }};color:{{ t.fg }};">{{ t.abbr }}<img class="team-logo" src="./logos/{{ t.abbr }}.png" alt="" loading="lazy" style="position:absolute;inset:0;width:100%;height:100%;object-fit:contain;padding:3px;"></span><span style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ t.short }}</span></span>
                   <span class="mono r">{{ t.playoff }}</span>
                   <span class="mono r">{{ t.r1 }}</span>
                   <span class="mono r">{{ t.r2 }}</span>
@@ -206,7 +241,7 @@
         </sc-for>
       </div>
 
-      <h3 style="margin:36px 0 10px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:26px;text-transform:uppercase;letter-spacing:.02em;">Most likely first-round matchups</h3>
+      <h3 style="margin:36px 0 10px;font-family:'Playfair Display',Georgia,serif;font-weight:700;font-size:26px;letter-spacing:-.01em;">Most likely first-round matchups</h3>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,270px),1fr));gap:14px;">
         <sc-for list="{{ slots }}" as="sl" hint-placeholder-count="8">
           <div style="border:1px solid var(--rule);padding:10px 12px;min-width:0;">
@@ -224,7 +259,7 @@
         </sc-for>
       </div>
 
-      <h3 style="margin:36px 0 10px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:26px;text-transform:uppercase;letter-spacing:.02em;">Most likely Stanley Cup Finals</h3>
+      <h3 style="margin:36px 0 10px;font-family:'Playfair Display',Georgia,serif;font-weight:700;font-size:26px;letter-spacing:-.01em;">Most likely Stanley Cup Finals</h3>
       <div style="max-width:520px;">
         <sc-for list="{{ finals }}" as="m" hint-placeholder-count="6">
           <div style="display:grid;grid-template-columns:24px minmax(0,1fr) auto;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--rule-2);font-size:13px;">
@@ -241,12 +276,12 @@
     <sc-if value="{{ hasTrophySection }}" hint-placeholder-val="{{ true }}">
     <section style="padding-top:44px;">
       <div style="display:flex;align-items:baseline;justify-content:space-between;gap:16px;flex-wrap:wrap;border-bottom:3px solid var(--ink);padding-bottom:10px;">
-        <h2 style="margin:0;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:34px;line-height:1;text-transform:uppercase;letter-spacing:.01em;">Awards</h2>
+        <h2 style="margin:0;font-family:'Playfair Display',Georgia,serif;font-weight:700;font-size:34px;line-height:1;letter-spacing:-.01em;">Awards</h2>
         <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--mute);">{{ trophiesNote }}</div>
       </div>
       <sc-if value="{{ hasVoted }}" hint-placeholder-val="{{ true }}">
       <div id="awards" style="margin-top:34px;">
-        <h3 style="margin:0 0 4px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:26px;text-transform:uppercase;letter-spacing:.02em;">Award races</h3>
+        <h3 style="margin:0 0 4px;font-family:'Playfair Display',Georgia,serif;font-weight:700;font-size:26px;letter-spacing:-.01em;">Award races</h3>
         <div style="font-size:14px;color:var(--ink-2);margin-bottom:12px;max-width:720px;">{{ awardsIntro }}</div>
         <div role="tablist" aria-label="Awards" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;">
           <sc-for list="{{ awardTabs }}" as="t" hint-placeholder-count="6">
@@ -255,7 +290,7 @@
         </div>
         <div style="display:flex;align-items:baseline;justify-content:space-between;gap:6px 16px;flex-wrap:wrap;border-bottom:2px solid var(--ink);padding-bottom:8px;">
           <div>
-            <div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:24px;text-transform:uppercase;letter-spacing:.02em;">{{ award.title }} <span class="mono" style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--alert);">{{ award.staleLabel }}</span><span class="mono" style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--mute);">{{ award.freshLabel }}</span></div>
+            <div style="font-family:'Playfair Display',Georgia,serif;font-weight:700;font-size:24px;letter-spacing:-.01em;">{{ award.title }} <span class="mono" style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--alert);">{{ award.staleLabel }}</span><span class="mono" style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--mute);">{{ award.freshLabel }}</span></div>
             <div style="font-size:13px;color:var(--mute);">{{ award.about }}</div>
           </div>
           <div style="font-size:15px;font-weight:600;max-width:520px;">{{ award.headline }}</div>
@@ -286,12 +321,12 @@
       </div>
       </sc-if>
       <sc-if value="{{ hasTrophies }}" hint-placeholder-val="{{ true }}">
-      <h3 style="margin:40px 0 0;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:26px;text-transform:uppercase;letter-spacing:.02em;">Stat races</h3>
+      <h3 style="margin:40px 0 0;font-family:'Playfair Display',Georgia,serif;font-weight:700;font-size:26px;letter-spacing:-.01em;">Stat races</h3>
       <div style="font-size:14px;color:var(--ink-2);">Counted, not voted: who finishes the season on top.</div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,270px),1fr));gap:0 40px;">
         <sc-for list="{{ trophies }}" as="b" hint-placeholder-count="4">
           <div style="min-width:0;">
-            <h3 style="margin:26px 0 2px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:22px;text-transform:uppercase;letter-spacing:.02em;">{{ b.title }}</h3>
+            <h3 style="margin:26px 0 2px;font-family:'Playfair Display',Georgia,serif;font-weight:700;font-size:22px;letter-spacing:-.01em;">{{ b.title }}</h3>
             <div class="mono" style="font-size:11px;color:var(--mute);margin-bottom:6px;">{{ b.sub }}</div>
             <div style="display:grid;grid-template-columns:24px minmax(0,1fr) auto;gap:0 10px;padding:6px 0;" class="shead"><span>#</span><span>Player</span><span class="r">Wins it</span></div>
             <sc-for list="{{ b.rows }}" as="p" hint-placeholder-count="8">
@@ -312,13 +347,13 @@
     <!-- Scorers -->
     <section style="padding-top:44px;">
       <div style="display:flex;align-items:baseline;justify-content:space-between;gap:16px;flex-wrap:wrap;border-bottom:3px solid var(--ink);padding-bottom:10px;">
-        <h2 style="margin:0;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:34px;line-height:1;text-transform:uppercase;letter-spacing:.01em;">Scorers</h2>
+        <h2 style="margin:0;font-family:'Playfair Display',Georgia,serif;font-weight:700;font-size:34px;line-height:1;letter-spacing:-.01em;">Scorers</h2>
         <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--mute);">{{ scorersNote }}</div>
       </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:0 40px;">
         <sc-for list="{{ leaderBoards }}" as="b" hint-placeholder-count="3">
           <div style="min-width:0;">
-            <h3 style="margin:26px 0 6px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:22px;text-transform:uppercase;letter-spacing:.02em;">{{ b.title }}</h3>
+            <h3 style="margin:26px 0 6px;font-family:'Playfair Display',Georgia,serif;font-weight:700;font-size:22px;letter-spacing:-.01em;">{{ b.title }}</h3>
             <div style="display:grid;grid-template-columns:24px minmax(0,1fr) auto auto;gap:0 10px;padding:6px 0;" class="shead"><span>#</span><span>Player</span><span class="r">{{ b.col }}</span><span class="r">Now</span></div>
             <sc-for list="{{ b.rows }}" as="p" hint-placeholder-count="10">
               <div style="display:grid;grid-template-columns:24px minmax(0,1fr) auto auto;gap:0 10px;padding:6px 0;border-bottom:1px solid var(--rule-2);font-size:13px;align-items:baseline;">
@@ -332,12 +367,12 @@
         </sc-for>
       </div>
 
-      <h3 style="margin:36px 0 10px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:26px;text-transform:uppercase;letter-spacing:.02em;">Top three, every team</h3>
+      <h3 style="margin:36px 0 10px;font-family:'Playfair Display',Georgia,serif;font-weight:700;font-size:26px;letter-spacing:-.01em;">Top three, every team</h3>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,290px),1fr));gap:14px;">
         <sc-for list="{{ teamCards }}" as="t" hint-placeholder-count="32">
           <div style="border:1px solid var(--rule);padding:10px 12px;min-width:0;">
             <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;">
-              <span style="display:flex;align-items:center;gap:8px;min-width:0;"><span class="chip" style="width:24px;height:24px;font-size:9px;background:{{ t.color }};color:{{ t.fg }};">{{ t.abbr }}</span><span class="cond" style="font-size:18px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ t.name }}</span></span>
+              <span style="display:flex;align-items:center;gap:8px;min-width:0;"><span class="chip" style="width:24px;height:24px;font-size:9px;background:{{ t.color }};color:{{ t.fg }};">{{ t.abbr }}<img class="team-logo" src="./logos/{{ t.abbr }}.png" alt="" loading="lazy" style="position:absolute;inset:0;width:100%;height:100%;object-fit:contain;padding:3px;"></span><span class="cond" style="font-size:18px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ t.name }}</span></span>
               <span class="mono" style="font-size:11px;color:var(--mute);white-space:nowrap;">{{ t.ptsLabel }}</span>
             </div>
             <sc-for list="{{ t.scorers }}" as="p" hint-placeholder-count="3">
@@ -355,14 +390,14 @@
     <!-- Goalie wins -->
     <section style="padding-top:44px;">
       <div style="display:flex;align-items:baseline;justify-content:space-between;gap:16px;flex-wrap:wrap;border-bottom:3px solid var(--ink);padding-bottom:10px;">
-        <h2 style="margin:0;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:34px;line-height:1;text-transform:uppercase;letter-spacing:.01em;">Goalie wins</h2>
+        <h2 style="margin:0;font-family:'Playfair Display',Georgia,serif;font-weight:700;font-size:34px;line-height:1;letter-spacing:-.01em;">Goalie wins</h2>
       </div>
       <div class="tblwrap"><div style="min-width:760px;">
         <div class="grow shead"><span>#</span><span>Goalie</span><span class="r">Starts</span><span class="r">Wins</span><span>10th–90th</span><span class="r">30+</span><span class="r">GSAx/60</span><span class="r">Last season</span></div>
         <sc-for list="{{ goalies }}" as="g" hint-placeholder-count="20">
           <div class="grow" style="border-bottom:1px solid var(--rule-2);">
             <span class="mono" style="color:var(--mute);">{{ g.rank }}</span>
-            <span style="display:flex;align-items:center;gap:8px;min-width:0;"><span class="chip" style="width:24px;height:24px;font-size:9px;background:{{ g.color }};color:{{ g.fg }};">{{ g.team }}</span><span style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ g.name }}</span></span>
+            <span style="display:flex;align-items:center;gap:8px;min-width:0;"><span class="chip" style="width:24px;height:24px;font-size:9px;background:{{ g.color }};color:{{ g.fg }};">{{ g.team }}<img class="team-logo" src="./logos/{{ g.team }}.png" alt="" loading="lazy" style="position:absolute;inset:0;width:100%;height:100%;object-fit:contain;padding:3px;"></span><span style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ g.name }}</span></span>
             <span class="mono r">{{ g.starts }}</span>
             <span class="cond r" style="font-size:22px;font-weight:700;">{{ g.wins }}</span>
             <span><span class="bar" style="display:block;" title="{{ g.rangeTitle }}"><i style="left:{{ g.barLeft }}%;width:{{ g.barWidth }}%;"></i><b style="left:{{ g.meanMark }}%;"></b></span></span>
@@ -377,13 +412,13 @@
     <!-- Method -->
     <section style="padding-top:44px;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,380px),1fr));gap:24px 48px;">
       <div style="min-width:0;">
-        <h2 style="margin:0 0 12px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:26px;text-transform:uppercase;letter-spacing:.02em;border-bottom:3px solid var(--ink);padding-bottom:8px;">How the season is simulated</h2>
+        <h2 style="margin:0 0 12px;font-family:'Playfair Display',Georgia,serif;font-weight:700;font-size:26px;letter-spacing:-.01em;border-bottom:3px solid var(--ink);padding-bottom:8px;">How the season is simulated</h2>
         <sc-for list="{{ method }}" as="m" hint-placeholder-count="5">
           <p style="margin:0 0 10px;font-size:14px;line-height:1.55;color:var(--ink-2);text-wrap:pretty;"><b>{{ m.head }}</b> {{ m.body }}</p>
         </sc-for>
       </div>
       <div style="min-width:0;">
-        <h2 style="margin:0 0 12px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:26px;text-transform:uppercase;letter-spacing:.02em;border-bottom:3px solid var(--ink);padding-bottom:8px;">Availability assumed</h2>
+        <h2 style="margin:0 0 12px;font-family:'Playfair Display',Georgia,serif;font-weight:700;font-size:26px;letter-spacing:-.01em;border-bottom:3px solid var(--ink);padding-bottom:8px;">Availability assumed</h2>
         <p style="margin:0 0 10px;font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--mute);">{{ notesLabel }}</p>
         <sc-for list="{{ injuries }}" as="i" hint-placeholder-count="12">
           <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:0 12px;padding:5px 0;border-bottom:1px solid var(--rule-2);font-size:13px;">
