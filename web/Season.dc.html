@@ -295,7 +295,7 @@
           </div>
           <div style="font-size:15px;font-weight:600;max-width:520px;">{{ award.headline }}</div>
         </div>
-        <div class="shead" style="display:grid;grid-template-columns:22px 34px minmax(0,1fr) 92px;gap:0 10px;padding:6px 0;"><span>#</span><span></span><span>Player · why he is here</span><span class="r">Win chance</span></div>
+        <div class="shead" style="display:grid;grid-template-columns:22px 34px minmax(0,1fr) 92px;gap:0 10px;padding:6px 0;"><span>#</span><span></span><span></span><span class="r">Win chance</span></div>
         <sc-for list="{{ award.rows }}" as="p" hint-placeholder-count="10">
           <div style="display:grid;grid-template-columns:22px 34px minmax(0,1fr) 92px;gap:0 10px;padding:10px 0;border-bottom:1px solid var(--rule-2);align-items:center;">
             <span class="mono" style="color:var(--mute);font-size:13px;">{{ p.rank }}</span>
@@ -636,7 +636,7 @@ class Component extends DCLogic {
     const age = d.generatedAt ? (Date.now() - new Date(d.generatedAt).getTime()) / 36e5 : Infinity;
     return {
       kicker: `Season simulation · ${d.season} · ${d.games}-game schedule · ${d.sims.toLocaleString()} seasons`,
-      title1: inSeason ? "The rest of" : "The whole", title2: "season.",
+      title1: "Season", title2: "Sim",
       blurb: inSeason
         ? `${d.leagueGamesPlayed.toLocaleString()} games are in the book and ${d.remainingGames.toLocaleString()} are left. Every team's strength blends its preseason rating with what it has done so far, and the remaining schedule is played ${d.sims.toLocaleString()} times from tonight's standings.`
         : `Before a puck drops: every opening-night roster rebuilt player by player, blended with last season's results and expected goals, and the full ${d.games}-game schedule played ${d.sims.toLocaleString()} times. From opening night the standings to date fold in and only what is left is simulated.`,
@@ -666,7 +666,7 @@ class Component extends DCLogic {
     const tabsList = [["Tonight", "Board.dc.html"], ["Props", "Board.dc.html#props"], ["Results", "Results.dc.html"], ["Season", "Season.dc.html"], ["Record", "Record.dc.html"]];
     const tabs = tabsList.map(([label, href]) => ({ label, href, current: label === "Season" ? "page" : undefined, shadow: label === "Season" ? "inset 0 -3px 0 var(--ink)" : "none", color: label === "Season" ? "var(--ink)" : "var(--mute)" }));
     const base = { tabs, themeAttr, otherSports: this.state.otherSports || [], hasNotice: !!this.state.notice, notice: this.state.notice || "" };
-    if (!vm) return { ...base, kicker: "Season simulation", title1: "The whole", title2: "season.", blurb: "", updated: "—", progress: "", stale: false, staleLabel: "", strip: [], divisions: [], conferences: [], leaderBoards: [], teamCards: [], goalies: [], method: [], injuries: [], games: 84, standingsNote: "", scorersNote: "", goaliesNote: "", notesLabel: "", hasRounds: false, roundConfs: [], slots: [], finals: [], hasTrophies: false, trophies: [], roundsNote: "", trophiesNote: "", calderNote: "", voted: [], hasVoted: false, hasTrophySection: false, votedNote: "", awardsIntro: "", awardTabs: [], award: { title: "", about: "", headline: "", staleLabel: "", freshLabel: "", rows: [], how: "", sources: [] } };
+    if (!vm) return { ...base, kicker: "Season simulation", title1: "Season", title2: "Sim", blurb: "", updated: "—", progress: "", stale: false, staleLabel: "", strip: [], divisions: [], conferences: [], leaderBoards: [], teamCards: [], goalies: [], method: [], injuries: [], games: 84, standingsNote: "", scorersNote: "", goaliesNote: "", notesLabel: "", hasRounds: false, roundConfs: [], slots: [], finals: [], hasTrophies: false, trophies: [], roundsNote: "", trophiesNote: "", calderNote: "", voted: [], hasVoted: false, hasTrophySection: false, votedNote: "", awardsIntro: "", awardTabs: [], award: { title: "", about: "", headline: "", staleLabel: "", freshLabel: "", rows: [], how: "", sources: [] } };
     // One award at a time: the tab picked, else the Hart.
     const list = vm.voted || [];
     const pick = list.find((v) => v.key === this.state.award) || list[0] || { title: "", about: "", headline: "", staleLabel: "", freshLabel: "", rows: [], how: "", sources: [] };
