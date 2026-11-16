@@ -2,8 +2,8 @@ Selections are unchanged since the previous card; this comment is here because C
 
 # NHL gameday card
 
-- Generated: 2026-11-16T14:34:21+00:00
-- 0 best bet(s), 14 lean(s), 985 pass(es) across 2 game(s); 0 unit(s) staked.
+- Generated: 2026-11-16T14:57:43+00:00
+- 0 best bet(s), 23 lean(s), 955 pass(es) across 2 game(s); 0 unit(s) staked.
 - Included markets: **assists, blocked_shots, goals, moneyline, points, puck_line, regulation_3_way, shots_on_goal, team_total, total_goals**
 - Unit size: $25
 
@@ -15,26 +15,35 @@ _No best bets._
 
 | Game | Starts | Market | Selection | Model | Edge | Price | Bet down to | Book |
 |:-----|:-------|:-------|:----------|------:|-----:|------:|------------:|:-----|
-| Vancouver Canucks @ Utah Mammoth | Nov 16, 9:30 PM ET | `puck_line` | away +2.5 | 71.9% | +14.4% | -135 | -160 | BetMGM |
-| Vancouver Canucks @ Utah Mammoth | Nov 16, 9:30 PM ET | `puck_line` | away +1.5 | 57.3% | +11.8% | +120 | -116 | BetUS |
-| Vancouver Canucks @ Utah Mammoth | Nov 16, 9:30 PM ET | `moneyline` | away | 34.6% | +9.3% | +295 | +222 | BetOnline.ag |
-| Vancouver Canucks @ Utah Mammoth | Nov 16, 9:30 PM ET | `team_total` | away_over 2 | 68.5% | +7.7% | -155 | -160 | BetMGM |
-| Montréal Canadiens @ New York Rangers | Nov 16, 7:30 PM ET | `assists` | J.T. Miller over 0.5 | 47.3% | +7.3% | +150 | +143 | BetOnline.ag |
-| Vancouver Canucks @ Utah Mammoth | Nov 16, 9:30 PM ET | `team_total` | away_over 2.5 | 51.6% | +7.2% | +125 | +108 | Hard Rock Bet |
-| Vancouver Canucks @ Utah Mammoth | Nov 16, 9:30 PM ET | `regulation_3_way` | away | 24.8% | +6.3% | +440 | +369 | Bally Bet |
-| Montréal Canadiens @ New York Rangers | Nov 16, 7:30 PM ET | `shots_on_goal` | Lane Hutson under 1.5 | 52.7% | +6.2% | +115 | +115 | BetMGM |
-| Vancouver Canucks @ Utah Mammoth | Nov 16, 9:30 PM ET | `shots_on_goal` | Mikhail Sergachev under 2.5 | 62.7% | +6.1% | -130 | -130 | Hard Rock Bet |
-| Vancouver Canucks @ Utah Mammoth | Nov 16, 9:30 PM ET | `team_total` | away_over 3 | 38.8% | +5.4% | +200 | +184 | BetMGM |
-| Montréal Canadiens @ New York Rangers | Nov 16, 7:30 PM ET | `points` | J.T. Miller over 0.5 | 60.9% | +5.4% | -125 | -137 | Bally Bet |
-| Vancouver Canucks @ Utah Mammoth | Nov 16, 9:30 PM ET | `points` | Brock Boeser over 0.5 | 52.9% | +5.3% | +110 | +101 | Hard Rock Bet |
-| Vancouver Canucks @ Utah Mammoth | Nov 16, 9:30 PM ET | `team_total` | away_over 3.5 | 30.2% | +5.2% | +300 | +276 | Hard Rock Bet |
-| Montréal Canadiens @ New York Rangers | Nov 16, 7:30 PM ET | `team_total` | home_over 3.5 | 43.9% | +3.6% | +148 | +148 | FanDuel |
+| Vancouver Canucks @ Utah Mammoth | Nov 16, 9:30 PM ET | `puck_line` | away +2.5 | 73.2% | +15.8% | -135 | -160 | BetMGM |
+| Vancouver Canucks @ Utah Mammoth | Nov 16, 9:30 PM ET | `puck_line` | away +1.5 | 58.7% | +12.8% | +118 | -123 | BetAnything |
+| Vancouver Canucks @ Utah Mammoth | Nov 16, 9:30 PM ET | `moneyline` | away | 35.7% | +10.3% | +295 | +211 | BetOnline.ag |
+| Vancouver Canucks @ Utah Mammoth | Nov 16, 9:30 PM ET | `shots_on_goal` | Mikhail Sergachev under 2.5 | 64.0% | +8.4% | -125 | -137 | Hard Rock Bet |
+| Vancouver Canucks @ Utah Mammoth | Nov 16, 9:30 PM ET | `team_total` | away_over 2 | 68.2% | +7.5% | -155 | -160 | BetMGM |
+| Vancouver Canucks @ Utah Mammoth | Nov 16, 9:30 PM ET | `blocked_shots` | MacKenzie Weegar under 2.5 | 65.6% | +7.3% | -140 | -147 | Fliff |
+| Vancouver Canucks @ Utah Mammoth | Nov 16, 9:30 PM ET | `regulation_3_way` | away | 25.5% | +7.0% | +440 | +354 | Bally Bet |
+| Montréal Canadiens @ New York Rangers | Nov 16, 7:30 PM ET | `shots_on_goal` | Lane Hutson under 1.5 | 52.8% | +6.3% | +115 | +114 | BetMGM |
+| Montréal Canadiens @ New York Rangers | Nov 16, 7:30 PM ET | `team_total` | home_over 3.5 | 45.8% | +5.4% | +148 | +137 | FanDuel |
+| Montréal Canadiens @ New York Rangers | Nov 16, 7:30 PM ET | `total_goals` | over 6 | 57.7% | +5.3% | -110 | -118 | BetAnything |
+| Montréal Canadiens @ New York Rangers | Nov 16, 7:30 PM ET | `total_goals` | over 7 | 39.8% | +5.3% | +190 | +176 | Bovada |
+| Vancouver Canucks @ Utah Mammoth | Nov 16, 9:30 PM ET | `team_total` | away_over 3 | 38.5% | +5.1% | +200 | +186 | BetMGM |
+| Montréal Canadiens @ New York Rangers | Nov 16, 7:30 PM ET | `team_total` | home_over 3 | 58.6% | +5.1% | -115 | -122 | BetMGM |
+| Vancouver Canucks @ Utah Mammoth | Nov 16, 9:30 PM ET | `team_total` | away_over 2.5 | 51.6% | +5.1% | +115 | +108 | BetMGM |
+| Montréal Canadiens @ New York Rangers | Nov 16, 7:30 PM ET | `total_goals` | over 6.5 | 51.3% | +5.0% | +116 | +110 | Courtside |
+| Montréal Canadiens @ New York Rangers | Nov 16, 7:30 PM ET | `total_goals` | over 7.5 | 31.8% | +4.8% | +270 | +254 | FanDuel |
+| Vancouver Canucks @ Utah Mammoth | Nov 16, 9:30 PM ET | `team_total` | away_over 3.5 | 30.1% | +4.1% | +285 | +277 | Bally Bet |
+| Montréal Canadiens @ New York Rangers | Nov 16, 7:30 PM ET | `total_goals` | over 8.5 | 23.3% | +4.0% | +420 | +406 | FanDuel |
+| Montréal Canadiens @ New York Rangers | Nov 16, 7:30 PM ET | `total_goals` | over 5.5 | 62.5% | +4.0% | -141 | -143 | Bally Bet |
+| Montréal Canadiens @ New York Rangers | Nov 16, 7:30 PM ET | `team_total` | home_over 4.5 | 26.6% | +3.9% | +340 | +333 | FanDuel |
+| Vancouver Canucks @ Utah Mammoth | Nov 16, 9:30 PM ET | `team_total` | home_under 4 | 54.2% | +3.7% | -102 | -102 | BetMGM |
+| Montréal Canadiens @ New York Rangers | Nov 16, 7:30 PM ET | `points` | J.T. Miller over 0.5 | 59.0% | +3.5% | -125 | -127 | Bally Bet |
+| Montréal Canadiens @ New York Rangers | Nov 16, 7:30 PM ET | `points` | Oliver Bjorkstrand over 0.5 | 41.0% | +3.2% | +165 | +164 | Bally Bet |
 
 Stats check: a team bet is staked only when the model gives that team at least a 40% chance to win. These cleared the edge bar without it and are recorded here.
 
-- away +2.5 (`puck_line`): Against the stats: the model gives Vancouver Canucks a 34.6% chance to win, under the 40% the card asks of a side. The price is long enough to clear the bar, but the stats do not give it a real chance. Recorded as a lean and staked at zero.
-- away +1.5 (`puck_line`): Against the stats: the model gives Vancouver Canucks a 34.6% chance to win, under the 40% the card asks of a side. The price is long enough to clear the bar, but the stats do not give it a real chance. Recorded as a lean and staked at zero.
-- away (`moneyline`): Against the stats: the model gives Vancouver Canucks a 34.6% chance to win, under the 40% the card asks of a side. The price is long enough to clear the bar, but the stats do not give it a real chance. Recorded as a lean and staked at zero.
+- away +2.5 (`puck_line`): Against the stats: the model gives Vancouver Canucks a 35.7% chance to win, under the 40% the card asks of a side. The price is long enough to clear the bar, but the stats do not give it a real chance. Recorded as a lean and staked at zero.
+- away +1.5 (`puck_line`): Against the stats: the model gives Vancouver Canucks a 35.7% chance to win, under the 40% the card asks of a side. The price is long enough to clear the bar, but the stats do not give it a real chance. Recorded as a lean and staked at zero.
+- away (`moneyline`): Against the stats: the model gives Vancouver Canucks a 35.7% chance to win, under the 40% the card asks of a side. The price is long enough to clear the bar, but the stats do not give it a real chance. Recorded as a lean and staked at zero.
 
 Leans are recorded and not staked.
 
@@ -44,33 +53,33 @@ Leans are recorded and not staked.
 
 | Game | Starts | Market | Selection | Model | Edge | Price | Book |
 |:-----|:-------|:-------|:----------|------:|-----:|------:|:-----|
-| Vancouver Canucks @ Utah Mammoth | Nov 16, 9:30 PM ET | `team_total` | away_over 1.5 | 75.2% | +5.5% | -230 | Hard Rock Bet |
-| Vancouver Canucks @ Utah Mammoth | Nov 16, 9:30 PM ET | `shots_on_goal` | Barrett Hayton under 2.5 | 64.5% | +5.3% | -145 | Hard Rock Bet |
-| Montréal Canadiens @ New York Rangers | Nov 16, 7:30 PM ET | `points` | J.T. Miller over 1.5 | 24.0% | +4.7% | +420 | FanDuel |
-| Vancouver Canucks @ Utah Mammoth | Nov 16, 9:30 PM ET | `points` | Mikhail Sergachev under 1.5 | 72.0% | +4.7% | -205 | Courtside |
-| Vancouver Canucks @ Utah Mammoth | Nov 16, 9:30 PM ET | `goals` | Brock Boeser over 0.5 | 31.0% | +4.7% | +280 | BetMGM |
-| Montréal Canadiens @ New York Rangers | Nov 16, 7:30 PM ET | `shots_on_goal` | Pavel Dorofeyev under 2.5 | 49.9% | +4.4% | +120 | Hard Rock Bet |
-| Vancouver Canucks @ Utah Mammoth | Nov 16, 9:30 PM ET | `shots_on_goal` | Kailer Yamamoto under 1.5 | 48.8% | +4.4% | +125 | Hard Rock Bet |
-| Vancouver Canucks @ Utah Mammoth | Nov 16, 9:30 PM ET | `blocked_shots` | MacKenzie Weegar under 2.5 | 62.1% | +3.8% | -140 | Fliff |
-| Vancouver Canucks @ Utah Mammoth | Nov 16, 9:30 PM ET | `assists` | Mikhail Sergachev under 0.5 | 45.5% | +3.8% | +140 | Courtside |
-| Vancouver Canucks @ Utah Mammoth | Nov 16, 9:30 PM ET | `assists` | Brock Boeser over 0.5 | 34.9% | +3.6% | +220 | Hard Rock Bet |
-| Montréal Canadiens @ New York Rangers | Nov 16, 7:30 PM ET | `assists` | Lane Hutson under 0.5 | 53.5% | +3.5% | +100 | Courtside |
-| Montréal Canadiens @ New York Rangers | Nov 16, 7:30 PM ET | `team_total` | home_over 2.5 | 65.8% | +3.5% | -165 | BetOnline.ag |
-| Montréal Canadiens @ New York Rangers | Nov 16, 7:30 PM ET | `team_total` | home_over 2 | 81.2% | +3.4% | -350 | BetMGM |
-| Montréal Canadiens @ New York Rangers | Nov 16, 7:30 PM ET | `goals` | Noah Laba over 0.5 | 12.3% | +3.2% | +1000 | Courtside |
-| Vancouver Canucks @ Utah Mammoth | Nov 16, 9:30 PM ET | `points` | Mikhail Sergachev under 0.5 | 35.4% | +3.2% | +210 | BetMGM |
-| Vancouver Canucks @ Utah Mammoth | Nov 16, 9:30 PM ET | `shots_on_goal` | Michael Carcone under 1.5 | 50.3% | +3.2% | +112 | Bally Bet |
-| Vancouver Canucks @ Utah Mammoth | Nov 16, 9:30 PM ET | `total_goals` | over 6.5 | 53.1% | +3.1% | +100 | Hard Rock Bet |
-| Montréal Canadiens @ New York Rangers | Nov 16, 7:30 PM ET | `assists` | J.T. Miller over 1.5 | 13.9% | +3.1% | +830 | FanDuel |
-| Montréal Canadiens @ New York Rangers | Nov 16, 7:30 PM ET | `shots_on_goal` | Juraj Slafkovsky under 2.5 | 64.6% | +3.1% | -160 | BetMGM |
-| Montréal Canadiens @ New York Rangers | Nov 16, 7:30 PM ET | `goals` | J.T. Miller over 0.5 | 28.7% | +3.1% | +290 | Bally Bet |
-| Vancouver Canucks @ Utah Mammoth | Nov 16, 9:30 PM ET | `shots_on_goal` | Anders Lee under 2.5 | 58.6% | +3.0% | -125 | Hard Rock Bet |
-| Montréal Canadiens @ New York Rangers | Nov 16, 7:30 PM ET | `team_total` | home_over 3 | 56.5% | +3.0% | -115 | BetMGM |
-| Vancouver Canucks @ Utah Mammoth | Nov 16, 9:30 PM ET | `goals` | Kailer Yamamoto under 0.5 | 75.9% | +2.9% | -270 | FanDuel |
-| Vancouver Canucks @ Utah Mammoth | Nov 16, 9:30 PM ET | `shots_on_goal` | Clayton Keller under 3.5 | 63.7% | +2.9% | -155 | theScore Bet |
-| Vancouver Canucks @ Utah Mammoth | Nov 16, 9:30 PM ET | `points` | Daniil But under 0.5 | 64.7% | +2.9% | -162 | Bally Bet |
+| Vancouver Canucks @ Utah Mammoth | Nov 16, 9:30 PM ET | `points` | Mikhail Sergachev under 1.5 | 73.3% | +6.0% | -205 | Courtside |
+| Vancouver Canucks @ Utah Mammoth | Nov 16, 9:30 PM ET | `shots_on_goal` | MacKenzie Weegar under 2.5 | 66.5% | +5.8% | -155 | Hard Rock Bet |
+| Montréal Canadiens @ New York Rangers | Nov 16, 7:30 PM ET | `assists` | J.T. Miller over 0.5 | 45.4% | +5.4% | +150 | BetOnline.ag |
+| Vancouver Canucks @ Utah Mammoth | Nov 16, 9:30 PM ET | `shots_on_goal` | Barrett Hayton under 2.5 | 62.6% | +5.2% | -135 | Hard Rock Bet |
+| Montréal Canadiens @ New York Rangers | Nov 16, 7:30 PM ET | `team_total` | home_over 2.5 | 67.3% | +5.1% | -165 | BetOnline.ag |
+| Vancouver Canucks @ Utah Mammoth | Nov 16, 9:30 PM ET | `team_total` | away_over 1.5 | 75.1% | +4.9% | -235 | BetMGM |
+| Vancouver Canucks @ Utah Mammoth | Nov 16, 9:30 PM ET | `assists` | Mikhail Sergachev under 0.5 | 46.5% | +4.8% | +140 | Courtside |
+| Montréal Canadiens @ New York Rangers | Nov 16, 7:30 PM ET | `team_total` | home_over 2 | 82.4% | +4.7% | -350 | BetMGM |
+| Vancouver Canucks @ Utah Mammoth | Nov 16, 9:30 PM ET | `points` | Mikhail Sergachev under 0.5 | 36.6% | +4.4% | +210 | BetMGM |
+| Vancouver Canucks @ Utah Mammoth | Nov 16, 9:30 PM ET | `shots_on_goal` | MacKenzie Weegar under 1.5 | 45.2% | +3.9% | +142 | FanDuel |
+| Montréal Canadiens @ New York Rangers | Nov 16, 7:30 PM ET | `shots_on_goal` | Pavel Dorofeyev under 2.5 | 49.1% | +3.7% | +120 | Hard Rock Bet |
+| Vancouver Canucks @ Utah Mammoth | Nov 16, 9:30 PM ET | `shots_on_goal` | Marco Rossi under 1.5 | 62.2% | +3.6% | -141 | Bally Bet |
+| Montréal Canadiens @ New York Rangers | Nov 16, 7:30 PM ET | `assists` | Lane Hutson under 0.5 | 53.6% | +3.6% | +100 | Courtside |
+| Montréal Canadiens @ New York Rangers | Nov 16, 7:30 PM ET | `goals` | Mika Zibanejad over 0.5 | 32.1% | +3.5% | +250 | BetMGM |
+| Vancouver Canucks @ Utah Mammoth | Nov 16, 9:30 PM ET | `puck_line` | away +3.5 | 83.9% | +3.5% | -410 | FanDuel |
+| Vancouver Canucks @ Utah Mammoth | Nov 16, 9:30 PM ET | `shots_on_goal` | Kailer Yamamoto under 1.5 | 47.9% | +3.5% | +125 | Hard Rock Bet |
+| Vancouver Canucks @ Utah Mammoth | Nov 16, 9:30 PM ET | `shots_on_goal` | Clayton Keller under 3.5 | 62.3% | +3.2% | -145 | Hard Rock Bet |
+| Vancouver Canucks @ Utah Mammoth | Nov 16, 9:30 PM ET | `shots_on_goal` | Lawson Crouse under 1.5 | 48.6% | +3.1% | +120 | Fliff |
+| Montréal Canadiens @ New York Rangers | Nov 16, 7:30 PM ET | `assists` | Mika Zibanejad over 0.5 | 49.2% | +3.1% | +117 | Bally Bet |
+| Vancouver Canucks @ Utah Mammoth | Nov 16, 9:30 PM ET | `assists` | Mikhail Sergachev under 1.5 | 83.8% | +3.1% | -420 | Bally Bet |
+| Montréal Canadiens @ New York Rangers | Nov 16, 7:30 PM ET | `points` | J.T. Miller over 1.5 | 22.3% | +3.0% | +420 | FanDuel |
+| Vancouver Canucks @ Utah Mammoth | Nov 16, 9:30 PM ET | `team_total` | home_under 3.5 | 43.0% | +3.0% | +150 | Hard Rock Bet |
+| Montréal Canadiens @ New York Rangers | Nov 16, 7:30 PM ET | `goals` | Noah Laba over 0.5 | 12.0% | +2.9% | +1000 | Courtside |
+| Montréal Canadiens @ New York Rangers | Nov 16, 7:30 PM ET | `points` | Lane Hutson under 0.5 | 48.4% | +2.9% | +120 | Courtside |
+| Montréal Canadiens @ New York Rangers | Nov 16, 7:30 PM ET | `goals` | Jaroslav Chmelar over 0.5 | 11.8% | +2.7% | +1000 | FanDuel |
 
-_960 further passes not listed._
+_930 further passes not listed._
 
 These are genuine model judgements about markets that were priced and modelled. They are **not** the same thing as the excluded markets below.
 
@@ -80,8 +89,8 @@ Who the model expects to win each game, from the same team ratings the card pric
 
 | Game | Puck drop | Stats' side | Win chance | Fair | Best price | Book | Against the price |
 |:--|:--|:--|--:|--:|--:|:--|:--|
-| Montréal Canadiens @ New York Rangers | Nov 16, 7:30 PM ET | **New York Rangers** | 50.2% | -101 | +101 | BetOnline.ag | price is 0.5 pts long, under the bar |
-| Vancouver Canucks @ Utah Mammoth | Nov 16, 9:30 PM ET | **Utah Mammoth** | 65.3% | -188 | -331 | Courtside | price is 11.5 pts short |
+| Montréal Canadiens @ New York Rangers | Nov 16, 7:30 PM ET | **New York Rangers** | 50.1% | -100 | +101 | BetOnline.ag | price is 0.4 pts long, under the bar |
+| Vancouver Canucks @ Utah Mammoth | Nov 16, 9:30 PM ET | **Utah Mammoth** | 64.2% | -179 | -331 | Courtside | price is 12.6 pts short |
 
 A list, not bets: no units, no stakes, nothing frozen into the forward ledger. The lab has no measurement showing that backing the stats' side at the market's price makes money.
 
@@ -91,20 +100,19 @@ No sportsbook the lab can reach has posted hits since October 27. PrizePicks sti
 
 | Game | Puck drop | Player | Line | Over | Under | Model leans |
 |:--|:--|:--|--:|--:|--:|:--|
-| Montréal Canadiens @ New York Rangers | Nov 16, 7:30 PM ET | Tye Kartye | 2.5 | 77.5% | 22.5% | Over |
-| Montréal Canadiens @ New York Rangers | Nov 16, 7:30 PM ET | Josh Anderson | 2.5 | 26.8% | 73.2% | Under |
-| Montréal Canadiens @ New York Rangers | Nov 16, 7:30 PM ET | Kaiden Guhle | 2.5 | 31.4% | 68.6% | Under |
-| Montréal Canadiens @ New York Rangers | Nov 16, 7:30 PM ET | Eeli Tolvanen | 2 | 35.6% | 64.4% | Under |
-| Montréal Canadiens @ New York Rangers | Nov 16, 7:30 PM ET | Will Cuylle | 4 | 48.0% | 51.9% | Under |
-| Vancouver Canucks @ Utah Mammoth | Nov 16, 9:30 PM ET | Luke Schenn | 3 | 35.3% | 64.7% | Under |
-| Vancouver Canucks @ Utah Mammoth | Nov 16, 9:30 PM ET | Jamie Oleksiak | 1.5 | 36.1% | 63.8% | Under |
-| Vancouver Canucks @ Utah Mammoth | Nov 16, 9:30 PM ET | Brock Boeser | 0.5 | 61.9% | 38.1% | Over |
-| Vancouver Canucks @ Utah Mammoth | Nov 16, 9:30 PM ET | Jacob Quillan | 1.5 | 58.8% | 41.2% | Over |
-| Vancouver Canucks @ Utah Mammoth | Nov 16, 9:30 PM ET | Paul Cotter | 3 | 46.9% | 53.1% | Under |
-| Vancouver Canucks @ Utah Mammoth | Nov 16, 9:30 PM ET | Jack McBain | 4 | 47.8% | 52.2% | Under |
-| Vancouver Canucks @ Utah Mammoth | Nov 16, 9:30 PM ET | MacKenzie Weegar | 2.5 | 51.8% | 48.2% | Over |
+| Montréal Canadiens @ New York Rangers | Nov 16, 7:30 PM ET | Tye Kartye | 2.5 | 74.2% | 25.8% | Over |
+| Montréal Canadiens @ New York Rangers | Nov 16, 7:30 PM ET | Kaiden Guhle | 2.5 | 26.0% | 74.0% | Under |
+| Montréal Canadiens @ New York Rangers | Nov 16, 7:30 PM ET | Eeli Tolvanen | 2 | 32.0% | 68.0% | Under |
+| Montréal Canadiens @ New York Rangers | Nov 16, 7:30 PM ET | Will Cuylle | 4 | 34.2% | 65.8% | Under |
+| Vancouver Canucks @ Utah Mammoth | Nov 16, 9:30 PM ET | Jamie Oleksiak | 1.5 | 33.2% | 66.8% | Under |
+| Vancouver Canucks @ Utah Mammoth | Nov 16, 9:30 PM ET | Paul Cotter | 3 | 64.9% | 35.1% | Over |
+| Vancouver Canucks @ Utah Mammoth | Nov 16, 9:30 PM ET | MacKenzie Weegar | 2.5 | 42.2% | 57.8% | Under |
+| Vancouver Canucks @ Utah Mammoth | Nov 16, 9:30 PM ET | Brock Boeser | 0.5 | 57.1% | 42.9% | Over |
+| Vancouver Canucks @ Utah Mammoth | Nov 16, 9:30 PM ET | Jack McBain | 4 | 51.6% | 48.4% | Over |
 
 A list, not bets: no units, no stakes, nothing frozen into the forward ledger. Measured on real prices, the hits model has no demonstrated edge.
+
+- 3 line(s) not listed: the model holds no opinion on the player (a name that did not resolve, or out tonight).
 
 ## Due List
 
@@ -114,14 +122,15 @@ Big games, measured on 2024-25 and 2025-26 (scripts/run_due_list_big_games.py): 
 
 | Player | Team | Opponent | Puck drop | Category | Line | Last season | Drought | Bar reached | Bars (tier / surprise) | Rarity | Line tonight | Goalie faced | Shots in drought | Model | Band record | Best price | Book | Tracked at | Flag |
 |:--|:--|:--|:--|:--|--:|--:|--:|:--|:--|:--|:--|:--|:--|:--|:--|--:|:--|--:|:--|
-| Juraj Slafkovský | MTL | NYR | Nov 16, 7:30 PM ET | goals | over 0.5 | 30 | 11 | 8 (tier) | tier 8 / surprise - | 1 in 66 for him | - | - | shots steady: 2.1 a game vs 2.2 usual | model 23% (-4.4 pts) | band 25-39 @8: +5.9% over 646 (95% -6.0% to +20.2%) | +260 | Bally Bet | 0.15u |  |
-| Nick Suzuki | MTL | NYR | Nov 16, 7:30 PM ET | assists | over 0.5 | 72 | 4 | 3 (both) | tier 3 / surprise 3 | 1 in 56 for him | - | - | shots down: 1.5 a game vs 2.3 usual | model 49% (-1.4 pts) | band 60+ @3: +10.5% over 184 (95% -1.2% to +23.6%) | +100 | BetMGM | 0.25u |  |
-| Pavel Dorofeyev | NYR | MTL | Nov 16, 7:30 PM ET | 2+ goals | over 1.5 | 37 | 36 | 15 (tier) | tier 15 / surprise - | 1 in 25 for him | - | - | - | model 7% (+0.4 pts) | band 35+ @15: -36.8% over 1285 (95% -50.6% to -21.8%) | +1500 | Courtside | 0.1u | lost in testing (band interval below zero) |
-| Dylan Guenther | UTA | VAN | Nov 16, 9:30 PM ET | 2+ goals | over 1.5 | 40 | 17 | 15 (tier) | tier 15 / surprise - | 1 in 4 for him | - | - | - | - | band 35+ @15: -36.8% over 1285 (95% -50.6% to -21.8%) | not posted | - | - | lost in testing (band interval below zero) |
-| Cole Caufield | MTL | NYR | Nov 16, 7:30 PM ET | hat trick | over 2.5 | 51 | 33 | 30 (tier) | tier 30 / surprise - | 1 in 2 for him | - | - | - | model 1% (-0.9 pts) | band 40+ @30: -58.6% over 1269 (95% -81.1% to -33.2%) | +5000 | BetMGM | 0.05u | lost in testing (band interval below zero) |
-| Dylan Guenther | UTA | VAN | Nov 16, 9:30 PM ET | hat trick | over 2.5 | 40 | 56 | 30 (tier) | tier 30 / surprise - | 1 in 2 for him | - | - | - | - | band 40+ @30: -58.6% over 1269 (95% -81.1% to -33.2%) | not posted | - | - | lost in testing (band interval below zero) |
+| Juraj Slafkovský | MTL | NYR | Nov 16, 7:30 PM ET | goals | over 0.5 | 30 | 11 | 8 (tier) | tier 8 / surprise - | 1 in 66 for him | F1, PP1 | backup Joonas Korpisalo, -3% goals vs expected | shots steady: 2.1 a game vs 2.2 usual | model 25% (-2.6 pts) | band 25-39 @8: +5.9% over 646 (95% -6.0% to +20.2%) | +260 | Bally Bet | 0.15u |  |
+| Nick Suzuki | MTL | NYR | Nov 16, 7:30 PM ET | assists | over 0.5 | 72 | 4 | 3 (both) | tier 3 / surprise 3 | 1 in 56 for him | F1, PP1 | backup Joonas Korpisalo, -3% goals vs expected | shots down: 1.5 a game vs 2.3 usual | model 49% (-1.2 pts) | band 60+ @3: +10.5% over 184 (95% -1.2% to +23.6%) | +100 | BetMGM | 0.25u |  |
+| Pavel Dorofeyev | NYR | MTL | Nov 16, 7:30 PM ET | 2+ goals | over 1.5 | 37 | 36 | 15 (tier) | tier 15 / surprise - | 1 in 25 for him | F2, PP1 | Jacob Fowler, -6% goals vs expected | - | model 7% (+0.7 pts) | band 35+ @15: -36.8% over 1285 (95% -50.6% to -21.8%) | +1500 | Courtside | 0.1u | lost in testing (band interval below zero) |
+| Cole Caufield | MTL | NYR | Nov 16, 7:30 PM ET | hat trick | over 2.5 | 51 | 33 | 30 (tier) | tier 30 / surprise - | 1 in 2 for him | F1, PP1 | backup Joonas Korpisalo, -3% goals vs expected | - | model 1% (-0.6 pts) | band 40+ @30: -58.6% over 1269 (95% -81.1% to -33.2%) | +5000 | BetMGM | 0.05u | lost in testing (band interval below zero) |
 
 A list, not bets: no units, no stakes, and none of it is in the best bets above. "Tracked at" is the notional size the site's Due List record counts it at (0.25u, less at +200 and longer); "lost in testing" marks a band whose backtest interval sits below zero.
+
+- Dylan Guenther (UTA, two_goals): not in UTA's posted lines tonight, so not listed.
+- Dylan Guenther (UTA, hat_trick): not in UTA's posted lines tonight, so not listed.
 
 ## Due List scorecard, Sun Nov 8 to Sat Nov 14
 
@@ -217,7 +226,7 @@ An excluded market is **not** a pass, an avoid, or a no-value call, and no price
 - Leans are recorded and not staked. The smallest edges are mostly estimation error, and in the EPL lab they lost.
 - One outcome is staked once. Where an alternate ladder prices the same outcome at several lines, the highest-edge rung is staked and the rest are recorded as leans naming it. This is not a per-game, per-slate or bankroll cap; there is none.
 - No edge here is a demonstrated edge. See `data/outputs/what_we_can_claim.md` for what the evidence actually supports.
-- Stakes are sized by each market's closing-line value (Cooper, 2026-11-10): x1.5 where the bets' 95% game-clustered CLV interval sits above zero, x0.5 where it spans zero, x0.25 below it, unchanged under 200 bets or 30 games. Table of 2026-11-16T13:44: `assists` x1.5 (beats the close, +1.09% over 847); `blocked_shots` x1 (too few to judge, +0.74% over 114); `goalie_saves` x1.5 (beats the close, +6.94% over 272); `goals` x1.5 (beats the close, +2.91% over 263); `hits` x1 (too few to judge, +1.07% over 120); `moneyline` x1 (too few to judge, +0.39% over 95); `points` x1.5 (beats the close, +3.25% over 1,624); `puck_line` x1.5 (beats the close, +0.85% over 329); `regulation_3_way` x0.5 (no demonstrated CLV, +0.45% over 208); `shots_on_goal` x1.5 (beats the close, +3.46% over 2,666); `team_total` x0.5 (no demonstrated CLV, +0.58% over 649); `total_goals` x0.5 (no demonstrated CLV, +0.55% over 524). Beating the close is not a demonstrated edge.
+- Stakes are sized by each market's closing-line value (Cooper, 2026-11-10): x1.5 where the bets' 95% game-clustered CLV interval sits above zero, x0.5 where it spans zero, x0.25 below it, unchanged under 200 bets or 30 games. Table of 2026-11-16T14:35: `assists` x1.5 (beats the close, +1.09% over 847); `blocked_shots` x1 (too few to judge, +0.74% over 114); `goalie_saves` x1.5 (beats the close, +6.94% over 272); `goals` x1.5 (beats the close, +2.91% over 263); `hits` x1 (too few to judge, +1.07% over 120); `moneyline` x1 (too few to judge, +0.39% over 95); `points` x1.5 (beats the close, +3.25% over 1,624); `puck_line` x1.5 (beats the close, +0.85% over 329); `regulation_3_way` x0.5 (no demonstrated CLV, +0.45% over 208); `shots_on_goal` x1.5 (beats the close, +3.46% over 2,666); `team_total` x0.5 (no demonstrated CLV, +0.58% over 649); `total_goals` x0.5 (no demonstrated CLV, +0.55% over 524). Beating the close is not a demonstrated edge.
 
 
 ---
@@ -228,6 +237,6 @@ What the evidence actually supports:
 - `data/outputs/props_calibration.md`
 - `data/outputs/what_we_can_claim.md`
 
-Run: https://github.com/cooperross399/nhl-betting-lab/actions/runs/43878406364
+Run: https://github.com/cooperross399/nhl-betting-lab/actions/runs/43888564958
 
 Recommendations only. No bet was placed, no policy was edited, and no market was allowlisted by this run.
