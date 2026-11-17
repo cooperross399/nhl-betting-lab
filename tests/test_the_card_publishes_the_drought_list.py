@@ -79,17 +79,17 @@ def test_a_card_with_no_prices_still_publishes_the_list_with_not_posted(tmp_path
         "64 assists are 64 points: since 2026-11-10 the 60-69 points band lists him too")
     row = card["drought_rows"][1]
     assert (row["tier_bar"], row["surprise_bar"], row["hit_rate"], row["rarity"], row["rule"], row["band"]) == (
-        3, 5, 0.5, 0.0312, "both", "60+")
+        3, 5, 0.5, 0.0312, "both", "55+")
     committed = json.loads((Path(__file__).resolve().parents[1] / "data" / "outputs" / "drought_rule_backtest.json")
                            .read_text(encoding="utf-8"))
     bucket = next(b for b in committed["buckets"] if b["window"] == "card" and b["season"] == "both"
-                  and b["market"] == "assists" and b["bucket"] == "TIER 60+ @3")
+                  and b["market"] == "assists" and b["bucket"] == "TIER 55+ @3")
     assert row["cell_record"] == {k: bucket[k] for k in ("wagers", "roi", "ci_low", "ci_high")}, (
         "the band's record is read from the committed backtest through the card's own main()")
     markdown = (tmp_path / "outputs" / "gameday_card.md").read_text(encoding="utf-8")
     section = markdown[markdown.index("## Due List"):]
     assert "Skater 1" in section and "not posted" in section and "over 0.5" in section
-    assert "| 5 (both) | tier 3 / surprise 5 | 1 in 32 for him | " in section and "| band 60+ @3: " in section
+    assert "| 5 (both) | tier 3 / surprise 5 | 1 in 32 for him | " in section and "| band 55+ @3: " in section
     assert "Backtest" in section.splitlines()[2], "one headline line under the heading"
     assert "Drought rule" not in markdown
     listed = json.loads((tmp_path / "outputs" / "drought_list.json").read_text(encoding="utf-8"))

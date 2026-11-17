@@ -32,9 +32,9 @@ def test_drought_carries_across_the_season_boundary_and_uses_last_seasons_record
 
 
 def test_qualifying_bars_are_the_ones_cooper_set():
-    assert drb.THRESHOLDS == {"points": 60, "goals": 20, "assists": 40}, "70 / 25 / 60 until 2026-11-10"
+    assert drb.THRESHOLDS == {"points": 60, "goals": 20, "assists": 55}, "70 / 25 / 60 until 2026-11-10; assists 40 until 2026-11-17"
     assert drb.TIERS == {"points": ((100, 2), (85, 3), (70, 4), (60, 5)), "goals": ((40, 4), (25, 8), (20, 10)),
-                         "assists": ((60, 3), (40, 4))}
+                         "assists": ((55, 3),)}
     assert drb.SURPRISE_MARKETS == ("points", "assists"), "goals left the surprise bar on 2026-10-10"
     assert drb.SURPRISE_LEVEL == 0.05
     assert drb.FLAT_DROUGHT == 5, "the #307 rule's bar, kept so the history buckets read the same"
@@ -51,13 +51,13 @@ def _wager(date, prior, hits, drought, *, gp=80, won=True, market="assists", sea
 def _wagers() -> pd.DataFrame:
     """Assists, card window: one wager per profile, each on its own night."""
     return pd.DataFrame([
-        _wager("2024-11-01", 60, 60, 3),   # A: 60+ (tier 3), p .75 (surprise 3): both bars at 3
+        _wager("2024-11-01", 60, 60, 3),   # A: 55+ (tier 3), p .75 (surprise 3): both bars at 3
         _wager("2024-11-02", 60, 60, 2),   # B: the same player a night earlier: neither bar
-        _wager("2024-11-03", 65, 40, 4),   # C: 60+ (tier 3), p .5 (surprise 5): the tier bar only, past it
-        _wager("2024-11-04", 70, 40, 5),   # D: 60+ (tier 3), p .5 (surprise 5): both bars, the surprise one exactly
-        _wager("2024-11-05", 70, 40, 6),   # E: 60+, p .5: both bars, past both
-        _wager("2024-11-06", 35, 60, 3),   # F: 35 assists, under 40: not a qualifier
-        _wager("2024-11-07", 38, 60, 4),   # G: 38 assists, under 40: not a qualifier
+        _wager("2024-11-03", 65, 40, 4),   # C: 55+ (tier 3), p .5 (surprise 5): the tier bar only, past it
+        _wager("2024-11-04", 70, 40, 5),   # D: 55+ (tier 3), p .5 (surprise 5): both bars, the surprise one exactly
+        _wager("2024-11-05", 70, 40, 6),   # E: 55+, p .5: both bars, past both
+        _wager("2024-11-06", 35, 60, 3),   # F: 35 assists, under 55: not a qualifier
+        _wager("2024-11-07", 38, 60, 4),   # G: 38 assists, under 55: not a qualifier
         _wager("2024-11-08", 20, 10, 10),  # H: not a qualifier, however long the drought
         _wager("2024-11-09", 60, 0, 3),    # I: p = 0: the surprise bar is undefined; the tier bar lists him
     ])
@@ -66,11 +66,11 @@ def _wagers() -> pd.DataFrame:
 def test_each_wager_is_labelled_with_its_band_and_both_bars():
     w = drb.label_bars(_wagers()).set_index("date")
 
-    assert w.loc["2024-11-01", ["band", "tier_bar", "surprise_bar", "either_bar", "hit_rate"]].tolist() == ["60+", 3, 3, 3, 0.75]
+    assert w.loc["2024-11-01", ["band", "tier_bar", "surprise_bar", "either_bar", "hit_rate"]].tolist() == ["55+", 3, 3, 3, 0.75]
     assert w.loc["2024-11-03", ["tier_bar", "surprise_bar", "either_bar"]].tolist() == [3, 5, 3]
-    assert w.loc["2024-11-04", ["band", "tier_bar", "surprise_bar", "either_bar"]].tolist() == ["60+", 3, 5, 3]
+    assert w.loc["2024-11-04", ["band", "tier_bar", "surprise_bar", "either_bar"]].tolist() == ["55+", 3, 5, 3]
     assert pd.isna(w.loc["2024-11-06", "band"]) and pd.isna(w.loc["2024-11-06", "tier_bar"]), "35 assists: no band"
-    assert pd.isna(w.loc["2024-11-07", "band"]), "38 assists: under the 40-59 band"
+    assert pd.isna(w.loc["2024-11-07", "band"]), "38 assists: under the 55+ band"
     assert not w.loc["2024-11-08", "qualifies"] and pd.isna(w.loc["2024-11-08", "band"])
     assert pd.isna(w.loc["2024-11-08", "tier_bar"]) and w.loc["2024-11-08", "either_bar"] == 23, (
         "a non-qualifier has no tier bar; his surprise bar (p = 0.125) exists, and `qualifies` keeps him out of every bucket")
@@ -103,13 +103,13 @@ def test_the_buckets_count_the_wagers_each_bar_lists():
     assert wagers == {
         "not in drought (0-4)": 4, "RULE: drought 5+": 2, "drought 5-6": 2,
         "SHIPPED: either bar": 5, "TIER bars only": 5, "SURPRISE 5% only": 3,
-        "TIER 60+ @3": 5, "TIER 60+ ==3": 2,
+        "TIER 55+ @3": 5, "TIER 55+ ==3": 2,
     }, "a bucket with no wager is absent; F, G and H, the non-qualifiers, are in none"
     assert {b["market"] for b in result["buckets"]} == {"assists"} and {b["window"] for b in result["buckets"]} == {"card"}
     seasons = {(b["bucket"], b["season"]) for b in result["buckets"]}
     assert ("SHIPPED: either bar", "2024") in seasons and ("SHIPPED: either bar", "2025") not in seasons
     order = [b["bucket"] for b in result["buckets"] if b["season"] == "both"]
-    assert order.index("RULE: drought 5+") < order.index("SHIPPED: either bar") < order.index("TIER 60+ @3") < order.index("TIER 60+ ==3")
+    assert order.index("RULE: drought 5+") < order.index("SHIPPED: either bar") < order.index("TIER 55+ @3") < order.index("TIER 55+ ==3")
     for b in result["buckets"]:
         assert {"wagers", "nights", "hit_rate", "implied", "median_odds", "roi", "units", "ci_low", "ci_high", "mde"} <= set(b)
         assert b["ci_low"] <= b["roi"] <= b["ci_high"]
@@ -122,13 +122,13 @@ def test_the_json_keeps_its_keys_and_names_the_tiers_the_level_and_the_rule():
     assert set(payload) == {"generated_at", "thresholds", "min_drought", "tiers", "surprise_level", "rule",
                             "accounting", "buckets", "goal_sweep"}
     assert payload["tiers"] == {"points": [[100, 2], [85, 3], [70, 4], [60, 5]], "goals": [[40, 4], [25, 8], [20, 10]],
-                                "assists": [[60, 3], [40, 4]]}
+                                "assists": [[55, 3]]}
     assert payload["surprise_level"] == 0.05 and payload["min_drought"] == 5
     assert "either" in payload["rule"] and "(1 - p)^n <= 0.05" in payload["rule"] and "100+ -> 2" in payload["rule"]
     text = drb.render(result, {"card": {"graded": 9}}, "now")
     assert text.startswith("# Due List backtest") and "## Headline (card window, the shipped rule: either bar)" in text
     assert "| assists | 5 | 5 |" in text, "the headline row is the SHIPPED bucket"
-    assert "| assists | 60+ | 3 | 5 |" in text, "the per-band table"
+    assert "| assists | 55+ | 3 | 5 |" in text, "the per-band table"
     assert "| points | 0 | 0 |" in text, "a market with no wager is a row of zeros, not a missing row"
     assert "| assists | SURPRISE 5% only | 3 |" in text and "Drought rule" not in text
 

@@ -1,4 +1,5 @@
-"""Big games on the Due List (Cooper, 2026-11-04): 2-goal games, hat tricks, shutouts.
+"""Big games on the Due List (Cooper, 2026-11-04): 2-goal games, hat tricks, shutouts;
+2-point games since 2026-11-17.
 
 An elite goal scorer is listed for 2+ goals (over 1.5) and a hat trick (over
 2.5) after a drought without one; an elite goalie for a shutout after starts
@@ -24,6 +25,7 @@ NOW = datetime(2026, 11, 5, 12, 0, tzinfo=timezone.utc)
 TEAM_NAMES = {"edmonton oilers": "EDM", "calgary flames": "CGY"}
 STARTS = {(DAY, "EDM", "CGY"): "2026-11-05T23:00:00Z"}
 TWO, HAT, SO = dr.BIG_GAMES["two_goals"], dr.BIG_GAMES["hat_trick"], dr.BIG_GAMES["shutout"]
+PTS = dr.BIG_GAMES["two_points"]
 
 
 def skater_games(pid, name, season, start, goals_list, offset=0):
@@ -32,6 +34,12 @@ def skater_games(pid, name, season, start, goals_list, offset=0):
              "date": (day + pd.Timedelta(days=i)).strftime("%Y-%m-%d"), "player_id": pid, "player": name,
              "role": "skater", "team": "EDM", "goals": g, "assists": 0, "points": g, "toi_seconds": 1100}
             for i, g in enumerate(goals_list)]
+
+
+def playmaker_games(pid, name, season, start, assists_list, offset=0):
+    """A skater who only assists: points are his assists, no goal ever."""
+    return [dict(row, assists=a, points=a) for row, a in
+            zip(skater_games(pid, name, season, start, [0] * len(assists_list), offset), assists_list)]
 
 
 def goalie_games(pid, name, season, start, ga_list, toi=3600, offset=0):
@@ -52,6 +60,12 @@ def make_logs() -> pd.DataFrame:
     # Plinker: 30 goals last season, never a multi-goal game: below the 35 and 40 floors.
     rows += skater_games(2, "Plinker Guy", 20252026, "2025-10-10", [1] * 30)
     rows += skater_games(2, "Plinker Guy", 20262027, "2026-10-10", [0] * 30, offset=100)
+    # Feeder: 110 points last season (55 two-assist games), then 4 games of one assist:
+    # a 100+ point scorer 4 games without a 2-point game. Helper: 80 points, below the floor.
+    rows += playmaker_games(3, "Feeder Guy", 20252026, "2025-10-10", [2] * 55)
+    rows += playmaker_games(3, "Feeder Guy", 20262027, "2026-10-10", [1] * 4, offset=100)
+    rows += playmaker_games(4, "Helper Guy", 20252026, "2025-10-10", [2] * 40)
+    rows += playmaker_games(4, "Helper Guy", 20262027, "2026-10-10", [1] * 10, offset=100)
     # Wall: 5 shutouts in 50 starts last season, then 16 starts without one, plus a relief
     # appearance (20 minutes) that is not a start and must not count.
     rows += goalie_games(9, "Wall Goalie", 20252026, "2025-10-10", [3] * 45 + [0] * 5)
@@ -63,7 +77,7 @@ def make_logs() -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-ROSTERS = {1: "EDM", 2: "EDM", 9: "CGY", 8: "CGY"}
+ROSTERS = {1: "EDM", 2: "EDM", 3: "EDM", 4: "EDM", 9: "CGY", 8: "CGY"}
 
 
 def quote(market, line, odds, book, player="Sniper Guy"):
@@ -89,7 +103,7 @@ def test_elite_scorer_on_a_drought_is_listed_for_two_goals_and_a_hat_trick() -> 
     assert hat["drought"] == 62 and hat["line"] == 2.5
     assert two["tier_bar"] == TWO["bar"] and hat["tier_bar"] == HAT["bar"]
     assert two["hit_rate"] == round(1 / 43, 3), "last season's share of games with 2+ goals"
-    assert two["cell_record"] == dr.BIG_GAMES_RECORDS[("two_goals", "35+")]
+    assert two["cell_record"] == dr.BIG_GAMES_RECORDS[("two_goals", "40+")]
     assert ("Plinker Guy", "two_goals") not in rows and ("Plinker Guy", "hat_trick") not in rows
 
 
@@ -98,6 +112,51 @@ def test_two_goals_and_hat_tricks_take_the_goals_over_1_5_and_2_5_prices() -> No
                             quote("goals", 2.5, 3000, "DraftKings"), quote("goals", 0.5, 110, "FanDuel")]))
     assert (rows[("Sniper Guy", "two_goals")]["american_odds"], rows[("Sniper Guy", "two_goals")]["book"]) == (650, "BetMGM")
     assert (rows[("Sniper Guy", "hat_trick")]["american_odds"], rows[("Sniper Guy", "hat_trick")]["book"]) == (3000, "DraftKings")
+
+
+def test_the_settings_are_the_ones_measured_on_2026_11_17() -> None:
+    assert (TWO["floor"], TWO["bar"], TWO["stat"]) == (40, 20, "goals"), "35+ at 15 until 2026-11-17"
+    assert (HAT["floor"], HAT["bar"], HAT["stat"]) == (40, 30, "goals")
+    assert (PTS["floor"], PTS["bar"], PTS["stat"], PTS["line"], PTS["price"]) == (100, 3, "points", 1.5, ("points", 1.5))
+    assert (SO["floor"], SO["bar"], SO["stat"]) == (4, 12, "shutouts")
+    assert dr.CATEGORY_LABELS["two_points"] == "2+ points"
+    assert set(dr.BIG_GAMES_RECORDS) == {("two_goals", "40+"), ("hat_trick", "40+"), ("two_points", "100+")}
+
+
+def test_a_100_point_scorer_on_a_drought_is_listed_for_two_points_at_the_points_over_1_5() -> None:
+    rows = by_market(build([quote("points", 1.5, 240, "FanDuel", player="Feeder Guy"),
+                            quote("points", 1.5, 260, "BetMGM", player="Feeder Guy"),
+                            quote("points", 0.5, -200, "DraftKings", player="Feeder Guy"),
+                            quote("goals", 1.5, 900, "DraftKings", player="Feeder Guy")]))
+    feeder = rows[("Feeder Guy", "two_points")]
+    assert feeder["last_season"] == 110 and feeder["drought"] == 4 and feeder["line"] == 1.5
+    assert feeder["tier_bar"] == PTS["bar"] and feeder["hit_rate"] == 1.0
+    assert (feeder["american_odds"], feeder["book"]) == (260, "BetMGM"), "the points over 1.5, never 0.5 or a goals line"
+    assert feeder["cell_record"] == dr.BIG_GAMES_RECORDS[("two_points", "100+")]
+    assert ("Feeder Guy", "two_goals") not in rows, "no goals last season"
+    assert ("Helper Guy", "two_points") not in rows, "80 points: under the 100 floor"
+
+
+def test_two_points_settle_on_points_over_1_5(tmp_path: Path) -> None:
+    from nhl_betting_lab import drought_forward as df
+
+    day = "2026-10-08"
+    row = {"date": day, "commence_time": f"{day}T23:00:00Z", "home_team": "EDM", "away_team": "CGY", "team": "EDM",
+           "opponent": "CGY", "selection": "over", "line": 1.5, "last_season": 110, "drought": 4, "book": "BetMGM",
+           "american_odds": 200}
+    rows = [dict(row, player="Two Pointer", player_id=1, market="two_points"),
+            dict(row, player="One Pointer", player_id=2, market="two_points")]
+    logs = pd.DataFrame([{"date": day, "player_id": pid, "player": name, "team": "EDM", "shots_on_goal": 0.0,
+                          "points": g + a, "goals": g, "assists": a, "blocked_shots": 0.0, "hits": 0.0, "saves": 0.0}
+                         for pid, name, g, a in ((1, "Two Pointer", 1, 1), (2, "One Pointer", 0, 1))])
+    games = pd.DataFrame([{"game_id": 1, "date": day, "home_team": "EDM", "away_team": "CGY",
+                           "home_goals": 3, "away_goals": 2, "regulation": True}])
+    df.record_list(rows, day, processed_dir=tmp_path)
+    df.settle_lists(logs, games, team_names=TEAM_NAMES, processed_dir=tmp_path,
+                    now=datetime(2026, 10, 9, 15, 0, tzinfo=timezone.utc))
+    ledger = df.load_ledger(tmp_path).set_index("player")
+    assert ledger.loc["Two Pointer", "outcome"] == "won" and ledger.loc["Two Pointer", "actual"] == 2
+    assert ledger.loc["One Pointer", "outcome"] == "lost"
 
 
 def test_an_elite_goalie_on_a_shutout_drought_is_listed_unpriced() -> None:
@@ -142,6 +201,10 @@ def test_the_card_names_each_big_game_and_its_line() -> None:
     text = "\n".join(render_drought_section(card))
     assert "| 2+ goals | over 1.5 |" in text and "| hat trick | over 2.5 |" in text
     assert "| shutout | no goal against |" in text
+    pts = by_market(build([quote("points", 1.5, 260, "BetMGM", player="Feeder Guy")]))[("Feeder Guy", "two_points")]
+    text = "\n".join(render_drought_section(GamedayCard(generated_at="2026-11-05T13:00:00+00:00", drought_built=True,
+                                                        drought_headline="h", drought_rows=[pts])))
+    assert "| 2+ points | over 1.5 |" in text
     assert dr.BIG_GAMES_HEADLINE in text
 
 
@@ -160,9 +223,12 @@ def test_the_site_grades_big_games(tmp_path: Path) -> None:
          "assists": 0, "toi_seconds": 3650, "goals_against": 0},
         {"game_id": "1", "player_id": "8", "player": "Sieve Goalie", "team": "CGY", "role": "goalie", "goals": 0,
          "assists": 0, "toi_seconds": 600, "goals_against": 0},
+        {"game_id": "1", "player_id": "3", "player": "Feeder Guy", "team": "EDM", "role": "skater", "goals": 1, "assists": 1},
     ]).to_csv(tmp_path / module.PLAYER_LOGS_FILENAME, index=False)
     by_id, _, boxed = module.read_player_counts(tmp_path, {"1"})
     assert boxed == {"1"}
     assert by_id[("1", "1")]["two_goals"] == 2 and by_id[("1", "1")]["hat_trick"] == 2
     assert by_id[("1", "9")]["shutout"] == 1 and by_id[("1", "8")]["shutout"] is None
+    assert by_id[("1", "3")]["two_points"] == 2 and by_id[("1", "3")]["two_goals"] == 1
+    assert by_id[("1", "1")]["two_points"] == 2
     assert set(dr.CATEGORIES) == set(module.DUE_LIST_MARKETS)

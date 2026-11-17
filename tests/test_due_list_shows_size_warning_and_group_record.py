@@ -31,7 +31,7 @@ def test_only_a_band_whose_interval_sits_below_zero_is_flagged() -> None:
 def test_the_committed_backtest_flags_the_two_losing_bands() -> None:
     records = dr.cell_records(ROOT / "data" / "outputs")
     flagged = {key for key, rec in records.items() if dr.lost_in_testing({"cell_record": rec})}
-    assert flagged == {("goals", "20-24"), ("assists", "40-59")}
+    assert flagged == {("goals", "20-24")}
 
 
 def _listed(**kw) -> dict:
