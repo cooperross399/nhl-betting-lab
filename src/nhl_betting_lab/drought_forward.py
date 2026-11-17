@@ -193,9 +193,11 @@ def settle_lists(
                 # An unpriced row is not a wager: it is graded for the hit rate with a
                 # placeholder price that never reaches the profit column.
                 priced = not pd.isna(r.american_odds)
-                # 2+ goals and hat tricks settle as the goals over their line; a
-                # shutout on the goalie's own start (`settle_shutout`).
-                market = "goals" if r.market in BIG_GAMES and BIG_GAMES[r.market]["role"] == "skater" else r.market
+                # 2+ goals and hat tricks settle as the goals over their line, 2+
+                # points as the points over 1.5; a shutout on the goalie's own
+                # start (`settle_shutout`).
+                market = (BIG_GAMES[r.market]["stat"] if r.market in BIG_GAMES and BIG_GAMES[r.market]["role"] == "skater"
+                          else r.market)
                 probe = type("Row", (), {"market": market, "player": r.player, "line": r.line,
                                          "selection": r.selection,
                                          "american_odds": r.american_odds if priced else 100.0})()

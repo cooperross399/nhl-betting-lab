@@ -295,7 +295,7 @@ def _seconds(toi) -> float:
 def season_qualifiers(season: int, role: str, cache: Path) -> dict[int, str]:
     """Skaters over the lowest floor of any event's stat, or goalies with 2+ shutouts, in a regular season."""
     if role == "skater":
-        asks = [(stat, min(FLOORS[e] for e, (st, _, _) in EVENTS.items() if st == stat)) for stat in STATS_OF]
+        asks = [(stat, min(min(FLOORS[e]) for e, (st, _, _) in EVENTS.items() if st == stat)) for stat in STATS_OF]
     else:
         asks = [("shutouts", min(SHUTOUT_FLOORS))]
     out = {}

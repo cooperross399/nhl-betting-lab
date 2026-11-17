@@ -1171,13 +1171,14 @@ def build_board(day: date, lab: Path, history_dir: Path) -> dict:
 
 #: The rule in one sentence (Cooper, 2026-10-07 evening; it replaces the flat
 #: 5-game rule shipped in #307). Two bars, and a drought at EITHER lists him.
-DROUGHT_RULE_SENTENCE = ("Cooper's Due List, an unstaked list he picks from: a skater with 60+ points, 20+ goals or 40+ assists "
+DROUGHT_RULE_SENTENCE = ("Cooper's Due List, an unstaked list he picks from: a skater with 60+ points, 20+ goals or 55+ assists "
                          "last regular season whose drought in that category has reached either bar, the tier bar his total sets "
                          "(points 100+ → 2, 85-99 → 3, 70-84 → 4, 60-69 → 5; goals 40+ → 4, 25-39 → 8, 20-24 → 10; "
-                         "assists 60+ → 3, 40-59 → 4) or, for points "
+                         "assists 55+ → 3) or, for points "
                          "and assists, his own equal-surprise bar, the shortest drought with no more than a 5% chance at his "
-                         "last-season hit rate; and, for the big games, a 35+ goal scorer 15 games without 2+ goals, a 40+ "
-                         "goal scorer 30 without a hat trick, or a goalie with 4+ shutouts 12 starts without one.")
+                         "last-season hit rate; and, for the big games, a 40+ goal scorer 20 games without 2+ goals, a 40+ "
+                         "goal scorer 30 without a hat trick, a 100+ point scorer 3 games without 2+ points, or a goalie "
+                         "with 4+ shutouts 12 starts without one.")
 
 #: What a listed row carries beyond the #307 fields, as the card's
 #: drought_list.json spells it -> as this board spells it. Each is read, never
@@ -2014,7 +2015,7 @@ PLAYER_LOGS_FILENAME = "player_game_logs.csv"
 #: The Due List's categories (web/SCHEMA.md, games[].drought). Points are goals
 #: plus assists. Since 2026-11-04 the big games too: 2+ goals and hat tricks
 #: (goals over 1.5 / 2.5) and shutouts (goals against 0 on a start).
-DUE_LIST_MARKETS = ("points", "goals", "assists", "two_goals", "hat_trick", "shutout")
+DUE_LIST_MARKETS = ("points", "goals", "assists", "two_goals", "hat_trick", "two_points", "shutout")
 #: A goalie start and a shutout, as the lab's drought_rule counts them
 #: (`GOALIE_START_SECONDS`, `SHUTOUT_SECONDS`), spelled out for the reason
 #: USER_AGENT gives.
@@ -2232,7 +2233,7 @@ def read_player_counts(processed: Path | None, game_ids: set[str]) -> tuple[dict
                 boxed.add(game_id)
                 goals, assists = _count(r.get("goals")), _count(r.get("assists"))
                 counts = {"goals": goals, "assists": assists, "points": goals + assists,
-                          "two_goals": goals, "hat_trick": goals}
+                          "two_goals": goals, "hat_trick": goals, "two_points": goals + assists}
                 if str(r.get("role") or "").strip() == "goalie":
                     # A shutout entry is graded on the goalie's own start: 1 a
                     # shutout, 0 not, None (void) when he did not start.

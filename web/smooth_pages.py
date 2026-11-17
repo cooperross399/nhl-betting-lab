@@ -189,6 +189,13 @@ PATCHES: dict[str, list[tuple[str, str]]] = {
             '        x.lostInTesting === true ? { label: "Warning", value: "Lost in testing", sub: "this group lost money on past seasons" } : null,\n'
             '        chance != null ? { label: "Model\'s chance"',
         ),
+        # 2+ point games joined the Due List on 2026-11-17 (Cooper), tracked
+        # live as points over 1.5.
+        (
+            '      shutout: ["shutout", "shutouts", "Shutout", "a shutout", "starts", "shutout"] };',
+            '      two_points: ["point", "points", "2+ points", "a 2-point game", "games", "points"],\n'
+            '      shutout: ["shutout", "shutouts", "Shutout", "a shutout", "starts", "shutout"] };',
+        ),
     ],
     "Results.dc.html": [
         # The strip's sub line is in the shared Results page itself since
@@ -205,6 +212,15 @@ PATCHES: dict[str, list[tuple[str, str]]] = {
         (
             '<span style="font-family:\'IBM Plex Mono\',monospace;font-size:11px;color:var(--mute);border:1px solid var(--rule);padding:2px 6px;">Not model bets · tracked at 0.25u each</span>',
             '<span style="font-family:\'IBM Plex Mono\',monospace;font-size:11px;color:var(--mute);border:1px solid var(--rule);padding:2px 6px;">Not model bets · 0.25u each, less at +200 and longer</span>',
+        ),
+        (
+            'hat_trick: ["Hat trick", "goal", "goals"], shutout: ["Shutout", "shutout", "shutouts"] };',
+            'hat_trick: ["Hat trick", "goal", "goals"], two_points: ["2+ points", "point", "points"], '
+            'shutout: ["Shutout", "shutout", "shutouts"] };',
+        ),
+        (
+            '...["two_goals", "hat_trick", "shutout"].filter(',
+            '...["two_goals", "hat_trick", "two_points", "shutout"].filter(',
         ),
     ],
 }

@@ -1,7 +1,8 @@
 """Cooper's Due List, in one place, for the evidence and for the card.
 
 The rule (Cooper, 2026-10-07 evening; it replaces the flat 5-game rule shipped
-that morning in #307; widened 2026-11-10): a skater with 60+ points, 20+ goals or 40+ assists LAST
+that morning in #307; widened 2026-11-10; assists refined 2026-11-17): a skater with 60+ points, 20+
+goals or 55+ assists LAST
 regular season is listed in that category when his current drought (regular-
 season games he dressed for without one in that category, carried across the
 season boundary) reaches EITHER of two bars. The better the player, the
@@ -9,7 +10,8 @@ shorter the drought:
 
 1. The TIER bar, from last season's total in the category (`TIERS`):
    points 100+ -> 2, 85-99 -> 3, 70-84 -> 4, 60-69 -> 5; goals 40+ -> 4,
-   25-39 -> 8, 20-24 -> 10; assists 60+ -> 3, 40-59 -> 4. (Until 2026-11-10,
+   25-39 -> 8, 20-24 -> 10; assists 55+ -> 3. (Assists 2026-11-10 to 11-17:
+   40+ to qualify, 60+ -> 3, 40-59 -> 4. Until 2026-11-10,
    when Cooper asked for more picks every day: points 70+ at 3/4/5, goals 40+
    -> 5 and 25-39 -> 10, assists 60+ -> 3 only. Goals until 2026-10-10: 30+ to qualify, 40+ -> 3,
    35-39 -> 4, 30-34 -> 5, plus the surprise bar. Assists until 2026-10-31:
@@ -67,13 +69,17 @@ from nhl_betting_lab.season import clean_text, row_game_date, season_id
 #: first three weeks; 60+ at 3 was the one assists band that made money.
 #: Widened on 2026-11-10 (Cooper: "i want more picks on the due list
 #: everyday"): 60+ points, 20+ goals, 40+ assists, with shorter droughts.
-THRESHOLDS = {"points": 60, "goals": 20, "assists": 40}
+#: Assists refined on 2026-11-17 to 55+ at 3 (see `TIERS`).
+THRESHOLDS = {"points": 60, "goals": 20, "assists": 55}
 #: The tier bar: (floor of last season's total, drought that lists him), best
 #: band first. The last floor of each category is the base qualifier.
 TIERS: dict[str, tuple[tuple[int, int], ...]] = {
     "points": ((100, 2), (85, 3), (70, 4), (60, 5)),
     "goals": ((40, 4), (25, 8), (20, 10)),
-    "assists": ((60, 3), (40, 4)),
+    # 2026-11-17 (Cooper: "Research and refine the parameters for 1+ assist"):
+    # 55+ assists at 3, the cell both bought seasons agreed on
+    # (scripts/run_due_list_big_games.py, Due List Tuning run 44104405522).
+    "assists": ((55, 3),),
 }
 #: The surprise bar's level: the smallest drought with (1 - p)^n <= this.
 SURPRISE_LEVEL = 0.05
@@ -336,43 +342,50 @@ def qualifiers_entering(logs: pd.DataFrame, day: str) -> pd.DataFrame:
 
 
 #: Big games (Cooper, 2026-11-04: "work shutouts/2 goal games/hat tricks into
-#: the due list for the really elite goalscorers/goalies"). Each is its own
+#: the due list for the really elite goalscorers/goalies"; 2+ points joined on
+#: 2026-11-17). Each is its own
 #: category beside points, goals and assists: `floor` is last season's total
-#: that makes a player elite for it (goals for the two scoring categories,
-#: shutouts for goalies) and `bar` the drought that lists him (games dressed
+#: that makes a player elite for it (in `stat`: goals for 2+ goals and hat
+#: tricks, points for 2+ points, shutouts for goalies) and `bar` the drought that lists him (games dressed
 #: without the event for skaters, starts without one for goalies). `price`
 #: is the provider market and line its best price is read from; a shutout
 #: has no market any book in this lab's feed quotes, so it is never priced.
 BIG_GAMES: dict[str, dict[str, Any]] = {
-    "two_goals": {"role": "skater", "count": 2, "line": 1.5, "price": ("goals", 1.5), "floor": 35, "bar": 15},
-    "hat_trick": {"role": "skater", "count": 3, "line": 2.5, "price": ("goals", 2.5), "floor": 40, "bar": 30},
-    "shutout": {"role": "goalie", "count": 1, "line": 0.5, "price": None, "floor": 4, "bar": 12},
+    "two_goals": {"role": "skater", "stat": "goals", "count": 2, "line": 1.5, "price": ("goals", 1.5),
+                  "floor": 40, "bar": 20},
+    "hat_trick": {"role": "skater", "stat": "goals", "count": 3, "line": 2.5, "price": ("goals", 2.5),
+                  "floor": 40, "bar": 30},
+    "two_points": {"role": "skater", "stat": "points", "count": 2, "line": 1.5, "price": ("points", 1.5),
+                   "floor": 100, "bar": 3},
+    "shutout": {"role": "goalie", "stat": "shutouts", "count": 1, "line": 0.5, "price": None, "floor": 4, "bar": 12},
 }
 #: Every category the list carries, in its order on the card.
 CATEGORIES = (*THRESHOLDS, *BIG_GAMES)
 #: How the card names each category.
 CATEGORY_LABELS = {"points": "points", "goals": "goals", "assists": "assists",
-                   "two_goals": "2+ goals", "hat_trick": "hat trick", "shutout": "shutout"}
+                   "two_goals": "2+ goals", "hat_trick": "hat trick", "two_points": "2+ points",
+                   "shutout": "shutout"}
 #: The big games' measured records, card window, 2024-25 and 2025-26, best
 #: price, flat stake, 95% interval bootstrapped over nights, at the shipped
 #: floor and bar: `scripts/run_due_list_big_games.py`, Due List Tuning run
-#: 42830129381 (2026-11-10, after the floors and bars were widened for more
-#: picks). A shutout has no price, so no record.
+#: 44104405522 (2026-11-17, when 2+ goals moved back to 40+ at 20 and 2+
+#: points joined). A shutout has no price, so no record.
 BIG_GAMES_RECORDS: dict[tuple[str, str], dict[str, Any]] = {
-    ("two_goals", "35+"): {"wagers": 1285, "roi": -0.368, "ci_low": -0.506, "ci_high": -0.218},
-    ("hat_trick", "40+"): {"wagers": 1269, "roi": -0.586, "ci_low": -0.811, "ci_high": -0.332},
+    ("two_goals", "40+"): {"wagers": 390, "roi": -0.234, "ci_low": -0.477, "ci_high": 0.030},
+    ("hat_trick", "40+"): {"wagers": 1268, "roi": -0.586, "ci_low": -0.792, "ci_high": -0.333},
+    ("two_points", "100+"): {"wagers": 174, "roi": -0.008, "ci_low": -0.197, "ci_high": 0.179},
 }
 #: One line for the card, from the same runs.
 BIG_GAMES_HEADLINE = (
-    "Big games, measured on 2024-25 and 2025-26 (scripts/run_due_list_big_games.py): no setting makes any of "
-    "them likelier than the player's own rate. Widened on 2026-11-10 for more picks (Cooper). 2+ goals, 35+ goal "
-    "scorers 15+ games without one: hit 6.0% against 9.5% implied, -36.8% over 1,285 (95% -50.6% to -21.8%; "
-    "-43.4% in 2024-25, -30.5% in 2025-26), a demonstrated loss. Hat trick, 40+ at 30+: -58.6% over 1,269 "
-    "(95% -81.1% to -33.2%), a demonstrated loss at every setting tried. Shutouts, 4+ last season at 12+ starts "
-    "without one: 5.2% of 656 starts at 10+ and 4.8% of 475 at 15+, against 9.7% to 9.8% the season before; no "
-    "book in this feed prices a shutout, so those rows are graded for hits only. Across 16 seasons of NHL game "
-    "logs (2010-11 to 2025-26, at the earlier, stricter settings) a drought never made any of the three likelier "
-    "than for the same players at any drought. Cooper picks from the list."
+    "Big games, re-measured 2026-11-17 on 2024-25 and 2025-26 (scripts/run_due_list_big_games.py, Due List Tuning "
+    "run 44104405522; each setting is the cell both seasons agreed on, picked after seeing it, so the figures "
+    "flatter it). 2+ goals, 40+ goal scorers 20+ games without one: hit 7.7% against 10.7% implied, -23.4% over "
+    "390 (95% -47.7% to +3.0%; -24.1% in 2024-25, -21.0% in 2025-26), no demonstrated edge. Hat trick, 40+ at "
+    "30+: -58.6% over 1,268 (95% -79.2% to -33.3%), a demonstrated loss at every setting tried. 2+ points, new: "
+    "100+ point scorers 3+ games without one, -0.8% over 174 (95% -19.7% to +17.9%; -1.6% and +0.6% by season), "
+    "no demonstrated edge. Shutouts, 4+ last season at 12+ starts without one: 5.2% of 656 starts at 10+ against "
+    "9.7% to 9.8% the season before; no book in this feed prices a shutout, so those rows are graded for hits "
+    "only. A drought made none of these likelier than the player's own rate. Cooper picks from the list."
 )
 
 
@@ -418,10 +431,13 @@ def big_game_events(logs: pd.DataFrame) -> pd.DataFrame:
         goalies = goalies[pd.to_numeric(goalies.toi_seconds, errors="coerce") >= GOALIE_START_SECONDS]
     else:
         goalies = goalies.iloc[0:0]
-    goals = pd.to_numeric(skaters.goals, errors="coerce")
+    counted = {"goals": pd.to_numeric(skaters.goals, errors="coerce")}
+    if "assists" in skaters.columns:
+        counted["points"] = counted["goals"] + pd.to_numeric(skaters.assists, errors="coerce")
     for category, spec in BIG_GAMES.items():
         if spec["role"] == "skater":
-            skaters[category] = (goals >= spec["count"]).astype(int)
+            stat = counted.get(spec["stat"], pd.Series(np.nan, index=skaters.index))
+            skaters[category] = (stat >= spec["count"]).astype(int)
             goalies[category] = 0
         else:
             ga = goalies["goals_against"] if "goals_against" in goalies.columns else pd.Series(np.nan, index=goalies.index)
@@ -451,12 +467,16 @@ def big_game_qualifiers_entering(logs: pd.DataFrame, day: str) -> pd.DataFrame:
     events = events.sort_values(["player_id", "date", "game_id"])
     tonight_season = int(season_id(day)) // 10000
     prior_rows = events[events.season_start == tonight_season - 1]
-    goals_by = {}
+    totals_by: dict[str, dict] = {"goals": {}, "points": {}}
     if not logs.empty and "goals" in logs.columns:
         sk = logs[(logs.role == "skater") & (logs.game_type == 2)]
         sk = sk[(pd.to_numeric(sk.season, errors="coerce") // 10000) == tonight_season - 1]
         sk = sk[sk["date"].astype(str).str.slice(0, 10) < day]
-        goals_by = pd.to_numeric(sk.goals, errors="coerce").groupby(sk.player_id).sum().to_dict()
+        goals = pd.to_numeric(sk.goals, errors="coerce")
+        totals_by["goals"] = goals.groupby(sk.player_id).sum().to_dict()
+        if "assists" in sk.columns:
+            points = goals + pd.to_numeric(sk.assists, errors="coerce")
+            totals_by["points"] = points.groupby(sk.player_id).sum().to_dict()
     rows = []
     for category, spec in BIG_GAMES.items():
         mine = events[events.role == spec["role"]]
@@ -464,7 +484,8 @@ def big_game_qualifiers_entering(logs: pd.DataFrame, day: str) -> pd.DataFrame:
         for pid, g in mine.groupby("player_id", sort=False):
             if pid not in prior.index:
                 continue
-            total = int(goals_by.get(pid, 0)) if spec["role"] == "skater" else int(prior.at[pid, "sum"])
+            total = (int(totals_by.get(spec["stat"], {}).get(pid, 0)) if spec["role"] == "skater"
+                     else int(prior.at[pid, "sum"]))
             if total < spec["floor"]:
                 continue
             flags = g[category].to_numpy()
