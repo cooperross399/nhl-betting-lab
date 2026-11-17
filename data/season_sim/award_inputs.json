@@ -237,8 +237,8 @@
       },
       {
         "book": "Sports Interaction",
-        "date": "2026-11-15",
-        "source": "canadasportsbetting.ca, Norris Trophy odds (page updated November 15, 2026; table note 'last updated on Nov 15, 2026'; odds courtesy of Sports Interaction; the intro text gives Bouchard +105, Hughes +230, table used)",
+        "date": "2026-11-17",
+        "source": "canadasportsbetting.ca, Norris Trophy odds (page updated November 17, 2026; table note 'last updated on Nov 17, 2026'; odds courtesy of Sports Interaction; table used)",
         "url": "https://www.canadasportsbetting.ca/betting-odds/nhl/awards/best-defenseman/",
         "lines": [
           {"name": "Evan Bouchard", "team": "EDM", "american": -120},
@@ -295,22 +295,22 @@
     ],
     "poll": {
       "outlet": "NHL.com Trophy Tracker",
-      "date": "2026-10-06",
-      "voters": 16,
-      "scoring": "5-4-3-2-1 points for a voter's first to fifth choice",
-      "url": "https://www.nhl.com/news/norris-trophy-tracker-colorado-avalanche-defenseman-cale-makar-early-season-leader",
+      "date": "2026-11-17",
+      "voters": 15,
+      "scoring": "5-4-3-2-1 points for a voter's first to fifth choice (table spells Sergachev 'Mikael'; NHL spelling used)",
+      "url": "https://www.nhl.com/news/norris-trophy-tracker-oilers-evan-bouchard-early-favorite-november-17-2026",
       "entries": [
-        {"name": "Cale Makar", "team": "COL", "points": 70, "firstPlace": 11},
-        {"name": "Quinn Hughes", "team": "MIN", "points": 51, "firstPlace": 2},
-        {"name": "Zach Werenski", "team": "CBJ", "points": 36, "firstPlace": 0},
-        {"name": "Rasmus Dahlin", "team": "BUF", "points": 29, "firstPlace": 3},
-        {"name": "Lane Hutson", "team": "MTL", "points": 24, "firstPlace": 0},
-        {"name": "Matthew Schaefer", "team": "NYI", "points": 14, "firstPlace": 0},
-        {"name": "Evan Bouchard", "team": "EDM", "points": 7, "firstPlace": 0},
-        {"name": "Miro Heiskanen", "team": "DAL", "points": 3, "firstPlace": 0},
-        {"name": "Jake Sanderson", "team": "OTT", "points": 3, "firstPlace": 0},
-        {"name": "Moritz Seider", "team": "DET", "points": 2, "firstPlace": 0},
-        {"name": "Victor Hedman", "team": "TBL", "points": 1, "firstPlace": 0}
+        {"name": "Evan Bouchard", "team": "EDM", "points": 68, "firstPlace": 11},
+        {"name": "Quinn Hughes", "team": "MIN", "points": 61, "firstPlace": 3},
+        {"name": "Cale Makar", "team": "COL", "points": 25},
+        {"name": "Matthew Schaefer", "team": "NYI", "points": 16},
+        {"name": "Adam Fox", "team": "NYR", "points": 15},
+        {"name": "Jackson LaCombe", "team": "ANA", "points": 12},
+        {"name": "Zach Werenski", "team": "CBJ", "points": 9},
+        {"name": "Mikhail Sergachev", "team": "UTA", "points": 6, "firstPlace": 1},
+        {"name": "Seth Jones", "team": "FLA", "points": 6},
+        {"name": "Roman Josi", "team": "NSH", "points": 5},
+        {"name": "Lane Hutson", "team": "MTL", "points": 2}
       ]
     }
   },
@@ -519,24 +519,22 @@
     ],
     "poll": {
       "outlet": "NHL.com Trophy Tracker",
-      "date": "2026-10-05",
-      "voters": 16,
-      "scoring": "5-4-3-2-1 points for a voter's first to fifth choice",
-      "url": "https://www.nhl.com/news/trophy-tracker-flyers-porter-martone-preseason-choice-for-calder-trophy-as-top-rookie",
+      "date": "2026-11-16",
+      "voters": null,
+      "scoring": "5-4-3-2-1 points for a voter's first to fifth choice (a poll of NHL.com writers; the article does not state the number of voters)",
+      "url": "https://www.nhl.com/news/calder-trophy-tracker-montreal-canadiens-jacob-fowler-early-favorite-november-16-2026",
       "entries": [
-        {"name": "Porter Martone", "team": "PHI", "points": 70, "firstPlace": 9},
-        {"name": "Gavin McKenna", "team": "TOR", "points": 59, "firstPlace": 5},
-        {"name": "Ivar Stenberg", "team": "SJS", "points": 34, "firstPlace": 1},
-        {"name": "Cole Hutson", "team": "WSH", "points": 34, "firstPlace": 1},
-        {"name": "Anton Frondell", "team": "CHI", "points": 18, "firstPlace": 0},
-        {"name": "Konsta Helenius", "team": "BUF", "points": 8, "firstPlace": 0},
-        {"name": "James Hagens", "team": "BOS", "points": 6, "firstPlace": 0},
-        {"name": "Ilya Protas", "team": "WSH", "points": 4, "firstPlace": 0},
-        {"name": "Alberts Smits", "team": "NYR", "points": 2, "firstPlace": 0},
-        {"name": "Viggo Bjorck", "team": "WPG", "points": 2, "firstPlace": 0},
-        {"name": "Victor Eklund", "team": "NYI", "points": 1, "firstPlace": 0},
-        {"name": "Sergei Murashov", "team": "PIT", "points": 1, "firstPlace": 0},
-        {"name": "Roger McQueen", "team": "ANA", "points": 1, "firstPlace": 0}
+        {"name": "Jacob Fowler", "team": "MTL", "points": 68, "firstPlace": 12},
+        {"name": "James Hagens", "team": "BOS", "points": 48, "firstPlace": 1},
+        {"name": "Trevor Connelly", "team": "VGK", "points": 32},
+        {"name": "Gavin McKenna", "team": "TOR", "points": 28, "firstPlace": 1},
+        {"name": "Roman Kantserov", "team": "CHI", "points": 14, "firstPlace": 1},
+        {"name": "Cole Hutson", "team": "WSH", "points": 14},
+        {"name": "Dylan Garand", "team": "NYR", "points": 12},
+        {"name": "Ivar Stenberg", "team": "SJS", "points": 4},
+        {"name": "Michael Brandsegg-Nygard", "team": "DET", "points": 3},
+        {"name": "Porter Martone", "team": "PHI", "points": 1},
+        {"name": "Judd Caulfield", "team": "BUF", "points": 1}
       ]
     }
   }
