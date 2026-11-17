@@ -4113,6 +4113,27 @@ Re-derive rather than trust if the data has moved.
   0.25, 0.1) is unchanged. Stakes only: the model, edge bars, market list,
   multipliers, snapshot, forward ledger and registered test are unchanged.
 
+- **2026-11-17: the weekly upgrade's second run changed no money rule; the
+  review now says which flagged sides the card already keeps off.** Read
+  through settled 2026-11-15 (card-feed's ledger, 48 days; CLV report built
+  2026-11-16 22:47 UTC; Layer Scoring of 2026-11-16). Best bets this season
+  +23.7u over 339 at 1u, +7.92u at the card's stakes; since 2026-11-10 18
+  bets, +1.08u at 1u, -0.62u at stake. The card's best-bet bar beats the
+  close 70.8% [63.2%, 77.3%] over 409 rows (183 games), mean CLV +4.10%
+  [+1.41%, +6.80%], EV at the close -0.9% [-2.0%, +0.2%]. On the
+  self-learned edge (6% prop / 3.5% team, 2026-10-06 to 11-15, split at
+  10-26) only `points` under excludes zero, -30.0u over 219 (-13.7%
+  [-26.9%, -0.5%]), and it is already never listed or staked; `assists`
+  under loses in both halves (-7.3u over 112) and is off too. Leads that do
+  not move the card: `goalie_saves` over -24.3u over 147 (30 games; +14.4u
+  then -38.6u), `blocked_shots` under -7.9u over 110 for a second week,
+  both spanning zero: no demonstrated edge. The Monday scorecard's only
+  "cut" is the lineup layer, off since 2026-11-09. So `weekly_review`
+  gains an "On the card" column (`card_status`, read from
+  `LEAN_EXCLUDED_SIDES` and `STAKE_EXCLUDED_MARKETS`), so a flag on a side
+  the card already keeps off is not read as a new lead. Report only: the
+  card, snapshot, ledger, model, bars and stakes are unchanged.
+
 ## Contract strings — never change these
 
 Cooper's local scheduled tasks hard-code these. Renaming any of them silently

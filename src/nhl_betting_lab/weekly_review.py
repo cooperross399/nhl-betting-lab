@@ -180,6 +180,20 @@ def learned_population(ledger: pd.DataFrame, *, warmup_days: int = WARMUP_DAYS) 
     return pd.DataFrame(rows)
 
 
+def card_status(market: str, side: str) -> str:
+    """What the card does with this market and side today, read from its own
+    tables, so a flag on a side the card already keeps off is not read as a
+    lead (the 2026-11-17 run flagged points and assists unders, both off
+    since 2026-11-09)."""
+    from nhl_betting_lab.reports import gameday_card
+
+    if (market, side) in gameday_card.LEAN_EXCLUDED_SIDES:
+        return "off the card"
+    if market in gameday_card.STAKE_EXCLUDED_MARKETS:
+        return "listed, never staked"
+    return "on"
+
+
 def side_trends(population: pd.DataFrame) -> tuple[list[dict[str, Any]], str]:
     """Each market and side above the measurement bar, by half of the window."""
     if population.empty:
@@ -216,6 +230,7 @@ def side_trends(population: pd.DataFrame) -> tuple[list[dict[str, Any]], str]:
             "first_half": {"wagers": len(first), "units": float(first["units"].sum())},
             "second_half": {"wagers": len(second), "units": float(second["units"].sum())},
             "flag": flag,
+            "card": card_status(market, side),
         })
     return sorted(out, key=lambda r: r["units"]), split
 
@@ -300,17 +315,20 @@ def render(review: Mapping[str, Any], *, generated: str = "") -> str:
         f"{bars['team']:.1%} (team), priced {bars['shortest']:+.0f} to {bars['longest']:+.0f}, one bet per "
         f"wager at the best frozen price, one unit flat, {window[0]} to {window[-1]} after a "
         f"{WARMUP_DAYS}-day warm-up, each day learned only on what had settled before it. Split at "
-        f"{review.get('split_day') or '—'}. A side is flagged only with {MIN_PER_HALF}+ wagers in each half.",
+        f"{review.get('split_day') or '—'}. A side is flagged only with {MIN_PER_HALF}+ wagers in each half. "
+        "`On the card` reads the card's own exclusion tables: a side marked off the card is still scored here "
+        "because the ledger still freezes it, and a flag on it is no lead.",
         "",
-        "| Market | Side | Wagers | Games | Units | ROI [95%, by game] | First half | Second half | Flag |",
-        "|:--|:--|--:|--:|--:|:--|:--|:--|:--|",
+        "| Market | Side | Wagers | Games | Units | ROI [95%, by game] | First half | Second half | Flag | On the card |",
+        "|:--|:--|--:|--:|--:|:--|:--|:--|:--|:--|",
     ]
     for r in review["trends"]:
         lines.append(
             f"| `{r['market']}` | {r['side']} | {r['wagers']} | {r['games']} | {r['units']:+.1f}u "
             f"| {_pct(r['roi'])} [{_pct(r['low'])}, {_pct(r['high'])}] "
             f"| {r['first_half']['units']:+.1f}u / {r['first_half']['wagers']} "
-            f"| {r['second_half']['units']:+.1f}u / {r['second_half']['wagers']} | {r['flag'] or '—'} |"
+            f"| {r['second_half']['units']:+.1f}u / {r['second_half']['wagers']} | {r['flag'] or '—'} "
+            f"| {r.get('card', 'on')} |"
         )
     lines += [
         "",

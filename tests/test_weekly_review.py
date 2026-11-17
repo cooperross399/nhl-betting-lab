@@ -103,3 +103,18 @@ def test_the_page_carries_no_price_line_book_or_player():
     assert "2.5" not in page and "-110" not in page
     assert "no demonstrated edge" in page
     assert "Weekly review" in page
+
+
+def test_a_side_the_card_already_keeps_off_is_named_so():
+    assert wr.card_status("points", "under") == "off the card"
+    assert wr.card_status("assists", "under") == "off the card"
+    assert wr.card_status("points", "over") == "listed, never staked"
+    assert wr.card_status("blocked_shots", "under") == "on"
+    days = ["2026-11-01", "2026-11-02", "2026-11-03", "2026-11-04"]
+    frame = _population(days, -1.0, -1.0).assign(market="points")
+    trends, split = wr.side_trends(frame)
+    assert trends[0]["card"] == "off the card"
+    text = wr.render({"trends": trends, "split_day": split, "window": days, "volume": [],
+                      "last_week_from": days[0], "last_week": [], "season": [],
+                      "bars": {"prop": 0.06, "team": 0.035, "shortest": -160, "longest": 600}})
+    assert "| On the card |" in text and "| off the card |" in text
