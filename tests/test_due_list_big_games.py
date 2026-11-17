@@ -115,8 +115,8 @@ def test_two_goals_and_hat_tricks_take_the_goals_over_1_5_and_2_5_prices() -> No
 
 
 def test_the_settings_are_the_ones_measured_on_2026_11_17() -> None:
-    assert (TWO["floor"], TWO["bar"], TWO["stat"]) == (40, 20, "goals"), "35+ at 15 until 2026-11-17"
-    assert (HAT["floor"], HAT["bar"], HAT["stat"]) == (40, 30, "goals")
+    assert (TWO["floor"], TWO["bar"], TWO["stat"]) == (40, 25, "goals"), "40+ at 20 until later 2026-11-17"
+    assert (HAT["floor"], HAT["bar"], HAT["stat"]) == (40, 50, "goals"), "40+ at 30 until 2026-11-17"
     assert (PTS["floor"], PTS["bar"], PTS["stat"], PTS["line"], PTS["price"]) == (100, 3, "points", 1.5, ("points", 1.5))
     assert (SO["floor"], SO["bar"], SO["stat"]) == (4, 12, "shutouts")
     assert dr.CATEGORY_LABELS["two_points"] == "2+ points"

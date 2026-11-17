@@ -2546,6 +2546,16 @@ Re-derive rather than trust if the data has moved.
   the edge bars, the market list, the staking rule, the snapshot, the forward
   ledger and the registered test are unchanged, and nights already recorded
   are not rebuilt.
+  **Later the same day, Cooper: "make the hat trick and 2+ goals a longer
+  game streak so that the profit may improve based on their due-ness".** 2+
+  goals now lists a 40+ goal scorer at 25 games without one (was 20), hat
+  tricks at 50 (was 30), read off the same run: 2+ goals -23.0% over 253
+  (-55.4% to +12.8%; -31.3% in 2024-25, +10.1% in 2025-26), hit 7.9%
+  against 10.6% implied; hat tricks -63.1% over 853 (-87.8% to -33.9%), hit
+  0.8% against 2.6%. A longer drought did not make either likelier (2+ goals
+  at 30 read -24.4% over 152; hat tricks at 40, 60 and 80 read -66.3%,
+  -67.2% and -63.5%): no demonstrated edge, and hat tricks remain a
+  demonstrated loss. Fewer rows a night as a result. Same unstaked list.
 
 - **2026-11-09: Due List hat tricks are tracked at 0.1u (Cooper: "hat tricks
   should be tracked as .1u bets for the DUE LIST", then "back-check and apply

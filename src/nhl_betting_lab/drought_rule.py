@@ -352,9 +352,9 @@ def qualifiers_entering(logs: pd.DataFrame, day: str) -> pd.DataFrame:
 #: has no market any book in this lab's feed quotes, so it is never priced.
 BIG_GAMES: dict[str, dict[str, Any]] = {
     "two_goals": {"role": "skater", "stat": "goals", "count": 2, "line": 1.5, "price": ("goals", 1.5),
-                  "floor": 40, "bar": 20},
+                  "floor": 40, "bar": 25},
     "hat_trick": {"role": "skater", "stat": "goals", "count": 3, "line": 2.5, "price": ("goals", 2.5),
-                  "floor": 40, "bar": 30},
+                  "floor": 40, "bar": 50},
     "two_points": {"role": "skater", "stat": "points", "count": 2, "line": 1.5, "price": ("points", 1.5),
                    "floor": 100, "bar": 3},
     "shutout": {"role": "goalie", "stat": "shutouts", "count": 1, "line": 0.5, "price": None, "floor": 4, "bar": 12},
@@ -368,20 +368,21 @@ CATEGORY_LABELS = {"points": "points", "goals": "goals", "assists": "assists",
 #: The big games' measured records, card window, 2024-25 and 2025-26, best
 #: price, flat stake, 95% interval bootstrapped over nights, at the shipped
 #: floor and bar: `scripts/run_due_list_big_games.py`, Due List Tuning run
-#: 44104405522 (2026-11-17, when 2+ goals moved back to 40+ at 20 and 2+
-#: points joined). A shutout has no price, so no record.
+#: 44104405522 (2026-11-17, when 2+ points joined; later that day Cooper
+#: lengthened 2+ goals to 25 games and hat tricks to 50, read off the same run). A shutout has no price, so no record.
 BIG_GAMES_RECORDS: dict[tuple[str, str], dict[str, Any]] = {
-    ("two_goals", "40+"): {"wagers": 390, "roi": -0.234, "ci_low": -0.477, "ci_high": 0.030},
-    ("hat_trick", "40+"): {"wagers": 1268, "roi": -0.586, "ci_low": -0.792, "ci_high": -0.333},
+    ("two_goals", "40+"): {"wagers": 253, "roi": -0.230, "ci_low": -0.554, "ci_high": 0.128},
+    ("hat_trick", "40+"): {"wagers": 853, "roi": -0.631, "ci_low": -0.878, "ci_high": -0.339},
     ("two_points", "100+"): {"wagers": 174, "roi": -0.008, "ci_low": -0.197, "ci_high": 0.179},
 }
 #: One line for the card, from the same runs.
 BIG_GAMES_HEADLINE = (
     "Big games, re-measured 2026-11-17 on 2024-25 and 2025-26 (scripts/run_due_list_big_games.py, Due List Tuning "
     "run 44104405522; each setting is the cell both seasons agreed on, picked after seeing it, so the figures "
-    "flatter it). 2+ goals, 40+ goal scorers 20+ games without one: hit 7.7% against 10.7% implied, -23.4% over "
-    "390 (95% -47.7% to +3.0%; -24.1% in 2024-25, -21.0% in 2025-26), no demonstrated edge. Hat trick, 40+ at "
-    "30+: -58.6% over 1,268 (95% -79.2% to -33.3%), a demonstrated loss at every setting tried. 2+ points, new: "
+    "flatter it). 2+ goals, 40+ goal scorers 25+ games without one: hit 7.9% against 10.6% implied, -23.0% over "
+    "253 (95% -55.4% to +12.8%; -31.3% in 2024-25, +10.1% in 2025-26), no demonstrated edge. Hat trick, 40+ at "
+    "50+: -63.1% over 853 (95% -87.8% to -33.9%), a demonstrated loss at every setting tried. Both bars were "
+    "lengthened on Cooper's word; a longer drought did not make either likelier. 2+ points, new: "
     "100+ point scorers 3+ games without one, -0.8% over 174 (95% -19.7% to +17.9%; -1.6% and +0.6% by season), "
     "no demonstrated edge. Shutouts, 4+ last season at 12+ starts without one: 5.2% of 656 starts at 10+ against "
     "9.7% to 9.8% the season before; no book in this feed prices a shutout, so those rows are graded for hits "
