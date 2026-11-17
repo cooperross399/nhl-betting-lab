@@ -2,8 +2,8 @@
 
 The opinion the live card actually held, written down before puck drop, settled against the boxscore after, never revised. This is the only possible price evidence for the regulation three-way, which has never been bought historically (it is per-event only and was never requested), and the accumulating out-of-sample test for everything else.
 
-- Generated: 2026-11-16T22:45:45+00:00
-- Ledger rows: 980,140 — one per book — on 177,602 wager(s), each counted once at the best price the card could have taken (3,239 void, 0 unsettleable)
+- Generated: 2026-11-17T13:41:57+00:00
+- Ledger rows: 985,893 — one per book — on 178,665 wager(s), each counted once at the best price the card could have taken (3,260 void, 0 unsettleable)
 - Set aside: 67,873 team-market ledger row(s) frozen before 2026-10-22, priced on the goals ratings or the first xG ratings. From that day the team markets are priced on shooter-adjusted xG with each team's own home ice, and only those are measured here (Cooper's decision, 2026-10-21).
 - Set aside: 192 goalie-saves ledger row(s) frozen before 2026-10-21, priced on the props model's own saves mean. From that day saves are priced on the game-context model, and only those are measured here (Cooper's decision, 2026-10-20).
 
@@ -13,33 +13,33 @@ The opinion the live card actually held, written down before puck drop, settled 
 
 | Market | Opinions | Bets | Profit | ROI | 95% interval, uncorrected | Corrected interval | Survives correction |
 |:-------|---------:|-----:|-------:|----:|:--|:--|:--|
-| `assists` | 19,458 | 878 | -14.0u | -1.6% | -7.4% .. +4.2% | -10.0% .. +6.9% | no |
-| `blocked_shots` | 1,213 | 116 | +7.6u | +6.5% | -11.4% .. +24.5% | -19.7% .. +32.8% | no |
-| `goalie_saves` | 4,749 | 233 | -23.1u | -9.9% | -42.8% .. +22.9% | -57.9% .. +38.1% | no |
-| `goals` | 41,569 | 272 | +8.1u | +3.0% | -18.7% .. +24.6% | -28.7% .. +34.6% | no |
+| `assists` | 19,559 | 883 | -13.0u | -1.5% | -7.2% .. +4.3% | -9.9% .. +7.0% | no |
+| `blocked_shots` | 1,238 | 118 | +7.3u | +6.2% | -11.6% .. +23.9% | -19.8% .. +32.1% | no |
+| `goalie_saves` | 4,812 | 238 | -22.0u | -9.2% | -41.5% .. +23.0% | -56.3% .. +37.9% | no |
+| `goals` | 41,815 | 272 | +8.1u | +3.0% | -18.7% .. +24.6% | -28.7% .. +34.6% | no |
 | `hits` | 436 | 138 | +13.8u | +10.0% | -5.8% .. +25.8% | -13.1% .. +33.1% | no |
-| `moneyline` | 354 | 47 | +3.5u | +7.5% | -25.4% .. +40.3% | -40.6% .. +55.5% | no |
-| `points` | 37,165 | 1,664 | -55.5u | -3.3% | -8.8% .. +2.1% | -11.3% .. +4.6% | no |
-| `puck_line` | 2,800 | 170 | +11.6u | +6.9% | -9.0% .. +22.7% | -16.3% .. +30.0% | no |
-| `regulation_3_way` | 531 | 115 | -3.9u | -3.4% | -26.8% .. +20.0% | -37.6% .. +30.8% | no |
-| `shots_on_goal` | 39,066 | 2,792 | +131.6u | +4.7% | -5.0% .. +14.5% | -9.5% .. +19.0% | no |
-| `team_total` | 7,980 | 348 | +3.0u | +0.9% | -25.4% .. +27.1% | -37.6% .. +39.3% | no |
-| `total_goals` | 4,517 | 357 | +30.1u | +8.4% | -22.1% .. +38.9% | -36.2% .. +53.0% | no |
+| `moneyline` | 358 | 49 | +7.4u | +15.1% | -18.5% .. +48.7% | -34.1% .. +64.2% | no |
+| `points` | 37,367 | 1,671 | -55.0u | -3.3% | -8.7% .. +2.2% | -11.2% .. +4.7% | no |
+| `puck_line` | 2,830 | 173 | +14.0u | +8.1% | -7.6% .. +23.7% | -14.8% .. +31.0% | no |
+| `regulation_3_way` | 537 | 117 | +2.0u | +1.7% | -22.6% .. +26.0% | -33.8% .. +37.2% | no |
+| `shots_on_goal` | 39,282 | 2,805 | +126.7u | +4.5% | -5.2% .. +14.2% | -9.7% .. +18.7% | no |
+| `team_total` | 8,077 | 361 | +4.7u | +1.3% | -24.1% .. +26.7% | -35.9% .. +38.5% | no |
+| `total_goals` | 4,569 | 364 | +23.1u | +6.4% | -23.8% .. +36.5% | -37.8% .. +50.5% | no |
 
 The corrected interval is the 95% interval widened (Bonferroni) for the 12 markets measured on the same data — the interval docs/when_this_ends.md registers the decision on. "Survives correction" reads it: yes when it excludes zero, no when it spans zero, and too few below 30 bets, where nothing survives whatever the interval says. The uncorrected interval is shown beside it for reference only. Both are clustered on the game: the rungs, sides and players of one game settle on one boxscore, so they count as one draw, never as independent bets.
 
-- `assists`: -1.6% over 878 bets, 95% interval -7.4% to +4.2%. The interval includes zero, which means **no demonstrated edge**.
-- `blocked_shots`: +6.5% over 116 bets, 95% interval -11.4% to +24.5%. The interval includes zero, which means **no demonstrated edge**.
-- `goalie_saves`: -9.9% over 233 bets, 95% interval -42.8% to +22.9%. The interval includes zero, which means **no demonstrated edge**.
+- `assists`: -1.5% over 883 bets, 95% interval -7.2% to +4.3%. The interval includes zero, which means **no demonstrated edge**.
+- `blocked_shots`: +6.2% over 118 bets, 95% interval -11.6% to +23.9%. The interval includes zero, which means **no demonstrated edge**.
+- `goalie_saves`: -9.2% over 238 bets, 95% interval -41.5% to +23.0%. The interval includes zero, which means **no demonstrated edge**.
 - `goals`: +3.0% over 272 bets, 95% interval -18.7% to +24.6%. The interval includes zero, which means **no demonstrated edge**.
 - `hits`: +10.0% over 138 bets, 95% interval -5.8% to +25.8%. The interval includes zero, which means **no demonstrated edge**.
-- `moneyline`: +7.5% over 47 bets, 95% interval -25.4% to +40.3%. The interval includes zero, which means **no demonstrated edge**.
-- `points`: -3.3% over 1664 bets, 95% interval -8.8% to +2.1%. The interval includes zero, which means **no demonstrated edge**.
-- `puck_line`: +6.9% over 170 bets, 95% interval -9.0% to +22.7%. The interval includes zero, which means **no demonstrated edge**.
-- `regulation_3_way`: -3.4% over 115 bets, 95% interval -26.8% to +20.0%. The interval includes zero, which means **no demonstrated edge**.
-- `shots_on_goal`: +4.7% over 2792 bets, 95% interval -5.0% to +14.5%. The interval includes zero, which means **no demonstrated edge**.
-- `team_total`: +0.9% over 348 bets, 95% interval -25.4% to +27.1%. The interval includes zero, which means **no demonstrated edge**.
-- `total_goals`: +8.4% over 357 bets, 95% interval -22.1% to +38.9%. The interval includes zero, which means **no demonstrated edge**.
+- `moneyline`: +15.1% over 49 bets, 95% interval -18.5% to +48.7%. The interval includes zero, which means **no demonstrated edge**.
+- `points`: -3.3% over 1671 bets, 95% interval -8.7% to +2.2%. The interval includes zero, which means **no demonstrated edge**.
+- `puck_line`: +8.1% over 173 bets, 95% interval -7.6% to +23.7%. The interval includes zero, which means **no demonstrated edge**.
+- `regulation_3_way`: +1.7% over 117 bets, 95% interval -22.6% to +26.0%. The interval includes zero, which means **no demonstrated edge**.
+- `shots_on_goal`: +4.5% over 2805 bets, 95% interval -5.2% to +14.2%. The interval includes zero, which means **no demonstrated edge**.
+- `team_total`: +1.3% over 361 bets, 95% interval -24.1% to +26.7%. The interval includes zero, which means **no demonstrated edge**.
+- `total_goals`: +6.4% over 364 bets, 95% interval -23.8% to +36.5%. The interval includes zero, which means **no demonstrated edge**.
 
 ## Registered decision statistic
 
@@ -49,8 +49,8 @@ docs/when_this_ends.md registers the stop/continue decision on "the forward ledg
 
 | Population | Settled opinions | Pooled return | 95% interval, uncorrected | Corrected interval | Against zero |
 |:--|:--|:--|:--|:--|:--|
-| A. Every settled opinion (reference only) | 159,838, against the floor of 3,000 — floor met | -20.0% (-31961.6u) | -22.3% .. -17.7% | -23.4% .. -16.6% | excludes zero, negative |
-| B. Opinions clearing the edge bar (registered) | 7,130, against the floor of 3,000 — floor met | +1.6% (+112.7u) | -4.0% .. +7.2% | -6.6% .. +9.8% | spans zero (no demonstrated edge) |
+| A. Every settled opinion (reference only) | 160,880, against the floor of 3,000 — floor met | -20.0% (-32177.8u) | -22.3% .. -17.7% | -23.4% .. -16.6% | excludes zero, negative |
+| B. Opinions clearing the edge bar (registered) | 7,189, against the floor of 3,000 — floor met | +1.6% (+117.1u) | -4.0% .. +7.2% | -6.5% .. +9.8% | spans zero (no demonstrated edge) |
 
 - **A. Every settled opinion (reference only)**: every settled opinion in every market, whatever its edge.
 - **B. Opinions clearing the edge bar (registered)**: the settled opinions whose edge clears the measurement bar for their market — 6% for a prop, 3.5% for a team market, the bar the historical backtest measures at and the same filter as the per-market Bets column. These are not the card's staked bets; the note below says how they differ.
