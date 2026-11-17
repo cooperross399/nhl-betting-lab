@@ -13,6 +13,11 @@ name: Due List Tuning
 # (bets, units, ROI, intervals) and goes to the run summary and the log only.
 on:
   workflow_dispatch:
+    inputs:
+      history_from:
+        description: "Also read the NHL's free game logs from this season's first year (e.g. 2014), rates only; empty skips it"
+        required: false
+        default: ""
   pull_request:
     paths:
       - "scripts/run_due_list_tuning.py"
@@ -78,6 +83,7 @@ jobs:
       - name: Search the settings
         env:
           PYTHONPATH: src
+          HISTORY_FROM: ${{ github.event.inputs.history_from }}
         run: |
           set -u
           status=0
@@ -91,7 +97,9 @@ jobs:
           # cell records from; it is printed between markers for committing.
           python scripts/run_drought_rule_backtest.py > /dev/null || status=$?
           # 2-goal games, hat tricks and shutouts (Cooper, 2026-11-04).
-          python scripts/run_due_list_big_games.py --status "$(TZ=America/New_York date +%F)" > /dev/null || status=$?
+          history=()
+          if [ -n "${HISTORY_FROM}" ]; then history=(--history "${HISTORY_FROM}"); fi
+          python scripts/run_due_list_big_games.py --status "$(TZ=America/New_York date +%F)" "${history[@]}" > /dev/null || status=$?
           if [ -s data/outputs/due_list_big_games.md ]; then
             cat data/outputs/due_list_big_games.md >> "$GITHUB_STEP_SUMMARY"
             cat data/outputs/due_list_big_games.md

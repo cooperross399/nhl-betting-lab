@@ -58,9 +58,22 @@ from nhl_betting_lab.season import game_date  # noqa: E402
 START_SECONDS = 2400
 FULL_GAME_SECONDS = 59 * 60
 BOOTSTRAPS = 1000
-EVENTS = {"two_goals": (2, 1.5), "hat_trick": (3, 2.5)}
-GOAL_FLOORS = (30, 35, 40, 45, 50)
-BARS = {"two_goals": (0, 5, 8, 10, 12, 15, 20, 25), "hat_trick": (0, 20, 30, 40, 50, 60, 80)}
+#: Each skater event: (stat counted, how many make the event, the over line it is priced at).
+#: 1+ assist and 2+ points joined on 2026-11-17 (Cooper: "Research and refine the
+#: parameters for 1+ assist, 2+ goals, and hattricks. Also research and find
+#: parmaters to add 2+ point games to the due list").
+EVENTS = {"one_assist": ("assists", 1, 0.5), "two_goals": ("goals", 2, 1.5), "hat_trick": ("goals", 3, 2.5),
+          "two_points": ("points", 2, 1.5)}
+GOAL_FLOORS = (20, 25, 30, 35, 40, 45, 50)
+#: Last season's total in the event's stat that qualifies a player.
+FLOORS = {"one_assist": (30, 40, 45, 50, 55, 60, 70), "two_goals": GOAL_FLOORS, "hat_trick": GOAL_FLOORS,
+          "two_points": (50, 60, 70, 80, 90, 100)}
+BARS = {"one_assist": (0, 2, 3, 4, 5, 6, 7, 8, 10, 12), "two_goals": (0, 5, 8, 10, 12, 15, 20, 25, 30),
+        "hat_trick": (0, 20, 30, 40, 50, 60, 80), "two_points": (0, 3, 5, 8, 10, 12, 15, 20, 25)}
+#: The cell table only ranks a setting with this many priced wagers, and this many in each season.
+RANK_MIN_WAGERS = 150
+RANK_MIN_SEASON = 50
+STATS_OF = sorted({stat for stat, _, _ in EVENTS.values()})
 SHUTOUT_FLOORS = (2, 3, 4, 5, 6)
 SHUTOUT_BARS = (0, 10, 15, 20, 25, 30, 40)
 
@@ -73,11 +86,16 @@ def decimal(odds):
 def skater_frame(logs: pd.DataFrame) -> pd.DataFrame:
     s = logs[(logs.role == "skater") & (logs.game_type == 2)].sort_values(["player_id", "date", "game_id"]).copy()
     s["season_start"] = s.season // 10000
-    for name, (k, _) in EVENTS.items():
-        s[name] = (s.goals >= k).astype(int)
+    for stat in STATS_OF:
+        if stat not in s.columns:
+            s[stat] = 0
+        s[stat] = pd.to_numeric(s[stat], errors="coerce").fillna(0)
+    for name, (stat, k, _) in EVENTS.items():
+        s[name] = (s[stat] >= k).astype(int)
         s["drought_" + name] = s.groupby("player_id")[name].transform(
             lambda v: pd.Series(drought_before(v.values), index=v.index))
-    per = s.groupby(["player_id", "season_start"]).agg(prior_goals=("goals", "sum"), prior_gp=("goals", "size"),
+    per = s.groupby(["player_id", "season_start"]).agg(prior_gp=("goals", "size"),
+                                                       **{f"prior_{st}": (st, "sum") for st in STATS_OF},
                                                        **{f"prior_{n}": (n, "sum") for n in EVENTS}).reset_index()
     per["season_start"] += 1
     return s.merge(per, on=["player_id", "season_start"], how="left")
@@ -96,8 +114,10 @@ def goalie_frame(logs: pd.DataFrame) -> pd.DataFrame:
 
 
 def priced(prices: pd.DataFrame, s: pd.DataFrame) -> pd.DataFrame:
-    """Best card-window over 1.5 / over 2.5 per (event, player), joined to the skater game it settles on."""
-    p = prices[(prices.market == "goals") & (prices.selection == "over") & prices.line.isin([1.5, 2.5])].copy()
+    """Best card-window over per (event, player), joined to the skater game it settles on."""
+    by_price = {(stat, line): name for name, (stat, _, line) in EVENTS.items()}
+    keep = pd.Series([(m, ln) in by_price for m, ln in zip(prices.market, prices.line)], index=prices.index)
+    p = prices[keep & (prices.selection == "over")].copy()
     if p.empty:
         return pd.DataFrame()
     p["gdate"] = p.commence_time.map(game_date)
@@ -105,7 +125,7 @@ def priced(prices: pd.DataFrame, s: pd.DataFrame) -> pd.DataFrame:
     first = p.groupby("provider_event_id").snapshot.transform("min")
     p = p[p.snapshot == first]
     p["dec"] = decimal(p.american_odds)
-    best = p.sort_values("dec").groupby(["provider_event_id", "player", "line"]).tail(1)
+    best = p.sort_values("dec").groupby(["provider_event_id", "market", "player", "line"]).tail(1)
     keys: dict[tuple[str, str], set] = {}
     for r in s[["player_id", "player", "date"]].drop_duplicates().itertuples():
         for alias in player_name_aliases(r.player):
@@ -117,11 +137,12 @@ def priced(prices: pd.DataFrame, s: pd.DataFrame) -> pd.DataFrame:
         if len(ids) != 1:
             continue
         g = idx.loc[(next(iter(ids)), r.gdate)]
-        event = "two_goals" if r.line == 1.5 else "hat_trick"
-        won = bool(g.goals >= EVENTS[event][0])
+        event = by_price[(r.market, r.line)]
+        stat, k, _ = EVENTS[event]
+        won = bool(g[stat] >= k)
         rows.append({"event": event, "date": r.gdate, "season": int(g.season_start), "player_id": next(iter(ids)),
                      "odds": float(r.american_odds), "dec": float(r.dec), "won": won,
-                     "profit": float(r.dec - 1) if won else -1.0, "prior_goals": g.prior_goals,
+                     "profit": float(r.dec - 1) if won else -1.0, "prior_total": g["prior_" + stat],
                      "drought": int(g["drought_" + event])})
     return pd.DataFrame(rows)
 
@@ -147,29 +168,74 @@ def roi_cell(r):
     return "—" if r is None else f"{pct(r['roi'])} / {r['n']}"
 
 
+EVENT_TITLES = {"one_assist": "1+ assist", "two_goals": "2+ goals", "hat_trick": "3+ goals (hat trick)",
+                "two_points": "2+ points"}
+
+
+def cells(s: pd.DataFrame, w: pd.DataFrame, event: str) -> list[dict]:
+    """Every (floor, bar) cell of one event: rate against own rate, and the priced record overall and by season."""
+    stat = EVENTS[event][0]
+    out = []
+    for floor in FLOORS[event]:
+        q = s[s["prior_" + stat] >= floor]
+        pw = w[(w.event == event) & (w.prior_total >= floor)] if len(w) else w
+        for bar in BARS[event]:
+            x = q[q["drought_" + event] >= bar]
+            own = (x["prior_" + event] / x.prior_gp).mean() if len(x) else float("nan")
+            px = pw[pw.drought >= bar] if len(pw) else pw
+            seed = zlib.crc32(repr((event, floor, bar)).encode())
+            out.append({"floor": floor, "bar": bar, "games": len(x),
+                        "rate": float(x[event].mean()) if len(x) else float("nan"), "own": float(own),
+                        "all": roi(px, seed) if len(px) else None,
+                        "s2024": roi(px[px.season == 2024], seed + 1) if len(px) else None,
+                        "s2025": roi(px[px.season == 2025], seed + 2) if len(px) else None})
+    return out
+
+
+def ranked(cs: list[dict]) -> list[dict]:
+    """Cells with enough wagers, best first by their worse season's ROI (both seasons must agree)."""
+    ok = [c for c in cs if c["all"] and c["all"]["n"] >= RANK_MIN_WAGERS and c["s2024"] and c["s2025"]
+          and c["s2024"]["n"] >= RANK_MIN_SEASON and c["s2025"]["n"] >= RANK_MIN_SEASON and c["bar"] > 0]
+    return sorted(ok, key=lambda c: (min(c["s2024"]["roi"], c["s2025"]["roi"]), c["all"]["roi"]), reverse=True)
+
+
+def render_ranking(s: pd.DataFrame, w: pd.DataFrame) -> list[str]:
+    L = ["## The settings both seasons agree on", "",
+         f"Per event, the cells with {RANK_MIN_WAGERS}+ priced wagers ({RANK_MIN_SEASON}+ in each season) and a "
+         "drought bar above 0, ranked by the worse of the two seasons' ROI. Picking the top cell after seeing it "
+         "flatters it; a cell is a demonstrated edge only if its whole interval sits above zero. Bar 0 at the same "
+         "floor is every game those players played, the control.", "",
+         "| Event | Floor | Bar | Rate | Own rate | Wagers | Hit | Implied | ROI | 95% interval | 2024-25 | 2025-26 | Control ROI |",
+         "|:--|--:|--:|--:|--:|--:|--:|--:|--:|:--|--:|--:|--:|"]
+    for event in EVENTS:
+        cs = cells(s, w, event)
+        ctrl = {c["floor"]: c["all"] for c in cs if c["bar"] == 0}
+        top = ranked(cs)[:5]
+        if not top:
+            L.append(f"| {EVENT_TITLES[event]} | — | — | — | — | too few priced wagers | | | | | | | |")
+        for c in top:
+            r = c["all"]
+            k = ctrl.get(c["floor"])
+            L.append(f"| {EVENT_TITLES[event]} | {c['floor']}+ | {c['bar']} | {c['rate']*100:.1f}% | {c['own']*100:.1f}% | "
+                     f"{r['n']} | {r['hit']*100:.1f}% | {r['implied']*100:.1f}% | {pct(r['roi'])} | "
+                     f"{pct(r['lo'])} .. {pct(r['hi'])} | {roi_cell(c['s2024'])} | {roi_cell(c['s2025'])} | "
+                     f"{roi_cell(k)} |")
+    return L + [""]
+
+
 def render_skaters(s: pd.DataFrame, w: pd.DataFrame) -> list[str]:
     L = []
-    for event, (k, line) in EVENTS.items():
-        L += [f"## {k}+ goals (over {line})", "",
+    for event, (stat, k, line) in EVENTS.items():
+        L += [f"## {EVENT_TITLES[event]} (over {line}), by last season's {stat}", "",
               "Rate: the share of games entered at that drought with the event. Own rate: his prior-season share. "
               f"Priced: the best `card`-window over {line}, one per selection.", "",
-              "| Last season goals | Drought bar | Games | Rate | Own rate | Priced | Hit | Implied | Median odds | ROI | 95% interval | 2024-25 | 2025-26 |",
+              f"| Last season {stat} | Drought bar | Games | Rate | Own rate | Priced | Hit | Implied | Median odds | ROI | 95% interval | 2024-25 | 2025-26 |",
               "|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|:--|--:|--:|"]
-        for floor in GOAL_FLOORS:
-            q = s[s.prior_goals >= floor]
-            pw = w[(w.event == event) & (w.prior_goals >= floor)] if len(w) else w
-            for bar in BARS[event]:
-                x = q[q["drought_" + event] >= bar]
-                own = (x["prior_" + event] / x.prior_gp).mean() if len(x) else float("nan")
-                px = pw[pw.drought >= bar] if len(pw) else pw
-                seed = zlib.crc32(repr((event, floor, bar)).encode())
-                r = roi(px, seed) if len(px) else None
-                s1 = roi(px[px.season == 2024], seed + 1) if len(px) else None
-                s2 = roi(px[px.season == 2025], seed + 2) if len(px) else None
-                body = (f"{r['n']} | {r['hit']*100:.1f}% | {r['implied']*100:.1f}% | {r['median_odds']:+d} | {pct(r['roi'])} | "
-                        f"{pct(r['lo'])} .. {pct(r['hi'])} | {roi_cell(s1)} | {roi_cell(s2)}") if r else "0 | — | — | — | — | — | — | —"
-                L.append(f"| {floor}+ | {bar} | {len(x)} | {x[event].mean()*100 if len(x) else float('nan'):.1f}% | "
-                         f"{own*100:.1f}% | {body} |")
+        for c in cells(s, w, event):
+            r = c["all"]
+            body = (f"{r['n']} | {r['hit']*100:.1f}% | {r['implied']*100:.1f}% | {r['median_odds']:+d} | {pct(r['roi'])} | "
+                    f"{pct(r['lo'])} .. {pct(r['hi'])} | {roi_cell(c['s2024'])} | {roi_cell(c['s2025'])}") if r else "0 | — | — | — | — | — | — | —"
+            L.append(f"| {c['floor']}+ | {c['bar']} | {c['games']} | {c['rate']*100:.1f}% | {c['own']*100:.1f}% | {body} |")
         L.append("")
     return L
 
@@ -227,19 +293,25 @@ def _seconds(toi) -> float:
 
 
 def season_qualifiers(season: int, role: str, cache: Path) -> dict[int, str]:
-    """Players with 30+ goals (skaters) or 2+ shutouts (goalies) in a regular season."""
-    field, floor = ("goals", min(GOAL_FLOORS)) if role == "skater" else ("shutouts", min(SHUTOUT_FLOORS))
-    out, start = {}, 0
-    while True:
-        params = {"isAggregate": "true", "isGame": "false", "start": start, "limit": 100,
-                  "cayenneExp": f"seasonId={season} and gameTypeId=2 and {field}>={floor}"}
-        data = _get(STATS.format(role=role), params, cache / f"{role}_{season}_{start}.json")
-        rows = data.get("data", [])
-        for r in rows:
-            out[int(r["playerId"])] = r.get("skaterFullName") or r.get("goalieFullName") or ""
-        start += len(rows)
-        if not rows or start >= int(data.get("total", 0)):
-            return out
+    """Skaters over the lowest floor of any event's stat, or goalies with 2+ shutouts, in a regular season."""
+    if role == "skater":
+        asks = [(stat, min(FLOORS[e] for e, (st, _, _) in EVENTS.items() if st == stat)) for stat in STATS_OF]
+    else:
+        asks = [("shutouts", min(SHUTOUT_FLOORS))]
+    out = {}
+    for field, floor in asks:
+        start = 0
+        while True:
+            params = {"isAggregate": "true", "isGame": "false", "start": start, "limit": 100,
+                      "cayenneExp": f"seasonId={season} and gameTypeId=2 and {field}>={floor}"}
+            data = _get(STATS.format(role=role), params, cache / f"{role}_{season}_{field}{floor}_{start}.json")
+            rows = data.get("data", [])
+            for r in rows:
+                out[int(r["playerId"])] = r.get("skaterFullName") or r.get("goalieFullName") or ""
+            start += len(rows)
+            if not rows or start >= int(data.get("total", 0)):
+                break
+    return out
 
 
 def history_logs(first: int, last: int, cache: Path) -> pd.DataFrame:
@@ -257,6 +329,8 @@ def history_logs(first: int, last: int, cache: Path) -> pd.DataFrame:
         for g in data.get("gameLog", []):
             rows.append({"game_id": g.get("gameId"), "season": season, "game_type": 2, "date": g.get("gameDate"),
                          "player_id": pid, "role": role, "goals": g.get("goals", 0) if role == "skater" else 0,
+                         "assists": g.get("assists", 0) if role == "skater" else 0,
+                         "points": g.get("points", 0) if role == "skater" else 0,
                          "toi_seconds": _seconds(g.get("toi")),
                          "goals_against": g.get("goalsAgainst") if role == "goalie" else np.nan})
     return pd.DataFrame(rows)
@@ -270,21 +344,25 @@ def render_history(s: pd.DataFrame, g: pd.DataFrame, first: int, last: int) -> l
          "drought with the event; own rate is that player's share the season before. A drought makes the event "
          "likelier only where the rate beats the own rate. Short seasons (2012-13, 2019-20, 2020-21) are counted "
          "on raw goals, so fewer players qualify in them.", ""]
-    for event, (k, _) in EVENTS.items():
-        L += [f"## {k}+ goals, pooled", "", "| Last season goals | Drought bar | Games | Rate | Own rate | Rate / own |",
+    for event, (stat, k, _) in EVENTS.items():
+        L += [f"## {EVENT_TITLES[event]}, pooled", "",
+              f"| Last season {stat} | Drought bar | Games | Rate | Own rate | Rate / own |",
               "|--:|--:|--:|--:|--:|--:|"]
-        for floor in GOAL_FLOORS:
-            q = s[s.prior_goals >= floor]
+        for floor in FLOORS[event]:
+            q = s[s["prior_" + stat] >= floor]
             for bar in BARS[event]:
                 x = q[q["drought_" + event] >= bar]
                 if not len(x):
                     continue
                 rate, own = x[event].mean(), (x["prior_" + event] / x.prior_gp).mean()
                 L.append(f"| {floor}+ | {bar} | {len(x)} | {rate*100:.1f}% | {own*100:.1f}% | {rate/own:.2f} |")
-        spec = BIG_GAMES[event]
-        L += ["", f"Shipped setting ({spec['floor']}+ goals, {spec['bar']}+ games), by season:", "",
+        spec = BIG_GAMES.get(event)
+        if spec is None:
+            L.append("")
+            continue
+        L += ["", f"Shipped setting ({spec['floor']}+ {stat}, {spec['bar']}+ games), by season:", "",
               "| Season | Games | Rate | Own rate |", "|:--|--:|--:|--:|"]
-        x = s[(s.prior_goals >= spec["floor"]) & (s["drought_" + event] >= spec["bar"])]
+        x = s[(s["prior_" + stat] >= spec["floor"]) & (s["drought_" + event] >= spec["bar"])]
         for y in seasons:
             b = x[x.season_start == y]
             if len(b):
@@ -357,17 +435,17 @@ def main(argv: list[str] | None = None) -> int:
     if prices_path.exists():
         prices = pd.read_csv(prices_path, usecols=["commence_time", "provider_event_id", "market", "player",
                                                    "selection", "line", "american_odds", "book", "snapshot"])
-        goals = prices[prices.market == "goals"]
-        store = ("Bought goals quotes by line (all snapshots): "
-                 + ", ".join(f"{ln:g}: {n}" for ln, n in goals.line.value_counts().sort_index().items())
+        lines = prices[prices.market.isin(STATS_OF) & (prices.selection == "over")]
+        store = ("Bought over quotes by market and line (all snapshots): "
+                 + ", ".join(f"{m} {ln:g}: {n}" for (m, ln), n in lines.groupby(["market", "line"]).size().items())
                  + ". Markets in the store: " + ", ".join(sorted(prices.market.astype(str).unique())) + ".")
         w = priced(prices, s)
         w = w[w.season.isin([2024, 2025])] if len(w) else w
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
-    L = ["# Due List big games: 2-goal games, hat tricks, shutouts", "",
+    L = ["# Due List big games: 1+ assist, 2+ goals, hat tricks, 2+ points, shutouts", "",
          f"Generated {now} by `scripts/run_due_list_big_games.py`. Regular seasons 2024-25 and 2025-26.", "",
          store or "No bought prices on disk: rates only.", ""]
-    L += render_skaters(s_m, w) + render_goalies(g_m)
+    L += render_ranking(s_m, w) + render_skaters(s_m, w) + render_goalies(g_m)
     text = "\n".join(L) + "\n"
     a.out.mkdir(parents=True, exist_ok=True)
     (a.out / "due_list_big_games.md").write_text(text)
