@@ -32,8 +32,8 @@
       },
       {
         "book": "Sports Interaction",
-        "date": "2026-11-15",
-        "source": "canadasportsbetting.ca, Hart Trophy odds (page updated November 15, 2026; table note 'last updated on Nov 15, 2026'; odds courtesy of Sports Interaction; the analysis text gives McDavid -300, Kaprizov +1000, MacKinnon +1200, table used)",
+        "date": "2026-11-18",
+        "source": "canadasportsbetting.ca, Hart Trophy odds (page updated November 18, 2026; table note 'last updated on Nov 18, 2026'; odds courtesy of Sports Interaction)",
         "url": "https://www.canadasportsbetting.ca/betting-odds/nhl/awards/mvp/",
         "lines": [
           {"name": "Connor McDavid", "team": "EDM", "american": -325},
@@ -119,20 +119,20 @@
       },
       {
         "book": "BET99",
-        "date": "2026-11-03",
-        "source": "Covers, NHL MVP odds (page updated Nov 3, 2026; odds courtesy of Bet99 as of Nov. 3)",
+        "date": "2026-11-17",
+        "source": "Covers, NHL MVP odds (page updated Nov 17, 2026; odds courtesy of Bet99 as of Nov. 17)",
         "url": "https://www.covers.com/nhl/nhl-mvp-odds",
         "lines": [
-          {"name": "Connor McDavid", "team": "EDM", "american": -190},
-          {"name": "Kirill Kaprizov", "team": "MIN", "american": 725},
-          {"name": "Nathan MacKinnon", "team": "COL", "american": 800},
-          {"name": "Leon Draisaitl", "team": "EDM", "american": 1100},
-          {"name": "Macklin Celebrini", "team": "SJS", "american": 1700},
-          {"name": "Evan Bouchard", "team": "EDM", "american": 1800},
-          {"name": "Jack Eichel", "team": "VGK", "american": 2000},
-          {"name": "Nikita Kucherov", "team": "TBL", "american": 2000},
-          {"name": "Nico Hischier", "team": "NJD", "american": 2250},
-          {"name": "Auston Matthews", "team": "TOR", "american": 2250}
+          {"name": "Connor McDavid", "team": "EDM", "american": -350},
+          {"name": "Kirill Kaprizov", "team": "MIN", "american": 900},
+          {"name": "Leon Draisaitl", "team": "EDM", "american": 975},
+          {"name": "Nikita Kucherov", "team": "TBL", "american": 1300},
+          {"name": "Jack Hughes", "team": "NJD", "american": 1600},
+          {"name": "Quinn Hughes", "team": "MIN", "american": 1900},
+          {"name": "Evan Bouchard", "team": "EDM", "american": 2100},
+          {"name": "Logan Cooley", "american": 2250},
+          {"name": "Cutter Gauthier", "american": 2250},
+          {"name": "Nico Hischier", "team": "NJD", "american": 2400}
         ]
       },
       {
