@@ -2,8 +2,8 @@ Selections are unchanged since the previous card; this comment was posted on req
 
 # NHL gameday card
 
-- Generated: 2026-11-18T20:38:57+00:00
-- 0 best bet(s), 19 lean(s), 2079 pass(es) across 3 game(s); 0 unit(s) staked.
+- Generated: 2026-11-18T22:40:49+00:00
+- 0 best bet(s), 19 lean(s), 2090 pass(es) across 3 game(s); 0 unit(s) staked.
 - Included markets: **assists, blocked_shots, goalie_saves, goals, moneyline, points, puck_line, regulation_3_way, shots_on_goal, team_total, total_goals**
 - Unit size: $25
 
@@ -15,29 +15,29 @@ _No best bets._
 
 | Game | Starts | Market | Selection | Model | Edge | Price | Bet down to | Book |
 |:-----|:-------|:-------|:----------|------:|-----:|------:|------------:|:-----|
-| Colorado Avalanche @ Utah Mammoth | Nov 18, 10:10 PM ET | `shots_on_goal` | Nazem Kadri under 2.5 | 53.2% | +9.7% | +130 | +113 | Hard Rock Bet |
+| Colorado Avalanche @ Utah Mammoth | Nov 18, 10:10 PM ET | `shots_on_goal` | Nazem Kadri under 2.5 | 54.1% | +8.6% | +120 | +109 | Bovada |
 | Colorado Avalanche @ Utah Mammoth | Nov 18, 10:10 PM ET | `shots_on_goal` | Mikhail Sergachev under 2.5 | 68.9% | +8.1% | -155 | -160 | Hard Rock Bet |
-| Colorado Avalanche @ Utah Mammoth | Nov 18, 10:10 PM ET | `moneyline` | away | 58.3% | +7.6% | -103 | -121 | BetOnline.ag |
-| Colorado Avalanche @ Utah Mammoth | Nov 18, 10:10 PM ET | `regulation_3_way` | away | 47.8% | +7.5% | +148 | +126 | Bally Bet |
+| Colorado Avalanche @ Utah Mammoth | Nov 18, 10:10 PM ET | `moneyline` | away | 58.6% | +7.7% | -104 | -122 | Circa Sports |
+| Colorado Avalanche @ Utah Mammoth | Nov 18, 10:10 PM ET | `regulation_3_way` | away | 47.9% | +7.6% | +148 | +126 | Bally Bet |
 | Colorado Avalanche @ Utah Mammoth | Nov 18, 10:10 PM ET | `shots_on_goal` | Mikhail Sergachev under 1.5 | 45.0% | +6.5% | +160 | +157 | theScore Bet |
 | Colorado Avalanche @ Utah Mammoth | Nov 18, 10:10 PM ET | `shots_on_goal` | Nazem Kadri under 1.5 | 32.4% | +6.1% | +280 | +279 | theScore Bet |
 | Colorado Avalanche @ Utah Mammoth | Nov 18, 10:10 PM ET | `team_total` | away_over 3 | 61.5% | +6.0% | -125 | -138 | BetMGM |
-| Colorado Avalanche @ Utah Mammoth | Nov 18, 10:10 PM ET | `total_goals` | over 6.5 | 53.6% | +5.6% | +108 | +100 | BetOnline.ag |
-| Montréal Canadiens @ New Jersey Devils | Nov 18, 7:40 PM ET | `moneyline` | away | 45.3% | +5.3% | +150 | +140 | theScore Bet |
-| Colorado Avalanche @ Utah Mammoth | Nov 18, 10:10 PM ET | `team_total` | away_over 3.5 | 48.4% | +5.0% | +130 | +123 | Bally Bet |
+| Montréal Canadiens @ New Jersey Devils | Nov 18, 7:40 PM ET | `moneyline` | away | 45.2% | +5.2% | +150 | +140 | Bally Bet |
+| Colorado Avalanche @ Utah Mammoth | Nov 18, 10:10 PM ET | `team_total` | away_over 3.5 | 48.5% | +5.1% | +130 | +123 | Bally Bet |
 | Colorado Avalanche @ Utah Mammoth | Nov 18, 10:10 PM ET | `puck_line` | away -1.5 | 35.2% | +4.9% | +230 | +216 | Bally Bet |
+| Montréal Canadiens @ New Jersey Devils | Nov 18, 7:40 PM ET | `regulation_3_way` | away | 34.6% | +4.7% | +235 | +222 | Bally Bet |
 | Colorado Avalanche @ Utah Mammoth | Nov 18, 10:10 PM ET | `total_goals` | over 7 | 43.1% | +4.7% | +160 | +153 | Bovada |
+| Colorado Avalanche @ Utah Mammoth | Nov 18, 10:10 PM ET | `total_goals` | over 6.5 | 53.6% | +4.6% | +104 | +100 | BetOnline.ag |
 | Colorado Avalanche @ Utah Mammoth | Nov 18, 10:10 PM ET | `team_total` | away_over 4.5 | 28.8% | +4.4% | +310 | +296 | FanDuel |
-| Montréal Canadiens @ New Jersey Devils | Nov 18, 7:40 PM ET | `regulation_3_way` | away | 35.4% | +4.1% | +220 | +214 | Bally Bet |
-| Colorado Avalanche @ Utah Mammoth | Nov 18, 10:10 PM ET | `total_goals` | over 7.5 | 34.3% | +4.0% | +230 | +225 | Bally Bet |
+| Colorado Avalanche @ Utah Mammoth | Nov 18, 10:10 PM ET | `total_goals` | over 7.5 | 34.2% | +4.4% | +235 | +226 | Bally Bet |
 | Colorado Avalanche @ Utah Mammoth | Nov 18, 10:10 PM ET | `total_goals` | over 5.5 | 64.7% | +3.9% | -155 | -157 | Bally Bet |
-| Montréal Canadiens @ New Jersey Devils | Nov 18, 7:40 PM ET | `points` | Jesper Bratt over 0.5 | 62.1% | +3.8% | -140 | -144 | Courtside |
 | Colorado Avalanche @ Utah Mammoth | Nov 18, 10:10 PM ET | `total_goals` | over 6 | 61.1% | +3.6% | -135 | -135 | Bovada |
-| Montréal Canadiens @ New Jersey Devils | Nov 18, 7:40 PM ET | `total_goals` | over 6 | 55.5% | +3.5% | -108 | -108 | Circa Sports |
+| Montréal Canadiens @ New Jersey Devils | Nov 18, 7:40 PM ET | `points` | Nico Hischier over 0.5 | 60.3% | +3.4% | -132 | -133 | theScore Bet |
+| Montréal Canadiens @ New Jersey Devils | Nov 18, 7:40 PM ET | `points` | Jesper Bratt over 0.5 | 62.4% | +3.2% | -145 | -146 | Courtside |
 
 Leans are recorded and not staked.
 
-2 cleared the lean bar and are listed with the passes: points overs priced longer than +200 are not listed: as leans this season they lost in both halves (-54.3u over 317 at 1u) while the shorter ones made +13.2u over 456.
+3 cleared the lean bar and are listed with the passes: points overs priced longer than +200 are not listed: as leans this season they lost in both halves (-54.3u over 317 at 1u) while the shorter ones made +13.2u over 456.
 
 1 cleared the lean bar and are listed with the passes: points unders are not listed as leans: measured as a loss on two seasons of bought prices (-4.2% over 6,140 wagers) and 247-315 as leans this season.
 
@@ -45,33 +45,33 @@ Leans are recorded and not staked.
 
 | Game | Starts | Market | Selection | Model | Edge | Price | Book |
 |:-----|:-------|:-------|:----------|------:|-----:|------:|:-----|
+| Montréal Canadiens @ New Jersey Devils | Nov 18, 7:40 PM ET | `points` | Stefan Noesen over 0.5 | 33.9% | +6.5% | +265 | Fanatics |
 | Colorado Avalanche @ Utah Mammoth | Nov 18, 10:10 PM ET | `points` | Mikhail Sergachev under 0.5 | 48.8% | +6.2% | +135 | Courtside |
-| Colorado Avalanche @ Utah Mammoth | Nov 18, 10:10 PM ET | `puck_line` | away +1.5 | 77.3% | +5.8% | -250 | BetMGM |
-| Montréal Canadiens @ New Jersey Devils | Nov 18, 7:40 PM ET | `points` | Stefan Noesen over 0.5 | 34.3% | +5.7% | +250 | Fanatics |
+| Colorado Avalanche @ Utah Mammoth | Nov 18, 10:10 PM ET | `puck_line` | away +1.5 | 77.6% | +6.2% | -250 | BetMGM |
+| Montréal Canadiens @ New Jersey Devils | Nov 18, 7:40 PM ET | `assists` | Jesper Bratt over 0.5 | 51.0% | +5.6% | +120 | Courtside |
 | Boston Bruins @ Detroit Red Wings | Nov 18, 7:40 PM ET | `assists` | David Pastrnak over 0.5 | 54.3% | +5.5% | +105 | Hard Rock Bet |
-| Montréal Canadiens @ New Jersey Devils | Nov 18, 7:40 PM ET | `assists` | Jesper Bratt over 0.5 | 50.9% | +5.4% | +120 | Courtside |
 | Colorado Avalanche @ Utah Mammoth | Nov 18, 10:10 PM ET | `assists` | Mikhail Sergachev under 0.5 | 56.6% | +5.3% | -105 | Courtside |
-| Colorado Avalanche @ Utah Mammoth | Nov 18, 10:10 PM ET | `team_total` | away_over 2 | 83.9% | +4.9% | -375 | BetMGM |
+| Colorado Avalanche @ Utah Mammoth | Nov 18, 10:10 PM ET | `puck_line` | away +2.5 | 87.6% | +4.9% | -476 | Caesars |
 | Boston Bruins @ Detroit Red Wings | Nov 18, 7:40 PM ET | `shots_on_goal` | Lucas Raymond under 1.5 | 35.7% | +4.9% | +225 | theScore Bet |
-| Colorado Avalanche @ Utah Mammoth | Nov 18, 10:10 PM ET | `shots_on_goal` | MacKenzie Weegar under 1.5 | 48.1% | +4.6% | +130 | Bally Bet |
+| Montréal Canadiens @ New Jersey Devils | Nov 18, 7:40 PM ET | `assists` | Nico Hischier over 0.5 | 41.0% | +4.7% | +175 | Courtside |
 | Colorado Avalanche @ Utah Mammoth | Nov 18, 10:10 PM ET | `shots_on_goal` | T.J. Hughes under 1.5 | 45.4% | +4.6% | +145 | Hard Rock Bet |
-| Montréal Canadiens @ New Jersey Devils | Nov 18, 7:40 PM ET | `assists` | Nico Hischier over 0.5 | 40.8% | +4.5% | +175 | Courtside |
 | Boston Bruins @ Detroit Red Wings | Nov 18, 7:40 PM ET | `points` | Elias Lindholm under 1.5 | 87.8% | +4.5% | -500 | theScore Bet |
+| Montréal Canadiens @ New Jersey Devils | Nov 18, 7:40 PM ET | `assists` | Stefan Noesen over 0.5 | 22.3% | +4.5% | +460 | Fanatics |
+| Colorado Avalanche @ Utah Mammoth | Nov 18, 10:10 PM ET | `team_total` | away_over 2 | 84.4% | +4.4% | -400 | BetMGM |
 | Boston Bruins @ Detroit Red Wings | Nov 18, 7:40 PM ET | `assists` | Moritz Seider under 0.5 | 58.9% | +4.4% | -120 | Courtside |
 | Colorado Avalanche @ Utah Mammoth | Nov 18, 10:10 PM ET | `team_total` | away_over 2.5 | 69.9% | +4.4% | -190 | BetMGM |
-| Colorado Avalanche @ Utah Mammoth | Nov 18, 10:10 PM ET | `shots_on_goal` | Artturi Lehkonen under 1.5 | 40.0% | +4.3% | +180 | theScore Bet |
+| Montréal Canadiens @ New Jersey Devils | Nov 18, 7:40 PM ET | `shots_on_goal` | Lane Hutson under 1.5 | 54.2% | +4.2% | +100 | Bally Bet |
 | Montréal Canadiens @ New Jersey Devils | Nov 18, 7:40 PM ET | `blocked_shots` | Alexandre Carrier under 2.5 | 64.2% | +4.2% | -150 | DraftKings |
 | Colorado Avalanche @ Utah Mammoth | Nov 18, 10:10 PM ET | `assists` | Devon Toews under 0.5 | 61.4% | +4.2% | -134 | Bally Bet |
 | Boston Bruins @ Detroit Red Wings | Nov 18, 7:40 PM ET | `points` | Moritz Seider under 0.5 | 51.7% | +4.1% | +110 | Courtside |
+| Montréal Canadiens @ New Jersey Devils | Nov 18, 7:40 PM ET | `assists` | Jack Hughes over 0.5 | 56.5% | +4.1% | -110 | BetMGM |
 | Boston Bruins @ Detroit Red Wings | Nov 18, 7:40 PM ET | `points` | Viktor Arvidsson under 1.5 | 85.8% | +4.0% | -450 | theScore Bet |
-| Montréal Canadiens @ New Jersey Devils | Nov 18, 7:40 PM ET | `assists` | Jack Hughes over 0.5 | 56.4% | +4.0% | -110 | BetMGM |
+| Colorado Avalanche @ Utah Mammoth | Nov 18, 10:10 PM ET | `points` | Mikhail Sergachev under 1.5 | 85.8% | +4.0% | -450 | theScore Bet |
 | Boston Bruins @ Detroit Red Wings | Nov 18, 7:40 PM ET | `shots_on_goal` | Lucas Raymond under 2.5 | 58.9% | +3.9% | -122 | FanDuel |
-| Montréal Canadiens @ New Jersey Devils | Nov 18, 7:40 PM ET | `puck_line` | away +2.5 | 79.7% | +3.9% | -312 | Caesars |
-| Montréal Canadiens @ New Jersey Devils | Nov 18, 7:40 PM ET | `shots_on_goal` | Lane Hutson under 1.5 | 53.9% | +3.9% | +100 | Bally Bet |
-| Montréal Canadiens @ New Jersey Devils | Nov 18, 7:40 PM ET | `shots_on_goal` | Lane Hutson under 0.5 | 22.9% | +3.8% | +425 | theScore Bet |
-| Montréal Canadiens @ New Jersey Devils | Nov 18, 7:40 PM ET | `points` | Jesper Bratt over 1.5 | 24.9% | +3.8% | +375 | theScore Bet |
+| Montréal Canadiens @ New Jersey Devils | Nov 18, 7:40 PM ET | `points` | Jesper Bratt over 1.5 | 25.0% | +3.9% | +375 | theScore Bet |
+| Colorado Avalanche @ Utah Mammoth | Nov 18, 10:10 PM ET | `shots_on_goal` | MacKenzie Weegar under 1.5 | 49.3% | +3.9% | +120 | Hard Rock Bet |
 
-_2054 further passes not listed._
+_2065 further passes not listed._
 
 These are genuine model judgements about markets that were priced and modelled. They are **not** the same thing as the excluded markets below.
 
@@ -81,9 +81,9 @@ Who the model expects to win each game, from the same team ratings the card pric
 
 | Game | Puck drop | Stats' side | Win chance | Fair | Best price | Book | Against the price |
 |:--|:--|:--|--:|--:|--:|:--|:--|
-| Montréal Canadiens @ New Jersey Devils | Nov 18, 7:40 PM ET | **New Jersey Devils** | 54.8% | -121 | -160 | Hard Rock Bet | price is 6.8 pts short |
+| Montréal Canadiens @ New Jersey Devils | Nov 18, 7:40 PM ET | **New Jersey Devils** | 54.8% | -121 | -160 | Hard Rock Bet | price is 6.7 pts short |
 | Boston Bruins @ Detroit Red Wings | Nov 18, 7:40 PM ET | **Boston Bruins** | 50.4% | -101 | -103 | Circa Sports | price is 0.4 pts short |
-| Colorado Avalanche @ Utah Mammoth | Nov 18, 10:10 PM ET | **Colorado Avalanche** | 58.3% | -140 | -103 | BetOnline.ag | price is 7.6 pts long, under the bar |
+| Colorado Avalanche @ Utah Mammoth | Nov 18, 10:10 PM ET | **Colorado Avalanche** | 58.6% | -142 | -104 | Circa Sports | price is 7.7 pts long, under the bar |
 
 A list, not bets: no units, no stakes, nothing frozen into the forward ledger. The lab has no measurement showing that backing the stats' side at the market's price makes money.
 
@@ -125,15 +125,15 @@ Big games, re-measured 2026-11-17 on 2024-25 and 2025-26 (scripts/run_due_list_b
 |:--|:--|:--|:--|:--|--:|--:|--:|:--|:--|:--|:--|:--|:--|:--|:--|--:|:--|--:|:--|
 | Alex DeBrincat | DET | BOS | Nov 18, 7:30 PM ET | points | over 0.5 | 85 | 6 | 3 (both) | tier 3 / surprise 3 | 1 in 511 for him | F1, PP1 | Jeremy Swayman, -8% goals vs expected | shots steady: 2.8 a game vs 3.5 usual | model 64% (+1.0 pts) | band 85-99 @3: +2.1% over 75 (95% -17.0% to +18.7%) | -170 | Hard Rock Bet | 0.25u | heavy juice (shorter than -160) |
 | Charlie McAvoy | BOS | DET | Nov 18, 7:30 PM ET | points | over 0.5 | 61 | 3 | 3 (surprise) | tier 5 / surprise 3 | 1 in 27 for him | D1, PP1 | backup Daniil Tarasov (Confirmed), -5% goals vs expected | shots steady: 1.3 a game vs 1.6 usual | model 45% (-7.7 pts) | band 60-69 @5: -11.9% over 110 (95% -30.7% to +5.3%) | -111 | BetMGM | 0.25u |  |
-| Martin Necas | COL | UTA | Nov 18, 10:00 PM ET | points | over 0.5 | 100 | 2 | 2 (tier) | tier 2 / surprise 3 | 1 in 13 for him | F1, PP1 | backup Sebastian Cossa (Likely), +2% goals vs expected | shots down: 2.0 a game vs 2.6 usual | model 68% (-0.1 pts) | band 100+ @2: +1.4% over 44 (95% -19.2% to +21.1%) | -210 | BetMGM | 0.25u | heavy juice (shorter than -160) |
-| Juraj Slafkovský | MTL | NJD | Nov 18, 7:30 PM ET | goals | over 0.5 | 30 | 12 | 8 (tier) | tier 8 / surprise - | 1 in 97 for him | F1, PP1 | backup Connor Hellebuyck (Confirmed), -5% goals vs expected | shots steady: 2.2 a game vs 2.2 usual | model 25% (+0.5 pts) | band 25-39 @8: +5.9% over 646 (95% -6.0% to +20.2%) | +310 | Courtside | 0.15u |  |
-| Alex DeBrincat | DET | BOS | Nov 18, 7:30 PM ET | goals | over 0.5 | 41 | 6 | 4 (tier) | tier 4 / surprise - | 1 in 25 for him | F1, PP1 | Jeremy Swayman, -8% goals vs expected | shots steady: 2.8 a game vs 3.5 usual | model 38% (+1.2 pts) | band 40+ @4: -7.7% over 326 (95% -21.0% to +6.4%) | +170 | FanDuel | 0.25u |  |
-| Viktor Arvidsson | DET | BOS | Nov 18, 7:30 PM ET | goals | over 0.5 | 25 | 8 | 8 (tier) | tier 8 / surprise - | 1 in 22 for him | F3, PP1 | Jeremy Swayman, -8% goals vs expected | shots up: 2.6 a game vs 2.6 usual | model 24% (-6.7 pts) | band 25-39 @8: +5.9% over 646 (95% -6.0% to +20.2%) | +230 | theScore Bet | 0.15u |  |
-| Nick Suzuki | MTL | NJD | Nov 18, 7:30 PM ET | assists | over 0.5 | 72 | 5 | 3 (both) | tier 3 / surprise 3 | 1 in 153 for him | F1, PP1 | backup Connor Hellebuyck (Confirmed), -5% goals vs expected | shots down: 1.6 a game vs 2.3 usual | model 47% (+1.1 pts) | band 55+ @3: +9.2% over 301 (95% -1.4% to +20.8%) | +120 | BetMGM | 0.25u |  |
-| Martin Necas | COL | UTA | Nov 18, 10:00 PM ET | assists | over 0.5 | 62 | 3 | 3 (tier) | tier 3 / surprise 5 | 1 in 7 for him | F1, PP1 | backup Sebastian Cossa (Likely), +2% goals vs expected | shots down: 2.0 a game vs 2.6 usual | model 53% (-1.3 pts) | band 55+ @3: +9.2% over 301 (95% -1.4% to +20.8%) | -118 | Bally Bet | 0.25u |  |
-| Alex DeBrincat | DET | BOS | Nov 18, 7:30 PM ET | hat trick | over 2.5 | 41 | 261 | 50 (tier) | tier 50 / surprise - | 1 in 1 for him | F1, PP1 | Jeremy Swayman, -8% goals vs expected | - | model 1% (+0.0 pts) | band 40+ @50: -63.1% over 853 (95% -87.8% to -33.9%) | +7000 | Bovada | 0.05u | lost in testing (band interval below zero) |
-| Nick Suzuki | MTL | NJD | Nov 18, 7:30 PM ET | 2+ points | over 1.5 | 101 | 5 | 3 (tier) | tier 3 / surprise - | 1 in 9 for him | F1, PP1 | backup Connor Hellebuyck (Confirmed), -5% goals vs expected | - | model 26% (-1.2 pts) | band 100+ @3: -0.8% over 174 (95% -19.7% to +17.9%) | +265 | Fanatics | 0.15u |  |
-| Martin Necas | COL | UTA | Nov 18, 10:00 PM ET | 2+ points | over 1.5 | 100 | 3 | 3 (tier) | tier 3 / surprise - | 1 in 5 for him | F1, PP1 | backup Sebastian Cossa (Likely), +2% goals vs expected | - | model 32% (-2.1 pts) | band 100+ @3: -0.8% over 174 (95% -19.7% to +17.9%) | +190 | Bally Bet | 0.25u |  |
+| Martin Necas | COL | UTA | Nov 18, 10:00 PM ET | points | over 0.5 | 100 | 2 | 2 (tier) | tier 2 / surprise 3 | 1 in 13 for him | F1, PP1 | backup Sebastian Cossa (Likely), +2% goals vs expected | shots down: 2.0 a game vs 2.6 usual | model 68% (-0.0 pts) | band 100+ @2: +1.4% over 44 (95% -19.2% to +21.1%) | -210 | BetMGM | 0.25u | heavy juice (shorter than -160) |
+| Juraj Slafkovský | MTL | NJD | Nov 18, 7:30 PM ET | goals | over 0.5 | 30 | 12 | 8 (tier) | tier 8 / surprise - | 1 in 97 for him | F1, PP1 | backup Connor Hellebuyck (Confirmed), -5% goals vs expected | shots steady: 2.2 a game vs 2.2 usual | model 25% (-0.9 pts) | band 25-39 @8: +5.9% over 646 (95% -6.0% to +20.2%) | +280 | Courtside | 0.15u |  |
+| Alex DeBrincat | DET | BOS | Nov 18, 7:30 PM ET | goals | over 0.5 | 41 | 6 | 4 (tier) | tier 4 / surprise - | 1 in 25 for him | F1, PP1 | Jeremy Swayman, -8% goals vs expected | shots steady: 2.8 a game vs 3.5 usual | model 39% (+0.2 pts) | band 40+ @4: -7.7% over 326 (95% -21.0% to +6.4%) | +160 | BetMGM | 0.25u |  |
+| Viktor Arvidsson | DET | BOS | Nov 18, 7:30 PM ET | goals | over 0.5 | 25 | 8 | 8 (tier) | tier 8 / surprise - | 1 in 22 for him | F3, PP1 | Jeremy Swayman, -8% goals vs expected | shots up: 2.6 a game vs 2.6 usual | model 24% (-6.4 pts) | band 25-39 @8: +5.9% over 646 (95% -6.0% to +20.2%) | +230 | theScore Bet | 0.15u |  |
+| Nick Suzuki | MTL | NJD | Nov 18, 7:30 PM ET | assists | over 0.5 | 72 | 5 | 3 (both) | tier 3 / surprise 3 | 1 in 153 for him | F1, PP1 | backup Connor Hellebuyck (Confirmed), -5% goals vs expected | shots down: 1.6 a game vs 2.3 usual | model 48% (-0.9 pts) | band 55+ @3: +9.2% over 301 (95% -1.4% to +20.8%) | +106 | Bally Bet | 0.25u |  |
+| Martin Necas | COL | UTA | Nov 18, 10:00 PM ET | assists | over 0.5 | 62 | 3 | 3 (tier) | tier 3 / surprise 5 | 1 in 7 for him | F1, PP1 | backup Sebastian Cossa (Likely), +2% goals vs expected | shots down: 2.0 a game vs 2.6 usual | model 53% (-1.3 pts) | band 55+ @3: +9.2% over 301 (95% -1.4% to +20.8%) | -118 | Bovada | 0.25u |  |
+| Alex DeBrincat | DET | BOS | Nov 18, 7:30 PM ET | hat trick | over 2.5 | 41 | 261 | 50 (tier) | tier 50 / surprise - | 1 in 1 for him | F1, PP1 | Jeremy Swayman, -8% goals vs expected | - | model 1% (-0.2 pts) | band 40+ @50: -63.1% over 853 (95% -87.8% to -33.9%) | +6000 | Courtside | 0.05u | lost in testing (band interval below zero) |
+| Nick Suzuki | MTL | NJD | Nov 18, 7:30 PM ET | 2+ points | over 1.5 | 101 | 5 | 3 (tier) | tier 3 / surprise - | 1 in 9 for him | F1, PP1 | backup Connor Hellebuyck (Confirmed), -5% goals vs expected | - | model 26% (-1.2 pts) | band 100+ @3: -0.8% over 174 (95% -19.7% to +17.9%) | +265 | Bally Bet | 0.15u |  |
+| Martin Necas | COL | UTA | Nov 18, 10:00 PM ET | 2+ points | over 1.5 | 100 | 3 | 3 (tier) | tier 3 / surprise - | 1 in 5 for him | F1, PP1 | backup Sebastian Cossa (Likely), +2% goals vs expected | - | model 32% (-1.4 pts) | band 100+ @3: -0.8% over 174 (95% -19.7% to +17.9%) | +200 | FanDuel | 0.15u |  |
 
 A list, not bets: no units, no stakes, and none of it is in the best bets above. "Tracked at" is the notional size the site's Due List record counts it at (0.25u, less at +200 and longer); "lost in testing" marks a band whose backtest interval sits below zero.
 
@@ -176,7 +176,7 @@ An excluded market is **not** a pass, an avoid, or a no-value call, and no price
 - Leans are recorded and not staked. The smallest edges are mostly estimation error, and in the EPL lab they lost.
 - One outcome is staked once. Where an alternate ladder prices the same outcome at several lines, the highest-edge rung is staked and the rest are recorded as leans naming it. This is not a per-game, per-slate or bankroll cap; there is none.
 - No edge here is a demonstrated edge. See `data/outputs/what_we_can_claim.md` for what the evidence actually supports.
-- Stakes are sized by each market's closing-line value (Cooper, 2026-11-10): x1.5 where the bets' 95% game-clustered CLV interval sits above zero, x0.5 where it spans zero, x0.25 below it, unchanged under 200 bets or 30 games. Table of 2026-11-18T14:58: `assists` x1.5 (beats the close, +1.02% over 885); `blocked_shots` x1 (too few to judge, +0.84% over 122); `goalie_saves` x1.5 (beats the close, +6.74% over 283); `goals` x1.5 (beats the close, +3.01% over 278); `hits` x1 (too few to judge, +1.07% over 120); `moneyline` x1 (too few to judge, +0.37% over 98); `points` x1.5 (beats the close, +3.16% over 1,695); `puck_line` x1.5 (beats the close, +0.85% over 337); `regulation_3_way` x0.5 (no demonstrated CLV, +0.45% over 215); `shots_on_goal` x1.5 (beats the close, +3.49% over 2,783); `team_total` x0.5 (no demonstrated CLV, +0.65% over 684); `total_goals` x1.5 (beats the close, +0.72% over 565). Beating the close is not a demonstrated edge.
+- Stakes are sized by each market's closing-line value (Cooper, 2026-11-10): x1.5 where the bets' 95% game-clustered CLV interval sits above zero, x0.5 where it spans zero, x0.25 below it, unchanged under 200 bets or 30 games. Table of 2026-11-18T20:40: `assists` x1.5 (beats the close, +1.02% over 885); `blocked_shots` x1 (too few to judge, +0.84% over 122); `goalie_saves` x1.5 (beats the close, +6.74% over 283); `goals` x1.5 (beats the close, +3.01% over 278); `hits` x1 (too few to judge, +1.07% over 120); `moneyline` x1 (too few to judge, +0.37% over 98); `points` x1.5 (beats the close, +3.16% over 1,695); `puck_line` x1.5 (beats the close, +0.85% over 337); `regulation_3_way` x0.5 (no demonstrated CLV, +0.45% over 215); `shots_on_goal` x1.5 (beats the close, +3.49% over 2,783); `team_total` x0.5 (no demonstrated CLV, +0.65% over 684); `total_goals` x1.5 (beats the close, +0.72% over 565). Beating the close is not a demonstrated edge.
 
 
 ---
@@ -187,6 +187,6 @@ What the evidence actually supports:
 - `data/outputs/props_calibration.md`
 - `data/outputs/what_we_can_claim.md`
 
-Run: https://github.com/cooperross399/nhl-betting-lab/actions/runs/44367942169
+Run: https://github.com/cooperross399/nhl-betting-lab/actions/runs/44380858916
 
 Recommendations only. No bet was placed, no policy was edited, and no market was allowlisted by this run.
