@@ -157,7 +157,11 @@ PASSES_SECTION = "Passes / notable avoids"
 #: recorded and not staked: in the EPL lab the smallest-edge bets lost, which
 #: is the expected shape when an edge is mostly estimation error.
 BEST_BET_EDGE = 0.09
-BEST_BET_PROP_EDGE = 0.12
+#: 0.10 since 2026-11-19, Cooper's word ("10%"), after four days with no
+#: prop best bet on the card: it was 0.12. The odds-bracket floor
+#: (`prop_confidence_floor`) and the tiers read this bar too. The forward
+#: ledger, population B and every backtest keep `MIN_PROP_EDGE`.
+BEST_BET_PROP_EDGE = 0.10
 
 #: Lower lean bars for one market and side, by Cooper's decision on
 #: 2026-11-04 ("Lean points overs more often", after "i like taking points

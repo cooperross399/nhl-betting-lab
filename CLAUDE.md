@@ -4231,6 +4231,29 @@ Re-derive rather than trust if the data has moved.
   list's notes); -150 itself, longer prices, rows with no price posted and
   every other category are listed as before. Unstaked lists only.
 
+- **2026-11-19, NOT a defect fix: the prop best-bet bar is 10%, not 12%
+  (Cooper, after "why do we never get props on the card anymore": "10%").**
+  `gameday_card.BEST_BET_PROP_EDGE` = 0.10; the odds-bracket floor
+  (`prop_confidence_floor`, now the bracket's shortest price's break-even
+  plus 10 points) and the tiers (A from 15%) read it. Why the card had no
+  prop best bet on 11-16 to 11-19: since 2026-10-28 self-learning shrinks
+  every prop edge toward the price before the bar is read. Replayed on the
+  forward ledger (props with a 12%+ edge before learning, 10-20 to 11-18,
+  one wager at the best frozen price): 538 fell under the bar after
+  learning, 49 failed the odds-bracket floor, 30 the price range, `points`
+  or an excluded side, 49 cleared. What cleared lost (-18.2u over 44 at 1u
+  from 11-01), and learned edges of 10-12% lost too (-12.4u over 32 from
+  11-01). Replayed at the 10% bar with every other gate: about 4.7 prop
+  best bets a day over 20 days, 43-49, -9.8u at 1u (-2.9u at tier stakes),
+  -5.6u over 11 from 11-05: no demonstrated edge, and on the record more
+  plays rather than better ones. Shots on goal this season: best bets
+  74-78, -1.0u at 1u (unders 73-69 +4.9u, overs 1-9 -5.9u); unders on the
+  learned edge at the 6% bar +20.2u over 640, by week +8.4, +2.0, +1.8,
+  -0.4, -2.1. The snapshot is frozen before `build_card`, so the forward
+  ledger, population B and the 2027-04-25 test are unchanged; the CLV
+  report's best-bet view follows the new bar. The model, the measurement
+  bars, the market list and every other gate are unchanged.
+
 ## Contract strings — never change these
 
 Cooper's local scheduled tasks hard-code these. Renaming any of them silently

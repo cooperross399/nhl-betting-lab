@@ -672,7 +672,7 @@ def test_a_tier_is_assigned_by_edge_size() -> None:
     assert card_module._tier_for(0.10, is_prop=False) == "B"
     assert card_module._tier_for(0.05, is_prop=False) == "C"
     # A prop must clear a higher bar for the same tier.
-    assert card_module._tier_for(0.10, is_prop=True) == "C"
+    assert card_module._tier_for(0.09, is_prop=True) == "C"
 
 
 def test_every_tier_has_a_stake_and_none_is_large() -> None:

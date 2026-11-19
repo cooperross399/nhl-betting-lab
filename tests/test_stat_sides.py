@@ -216,13 +216,13 @@ def test_a_prop_the_model_is_confident_in_for_its_bracket_is_staked() -> None:
 
 
 def test_a_prop_that_clears_the_edge_bar_but_not_its_bracket_is_a_lean() -> None:
-    # +135 at 56.7% is a 14.2-point edge (a best bet by price) but under 59.4%.
+    # +135 at 56.7% is a 14.2-point edge (a best bet by price) but under 57.4%.
     row = _prop(135)
     card = _built([row], {_pkey(row): 0.567})
     assert card.best_bets == []
     lean = card.leans[0]
     assert lean["demotion_reason"].startswith(card_module.PROP_CONFIDENCE_PREFIX)
-    assert "56.7% chance to hit; props priced +111 to +150 need 59.4%" in lean["demotion_reason"]
+    assert "56.7% chance to hit; props priced +111 to +150 need 57.4%" in lean["demotion_reason"]
     assert lean["suggested_units"] == 0.0
     assert "Stats check, props:" in card_module.render_card(card)
 

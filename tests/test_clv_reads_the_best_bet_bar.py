@@ -34,12 +34,12 @@ def _opinion(**overrides) -> dict:
 @pytest.mark.parametrize(
     ("market", "edge", "odds", "prob", "expected"),
     [
-        ("shots_on_goal", 0.165, 120, 0.62, True),     # clears 12% and its bracket
-        ("shots_on_goal", 0.10, 120, 0.55, False),     # under the 12% prop bar
+        ("shots_on_goal", 0.165, 120, 0.62, True),     # clears 10% and its bracket
+        ("shots_on_goal", 0.09, 120, 0.55, False),     # under the 10% prop bar
         ("shots_on_goal", 0.13, -170, 0.76, False),    # shorter than -160
         ("shots_on_goal", 0.20, 700, 0.32, False),     # longer than +600
         ("points", 0.20, 120, 0.65, False),            # stake-excluded market
-        ("shots_on_goal", 0.13, -150, 0.73, False),    # misses its bracket floor
+        ("shots_on_goal", 0.13, -150, 0.70, False),    # misses its bracket floor
         ("moneyline", 0.10, 200, 0.43, True),          # team bar 9%, 40%+ to win
         ("moneyline", 0.10, 300, 0.35, False),         # under 40% to win
         ("total_goals", 0.08, -110, 0.60, False),      # under the 9% team bar
