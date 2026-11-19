@@ -4218,6 +4218,12 @@ Re-derive rather than trust if the data has moved.
   longer), never in the bets' headline. Nothing reaches the card's
   selections, stakes, fingerprint, snapshot, forward ledger or the
   registered test.
+  **Same day, Cooper: "separate the due and hot lists in two different tabs
+  under props".** The board's Props tab has three tabs: Model props, Due
+  List (`#drought`) and Hot List (`#hot`, propView "hot", drawn from
+  `games[].hot`), each counting its own players (`web/smooth_pages.py`
+  patches; Board stays pinned). The game panel still shows both lists
+  together. Site only.
 
 ## Contract strings — never change these
 

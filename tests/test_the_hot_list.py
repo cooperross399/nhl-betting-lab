@@ -177,7 +177,10 @@ def test_the_published_board_draws_hot_rows_beside_the_due_list(tmp_path, monkey
     (site / "render.mjs").write_text(_PAGE_DRIVER.replace(
         "const pick = (x) => ({ player: x.player, meta: x.meta, record: x.record, facts: x.facts });",
         "const pick = (x) => ({ player: x.player, category: x.category, history: x.history, streak: x.streak, "
-        "boxLabel: x.boxLabel, price: x.price, facts: x.facts });"), encoding="utf-8")
+        "boxLabel: x.boxLabel, price: x.price, facts: x.facts });").replace(
+        'for (const tab of ["tonight", "props"]) {', 'for (const tab of ["tonight", "props", "hot"]) {').replace(
+        'tab, propView: "drought"', 'tab: tab === "hot" ? "props" : tab, propView: tab === "hot" ? "hot" : "drought"'),
+        encoding="utf-8")
     page = site / "Board.dc.html"
     page.write_text(smooth_pages.patch("Board.dc.html", (ROOT / "web" / "Board.dc.html").read_text(encoding="utf-8")),
                     encoding="utf-8")
@@ -203,5 +206,8 @@ def test_the_published_board_draws_hot_rows_beside_the_due_list(tmp_path, monkey
     assert hot["history"] == "90 points last season · 9 points in his last 5 games"
     assert {f["label"] for f in hot["facts"]} == {"Last 5 games", "Streak", "Tracked at", "Model's chance"}
     assert (goal["category"], goal["streak"], goal["boxLabel"], goal["price"]) == ("Hot · anytime goal", "3", "straight", "—")
-    view = out["props"]["view"]
+    # Props has a Due List tab and a Hot List tab (Cooper, 2026-11-19): the
+    # Due List tab lists only the Due List, the Hot List tab only the Hot List.
+    assert out["props"]["view"] == [], "the Due List tab lists no Hot List row"
+    view = out["hot"]["view"]
     assert [r["category"] for g in view for r in g["rows"]] == ["Hot · 1+ point", "Hot · anytime goal"]

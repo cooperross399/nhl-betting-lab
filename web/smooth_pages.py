@@ -255,25 +255,66 @@ PATCHES: dict[str, list[tuple[str, str]]] = {
             'drought: dr.length ? `Due List ×${dr.length}` : "",',
             'drought: dr.length ? `Due/Hot ×${dr.length}` : "",',
         ),
+        # Props has three tabs (Cooper, 2026-11-19: "separate the due and hot
+        # lists in two different tabs under props"): Model props, Due List and
+        # Hot List. The Hot List tab is propView "hot" (#hot), drawn by the
+        # Due List's own view from games[].hot; the game panel keeps both.
+        (
+            'const dHasField = dGames.some((g) => Array.isArray(g.drought));',
+            'const dHasField = dGames.some((g) => Array.isArray((S.propView === "hot" ? g.hot : g.drought)));',
+        ),
         (
             'const dGroups = dGames.filter((g) => droughtRows(g.drought).length).map((g) => {',
-            'const dGroups = dGames.filter((g) => droughtRows(g.drought).length || droughtRows(g.hot).length).map((g) => {',
+            'const dGroups = dGames.filter((g) => droughtRows((S.propView === "hot" ? g.hot : g.drought)).length).map((g) => {',
         ),
         (
             'e.away.score != null, rows = droughtRows(g.drought);',
-            'e.away.score != null, rows = [...droughtRows(g.drought), ...droughtRows(g.hot).map((x) => ({ ...x, _hot: true }))];',
+            'e.away.score != null, rows = droughtRows((S.propView === "hot" ? g.hot : g.drought));',
         ),
         (
             'rows: rows.map((x) => drRow(x, g.id)) };',
-            'rows: rows.map((x) => (x._hot ? hotRow(x, g.id) : drRow(x, g.id))) };',
+            'rows: rows.map((x) => (S.propView === "hot" ? hotRow(x, g.id) : drRow(x, g.id))) };',
+        ),
+        (
+            'const isDrought = S.propView === "drought";',
+            'const isDrought = S.propView === "drought" || S.propView === "hot";',
         ),
         (
             'viewBtn("drought", `Due List · ${dCount}`)',
-            'viewBtn("drought", `Due & Hot · ${dCount}`)',
+            'viewBtn("drought", `Due List · ${dGames.reduce((n, g) => n + droughtRows(g.drought).length, 0)}`), '
+            'viewBtn("hot", `Hot List · ${dGames.reduce((n, g) => n + droughtRows(g.hot).length, 0)}`)',
         ),
         (
-            'Nobody on the Due List tonight',
-            'Nobody on the Due or Hot List tonight',
+            'grid-template-columns:1fr 1fr;border:1px solid var(--ink);margin-top:16px;',
+            'grid-template-columns:repeat(3,minmax(0,1fr));border:1px solid var(--ink);margin-top:16px;',
+        ),
+        (
+            'title: "Due List starts with the regular season"',
+            'title: `${S.propView === "hot" ? "Hot" : "Due"} List starts with the regular season`',
+        ),
+        (
+            'title: "No Due List on this board"',
+            'title: `No ${S.propView === "hot" ? "Hot" : "Due"} List on this board`',
+        ),
+        (
+            'title: "Nobody on the Due List tonight"',
+            'title: `Nobody on the ${S.propView === "hot" ? "Hot" : "Due"} List tonight`',
+        ),
+        (
+            'propView === "drought" ? "#drought" : "#props"',
+            'propView === "drought" ? "#drought" : propView === "hot" ? "#hot" : "#props"',
+        ),
+        (
+            '(pv && /^#(props|drought)$/.test(location.hash))',
+            '(pv && /^#(props|drought|hot)$/.test(location.hash))',
+        ),
+        (
+            'propView: location.hash === "#drought" || !pv ? "drought" : "model"',
+            'propView: pv && location.hash === "#hot" ? "hot" : location.hash === "#drought" || !pv ? "drought" : "model"',
+        ),
+        (
+            'if (tab === "props" && this.state.propView === "drought") for (const g of data.games || []) { const e = byGame[g.id]; if (Array.isArray(g.drought) && g.drought.length',
+            'if (tab === "props" && (this.state.propView === "drought" || this.state.propView === "hot")) for (const g of data.games || []) { const e = byGame[g.id]; if (Array.isArray(this.state.propView === "hot" ? g.hot : g.drought) && (this.state.propView === "hot" ? g.hot : g.drought).length',
         ),
     ],
     "Results.dc.html": [
