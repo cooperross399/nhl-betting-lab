@@ -485,6 +485,12 @@ PYTHONPATH=src .venv/bin/python scripts/run_due_list_tuning.py
 # Tuning workflow runs it in CI on the bought prices).
 PYTHONPATH=src .venv/bin/python scripts/run_due_list_big_games.py
 
+# Where does the Due List make money, and would a Hot List (streaks and form)?
+# This season's graded Due List sliced by group, price and drought; the shipped
+# rule and a streak sweep on the bought prices; both on this season's forward
+# ledger (Due List Tuning workflow runs it in CI).
+PYTHONPATH=src .venv/bin/python scripts/run_due_hot_research.py --ledger-dir <card-feed forward_evidence folder>
+
 # How good are the DFS projections? Walk-forward MAE, rank and ceiling coverage
 # of the lab's DraftKings projection against DK averages and the app's old
 # formula (DFS Projection Test workflow runs it in CI on the bought prices).
