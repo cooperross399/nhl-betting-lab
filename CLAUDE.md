@@ -4224,6 +4224,12 @@ Re-derive rather than trust if the data has moved.
   `games[].hot`), each counting its own players (`web/smooth_pages.py`
   patches; Board stays pinned). The game panel still shows both lists
   together. Site only.
+  **Then, Cooper: "dont show me 1+ point if its for more than -150".** A
+  1+ point row (market `points`, over 0.5) on the Due List or the Hot List
+  priced shorter than -150 is not listed (`drought_rule.POINT_MAX_JUICE`,
+  `drop_short_points`, applied in both builders, the count named in the
+  list's notes); -150 itself, longer prices, rows with no price posted and
+  every other category are listed as before. Unstaked lists only.
 
 ## Contract strings — never change these
 

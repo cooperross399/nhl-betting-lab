@@ -40,7 +40,7 @@ from typing import Any
 
 import pandas as pd
 
-from nhl_betting_lab.drought_rule import HEAVY_JUICE, DroughtList, _decimal, best_over_prices
+from nhl_betting_lab.drought_rule import HEAVY_JUICE, DroughtList, _decimal, best_over_prices, drop_short_points
 from nhl_betting_lab.puck_drop import apply_puck_drop_guard
 from nhl_betting_lab.season import season_id
 
@@ -193,6 +193,7 @@ def build_hot_list(
             if chance is not None:
                 row["model_probability"] = round(float(chance), 4)
                 row["model_edge"] = round(float(chance) - 1 / _decimal(priced[0]), 4)
+    rows = drop_short_points(rows, result.notes)
     order = {m: i for i, m in enumerate(HOT_RULES)}
     rows.sort(key=lambda r: (order[r["market"]], -(r["last5"] or 0) if r["rule"] == "last5" else -r["streak"], r["player"]))
     result.rows = rows

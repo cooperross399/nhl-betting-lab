@@ -106,6 +106,22 @@ SECTION_TITLE = "Due List"
 #: Prices shorter than this are flagged on the row, never hidden: Cooper picks.
 HEAVY_JUICE = MAX_DEFAULT_JUICE
 
+#: A 1+ point row priced shorter than this is not listed at all, on the Due
+#: List or the Hot List (Cooper, 2026-11-19: "dont show me 1+ point if its for
+#: more than -150"). -150 itself is listed; a row with no price is listed.
+POINT_MAX_JUICE = -150
+
+
+def drop_short_points(rows: list[dict], notes: list[str]) -> list[dict]:
+    """`rows` without the 1+ point overs priced shorter than POINT_MAX_JUICE,
+    naming how many were left off in `notes`."""
+    keep = [r for r in rows if not (r.get("market") == "points" and r.get("american_odds") is not None
+                                    and r["american_odds"] < POINT_MAX_JUICE)]
+    left = len(rows) - len(keep)
+    if left:
+        notes.append(f"{left} 1+ point row(s) priced shorter than {POINT_MAX_JUICE} are not listed.")
+    return keep
+
 #: A game id no real game has, so the sentinel row sorts after every real one
 #: and is told apart from them.
 _TONIGHT_GAME_ID = 10**12
@@ -615,6 +631,7 @@ def build_drought_list(
             if chance is not None:
                 row["model_probability"] = round(float(chance), 4)
                 row["model_edge"] = round(float(chance) - 1 / _decimal(priced[0]), 4)
+    rows = drop_short_points(rows, result.notes)
     order = {m: i for i, m in enumerate(CATEGORIES)}
     rows.sort(key=lambda r: (order[r["market"]], r["rarity"], -r["drought"], r["player"]))
     result.rows = rows
