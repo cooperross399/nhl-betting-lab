@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import traceback
 import zlib
 from datetime import datetime, timezone
 from pathlib import Path
@@ -176,6 +177,8 @@ def live_rows(ledger: pd.DataFrame) -> pd.DataFrame:
     p["dec"] = decimal(p.american_odds)
     best = p.sort_values("dec").groupby(["snapshot_date", "market", "player"]).tail(1)
     best = best.rename(columns={"american_odds": "odds", "edge": "model_edge"})
+    if "model_edge" not in best.columns:
+        best["model_edge"] = np.nan
     best["won"] = best.outcome == "won"
     best["push"] = best.outcome == "push"
     return best[["gdate", "market", "player", "odds", "won", "push", "model_edge"]]
@@ -392,31 +395,49 @@ def main(argv: list[str] | None = None) -> int:
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
     L = ["# Due List profit and a Hot List: research", "", f"Generated {now}. 1u flat at the price; "
          "95% intervals bootstrapped over game nights. An interval that includes zero is no demonstrated edge."]
-    ledger_path = a.data / "drought_forward.csv"
-    if ledger_path.exists():
-        L += due_live(pd.read_csv(ledger_path))
-    else:
-        L += ["", "## 1. This season's Due List record", "", "No Due List ledger on disk."]
-    prices_path = a.data / "historical_prop_prices.csv"
-    cs: list[dict] = []
-    if prices_path.exists():
+    def part(fn):
+        try:
+            fn()
+        except Exception:  # one part failing must not hide the others
+            L.extend(["", "```", traceback.format_exc(), "```"])
+
+    state: dict = {"cs": []}
+
+    def one():
+        ledger_path = a.data / "drought_forward.csv"
+        if ledger_path.exists():
+            L.extend(due_live(pd.read_csv(ledger_path)))
+        else:
+            L.extend(["", "## 1. This season's Due List record", "", "No Due List ledger on disk."])
+
+    def two():
+        prices_path = a.data / "historical_prop_prices.csv"
+        if not prices_path.exists():
+            L.extend(["", "No bought prices on disk; parts 2 and 3 not measured."])
+            return
         prices = pd.read_csv(prices_path, usecols=["commence_time", "provider_event_id", "market", "player",
                                                    "selection", "line", "american_odds", "snapshot"])
         w = attach(bought_rows(prices), s)
         del prices
-        L += due_history(w)
-        hot, cs = hot_history(w)
-        L += hot
-    else:
-        L += ["", "No bought prices on disk; parts 2 and 3 not measured."]
-    fe = a.data / "forward_evidence.csv"
-    days = sorted(a.ledger_dir.glob("*.csv")) if a.ledger_dir else []
-    if days or fe.exists():
+        try:
+            L.extend(due_history(w))
+        except Exception:
+            L.extend(["", "```", traceback.format_exc(), "```"])
+        hot, state["cs"] = hot_history(w)
+        L.extend(hot)
+
+    def four():
+        fe = a.data / "forward_evidence.csv"
+        days = sorted(a.ledger_dir.glob("*.csv")) if a.ledger_dir else []
+        if not (days or fe.exists()):
+            L.extend(["", "## 4. This season", "", "No forward ledger on disk."])
+            return
         frames = [pd.read_csv(f, low_memory=False) for f in days] if days else [pd.read_csv(fe, low_memory=False)]
         v = attach(live_rows(pd.concat(frames, ignore_index=True)), s)
-        L += live_test(v, cs)
-    else:
-        L += ["", "## 4. This season", "", "No forward ledger on disk."]
+        L.extend(live_test(v, state["cs"]))
+
+    for fn in (one, two, four):
+        part(fn)
     text = "\n".join(L) + "\n"
     a.out.mkdir(parents=True, exist_ok=True)
     (a.out / "due_hot_research.md").write_text(text)

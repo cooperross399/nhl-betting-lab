@@ -122,14 +122,16 @@ jobs:
             git reset -q
           fi
           python scripts/run_due_hot_research.py --ledger-dir "$cf/forward_evidence" > /dev/null || status=$?
-          if [ -s data/outputs/due_hot_research.md ]; then
-            cat data/outputs/due_hot_research.md >> "$GITHUB_STEP_SUMMARY"
-            cat data/outputs/due_hot_research.md
-          fi
           if [ -s data/outputs/drought_rule_backtest.json ]; then
             echo "----- drought_rule_backtest.json -----"
             cat data/outputs/drought_rule_backtest.json
             echo "----- end drought_rule_backtest.json -----"
+          fi
+          # Printed last, so the research is the end of the log.
+          if [ -s data/outputs/due_hot_research.md ]; then
+            cat data/outputs/due_hot_research.md >> "$GITHUB_STEP_SUMMARY"
+            echo "----- due_hot_research.md -----"
+            cat data/outputs/due_hot_research.md
           fi
           # The bought prices leave the workspace before the job ends.
           rm -f data/processed/historical_prop_prices.csv
