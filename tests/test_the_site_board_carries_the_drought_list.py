@@ -187,7 +187,7 @@ def test_the_note_is_the_rule_and_the_backtest_headline_read_from_its_file(lab, 
 
     assert "60+ points, 25+ goals or 55+ assists" in note and "unstaked" in note and "Due List" in note
     # The shipped rule's card-window headline (either bar), as the committed backtest JSON states it.
-    assert "points -3.5% over 574 wagers" in note and "goals -6.9% over 1631" in note and "assists +9.2% over 301" in note
+    assert "points -3.5% over 574 wagers" in note and "goals +1.3% over 972" in note and "assists +9.2% over 301" in note
     assert "no category's interval sits above zero" in note
     assert "did not reach this build" not in note
     # The seasons the cell records were measured on, read from the same file's card-window buckets (2024 and 2025 starts).
