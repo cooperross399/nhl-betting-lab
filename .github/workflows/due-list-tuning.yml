@@ -23,6 +23,7 @@ on:
       - "scripts/run_due_list_tuning.py"
       - "scripts/run_drought_rule_backtest.py"
       - "scripts/run_due_list_big_games.py"
+      - "scripts/run_due_hot_research.py"
       - "src/nhl_betting_lab/drought_rule.py"
       - ".github/workflows/due-list-tuning.yml"
 
@@ -111,6 +112,19 @@ jobs:
           if [ -s data/outputs/due_list_big_games_history.md ]; then
             cat data/outputs/due_list_big_games_history.md >> "$GITHUB_STEP_SUMMARY"
             cat data/outputs/due_list_big_games_history.md
+          fi
+          # Where the Due List makes money, and a Hot List (Cooper, 2026-11-18).
+          # This season's forward ledger is read from card-feed's day files.
+          cf="$RUNNER_TEMP/card-feed"
+          mkdir -p "$cf"
+          if git fetch --depth 1 origin card-feed 2>/dev/null; then
+            git --work-tree="$cf" checkout FETCH_HEAD -- forward_evidence 2>/dev/null || true
+            git reset -q
+          fi
+          python scripts/run_due_hot_research.py --ledger-dir "$cf/forward_evidence" > /dev/null || status=$?
+          if [ -s data/outputs/due_hot_research.md ]; then
+            cat data/outputs/due_hot_research.md >> "$GITHUB_STEP_SUMMARY"
+            cat data/outputs/due_hot_research.md
           fi
           if [ -s data/outputs/drought_rule_backtest.json ]; then
             echo "----- drought_rule_backtest.json -----"
