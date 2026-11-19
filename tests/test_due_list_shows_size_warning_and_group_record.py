@@ -28,10 +28,11 @@ def test_only_a_band_whose_interval_sits_below_zero_is_flagged() -> None:
     assert not dr.lost_in_testing({})
 
 
-def test_the_committed_backtest_flags_the_two_losing_bands() -> None:
+def test_the_committed_backtest_flags_no_listed_band() -> None:
+    """Goals 20-24 was the last band flagged; it left the list on 2026-11-19."""
     records = dr.cell_records(ROOT / "data" / "outputs")
     flagged = {key for key, rec in records.items() if dr.lost_in_testing({"cell_record": rec})}
-    assert flagged == {("goals", "20-24")}
+    assert flagged == set()
 
 
 def _listed(**kw) -> dict:

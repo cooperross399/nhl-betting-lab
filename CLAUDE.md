@@ -4175,6 +4175,50 @@ Re-derive rather than trust if the data has moved.
   the card already keeps off is not read as a new lead. Report only: the
   card, snapshot, ledger, model, bars and stakes are unchanged.
 
+- **2026-11-19: the Due List loses goals 20-24, and a Hot List sits beside
+  it (Cooper: "where can we gain profit on the DUE list and could we
+  investigate the possibility of adding a HOT list like guys who are playing
+  super well or on point/goal/assist streaks").** `scripts/run_due_hot_research.py`
+  (Due List Tuning run 28 on #491; aggregates only) reads three things.
+  **This season's Due List** (forward record, 2026-09-29 to 11-17): 418
+  graded, 396 priced, 31.8% hit against 32.2% implied, +32.1u at 1u
+  (+8.1%, -18.0% .. +44.4%), +1.16u at the tracked sizes; by category at
+  tracked sizes 1+ assist -1.19u (196), 1+ goal +2.03u (109), 1+ point
+  -0.58u (34), hat tricks +0.80u (45), 2+ goals +0.10u (12). The 1u profit
+  is long prices (+501 or longer +35.2u over 60, 4 hits); every slice's
+  interval spans zero but one, -150 to -111 at -39.2% over 23. **The bought
+  seasons** (card window, shipped rule, 2,506 wagers, -4.2% [-10.3%,
+  +1.8%]): goals 20-24 lost in both, -20.8% over 355 (2024-25) and -16.8%
+  over 304 (2025-26), the one band to lose in both and already tagged "lost
+  in testing"; goals 25-39 won in both (+7.0% over 353, +4.6% over 293);
+  assists 55+ won in both (+9.3%, +9.0%); goals priced +111 to +150 lost
+  about 25% in both (116), not acted on (live +15.7% over 53 across all
+  categories). **So `THRESHOLDS["goals"]` is 25 and `TIERS["goals"]` drops
+  (20, 10).** Regenerated backtest (Due List Tuning run 29 on #491, card
+  window, either bar): goals +1.3% over 972 (-8.6% .. +11.5%; +0.3% over
+  582 and +2.8% over 390 by season), where 20+ read -6.9% over 1,631;
+  points -3.5% over 574 and assists +9.2% over 301 unchanged. No band is now
+  "lost in testing". Picked after seeing the data; no demonstrated edge.
+  **The Hot List** (`nhl_betting_lab.hot_list`): every streak and last-five
+  setting at every floor (Part 3) loses less than the same players at any
+  form and none shows an edge. Chosen by the worse season: points 80+ last
+  season with 8+ points in the last five, +0.7% over 360 [-6.6%, +7.6%]
+  (live this season +1.2% over 141); assists 60+ with 6+ in the last five,
+  -0.6% over 382 [-8.0%, +7.1%] (live +11.4% over 101); goals 40+ on a 2+
+  game goal streak, -0.9% over 264 [-15.6%, +14.0%] (live -13.6% over 38).
+  Streak and last five are counted over regular-season games dressed,
+  across the season boundary. Each listed row is the over 0.5 at the best
+  staged price (heavy juice flagged, never hidden; "not posted" never
+  filled), the puck-drop guard applies, and it is an UNSTAKED list like
+  the Due List: a "Hot List" card section after the Due List,
+  `data/outputs/hot_list.json` (in gameday-reports), `games[].hot` on the
+  board, a "Due & Hot Lists" board view (`smooth_pages` patches), graded on
+  `results.json` as `hotList` and on Record as its own "Hot List" group at
+  the prop sizes (0.25u, 0.15u at +200 to +500, 0.1u to +1500, 0.05u
+  longer), never in the bets' headline. Nothing reaches the card's
+  selections, stakes, fingerprint, snapshot, forward ledger or the
+  registered test.
+
 ## Contract strings — never change these
 
 Cooper's local scheduled tasks hard-code these. Renaming any of them silently

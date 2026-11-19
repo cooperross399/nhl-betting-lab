@@ -121,7 +121,7 @@ def test_the_json_keeps_its_keys_and_names_the_tiers_the_level_and_the_rule():
 
     assert set(payload) == {"generated_at", "thresholds", "min_drought", "tiers", "surprise_level", "rule",
                             "accounting", "buckets", "goal_sweep"}
-    assert payload["tiers"] == {"points": [[100, 2], [85, 3], [70, 4], [60, 5]], "goals": [[40, 4], [25, 8], [20, 10]],
+    assert payload["tiers"] == {"points": [[100, 2], [85, 3], [70, 4], [60, 5]], "goals": [[40, 4], [25, 8]],
                                 "assists": [[55, 3]]}
     assert payload["surprise_level"] == 0.05 and payload["min_drought"] == 5
     assert "either" in payload["rule"] and "(1 - p)^n <= 0.05" in payload["rule"] and "100+ -> 2" in payload["rule"]
