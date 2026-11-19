@@ -1,6 +1,6 @@
 """Cooper's Due List on the card: a selection list, built from the same function as the evidence.
 
-The rule (2026-10-07 evening, widened 2026-11-10, assists 2026-11-17): 60+ points, 20+ goals or 55+ assists last
+The rule (2026-10-07 evening, widened 2026-11-10, assists 2026-11-17): 60+ points, 25+ goals or 55+ assists last
 regular season, listed in that category when the drought reaches EITHER bar: the tier bar from
 last season's total (2 to 10 games by band) or the surprise bar from his own hit rate (the
 smallest n with (1-p)^n <= 0.05). On the card it is an UNSTAKED list Cooper picks from.
@@ -96,7 +96,7 @@ def test_the_tier_bar_and_its_band_at_every_boundary():
         ("points", 59, None, None), ("points", 60, 5, "60-69"), ("points", 69, 5, "60-69"),
         ("points", 70, 4, "70-84"), ("points", 84, 4, "70-84"),
         ("points", 85, 3, "85-99"), ("points", 99, 3, "85-99"), ("points", 100, 2, "100+"), ("points", 153, 2, "100+"),
-        ("goals", 19, None, None), ("goals", 20, 10, "20-24"), ("goals", 24, 10, "20-24"),
+        ("goals", 19, None, None), ("goals", 20, None, None), ("goals", 24, None, None),
         ("goals", 25, 8, "25-39"), ("goals", 34, 8, "25-39"),
         ("goals", 39, 8, "25-39"), ("goals", 40, 4, "40+"), ("goals", 64, 4, "40+"),
         ("assists", 40, None, None), ("assists", 54, None, None), ("assists", 55, 3, "55+"),
@@ -106,9 +106,9 @@ def test_the_tier_bar_and_its_band_at_every_boundary():
         assert dr.tier_bar(market, total) == bar, (market, total)
         assert dr.band_label(market, total) == band, (market, total)
     assert dr.tier_bar("points", float("nan")) is None and dr.band_label("goals", None) is None
-    assert dr.TIERS == {"points": ((100, 2), (85, 3), (70, 4), (60, 5)), "goals": ((40, 4), (25, 8), (20, 10)),
+    assert dr.TIERS == {"points": ((100, 2), (85, 3), (70, 4), (60, 5)), "goals": ((40, 4), (25, 8)),
                         "assists": ((55, 3),)}, "assists refined 2026-11-17"
-    assert dr.THRESHOLDS == {"points": 60, "goals": 20, "assists": 55}, "70 / 25 / 60 until 2026-11-10; assists 40 until 2026-11-17"
+    assert dr.THRESHOLDS == {"points": 60, "goals": 25, "assists": 55}, "goals 20 from 2026-11-10 to 11-19; assists 40 until 2026-11-17"
     assert dr.SURPRISE_MARKETS == ("points", "assists"), "goals left the surprise bar on 2026-10-10"
 
 
@@ -203,7 +203,7 @@ def test_a_player_is_listed_when_either_bar_is_reached_and_the_rule_names_which(
     assert dr.bars_reached("goals", 45, 0.9, 3) is None
     assert dr.bars_reached("goals", 45, 0.9, 4)["rule"] == "tier" and dr.bars_reached("goals", 45, 0.9, 4)["surprise_bar"] is None
     assert dr.bars_reached("goals", 30, 0.6, 7) is None and dr.bars_reached("goals", 30, 0.6, 8)["tier_bar"] == 8
-    assert dr.bars_reached("goals", 22, 0.6, 9) is None and dr.bars_reached("goals", 22, 0.6, 10)["band"] == "20-24"
+    assert dr.bars_reached("goals", 22, 0.6, 30) is None, "20-24 goals dropped 2026-11-19"
     assert dr.bars_reached("goals", 19, 0.6, 30) is None
 
 

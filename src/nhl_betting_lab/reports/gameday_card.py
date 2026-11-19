@@ -531,6 +531,12 @@ class GamedayCard:
     drought_unresolved: list[str] = field(default_factory=list)
     drought_notes: list[str] = field(default_factory=list)
     drought_headline: str = ""
+    #: Cooper's Hot List (2026-11-19, `nhl_betting_lab.hot_list`): unstaked,
+    #: like the Due List, and in none of the selections, stakes or ledgers.
+    hot_built: bool = False
+    hot_rows: list[dict[str, Any]] = field(default_factory=list)
+    hot_unresolved: list[str] = field(default_factory=list)
+    hot_notes: list[str] = field(default_factory=list)
     #: The Due List scorecard, as markdown lines, on Mondays only (2026-10-31).
     due_scorecard: list[str] = field(default_factory=list)
     #: The layer scorecard (`nhl_betting_lab.layer_scorecard`), as markdown
@@ -1729,6 +1735,10 @@ def render_card(card: GamedayCard) -> str:
         )
 
     lines.extend(render_drought_section(card))
+    if card.hot_built:
+        from nhl_betting_lab.hot_list import render_section as render_hot_section
+
+        lines.extend(render_hot_section(card.hot_rows, card.hot_notes, card.hot_unresolved))
     lines.extend(card.layer_scorecard)
 
     if card.unresolved_names:

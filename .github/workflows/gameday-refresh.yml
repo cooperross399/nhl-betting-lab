@@ -1491,6 +1491,7 @@ jobs:
             data/outputs/gameday_card.md
             data/outputs/gameday_card.json
             data/outputs/drought_list.json
+            data/outputs/hot_list.json
             data/outputs/drought_rule_forward.md
             data/outputs/drought_rule_forward.json
             data/outputs/provider_shadow_verification.md

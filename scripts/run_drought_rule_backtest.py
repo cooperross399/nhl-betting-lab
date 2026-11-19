@@ -1,11 +1,11 @@
 """Measure the Due List rule against bought prop prices.
 
 The rule (Cooper, 2026-10-07 evening; goals changed 2026-10-10): a skater who
-produced 60+ points, 20+ goals or 55+ assists LAST regular season (assists refined 2026-11-17) is listed in
+produced 60+ points, 25+ goals or 55+ assists LAST regular season (assists refined 2026-11-17) is listed in
 that category when his current drought (straight regular-season games dressed
 without one in it) reaches EITHER bar: the TIER bar from last season's total
 (points 100+ -> 2, 85-99 -> 3, 70-84 -> 4, 60-69 -> 5; goals 40+ -> 4, 25-39 -> 8,
-20-24 -> 10; assists 55+ -> 3) or, for points and assists only,
+assists 55+ -> 3) or, for points and assists only,
 the SURPRISE bar from his own prior-season hit rate p (the smallest n with
 (1 - p)^n <= 0.05). The wager measured
 is the over 0.5 in that category (1+ point, anytime goal, 1+ assist). The flat
@@ -75,9 +75,9 @@ SHOTS_BUCKETS = ((f"SHIPPED, shots up (>= {SHOTS_UP:g}x usual)", SHOTS_UP, np.in
                  (f"SHIPPED, shots down (< {SHOTS_DOWN:g}x)", -np.inf, SHOTS_DOWN))
 BOOTSTRAPS = 1000
 RULE_SENTENCE = (
-    "A skater with 60+ points, 20+ goals or 55+ assists last regular season is listed in that category when "
+    "A skater with 60+ points, 25+ goals or 55+ assists last regular season is listed in that category when "
     "his drought reaches either the tier bar from last season's total (points 100+ -> 2, 85-99 -> 3, 70-84 -> 4, "
-    "60-69 -> 5; goals 40+ -> 4, 25-39 -> 8, 20-24 -> 10; assists 55+ -> 3) or, for points and "
+    "60-69 -> 5; goals 40+ -> 4, 25-39 -> 8; assists 55+ -> 3) or, for points and "
     "assists, the "
     f"surprise bar from his own prior-season hit rate p, the smallest n with (1 - p)^n <= {SURPRISE_LEVEL}; "
     "the wager is the over 0.5."

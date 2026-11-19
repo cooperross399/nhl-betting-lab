@@ -1,7 +1,8 @@
 """Cooper's Due List, in one place, for the evidence and for the card.
 
 The rule (Cooper, 2026-10-07 evening; it replaces the flat 5-game rule shipped
-that morning in #307; widened 2026-11-10; assists refined 2026-11-17): a skater with 60+ points, 20+
+that morning in #307; widened 2026-11-10; assists refined 2026-11-17; goals
+20-24 dropped 2026-11-19): a skater with 60+ points, 25+
 goals or 55+ assists LAST
 regular season is listed in that category when his current drought (regular-
 season games he dressed for without one in that category, carried across the
@@ -10,7 +11,8 @@ shorter the drought:
 
 1. The TIER bar, from last season's total in the category (`TIERS`):
    points 100+ -> 2, 85-99 -> 3, 70-84 -> 4, 60-69 -> 5; goals 40+ -> 4,
-   25-39 -> 8, 20-24 -> 10; assists 55+ -> 3. (Assists 2026-11-10 to 11-17:
+   25-39 -> 8; assists 55+ -> 3. (Goals 2026-11-10 to 11-19 also listed
+   20-24 -> 10, dropped after it lost in both bought seasons. Assists 2026-11-10 to 11-17:
    40+ to qualify, 60+ -> 3, 40-59 -> 4. Until 2026-11-10,
    when Cooper asked for more picks every day: points 70+ at 3/4/5, goals 40+
    -> 5 and 25-39 -> 10, assists 60+ -> 3 only. Goals until 2026-10-10: 30+ to qualify, 40+ -> 3,
@@ -70,12 +72,16 @@ from nhl_betting_lab.season import clean_text, row_game_date, season_id
 #: Widened on 2026-11-10 (Cooper: "i want more picks on the due list
 #: everyday"): 60+ points, 20+ goals, 40+ assists, with shorter droughts.
 #: Assists refined on 2026-11-17 to 55+ at 3 (see `TIERS`).
-THRESHOLDS = {"points": 60, "goals": 20, "assists": 55}
+#: Goals 20-24 dropped on 2026-11-19 (Cooper: "where can we gain profit on the
+#: DUE list"): it lost in both bought seasons, -20.8% over 355 (2024-25) and
+#: -16.8% over 304 (2025-26), the one band to lose in both
+#: (scripts/run_due_hot_research.py, Due List Tuning run 28 on #491).
+THRESHOLDS = {"points": 60, "goals": 25, "assists": 55}
 #: The tier bar: (floor of last season's total, drought that lists him), best
 #: band first. The last floor of each category is the base qualifier.
 TIERS: dict[str, tuple[tuple[int, int], ...]] = {
     "points": ((100, 2), (85, 3), (70, 4), (60, 5)),
-    "goals": ((40, 4), (25, 8), (20, 10)),
+    "goals": ((40, 4), (25, 8)),
     # 2026-11-17 (Cooper: "Research and refine the parameters for 1+ assist"):
     # 55+ assists at 3, the cell both bought seasons agreed on
     # (scripts/run_due_list_big_games.py, Due List Tuning run 44104405522).

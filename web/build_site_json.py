@@ -933,6 +933,7 @@ def build_board(day: date, lab: Path, history_dir: Path) -> dict:
         card = json.loads(card_path.read_text(encoding="utf-8"))
     candidates = [r for r in card.get("best_bets", []) + card.get("leans", []) + card.get("passes", []) if r.get("market") in MARKET_LABEL]
     drought_listed = read_drought_list(lab, day) if not preseason else None
+    hot_listed = read_hot_list(lab, day) if not preseason else None
     prices = todays_rows(read_prices(lab / "data" / "staging"), day) if not preseason else []
     featured = todays_rows(read_prices(lab / "data" / "staging", featured_only=True), day) if not preseason else []
     opens = earliest_capture(lab / "data" / "processed", day) if not preseason else []
@@ -993,6 +994,8 @@ def build_board(day: date, lab: Path, history_dir: Path) -> dict:
             # that could not project.
             begun = (_moment(g["startTimeUTC"]) or datetime.min.replace(tzinfo=timezone.utc)) <= datetime.now(timezone.utc)
             row["drought"] = drought_for_game(drought_listed, h, a, begun)
+            if hot_listed is not None:
+                row["hot"] = hot_for_game(hot_listed, h, a, begun)
         if not preseason and lab_model and row["gameType"] == REGULAR_SEASON_GAME_TYPE:
             home_key = lab_model["resolve"](f"{home.get('placeName', {}).get('default', '')} {home.get('commonName', {}).get('default', '')}".strip()) or h
             away_key = lab_model["resolve"](f"{away.get('placeName', {}).get('default', '')} {away.get('commonName', {}).get('default', '')}".strip()) or a
@@ -1171,9 +1174,9 @@ def build_board(day: date, lab: Path, history_dir: Path) -> dict:
 
 #: The rule in one sentence (Cooper, 2026-10-07 evening; it replaces the flat
 #: 5-game rule shipped in #307). Two bars, and a drought at EITHER lists him.
-DROUGHT_RULE_SENTENCE = ("Cooper's Due List, an unstaked list he picks from: a skater with 60+ points, 20+ goals or 55+ assists "
+DROUGHT_RULE_SENTENCE = ("Cooper's Due List, an unstaked list he picks from: a skater with 60+ points, 25+ goals or 55+ assists "
                          "last regular season whose drought in that category has reached either bar, the tier bar his total sets "
-                         "(points 100+ → 2, 85-99 → 3, 70-84 → 4, 60-69 → 5; goals 40+ → 4, 25-39 → 8, 20-24 → 10; "
+                         "(points 100+ → 2, 85-99 → 3, 70-84 → 4, 60-69 → 5; goals 40+ → 4, 25-39 → 8; "
                          "assists 55+ → 3) or, for points "
                          "and assists, his own equal-surprise bar, the shortest drought with no more than a 5% chance at his "
                          "last-season hit rate; and, for the big games, a 40+ goal scorer 25 games without 2+ goals, a 40+ "
@@ -1271,6 +1274,56 @@ def read_drought_list(lab: Path, day: date) -> dict | None:
     if not isinstance(payload, dict) or payload.get("day") != day.isoformat() or not isinstance(payload.get("rows"), list):
         return None
     return payload
+
+
+def read_hot_list(lab: Path, day: date) -> dict | None:
+    """The card's Hot List for `day` (data/outputs/hot_list.json), or None.
+
+    Written by the card beside drought_list.json (nhl_betting_lab.hot_list,
+    Cooper 2026-11-19) and restored with the rest of `gameday-reports`. A list
+    built for another day is never shown on this one.
+    """
+    path = lab / "data" / "outputs" / "hot_list.json"
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(payload, dict) or payload.get("day") != day.isoformat() or not isinstance(payload.get("rows"), list):
+        return None
+    return payload
+
+
+#: The Hot List's forms (nhl_betting_lab.hot_list.HOT_RULES kinds).
+HOT_RULE_KINDS = ("last5", "streak")
+
+
+def hot_for_game(listed: dict | None, home: str, away: str, started: bool) -> list[dict]:
+    """The Hot List players of one game, in the card's order (web/SCHEMA.md games[].hot).
+
+    A game that has started lists nobody. A price the card did not stage stays
+    null; every figure is the card's, never computed here.
+    """
+    if not listed or started:
+        return []
+    out = []
+    for r in listed["rows"]:
+        if not isinstance(r, dict) or r.get("home_team") != home or r.get("away_team") != away:
+            continue
+        odds = r.get("american_odds")
+        priced = _is_number(odds)
+        out.append({
+            "player": r.get("player"), "playerId": r.get("player_id"), "team": r.get("team"),
+            "market": r.get("market"), "line": r.get("line"), "lastSeason": _whole(r.get("last_season")),
+            "last5": _whole(r.get("last5")), "streak": _whole(r.get("streak")), "bar": _whole(r.get("bar")),
+            "rule": r.get("rule") if r.get("rule") in HOT_RULE_KINDS else None,
+            "price": (int(odds) if float(odds).is_integer() else float(odds)) if priced else None,
+            "book": (r.get("book") or None) if priced else None,
+            "heavyJuice": bool(r.get("heavy_juice")),
+            "stake": prop_stake(odds) if priced else None,
+            "modelChance": _real(r.get("model_probability")),
+            "modelEdge": _real(r.get("model_edge")),
+        })
+    return out
 
 
 def drought_window(lab: Path) -> str | None:
@@ -1893,7 +1946,7 @@ def settle(day: date, history_dir: Path, *, processed: Path | None = None) -> di
     schedule_only = bool(shown) and not any("projGoals" in (g.get("home") or {}) for g in shown)
     # The Due List needs the card's list and nothing of the model, so a board
     # that carried it is graded on it even where the model projected nothing.
-    carries_list = any("drought" in g for g in shown if isinstance(g, dict))
+    carries_list = any("drought" in g or "hot" in g for g in shown if isinstance(g, dict))
     if schedule_only:
         # A regular-season board frozen without the model (build_board's
         # schedule-only notice) grades nothing below, and this set no notice,
@@ -1909,6 +1962,8 @@ def settle(day: date, history_dir: Path, *, processed: Path | None = None) -> di
     finals = {str(g["id"]): g for g in schedule_for(day) if g.get("gameState") in {"OFF", "FINAL"}}
     if carries_list:
         base["dueList"] = grade_due_list(board, finals, processed, due_ledger_prices(read_due_ledger(processed)[0], day))
+    if any("hot" in g for g in shown if isinstance(g, dict)):
+        base["hotList"] = grade_due_list(board, finals, processed, field="hot")
     if isinstance(board.get("props"), dict):
         base["props"] = grade_props(board, finals, processed)
     if schedule_only:
@@ -2262,7 +2317,7 @@ def _due_list_key(entry: dict) -> tuple:
 
 
 def grade_due_list(board: dict, finals: dict, processed: Path | None,
-                   ledger_prices: dict[tuple[str, str], float] | None = None) -> dict:
+                   ledger_prices: dict[tuple[str, str], float] | None = None, field: str = "drought") -> dict:
     """results.json's `dueList` (its `summary` and `rows`) for one frozen board.
 
     Every entry the frozen board published is graded, priced or not, against
@@ -2284,9 +2339,10 @@ def grade_due_list(board: dict, finals: dict, processed: Path | None,
     entry published with no price takes the price the lab's ledger settled
     it at (`ledger_prices`, the card's frozen price that morning), marked
     `priceSource: "card"`; with neither it is graded and carries no units.
-    Nothing is bet.
+    Nothing is bet. `field` "hot" grades the Hot List (games[].hot) by the
+    same rules, its markets being Due List categories.
     """
-    games = [g for g in board.get("games") or [] if isinstance(g, dict) and "drought" in g]
+    games = [g for g in board.get("games") or [] if isinstance(g, dict) and field in g]
     by_id, by_name, boxed = read_player_counts(processed, {str(g.get("id")) for g in games if str(g.get("id")) in finals})
     tally = {"w": 0, "l": 0, "p": 0}
     rows: list[dict] = []
@@ -2294,7 +2350,7 @@ def grade_due_list(board: dict, finals: dict, processed: Path | None,
     for g in games:
         game_id = str(g.get("id"))
         home, away = (g.get("home") or {}).get("abbr"), (g.get("away") or {}).get("abbr")
-        for entry in g.get("drought") or []:
+        for entry in g.get(field) or []:
             if not isinstance(entry, dict):
                 continue
             key = _due_list_key(entry)
@@ -2409,7 +2465,7 @@ TEAM_PICK_DEFAULT_UNITS = 1.0
 
 #: The tracker's groups: the card's team best bets, its prop best bets, and
 #: the Due List at its notional DUE_LIST_STAKE. Leans are never tracked.
-TRACKER_GROUPS = {"team": "Team picks", "props": "Player props", "due": "Due List"}
+TRACKER_GROUPS = {"team": "Team picks", "props": "Player props", "due": "Due List", "hot": "Hot List"}
 
 #: Price bands, by the American price taken.
 PRICE_BANDS = ((-10_000, -151, "−150 and shorter"), (-150, -111, "−149 to −111"), (-110, 110, "−110 to +110"),
@@ -2427,7 +2483,7 @@ TRACKED_STAKE_RULE = ("0.25u, to win 0.25u on a minus price; props +200 to +500 
 def restake(row: dict) -> dict:
     """One tracker row restated at RECORD_STAKE (to win it on a minus price),
     from its own price and result: a row kept at the card's stake reads the same."""
-    stake = prop_stake(row.get("price")) if row.get("group") in ("due", "props", "leans") else RECORD_STAKE
+    stake = prop_stake(row.get("price")) if row.get("group") in ("due", "hot", "props", "leans") else RECORD_STAKE
     got = record_units(row.get("price"), row.get("result"), stake=stake)
     if got is None:
         return row
@@ -2481,6 +2537,17 @@ def tracker_rows(results: dict) -> list[dict]:
                     "player": r.get("player"), "playerId": r.get("playerId"), "team": r.get("team"),
                     "opp": r.get("opp"), "price": float(r["price"]), "result": r["result"],
                     **({"band": r["band"]} if isinstance(r.get("band"), str) and r["band"] else {}),
+                    "staked": 0.0, "units": 0.0}))
+    # Cooper's Hot List (2026-11-19), tracked at the Due List's notional sizes.
+    for r in ((results.get("hotList") or {}).get("rows") or []) if isinstance(results.get("hotList"), dict) else []:
+        if not isinstance(r, dict) or r.get("result") not in ("win", "loss", "push") or not _is_number(r.get("price")):
+            continue
+        market = r.get("market")
+        out.append(restake({"date": day, "group": "hot", "market": market, "propType": PROP_LABEL.get(market, market),
+                    "side": "over", "line": r.get("line") if r.get("line") is not None else DUE_LIST_LINE,
+                    "player": r.get("player"), "playerId": r.get("playerId"), "team": r.get("team"),
+                    "opp": r.get("opp"), "price": float(r["price"]), "result": r["result"],
+                    **({"rule": r["rule"]} if r.get("rule") in HOT_RULE_KINDS else {}),
                     "staked": 0.0, "units": 0.0}))
     return out
 
@@ -2581,7 +2648,7 @@ def tracker(rows: list[dict], *, nights: int, generated_at: str | None = None) -
     def market_label(r, k):
         if r["group"] == "team":
             return r["market"]
-        return f"{'Due List · ' if r['group'] == 'due' else ''}{r.get('propType')}"
+        return f"{'Due List · ' if r['group'] == 'due' else 'Hot List · ' if r['group'] == 'hot' else ''}{r.get('propType')}"
 
     def player_key(r):
         if r["group"] == "team":

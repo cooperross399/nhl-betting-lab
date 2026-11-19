@@ -63,6 +63,10 @@ from nhl_betting_lab.providers.team_names import (
 )
 from nhl_betting_lab.puck_drop import parse_commence_time
 from nhl_betting_lab.due_context import annotate as annotate_due_list
+from nhl_betting_lab.hot_list import SITE_LIST_FILENAME as HOT_SITE_LIST_FILENAME
+from nhl_betting_lab.hot_list import build_hot_list
+from nhl_betting_lab.hot_list import save_site_list as save_hot_list
+from nhl_betting_lab.hot_list import site_payload as hot_site_payload
 from nhl_betting_lab.lineups import TEAM_LINEUP_LAYER_ON, TonightLineups, tonight_lineups
 from nhl_betting_lab.reports.card_pricing import (
     price_props,
@@ -1152,6 +1156,24 @@ def main(argv: list[str] | None = None) -> int:
         outputs / SITE_LIST_FILENAME,
         site_payload(drought, card.drought_headline, card.generated_at),
     )
+    # Cooper's Hot List (2026-11-19): the Due List's opposite, unstaked, on
+    # the same logs, rosters, schedule and staged prices.
+    card.hot_built = True
+    try:
+        hot = build_hot_list(logs=logs, rosters=current_rosters(raw_dir=raw), starts=starts, prices=priceable,
+                             team_names=team_names, day=snapshot_day, now=moment, probabilities=probabilities)
+    except (KeyError, ValueError) as exc:
+        from nhl_betting_lab.drought_rule import DroughtList
+
+        hot = DroughtList(day=snapshot_day, notes=[f"The Hot List could not be built: {exc}"])
+        print(f"::warning::The Hot List could not be built: {exc}")
+    card.hot_rows, card.hot_unresolved, card.hot_notes = hot.rows, hot.unresolved, list(hot.notes)
+    if hot.removed_by_guard:
+        card.hot_notes.append(f"{hot.removed_by_guard} qualifier(s) are not listed: their game has started or "
+                              "its start could not be confirmed.")
+    print(f"Hot List for {snapshot_day}: {len(hot.rows)} row(s), "
+          f"{sum(1 for r in hot.rows if r['american_odds'] is None)} with no price posted.")
+    save_hot_list(outputs / HOT_SITE_LIST_FILENAME, hot_site_payload(hot, card.generated_at))
     if args.now and processed.resolve() == PROCESSED_DIR.resolve():
         # The real ledger's own rule (see the archive above): a reproduction
         # of a past night must not write a dated list into the real record.

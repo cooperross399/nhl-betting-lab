@@ -116,6 +116,34 @@ PL = ('const pl = (key, alt) => { const m = r.season && r.season.money && r.seas
       'return m && typeof m.units === "number" ? '
       '`${m.units > 0.004 ? "+" : m.units < -0.004 ? "−" : ""}${Math.abs(m.units).toFixed(2)}u at ${m.stake ?? 0.25}u a bet` : alt; };\n  ')
 
+#: The Due List's box label span, which the Hot List row relabels.
+SPAN = ("<span style=\"font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:.08em;"
+        "text-transform:uppercase;color:var(--mute);\">")
+
+#: The Hot List row (2026-11-19), the Due List row's shape so the same template
+#: draws it. Defined beside drRow; every read is guarded.
+HOT_ROW = (
+    "    const HOT_UNITS = { points: [\"point\", \"points\", \"Hot · 1+ point\", \"a point\"], goals: [\"goal\", \"goals\", \"Hot · anytime goal\", \"a goal\"],\n"
+    "      assists: [\"assist\", \"assists\", \"Hot · 1+ assist\", \"an assist\"] };\n"
+    "    const hotRow = (x, gid) => {\n"
+    "      const u = HOT_UNITS[x.market] || [x.market, x.market, `Hot · ${x.market}`, x.market], t = T[x.team] || {}, priced = typeof x.price === \"number\";\n"
+    "      const isStreak = x.rule === \"streak\", n = isStreak ? x.streak : x.last5;\n"
+    "      const form = isStreak ? `${x.streak} straight games with ${u[3]}` : `${x.last5} ${x.last5 === 1 ? u[0] : u[1]} in his last 5 games`;\n"
+    "      const facts = [\n"
+    "        typeof x.last5 === \"number\" ? { label: \"Last 5 games\", value: `${x.last5} ${x.last5 === 1 ? u[0] : u[1]}`, sub: \"\" } : null,\n"
+    "        typeof x.streak === \"number\" ? { label: \"Streak\", value: `${x.streak} straight`, sub: `games with ${u[3]}` } : null,\n"
+    "        typeof x.stake === \"number\" ? { label: \"Tracked at\", value: `${x.stake}u`, sub: \"on the Hot List record\" } : null,\n"
+    "        typeof x.modelChance === \"number\" ? { label: \"Model's chance\", value: `${Math.round(x.modelChance * 100)}%`, sub: typeof x.modelEdge === \"number\" ? `${x.modelEdge > 0 ? \"+\" : \"\"}${(x.modelEdge * 100).toFixed(1)} pts vs the price` : \"\" } : null,\n"
+    "      ].filter(Boolean);\n"
+    "      return { boxLabel: isStreak ? \"straight\" : \"in last 5\", player: x.player, team: x.team || \"\", color: t.color || \"var(--ink)\", fg: t.fg || \"var(--paper)\",\n"
+    "        streak: n != null ? String(n) : \"—\", category: u[2], history: `${x.lastSeason ?? \"—\"} ${u[1]} last season · ${form}`, facts, hasFacts: facts.length > 0,\n"
+    "        price: priced ? F.fmtOdds(x.price) : \"—\", book: priced ? x.book || \"\" : \"price not posted\", priceColor: priced ? \"var(--ink)\" : \"var(--mute)\", juice: !!x.heavyJuice,\n"
+    "        track: track({ ...x, gameId: gid, side: \"over\", line: typeof x.line === \"number\" ? x.line : 0.5, unitOne: u[0], unitMany: u[1] }),\n"
+    "        aria: `${x.player}, ${u[2]}, ${form}, ${priced ? F.fmtOdds(x.price) : \"price not posted\"}` };\n"
+    "    };\n"
+)
+
+
 PATCHES: dict[str, list[tuple[str, str]]] = {
     "lib/sports.js": [
         (
@@ -195,6 +223,57 @@ PATCHES: dict[str, list[tuple[str, str]]] = {
             '      shutout: ["shutout", "shutouts", "Shutout", "a shutout", "starts", "shutout"] };',
             '      two_points: ["point", "points", "2+ points", "a 2-point game", "games", "points"],\n'
             '      shutout: ["shutout", "shutouts", "Shutout", "a shutout", "starts", "shutout"] };',
+        ),
+        # Cooper's Hot List (2026-11-19; nhl_betting_lab.hot_list, web/SCHEMA.md
+        # games[].hot): players on a streak, listed beside the Due List in the
+        # same view and the same game panel, each row labelled "Hot".
+        (
+            "    const byGameProps = {};",
+            HOT_ROW + "    const byGameProps = {};",
+        ),
+        (
+            'const dr = droughtRows(r.drought).map((x) => drRow(x, g.id));',
+            'const dr = [...droughtRows(r.drought).map((x) => drRow(x, g.id)), ...droughtRows(r.hot).map((x) => hotRow(x, g.id))];',
+        ),
+        (
+            'return { player: x.player, team: x.team || "", color: t.color || "var(--ink)", fg: t.fg || "var(--paper)", streak: x.drought',
+            'return { boxLabel: "games w/o", player: x.player, team: x.team || "", color: t.color || "var(--ink)", fg: t.fg || "var(--paper)", streak: x.drought',
+        ),
+        (
+            "\n" + " " * 30 + SPAN + "games w/o</span>",
+            "\n" + " " * 30 + SPAN + "{{ r.boxLabel }}</span>",
+        ),
+        (
+            "\n" + " " * 20 + SPAN + "games w/o</span>",
+            "\n" + " " * 20 + SPAN + "{{ r.boxLabel }}</span>",
+        ),
+        (
+            '>Due List · potential bets</span>',
+            '>Due &amp; Hot Lists · potential bets</span>',
+        ),
+        (
+            'drought: dr.length ? `Due List ×${dr.length}` : "",',
+            'drought: dr.length ? `Due/Hot ×${dr.length}` : "",',
+        ),
+        (
+            'const dGroups = dGames.filter((g) => droughtRows(g.drought).length).map((g) => {',
+            'const dGroups = dGames.filter((g) => droughtRows(g.drought).length || droughtRows(g.hot).length).map((g) => {',
+        ),
+        (
+            'e.away.score != null, rows = droughtRows(g.drought);',
+            'e.away.score != null, rows = [...droughtRows(g.drought), ...droughtRows(g.hot).map((x) => ({ ...x, _hot: true }))];',
+        ),
+        (
+            'rows: rows.map((x) => drRow(x, g.id)) };',
+            'rows: rows.map((x) => (x._hot ? hotRow(x, g.id) : drRow(x, g.id))) };',
+        ),
+        (
+            'viewBtn("drought", `Due List · ${dCount}`)',
+            'viewBtn("drought", `Due & Hot · ${dCount}`)',
+        ),
+        (
+            'Nobody on the Due List tonight',
+            'Nobody on the Due or Hot List tonight',
         ),
     ],
     "Results.dc.html": [

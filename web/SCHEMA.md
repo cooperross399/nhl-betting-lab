@@ -222,7 +222,7 @@ games[].pick     + side   "away" | "home" | "over" | "under"  — which side the
                  + line   number | null — the total's or puck line's number; null for moneyline and regulation
                  Written by build_site_json.py::pick_side_and_line from the card candidate's own selection and line.
 games[].drought  [] on every regular-season game — Cooper's Due List (2026-10-07; that evening the two bars below replaced
-                 the flat 5-game rule of #307), an unstaked list he picks from: 60+ points, 20+ goals or 55+ assists (70 / 25 / 60 until 2026-11-10; assists 40+ 2026-11-10 to 11-17) last regular
+                 the flat 5-game rule of #307), an unstaked list he picks from: 60+ points, 25+ goals or 55+ assists (70 / 25 / 60 until 2026-11-10; assists 40+ 2026-11-10 to 11-17; goals 20+ 2026-11-10 to 11-19) last regular
                  season, and a drought in that category (games dressed without one, carried across the season boundary) that
                  has reached EITHER bar. Since 2026-11-04 also the big games: "two_goals" (2+ goals, line 1.5) and
                  "hat_trick" (3+ goals, line 2.5) for a 40+ goal scorer 25 games / 50 games without one, since 2026-11-17 "two_points"
@@ -289,6 +289,17 @@ games[].drought  [] on every regular-season game — Cooper's Due List (2026-10-
                  publishes, with nulls. Nothing is computed or filled in here, and a missing price still renders "price not
                  posted". The page guards every one of these reads: a board without the drought field (EPL, CBB) and an NHL
                  board frozen before they existed render exactly as before.
+games[].hot      [] | absent — Cooper's Hot List (2026-11-19; nhl_betting_lab.hot_list): players on a streak, the Due List's
+                 opposite. Present on every regular-season game when the card's data/outputs/hot_list.json is for this day,
+                 empty when nobody qualifies or the game has started. Rules: 80+ points last season and 8+ points in his
+                 last 5 games; 60+ assists and 6+ assists in his last 5; 40+ goals and a goal in each of his last 2+ games.
+                 Each row: player, playerId, team, market (points | goals | assists, over 0.5), line, lastSeason, last5
+                 (his last 5 games' total in the stat | null under 5 games), streak (games in a row with one), bar, rule
+                 ("last5" | "streak" | null), price (best American odds | null: not posted), book, heavyJuice, stake (the
+                 notional size the site records it at, prop_stake | null), modelChance, modelEdge (the card's own chance
+                 of the over and its gap to the price | null). Graded the next morning like the Due List into
+                 results.json hotList and tracker.json rows of group "hot". Unstaked: never a pick, never given units.
+                 The Board draws it inside the Due List view and panel through web/smooth_pages.py, rows labelled "Hot".
 droughtNote      one sentence shown above each game's list: the Due List rule (both bars, either lists him) and the
                  backtest headline, read from data/outputs/drought_rule_backtest.json
 droughtWindow    string | null — the seasons the cell records were measured on, as the page's label ("2024-26": the first
