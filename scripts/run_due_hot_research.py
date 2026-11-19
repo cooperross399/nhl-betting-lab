@@ -278,7 +278,8 @@ def due_live(ledger: pd.DataFrame) -> list[str]:
              f"tracked units {d.tracked.sum():+.2f}u.")
     sl = [("all", pd.Series(True, index=d.index))]
     sl += [(f"category {c}", d.category == c) for c in sorted(d.category.unique())]
-    sl += [(f"band {b}", d.band == b) for b in sorted(d.band.unique()) if b not in set(d.category)]
+    d["band"] = d.band.fillna("").astype(str)
+    sl += [(f"band {b}", d.band == b) for b in sorted(d.band.unique()) if b and b != "None" and b not in set(d.category)]
     sl += [(f"price {label}", d.bracket == label) for _, _, label in PRICE_BRACKETS]
     sl += [("home", d.home), ("away", ~d.home)]
     sl += [("drought 0-4", dr <= 4), ("drought 5-9", dr.between(5, 9)), ("drought 10-19", dr.between(10, 19)),
@@ -306,6 +307,12 @@ def due_history(w: pd.DataFrame) -> list[str]:
         L += table(f"Shipped rule, {m}, by price and venue", y,
                    [(f"price {label}", y.bracket == label) for _, _, label in PRICE_BRACKETS]
                    + [("home", y.venue == "home"), ("away", y.venue == "away")] + drought_past(y), "hist-due-" + m)
+        L += table(f"Shipped rule, {m}, by price and season", y,
+                   [(f"price {label}, {s}-{str(s + 1)[2:]}", (y.bracket == label) & (y.season == s))
+                    for _, _, label in PRICE_BRACKETS for s in (2024, 2025)]
+                   + [(f"band {b}, {s}-{str(s + 1)[2:]}", (y.band.astype(str) == b) & (y.season == s))
+                      for b in sorted(y.band.dropna().astype(str).unique()) for s in (2024, 2025)],
+                   "hist-due-season-" + m)
     return L
 
 
