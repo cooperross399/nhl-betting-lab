@@ -198,7 +198,8 @@ STAKE_SIZES = {0.125: 0.15, 0.375: 0.35}
 def round_stake(units: float) -> float:
     """A best bet's units after the CLV multiplier, as a size Cooper uses:
     0.125 is 0.15 and 0.375 is 0.35 (his words), anything else the nearest
-    0.05, never under 0.05. A tier's own stake (0.5, 0.25, 0.1) is unchanged."""
+    0.05, never under 0.05. A tier's own stake (2, 1, 0.4 since 2026-11-21;
+    0.5, 0.25, 0.1 before) is unchanged."""
     units = round(float(units), 4)
     if units <= 0:
         return 0.0

@@ -4254,6 +4254,39 @@ Re-derive rather than trust if the data has moved.
   report's best-bet view follows the new bar. The model, the measurement
   bars, the market list and every other gate are unchanged.
 
+- **2026-11-21: every tracked record and the card's stakes move to a 1u
+  base; the ladder keeps its shape (Cooper, decision of 2026-11-21: "Change
+  the record/profit to reflect 1u risk/to win and quarter kelly sizing based
+  off that for the longer odds", then, minutes later, "okay no i meant use
+  the due list ladder style pricing but with 1u as the main instead of
+  .25u").** No quarter Kelly: the second message replaced it. The rule, one
+  ladder everywhere: up to +199, 1u risked on a plus price and enough to win
+  1u on a minus price (a push returns 0); +200 to +500 0.6u, +501 to +1500
+  0.4u, longer 0.2u. It is the 2026-11-10 ladder times four
+  (0.25 / 0.15 / 0.1 / 0.05). Where it lives: the lab's
+  `drought_forward.TRACKED_STAKE` / `TRACKED_STAKE_BRACKETS` (the card's Due
+  and Hot List "Tracked at" columns and the Monday scorecard), the site's
+  `build_site_json.RECORD_STAKE`, `DUE_LIST_STAKE`, `PROP_STAKE_BRACKETS`
+  (tracker.json, the four season records under the board, Results, the Due
+  and Hot List records, prop best bets) and `web/prop_leans.py`
+  (`LEAN_STAKE`, the prop leans record). The card's best-bet stakes keep
+  their proportions from the new base: `TIER_UNITS` A 2u, B 1u, C 0.4u
+  (were 0.5 / 0.25 / 0.1), still times the CLV multiplier, so a staked row
+  reads 3, 2, 1.5, 1, 0.6, 0.5, 0.25, 0.2 or 0.1 and never an odd size.
+  **History is restated:** tracker rows are recomputed from each row's own
+  price and result every build, and a kept night whose `summary.money` was
+  written at another stake (every night before this, which names none) is
+  settled again; if that fails its money is scaled to the new stake
+  (`restated_money`, exact, since every record was flat at its stake). The
+  site's pages read the new stake (`?? 1` fallbacks, Record and Methods
+  wording, `web/SCHEMA.md`), and Publish Site's log prints each record's
+  units and units risked. Every figure on the site reads four times what it
+  did, to within the rounding of each row to 0.01u. **The X card's profits
+  do not change** (Cooper, the same evening: "dont change the twitter
+  prpfits"). Nothing is bet; the model, the edge bars, the market list, the
+  snapshot, the forward ledger and the registered test are unchanged.
+  This lab keeps no separate decision log: this entry is the record.
+
 ## Contract strings — never change these
 
 Cooper's local scheduled tasks hard-code these. Renaming any of them silently

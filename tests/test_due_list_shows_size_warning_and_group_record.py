@@ -52,8 +52,8 @@ def test_the_card_shows_the_tracked_size_and_the_flag() -> None:
                                                         cell_record=SPANNING, american_odds=-120)])
     text = "\n".join(render_drought_section(card))
     assert "| Best price | Book | Tracked at | Flag |" in text
-    assert "| +320 | fanduel | 0.15u | lost in testing (band interval below zero) |" in text
-    assert "| -120 | fanduel | 0.25u |  |" in text
+    assert "| +320 | fanduel | 0.6u | lost in testing (band interval below zero) |" in text
+    assert "| -120 | fanduel | 1u |  |" in text
 
 
 def test_the_site_row_carries_its_stake_and_the_flag() -> None:
@@ -61,7 +61,7 @@ def test_the_site_row_carries_its_stake_and_the_flag() -> None:
     listed = {"rows": [_listed(), _listed(player="No Price", player_id=8470003, american_odds=None,
                                           cell_record=SPANNING)]}
     rows = site.drought_for_game(listed, "TOR", "MTL", started=False)
-    assert rows[0]["stake"] == 0.15 and rows[0]["lostInTesting"] is True
+    assert rows[0]["stake"] == 0.6 and rows[0]["lostInTesting"] is True
     assert rows[1]["stake"] is None and rows[1]["lostInTesting"] is False
 
 
@@ -78,7 +78,7 @@ def test_the_tracker_keeps_a_record_by_group(tmp_path) -> None:
     assert set(groups) == {"goals:20-24", "assists:60+"}
     goals = groups["goals:20-24"]
     assert (goals["w"], goals["l"], goals["bets"]) == (1, 1, 2)
-    assert goals["units"] == round(0.25 * 1.5 - 0.15, 2)
+    assert goals["units"] == round(1.0 * 1.5 - 0.6, 2)
     assert goals["label"].endswith("20-24 last season")
     assert sum(g["bets"] for g in out["byDueGroup"]) == 3
 

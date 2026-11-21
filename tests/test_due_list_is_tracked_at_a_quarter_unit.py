@@ -87,14 +87,14 @@ def test_every_priced_entry_is_tracked_at_a_quarter_unit(tmp_path: Path, monkeyp
 
     rows = {r["player"]: r for r in results["dueList"]["rows"]}
     assert [rows[n]["result"] for n in ("Alpha Points", "Bravo Goals", "Charlie Assists")] == ["win", "loss", "win"]
-    # -150 won: 0.375u risked to win 0.25u (Cooper, 2026-11-04). +140 lost: the
-    # 0.25 stake. No price: graded, no units.
-    assert rows["Alpha Points"]["units"] == 0.25
-    assert rows["Bravo Goals"]["units"] == -0.25
+    # -150 won: 1.5u risked to win 1u (1u base since 2026-11-21). +140 lost: the
+    # 1u stake. No price: graded, no units.
+    assert rows["Alpha Points"]["units"] == 1.0
+    assert rows["Bravo Goals"]["units"] == -1.0
     assert rows["Charlie Assists"]["units"] is None
-    assert board["record"]["dueList"] == {"w": 2, "l": 1, "p": 0, "nights": 1, "stake": 0.25, "units": 0.0, "staked": 0.62}
+    assert board["record"]["dueList"] == {"w": 2, "l": 1, "p": 0, "nights": 1, "stake": 1.0, "units": 0.0, "staked": 2.5}
     season = results["seasonRecord"]["dueList"]
-    assert (season["source"], season["units"], season["staked"], season["returnPct"]) == ("boards", 0.0, 0.62, 0.0)
+    assert (season["source"], season["units"], season["staked"], season["returnPct"]) == ("boards", 0.0, 2.5, 0.0)
 
 
 def _write_ledger(lab: Path, rows: list[dict], sources: dict | None = None) -> None:
@@ -135,17 +135,17 @@ def test_the_season_comes_from_the_labs_ledger_with_its_backfilled_nights(tmp_pa
     board, results = _build(lab, out, monkeypatch, NEXT_DAY, finals=True)
 
     charlie = next(r for r in results["dueList"]["rows"] if r["player"] == "Charlie Assists")
-    assert (charlie["price"], charlie["priceSource"], charlie["units"]) == (120, "card", 0.3)
+    assert (charlie["price"], charlie["priceSource"], charlie["units"]) == (120, "card", 1.2)
 
     season = results["dueList"]["season"]
-    # Won: +0.30 (+200 at 0.15u, Cooper 2026-11-10), +0.25, +0.30. Lost: -0.275
-    # (-110, to win 0.25), -0.25. Risked: 0.15 + 0.275 + 0.375 + 0.25 + 0.25 = 1.30.
+    # Won: +1.20 (+200 at 0.6u; the ladder times four since 2026-11-21), +1.00,
+    # +1.20. Lost: -1.10 (-110, to win 1u), -1.00. Risked: 0.6 + 1.1 + 1.5 + 1 + 1 = 5.2.
     assert (season["w"], season["l"], season["p"], season["nights"]) == (3, 3, 0, 2)
     assert (season["wagers"], season["unpriced"], season["void"]) == (5, 1, 1)
-    assert season["units"] == pytest.approx(0.325, abs=0.006) and season["staked"] == 1.3
+    assert season["units"] == pytest.approx(1.3, abs=0.024) and season["staked"] == 5.2
     assert season["backfilledNights"] == [earlier] and season["cardPriced"] == 1 and season["source"] == "ledger"
-    assert board["record"]["dueList"] == {"w": 3, "l": 3, "p": 0, "nights": 2, "stake": 0.25,
-                                          "units": season["units"], "staked": 1.3}
+    assert board["record"]["dueList"] == {"w": 3, "l": 3, "p": 0, "nights": 2, "stake": 1.0,
+                                          "units": season["units"], "staked": 5.2}
 
 
 def test_due_list_entries_are_never_picks_or_props(tmp_path: Path, monkeypatch) -> None:

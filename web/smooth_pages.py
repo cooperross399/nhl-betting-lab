@@ -107,14 +107,14 @@ NO_TRACKER_TAB: dict[str, re.Pattern[str]] = {
     "lib/sports.js": re.compile(r'\n    \.\.\.\(has\("tracker"\) \? \[tab\("Tracker"[^\]]*\] : \[tab\("Archive"[^\]]*\]\),'),
 }
 
-# Under each season record on the board, how it would have paid at 0.25u a
-# bet (Cooper, 2026-11-03: "I want a tracked profit/loss for best
+# Under each season record on the board, how it would have paid at a stake a
+# bet (1u since 2026-11-21; 0.25u before) (Cooper, 2026-11-03: "I want a tracked profit/loss for best
 # bets/totals/leans/straight up underneath the record", ".25u per bet. to win
 # .25u for -odds"). build_site_json.season_record writes `units` beside each
 # record; a record without it keeps the old line.
 PL = ('const pl = (key, alt) => { const m = r.season && r.season.money && r.season.money[key]; '
       'return m && typeof m.units === "number" ? '
-      '`${m.units > 0.004 ? "+" : m.units < -0.004 ? "−" : ""}${Math.abs(m.units).toFixed(2)}u at ${m.stake ?? 0.25}u a bet` : alt; };\n  ')
+      '`${m.units > 0.004 ? "+" : m.units < -0.004 ? "−" : ""}${Math.abs(m.units).toFixed(2)}u at ${m.stake ?? 1}u a bet` : alt; };\n  ')
 
 #: The Due List's box label span, which the Hot List row relabels.
 SPAN = ("<span style=\"font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:.08em;"
@@ -145,6 +145,15 @@ HOT_ROW = (
 
 
 PATCHES: dict[str, list[tuple[str, str]]] = {
+    # The graphic's props card said every prop best bet was 0.1u, a stake
+    # the card stopped using long ago; since 2026-11-21 (a 1u base) the card's
+    # stake varies by tier, so the line names the count alone.
+    "Graphic.dc.html": [
+        (
+            '${bets.length} best bet${bets.length === 1 ? "" : "s"} · 0.1u each`',
+            '${bets.length} best bet${bets.length === 1 ? "" : "s"}`',
+        ),
+    ],
     "lib/sports.js": [
         (
             "  const strip = [\n    { label: \"Best bets · season\"",
@@ -168,7 +177,7 @@ PATCHES: dict[str, list[tuple[str, str]]] = {
         ),
         (
             '[{ label: "Best bets · season", value: F.recStr(data.seasonRecord.picks) }]',
-            '[{ label: "Best bets · season", value: F.recStr(data.seasonRecord.picks), ...((m) => (m && typeof m.units === "number" ? { sub: `${m.units > 0.004 ? "+" : m.units < -0.004 ? "−" : ""}${Math.abs(m.units).toFixed(2)}u at ${m.stake ?? 0.25}u a bet` } : {}))((data.seasonRecord.money || {}).picks) }]',
+            '[{ label: "Best bets · season", value: F.recStr(data.seasonRecord.picks), ...((m) => (m && typeof m.units === "number" ? { sub: `${m.units > 0.004 ? "+" : m.units < -0.004 ? "−" : ""}${Math.abs(m.units).toFixed(2)}u at ${m.stake ?? 1}u a bet` } : {}))((data.seasonRecord.money || {}).picks) }]',
         ),
     ],
     "Board.dc.html": [
@@ -186,23 +195,23 @@ PATCHES: dict[str, list[tuple[str, str]]] = {
             "showScores: false, isTonight: true, isProps: false,",
             'showScores: false, isTonight: this.state.tab !== "props", isProps: this.state.tab === "props",',
         ),
-        # The prop leans' season line with its profit at 0.25u a lean
+        # The prop leans' season line with its profit at 1u a lean (0.25u until 2026-11-21)
         # (build_site_json.lean_season_line; Cooper, 2026-11-08).
         (
             'label: "Prop leans", tag: "no stake", record: rec(R.propLeans), units: "", unitsColor: "var(--ink-2)",',
-            'label: "Prop leans", tag: "0.25u each", record: rec(R.propLeans), units: un(R.propLeans.units), unitsColor: col(R.propLeans.units),',
+            'label: "Prop leans", tag: "1u each", record: rec(R.propLeans), units: un(R.propLeans.units), unitsColor: col(R.propLeans.units),',
         ),
         # Plus-money Due List entries are tracked smaller, by price (Cooper,
         # 2026-11-10; hat tricks 0.1u from 2026-11-09 until then).
         (
             '<span style="font-family:\'IBM Plex Mono\',monospace;font-size:11px;color:var(--mute);border:1px solid var(--rule);padding:2px 6px;">Not model bets · tracked at 0.25u each</span>',
-            '<span style="font-family:\'IBM Plex Mono\',monospace;font-size:11px;color:var(--mute);border:1px solid var(--rule);padding:2px 6px;">Not model bets · 0.25u each, less at +200 and longer</span>',
+            '<span style="font-family:\'IBM Plex Mono\',monospace;font-size:11px;color:var(--mute);border:1px solid var(--rule);padding:2px 6px;">Not model bets · 1u each, less at +200 and longer</span>',
         ),
         # The tail only, so the patch holds whichever font the label is set in
         # (the 2026-11-14 redesign moved it from Barlow Condensed to Inter).
         (
             'padding:4px 9px;white-space:nowrap;">Not model bets · tracked at 0.25u each</span>',
-            'padding:4px 9px;white-space:nowrap;">Not model bets · 0.25u each, less at +200 and longer</span>',
+            'padding:4px 9px;white-space:nowrap;">Not model bets · 1u each, less at +200 and longer</span>',
         ),
         # Each Due List row shows the size the season record tracks it at,
         # and a band that lost in testing is tagged (Cooper, 2026-11-10:
@@ -327,11 +336,11 @@ PATCHES: dict[str, list[tuple[str, str]]] = {
         ),
         (
             'sub: RP.seasonLeans.nights ? rate(RP.seasonLeans) : "No night settled yet"',
-            'sub: RP.seasonLeans.nights ? (typeof RP.seasonLeans.units === "number" ? `${sgn(RP.seasonLeans.units)}u at 0.25u a lean (less at +200 and longer) · ${rate(RP.seasonLeans)}` : rate(RP.seasonLeans)) : "No night settled yet"',
+            'sub: RP.seasonLeans.nights ? (typeof RP.seasonLeans.units === "number" ? `${sgn(RP.seasonLeans.units)}u at 1u a lean (less at +200 and longer) · ${rate(RP.seasonLeans)}` : rate(RP.seasonLeans)) : "No night settled yet"',
         ),
         (
             '<span style="font-family:\'IBM Plex Mono\',monospace;font-size:11px;color:var(--mute);border:1px solid var(--rule);padding:2px 6px;">Not model bets · tracked at 0.25u each</span>',
-            '<span style="font-family:\'IBM Plex Mono\',monospace;font-size:11px;color:var(--mute);border:1px solid var(--rule);padding:2px 6px;">Not model bets · 0.25u each, less at +200 and longer</span>',
+            '<span style="font-family:\'IBM Plex Mono\',monospace;font-size:11px;color:var(--mute);border:1px solid var(--rule);padding:2px 6px;">Not model bets · 1u each, less at +200 and longer</span>',
         ),
         (
             'hat_trick: ["Hat trick", "goal", "goals"], shutout: ["Shutout", "shutout", "shutouts"] };',

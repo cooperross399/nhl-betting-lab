@@ -167,9 +167,10 @@ def test_a_quarter_unit_record_pays_as_cooper_set_it():
     import sys
     sys.path.insert(0, str(WEB))
     spec.loader.exec_module(mod)
-    assert mod.record_units(150, "win") == (0.375, 0.25)
-    assert mod.record_units(150, "loss") == (-0.25, 0.25)
-    assert mod.record_units(-150, "win") == (0.25, 0.375)
-    assert mod.record_units(-150, "loss") == (-0.375, 0.375)
-    assert mod.record_units(-110, "push") == (0.0, 0.275)
+    # 1u base since 2026-11-21 (Cooper: "1u as the main instead of .25u").
+    assert mod.record_units(150, "win") == (1.5, 1.0)
+    assert mod.record_units(150, "loss") == (-1.0, 1.0)
+    assert mod.record_units(-150, "win") == (1.0, 1.5)
+    assert mod.record_units(-150, "loss") == (-1.5, 1.5)
+    assert mod.record_units(-110, "push") == (0.0, 1.1)
     assert mod.record_units(None, "win") is None and mod.record_units(0, "win") is None

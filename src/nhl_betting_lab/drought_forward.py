@@ -281,19 +281,23 @@ def _stat(rows: pd.DataFrame) -> dict[str, Any]:
 
 #: The notional stake the season record is kept at (Cooper, 2026-10-09: "as
 #: if we bet .25u on each one every night"). The ledger is kept at one unit;
-#: this scales it. Nothing is bet.
-TRACKED_STAKE = 0.25
+#: this scales it. Nothing is bet. 1u since 2026-11-21 (Cooper: "use the
+#: due list ladder style pricing but with 1u as the main instead of .25u");
+#: every past entry is restated at it.
+TRACKED_STAKE = 1.0
 #: Plus-money entries are tracked smaller, by price (Cooper, 2026-11-10:
 #: "+200 to +500 are going to be .15u wagers ... +501 to +1500 is .1u and
 #: +1500 or greater is .05u", ".25u for the others like usual"). Each pair
 #: is (longest price, stake); longer than +1500 is TRACKED_STAKE_LONGEST.
 #: It replaces the hat-trick 0.1u of 2026-11-09 and restates every past
 #: entry. The site's `build_site_json.PROP_STAKE_BRACKETS` is the same.
-TRACKED_STAKE_BRACKETS: tuple[tuple[int, float], ...] = ((500, 0.15), (1500, 0.1))
-TRACKED_STAKE_LONGEST = 0.05
+#: Since 2026-11-21 the ladder is four times its old size: +200 to +500
+#: 0.6u, +501 to +1500 0.4u, longer 0.2u.
+TRACKED_STAKE_BRACKETS: tuple[tuple[int, float], ...] = ((500, 0.6), (1500, 0.4))
+TRACKED_STAKE_LONGEST = 0.2
 #: Kept for readers of the old name: no category has its own stake now.
 TRACKED_STAKES: dict[str, float] = {}
-TRACKED_STAKE_RULE = "0.25u; +200 to +500 0.15u, +501 to +1500 0.1u, longer 0.05u"
+TRACKED_STAKE_RULE = "1u (to win 1u on a minus price); +200 to +500 0.6u, +501 to +1500 0.4u, longer 0.2u"
 
 
 def tracked_stake(market: object = None, price: object = None) -> float:
@@ -423,7 +427,8 @@ def pending_rows(processed_dir: Path | None = None) -> int:
 
 
 # ---------------------------------------------------------------------------
-# Season-long tracking (Cooper, 2026-10-09): every entry as if 0.25u were bet.
+# Season-long tracking (Cooper, 2026-10-09): every entry as if a stake were bet
+# (0.25u until 2026-11-21, 1u since, both on the price ladder).
 #
 # The list was first recorded on 2026-10-07. The nights of the season before
 # that are rebuilt here from what the lab already held that morning, and an
@@ -687,11 +692,11 @@ def render_scorecard(card: Mapping[str, Any]) -> list[str]:
     lines = [f"## Due List scorecard, {fmt(start)} to {fmt(end)}", ""]
     for label, title in (("week", "Last week"), ("season", "Season")):
         s = card["slices"][label]
-        lines += [f"**{title}**", "", "| | Listed | Hits | Units (0.25u; +200 and longer smaller) |", "|:--|--:|--:|--:|"]
+        lines += [f"**{title}**", "", "| | Listed | Hits | Units (1u; +200 and longer smaller) |", "|:--|--:|--:|--:|"]
         lines += [_line(m, s["categories"][m]) for m in CATEGORIES]
         lines += [_line("all", s["overall"]), _line("model agreed", s["model_agreed"]),
                   _line("model disagreed", s["model_disagreed"]), ""]
-    lines += ["Hits count every graded entry; units count entries that had a price, at 0.25u as the site tracks "
+    lines += ["Hits count every graded entry; units count entries that had a price, at 1u as the site tracks "
               "the list. \"Model agreed\" means the card's own chance beat the listed price; entries listed "
               "before Oct 31 recorded no chance and sit in neither row. Nothing here is bet, and a week is "
               "far too few to call an edge either way.", ""]

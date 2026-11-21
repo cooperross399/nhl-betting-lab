@@ -121,7 +121,7 @@ def test_the_site_copies_the_cards_rows_in_the_schemas_shape() -> None:
     assert [r["player"] for r in out] == ["Hot Scorer", "No Price"]
     assert out[0] == {"player": "Hot Scorer", "playerId": 1, "team": "TOR", "market": "points", "line": 0.5,
                       "lastSeason": 90, "last5": 9, "streak": 4, "bar": 8, "rule": "last5", "price": 250,
-                      "book": "DraftKings", "heavyJuice": False, "stake": 0.15, "modelChance": 0.31, "modelEdge": 0.024}
+                      "book": "DraftKings", "heavyJuice": False, "stake": 0.6, "modelChance": 0.31, "modelEdge": 0.024}
     assert out[1]["price"] is None and out[1]["book"] is None and out[1]["stake"] is None and out[1]["rule"] is None
     assert site.hot_for_game(listed, "TOR", "MTL", True) == [], "a started game lists nobody"
 
@@ -155,7 +155,7 @@ def test_the_hot_list_is_graded_and_tracked_as_its_own_group(tmp_path) -> None:
     assert due["rows"] == [], "the Due List grades only its own field"
     rows = site.tracker_rows({"resultsDate": DAY, "hotList": graded})
     assert [(r["group"], r["player"], r["result"], r["units"], r["staked"]) for r in rows] == [
-        ("hot", "Hot Scorer", "win", 0.38, 0.15), ("hot", "Missed", "loss", -0.38, 0.375)]
+        ("hot", "Hot Scorer", "win", 1.5, 0.6), ("hot", "Missed", "loss", -1.5, 1.5)]
     tracked = site.tracker(rows, nights=1)
     assert {g["key"]: g["bets"] for g in tracked["byGroup"]}["hot"] == 2
     assert site.TRACKER_GROUPS["hot"] == "Hot List"

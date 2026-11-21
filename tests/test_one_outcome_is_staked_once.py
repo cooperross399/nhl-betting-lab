@@ -247,8 +247,9 @@ def test_the_rung_that_keeps_the_stake_is_the_highest_edge_one() -> None:
 def test_the_ladder_no_longer_stakes_one_outcome_three_times_over() -> None:
     """The defect in units, which is what a bankroll actually feels.
 
-    Three rungs at tier A/B were 0.5 + 0.25 + 0.25 = 1.0 unit on one outcome
-    that settles once. One rung is 0.5.
+    Three rungs at tier A/B were 2 + 1 + 1 = 4 units on one outcome that
+    settles once (0.5 + 0.25 + 0.25 before the 1u base of 2026-11-21). One
+    rung is 2.
     """
     rows = [row for row, _ in LADDER]
     probabilities = {_key(row): p for row, p in LADDER}
@@ -260,7 +261,7 @@ def test_the_ladder_no_longer_stakes_one_outcome_three_times_over() -> None:
         now=NOW,
     )
 
-    assert card.total_units == 0.5
+    assert card.total_units == 2.0
 
 
 # -- (b) the side rides in `selection`, so sides never collapse ---------

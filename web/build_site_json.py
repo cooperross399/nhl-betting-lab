@@ -879,19 +879,19 @@ def _prop_leans_module():
 def lean_season_line(leans: dict | None) -> dict | None:
     """The prop leans' season line for board.json `record.propLeans` and
     results.json `props.seasonLeans`, from prop_leans.json's graded season:
-    w, l, p, nights, and units and staked at 0.25u a lean. None when the
+    w, l, p, nights, and units and staked at LEAN stakes (1u a lean, prop_leans.stake). None when the
     record was not built."""
     s = (leans or {}).get("season")
     if not isinstance(s, dict):
         return None
     line = {k: s[k] for k in ("w", "l", "p", "void", "units", "staked") if k in s}
     line["nights"] = int(leans.get("nights") or 0)
-    line["stake"] = 0.25
+    line["stake"] = RECORD_STAKE
     return line
 
 
 def prop_leans_page(lab: Path, ref: str, today: date) -> dict:
-    """prop_leans.json: the card's prop leans graded at 0.25u (to win 0.25u on a minus price;
+    """prop_leans.json: the card's prop leans graded at 1u (to win 1u on a minus price;
     +200 and longer smaller, prop_leans.stake), season long
     (web/prop_leans.py). A card-feed ref this checkout cannot read writes a
     file that says so, with no record, never an empty one."""
@@ -1933,7 +1933,7 @@ def settle(day: date, history_dir: Path, *, processed: Path | None = None) -> di
     base = {"generatedAt": now, "season": "2026–27", "resultsDate": day.isoformat(), "teams": {}, "games": [],
             "summary": {"straightUp": {"w": 0, "l": 0}, "picks": {"w": 0, "l": 0, "p": 0},
                         "leans": {"w": 0, "l": 0, "p": 0}, "totals": {"w": 0, "l": 0, "p": 0},
-                        "money": {key: {"units": 0.0, "staked": 0.0} for key in SEASON_KEYS}}}
+                        "money": {key: {"units": 0.0, "staked": 0.0, "stake": RECORD_STAKE} for key in SEASON_KEYS}}}
     if not frozen.exists():
         base["notice"] = "No board was published for this date, so there is nothing to settle."
         return base
@@ -2084,8 +2084,10 @@ DUE_LIST_LINE = 0.5
 #: The Due List is tracked as if this were bet on every priced entry, every
 #: night (Cooper, 2026-10-09: "as if we bet .25u on each one every night").
 #: Nothing is bet. It is the lab's `drought_forward.TRACKED_STAKE`, spelled
-#: out here for the reason USER_AGENT gives.
-DUE_LIST_STAKE = 0.25
+#: out here for the reason USER_AGENT gives. 1u since 2026-11-21 (Cooper:
+#: "use the due list ladder style pricing but with 1u as the main instead of
+#: .25u"), every past entry restated.
+DUE_LIST_STAKE = 1.0
 #: Plus-money props are tracked at a smaller stake, by price (Cooper,
 #: 2026-11-10: "goal scorers/props +200 to +500 are going to be .15u wagers
 #: and go back and edit any previous wagers also. Anything +501 to +1500 is
@@ -2095,14 +2097,16 @@ DUE_LIST_STAKE = 0.25
 #: It replaces the hat-trick 0.1u of 2026-11-09 and applies to every
 #: tracked prop (Due List entries, prop best bets, prop leans), past ones
 #: included. The lab's `drought_forward.TRACKED_STAKE_BRACKETS` is the same.
-PROP_STAKE_BRACKETS = ((199, None), (500, 0.15), (1500, 0.1))
-PROP_STAKE_LONGEST = 0.05
+#: Since 2026-11-21 the whole ladder is four times its old size, so 1u is the
+#: main stake: +200 to +500 0.6u, +501 to +1500 0.4u, longer 0.2u.
+PROP_STAKE_BRACKETS = ((199, None), (500, 0.6), (1500, 0.4))
+PROP_STAKE_LONGEST = 0.2
 #: Kept for readers of the old name: no category has its own stake now.
 DUE_LIST_STAKES: dict = {}
 
 
 def prop_stake(price: object) -> float:
-    """The notional stake one tracked prop at `price` is tracked at: 0.25u
+    """The notional stake one tracked prop at `price` is tracked at: 1u
     (to win it on a minus price) up to +199, then by PROP_STAKE_BRACKETS."""
     if not _is_number(price) or float(price) < 200:
         return DUE_LIST_STAKE
@@ -2476,8 +2480,8 @@ PRICE_BANDS = ((-10_000, -151, "−150 and shorter"), (-150, -111, "−149 to �
 #: bet weve tracked on the website in records and stuff is all .25u or to
 #: win .25u for -odds"): RECORD_STAKE risked on a plus price, enough to win
 #: it on a minus price. The card's own stake stays on the card and the board.
-TRACKED_STAKE_RULE = ("0.25u, to win 0.25u on a minus price; props +200 to +500 0.15u, "
-                      "+501 to +1500 0.1u, longer than +1500 0.05u")
+TRACKED_STAKE_RULE = ("1u, to win 1u on a minus price; props +200 to +500 0.6u, "
+                      "+501 to +1500 0.4u, longer than +1500 0.2u")
 
 
 def restake(row: dict) -> dict:
@@ -2725,16 +2729,21 @@ SEASON_KEYS = ("straightUp", "picks", "leans", "totals")
 #: The stake the season's four records are tracked at (Cooper, 2026-11-03:
 #: "I want a tracked profit/loss for best bets/totals/leans/straight up
 #: underneath the record", ".25u per bet. to win .25u for -odds"). On plus
-#: odds 0.25u is risked; on minus odds enough is risked to win 0.25u. Nothing
-#: is bet; it is how each record would have paid.
-RECORD_STAKE = 0.25
+#: odds the stake is risked; on minus odds enough is risked to win it. Nothing
+#: is bet; it is how each record would have paid. 0.25u until 2026-11-21,
+#: then 1u (Cooper: "Change the record/profit to reflect 1u risk/to win",
+#: then "use the due list ladder style pricing but with 1u as the main
+#: instead of .25u"); every settled night is restated (`_kept_without_record_units`).
+RECORD_STAKE = 1.0
+#: The stake a kept night's `summary.money` was written at when it names none.
+OLD_RECORD_STAKE = 0.25
 
 
 def record_units(price, outcome: str, stake: float | None = None) -> tuple[float, float] | None:
     """(profit, risked) of one graded call at RECORD_STAKE, or None without a price.
 
-    A win at +150 pays 0.375u on 0.25u risked; a win at −150 pays 0.25u on
-    0.375u risked, and the loss costs the 0.375u. A push returns the stake."""
+    A win at +150 pays 1.5u on 1u risked; a win at −150 pays 1u on 1.5u
+    risked, and the loss costs the 1.5u. A push returns the stake."""
     if not isinstance(price, (int, float)) or isinstance(price, bool) or not -100000 < price < 100000 or -100 < price < 100:
         return None
     stake = RECORD_STAKE if stake is None else stake
@@ -2745,7 +2754,7 @@ def record_units(price, outcome: str, stake: float | None = None) -> tuple[float
 
 
 def _add_units(tally: dict, price, outcome: str) -> None:
-    """Add one call's 0.25u profit to a night's `summary.money` entry; an unpriced call adds nothing and is counted."""
+    """Add one call's RECORD_STAKE profit to a night's `summary.money` entry; an unpriced call adds nothing and is counted."""
     tally.setdefault("units", 0.0)
     tally.setdefault("staked", 0.0)
     got = record_units(price, outcome)
@@ -2780,13 +2789,37 @@ def _kept_night(path: Path) -> dict | None:
 
 
 def _kept_without_record_units(night: dict) -> bool:
-    """A night kept before its four records carried 0.25u profit (2026-11-03).
+    """A night kept before its four records carried profit (2026-11-03), or
+    kept at another stake than RECORD_STAKE (before 2026-11-21 every kept
+    night was at 0.25u and names no stake).
 
-    Settled again once, so the season's profit counts every night; if that
-    fails the kept night is read as it was and counted in nightsWithoutUnits."""
+    Settled again once, so the season's profit counts every night at today's
+    stake; if that fails the kept night is read as it was (its money rescaled,
+    `restated_money`) or counted in nightsWithoutUnits."""
     summary = night.get("summary") if isinstance(night.get("summary"), dict) else {}
-    return "money" not in summary and any(
-        isinstance(summary.get(k), dict) and any(int(summary[k].get(x) or 0) for x in ("w", "l", "p")) for k in SEASON_KEYS)
+    graded = any(isinstance(summary.get(k), dict) and any(int(summary[k].get(x) or 0) for x in ("w", "l", "p"))
+                 for k in SEASON_KEYS)
+    if "money" not in summary:
+        return graded
+    return any(isinstance(m, dict) and m.get("stake", OLD_RECORD_STAKE) != RECORD_STAKE
+               for m in summary["money"].values())
+
+
+def restated_money(night: dict) -> dict:
+    """A kept night whose `summary.money` was written at another stake, scaled
+    to RECORD_STAKE. Every record was flat at its stake, so the scale is exact."""
+    summary = night.get("summary") if isinstance(night.get("summary"), dict) else {}
+    money = summary.get("money")
+    if not isinstance(money, dict):
+        return night
+    again = {}
+    for key, m in money.items():
+        if not isinstance(m, dict):
+            continue
+        scale = RECORD_STAKE / float(m.get("stake", OLD_RECORD_STAKE) or OLD_RECORD_STAKE)
+        again[key] = {**m, "units": round(float(m.get("units") or 0.0) * scale, 4),
+                      "staked": round(float(m.get("staked") or 0.0) * scale, 4), "stake": RECORD_STAKE}
+    return {**night, "summary": {**summary, "money": again}}
 
 
 def _kept_before_the_list_was_graded(night: dict, frozen: Path) -> bool:
@@ -2905,7 +2938,7 @@ def season_record(today: date, history_dir: Path, latest: dict, *, processed: Pa
                     continue
                 settled = None
             if settled is None:
-                night = kept_night = stale
+                night = kept_night = restated_money(stale)
             else:
                 night = night_record(settled)
         if bets is not None:
@@ -3056,7 +3089,7 @@ def main(argv: list[str] | None = None) -> int:
             results["props"]["seasonLeans"] = season["propLeans"]
             results["props"].setdefault("season", season["props"])
     # The prop leans' season line on the Props tab and the Results strip
-    # reads the graded record (prop_leans.json, 0.25u a lean, to win 0.25u
+    # reads the graded record (prop_leans.json, 1u a lean, to win 1u
     # on a minus price), not the nightly boards, which list best bets only
     # since 2026-10-09 and so never carried the leans (Cooper, 2026-11-08:
     # "The website isnt showing the prop lean record/profit").
@@ -3069,7 +3102,18 @@ def main(argv: list[str] | None = None) -> int:
     (out / "board.json").write_text(json.dumps(board, indent=1, ensure_ascii=False), encoding="utf-8")
     (out / "results.json").write_text(json.dumps(results, indent=1, ensure_ascii=False), encoding="utf-8")
     (out / "ratings.json").write_text(json.dumps(ratings_page(Path(args.lab)), indent=1, ensure_ascii=False), encoding="utf-8")
-    (out / "tracker.json").write_text(json.dumps(tracker(tracked, nights=season["nights"]), indent=1, ensure_ascii=False), encoding="utf-8")
+    tracked_page = tracker(tracked, nights=season["nights"])
+    (out / "tracker.json").write_text(json.dumps(tracked_page, indent=1, ensure_ascii=False), encoding="utf-8")
+    # Every season record's units and what it risked, at the stake in force,
+    # in the run log (so a change of stake can be read off a run).
+    for key, m in (season.get("money") or {}).items():
+        print(f"record {key}: {m['units']:+.2f}u on {m['staked']:.2f}u risked at {m['stake']:g}u a bet")
+    for g in [tracked_page["overall"] | {"key": "all", "label": "all results"}] + tracked_page["byGroup"]:
+        if g.get("bets"):
+            print(f"tracker {g['key']}: {g['w']}-{g['l']}-{g['p']}, {g['units']:+.2f}u on {g['staked']:.2f}u risked")
+    if isinstance(season.get("dueList"), dict) and "units" in season["dueList"]:
+        d = season["dueList"]
+        print(f"record dueList ({d.get('source')}): {float(d['units']):+.2f}u on {float(d.get('staked') or 0):.2f}u risked")
     (out / "record.json").write_text(json.dumps(track_record(today, history, tracked), indent=1, ensure_ascii=False), encoding="utf-8")
     if leans is not None:
         (out / "prop_leans.json").write_text(json.dumps(leans, indent=1, ensure_ascii=False), encoding="utf-8")
@@ -3078,7 +3122,7 @@ def main(argv: list[str] | None = None) -> int:
     elif leans.get("season"):
         s = leans["season"]
         print(f"prop leans: {s['w']}-{s['l']}-{s['p']} ({s['void']} void, {s['pending']} pending, "
-              f"{s['unmatched']} unmatched) over {leans['nights']} nights, {s['units']:+.2f}u at 0.25u (to win 0.25u on minus prices; +200 and longer smaller).")
+              f"{s['unmatched']} unmatched) over {leans['nights']} nights, {s['units']:+.2f}u at 1u (to win 1u on minus prices; +200 and longer smaller).")
     else:
         print(f"::warning::prop leans not built: {leans.get('note')}")
     print(f"board {today}: {len(board['games'])} games ({board['phase']}); results {today - timedelta(days=1)}: {len(results['games'])} settled.")

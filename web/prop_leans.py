@@ -1,4 +1,4 @@
-"""The card's player-prop leans, graded season long at 0.25u (to win 0.25u on a minus price): prop_leans.json.
+"""The card's player-prop leans, graded season long at 1u (to win 1u on a minus price): prop_leans.json.
 
 Cooper, 2026-11-03: "track the prop leans record/profit on the website".
 
@@ -6,7 +6,8 @@ A lean is a prop the card lists under "Leans" and stakes at zero: its edge
 clears the measurement bar but not the best-bet bar, or it cleared the
 best-bet bar and a rule held the stake back (the odds-bracket stats check,
 one stake per outcome, the `points` exclusion, the saves starter check).
-Nothing here is bet. The record is what 0.25u on every lean would have done (to win 0.25u on a minus price).
+Nothing here is bet. The record is what 1u on every lean would have done (to win 1u on a minus price; smaller
+at +200 and longer). 0.25u until 2026-11-21, when Cooper moved the base to 1u.
 
 Both sources are on the public `card-feed` branch, so this needs no state of
 its own and every run rebuilds the whole season:
@@ -47,7 +48,7 @@ from zoneinfo import ZoneInfo
 ET = ZoneInfo("America/New_York")
 
 #: The flat notional stake on every lean, in units.
-LEAN_STAKE = 0.25
+LEAN_STAKE = 1.0
 
 #: The card's prop markets, as the card names them.
 PROP_MARKETS = ("shots_on_goal", "points", "goals", "assists", "goalie_saves", "blocked_shots", "hits")
@@ -193,10 +194,11 @@ def win_profit(american: float) -> float:
 
 
 #: Plus-money props are tracked smaller, by price (Cooper, 2026-11-10):
-#: +200 to +500 0.15u, +501 to +1500 0.1u, longer 0.05u, everything else
-#: LEAN_STAKE. The same brackets as build_site_json.PROP_STAKE_BRACKETS.
-LEAN_STAKE_BRACKETS = ((500, 0.15), (1500, 0.1))
-LEAN_STAKE_LONGEST = 0.05
+#: +200 to +500 0.6u, +501 to +1500 0.4u, longer 0.2u, everything else
+#: LEAN_STAKE (four times the 2026-11-10 ladder since 2026-11-21). The same
+#: brackets as build_site_json.PROP_STAKE_BRACKETS.
+LEAN_STAKE_BRACKETS = ((500, 0.6), (1500, 0.4))
+LEAN_STAKE_LONGEST = 0.2
 
 
 def stake(price: float) -> float:
@@ -300,9 +302,9 @@ def build(repo: Path, ref: str, *, today: date, directory=None, abbr=None,
         "generatedAt": generated_at or datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
         "stake": LEAN_STAKE,
         "source": "card-feed: each league day's first card that lists a prop lean, settled by the forward ledger",
-        "note": ("Leans are props the card lists but does not bet. This is what 0.25u on every one would have done "
-                 "(on a minus price, enough to win 0.25u; +200 to +500 at 0.15u, +501 to +1500 at 0.1u, longer at "
-                 "0.05u), at the price the card listed. Nothing here was bet."),
+        "note": ("Leans are props the card lists but does not bet. This is what 1u on every one would have done "
+                 "(on a minus price, enough to win 1u; +200 to +500 at 0.6u, +501 to +1500 at 0.4u, longer at "
+                 "0.2u), at the price the card listed. Nothing here was bet."),
         "firstDate": graded_nights[0]["date"] if graded_nights else None,
         "lastDate": graded_nights[-1]["date"] if graded_nights else None,
         "nights": len(graded_nights),

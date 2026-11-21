@@ -678,7 +678,8 @@ def test_a_tier_is_assigned_by_edge_size() -> None:
 def test_every_tier_has_a_stake_and_none_is_large() -> None:
     """These are positions whose expected value is genuinely uncertain."""
     assert set(card_module.TIER_UNITS) == {"A", "B", "C"}
-    assert all(0 < units <= 0.5 for units in card_module.TIER_UNITS.values())
+    # 1u base since 2026-11-21 (Cooper): A 2u is the largest stake.
+    assert all(0 < units <= 2.0 for units in card_module.TIER_UNITS.values())
 
 
 def test_every_selection_row_displays_its_start_time_in_eastern() -> None:

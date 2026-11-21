@@ -339,7 +339,11 @@ def lean_bar(market_key: str, selection: str, default: float) -> float:
 LADDER_DEMOTION_PREFIX = "One stake per outcome:"
 
 
-TIER_UNITS = {"A": 0.5, "B": 0.25, "C": 0.1}
+#: A best bet's stake by tier, before the CLV multiplier. 1u is the main
+#: stake since 2026-11-21 (Cooper: "use the due list ladder style pricing but
+#: with 1u as the main instead of .25u"): the tiers keep their proportions,
+#: four times the old 0.5 / 0.25 / 0.1.
+TIER_UNITS = {"A": 2.0, "B": 1.0, "C": 0.4}
 
 #: Markets that cannot produce a selection without information this lab does
 #: not have, whatever the policy says. Stated as data so the card can name the
@@ -1593,7 +1597,7 @@ def render_drought_section(card: GamedayCard) -> list[str]:
                 f"| {drought_price_text(row)} | {row.get('book') or '-'} | {tracked} | {flag} |"
             )
         lines += ["", "A list, not bets: no units, no stakes, and none of it is in the best bets above. "
-                  "\"Tracked at\" is the notional size the site's Due List record counts it at (0.25u, "
+                  "\"Tracked at\" is the notional size the site's Due List record counts it at (1u, "
                   "less at +200 and longer); \"lost in testing\" marks a band whose backtest interval sits below zero.", ""]
     else:
         lines += ["_Nobody on tonight's slate qualifies._", ""]
