@@ -111,15 +111,29 @@ HEAVY_JUICE = MAX_DEFAULT_JUICE
 #: more than -150"). -150 itself is listed; a row with no price is listed.
 POINT_MAX_JUICE = -150
 
+#: No row of any category priced shorter than this is listed (2026-11-21,
+#: Cooper: "reevaluate ... the due list, and the hot list so we can begin to
+#: try and turn that profit into a positive soon"). Graded this season against
+#: the forward ledger, Due and Hot List rows priced shorter than -130 hit 47.6%
+#: against 60.1% implied (-110 or shorter, 42 rows) and lost -13.0u over 38 at
+#: 1u; the rest of the lists' loss is spread thin. -130 itself is listed.
+LIST_MAX_JUICE = -130
+
 
 def drop_short_points(rows: list[dict], notes: list[str]) -> list[dict]:
-    """`rows` without the 1+ point overs priced shorter than POINT_MAX_JUICE,
-    naming how many were left off in `notes`."""
-    keep = [r for r in rows if not (r.get("market") == "points" and r.get("american_odds") is not None
-                                    and r["american_odds"] < POINT_MAX_JUICE)]
+    """`rows` without the rows priced shorter than LIST_MAX_JUICE (and the 1+
+    point overs shorter than POINT_MAX_JUICE), naming how many were left off
+    in `notes`."""
+    def short(r: dict) -> bool:
+        odds = r.get("american_odds")
+        if odds is None:
+            return False
+        cap = max(LIST_MAX_JUICE, POINT_MAX_JUICE) if r.get("market") == "points" else LIST_MAX_JUICE
+        return odds < cap
+    keep = [r for r in rows if not short(r)]
     left = len(rows) - len(keep)
     if left:
-        notes.append(f"{left} 1+ point row(s) priced shorter than {POINT_MAX_JUICE} are not listed.")
+        notes.append(f"{left} row(s) priced shorter than {LIST_MAX_JUICE} are not listed.")
     return keep
 
 #: A game id no real game has, so the sentinel row sorts after every real one

@@ -206,6 +206,23 @@ LEAN_EXCLUDED_SIDES: dict[tuple[str, str], str] = {
 }
 
 
+#: Markets never listed as a lean, though a best bet in them is still staked
+#: (2026-11-21, Cooper: "reevaluate totals, leans, the due list, and the hot
+#: list so we can begin to try and turn that profit into a positive soon").
+#: Regulation three-way leans were the site's team-lean record's loss: read
+#: off card-feed's cards and forward ledger, 2026-10-06 to 11-20, best price,
+#: 1u, they were 105 of the 221 board leans and -10.0u of its -11.2u, and the
+#: ledger's 3.5%+ regulation opinions lost in both halves of the season
+#: (-12.0u over 233). Its best bets (+8.6u over 25) keep their stake. No
+#: demonstrated edge either way.
+LEAN_ONLY_EXCLUDED_MARKETS: dict[str, str] = {
+    "regulation_3_way": (
+        "regulation three-way is not listed as a lean: as leans this season "
+        "it went -10.0u over 105 at 1u, losing in both halves"
+    ),
+}
+
+
 #: The longest price at which a market and side is listed, by Cooper's
 #: decision of 2026-11-09 ("Yes do all 4"). Points overs listed from the 3%
 #: lean bar (`LEAN_BAR_OVERRIDES`) and priced longer than +200 lost in both
@@ -894,6 +911,8 @@ def build_candidates(
                 None if strong_defence is None else bool(strong_defence(home, away))
             ),
         )
+        if not excluded and candidate.section == LEANS_SECTION:
+            excluded = LEAN_ONLY_EXCLUDED_MARKETS.get(market_key)
         if candidate.section in (LEANS_SECTION, BEST_BETS_SECTION) and excluded:
             candidate.section = PASSES_SECTION
             candidate.suggested_units = 0.0

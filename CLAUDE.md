@@ -4287,6 +4287,39 @@ Re-derive rather than trust if the data has moved.
   snapshot, the forward ledger and the registered test are unchanged.
   This lab keeps no separate decision log: this entry is the record.
 
+- **2026-11-21, NOT a defect fix: regulation three-way is no longer a lean,
+  and no Due or Hot List row shorter than -130 is listed (Cooper: "reevaluate
+  totals, leans, the due list, and the hot list so we can begin to try and
+  turn that profit into a positive soon").** Every listed pick this season
+  was re-graded from card-feed's cards (first card after 12:00 UTC each day)
+  against the forward ledger, best price, at the 1u ladder:
+  - **Team leans** (the board's per-game lean): 221 reconstructed, -11.2u
+    (the site reads -9.4u over 235). Regulation three-way was 105 of them,
+    -10.0u, losing in both halves; the ledger's 3.5%+ regulation opinions
+    -12.0u over 233 (-3.6u, -8.4u). Without it the leans read -2.6u over
+    182. `gameday_card.LEAN_ONLY_EXCLUDED_MARKETS` sends a regulation lean
+    to the passes, reason named; a regulation best bet (+8.6u over 25) is
+    still staked.
+  - **Totals** (the site's -33.9u): about -32.4u of it is boards graded
+    before 2026-11-05 on the old projection-against-line call (115-132-3).
+    Under the model's-side rule since then it is about level (-2.9u from
+    11-05 to 11-10, +3.0u since 11-11), so the rule is unchanged.
+  - **Due and Hot Lists** (Due -16.5u over 351 graded, Hot -5.0u over 13):
+    rows priced -110 or shorter hit 47.6% against 60.1% implied (42 rows),
+    and rows shorter than -130 lost -13.0u over 38. `drought_rule.
+    LIST_MAX_JUICE` (-130) now leaves off every category's row priced
+    shorter, on both lists (`drop_short_points`); points' -150 is inside it.
+    1+ assist is the Due List's largest loss (-12.2u over 161, most of it
+    +200 to +300, -11.4u over 49), left as is: its 55+ at 3 setting won in
+    both bought seasons.
+  - **Prop leans** are positive since the 11-05 and 11-09 changes (+15.8u
+    over 647), so unchanged.
+  Chosen on the weeks they are scored on, small samples, every interval
+  spans zero: **no demonstrated edge.** Leans and lists only: the snapshot,
+  forward ledger, population B, the model, the edge bars, the staking rule
+  and the registered test are unchanged. Boards already graded keep their
+  grading.
+
 ## Contract strings — never change these
 
 Cooper's local scheduled tasks hard-code these. Renaming any of them silently
