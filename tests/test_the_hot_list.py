@@ -75,9 +75,9 @@ def test_who_qualifies_and_for_what() -> None:
 
 def test_the_card_list_prices_the_over_and_keeps_an_unposted_price_missing() -> None:
     prices = pd.DataFrame([
-        {"market": "points", "line": 0.5, "selection": "over", "player": "Hot Scorer", "american_odds": -150,
-         "book": "DraftKings", "home_team": "Toronto Maple Leafs", "away_team": "Montreal Canadiens", "commence_time": f"{DAY}T23:00:00Z"},
         {"market": "points", "line": 0.5, "selection": "over", "player": "Hot Scorer", "american_odds": -140,
+         "book": "DraftKings", "home_team": "Toronto Maple Leafs", "away_team": "Montreal Canadiens", "commence_time": f"{DAY}T23:00:00Z"},
+        {"market": "points", "line": 0.5, "selection": "over", "player": "Hot Scorer", "american_odds": -125,
          "book": "FanDuel", "home_team": "Toronto Maple Leafs", "away_team": "Montreal Canadiens", "commence_time": f"{DAY}T23:00:00Z"},
     ])
     result = build_hot_list(logs=logs(), rosters={1: "TOR", 2: "MTL", 3: "MTL"},
@@ -86,7 +86,7 @@ def test_the_card_list_prices_the_over_and_keeps_an_unposted_price_missing() -> 
                             now=datetime(2026, 11, 19, 15, tzinfo=timezone.utc))
     by = {r["market"]: r for r in result.rows}
     assert [r["market"] for r in result.rows] == ["points", "goals"]
-    assert by["points"]["american_odds"] == -140 and by["points"]["book"] == "FanDuel" and not by["points"]["heavy_juice"]
+    assert by["points"]["american_odds"] == -125 and by["points"]["book"] == "FanDuel" and not by["points"]["heavy_juice"]
     assert by["goals"]["american_odds"] is None and by["goals"]["book"] == "", "never filled in"
     section = "\n".join(render_section(result.rows, result.notes, result.unresolved))
     assert section.startswith("## Hot List") and HEADLINE in section
