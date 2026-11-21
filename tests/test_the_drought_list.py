@@ -297,7 +297,7 @@ def test_the_team_is_the_rosters_not_the_logs_last_club():
     assert build(rosters={}).rows == [] and "rosters" in build(rosters={}).notes[0]
 
 
-def test_the_best_price_and_its_book_are_shown_and_heavy_juice_is_a_flag_not_a_filter():
+def test_the_best_price_and_its_book_are_shown_and_a_short_price_is_left_off():
     result = build([
         quote("Assist Man", "assists", 150, "FanDuel"), quote("Assist Man", "assists", 170, "DraftKings"),
         quote("Test Scorer", "goals", -170, "BetMGM", home="Winnipeg Jets", away="Montreal Canadiens"),
@@ -307,9 +307,11 @@ def test_the_best_price_and_its_book_are_shown_and_heavy_juice_is_a_flag_not_a_f
 
     assert (by["Assist Man"]["american_odds"], by["Assist Man"]["book"]) == (170, "DraftKings")
     assert not by["Assist Man"]["heavy_juice"]
-    assert by["Test Scorer"]["american_odds"] == -170 and by["Test Scorer"]["heavy_juice"], "-170 is shorter than -160"
-    # exactly -160 is not shorter than -160
-    assert not next(r for r in build([quote("Assist Man", "assists", -160, "X")]).rows if r["player"] == "Assist Man")["heavy_juice"]
+    # Since 2026-11-21 no row priced shorter than -130 is listed at all
+    # (drought_rule.LIST_MAX_JUICE), so -170 is left off and named in the notes.
+    assert "Test Scorer" not in by
+    assert any("priced shorter than -130" in n for n in result.notes)
+    assert not next(r for r in build([quote("Assist Man", "assists", -130, "X")]).rows if r["player"] == "Assist Man")["heavy_juice"]
 
 
 def test_only_the_over_half_line_in_that_players_category_prices_a_row():
