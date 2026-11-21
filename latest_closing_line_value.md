@@ -6,12 +6,12 @@ backtest needs, which is the whole reason it exists — but it answers
 a *narrower* question. Beating the close is evidence of finding
 something; it is not profit, and this file never calls it profit.
 
-- Generated: 2026-11-21T14:58:07+00:00
-- Opinions considered: **193426**; matched to a closing price: **184550**; no closing price found: **8876**.
-- Within that count, priced before face-off but no close near face-off: **8612** — no capture was taken within 150 minutes of face-off (a round missed, or none is scheduled that close). An older price is an intraday price, not the market's last word, so they are not scored.
+- Generated: 2026-11-21T20:47:27+00:00
+- Opinions considered: **194559**; matched to a closing price: **185678**; no closing price found: **8881**.
+- Within that count, priced before face-off but no close near face-off: **8616** — no capture was taken within 150 minutes of face-off (a round missed, or none is scheduled that close). An older price is an intraday price, not the market's last word, so they are not scored.
 - Of those, **25** are in a market the store holds no price for, in their game, from before face-off: `blocked_shots` (15), `moneyline` (10). No book pulled these. The capture never priced that market for that game — its request for that market failed or was not yet made (the bulk moneyline, puck line and total joined the capture after its first rounds), or no capture ran before face-off — so they are a gap in what is captured and say nothing about the model.
-- The other **239** are in a market that was captured for their game, but their own line or side never was before face-off: the books pulled or moved it, or the capture's ladders did not carry that line.
-- Not yet played: **7590** opinion(s), 360 of them clearing the measurement bar (not the card's staked bets), whose game starts after this report was built. None has a closing price yet and none is counted above; each is scored against its close once its game has started.
+- The other **240** are in a market that was captured for their game, but their own line or side never was before face-off: the books pulled or moved it, or the capture's ladders did not carry that line.
+- Not yet played: **6849** opinion(s), 326 of them clearing the measurement bar (not the card's staked bets), whose game starts after this report was built. None has a closing price yet and none is counted above; each is scored against its close once its game has started.
 
 A closing price is the last price captured **strictly before** the
 listed start, and no more than 150 minutes before it.
@@ -31,9 +31,9 @@ cannot bound an interval at all.
 
 | Rows | Beat close | Tied | Beat rate [95%] | Mean CLV% [95%] | EV at close [95%] (n) | Games |
 | --- | --- | --- | --- | --- | --- | --- |
-| 184550 | 58379 | 57255 | 45.9% [45.3%, 46.4%] | +0.45% [+0.28%, +0.61%] | -4.5% [-4.5%, -4.4%] (119327) | 346 |
+| 185678 | 58574 | 57947 | 45.9% [45.3%, 46.4%] | +0.44% [+0.27%, +0.60%] | -4.5% [-4.5%, -4.4%] (120094) | 348 |
 
-8876 opinion(s) had no closing price and are not in this table.
+8881 opinion(s) had no closing price and are not in this table.
 
 The interval excludes zero on the positive side.
 
@@ -43,7 +43,7 @@ On expected value at the close — the money figure: The interval excludes zero 
 
 | Rows | Beat close | Tied | Beat rate [95%] | Mean CLV% [95%] | EV at close [95%] (n) | Games |
 | --- | --- | --- | --- | --- | --- | --- |
-| 8445 | 4177 | 1820 | 63.0% [61.0%, 65.0%] | +2.48% [+1.91%, +3.05%] | -1.6% [-2.1%, -1.0%] (7337) | 345 |
+| 8512 | 4193 | 1866 | 63.1% [61.1%, 65.0%] | +2.46% [+1.89%, +3.03%] | -1.6% [-2.1%, -1.0%] (7397) | 347 |
 
 393 bet(s) had no closing price and are not in this table.
 
@@ -57,7 +57,7 @@ The opinions that clear the card's best-bet bar as far as a frozen opinion shows
 
 | Rows | Beat close | Tied | Beat rate [95%] | Mean CLV% [95%] | EV at close [95%] (n) | Games |
 | --- | --- | --- | --- | --- | --- | --- |
-| 726 | 428 | 139 | 72.9% [67.9%, 77.4%] | +3.77% [+2.22%, +5.33%] | -0.6% [-1.3%, +0.1%] (667) | 264 |
+| 736 | 432 | 145 | 73.1% [68.1%, 77.5%] | +3.74% [+2.20%, +5.28%] | -0.6% [-1.3%, +0.1%] (677) | 266 |
 
 32 opinion(s) had no closing price and are not in this table.
 
@@ -73,40 +73,40 @@ row that only looks remarkable among a dozen is not remarkable.
 
 | Market | View | Rows | Beat close | Tied | Beat rate [95% family-wise, 12 markets] | Mean CLV% [95% family-wise, 12 markets] | EV at close [95% family-wise, 12 markets] (n) | Games |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `assists` | opinions | 20333 | 6634 | 5914 | 46.0% [44.5%, 47.5%] | -0.48% [-0.90%, -0.05%] | -4.1% [-4.3%, -4.0%] (12751) | 340 |
-| `assists` | bets | 934 | 406 | 252 | 59.5% [53.6%, 65.2%] | +1.00% [+0.62%, +1.37%] | -1.8% [-2.2%, -1.4%] (930) | 322 |
+| `assists` | opinions | 20458 | 6653 | 5994 | 46.0% [44.5%, 47.5%] | -0.47% [-0.89%, -0.05%] | -4.1% [-4.3%, -4.0%] (12831) | 342 |
+| `assists` | bets | 940 | 408 | 256 | 59.6% [53.7%, 65.3%] | +1.00% [+0.63%, +1.37%] | -1.8% [-2.2%, -1.4%] (936) | 324 |
 | `assists` | best-bet bar | 56 | 18 | 19 | 48.6% [26.7%, 71.1%] | +0.79% [-0.67%, +2.25%] | -1.7% [-3.4%, -0.0%] (56) | 51 |
 | `blocked_shots` | opinions | 1360 | 222 | 814 | 40.7% [34.1%, 47.6%] | -0.33% [-0.64%, -0.02%] | -7.9% [-8.2%, -7.5%] (691) | 173 |
 | `blocked_shots` | bets | 130 | 32 | 80 | 64.0% [43.1%, 80.6%] | +0.90% [-0.25%, +2.05%] | -6.7% [-7.5%, -5.8%] (125) | 93 |
 | `blocked_shots` | best-bet bar | 25 | 11 | 12 | 84.6% [45.1%, 97.4%] | +1.77% [-0.00%, +3.54%] | -5.5% [-7.1%, -3.9%] (25) | 23 |
-| `goalie_saves` | opinions | 6017 | 1670 | 2684 | 50.1% [44.5%, 55.7%] | -0.00% [-0.68%, +0.67%] | -3.1% [-3.6%, -2.7%] (1201) | 198 |
-| `goalie_saves` | bets | 337 | 205 | 88 | 82.3% [68.3%, 91.0%] | +6.21% [-0.75%, +13.17%] | +0.6% [-2.9%, +4.1%] (119) | 81 |
+| `goalie_saves` | opinions | 6033 | 1670 | 2695 | 50.0% [44.4%, 55.6%] | -0.01% [-0.68%, +0.66%] | -3.1% [-3.6%, -2.7%] (1204) | 199 |
+| `goalie_saves` | bets | 345 | 205 | 94 | 81.7% [67.6%, 90.5%] | +6.05% [-0.77%, +12.87%] | +0.5% [-3.0%, +4.0%] (121) | 82 |
 | `goalie_saves` | best-bet bar | 44 | 37 | 5 | 94.9% [74.1%, 99.2%] | +17.57% [-13.55%, +48.68%] | +8.4% [-11.5%, +28.3%] (19) | 14 |
-| `goals` | opinions | 45107 | 12027 | 19900 | 47.7% [46.3%, 49.1%] | +1.02% [+0.69%, +1.36%] | -3.9% [-4.1%, -3.8%] (21529) | 340 |
-| `goals` | bets | 286 | 166 | 63 | 74.4% [64.3%, 82.5%] | +2.99% [+1.86%, +4.12%] | -1.8% [-2.8%, -0.7%] (271) | 169 |
+| `goals` | opinions | 45384 | 12062 | 20084 | 47.7% [46.3%, 49.1%] | +1.02% [+0.69%, +1.35%] | -3.9% [-4.1%, -3.8%] (21667) | 342 |
+| `goals` | bets | 289 | 166 | 66 | 74.4% [64.3%, 82.5%] | +2.96% [+1.84%, +4.08%] | -1.8% [-2.8%, -0.8%] (274) | 170 |
 | `goals` | best-bet bar | 7 | 5 | 0 | 71.4% [24.7%, 95.0%] | +2.58% [-2.62%, +7.78%] | -2.4% [-6.8%, +1.9%] (7) | 7 |
 | `hits` | opinions | 374 | 134 | 106 | 50.0% [41.4%, 58.6%] | +0.01% [-0.70%, +0.73%] | -7.9% [-8.6%, -7.3%] (374) | 67 |
 | `hits` | bets | 120 | 57 | 34 | 66.3% [47.1%, 81.3%] | +1.07% [-0.29%, +2.43%] | -7.0% [-8.2%, -5.8%] (120) | 59 |
 | `hits` | best-bet bar | 68 | 38 | 18 | 76.0% [52.1%, 90.2%] | +2.27% [+0.59%, +3.94%] | -5.9% [-7.4%, -4.4%] (68) | 42 |
-| `moneyline` | opinions | 682 | 288 | 84 | 48.2% [42.4%, 54.0%] | -0.29% [-0.69%, +0.10%] | -2.2% [-2.6%, -1.8%] (682) | 341 |
+| `moneyline` | opinions | 686 | 290 | 85 | 48.3% [42.5%, 54.1%] | -0.30% [-0.69%, +0.10%] | -2.2% [-2.6%, -1.8%] (686) | 343 |
 | `moneyline` | bets | 99 | 46 | 11 | 52.3% [37.5%, 66.7%] | +0.37% [-0.85%, +1.59%] | -1.5% [-2.7%, -0.3%] (99) | 99 |
 | `moneyline` | best-bet bar | 9 | 4 | 1 | 50.0% [14.4%, 85.6%] | -0.33% [-5.82%, +5.16%] | -2.6% [-8.0%, +2.9%] (9) | 9 |
-| `points` | opinions | 39138 | 12344 | 9726 | 42.0% [40.8%, 43.1%] | +0.81% [+0.02%, +1.60%] | -5.2% [-5.4%, -4.9%] (29830) | 340 |
-| `points` | bets | 1770 | 823 | 391 | 59.7% [54.9%, 64.3%] | +3.02% [-0.11%, +6.16%] | +0.1% [-3.0%, +3.2%] (1769) | 336 |
+| `points` | opinions | 39380 | 12372 | 9888 | 42.0% [40.8%, 43.1%] | +0.79% [+0.00%, +1.57%] | -5.2% [-5.4%, -4.9%] (30018) | 342 |
+| `points` | bets | 1788 | 829 | 403 | 59.9% [55.1%, 64.4%] | +3.00% [-0.10%, +6.10%] | +0.1% [-2.9%, +3.2%] (1787) | 338 |
 | `points` | best-bet bar | 0 | 0 | 0 | — | — | — | 0 |
-| `puck_line` | opinions | 5826 | 2281 | 1441 | 52.0% [49.9%, 54.2%] | +0.44% [+0.12%, +0.75%] | -3.0% [-3.3%, -2.7%] (5137) | 346 |
-| `puck_line` | bets | 351 | 184 | 68 | 65.0% [54.2%, 74.5%] | +0.85% [-0.10%, +1.80%] | -2.4% [-3.3%, -1.5%] (351) | 189 |
+| `puck_line` | opinions | 5857 | 2293 | 1451 | 52.0% [49.9%, 54.2%] | +0.44% [+0.13%, +0.75%] | -3.0% [-3.3%, -2.7%] (5165) | 348 |
+| `puck_line` | bets | 353 | 185 | 69 | 65.1% [54.3%, 74.6%] | +0.85% [-0.10%, +1.79%] | -2.4% [-3.2%, -1.5%] (353) | 190 |
 | `puck_line` | best-bet bar | 18 | 13 | 2 | 81.2% [43.7%, 96.0%] | +2.23% [-0.44%, +4.90%] | -0.3% [-2.2%, +1.6%] (18) | 14 |
-| `regulation_3_way` | opinions | 1020 | 388 | 234 | 49.4% [44.3%, 54.5%] | -0.09% [-0.43%, +0.24%] | — | 340 |
+| `regulation_3_way` | opinions | 1026 | 389 | 235 | 49.2% [44.1%, 54.3%] | -0.10% [-0.43%, +0.23%] | — | 342 |
 | `regulation_3_way` | bets | 223 | 101 | 47 | 57.4% [46.6%, 67.5%] | +0.48% [-0.35%, +1.31%] | — | 223 |
 | `regulation_3_way` | best-bet bar | 31 | 16 | 5 | 61.5% [34.8%, 82.8%] | +1.28% [-1.70%, +4.25%] | — | 31 |
-| `shots_on_goal` | opinions | 40675 | 13930 | 9617 | 44.9% [43.2%, 46.5%] | +0.24% [-0.11%, +0.60%] | -4.7% [-4.8%, -4.6%] (23477) | 340 |
-| `shots_on_goal` | bets | 2914 | 1579 | 522 | 66.0% [62.3%, 69.5%] | +3.46% [+2.71%, +4.21%] | -0.9% [-1.4%, -0.4%] (2272) | 339 |
-| `shots_on_goal` | best-bet bar | 375 | 248 | 51 | 76.5% [68.6%, 82.9%] | +4.20% [+3.08%, +5.32%] | +1.4% [+0.3%, +2.4%] (372) | 212 |
-| `team_total` | opinions | 15423 | 5516 | 4204 | 49.2% [47.8%, 50.5%] | +0.09% [-0.03%, +0.22%] | -4.8% [-5.0%, -4.7%] (15239) | 340 |
+| `shots_on_goal` | opinions | 40961 | 13983 | 9808 | 44.9% [43.2%, 46.5%] | +0.24% [-0.11%, +0.59%] | -4.7% [-4.8%, -4.6%] (23663) | 342 |
+| `shots_on_goal` | bets | 2944 | 1586 | 542 | 66.0% [62.3%, 69.5%] | +3.43% [+2.69%, +4.18%] | -1.0% [-1.4%, -0.5%] (2301) | 341 |
+| `shots_on_goal` | best-bet bar | 385 | 252 | 57 | 76.8% [69.0%, 83.2%] | +4.13% [+3.03%, +5.22%] | +1.3% [+0.3%, +2.3%] (382) | 214 |
+| `team_total` | opinions | 15515 | 5544 | 4238 | 49.2% [47.8%, 50.5%] | +0.09% [-0.03%, +0.22%] | -4.8% [-5.0%, -4.7%] (15331) | 342 |
 | `team_total` | bets | 699 | 315 | 150 | 57.4% [45.1%, 68.8%] | +0.66% [-0.37%, +1.70%] | -4.4% [-5.4%, -3.4%] (699) | 161 |
 | `team_total` | best-bet bar | 47 | 26 | 10 | 70.3% [33.3%, 91.8%] | +1.64% [-1.74%, +5.03%] | -4.0% [-7.1%, -0.8%] (47) | 20 |
-| `total_goals` | opinions | 8595 | 2945 | 2531 | 48.6% [46.7%, 50.4%] | +0.09% [-0.10%, +0.28%] | -3.5% [-3.6%, -3.3%] (8416) | 346 |
+| `total_goals` | opinions | 8644 | 2962 | 2549 | 48.6% [46.8%, 50.4%] | +0.09% [-0.10%, +0.28%] | -3.5% [-3.6%, -3.3%] (8464) | 348 |
 | `total_goals` | bets | 582 | 263 | 114 | 56.2% [43.8%, 67.9%] | +0.77% [-0.23%, +1.76%] | -3.1% [-4.1%, -2.2%] (582) | 121 |
 | `total_goals` | best-bet bar | 46 | 12 | 16 | 40.0% [12.2%, 76.1%] | -0.48% [-2.95%, +2.00%] | -4.4% [-6.5%, -2.3%] (46) | 13 |
 
