@@ -4319,6 +4319,22 @@ Re-derive rather than trust if the data has moved.
   forward ledger, population B, the model, the edge bars, the staking rule
   and the registered test are unchanged. Boards already graded keep their
   grading.
+- **2026-11-22: a started or finished game keeps our projected winner and
+  total on the site (Cooper: "once games have started/ended on the website
+  they need to still show what our projected total and the projected winner
+  were based off our line calculations").** Site only. Staged prices cover
+  games still to face off, so a build after puck drop had no line for a game
+  under way and published it with no total, lines or pick.
+  `build_site_json.keep_started_projections` gives such a game, when this
+  build did not price it, the projection, lines and pick the day's frozen
+  board published (`STARTED_GAME_KEYS`; a side's projected goals and win
+  chance only where the build has none). On the board (`smooth_pages`
+  patches; Board stays pinned) a started game's row reads "Projected: TOR
+  58% · 6.4 goals" in place of "Stats: TOR 58%", and its score box prints
+  "Our projection: TOR to win (58%), 6.4 total goals" with the goals so far
+  and who leads, or, once final, whether the winner was called right. Nothing
+  is repriced or graded differently; the card, snapshot and ledger are
+  untouched. `tests/test_started_games_keep_their_projection.py`.
 
 ## Contract strings — never change these
 

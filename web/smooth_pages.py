@@ -144,6 +144,29 @@ HOT_ROW = (
 )
 
 
+#: Our projected winner and total for a game under way or over, and the line
+#: the score box prints under the score (Cooper, 2026-11-22).
+PROJ_HELPERS = (
+    "    const projOf = (r) => {\n"
+    "      const hp = r.home && r.home.winProb, ap = r.away && r.away.winProb, hg = r.home && r.home.projGoals, ag = r.away && r.away.projGoals;\n"
+    "      if (typeof hp !== \"number\" || typeof ap !== \"number\" || !Number.isFinite(hp) || !Number.isFinite(ap)) return null;\n"
+    "      const homeWins = hp >= ap, total = r.total && typeof r.total.proj === \"number\" ? r.total.proj : typeof hg === \"number\" && typeof ag === \"number\" ? hg + ag : null;\n"
+    "      return { abbr: homeWins ? r.home.abbr : r.away.abbr, pct: Math.round((homeWins ? hp : ap) * 100), total, homeWins };\n"
+    "    };\n"
+    "    const projLine = (r, e, scored) => {\n"
+    "      const p = projOf(r);\n"
+    "      if (!p) return \"\";\n"
+    "      let how = \"\";\n"
+    "      if (scored) {\n"
+    "        const goals = e.home.score + e.away.score, level = e.home.score === e.away.score;\n"
+    "        if (e.state === \"post\") how = ` · ${level ? \"\" : (e.home.score > e.away.score) === p.homeWins ? \"winner called right, \" : \"winner missed, \"}${goals} goals scored`;\n"
+    "        else how = ` · ${goals} goal${goals === 1 ? \"\" : \"s\"} so far${level ? \"\" : `, ${(e.home.score > e.away.score) === p.homeWins ? p.abbr + \" leads\" : p.abbr + \" trails\"}`}`;\n"
+    "      }\n"
+    "      return `Our projection: ${p.abbr} to win (${p.pct}%)${p.total != null ? `, ${p.total.toFixed(1)} total goals` : \"\"}${how}`;\n"
+    "    };\n"
+)
+
+
 PATCHES: dict[str, list[tuple[str, str]]] = {
     # The graphic's props card said every prop best bet was 0.1u, a stake
     # the card stopped using long ago; since 2026-11-21 (a 1u base) the card's
@@ -324,6 +347,34 @@ PATCHES: dict[str, list[tuple[str, str]]] = {
         (
             'if (tab === "props" && this.state.propView === "drought") for (const g of data.games || []) { const e = byGame[g.id]; if (Array.isArray(g.drought) && g.drought.length',
             'if (tab === "props" && (this.state.propView === "drought" || this.state.propView === "hot")) for (const g of data.games || []) { const e = byGame[g.id]; if (Array.isArray(this.state.propView === "hot" ? g.hot : g.drought) && (this.state.propView === "hot" ? g.hot : g.drought).length',
+        ),
+        # A game under way or over keeps our projected winner and total on its
+        # row and in its score box, beside the live or final score (Cooper,
+        # 2026-11-22: "once games have started/ended on the website they need
+        # to still show what our projected total and the projected winner
+        # were"). Read off the board's own winProb, projGoals and total.proj,
+        # which build_site_json.keep_started_projections keeps after puck drop.
+        (
+            "    const statSide = (r) => {\n",
+            PROJ_HELPERS + "    const statSide = (r, began) => {\n",
+        ),
+        (
+            "      return `Stats: ${home ? r.home.abbr : r.away.abbr} ${Math.round((home ? hp : ap) * 100)}%`;\n",
+            "      if (began) { const p = projOf(r); return `Projected: ${p.abbr} ${p.pct}%${p.total != null ? ` · ${p.total.toFixed(1)} goals` : \"\"}`; }\n"
+            "      return `Stats: ${home ? r.home.abbr : r.away.abbr} ${Math.round((home ? hp : ap) * 100)}%`;\n",
+        ),
+        (
+            "statSide: statSide(r),",
+            "statSide: statSide(r, (!!e && e.state !== \"pre\") || Date.parse(r.startUtc) <= now),",
+        ),
+        (
+            "${scored ? e[p2].score : \"–\"} ${r[p2].abbr}`, shots,",
+            "${scored ? e[p2].score : \"–\"} ${r[p2].abbr}`, shots, proj: projLine(r, e, scored),",
+        ),
+        (
+            "font-size:16px;font-weight:600;\">{{ g.box.score }}</div>",
+            "font-size:16px;font-weight:600;\">{{ g.box.score }}</div>\n"
+            "                        <sc-if value=\"{{ g.box.proj }}\" hint-placeholder-val=\"{{ false }}\"><div style=\"font-family:'IBM Plex Mono',monospace;font-size:13px;line-height:1.5;color:var(--ink-2);\">{{ g.box.proj }}</div></sc-if>",
         ),
     ],
     "Results.dc.html": [

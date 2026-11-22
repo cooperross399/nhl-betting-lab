@@ -916,6 +916,54 @@ def prop_leans_page(lab: Path, ref: str, today: date) -> dict:
                 "note": f"The prop leans record could not be read from card-feed this run ({type(exc).__name__})."}
 
 
+#: What a started game keeps from the day's frozen board when this build
+#: could not price it. The prices are staged for games still to face off, so
+#: a build after puck drop holds no line for a game under way and used to
+#: drop its total, its lines and its pick (Cooper, 2026-11-22: "once games
+#: have started/ended on the website they need to still show what our
+#: projected total and the projected winner were").
+STARTED_GAME_KEYS = ("priced", "moneyline", "puckLine", "total", "regulation", "pick", "factors")
+STARTED_SIDE_KEYS = ("projGoals", "winProb", "b2b")
+
+
+def keep_started_projections(games: list[dict], frozen_path: Path, now: datetime) -> int:
+    """Give each game that has started, and that this build did not price,
+    the projection, lines and pick the day's frozen board published for it.
+
+    A game this build priced keeps its own figures, and so does a game the
+    frozen board did not project. A side's projected goals and win chance
+    are filled only where this build has none. Returns how many games were
+    filled. Nothing is repriced: these are the figures already published.
+    """
+    if not frozen_path.is_file():
+        return 0
+    try:
+        frozen = json.loads(frozen_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return 0
+    by_id = {str(g.get("id")): g for g in (frozen.get("games") or []) if isinstance(g, dict)}
+    filled = 0
+    for row in games:
+        start = _moment(row.get("startUtc"))
+        if start is None or start > now:
+            continue
+        old = by_id.get(str(row.get("id")))
+        if not old or not isinstance((old.get("home") or {}).get("winProb"), (int, float)):
+            continue
+        for side in ("away", "home"):
+            mine, theirs = row.setdefault(side, {}), old.get(side) or {}
+            for key in STARTED_SIDE_KEYS:
+                if mine.get(key) is None and theirs.get(key) is not None:
+                    mine[key] = theirs[key]
+        if row.get("priced"):
+            continue
+        for key in STARTED_GAME_KEYS:
+            if key in old:
+                row[key] = old[key]
+        filled += 1
+    return filled
+
+
 def build_board(day: date, lab: Path, history_dir: Path) -> dict:
     now = datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
     games = schedule_for(day)
@@ -1102,6 +1150,7 @@ def build_board(day: date, lab: Path, history_dir: Path) -> dict:
         row.pop("_provider", None)
         out_games.append(row)
 
+    keep_started_projections(out_games, history_dir / f"{day.isoformat()}.json", datetime.now(timezone.utc))
     record = load_record(lab / "data" / "outputs" / "forward_evidence.json")
     # Published so the page can name the gate that ACTUALLY stopped a pick.
     # With nothing allowlisted the card never reaches the edge bar, so saying
