@@ -1,6 +1,6 @@
 # Picks by the run that first listed them
 
-- Generated: 2026-11-22T15:04:11+00:00
+- Generated: 2026-11-22T20:57:41+00:00
 - Source: every card on card-feed (`latest_card_comment.md` history); results from the forward ledger, at the card's listed price, one unit flat; CLV against the close from the private capture store.
 - Every interval is 95%, clustered by game. Aggregate only: no price, line, book or player.
 
