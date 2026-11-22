@@ -160,7 +160,11 @@ if args[:2] == ["run", "list"]:
         runs = [r for r in runs if status in (r["status"], r["conclusion"])]
     runs = runs[: int(value("--limit", "20"))]
     fields = [f for f in value("--json", "").split(",") if f]
-    rows = [{{k: r.get(k, "main") if k == "headBranch" else r[k] for k in fields}}
+    # updatedAt is when the run finished: `finished_at` where a test sets
+    # one, else its creation (every other run here finishes in order).
+    rows = [{{k: r.get(k, "main") if k == "headBranch"
+              else r.get("finished_at", r["created_at"]) if k == "updatedAt"
+              else r[k] for k in fields}}
             for r in runs]
     jq = value("--jq")
     if jq is None:
@@ -185,7 +189,7 @@ if args[:1] == ["api"]:
             if source is None or r["databaseId"] in hidden:
                 continue
             found.append({{"id": r["databaseId"] * 10, "name": name, "expired": False,
-                          "created_at": r["created_at"],
+                          "created_at": r.get("finished_at", r["created_at"]),
                           "workflow_run": {{"id": r["databaseId"],
                                            "head_branch": r.get("headBranch", "main")}}}})
         # The API's own order is not relied on: oldest first here.
@@ -1203,6 +1207,28 @@ def test_a_stood_down_seven_am_run_is_passed_over(chain: PublishSite) -> None:
     assert after.boards == _dates(D3, D2, D1)
     assert "never ran its 'Publish Site' job" in after.log
     assert newest.run_id in {r["databaseId"] for r in chain.registry}
+
+
+def test_the_newest_publish_is_the_one_that_finished_last(chain: PublishSite) -> None:
+    """The 7 AM publish is created hours before it publishes, so a run
+    created after it can finish first. On 2026-11-22 the listing, in creation
+    order, named that earlier-finishing run as the newest publish while the
+    artifacts API's newest site-history was the 7 AM run's, and every publish
+    after it refused. The newest publish is the one that finished last."""
+    first = chain.run(D1)
+    waited = chain.run(D2)
+    # `waited` was created before `first` and finished after it.
+    rows = {r["databaseId"]: r for r in chain.registry}
+    rows[waited.run_id]["finished_at"] = chain.created(waited.run_id)
+    rows[waited.run_id]["created_at"] = chain.created(first.run_id - 1)
+    chain.registry.sort(key=lambda r: r["created_at"], reverse=True)
+    assert chain.registry[0]["databaseId"] == first.run_id
+
+    after = chain.run(D3)
+
+    assert after.conclusion == "success", after.log
+    assert after.boards == _dates(D3, D2, D1)
+    assert f"from publish-site.yml run {waited.run_id}" in after.log
 
 
 def test_a_run_whose_jobs_cannot_be_asked_is_a_refusal(chain: PublishSite) -> None:

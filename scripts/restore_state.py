@@ -299,7 +299,7 @@ def completed_runs(
     asked = max(limit * 5, 50) if success_only else limit
     args = ["run", "list", "--workflow", workflow, "--branch", branch,
             "--limit", str(asked),
-            "--json", "databaseId,conclusion,status,headBranch"]
+            "--json", "databaseId,conclusion,status,headBranch,updatedAt"]
     problem = f"{workflow} runs were listed as something other than JSON."
     for attempt in range(attempts):
         if attempt:
@@ -530,6 +530,19 @@ def restore(
                 f"{artifact} is unknown.{_not_consulted(later, artifact)}",
             )
             break
+        if require_newest:
+            # Newest by when the run finished, not when it was created. The
+            # 7 AM publish is created at about 07:30 UTC and waits until 7 AM
+            # New York to publish, so a run created after it (a Gameday
+            # Refresh completion) can finish first. Ordered by creation the
+            # listing named that earlier-finishing run as the newest publish
+            # while the artifacts API's newest site-history was the 7 AM
+            # run's, and every publish refused on 2026-11-22 (runs
+            # 45020705694, 45024073249) with nothing able to publish past it.
+            # The sort is stable, so a listing without `updatedAt` keeps
+            # gh's order.
+            runs = sorted(runs, key=lambda r: r.get("updatedAt") or "",
+                          reverse=True)
         if require_job:
             kept = []
             for run in runs:
