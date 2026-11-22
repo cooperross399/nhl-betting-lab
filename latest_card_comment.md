@@ -1,9 +1,9 @@
-**Selections changed** since the previous card — 0 best bet(s), 0 unit(s) staked.
+Selections are unchanged since the previous card; this comment was posted on request, and the run was clean.
 
 # NHL gameday card
 
-- Generated: 2026-11-22T13:44:05+00:00
-- 0 best bet(s), 16 lean(s), 2476 pass(es) across 5 game(s); 0 unit(s) staked.
+- Generated: 2026-11-22T14:55:00+00:00
+- 0 best bet(s), 16 lean(s), 2614 pass(es) across 5 game(s); 0 unit(s) staked.
 - Included markets: **assists, goalie_saves, goals, moneyline, points, puck_line, regulation_3_way, shots_on_goal, team_total, total_goals**
 - Unit size: $25
 
@@ -15,26 +15,26 @@ _No best bets._
 
 | Game | Starts | Market | Selection | Model | Edge | Price | Bet down to | Book |
 |:-----|:-------|:-------|:----------|------:|-----:|------:|------------:|:-----|
-| Carolina Hurricanes @ New York Rangers | Nov 22, 12:40 PM ET | `shots_on_goal` | Taylor Hall under 1.5 | 55.4% | +11.0% | +125 | +103 | Bally Bet |
-| Buffalo Sabres @ Tampa Bay Lightning | Nov 22, 5:10 PM ET | `shots_on_goal` | Jack Quinn under 2.5 | 63.7% | +7.2% | -130 | -136 | BetMGM |
-| Carolina Hurricanes @ New York Rangers | Nov 22, 12:40 PM ET | `shots_on_goal` | Mark Jankowski under 1.5 | 61.9% | +7.2% | -121 | -126 | Bally Bet |
-| Edmonton Oilers @ St Louis Blues | Nov 22, 7:10 PM ET | `shots_on_goal` | Philip Broberg under 1.5 | 54.2% | +6.6% | +110 | +108 | Hard Rock Bet |
-| Pittsburgh Penguins @ Dallas Stars | Nov 22, 7:10 PM ET | `total_goals` | over 7 | 41.4% | +6.3% | +185 | +164 | Bovada |
-| Pittsburgh Penguins @ Dallas Stars | Nov 22, 7:10 PM ET | `assists` | Jamie Benn over 0.5 | 34.0% | +6.2% | +260 | +257 | Courtside |
-| Pittsburgh Penguins @ Dallas Stars | Nov 22, 7:10 PM ET | `total_goals` | over 6 | 59.3% | +5.8% | -115 | -126 | Circa Sports |
-| Pittsburgh Penguins @ Dallas Stars | Nov 22, 7:10 PM ET | `total_goals` | over 6.5 | 52.5% | +5.4% | +112 | +104 | Courtside |
-| Pittsburgh Penguins @ Dallas Stars | Nov 22, 7:10 PM ET | `points` | Jamie Benn over 0.5 | 47.2% | +4.7% | +135 | +127 | Courtside |
-| Pittsburgh Penguins @ Dallas Stars | Nov 22, 7:10 PM ET | `total_goals` | over 5.5 | 63.9% | +4.7% | -145 | -152 | Hard Rock Bet |
+| Carolina Hurricanes @ New York Rangers | Nov 22, 12:40 PM ET | `shots_on_goal` | Taylor Hall under 1.5 | 55.6% | +11.1% | +125 | +102 | Bally Bet |
+| Pittsburgh Penguins @ Dallas Stars | Nov 22, 7:10 PM ET | `total_goals` | over 7 | 42.5% | +7.4% | +185 | +157 | Bovada |
+| Buffalo Sabres @ Tampa Bay Lightning | Nov 22, 5:10 PM ET | `shots_on_goal` | Jack Quinn under 2.5 | 63.9% | +7.4% | -130 | -137 | BetMGM |
+| Carolina Hurricanes @ New York Rangers | Nov 22, 12:40 PM ET | `shots_on_goal` | Mark Jankowski under 1.5 | 62.0% | +7.3% | -121 | -127 | Bally Bet |
+| Buffalo Sabres @ Tampa Bay Lightning | Nov 22, 5:10 PM ET | `shots_on_goal` | Jack Quinn under 1.5 | 40.6% | +7.3% | +200 | +189 | theScore Bet |
+| Pittsburgh Penguins @ Dallas Stars | Nov 22, 7:10 PM ET | `total_goals` | over 6 | 60.4% | +6.9% | -115 | -131 | Circa Sports |
+| Pittsburgh Penguins @ Dallas Stars | Nov 22, 7:10 PM ET | `total_goals` | over 6.5 | 53.7% | +6.6% | +112 | +100 | Courtside |
+| Edmonton Oilers @ St Louis Blues | Nov 22, 7:10 PM ET | `shots_on_goal` | Philip Broberg under 1.5 | 54.9% | +6.1% | +105 | +105 | Hard Rock Bet |
+| Carolina Hurricanes @ New York Rangers | Nov 22, 12:40 PM ET | `shots_on_goal` | J.T. Miller under 1.5 | 46.0% | +6.0% | +150 | +150 | theScore Bet |
+| Pittsburgh Penguins @ Dallas Stars | Nov 22, 7:10 PM ET | `total_goals` | over 5.5 | 65.0% | +5.8% | -145 | -159 | Hard Rock Bet |
+| Pittsburgh Penguins @ Dallas Stars | Nov 22, 7:10 PM ET | `total_goals` | over 7.5 | 34.6% | +5.7% | +246 | +222 | Courtside |
 | Buffalo Sabres @ Tampa Bay Lightning | Nov 22, 5:10 PM ET | `points` | Nikita Kucherov over 1.5 | 51.1% | +4.6% | +115 | +108 | BetMGM |
-| Pittsburgh Penguins @ Dallas Stars | Nov 22, 7:10 PM ET | `total_goals` | over 7.5 | 33.5% | +4.6% | +246 | +234 | Courtside |
-| Pittsburgh Penguins @ Dallas Stars | Nov 22, 7:10 PM ET | `moneyline` | away | 37.8% | +4.2% | +198 | +192 | Circa Sports |
-| Buffalo Sabres @ Tampa Bay Lightning | Nov 22, 5:10 PM ET | `points` | Victor Hedman over 0.5 | 41.9% | +3.8% | +163 | +158 | Bally Bet |
-| Pittsburgh Penguins @ Dallas Stars | Nov 22, 7:10 PM ET | `total_goals` | over 8.5 | 24.5% | +3.6% | +380 | +377 | FanDuel |
-| Chicago Blackhawks @ Vancouver Canucks | Nov 22, 8:10 PM ET | `points` | Tyler Bertuzzi over 0.5 | 56.9% | +3.4% | -115 | -117 | BetMGM |
+| Pittsburgh Penguins @ Dallas Stars | Nov 22, 7:10 PM ET | `total_goals` | over 8.5 | 25.4% | +4.6% | +381 | +358 | Courtside |
+| Pittsburgh Penguins @ Dallas Stars | Nov 22, 7:10 PM ET | `points` | Jamie Benn over 0.5 | 47.7% | +4.2% | +130 | +124 | theScore Bet |
+| Buffalo Sabres @ Tampa Bay Lightning | Nov 22, 5:10 PM ET | `points` | Victor Hedman over 0.5 | 41.9% | +3.9% | +163 | +158 | Bally Bet |
+| Chicago Blackhawks @ Vancouver Canucks | Nov 22, 8:10 PM ET | `points` | Tyler Bertuzzi over 0.5 | 57.0% | +3.5% | -115 | -117 | BetMGM |
 
 Stats check, props: a prop is staked only when the model's hit chance clears what the shortest price in its odds bracket would need. These cleared the edge bar without it and are recorded here.
 
-- Taylor Hall under 1.5 (`shots_on_goal`): Not confident enough for its odds: the model gives it a 55.4% chance to hit; props priced +111 to +150 need 57.4%. The price clears the edge bar, but the model is not confident enough for its odds bracket. Recorded as a lean and staked at zero.
+- Taylor Hall under 1.5 (`shots_on_goal`): Not confident enough for its odds: the model gives it a 55.6% chance to hit; props priced +111 to +150 need 57.4%. The price clears the edge bar, but the model is not confident enough for its odds bracket. Recorded as a lean and staked at zero.
 
 Leans are recorded and not staked.
 
@@ -44,33 +44,33 @@ Leans are recorded and not staked.
 
 | Game | Starts | Market | Selection | Model | Edge | Price | Book |
 |:-----|:-------|:-------|:----------|------:|-----:|------:|:-----|
-| Edmonton Oilers @ St Louis Blues | Nov 22, 7:10 PM ET | `assists` | Vasily Podkolzin under 0.5 | 70.2% | +6.6% | -175 | Bally Bet |
-| Carolina Hurricanes @ New York Rangers | Nov 22, 12:40 PM ET | `shots_on_goal` | J.T. Miller under 2.5 | 68.5% | +6.2% | -165 | Hard Rock Bet |
-| Carolina Hurricanes @ New York Rangers | Nov 22, 12:40 PM ET | `shots_on_goal` | J.T. Miller under 1.5 | 45.9% | +5.9% | +150 | theScore Bet |
-| Edmonton Oilers @ St Louis Blues | Nov 22, 7:10 PM ET | `shots_on_goal` | Leon Draisaitl under 3.5 | 64.1% | +5.8% | -140 | BetMGM |
-| Buffalo Sabres @ Tampa Bay Lightning | Nov 22, 5:10 PM ET | `assists` | Victor Hedman over 0.5 | 36.9% | +5.6% | +220 | Bally Bet |
-| Edmonton Oilers @ St Louis Blues | Nov 22, 7:10 PM ET | `shots_on_goal` | Evan Bouchard under 2.5 | 51.8% | +5.3% | +115 | Hard Rock Bet |
-| Pittsburgh Penguins @ Dallas Stars | Nov 22, 7:10 PM ET | `points` | Erik Karlsson under 0.5 | 54.0% | +5.2% | +105 | Courtside |
-| Carolina Hurricanes @ New York Rangers | Nov 22, 12:40 PM ET | `shots_on_goal` | Seth Jarvis under 1.5 | 42.2% | +5.2% | +170 | theScore Bet |
-| Carolina Hurricanes @ New York Rangers | Nov 22, 12:40 PM ET | `shots_on_goal` | Seth Jarvis under 2.5 | 65.2% | +5.2% | -150 | BetMGM |
-| Buffalo Sabres @ Tampa Bay Lightning | Nov 22, 5:10 PM ET | `goals` | Brayden Point over 0.5 | 40.8% | +5.1% | +180 | theScore Bet |
-| Buffalo Sabres @ Tampa Bay Lightning | Nov 22, 5:10 PM ET | `assists` | Zach Benson under 0.5 | 67.4% | +5.1% | -165 | Courtside |
-| Edmonton Oilers @ St Louis Blues | Nov 22, 7:10 PM ET | `shots_on_goal` | Pavel Buchnevich under 1.5 | 49.6% | +5.1% | +125 | Hard Rock Bet |
-| Chicago Blackhawks @ Vancouver Canucks | Nov 22, 8:10 PM ET | `assists` | Frank Nazar under 0.5 | 63.2% | +4.9% | -140 | theScore Bet |
-| Pittsburgh Penguins @ Dallas Stars | Nov 22, 7:10 PM ET | `assists` | Erik Karlsson under 0.5 | 62.3% | +4.9% | -135 | Courtside |
-| Pittsburgh Penguins @ Dallas Stars | Nov 22, 7:10 PM ET | `shots_on_goal` | Jamie Benn over 2.5 | 21.4% | +4.8% | +500 | Fanatics |
-| Edmonton Oilers @ St Louis Blues | Nov 22, 7:10 PM ET | `points` | Vasily Podkolzin under 0.5 | 53.4% | +4.6% | +105 | theScore Bet |
-| Carolina Hurricanes @ New York Rangers | Nov 22, 12:40 PM ET | `shots_on_goal` | Adam Fox under 1.5 | 56.9% | +4.5% | -110 | Hard Rock Bet |
-| Buffalo Sabres @ Tampa Bay Lightning | Nov 22, 5:10 PM ET | `points` | Jack Quinn under 0.5 | 54.5% | +4.5% | +100 | Courtside |
-| Pittsburgh Penguins @ Dallas Stars | Nov 22, 7:10 PM ET | `shots_on_goal` | Jamie Benn over 1.5 | 44.4% | +4.4% | +150 | Courtside |
-| Carolina Hurricanes @ New York Rangers | Nov 22, 12:40 PM ET | `points` | Shayne Gostisbehere under 0.5 | 56.7% | +4.3% | -110 | Courtside |
-| Carolina Hurricanes @ New York Rangers | Nov 22, 12:40 PM ET | `assists` | Jackson Blake under 0.5 | 68.0% | +4.3% | -175 | Courtside |
-| Pittsburgh Penguins @ Dallas Stars | Nov 22, 7:10 PM ET | `shots_on_goal` | Jason Robertson under 3.5 | 63.5% | +4.3% | -145 | Hard Rock Bet |
-| Carolina Hurricanes @ New York Rangers | Nov 22, 12:40 PM ET | `shots_on_goal` | Jackson Blake under 1.5 | 39.9% | +4.2% | +180 | theScore Bet |
-| Buffalo Sabres @ Tampa Bay Lightning | Nov 22, 5:10 PM ET | `assists` | Nikita Kucherov over 1.5 | 34.9% | +4.2% | +225 | Fanatics |
-| Carolina Hurricanes @ New York Rangers | Nov 22, 12:40 PM ET | `points` | Jackson Blake under 0.5 | 51.8% | +4.1% | +110 | BetOnline.ag |
+| Edmonton Oilers @ St Louis Blues | Nov 22, 7:10 PM ET | `assists` | Vasily Podkolzin under 0.5 | 69.8% | +6.2% | -175 | Bally Bet |
+| Edmonton Oilers @ St Louis Blues | Nov 22, 7:10 PM ET | `shots_on_goal` | Leon Draisaitl under 3.5 | 64.2% | +5.9% | -140 | BetMGM |
+| Edmonton Oilers @ St Louis Blues | Nov 22, 7:10 PM ET | `shots_on_goal` | Evan Bouchard under 2.5 | 52.3% | +5.8% | +115 | Hard Rock Bet |
+| Carolina Hurricanes @ New York Rangers | Nov 22, 12:40 PM ET | `shots_on_goal` | J.T. Miller under 2.5 | 69.2% | +5.6% | -175 | Hard Rock Bet |
+| Buffalo Sabres @ Tampa Bay Lightning | Nov 22, 5:10 PM ET | `assists` | Victor Hedman over 0.5 | 36.7% | +5.5% | +220 | Bally Bet |
+| Buffalo Sabres @ Tampa Bay Lightning | Nov 22, 5:10 PM ET | `goals` | Brayden Point over 0.5 | 41.1% | +5.4% | +180 | theScore Bet |
+| Carolina Hurricanes @ New York Rangers | Nov 22, 12:40 PM ET | `shots_on_goal` | Seth Jarvis under 1.5 | 42.3% | +5.3% | +170 | theScore Bet |
+| Carolina Hurricanes @ New York Rangers | Nov 22, 12:40 PM ET | `shots_on_goal` | Seth Jarvis under 2.5 | 65.3% | +5.3% | -150 | BetMGM |
+| Edmonton Oilers @ St Louis Blues | Nov 22, 7:10 PM ET | `shots_on_goal` | Pavel Buchnevich under 1.5 | 49.7% | +5.3% | +125 | Hard Rock Bet |
+| Pittsburgh Penguins @ Dallas Stars | Nov 22, 7:10 PM ET | `assists` | Jamie Benn over 0.5 | 34.9% | +5.0% | +235 | Courtside |
+| Pittsburgh Penguins @ Dallas Stars | Nov 22, 7:10 PM ET | `team_total` | away_over 2 | 70.3% | +4.8% | -190 | BetMGM |
+| Pittsburgh Penguins @ Dallas Stars | Nov 22, 7:10 PM ET | `points` | Erik Karlsson under 0.5 | 53.5% | +4.7% | +105 | theScore Bet |
+| Pittsburgh Penguins @ Dallas Stars | Nov 22, 7:10 PM ET | `shots_on_goal` | Jamie Benn over 2.5 | 21.4% | +4.7% | +500 | Fanatics |
+| Carolina Hurricanes @ New York Rangers | Nov 22, 12:40 PM ET | `shots_on_goal` | Adam Fox under 1.5 | 57.1% | +4.7% | -110 | Hard Rock Bet |
+| Pittsburgh Penguins @ Dallas Stars | Nov 22, 7:10 PM ET | `shots_on_goal` | Jamie Benn over 1.5 | 43.9% | +4.6% | +155 | Bovada |
+| Carolina Hurricanes @ New York Rangers | Nov 22, 12:40 PM ET | `points` | Shayne Gostisbehere under 0.5 | 55.8% | +4.6% | -105 | Courtside |
+| Chicago Blackhawks @ Vancouver Canucks | Nov 22, 8:10 PM ET | `assists` | Frank Nazar under 0.5 | 62.8% | +4.5% | -140 | theScore Bet |
+| Buffalo Sabres @ Tampa Bay Lightning | Nov 22, 5:10 PM ET | `assists` | Zach Benson under 0.5 | 67.4% | +4.4% | -170 | Courtside |
+| Carolina Hurricanes @ New York Rangers | Nov 22, 12:40 PM ET | `shots_on_goal` | Jackson Blake under 1.5 | 40.0% | +4.3% | +180 | theScore Bet |
+| Carolina Hurricanes @ New York Rangers | Nov 22, 12:40 PM ET | `goals` | Taylor Hall under 0.5 | 85.5% | +4.2% | -435 | Circa Sports |
+| Carolina Hurricanes @ New York Rangers | Nov 22, 12:40 PM ET | `shots_on_goal` | Shayne Gostisbehere under 1.5 | 58.1% | +4.2% | -117 | Bally Bet |
+| Edmonton Oilers @ St Louis Blues | Nov 22, 7:10 PM ET | `points` | Vasily Podkolzin under 0.5 | 52.9% | +4.1% | +105 | theScore Bet |
+| Buffalo Sabres @ Tampa Bay Lightning | Nov 22, 5:10 PM ET | `points` | Jack Quinn under 0.5 | 54.1% | +4.1% | +100 | Courtside |
+| Buffalo Sabres @ Tampa Bay Lightning | Nov 22, 5:10 PM ET | `assists` | Nikita Kucherov over 0.5 | 70.7% | +4.0% | -200 | BetMGM |
+| Chicago Blackhawks @ Vancouver Canucks | Nov 22, 8:10 PM ET | `shots_on_goal` | Frank Nazar under 2.5 | 62.3% | +4.0% | -140 | theScore Bet |
 
-_2451 further passes not listed._
+_2589 further passes not listed._
 
 These are genuine model judgements about markets that were priced and modelled. They are **not** the same thing as the excluded markets below.
 
@@ -80,11 +80,11 @@ Who the model expects to win each game, from the same team ratings the card pric
 
 | Game | Puck drop | Stats' side | Win chance | Fair | Best price | Book | Against the price |
 |:--|:--|:--|--:|--:|--:|:--|:--|
-| Carolina Hurricanes @ New York Rangers | Nov 22, 12:40 PM ET | **Carolina Hurricanes** | 59.1% | -145 | -150 | Hard Rock Bet | price is 0.9 pts short |
-| Buffalo Sabres @ Tampa Bay Lightning | Nov 22, 5:10 PM ET | **Tampa Bay Lightning** | 63.8% | -176 | -194 | Circa Sports | price is 2.2 pts short |
-| Pittsburgh Penguins @ Dallas Stars | Nov 22, 7:10 PM ET | **Dallas Stars** | 62.2% | -165 | -215 | theScore Bet | price is 6.0 pts short |
-| Edmonton Oilers @ St Louis Blues | Nov 22, 7:10 PM ET | **Edmonton Oilers** | 50.6% | -102 | -106 | Circa Sports | price is 0.9 pts short |
-| Chicago Blackhawks @ Vancouver Canucks | Nov 22, 8:10 PM ET | **Chicago Blackhawks** | 54.1% | -118 | -104 | Circa Sports | price is 3.1 pts long, under the bar |
+| Carolina Hurricanes @ New York Rangers | Nov 22, 12:40 PM ET | **Carolina Hurricanes** | 58.2% | -140 | -150 | Hard Rock Bet | price is 1.8 pts short |
+| Buffalo Sabres @ Tampa Bay Lightning | Nov 22, 5:10 PM ET | **Tampa Bay Lightning** | 64.7% | -184 | -200 | Hard Rock Bet | price is 1.9 pts short |
+| Pittsburgh Penguins @ Dallas Stars | Nov 22, 7:10 PM ET | **Dallas Stars** | 63.1% | -171 | -220 | Courtside | price is 5.6 pts short |
+| Edmonton Oilers @ St Louis Blues | Nov 22, 7:10 PM ET | **St Louis Blues** | 50.4% | -102 | -103 | Courtside | price is 0.4 pts short |
+| Chicago Blackhawks @ Vancouver Canucks | Nov 22, 8:10 PM ET | **Chicago Blackhawks** | 53.2% | -113 | -104 | Circa Sports | price is 2.2 pts long, under the bar |
 
 A list, not bets: no units, no stakes, nothing frozen into the forward ledger. The lab has no measurement showing that backing the stats' side at the market's price makes money.
 
@@ -133,7 +133,7 @@ Big games, re-measured 2026-11-17 on 2024-25 and 2025-26 (scripts/run_due_list_b
 
 | Player | Team | Opponent | Puck drop | Category | Line | Last season | Drought | Bar reached | Bars (tier / surprise) | Rarity | Line tonight | Goalie faced | Shots in drought | Model | Band record | Best price | Book | Tracked at | Flag |
 |:--|:--|:--|:--|:--|--:|--:|--:|:--|:--|:--|:--|:--|:--|:--|:--|--:|:--|--:|:--|
-| Wyatt Johnston | DAL | PIT | Nov 22, 7:00 PM ET | hat trick | over 2.5 | 45 | 76 | 50 (tier) | tier 50 / surprise - | 1 in 3 for him | F1, PP1 | Arturs Silovs, +1% goals vs expected | - | model 2% (+0.4 pts) | band 40+ @50: -63.1% over 853 (95% -87.8% to -33.9%) | +6500 | DraftKings | 0.2u | lost in testing (band interval below zero) |
+| Wyatt Johnston | DAL | PIT | Nov 22, 7:00 PM ET | hat trick | over 2.5 | 45 | 76 | 50 (tier) | tier 50 / surprise - | 1 in 3 for him | F1, PP1 | Arturs Silovs, +1% goals vs expected | - | model 2% (+0.4 pts) | band 40+ @50: -63.1% over 853 (95% -87.8% to -33.9%) | +6500 | Courtside | 0.2u | lost in testing (band interval below zero) |
 
 A list, not bets: no units, no stakes, and none of it is in the best bets above. "Tracked at" is the notional size the site's Due List record counts it at (1u, less at +200 and longer); "lost in testing" marks a band whose backtest interval sits below zero.
 
@@ -143,7 +143,7 @@ Hot List: 80+ points last season and 8+ points in his last 5; 60+ assists and 6+
 
 | Player | Team | Opponent | Category | Line | Last season | Form | Model | Best price | Book | Tracked at | Flag |
 |:--|:--|:--|:--|--:|--:|:--|:--|--:|:--|--:|:--|
-| Wyatt Johnston | DAL | PIT | anytime goal | over 0.5 | 45 | 4 straight games with one | 42% | +155 | BetMGM | 1u |  |
+| Wyatt Johnston | DAL | PIT | anytime goal | over 0.5 | 45 | 4 straight games with one | 43% | +155 | BetMGM | 1u |  |
 | Tage Thompson | BUF | TBL | anytime goal | over 0.5 | 40 | 3 straight games with one | 34% | +170 | BetMGM | 1u |  |
 
 A list, not bets: no units, no stakes, and none of it is in the best bets above. "Tracked at" is the notional size the site's Hot List record counts it at.
@@ -167,7 +167,7 @@ These appeared in the provider's prices and could not be matched to a modelled t
 
 ## Priced game by game
 
-- `goalie_saves`: Allowlisted, and judged game by game: priced for 3 of 5 game(s), and picked only in those. Not priced in 2026-11-22 Buffalo Sabres@Tampa Bay Lightning, 2026-11-23 Pittsburgh Penguins@Dallas Stars, so nothing in this market is carded for them; that is an absence, not a pass or a no-value call.
+- `goalie_saves`: Allowlisted, and judged game by game: priced for 4 of 5 game(s), and picked only in those. Not priced in 2026-11-22 Buffalo Sabres@Tampa Bay Lightning, so nothing in this market is carded for them; that is an absence, not a pass or a no-value call.
 
 ## Excluded markets
 
@@ -193,7 +193,7 @@ An excluded market is **not** a pass, an avoid, or a no-value call, and no price
 - Leans are recorded and not staked. The smallest edges are mostly estimation error, and in the EPL lab they lost.
 - One outcome is staked once. Where an alternate ladder prices the same outcome at several lines, the highest-edge rung is staked and the rest are recorded as leans naming it. This is not a per-game, per-slate or bankroll cap; there is none.
 - No edge here is a demonstrated edge. See `data/outputs/what_we_can_claim.md` for what the evidence actually supports.
-- Stakes are sized by each market's closing-line value (Cooper, 2026-11-10): x1.5 where the bets' 95% game-clustered CLV interval sits above zero, x0.5 where it spans zero, x0.25 below it, unchanged under 200 bets or 30 games. Table of 2026-11-21T22:50: `assists` x1.5 (beats the close, +1.00% over 940); `blocked_shots` x1 (too few to judge, +0.90% over 130); `goalie_saves` x1.5 (beats the close, +6.05% over 345); `goals` x1.5 (beats the close, +2.96% over 289); `hits` x1 (too few to judge, +1.07% over 120); `moneyline` x1 (too few to judge, +0.37% over 99); `points` x1.5 (beats the close, +3.00% over 1,788); `puck_line` x1.5 (beats the close, +0.85% over 353); `regulation_3_way` x0.5 (no demonstrated CLV, +0.48% over 223); `shots_on_goal` x1.5 (beats the close, +3.43% over 2,944); `team_total` x0.5 (no demonstrated CLV, +0.66% over 699); `total_goals` x1.5 (beats the close, +0.77% over 582). Beating the close is not a demonstrated edge.
+- Stakes are sized by each market's closing-line value (Cooper, 2026-11-10): x1.5 where the bets' 95% game-clustered CLV interval sits above zero, x0.5 where it spans zero, x0.25 below it, unchanged under 200 bets or 30 games. Table of 2026-11-22T13:46: `assists` x1.5 (beats the close, +0.96% over 978); `blocked_shots` x1 (too few to judge, +0.88% over 137); `goalie_saves` x1.5 (beats the close, +5.89% over 387); `goals` x1.5 (beats the close, +2.95% over 303); `hits` x1 (too few to judge, +1.07% over 120); `moneyline` x1 (too few to judge, +0.39% over 101); `points` x1.5 (beats the close, +2.91% over 1,848); `puck_line` x1.5 (beats the close, +0.85% over 364); `regulation_3_way` x0.5 (no demonstrated CLV, +0.29% over 228); `shots_on_goal` x1.5 (beats the close, +3.39% over 3,054); `team_total` x0.5 (no demonstrated CLV, +0.67% over 713); `total_goals` x1.5 (beats the close, +0.83% over 606). Beating the close is not a demonstrated edge.
 
 
 ---
@@ -204,6 +204,6 @@ What the evidence actually supports:
 - `data/outputs/props_calibration.md`
 - `data/outputs/what_we_can_claim.md`
 
-Run: https://github.com/cooperross399/nhl-betting-lab/actions/runs/45010725833
+Run: https://github.com/cooperross399/nhl-betting-lab/actions/runs/45034117347
 
 Recommendations only. No bet was placed, no policy was edited, and no market was allowlisted by this run.
