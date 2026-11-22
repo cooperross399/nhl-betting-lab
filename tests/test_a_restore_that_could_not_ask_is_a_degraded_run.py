@@ -122,7 +122,10 @@ if args[:2] == ["run", "list"]:
         runs = [r for r in runs if status in (r["status"], r["conclusion"])]
     runs = runs[: int(value("--limit", "20"))]
     fields = [f for f in value("--json", "").split(",") if f]
-    print(json.dumps([{{k: r[k] for k in fields}} for r in runs]))
+    # updatedAt, when a run finished, is asked for under --require-newest;
+    # a run here that sets none lists as null, keeping the listing's order.
+    print(json.dumps([{{k: r.get(k) if k == "updatedAt" else r[k] for k in fields}}
+                      for r in runs]))
     sys.exit(0)
 if args[:2] == ["run", "download"]:
     run_id, name, dest = args[2], value("--name"), Path(value("--dir"))
