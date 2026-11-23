@@ -146,4 +146,7 @@ def test_a_player_off_the_roster_is_listed_as_returning_with_a_birth_date() -> N
     notes = json.loads((ROOT / "data" / "season_sim" / "roster_notes.json").read_text("utf-8"))
     assert "Dylan Larkin" not in [e["name"] for e in notes["out"]]
     larkin = [e for e in notes["returning"] if e["name"] == "Dylan Larkin"]
-    assert len(larkin) == 1 and larkin[0]["born"] == "1996-07-30" and larkin[0]["team"] == "DET"
+    # Traded DET to MTL on 2026-11-22 (NHL.com); until the NHL lists him on
+    # Montreal's roster the entry is what puts him there, so it needs his
+    # birth date either way.
+    assert len(larkin) == 1 and larkin[0]["born"] == "1996-07-30" and larkin[0]["team"] == "MTL"
