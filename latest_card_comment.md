@@ -2,9 +2,9 @@ Selections are unchanged since the previous card; this comment was posted on req
 
 # NHL gameday card
 
-- Generated: 2026-11-24T14:52:42+00:00
-- 0 best bet(s), 12 lean(s), 520 pass(es) across 1 game(s); 0 unit(s) staked.
-- Included markets: **assists, goals, moneyline, points, puck_line, regulation_3_way, shots_on_goal, team_total, total_goals**
+- Generated: 2026-11-24T20:39:11+00:00
+- 0 best bet(s), 12 lean(s), 594 pass(es) across 1 game(s); 0 unit(s) staked.
+- Included markets: **assists, goalie_saves, goals, moneyline, points, puck_line, regulation_3_way, shots_on_goal, team_total, total_goals**
 - Unit size: $25
 
 ## Best bets
@@ -15,18 +15,22 @@ _No best bets._
 
 | Game | Starts | Market | Selection | Model | Edge | Price | Bet down to | Book |
 |:-----|:-------|:-------|:----------|------:|-----:|------:|------------:|:-----|
-| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `shots_on_goal` | Leon Draisaitl under 3.5 | 64.4% | +7.0% | -135 | -140 | Bovada |
-| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `shots_on_goal` | Mitch Marner under 2.5 | 62.8% | +6.3% | -130 | -131 | Bovada |
-| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `total_goals` | over 7 | 42.2% | +5.9% | +175 | +159 | Bovada |
-| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `total_goals` | over 6 | 60.0% | +5.5% | -120 | -130 | BetMGM |
-| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `total_goals` | over 6.5 | 53.6% | +5.3% | +107 | +100 | Courtside |
-| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `moneyline` | away | 58.0% | +5.2% | -112 | -119 | Bally Bet |
-| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `total_goals` | over 7.5 | 33.9% | +5.0% | +245 | +229 | Bally Bet |
-| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `total_goals` | over 5.5 | 64.4% | +4.7% | -148 | -155 | Bally Bet |
-| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `team_total` | away_over 3.5 | 47.6% | +4.1% | +130 | +127 | Bally Bet |
-| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `total_goals` | over 8.5 | 25.2% | +3.9% | +370 | +361 | FanDuel |
-| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `points` | Mattias Ekholm over 0.5 | 36.8% | +3.4% | +200 | +197 | Hard Rock Bet |
-| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `points` | Leon Draisaitl over 1.5 | 48.9% | +3.4% | +120 | +119 | Bally Bet |
+| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `shots_on_goal` | Leon Draisaitl under 3.5 | 70.0% | +11.9% | -139 | -160 | Bally Bet |
+| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `goalie_saves` | Devon Levi over 23.5 | 55.5% | +7.2% | +107 | +102 | BetOnline.ag |
+| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `total_goals` | over 7 | 42.2% | +6.4% | +180 | +159 | Bovada |
+| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `total_goals` | over 6.5 | 53.5% | +6.3% | +112 | +101 | BetOnline.ag |
+| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `shots_on_goal` | Mitch Marner under 2.5 | 63.7% | +6.3% | -135 | -136 | Courtside |
+| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `total_goals` | over 6 | 60.3% | +5.8% | -120 | -131 | BetMGM |
+| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `total_goals` | over 5.5 | 64.7% | +5.0% | -148 | -157 | Bally Bet |
+| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `moneyline` | away | 58.2% | +5.0% | -114 | -120 | Bally Bet |
+| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `total_goals` | over 7.5 | 34.3% | +4.9% | +240 | +225 | Bally Bet |
+| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `team_total` | away_over 3.5 | 48.1% | +4.6% | +130 | +125 | Bally Bet |
+| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `points` | Ryan Nugent-Hopkins over 0.5 | 55.5% | +4.5% | -104 | -110 | FanDuel |
+| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `total_goals` | over 8.5 | 25.4% | +4.1% | +370 | +357 | FanDuel |
+
+Stats check, props: a prop is staked only when the model's hit chance clears what the shortest price in its odds bracket would need. These cleared the edge bar without it and are recorded here.
+
+- Leon Draisaitl under 3.5 (`shots_on_goal`): Not confident enough for its odds: the model gives it a 70.0% chance to hit; props priced -160 to -136 need 71.5%. The price clears the edge bar, but the model is not confident enough for its odds bracket. Recorded as a lean and staked at zero.
 
 Leans are recorded and not staked.
 
@@ -36,33 +40,33 @@ Leans are recorded and not staked.
 
 | Game | Starts | Market | Selection | Model | Edge | Price | Book |
 |:-----|:-------|:-------|:----------|------:|-----:|------:|:-----|
-| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `regulation_3_way` | away | 46.8% | +5.1% | +140 | Bally Bet |
-| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `assists` | Shea Theodore over 0.5 | 35.3% | +5.0% | +230 | Hard Rock Bet |
-| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `puck_line` | away +1.5 | 77.7% | +4.7% | -270 | Caesars |
-| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `assists` | Victor Olofsson under 0.5 | 73.3% | +4.1% | -225 | theScore Bet |
-| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `shots_on_goal` | Tomas Hertl under 2.5 | 65.6% | +4.1% | -160 | Hard Rock Bet |
-| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `goals` | Victor Olofsson under 0.5 | 78.7% | +4.0% | -295 | Circa Sports |
-| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `goals` | Leon Draisaitl over 0.5 | 50.5% | +4.0% | +115 | Bally Bet |
-| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `assists` | Mattias Ekholm over 0.5 | 31.5% | +3.8% | +260 | Hard Rock Bet |
-| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `assists` | Mark Stone over 0.5 | 47.2% | +3.7% | +130 | BetMGM |
+| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `goalie_saves` | Devon Levi over 21.5 | 68.4% | +5.9% | -167 | BetOnline.ag |
+| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `goalie_saves` | Devon Levi over 27.5 | 31.1% | +5.8% | +295 | Courtside |
+| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `assists` | Ryan Nugent-Hopkins over 0.5 | 42.6% | +5.3% | +168 | Bovada |
+| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `goalie_saves` | Devon Levi over 25.5 | 43.0% | +5.3% | +165 | Courtside |
+| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `regulation_3_way` | away | 46.8% | +5.2% | +140 | BetMGM |
+| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `goalie_saves` | Devon Levi over 29.5 | 21.4% | +4.8% | +500 | Courtside |
+| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `puck_line` | away +1.5 | 77.5% | +4.6% | -270 | Caesars |
+| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `goalie_saves` | Devon Levi over 26.5 | 37.1% | +4.3% | +205 | FanDuel |
+| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `points` | Victor Olofsson under 0.5 | 55.4% | +4.2% | -105 | Hard Rock Bet |
+| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `assists` | Shea Theodore over 0.5 | 35.8% | +4.1% | +215 | Bally Bet |
+| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `assists` | Mattias Ekholm over 0.5 | 30.3% | +4.0% | +280 | BetMGM |
+| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `goalie_saves` | Devon Levi over 31.5 | 13.9% | +3.9% | +900 | Courtside |
+| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `shots_on_goal` | Tomas Hertl under 2.5 | 66.1% | +3.8% | -165 | Hard Rock Bet |
+| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `goalie_saves` | Devon Levi over 24.5 | 49.6% | +3.7% | +118 | FanDuel |
+| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `goals` | Victor Olofsson under 0.5 | 78.2% | +3.6% | -295 | Circa Sports |
 | Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `goals` | Jason Dickinson over 0.5 | 13.0% | +3.5% | +950 | Courtside |
-| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `points` | Colton Dach over 0.5 | 31.6% | +3.4% | +255 | Bally Bet |
-| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `team_total` | away_over 2.5 | 68.9% | +3.4% | -190 | BetMGM |
-| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `shots_on_goal` | Evan Bouchard under 2.5 | 57.7% | +3.2% | -120 | BetMGM |
-| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `team_total` | away_over 3 | 60.6% | +3.2% | -135 | BetMGM |
-| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `team_total` | away_over 4.5 | 28.1% | +3.1% | +300 | Bally Bet |
-| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `goals` | Owen Michaels over 0.5 | 10.8% | +3.1% | +1200 | Courtside |
-| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `goals` | Colton Dach over 0.5 | 15.5% | +3.0% | +700 | Courtside |
-| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `shots_on_goal` | Jack Eichel over 4.5 | 20.2% | +2.8% | +475 | Courtside |
-| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `points` | Shea Theodore over 0.5 | 40.5% | +2.8% | +165 | Hard Rock Bet |
-| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `puck_line` | away +2.5 | 87.5% | +2.7% | -556 | Caesars |
-| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `team_total` | away_over 2 | 83.7% | +2.7% | -425 | BetMGM |
-| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `shots_on_goal` | Tomas Hertl under 1.5 | 44.0% | +2.7% | +142 | FanDuel |
-| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `points` | Filip Hallander over 0.5 | 30.1% | +2.7% | +265 | Bally Bet |
-| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `goals` | Alex Formenton over 0.5 | 10.9% | +2.6% | +1100 | Courtside |
-| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `team_total` | away_over 5.5 | 14.2% | +2.6% | +760 | FanDuel |
+| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `team_total` | away_over 2.5 | 69.0% | +3.5% | -190 | BetMGM |
+| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `points` | Mattias Ekholm over 0.5 | 35.7% | +3.4% | +210 | BetMGM |
+| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `team_total` | away_over 3 | 60.7% | +3.3% | -135 | BetMGM |
+| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `goalie_saves` | Devon Levi over 20.5 | 74.7% | +3.3% | -250 | FanDuel |
+| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `assists` | Victor Olofsson under 0.5 | 73.7% | +3.2% | -240 | Hard Rock Bet |
+| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `shots_on_goal` | Jack Eichel over 4.5 | 19.8% | +3.1% | +500 | Fanatics |
+| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `team_total` | away_over 4.5 | 28.4% | +3.1% | +295 | Bally Bet |
+| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `goalie_saves` | Carter Hart over 22.5 | 49.1% | +3.1% | +117 | BetOnline.ag |
+| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | `goalie_saves` | Devon Levi over 22.5 | 62.7% | +3.0% | -148 | FanDuel |
 
-_495 further passes not listed._
+_569 further passes not listed._
 
 These are genuine model judgements about markets that were priced and modelled. They are **not** the same thing as the excluded markets below.
 
@@ -72,7 +76,7 @@ Who the model expects to win each game, from the same team ratings the card pric
 
 | Game | Puck drop | Stats' side | Win chance | Fair | Best price | Book | Against the price |
 |:--|:--|:--|--:|--:|--:|:--|:--|
-| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | **Vegas Golden Knights** | 58.0% | -138 | -112 | Bally Bet | price is 5.1 pts long, under the bar |
+| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | **Vegas Golden Knights** | 58.2% | -139 | -114 | Bally Bet | price is 5.0 pts long, under the bar |
 
 A list, not bets: no units, no stakes, nothing frozen into the forward ledger. The lab has no measurement showing that backing the stats' side at the market's price makes money.
 
@@ -83,8 +87,8 @@ No sportsbook the lab can reach has posted hits since October 27. PrizePicks sti
 | Game | Puck drop | Player | Line | Over | Under | Model leans |
 |:--|:--|:--|--:|--:|--:|:--|
 | Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | Nic Dowd | 3 | 8.4% | 91.6% | Under |
-| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | Vasily Podkolzin | 2.5 | 69.8% | 30.2% | Over |
 | Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | Jeremy Lauzon | 3.5 | 68.6% | 31.4% | Over |
+| Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | Vasily Podkolzin | 2.5 | 66.8% | 33.2% | Over |
 | Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | Brayden McNabb | 1.5 | 62.3% | 37.7% | Over |
 | Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | Mattias Ekholm | 0.5 | 60.4% | 39.6% | Over |
 | Vegas Golden Knights @ Edmonton Oilers | Nov 24, 8:10 PM ET | Trent Frederic | 2.5 | 42.5% | 57.5% | Under |
@@ -103,7 +107,7 @@ Big games, re-measured 2026-11-17 on 2024-25 and 2025-26 (scripts/run_due_list_b
 
 | Player | Team | Opponent | Puck drop | Category | Line | Last season | Drought | Bar reached | Bars (tier / surprise) | Rarity | Line tonight | Goalie faced | Shots in drought | Model | Band record | Best price | Book | Tracked at | Flag |
 |:--|:--|:--|:--|:--|--:|--:|--:|:--|:--|:--|:--|:--|:--|:--|:--|--:|:--|--:|:--|
-| Mitch Marner | VGK | EDM | Nov 24, 8:00 PM ET | assists | over 0.5 | 56 | 3 | 3 (tier) | tier 3 / surprise 5 | 1 in 8 for him | F2, PP1 | Devon Levi, -1% goals vs expected | shots up: 3.3 a game vs 2.2 usual | model 50% (-2.8 pts) | band 55+ @3: +9.2% over 301 (95% -1.4% to +20.8%) | -114 | BetOnline.ag | 1u |  |
+| Mitch Marner | VGK | EDM | Nov 24, 8:00 PM ET | assists | over 0.5 | 56 | 3 | 3 (tier) | tier 3 / surprise 5 | 1 in 8 for him | F2, PP1 | Devon Levi (Confirmed), -1% goals vs expected | shots up: 3.3 a game vs 2.2 usual | model 51% (-2.5 pts) | band 55+ @3: +9.2% over 301 (95% -1.4% to +20.8%) | -114 | BetOnline.ag | 1u |  |
 
 A list, not bets: no units, no stakes, and none of it is in the best bets above. "Tracked at" is the notional size the site's Due List record counts it at (1u, less at +200 and longer); "lost in testing" marks a band whose backtest interval sits below zero.
 
@@ -118,7 +122,6 @@ _Nobody on tonight's slate qualifies._
 ## Excluded markets
 
 - `blocked_shots`: The provider returned no rows for this market. That is an absence, not a price of zero and not a no-value call. Check per-bookmaker coverage including alternate lines before concluding it is not offered.
-- `goalie_saves`: The provider returned no rows for this market. That is an absence, not a price of zero and not a no-value call. Check per-bookmaker coverage including alternate lines before concluding it is not offered.
 - `hits`: The provider returned no rows for this market. That is an absence, not a price of zero and not a no-value call. Check per-bookmaker coverage including alternate lines before concluding it is not offered.
 
 An excluded market is **not** a pass, an avoid, or a no-value call, and no price was invented for it.
@@ -140,7 +143,7 @@ An excluded market is **not** a pass, an avoid, or a no-value call, and no price
 - Leans are recorded and not staked. The smallest edges are mostly estimation error, and in the EPL lab they lost.
 - One outcome is staked once. Where an alternate ladder prices the same outcome at several lines, the highest-edge rung is staked and the rest are recorded as leans naming it. This is not a per-game, per-slate or bankroll cap; there is none.
 - No edge here is a demonstrated edge. See `data/outputs/what_we_can_claim.md` for what the evidence actually supports.
-- Stakes are sized by each market's closing-line value (Cooper, 2026-11-10): x1.5 where the bets' 95% game-clustered CLV interval sits above zero, x0.5 where it spans zero, x0.25 below it, unchanged under 200 bets or 30 games. Table of 2026-11-24T14:01: `assists` x1.5 (beats the close, +0.92% over 1,021); `blocked_shots` x1 (too few to judge, +0.85% over 139); `goalie_saves` x1.5 (beats the close, +5.89% over 390); `goals` x1.5 (beats the close, +2.83% over 310); `hits` x1 (too few to judge, +1.07% over 120); `moneyline` x1 (too few to judge, +0.43% over 105); `points` x1.5 (beats the close, +2.81% over 1,927); `puck_line` x1.5 (beats the close, +0.86% over 376); `regulation_3_way` x0.5 (no demonstrated CLV, +0.36% over 235); `shots_on_goal` x1.5 (beats the close, +3.32% over 3,171); `team_total` x0.5 (no demonstrated CLV, +0.68% over 726); `total_goals` x1.5 (beats the close, +0.80% over 623). Beating the close is not a demonstrated edge.
+- Stakes are sized by each market's closing-line value (Cooper, 2026-11-10): x1.5 where the bets' 95% game-clustered CLV interval sits above zero, x0.5 where it spans zero, x0.25 below it, unchanged under 200 bets or 30 games. Table of 2026-11-24T14:54: `assists` x1.5 (beats the close, +0.92% over 1,021); `blocked_shots` x1 (too few to judge, +0.85% over 139); `goalie_saves` x1.5 (beats the close, +5.89% over 390); `goals` x1.5 (beats the close, +2.83% over 310); `hits` x1 (too few to judge, +1.07% over 120); `moneyline` x1 (too few to judge, +0.43% over 105); `points` x1.5 (beats the close, +2.81% over 1,927); `puck_line` x1.5 (beats the close, +0.86% over 376); `regulation_3_way` x0.5 (no demonstrated CLV, +0.36% over 235); `shots_on_goal` x1.5 (beats the close, +3.32% over 3,171); `team_total` x0.5 (no demonstrated CLV, +0.68% over 726); `total_goals` x1.5 (beats the close, +0.80% over 623). Beating the close is not a demonstrated edge.
 
 
 ---
@@ -151,6 +154,6 @@ What the evidence actually supports:
 - `data/outputs/props_calibration.md`
 - `data/outputs/what_we_can_claim.md`
 
-Run: https://github.com/cooperross399/nhl-betting-lab/actions/runs/45416877174
+Run: https://github.com/cooperross399/nhl-betting-lab/actions/runs/45478918173
 
 Recommendations only. No bet was placed, no policy was edited, and no market was allowlisted by this run.
