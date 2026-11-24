@@ -4336,6 +4336,37 @@ Re-derive rather than trust if the data has moved.
   is repriced or graded differently; the card, snapshot and ledger are
   untouched. `tests/test_started_games_keep_their_projection.py`.
 
+- **2026-11-24, NOT a defect fix: goalie saves overs priced longer than
+  +110 are neither listed nor staked (the weekly upgrade, under Cooper's
+  standing authorization of 2026-11-12).** The third weekly review (ledger
+  2026-10-06 to 11-22, 54 day files; CLV report built 2026-11-23 22:57 UTC)
+  found saves overs the card's largest leak on the self-learned edge (6%
+  bar, -160 to +600, one wager at the best frozen price, 1u): **-40.7u over
+  167 in 35 games, -24.4% [-61.5%, +21.1%]**, +12.8u then -53.5u by half,
+  and the card's saves-over best bets 0-4 this season. By price: -160 to
+  +110 +1.4u over 44; +111 to +150 -9.5u over 23, +151 to +200 -8.7u over
+  30, +201 to +300 -11.1u over 35, +301 to +600 -12.8u over 35 (-42.1u over
+  123). Over every frozen saves opinion since `SAVES_CONTEXT_FROM` the over
+  is calibrated (33.9% landed against 34.8% modelled, 5,723), so the loss is
+  selection: by raw edge, population B saves overs at 12%+ landed 20%
+  against a 36% price (47). CLV points the other way (population B saves
+  bets beat the close 82.7% over 389 rows in 90 games, mean +5.90%
+  [-0.18%, +11.99%] family-wise), so this is a judgement on results, not on
+  the close. `LEAN_MAX_PRICE[("goalie_saves", "over")] = 110`, each cap
+  now naming its own reason (`LEAN_MAX_PRICE_REASONS`); the weekly review's
+  "On the card" column names a cap. Chosen on the weeks it is scored on,
+  every interval spans zero: **no demonstrated edge.** The snapshot is
+  frozen before `build_card`, so the forward ledger, population B and the
+  2027-04-25 test are unchanged; the model, edge bars, market list and
+  staking rule are unchanged. Also read and left alone: `blocked_shots`
+  unders lose in both halves for a third week (-7.4u over 115, -6.4%
+  [-22.8%, +10.3%]); `total_goals` overs +67.6u over 331 and `points` overs
+  (listed, never staked) +17.8u over 187 win in both halves; best bets this
+  season +20.4u over 347 at 1u, -3.34u over 8 since 11-17. No card on
+  2026-11-20: every run that day found no regular-season game on the
+  schedule or the board (empty slate, not degraded).
+  `tests/test_long_saves_overs_are_off_the_card.py`.
+
 ## Contract strings — never change these
 
 Cooper's local scheduled tasks hard-code these. Renaming any of them silently

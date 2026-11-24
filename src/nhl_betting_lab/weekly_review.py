@@ -189,9 +189,14 @@ def card_status(market: str, side: str) -> str:
 
     if (market, side) in gameday_card.LEAN_EXCLUDED_SIDES:
         return "off the card"
+    cap = gameday_card.LEAN_MAX_PRICE.get((market, side))
     if market in gameday_card.STAKE_EXCLUDED_MARKETS:
-        return "listed, never staked"
-    return "on"
+        status = "listed, never staked"
+    else:
+        status = "on"
+    if cap is not None:
+        status += f", off longer than +{cap:.0f}"
+    return status
 
 
 def side_trends(population: pd.DataFrame) -> tuple[list[dict[str, Any]], str]:
