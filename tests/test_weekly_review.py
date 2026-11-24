@@ -108,7 +108,8 @@ def test_the_page_carries_no_price_line_book_or_player():
 def test_a_side_the_card_already_keeps_off_is_named_so():
     assert wr.card_status("points", "under") == "off the card"
     assert wr.card_status("assists", "under") == "off the card"
-    assert wr.card_status("points", "over") == "listed, never staked"
+    assert wr.card_status("points", "over") == "listed, never staked, off longer than +200"
+    assert wr.card_status("goalie_saves", "over") == "on, off longer than +110"
     assert wr.card_status("blocked_shots", "under") == "on"
     days = ["2026-11-01", "2026-11-02", "2026-11-03", "2026-11-04"]
     frame = _population(days, -1.0, -1.0).assign(market="points")

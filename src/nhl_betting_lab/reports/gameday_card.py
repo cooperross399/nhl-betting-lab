@@ -231,7 +231,37 @@ LEAN_ONLY_EXCLUDED_MARKETS: dict[str, str] = {
 #: or shorter made +13.2u over 456. Long overs are where the favourite-
 #: longshot bias and a count model's overstated tails meet, which is why
 #: the card already passes anything past +600.
-LEAN_MAX_PRICE: dict[tuple[str, str], float] = {("points", "over"): 200.0}
+#: Then the weekly upgrade of 2026-11-24 (Cooper's standing authorization of
+#: 2026-11-12): goalie saves overs priced longer than +110 are neither listed
+#: nor staked. On the self-learned edge (6% bar, -160 to +600, one wager at
+#: the best frozen price, 1u, 2026-10-06 to 11-22) saves overs were the
+#: card's largest leak, -40.7u over 167 in 35 games (-24.4%, 95% by game
+#: -61.5% to +21.1%; +12.8u then -53.5u by half), and its saves-over best
+#: bets went 0-4. The plus-money ones carried all of it, -42.1u over 123
+#: (+111 to +150 -9.5u over 23, +151 to +200 -8.7u over 30, +201 to +300
+#: -11.1u over 35, +301 to +600 -12.8u over 35), while -160 to +110 made
+#: +1.4u over 44. Over all frozen saves opinions from 2026-10-21 the over is
+#: calibrated (33.9% landed, 34.8% modelled, 5,723), so the loss is
+#: selection: a long saves over clears the bar where the model disagrees
+#: most, and those landed 20% against a 36% price at a 12%+ raw edge (47).
+#: Chosen on the weeks it is scored on, every interval spans zero: no
+#: demonstrated edge. The snapshot is frozen before the card, so the forward
+#: ledger is unchanged.
+LEAN_MAX_PRICE: dict[tuple[str, str], float] = {
+    ("points", "over"): 200.0,
+    ("goalie_saves", "over"): 110.0,
+}
+LEAN_MAX_PRICE_REASONS: dict[tuple[str, str], str] = {
+    ("points", "over"): (
+        "as leans this season they lost in both halves (-54.3u over 317 at "
+        "1u) while the shorter ones made +13.2u over 456"
+    ),
+    ("goalie_saves", "over"): (
+        "this season they lost -42.1u over 123 at 1u on the self-learned "
+        "edge, and the saves-over best bets went 0-4, while the shorter ones "
+        "made +1.4u over 44"
+    ),
+}
 
 
 #: Game-total unders, by Cooper's decision of 2026-11-11 ("the totals portion
@@ -333,10 +363,8 @@ def lean_excluded_reason(
         longer = False
     if longer:
         return (
-            f"{side[0]} {side[1]}s priced longer than +{cap:.0f} are not "
-            "listed: as leans this season they lost in both halves "
-            "(-54.3u over 317 at 1u) while the shorter ones made +13.2u "
-            "over 456"
+            f"{side[0]} {side[1]}s priced longer than +{cap:.0f} are neither "
+            f"listed nor staked: {LEAN_MAX_PRICE_REASONS.get(side, 'they lost this season')}"
         )
     return None
 

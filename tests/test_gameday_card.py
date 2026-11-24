@@ -317,7 +317,7 @@ def test_goalie_saves_is_no_longer_hard_gated() -> None:
     from nhl_betting_lab.data.starting_goalies import GoalieStarters
     from nhl_betting_lab.providers.team_names import normalize_team_name
 
-    rows = [_price_row(market="goalie_saves", player="Joseph Woll", line=27.5)]
+    rows = [_price_row(market="goalie_saves", player="Joseph Woll", line=27.5, price=100)]  # a saves over at +100: longer ones are capped (2026-11-24)
     starters = GoalieStarters(
         listings={(_key(rows[0])[6], normalize_team_name("TOR")): ("Joseph Woll", "Confirmed")}
     )

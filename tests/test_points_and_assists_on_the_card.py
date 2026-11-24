@@ -61,7 +61,7 @@ def test_a_long_points_over_is_not_listed() -> None:
     assert cap == 200.0
     selections, passes = _price(_row("points", "over", 250), 0.35)
     assert not selections
-    assert "priced longer than +200" in passes[0].demotion_reason
+    assert "priced longer than +200 are neither listed nor staked" in passes[0].demotion_reason
     # At the cap and shorter it still leans from the 3% bar.
     selections, _ = _price(_row("points", "over", 200), 0.37)
     assert [c.section for c in selections] == [LEANS_SECTION]
