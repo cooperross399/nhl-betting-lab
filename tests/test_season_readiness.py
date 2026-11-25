@@ -8,6 +8,8 @@ something false without any error anywhere.
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 import ast
 import io
 import json
@@ -162,6 +164,9 @@ def test_a_refused_market_list_falls_back_to_the_core_markets() -> None:
         + list(odds_api.ALTERNATE_PROVIDER_MARKETS),
         credit_cap=500,
         fetched_at="2026-10-09T12:00:00Z",
+        # Fixed clock: the fixture's game is 2026-10-09, and a real clock
+        # past it drops the game as already started.
+        now=datetime(2026, 10, 9, 12, tzinfo=timezone.utc),
     )
 
     assert result.rows, "the core markets must survive a refused ladder"
@@ -264,7 +269,8 @@ def test_capping_the_per_event_fetch_caps_the_bulk_fetch_too() -> None:
     )
 
     result = provider.fetch_team_markets(
-        fetched_at="2026-10-01T12:00:00Z", max_events=2
+        fetched_at="2026-10-01T12:00:00Z", max_events=2,
+        now=datetime(2026, 10, 1, 12, tzinfo=timezone.utc),
     )
 
     assert result.events_seen == 2
