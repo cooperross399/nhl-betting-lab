@@ -24,6 +24,7 @@ on:
       - "scripts/run_drought_rule_backtest.py"
       - "scripts/run_due_list_big_games.py"
       - "scripts/run_due_hot_research.py"
+      - "scripts/run_due_list_refine.py"
       - "src/nhl_betting_lab/drought_rule.py"
       - ".github/workflows/due-list-tuning.yml"
 
@@ -126,6 +127,14 @@ jobs:
             echo "----- drought_rule_backtest.json -----"
             cat data/outputs/drought_rule_backtest.json
             echo "----- end drought_rule_backtest.json -----"
+          fi
+          # Refining 1+ assist and 1+ point to where they pay (Cooper, 2026-11-25).
+          python scripts/run_due_list_refine.py --ledger-dir "$cf/forward_evidence" > /dev/null || status=$?
+          if [ -s data/outputs/due_list_refine.md ]; then
+            cat data/outputs/due_list_refine.md >> "$GITHUB_STEP_SUMMARY"
+            echo "----- due_list_refine.md -----"
+            cat data/outputs/due_list_refine.md
+            echo "----- end due_list_refine.md -----"
           fi
           # Printed last, so the research is the end of the log.
           if [ -s data/outputs/due_hot_research.md ]; then
