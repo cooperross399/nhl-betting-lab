@@ -1,4 +1,4 @@
-"""2026-11-25 (Cooper: "We have to improve our totals and leans in our model
+"""2026-11-25 (reversed the same evening: every record keeps every night) (Cooper: "We have to improve our totals and leans in our model
 and on the website. Find a way"): the Totals and Leans season records keep
 only the nights under the rule in force today (`CURRENT_RULE_FROM`), and
 the board names the day it began (then: "i dont want to see the old
@@ -53,11 +53,13 @@ def _season(tmp_path: Path, monkeypatch) -> dict:
     return module.season_record(date(2026, 11, 28), history, {"resultsDate": "none"})
 
 
-def test_the_totals_record_counts_only_nights_under_its_rule(tmp_path: Path, monkeypatch) -> None:
+def test_the_totals_record_keeps_every_night(tmp_path: Path, monkeypatch) -> None:
+    """Cooper: "i want the model to have graded the total for every game of
+    the season"."""
     season = _season(tmp_path, monkeypatch)
-    assert season["totals"] == {"w": 3, "l": 1, "p": 1}
-    assert season["money"]["totals"]["units"] == 1.9
-    assert season["money"]["totals"]["since"] == {"from": "2026-11-05", "nights": 2}
+    assert season["totals"] == {"w": 3, "l": 3, "p": 1}
+    assert season["money"]["totals"]["units"] == -0.1
+    assert "since" not in season["money"]["totals"]
 
 
 def test_the_leans_record_keeps_every_night(tmp_path: Path, monkeypatch) -> None:
@@ -84,3 +86,27 @@ def test_the_board_names_the_day_the_rule_began() -> None:
     spec.loader.exec_module(module)
     assert "since(m.since)" in module.PL
     assert "(current rule)" not in module.PL
+
+
+def test_a_night_kept_under_the_old_totals_grading_is_settled_again(tmp_path: Path, monkeypatch) -> None:
+    module = site_module()
+    history = tmp_path / "history"
+    (history / "settled").mkdir(parents=True)
+    day = date(2026, 11, 12)
+    (history / f"{day.isoformat()}.json").write_text("{}", encoding="utf-8")
+    old = {"resultsDate": day.isoformat(), "games": 1, "bets": [],
+           "summary": {**NIGHTS[date(2026, 11, 3)]["summary"]}}
+    old["summary"]["money"] = {k: {**v, "stake": 1.0} for k, v in old["summary"]["money"].items()}
+    (history / "settled" / f"{day.isoformat()}.json").write_text(__import__("json").dumps(old), encoding="utf-8")
+    calls = []
+
+    def settle(d, history_dir, **kw):
+        calls.append(d)
+        return {"resultsDate": d.isoformat(), **{k: v for k, v in NIGHTS[date(2026, 11, 5)].items() if k != "resultsDate"}}
+
+    monkeypatch.setattr(module, "settle", settle)
+    monkeypatch.setattr(module, "night_record",
+                        lambda r: {"games": 1, "summary": r["summary"], "bets": [], "totalsGrading": module.TOTALS_GRADING})
+    season = module.season_record(date(2026, 11, 28), history, {"resultsDate": "none"})
+    assert calls == [day]
+    assert season["totals"] == {"w": 2, "l": 1, "p": 0}

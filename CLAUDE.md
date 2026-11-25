@@ -4419,8 +4419,18 @@ Re-derive rather than trust if the data has moved.
   every night. Earlier nights stay in the frozen boards and kept nights,
   unread by the board. Site only.
   **Later that night, Cooper: "can we not re-go through the leans. didnt
-  want that to start fresh".** The Leans record keeps every night again;
-  only Totals counts from 2026-11-05.
+  want that to start fresh", then "i want the model to have graded the
+  total for every game of the season".** Both records keep every night
+  again (`CURRENT_RULE_FROM` is empty). The board calls a total on every
+  game (`total_side` returns the under whenever it is the better return,
+  no longer "none"), and settlement grades every board's total on the
+  model's better-return side at its frozen prices (`graded_total_side`):
+  the boards frozen with no call (2026-11-11 to 11-25) and before `side`
+  existed (to 11-05) included, falling back to the frozen side, then the
+  projection, where a board lacks a chance or a price. Every kept night is
+  settled again once (`TOTALS_GRADING` = 2). This restates the Totals
+  record's history by one rule. Site only: the card's under listing rule,
+  the snapshot and the ledger are unchanged.
 
 ## Contract strings — never change these
 
