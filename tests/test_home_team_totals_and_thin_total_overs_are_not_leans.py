@@ -75,6 +75,6 @@ def test_a_total_over_from_six_points_leans() -> None:
 
 
 def test_other_sides_keep_their_bar() -> None:
-    assert lean_bar("moneyline", "home", 0.035) == 0.035
+    assert lean_bar("puck_line", "home", 0.035) == 0.035
     assert lean_only_reason("total_goals", "over", 0.07) is None
-    assert lean_only_reason("team_total", "away_under", 0.04) is None
+    assert lean_only_reason("team_total", "away_over", 0.04) is None

@@ -199,6 +199,9 @@ def card_status(market: str, side: str) -> str:
     if (market in gameday_card.LEAN_ONLY_EXCLUDED_MARKETS
             or (market, side) in gameday_card.LEAN_ONLY_EXCLUDED_SIDES):
         status += ", never a lean"
+    lean_cap = gameday_card.LEAN_ONLY_MAX_PRICE.get((market, side))
+    if lean_cap is not None:
+        status += f", leans to +{lean_cap:.0f}"
     floor = gameday_card.LEAN_MIN_EDGE.get((market, side))
     if floor is not None:
         status += f", leans from {floor:.0%}"
