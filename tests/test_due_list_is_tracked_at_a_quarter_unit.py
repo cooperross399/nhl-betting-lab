@@ -47,6 +47,7 @@ LOGS = [
 
 def _build(lab: Path, out: Path, monkeypatch, day, *, finals: bool) -> tuple[dict, dict]:
     module = site_module()
+    module.DUE_CURRENT_BARS = {}  # grading fixtures; the restatement has its own test
 
     def later(d):
         games = schedule(d, final=finals and d < day)

@@ -95,3 +95,10 @@ def test_an_unpriced_entry_takes_the_cards_frozen_price_even_after_it_settled(tm
     # Three priced wagers: +1.70 and +1.25 at 1u, and a loss priced +200 or
     # longer at 0.6u (the 2026-11-10 ladder on the 1u base of 2026-11-21): -0.6.
     assert "+2.35u over 3 wager(s), 2.60u staked" in text
+
+
+@pytest.fixture(autouse=True)
+def _every_fixture_entry_counts(monkeypatch):
+    """These fixtures test settlement and the report, not the 2026-11-25
+    restatement to today's bars, which has its own test."""
+    monkeypatch.setattr(df, "meets_current_bars", lambda *a, **k: True)

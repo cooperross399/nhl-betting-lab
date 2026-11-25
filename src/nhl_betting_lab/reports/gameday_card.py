@@ -257,15 +257,68 @@ LEAN_ONLY_EXCLUDED_SIDES: dict[tuple[str, str], str] = {
 #: ledger's one-wager-per-side view does not show the split (3.5-6% +31.6u
 #: over 213), so this is a judgement on what the card listed, not a
 #: demonstrated edge.
-LEAN_MIN_EDGE: dict[tuple[str, str], float] = {("total_goals", "over"): 0.06}
+#: Then (2026-11-25, Cooper: "also find more winning numbers for the
+#: totals/leans"): moneyline leans and away team-total under leans need 6%
+#: too. Regraded the same way, 2026-09-29 to 11-23, moneyline leans under 6%
+#: went -23.9u over 84 (both sides, losing in each of the three stretches)
+#: and those from 6% +8.1u over 34; away team-total under leans under 6%
+#: -13.6u over 36 (losing in each stretch), from 6% +8.0u over 13. Small
+#: samples, chosen on the weeks they are scored on: no demonstrated edge.
+LEAN_MIN_EDGE: dict[tuple[str, str], float] = {
+    ("total_goals", "over"): 0.06,
+    ("moneyline", "home"): 0.06,
+    ("moneyline", "away"): 0.06,
+    ("team_total", "away_under"): 0.06,
+}
+LEAN_MIN_EDGE_REASONS: dict[tuple[str, str], str] = {
+    ("total_goals", "over"): (
+        "this season the thinner ones lost (-10.2u over 328 at 1u) while "
+        "those from 6% made +39.9u over 146"
+    ),
+    ("moneyline", "home"): (
+        "this season moneyline leans under 6% lost (-23.9u over 84 at 1u, in "
+        "every stretch) while those from 6% made +8.1u over 34"
+    ),
+    ("moneyline", "away"): (
+        "this season moneyline leans under 6% lost (-23.9u over 84 at 1u, in "
+        "every stretch) while those from 6% made +8.1u over 34"
+    ),
+    ("team_total", "away_under"): (
+        "this season the thinner ones lost (-13.6u over 36 at 1u, in every "
+        "stretch) while those from 6% made +8.0u over 13"
+    ),
+}
+
+#: The longest price a side is listed at as a LEAN (a best bet is still
+#: staked), 2026-11-25, the same request: goals over leans priced longer
+#: than +150 went -16.3u over 135 at 1u (31-104), losing in each of the
+#: three stretches, while +150 or shorter made +0.3u over 11. The Due List's
+#: goals rows are a separate list and unchanged. No demonstrated edge.
+LEAN_ONLY_MAX_PRICE: dict[tuple[str, str], float] = {("goals", "over"): 150.0}
+LEAN_ONLY_MAX_PRICE_REASONS: dict[tuple[str, str], str] = {
+    ("goals", "over"): (
+        "as leans this season they went -16.3u over 135 at 1u, losing in "
+        "every stretch"
+    ),
+}
 
 
-def lean_only_reason(market_key: str, selection: str, edge: Any = None) -> str | None:
+def lean_only_reason(market_key: str, selection: str, edge: Any = None, price: Any = None) -> str | None:
     """Why a lean (never a best bet) in this market and side is not listed."""
     side = (market_key, str(selection).strip().lower())
     reason = LEAN_ONLY_EXCLUDED_MARKETS.get(market_key) or LEAN_ONLY_EXCLUDED_SIDES.get(side)
     if reason:
         return reason
+    cap = LEAN_ONLY_MAX_PRICE.get(side)
+    try:
+        longer = cap is not None and price is not None and float(price) > cap
+    except (TypeError, ValueError):
+        longer = False
+    if longer:
+        return (
+            f"{side[0]} {side[1]}s priced longer than +{cap:.0f} are not listed "
+            f"as leans: {LEAN_ONLY_MAX_PRICE_REASONS.get(side, 'they lost this season')}"
+        )
     floor = LEAN_MIN_EDGE.get(side)
     try:
         short = floor is not None and edge is not None and float(edge) < floor
@@ -274,8 +327,7 @@ def lean_only_reason(market_key: str, selection: str, edge: Any = None) -> str |
     if short:
         return (
             f"{side[0]} {side[1]}s need a {floor:.0%} edge to be listed as leans: "
-            "this season the thinner ones lost (-10.2u over 328 at 1u) while "
-            "those from 6% made +39.9u over 146"
+            + LEAN_MIN_EDGE_REASONS.get(side, "this season the thinner ones lost")
         )
     return None
 
@@ -999,7 +1051,7 @@ def build_candidates(
             ),
         )
         if not excluded and candidate.section == LEANS_SECTION:
-            excluded = lean_only_reason(market_key, selection, edge)
+            excluded = lean_only_reason(market_key, selection, edge, price)
         if candidate.section in (LEANS_SECTION, BEST_BETS_SECTION) and excluded:
             candidate.section = PASSES_SECTION
             candidate.suggested_units = 0.0

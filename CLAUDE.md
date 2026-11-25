@@ -4458,6 +4458,45 @@ Re-derive rather than trust if the data has moved.
   registered test are unchanged, and nights already recorded are not
   rebuilt.
 
+- **2026-11-25: past Due List results count only entries today's bars
+  would list (Cooper: "fix the previous results based on those bars").** The
+  1+ point and 1+ assist entries recorded under older bars are left out of
+  every tracked record: the site's season Due List record, the by-group
+  table, tracker.json and each night's results (`build_site_json.
+  meets_due_bars`, `DUE_CURRENT_BARS`, pinned to the lab's), and the lab's
+  forward report and Monday scorecard (`drought_rule.meets_current_bars`,
+  `drought_forward.current_bars_only`). An entry counts only at 60+ points
+  last season, a 2-game drought and a price of +120 to +200 (1+ point), or
+  60+ assists, a 1-game drought and +100 or longer (1+ assist); one with no
+  price is kept, as the list keeps one. Every other category is unchanged.
+  Every kept night is settled again once (`DUE_GRADING` = 1). The dated
+  lists and the ledger keep every row; only the records count fewer.
+  `tests/test_past_due_list_results_meet_todays_bars.py`.
+
+- **2026-11-25, NOT a defect fix: thin moneyline and away team-total under
+  leans, and long goals over leans, are off the leans (Cooper: "also find
+  more winning numbers for the totals/leans").** Every lean on card-feed's
+  first card of each day, 2026-09-29 to 11-23, regraded on the forward ledger
+  at the card's price and the 1u ladder, with every rule already in force
+  applied (2,649 graded, +90.8u). Three slices lost in each of the three
+  stretches (to 10-21, 10-22 to 11-05, from 11-06): moneyline leans under a
+  6% edge, -23.9u over 84 (both sides; from 6% +8.1u over 34); away team-total
+  under leans under 6%, -13.6u over 36 (from 6% +8.0u over 13); goals over
+  leans longer than +150, -16.3u over 135 (31-104; +150 or shorter +0.3u
+  over 11). `LEAN_MIN_EDGE` now holds moneyline home and away and team-total
+  away under at 6% (each with its reason in `LEAN_MIN_EDGE_REASONS`), and
+  `LEAN_ONLY_MAX_PRICE` caps goals over leans at +150; best bets on all of
+  them are still staked, and the Due List's goals rows are unchanged.
+  Replayed: team leans +34.4u over 582 to +71.9u over 462, prop leans +56.4u
+  over 2,067 to +72.7u over 1,932, all leans +90.8u to +144.6u (2,394), every
+  stretch positive. The site's Totals record (every game on the model's
+  better-return side, main line, from 10-22) reads +9.6u over 231; calling
+  the under only at 6%+ on 5.5 or 6.5 would read +13.2u, inside noise and
+  nearly "always the over", so it is unchanged. Chosen on the weeks they are
+  scored on, small samples: no demonstrated edge. Leans only: the snapshot,
+  forward ledger, population B, the model, the best-bet bars and the stakes
+  are unchanged. `tests/test_thin_moneyline_and_long_goal_leans_are_off.py`.
+
 ## Contract strings — never change these
 
 Cooper's local scheduled tasks hard-code these. Renaming any of them silently

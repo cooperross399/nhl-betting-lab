@@ -180,6 +180,38 @@ def outside_price_window(rows: list[dict], notes: list[str]) -> list[dict]:
     return keep
 
 
+def meets_current_bars(market, last_season, drought, price) -> bool:
+    """Whether a recorded 1+ point or 1+ assist entry meets today's bars.
+
+    2026-11-25, Cooper: "fix the previous results based on those bars". Past
+    entries were listed under older bars; the tracked record now counts only
+    those today's rule would also list: last season's total at or above the
+    base qualifier, a drought at or past the tier bar, and a price inside
+    `PRICE_WINDOWS` (an entry with no price is kept, as the list keeps one).
+    Every other category is unchanged and always counts.
+    """
+    if market not in PRICE_WINDOWS:
+        return True
+    try:
+        prior = float(last_season)
+        streak = float(drought)
+    except (TypeError, ValueError):
+        return True  # not recorded: never guessed away
+    if prior != prior or streak != streak:
+        return True
+    bar = tier_bar(market, prior)
+    if bar is None or streak < bar:
+        return False
+    try:
+        odds = float(price)
+    except (TypeError, ValueError):
+        return True
+    if odds != odds:
+        return True
+    lo, hi = PRICE_WINDOWS[market]
+    return lo <= odds and (hi is None or odds <= hi)
+
+
 #: A game id no real game has, so the sentinel row sorts after every real one
 #: and is told apart from them.
 _TONIGHT_GAME_ID = 10**12

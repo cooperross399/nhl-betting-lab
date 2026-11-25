@@ -42,6 +42,7 @@ from nhl_betting_lab.drought_rule import (
     backtest_headline,
     best_over_prices,
     build_drought_list,
+    meets_current_bars,
 )
 from nhl_betting_lab.forward_evidence import (
     PATIENCE_DAYS,
@@ -330,9 +331,22 @@ def _tracked(rows: pd.DataFrame) -> tuple[float, float]:
     return units, float(stakes.sum())
 
 
+def current_bars_only(ledger: pd.DataFrame) -> pd.DataFrame:
+    """The ledger without the 1+ point and 1+ assist entries today's bars
+    would not list (`drought_rule.meets_current_bars`, 2026-11-25). The
+    ledger itself keeps every row; only the record counts fewer."""
+    if ledger.empty or "market" not in ledger.columns:
+        return ledger
+    frame = ledger.reindex(columns=list(dict.fromkeys([*ledger.columns, "last_season", "drought", "american_odds"])))
+    keep = [meets_current_bars(m, p, d, o) for m, p, d, o in
+            zip(frame["market"], frame["last_season"], frame["drought"], frame["american_odds"])]
+    return ledger[keep]
+
+
 def build_report(ledger: pd.DataFrame, *, pending_rows: int = 0, outputs_dir: Path | None = None,
                  sources: Mapping[str, Any] | None = None) -> dict[str, Any]:
     sources = sources or {}
+    ledger = current_bars_only(ledger)
     payload: dict[str, Any] = {
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "pending_rows": int(pending_rows),
@@ -662,7 +676,7 @@ def build_scorecard(ledger: pd.DataFrame, day: str) -> dict[str, Any]:
     before 2026-10-31 recorded none and count in neither split.
     """
     start, end = scorecard_week(day)
-    frame = ledger.reindex(columns=list(LEDGER_COLUMNS)).copy()
+    frame = current_bars_only(ledger.reindex(columns=list(LEDGER_COLUMNS))).copy()
     frame["date"] = frame["date"].astype(str)
     edge = pd.to_numeric(frame["model_edge"], errors="coerce")
     week = frame[(frame["date"] >= start) & (frame["date"] <= end)]

@@ -2248,6 +2248,45 @@ def _price(value: object) -> float | None:
     return x if math.isfinite(x) and x != 0 else None
 
 
+#: Today's Due List bars for 1+ point and 1+ assist, the lab's
+#: `drought_rule.THRESHOLDS`/`TIERS`/`PRICE_WINDOWS` spelled here because the
+#: site imports nothing from the package (pinned equal by
+#: tests/test_past_due_list_results_meet_todays_bars.py). (base qualifier,
+#: drought bar, shortest price, longest price or None.)
+DUE_CURRENT_BARS: dict[str, tuple[int, int, int, int | None]] = {
+    "points": (60, 2, 120, 200), "assists": (60, 1, 100, None)}
+
+#: How a kept night's Due List rows were filtered. 1: only entries meeting
+#: today's bars count (2026-11-25, Cooper: "fix the previous results based on
+#: those bars"). A night kept under another rule is settled again once.
+DUE_GRADING = 1
+
+
+def meets_due_bars(market: object, last_season: object, drought: object, price: object) -> bool:
+    """Whether a recorded Due List entry meets today's bars (DUE_CURRENT_BARS).
+
+    Every category other than 1+ point and 1+ assist always counts. A 1+
+    point or 1+ assist entry counts only with last season's total at the
+    base qualifier or more, a drought at the bar or longer, and a price
+    inside its window; one with no price is kept, as the list keeps one.
+    """
+    bars = DUE_CURRENT_BARS.get(str(market or ""))
+    if bars is None:
+        return True
+    floor, bar, lo, hi = bars
+    try:
+        prior, streak = float(last_season), float(drought)
+    except (TypeError, ValueError):
+        # Not recorded: nothing to judge it by, so it is never guessed away.
+        return True
+    if not (math.isfinite(prior) and math.isfinite(streak)):
+        return True
+    if prior < floor or streak < bar:
+        return False
+    odds = _price(price)
+    return odds is None or (odds >= lo and (hi is None or odds <= hi))
+
+
 def due_ledger_prices(rows: list[dict], day: date) -> dict[tuple[str, str], float]:
     """{(player id, market): price} the lab's ledger settled `day`'s entries at."""
     out: dict[tuple[str, str], float] = {}
@@ -2277,6 +2316,8 @@ def due_ledger_season(rows: list[dict], sources: dict) -> dict | None:
     nights: set[str] = set()
     to_result = {"won": "win", "lost": "loss", "push": "push"}
     for r in rows:
+        if not meets_due_bars(r.get("market"), r.get("last_season"), r.get("drought"), r.get("american_odds")):
+            continue
         outcome = str(r.get("outcome") or "")
         day = str(r.get("date") or "")[:10]
         if outcome == "void":
@@ -2417,6 +2458,9 @@ def grade_due_list(board: dict, finals: dict, processed: Path | None,
         home, away = (g.get("home") or {}).get("abbr"), (g.get("away") or {}).get("abbr")
         for entry in g.get(field) or []:
             if not isinstance(entry, dict):
+                continue
+            if field == "drought" and not meets_due_bars(entry.get("market"), entry.get("lastSeason"),
+                                                         entry.get("drought"), entry.get("price")):
                 continue
             key = _due_list_key(entry)
             if key in seen:
@@ -2765,7 +2809,7 @@ def night_record(results: dict) -> dict:
     "ok", as the page reads a block without one)."""
     games = results.get("games") or []
     night = {"games": len(games), "summary": results.get("summary") or {}, "bets": tracker_rows(results),
-             "totalsGrading": TOTALS_GRADING}
+             "totalsGrading": TOTALS_GRADING, "dueGrading": DUE_GRADING}
     due = results.get("dueList")
     if isinstance(due, dict):
         night["dueList"] = due_list_tallies(due.get("rows") or [])
@@ -2990,7 +3034,8 @@ def season_record(today: date, history_dir: Path, latest: dict, *, processed: Pa
             if "bets" not in kept_night and not _kept_before_the_list_was_graded({**kept_night, "bets": []}, path):
                 stale = kept_night
             kept_night = None
-        if kept_night is not None and kept_night.get("totalsGrading") != TOTALS_GRADING:
+        if kept_night is not None and (kept_night.get("totalsGrading") != TOTALS_GRADING
+                                       or kept_night.get("dueGrading") != DUE_GRADING):
             stale = stale or kept_night
             kept_night = None
         if kept_night is not None and _kept_without_record_units(kept_night):
