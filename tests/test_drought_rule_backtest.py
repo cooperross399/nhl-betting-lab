@@ -165,7 +165,8 @@ def test_the_committed_report_was_generated_by_the_shipped_rule():
     assert payload["tiers"] == {m: [list(t) for t in tiers] for m, tiers in drb.TIERS.items()}
     assert payload["surprise_level"] == drb.SURPRISE_LEVEL and payload["rule"] == drb.RULE_SENTENCE
     buckets = {b["bucket"] for b in payload["buckets"]}
-    assert {"SHIPPED: either bar", "TIER bars only", "SURPRISE 5% only", "RULE: drought 5+", "not in drought (0-4)"} <= buckets
+    assert {"SHIPPED: either bar", "TIER bars only", "RULE: drought 5+", "not in drought (0-4)"} <= buckets
+    assert ("SURPRISE 5% only" in buckets) == bool(drb.SURPRISE_MARKETS), "no category is on the surprise bar since 2026-11-25"
     assert {drb.tier_bucket(drb.band_label(m, floor), bar) for m, tiers in drb.TIERS.items() for floor, bar in tiers} <= buckets
     markdown = (root / "drought_rule_backtest.md").read_text(encoding="utf-8")
     assert markdown.startswith("# Due List backtest") and payload["generated_at"] in markdown

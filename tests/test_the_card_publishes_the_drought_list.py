@@ -89,7 +89,7 @@ def test_a_card_with_no_prices_still_publishes_the_list_with_not_posted(tmp_path
     markdown = (tmp_path / "outputs" / "gameday_card.md").read_text(encoding="utf-8")
     section = markdown[markdown.index("## Due List"):]
     assert "Skater 1" in section and "not posted" in section and "over 0.5" in section
-    assert "| 5 (tier) | tier 1 / surprise - | 1 in 32 for him | " in section and "| band 60+ @1: " in section
+    assert "| 5 | 1 (tier) | tier 1 / surprise - | 1 in 32 for him | " in section and "| band 60+ @1: " in section
     assert "Backtest" in section.splitlines()[2], "one headline line under the heading"
     assert "Drought rule" not in markdown
     listed = json.loads((tmp_path / "outputs" / "drought_list.json").read_text(encoding="utf-8"))

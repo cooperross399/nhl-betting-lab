@@ -4442,14 +4442,16 @@ Re-derive rather than trust if the data has moved.
   2024-25, 2025-26 and this season (1u flat, best price). Shipped:
   **1+ point at 60+ points last season, a 2-game drought, priced +120 to
   +200**: +3.2% over 111, +23.0% over 68, this season +11.3% over 21;
-  bought pooled +10.7% over 179 (-6.8% to +27.6%), where today's rule read
+  bought pooled +10.7% over 179 (-6.7% to +27.4%), where today's rule read
   -5.4% over 232. **1+ assist at 60+ assists, a 1-game drought, priced
   +100 or longer**: +2.1% over 180, +4.1% over 62, this season +12.9% over
-  24; pooled +2.6% over 242 (-10.9% to +16.3%), where 55+ at today's bar
+  24; pooled +2.6% over 242 (-11.1% to +17.3%), where 55+ at today's bar
   read +7.5% over 245 but -4.5% this season. The surprise bar no longer
   applies (`SURPRISE_MARKETS` empty); `PRICE_WINDOWS` and
   `outside_price_window` leave a priced row outside its window off the
-  list (unpriced rows stay). Picked after seeing the data, every interval
+  list (unpriced rows stay), and the backtest measures only those prices;
+  the committed `drought_rule_backtest.json` is regenerated on the new rule
+  (Due List Tuning run 45535385454). Picked after seeing the data, every interval
   spans zero: **no demonstrated edge.** Goals and the big-game categories
   are unchanged. Still an UNSTAKED list: the model, the edge bars, the
   market list, the staking rule, the snapshot, the forward ledger and the
