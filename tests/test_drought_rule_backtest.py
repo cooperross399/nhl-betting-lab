@@ -19,6 +19,7 @@ MECHANICS_BARS = {
     "THRESHOLDS": {"points": 60, "goals": 25, "assists": 55},
     "TIERS": {"points": ((100, 2), (85, 3), (70, 4), (60, 5)), "goals": ((40, 4), (25, 8)), "assists": ((55, 3),)},
     "SURPRISE_MARKETS": ("points", "assists"),
+    "PRICE_WINDOWS": {},
 }
 
 
@@ -180,3 +181,16 @@ def test_the_shipped_wagers_split_by_shots_during_the_drought():
     assert (wagers[up], wagers[steady], wagers[down]) == (2, 1, 1), "1.2x and 1.0x up, 0.9x steady, 0.5x down"
     assert wagers["SHIPPED: either bar"] == 5, "a row with no shot count stays in the rule, just in no shots bucket"
     assert "## Shots during the drought" in drb.render(result, {}, "now")
+
+
+def test_a_price_outside_its_window_is_not_measured():
+    """2026-11-25: 1+ point is listed only at +120 to +200 and 1+ assist at +100 or longer, so the
+    backtest measures only those prices."""
+    base = {"window": "card", "date": "2024-11-01", "season": 2024, "player": "A", "book": "B", "dec": 2.0,
+            "won": True, "prior": 80, "drought": 3, "prior_gp": 80, "prior_hits": 40}
+    w = drb.label_bars(pd.DataFrame([
+        {**base, "market": "points", "odds": 110.0}, {**base, "market": "points", "odds": 150.0},
+        {**base, "market": "points", "odds": 250.0}, {**base, "market": "assists", "odds": -105.0},
+        {**base, "market": "assists", "odds": 300.0}, {**base, "market": "goals", "odds": -105.0},
+    ]))
+    assert w.qualifies.tolist() == [False, True, False, False, True, True]

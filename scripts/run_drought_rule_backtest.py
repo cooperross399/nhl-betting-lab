@@ -42,6 +42,7 @@ from nhl_betting_lab.drought_rule import (  # noqa: E402,F401
     SHIPPED_BUCKET,
     SHOTS_DOWN,
     SHOTS_UP,
+    PRICE_WINDOWS,
     SURPRISE_LEVEL,
     SURPRISE_MARKETS,
     THRESHOLDS,
@@ -131,6 +132,11 @@ def label_bars(w: pd.DataFrame) -> pd.DataFrame:
     w = w.copy()
     w["profit"] = np.where(w.won, w.dec - 1, -1.0)
     w["qualifies"] = w.prior >= w.market.map(THRESHOLDS)
+    # A price outside the category's window is never listed (2026-11-25), so it is never measured.
+    for market, (lo, hi) in PRICE_WINDOWS.items():
+        odds = pd.to_numeric(w.odds, errors="coerce")
+        outside = (w.market == market) & ((odds < lo) | ((odds > hi) if hi is not None else False))
+        w.loc[outside, "qualifies"] = False
     gp = pd.to_numeric(w.prior_gp, errors="coerce")
     w["hit_rate"] = pd.to_numeric(w.prior_hits, errors="coerce") / gp.where(gp > 0)
     w["band"] = [band_label(m, t) for m, t in zip(w.market, w.prior)]
