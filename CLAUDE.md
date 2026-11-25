@@ -4399,7 +4399,7 @@ Re-derive rather than trust if the data has moved.
   on the ledger since 10-22 it reads +13.7u over 153, and about -32u of its
   season figure was graded under the projection-against-the-line call
   retired on 11-05. So `web/build_site_json.CURRENT_RULE_FROM` (totals
-  2026-11-05, leans 2026-11-26) adds `money[key].since` to the season
+  2026-11-05, leans 2026-11-25 since the follow-up below) adds `money[key].since` to the season
   record, and the board strip prints "since Nov 5 (current rule): W-L, Xu"
   under Totals and Leans (`smooth_pages.PL`); the season figures are not
   restated. Prop leans (points overs -19.5u over 234, goals overs -11.0u over
@@ -4411,6 +4411,13 @@ Re-derive rather than trust if the data has moved.
   test are unchanged. `weekly_review.card_status` names both.
   `tests/test_home_team_totals_and_thin_total_overs_are_not_leans.py`,
   `tests/test_records_say_how_todays_rule_has_done.py`.
+  **Same evening, Cooper: "i dont want to see the old stuff".** The Totals
+  and Leans season records now count only nights on or after
+  `CURRENT_RULE_FROM` (totals 2026-11-05; leans moved to 2026-11-25, the
+  first card built with this rule), wins, losses and units alike, and the
+  strip names the day ("· since Nov 5"). Straight up and best bets keep
+  every night. Earlier nights stay in the frozen boards and kept nights,
+  unread by the board. Site only.
 
 ## Contract strings — never change these
 
