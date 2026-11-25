@@ -2,24 +2,26 @@
 
 The rule (Cooper, 2026-10-07 evening; it replaces the flat 5-game rule shipped
 that morning in #307; widened 2026-11-10; assists refined 2026-11-17; goals
-20-24 dropped 2026-11-19): a skater with 60+ points, 25+
-goals or 55+ assists LAST
+20-24 dropped 2026-11-19; points and assists refined 2026-11-25): a skater
+with 60+ points, 25+ goals or 60+ assists LAST
 regular season is listed in that category when his current drought (regular-
 season games he dressed for without one in that category, carried across the
 season boundary) reaches EITHER of two bars. The better the player, the
 shorter the drought:
 
 1. The TIER bar, from last season's total in the category (`TIERS`):
-   points 100+ -> 2, 85-99 -> 3, 70-84 -> 4, 60-69 -> 5; goals 40+ -> 4,
-   25-39 -> 8; assists 55+ -> 3. (Goals 2026-11-10 to 11-19 also listed
+   points 60+ -> 2 (priced +120 to +200); goals 40+ -> 4, 25-39 -> 8;
+   assists 60+ -> 1 (priced +100 or longer): `PRICE_WINDOWS`. (Until
+   2026-11-25: points 100+ -> 2, 85-99 -> 3, 70-84 -> 4, 60-69 -> 5, assists
+   55+ -> 3, both on the surprise bar too. Goals 2026-11-10 to 11-19 also listed
    20-24 -> 10, dropped after it lost in both bought seasons. Assists 2026-11-10 to 11-17:
    40+ to qualify, 60+ -> 3, 40-59 -> 4. Until 2026-11-10,
    when Cooper asked for more picks every day: points 70+ at 3/4/5, goals 40+
    -> 5 and 25-39 -> 10, assists 60+ -> 3 only. Goals until 2026-10-10: 30+ to qualify, 40+ -> 3,
    35-39 -> 4, 30-34 -> 5, plus the surprise bar. Assists until 2026-10-31:
    30+ to qualify, 60+ -> 3, 45-59 -> 4, 30-44 -> 5.)
-2. The SURPRISE bar (equal surprise, points and assists only:
-   `SURPRISE_MARKETS`), from his own prior-season hit rate
+2. The SURPRISE bar (equal surprise, for the categories in
+   `SURPRISE_MARKETS`, none since 2026-11-25), from his own prior-season hit rate
    p = (prior-season regular-season games with one or more in the category)
    / (prior-season regular-season games dressed): the smallest n >= 1 with
    (1 - p)^n <= `SURPRISE_LEVEL` (0.05). Undefined when p == 0 (he never
@@ -76,23 +78,30 @@ from nhl_betting_lab.season import clean_text, row_game_date, season_id
 #: DUE list"): it lost in both bought seasons, -20.8% over 355 (2024-25) and
 #: -16.8% over 304 (2025-26), the one band to lose in both
 #: (scripts/run_due_hot_research.py, Due List Tuning run 28 on #491).
-THRESHOLDS = {"points": 60, "goals": 25, "assists": 55}
+#: 1+ assist and 1+ point refined on 2026-11-25 (Cooper: "dont drop either
+#: just refine the bar to or expand it to where it is profitable"): see
+#: `PRICE_WINDOWS`.
+THRESHOLDS = {"points": 60, "goals": 25, "assists": 60}
 #: The tier bar: (floor of last season's total, drought that lists him), best
 #: band first. The last floor of each category is the base qualifier.
 TIERS: dict[str, tuple[tuple[int, int], ...]] = {
-    "points": ((100, 2), (85, 3), (70, 4), (60, 5)),
+    # 2026-11-25: 60+ points at 2, priced +120 to +200 (`PRICE_WINDOWS`).
+    "points": ((60, 2),),
     "goals": ((40, 4), (25, 8)),
     # 2026-11-17 (Cooper: "Research and refine the parameters for 1+ assist"):
     # 55+ assists at 3, the cell both bought seasons agreed on
     # (scripts/run_due_list_big_games.py, Due List Tuning run 44104405522).
-    "assists": ((55, 3),),
+    # 2026-11-25: 60+ assists at 1, priced +100 or longer (`PRICE_WINDOWS`).
+    "assists": ((60, 1),),
 }
 #: The surprise bar's level: the smallest drought with (1 - p)^n <= this.
 SURPRISE_LEVEL = 0.05
 #: The categories the surprise bar lists in. Goals left it on 2026-10-10
 #: (Cooper, after `scripts/run_due_list_tuning.py`): 25+ goals at a 10-game
 #: drought was the one setting both bought seasons chose, and he kept 40+ at 5.
-SURPRISE_MARKETS = ("points", "assists")
+#: Points and assists left it on 2026-11-25: the refined settings are plain
+#: drought bars (`scripts/run_due_list_refine.py`).
+SURPRISE_MARKETS: tuple[str, ...] = ()
 LINE = 0.5
 #: The shots check (2026-10-31): shots on goal a game during the drought
 #: against his own rate over the games before it, up to this many.
@@ -135,6 +144,41 @@ def drop_short_points(rows: list[dict], notes: list[str]) -> list[dict]:
     if left:
         notes.append(f"{left} row(s) priced shorter than {LIST_MAX_JUICE} are not listed.")
     return keep
+
+#: The price window a 1+ point or 1+ assist row must sit in to be listed
+#: (shortest, longest; None is no cap). 2026-11-25, Cooper: "dont drop either
+#: just refine the bar to or expand it to where it is profitable". The setting
+#: profitable on all three samples, ranked by the worst
+#: (scripts/run_due_list_refine.py, Due List Tuning run 45531499409; 1u flat
+#: at the best price, ROI / wagers):
+#: - points 60+ at 2, +120 to +200: 2024-25 +3.2% / 111, 2025-26 +23.0% / 68,
+#:   this season +11.3% / 21; bought pooled +10.7% over 179 (-6.8% to +27.6%).
+#:   The old rule read -13.8% / 147, +9.0% / 85, -3.9% / 34.
+#: - assists 60+ at 1, +100 or longer: +2.1% / 180, +4.1% / 62, +12.9% / 24;
+#:   pooled +2.6% over 242 (-10.9% to +16.3%). The old rule (55+ at 3) read
+#:   +5.2% / 144, +10.9% / 101, -4.5% / 23.
+#: Picked after seeing it, every interval spans zero: no demonstrated edge.
+#: A row with no price posted is still listed ("not posted").
+PRICE_WINDOWS: dict[str, tuple[int, int | None]] = {"points": (120, 200), "assists": (100, None)}
+
+
+def outside_price_window(rows: list[dict], notes: list[str]) -> list[dict]:
+    """`rows` without the 1+ point and 1+ assist rows priced outside
+    `PRICE_WINDOWS`, naming how many were left off in `notes`."""
+    def outside(r: dict) -> bool:
+        window = PRICE_WINDOWS.get(r.get("market"))
+        odds = r.get("american_odds")
+        if window is None or odds is None:
+            return False
+        lo, hi = window
+        return odds < lo or (hi is not None and odds > hi)
+    keep = [r for r in rows if not outside(r)]
+    left = len(rows) - len(keep)
+    if left:
+        notes.append(f"{left} 1+ point or 1+ assist row(s) priced outside their window "
+                     "(points +120 to +200, assists +100 or longer) are not listed.")
+    return keep
+
 
 #: A game id no real game has, so the sentinel row sorts after every real one
 #: and is told apart from them.
@@ -646,6 +690,7 @@ def build_drought_list(
                 row["model_probability"] = round(float(chance), 4)
                 row["model_edge"] = round(float(chance) - 1 / _decimal(priced[0]), 4)
     rows = drop_short_points(rows, result.notes)
+    rows = outside_price_window(rows, result.notes)
     order = {m: i for i, m in enumerate(CATEGORIES)}
     rows.sort(key=lambda r: (order[r["market"]], r["rarity"], -r["drought"], r["player"]))
     result.rows = rows

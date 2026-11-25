@@ -4418,6 +4418,45 @@ Re-derive rather than trust if the data has moved.
   strip names the day ("· since Nov 5"). Straight up and best bets keep
   every night. Earlier nights stay in the frozen boards and kept nights,
   unread by the board. Site only.
+  **Later that night, Cooper: "can we not re-go through the leans. didnt
+  want that to start fresh", then "i want the model to have graded the
+  total for every game of the season".** Both records keep every night
+  again (`CURRENT_RULE_FROM` is empty). The board calls a total on every
+  game (`total_side` returns the under whenever it is the better return,
+  no longer "none"), and settlement grades every board's total on the
+  model's better-return side at its frozen prices (`graded_total_side`):
+  the boards frozen with no call (2026-11-11 to 11-25) and before `side`
+  existed (to 11-05) included, falling back to the frozen side, then the
+  projection, where a board lacks a chance or a price. Every kept night is
+  settled again once (`TOTALS_GRADING` = 2). This restates the Totals
+  record's history by one rule. Site only: the card's under listing rule,
+  the snapshot and the ledger are unchanged.
+
+- **2026-11-25: the Due List's 1+ assist and 1+ point rules are refined,
+  not dropped (Cooper: "dont drop either just refine the bar to or expand
+  it to where it is profitable").** This season the list's 1+ assist rows
+  read -12.42u over 159 and 1+ point -6.03u over 33 (1u ladder).
+  `scripts/run_due_list_refine.py` (Due List Tuning run 45531499409) swept
+  floor, drought bar and price window and ranked each setting, with 120+
+  bought wagers (40+ a season) and 20+ this season, by the worst of
+  2024-25, 2025-26 and this season (1u flat, best price). Shipped:
+  **1+ point at 60+ points last season, a 2-game drought, priced +120 to
+  +200**: +3.2% over 111, +23.0% over 68, this season +11.3% over 21;
+  bought pooled +10.7% over 179 (-6.7% to +27.4%), where today's rule read
+  -5.4% over 232. **1+ assist at 60+ assists, a 1-game drought, priced
+  +100 or longer**: +2.1% over 180, +4.1% over 62, this season +12.9% over
+  24; pooled +2.6% over 242 (-11.1% to +17.3%), where 55+ at today's bar
+  read +7.5% over 245 but -4.5% this season. The surprise bar no longer
+  applies (`SURPRISE_MARKETS` empty); `PRICE_WINDOWS` and
+  `outside_price_window` leave a priced row outside its window off the
+  list (unpriced rows stay), and the backtest measures only those prices;
+  the committed `drought_rule_backtest.json` is regenerated on the new rule
+  (Due List Tuning run 45535385454). Picked after seeing the data, every interval
+  spans zero: **no demonstrated edge.** Goals and the big-game categories
+  are unchanged. Still an UNSTAKED list: the model, the edge bars, the
+  market list, the staking rule, the snapshot, the forward ledger and the
+  registered test are unchanged, and nights already recorded are not
+  rebuilt.
 
 ## Contract strings — never change these
 

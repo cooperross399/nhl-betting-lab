@@ -127,8 +127,9 @@ def test_the_total_side_is_the_better_return_not_the_projection() -> None:
     # Projected 6.6 against 6.5 calls the over on the old rule; the model's
     # chance of the over is 48%, and the under at -105 is the better return.
     total = {"current": 6.5, "proj": 6.6, "overProb": 0.48, "overPrice": -115, "underPrice": -105}
-    # Since 2026-11-11 an under short of the card's 6% bar is no totals call.
-    assert site.total_side(total) == site.NO_TOTAL_CALL
+    # Since 2026-11-25 every game gets a call: the under here, though it is
+    # short of the card's 6% bar.
+    assert site.total_side(total) == "under"
     assert site.total_side({**total, "overProb": 0.56}) == "over"
     assert site.total_side({**total, "underPrice": None}) is None
 
@@ -186,10 +187,16 @@ def test_the_site_and_the_card_share_the_under_rule() -> None:
     assert site.TOTAL_UNDER_MIN_EDGE == card.TOTAL_UNDER_MIN_EDGE
     total = {"current": 6.5, "proj": 6.0, "overProb": 0.40, "overPrice": -115, "underPrice": -105}
     assert site.total_side(total) == "under"
-    assert site.total_side({**total, "current": 6.0}) == site.NO_TOTAL_CALL
+    # The board calls the under on any line now; the card's listing rule is
+    # the card's.
+    assert site.total_side({**total, "current": 6.0}) == "under"
 
 
-def test_a_game_with_no_totals_call_is_not_graded(tmp_path, monkeypatch) -> None:
+def test_every_game_with_a_total_is_graded(tmp_path, monkeypatch) -> None:
+    """Cooper, 2026-11-25: "i want the model to have graded the total for
+    every game of the season". A board frozen with no call ("none") is
+    graded on the model's better-return side, or, without a chance, on the
+    projection against the line."""
     import json
     from datetime import date
 
@@ -199,40 +206,20 @@ def test_a_game_with_no_totals_call_is_not_graded(tmp_path, monkeypatch) -> None
             "home": {"abbr": "TOR", "projGoals": 3.0}, "away": {"abbr": "NYR", "projGoals": 3.2},
             "total": {"current": 6.5, "proj": 6.2, "side": site.NO_TOTAL_CALL,
                       "overPrice": -110, "underPrice": -110}}
-    (tmp_path / f"{day.isoformat()}.json").write_text(json.dumps({"phase": "regular", "games": [game]}))
+
+    def settled():
+        (tmp_path / f"{day.isoformat()}.json").write_text(json.dumps({"phase": "regular", "games": [game]}))
+        return site.settle(day, tmp_path)
+
     final = {"id": 1, "gameState": "OFF", "homeTeam": {"score": 2}, "awayTeam": {"score": 3}}
     monkeypatch.setattr(site, "schedule_for", lambda d: [final])
-    results = site.settle(day, tmp_path)
-    assert results["summary"]["totals"] == {"w": 0, "l": 0, "p": 0}
-    assert results["summary"]["money"]["totals"]["staked"] == 0.0
+    # No chance on the board: the projection, 6.2 against 6.5, calls the under; 5 goals.
+    results = settled()
+    assert results["summary"]["totals"] == {"w": 1, "l": 0, "p": 0}
     (row,) = results["games"]
-    assert "total" not in row
-    # An over call on the same game is graded as before.
-    game["total"]["side"] = "over"
-    (tmp_path / f"{day.isoformat()}.json").write_text(json.dumps({"phase": "regular", "games": [game]}))
-    assert site.settle(day, tmp_path)["summary"]["totals"] == {"w": 0, "l": 1, "p": 0}
-
-
-def test_a_game_total_under_needs_two_strong_defences() -> None:
-    """Cooper, 2026-11-11: "focus on games with elite goalies/great defenses"."""
-    row = _total_row("under", 6.5)
-    key = selection_key(SimpleNamespace(**row), market="total_goals", selection="under", line=6.5)
-    frame = pd.DataFrame([row])
-    listed, _ = build_candidates(frame, {key: 0.57}, strong_defence=lambda home, away: True)
-    assert len(listed) == 1
-    listed, passes = build_candidates(frame, {key: 0.57}, strong_defence=lambda home, away: False)
-    assert not listed
-    assert passes[0].demotion_reason == card.STRONG_DEFENCE_REASON
-    over = _total_row("over", 6.5)
-    okey = selection_key(SimpleNamespace(**over), market="total_goals", selection="over", line=6.5)
-    listed, _ = build_candidates(pd.DataFrame([over]), {okey: 0.57}, strong_defence=lambda h, a: False)
-    assert len(listed) == 1
-
-
-def test_strong_defences_are_the_better_half() -> None:
-    spec = importlib.util.spec_from_file_location("run_gameday_card_defence", ROOT / "scripts" / "run_gameday_card.py")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    teams = {c: SimpleNamespace(defence=d) for c, d in (("A", 0.9), ("B", 1.0), ("C", 1.1), ("D", 1.2))}
-    assert module.strong_defences(teams) == {"A", "B"}
-    assert module.strong_defences({}) == set()
+    assert row["total"]["side"] == "under"
+    # With the model's chance, its better-return side decides, whatever was frozen.
+    game["total"]["overProb"] = 0.58
+    assert settled()["summary"]["totals"] == {"w": 0, "l": 1, "p": 0}
+    game["total"].update(overProb=0.40, side="over")
+    assert settled()["summary"]["totals"] == {"w": 1, "l": 0, "p": 0}

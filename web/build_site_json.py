@@ -1223,12 +1223,10 @@ def build_board(day: date, lab: Path, history_dir: Path) -> dict:
 
 #: The rule in one sentence (Cooper, 2026-10-07 evening; it replaces the flat
 #: 5-game rule shipped in #307). Two bars, and a drought at EITHER lists him.
-DROUGHT_RULE_SENTENCE = ("Cooper's Due List, an unstaked list he picks from: a skater with 60+ points, 25+ goals or 55+ assists "
-                         "last regular season whose drought in that category has reached either bar, the tier bar his total sets "
-                         "(points 100+ → 2, 85-99 → 3, 70-84 → 4, 60-69 → 5; goals 40+ → 4, 25-39 → 8; "
-                         "assists 55+ → 3) or, for points "
-                         "and assists, his own equal-surprise bar, the shortest drought with no more than a 5% chance at his "
-                         "last-season hit rate; and, for the big games, a 40+ goal scorer 25 games without 2+ goals, a 40+ "
+DROUGHT_RULE_SENTENCE = ("Cooper's Due List, an unstaked list he picks from: a skater with 60+ points, 25+ goals or 60+ assists "
+                         "last regular season whose drought in that category has reached its bar (points 60+ → 2 games, "
+                         "priced +120 to +200; goals 40+ → 4, 25-39 → 8; assists 60+ → 1 game, priced +100 or longer); "
+                         "and, for the big games, a 40+ goal scorer 25 games without 2+ goals, a 40+ "
                          "goal scorer 50 without a hat trick, a 100+ point scorer 3 games without 2+ points, or a goalie "
                          "with 4+ shutouts 12 starts without one.")
 
@@ -1955,19 +1953,34 @@ def total_side(total: dict) -> str | None:
 
     if ret(p, over) >= ret(1 - p, under):
         return "over"
-    # Since 2026-11-11 the board calls the under only where the card would
-    # list it: on a 5.5 or 6.5 line, with the model's chance beating the
-    # under's price by 6 points or more. Otherwise it makes no totals call
-    # and the Totals record grades nothing for that game. Replayed on the
+    # Every game gets a call (Cooper, 2026-11-25: "i want the model to have
+    # graded the total for every game of the season"): the under whenever it
+    # is the better return. From 2026-11-11 to 2026-11-25 the board called
+    # the under only where the card would list it (a 5.5 or 6.5 line, a 6%
+    # edge) and otherwise made no call (NO_TOTAL_CALL), which left those
+    # games ungraded; graded_total_side grades them too. Replayed on the
     # ledger's main lines at 0.25u (2026-09-29 to 11-09, 285 games): every
     # call 143-142, -1.56u; the over calls alone 101-93, +0.90u. No
     # demonstrated edge either way.
-    line = total.get("current")
-    implied_under = 1.0 / (1 + (under / 100.0 if under > 0 else 100.0 / abs(under)))
-    on_line = isinstance(line, (int, float)) and any(abs(line - x) < 1e-9 for x in TOTAL_UNDER_LINES)
-    if on_line and (1 - p) - implied_under >= TOTAL_UNDER_MIN_EDGE:
-        return "under"
-    return NO_TOTAL_CALL
+    return "under"
+
+
+def graded_total_side(total: dict) -> str | None:
+    """The side a settled board's total is graded on: the model's
+    better-return side at the frozen prices (total_side), so every game of
+    the season is graded by one rule, the boards frozen with no call
+    ("none", 2026-11-11 to 11-25) and those frozen before `side` existed
+    (to 2026-11-05) included. A board without both prices and a chance falls
+    back to its frozen side, then to the projection against the line."""
+    side = total_side(total)
+    if side in ("over", "under"):
+        return side
+    if total.get("side") in ("over", "under"):
+        return total["side"]
+    proj, line = total.get("proj"), total.get("current")
+    if isinstance(proj, (int, float)) and isinstance(line, (int, float)):
+        return "over" if proj > line else "under"
+    return None
 
 
 def settle(day: date, history_dir: Path, *, processed: Path | None = None) -> dict:
@@ -2035,11 +2048,10 @@ def settle(day: date, history_dir: Path, *, processed: Path | None = None) -> di
                "away": {"abbr": aa, "projGoals": g["away"]["projGoals"], "final": as_},
                "home": {"abbr": ha, "projGoals": g["home"]["projGoals"], "final": hs}}
         tot = g.get("total")
-        if tot and tot.get("side") != NO_TOTAL_CALL:
+        proj_side = graded_total_side(tot) if tot and isinstance(tot.get("current"), (int, float)) else None
+        if proj_side:
             total_goals = hs + as_
             res = "push" if total_goals == tot["current"] else "over" if total_goals > tot["current"] else "under"
-            proj_side = tot.get("side") if tot.get("side") in ("over", "under") else (
-                "over" if tot["proj"] > tot["current"] else "under")
             s["totals"]["p" if res == "push" else "w" if res == proj_side else "l"] += 1
             _add_units(s["money"]["totals"], tot.get("overPrice" if proj_side == "over" else "underPrice"),
                        "push" if res == "push" else "win" if res == proj_side else "loss")
@@ -2752,7 +2764,8 @@ def night_record(results: dict) -> dict:
     and the props tallies when the night's props block was published (status
     "ok", as the page reads a block without one)."""
     games = results.get("games") or []
-    night = {"games": len(games), "summary": results.get("summary") or {}, "bets": tracker_rows(results)}
+    night = {"games": len(games), "summary": results.get("summary") or {}, "bets": tracker_rows(results),
+             "totalsGrading": TOTALS_GRADING}
     due = results.get("dueList")
     if isinstance(due, dict):
         night["dueList"] = due_list_tallies(due.get("rows") or [])
@@ -2766,6 +2779,11 @@ def night_record(results: dict) -> dict:
     return night
 
 
+#: How a kept night's Totals were graded. 2: every game on the model's
+#: better-return side at the frozen prices (graded_total_side, 2026-11-25).
+#: A night kept under another rule is settled again once.
+TOTALS_GRADING = 2
+
 #: Where each night's settlement is kept, inside the history Publish Site
 #: restores and uploads, so the season record reads an old night once.
 SETTLED_DIR = "settled"
@@ -2775,17 +2793,14 @@ FROZEN_BOARD = re.compile(r"^(\d{4}-\d{2}-\d{2})\.json$")
 
 SEASON_KEYS = ("straightUp", "picks", "leans", "totals")
 
-#: The first night each record was called under the rule in force today
-#: (2026-11-25, Cooper: "We have to improve our totals and leans in our model
-#: and on the website", then "i dont want to see the old stuff"). The Totals
-#: and Leans season records count only the nights from that day on, wins,
-#: losses and units alike; nights before it stay in the frozen boards and the
-#: kept nights, and are read by nothing on the board. Totals: the model's side
-#: since 2026-11-05 (the 11-11 under rule refines it); the -32u or so graded
-#: under the projection-against-the-line call retired that day is gone from
-#: the record. Leans: the board's lean from the card of 2026-11-25, the first
-#: without thin total overs or home team totals as leans.
-CURRENT_RULE_FROM: dict[str, str] = {"totals": "2026-11-05", "leans": "2026-11-25"}
+#: The first night a season record counts from, by record. Empty: every
+#: record counts every night. From 2026-11-25 (Cooper: "i dont want to see
+#: the old stuff") Totals counted from 2026-11-05 and Leans from 11-25; the
+#: same evening he asked for both back ("can we not re-go through the leans.
+#: didnt want that to start fresh", "i want the model to have graded the
+#: total for every game of the season"). The mechanism stays for a record
+#: that should restart.
+CURRENT_RULE_FROM: dict[str, str] = {}
 
 #: The stake the season's four records are tracked at (Cooper, 2026-11-03:
 #: "I want a tracked profit/loss for best bets/totals/leans/straight up
@@ -2974,6 +2989,9 @@ def season_record(today: date, history_dir: Path, latest: dict, *, processed: Pa
             # again fails (an outage), it is still read as kept, without bets.
             if "bets" not in kept_night and not _kept_before_the_list_was_graded({**kept_night, "bets": []}, path):
                 stale = kept_night
+            kept_night = None
+        if kept_night is not None and kept_night.get("totalsGrading") != TOTALS_GRADING:
+            stale = stale or kept_night
             kept_night = None
         if kept_night is not None and _kept_without_record_units(kept_night):
             stale = stale or kept_night

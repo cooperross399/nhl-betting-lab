@@ -3,11 +3,32 @@ import importlib.util
 from pathlib import Path
 
 import pandas as pd
+import pytest
+
+from nhl_betting_lab import drought_rule as dr
 
 _spec = importlib.util.spec_from_file_location(
     "drought_rule_backtest", Path(__file__).resolve().parents[1] / "scripts" / "run_drought_rule_backtest.py")
 drb = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(drb)
+
+
+#: The bars of 2026-11-17 to 11-25 (tiered points, 55+ assists at 3, the
+#: surprise bar on both): the bucket mechanics run on them.
+MECHANICS_BARS = {
+    "THRESHOLDS": {"points": 60, "goals": 25, "assists": 55},
+    "TIERS": {"points": ((100, 2), (85, 3), (70, 4), (60, 5)), "goals": ((40, 4), (25, 8)), "assists": ((55, 3),)},
+    "SURPRISE_MARKETS": ("points", "assists"),
+    "PRICE_WINDOWS": {},
+}
+
+
+@pytest.fixture
+def mechanics_bars(monkeypatch):
+    for name, value in MECHANICS_BARS.items():
+        monkeypatch.setattr(dr, name, value)
+        if hasattr(drb, name):
+            monkeypatch.setattr(drb, name, value)
 
 
 def test_drought_counts_games_before_this_one_and_resets_on_a_hit():
@@ -32,10 +53,10 @@ def test_drought_carries_across_the_season_boundary_and_uses_last_seasons_record
 
 
 def test_qualifying_bars_are_the_ones_cooper_set():
-    assert drb.THRESHOLDS == {"points": 60, "goals": 25, "assists": 55}, "goals 20 from 2026-11-10 to 11-19; assists 40 until 2026-11-17"
-    assert drb.TIERS == {"points": ((100, 2), (85, 3), (70, 4), (60, 5)), "goals": ((40, 4), (25, 8)),
-                         "assists": ((55, 3),)}
-    assert drb.SURPRISE_MARKETS == ("points", "assists"), "goals left the surprise bar on 2026-10-10"
+    assert drb.THRESHOLDS == {"points": 60, "goals": 25, "assists": 60}, "assists 55 from 2026-11-17 to 11-25"
+    assert drb.TIERS == {"points": ((60, 2),), "goals": ((40, 4), (25, 8)),
+                         "assists": ((60, 1),)}
+    assert drb.SURPRISE_MARKETS == (), "points and assists left the surprise bar on 2026-11-25"
     assert drb.SURPRISE_LEVEL == 0.05
     assert drb.FLAT_DROUGHT == 5, "the #307 rule's bar, kept so the history buckets read the same"
     assert drb.SHIPPED_BUCKET == "SHIPPED: either bar" and drb.TIER_ONLY_BUCKET == "TIER bars only"
@@ -63,6 +84,7 @@ def _wagers() -> pd.DataFrame:
     ])
 
 
+@pytest.mark.usefixtures("mechanics_bars")
 def test_each_wager_is_labelled_with_its_band_and_both_bars():
     w = drb.label_bars(_wagers()).set_index("date")
 
@@ -96,6 +118,7 @@ def test_a_goals_wager_has_no_surprise_bar_and_lists_on_its_tier_bar_alone():
     assert [b["wagers"] for b in listed] == [2]
 
 
+@pytest.mark.usefixtures("mechanics_bars")
 def test_the_buckets_count_the_wagers_each_bar_lists():
     result = drb.measure(drb.label_bars(_wagers()))
     wagers = {b["bucket"]: b["wagers"] for b in result["buckets"] if b["window"] == "card" and b["season"] == "both"}
@@ -115,6 +138,7 @@ def test_the_buckets_count_the_wagers_each_bar_lists():
         assert b["ci_low"] <= b["roi"] <= b["ci_high"]
 
 
+@pytest.mark.usefixtures("mechanics_bars")
 def test_the_json_keeps_its_keys_and_names_the_tiers_the_level_and_the_rule():
     result = drb.measure(drb.label_bars(_wagers()))
     payload = drb.payload(result, {"card": {"graded": 9}}, "2026-10-07T00:00:00+00:00")
@@ -141,7 +165,8 @@ def test_the_committed_report_was_generated_by_the_shipped_rule():
     assert payload["tiers"] == {m: [list(t) for t in tiers] for m, tiers in drb.TIERS.items()}
     assert payload["surprise_level"] == drb.SURPRISE_LEVEL and payload["rule"] == drb.RULE_SENTENCE
     buckets = {b["bucket"] for b in payload["buckets"]}
-    assert {"SHIPPED: either bar", "TIER bars only", "SURPRISE 5% only", "RULE: drought 5+", "not in drought (0-4)"} <= buckets
+    assert {"SHIPPED: either bar", "TIER bars only", "RULE: drought 5+", "not in drought (0-4)"} <= buckets
+    assert ("SURPRISE 5% only" in buckets) == bool(drb.SURPRISE_MARKETS), "no category is on the surprise bar since 2026-11-25"
     assert {drb.tier_bucket(drb.band_label(m, floor), bar) for m, tiers in drb.TIERS.items() for floor, bar in tiers} <= buckets
     markdown = (root / "drought_rule_backtest.md").read_text(encoding="utf-8")
     assert markdown.startswith("# Due List backtest") and payload["generated_at"] in markdown
@@ -157,3 +182,16 @@ def test_the_shipped_wagers_split_by_shots_during_the_drought():
     assert (wagers[up], wagers[steady], wagers[down]) == (2, 1, 1), "1.2x and 1.0x up, 0.9x steady, 0.5x down"
     assert wagers["SHIPPED: either bar"] == 5, "a row with no shot count stays in the rule, just in no shots bucket"
     assert "## Shots during the drought" in drb.render(result, {}, "now")
+
+
+def test_a_price_outside_its_window_is_not_measured():
+    """2026-11-25: 1+ point is listed only at +120 to +200 and 1+ assist at +100 or longer, so the
+    backtest measures only those prices."""
+    base = {"window": "card", "date": "2024-11-01", "season": 2024, "player": "A", "book": "B", "dec": 2.0,
+            "won": True, "prior": 80, "drought": 3, "prior_gp": 80, "prior_hits": 40}
+    w = drb.label_bars(pd.DataFrame([
+        {**base, "market": "points", "odds": 110.0}, {**base, "market": "points", "odds": 150.0},
+        {**base, "market": "points", "odds": 250.0}, {**base, "market": "assists", "odds": -105.0},
+        {**base, "market": "assists", "odds": 300.0}, {**base, "market": "goals", "odds": -105.0},
+    ]))
+    assert w.qualifies.tolist() == [False, True, False, False, True, True]
