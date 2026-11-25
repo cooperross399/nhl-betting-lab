@@ -1,9 +1,9 @@
 """2026-11-25 (Cooper: "We have to improve our totals and leans in our model
 and on the website. Find a way"): the Totals and Leans season records keep
-every night as it was graded, and say beside it how the record has done
-under the rule in force today (`CURRENT_RULE_FROM`). About -32u of the
-Totals record at 1u was graded under the projection-against-the-line call
-retired on 2026-11-05.
+only the nights under the rule in force today (`CURRENT_RULE_FROM`), and
+the board names the day it began (then: "i dont want to see the old
+stuff"). About -32u of the old Totals record at 1u was graded under the
+projection-against-the-line call retired on 2026-11-05.
 """
 
 from __future__ import annotations
@@ -34,7 +34,7 @@ def _night(totals: tuple[int, int, int], units: float, leans: tuple[int, int, in
 NIGHTS = {
     date(2026, 11, 3): _night((0, 2, 0), -2.0, (1, 0, 0), 1.0),
     date(2026, 11, 5): _night((2, 1, 0), 0.9),
-    date(2026, 11, 26): _night((1, 0, 1), 1.0, (0, 1, 0), -1.0),
+    date(2026, 11, 25): _night((1, 0, 1), 1.0, (0, 1, 0), -1.0),
 }
 
 
@@ -53,32 +53,32 @@ def _season(tmp_path: Path, monkeypatch) -> dict:
     return module.season_record(date(2026, 11, 28), history, {"resultsDate": "none"})
 
 
-def test_the_totals_record_says_how_it_has_done_since_its_rule(tmp_path: Path, monkeypatch) -> None:
+def test_the_totals_record_counts_only_nights_under_its_rule(tmp_path: Path, monkeypatch) -> None:
     season = _season(tmp_path, monkeypatch)
-    assert season["totals"] == {"w": 3, "l": 3, "p": 1}
-    assert season["money"]["totals"]["units"] == -0.1
-    since = season["money"]["totals"]["since"]
-    assert since["from"] == "2026-11-05"
-    assert (since["w"], since["l"], since["p"], since["units"], since["nights"]) == (3, 1, 1, 1.9, 2)
+    assert season["totals"] == {"w": 3, "l": 1, "p": 1}
+    assert season["money"]["totals"]["units"] == 1.9
+    assert season["money"]["totals"]["since"] == {"from": "2026-11-05", "nights": 2}
 
 
 def test_the_leans_record_counts_from_the_first_card_under_todays_rule(tmp_path: Path, monkeypatch) -> None:
     season = _season(tmp_path, monkeypatch)
-    since = season["money"]["leans"]["since"]
-    assert since["from"] == "2026-11-26"
-    assert (since["w"], since["l"], since["units"]) == (0, 1, -1.0)
+    assert season["leans"] == {"w": 0, "l": 1, "p": 0}
+    assert season["money"]["leans"]["units"] == -1.0
+    assert season["money"]["leans"]["since"] == {"from": "2026-11-25", "nights": 1}
 
 
-def test_a_record_with_no_current_rule_or_nothing_graded_under_it_carries_none(tmp_path: Path, monkeypatch) -> None:
+def test_the_other_records_keep_every_night(tmp_path: Path, monkeypatch) -> None:
     season = _season(tmp_path, monkeypatch)
+    assert season["straightUp"] == {"w": 3, "l": 0}
+    assert season["money"]["straightUp"]["units"] == 3.0
     assert "since" not in season["money"]["picks"]
     assert "since" not in season["money"]["straightUp"]
 
 
-def test_the_board_prints_the_current_rules_record() -> None:
+def test_the_board_names_the_day_the_rule_began() -> None:
     import importlib.util
     spec = importlib.util.spec_from_file_location("_smooth", Path(__file__).resolve().parents[1] / "web" / "smooth_pages.py")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     assert "since(m.since)" in module.PL
-    assert "(current rule)" in module.PL
+    assert "(current rule)" not in module.PL
