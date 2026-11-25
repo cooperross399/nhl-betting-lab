@@ -43,7 +43,23 @@ from test_site_never_calls_an_unpriced_game_a_pass import (
 ACCURACY = ("straightUp", "puckLine", "totals")
 
 
+def _count_every_night(monkeypatch) -> None:
+    """These fixtures settle October nights, before the Totals and Leans
+    records' current rule began (`CURRENT_RULE_FROM`), which leaves those
+    two records empty by design. The question here is whether a settled
+    night is tallied at all, so the cutoff is lifted for it."""
+    loader = harness.site_module
+
+    def every_night():
+        module = loader()
+        module.CURRENT_RULE_FROM = {}
+        return module
+
+    monkeypatch.setattr(harness, "site_module", every_night)
+
+
 def test_a_settled_night_is_the_boards_season_record(tmp_path: Path, monkeypatch) -> None:
+    _count_every_night(monkeypatch)
     lab = make_lab(tmp_path, monkeypatch, staged=True)
     out = tmp_path / "out"
     board, _ = build(lab, out, monkeypatch)
@@ -162,6 +178,7 @@ def test_an_unpriced_or_exhibition_row_never_counts_toward_the_season(
     is the companion that keeps both halves from passing on an empty tally:
     the same two games there count one best bet and two totals.
     """
+    _count_every_night(monkeypatch)
     # Unpriced: both games are projected and played to a final, no price
     # reaches either.
     lab = make_lab(tmp_path / "unpriced", monkeypatch, staged=False)
