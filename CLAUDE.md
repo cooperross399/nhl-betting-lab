@@ -4367,6 +4367,51 @@ Re-derive rather than trust if the data has moved.
   schedule or the board (empty slate, not degraded).
   `tests/test_long_saves_overs_are_off_the_card.py`.
 
+- **2026-11-25, NOT a defect fix: home team totals are never leans, a
+  game-total over leans only from a 6% edge, and the site's Totals and Leans
+  records say how today's rule has done (Cooper: "We have to improve our
+  totals and leans in our model and on the website. Find a way").** Every
+  lean on card-feed's first card of each day, 2026-09-29 to 11-23, regraded
+  on the forward ledger at the card's price and the 1u ladder: 4,343 graded,
+  -106.2u (-52.6u over 901 since 11-05). Two team slices lost steadily:
+  1. **Home team totals**: -41.6u over 216 (overs -27.0u over 167, unders
+     -14.1u over 49), losing in each of three stretches (to 10-21, 10-22 to
+     11-04, from 11-05) both ways, while away team totals made +38.5u over
+     174. On every settled team-total opinion from 10-22 the model held the
+     home over at 46.2% where 44.7% landed and the away over at 44.7% where
+     47.0% landed (about 2,400 opinions each, 231 games); home teams won
+     49.4% of those games against the model's 53.7% (the price 55.5%).
+     `gameday_card.LEAN_ONLY_EXCLUDED_SIDES` sends a home team-total lean to
+     the passes, reason named; a home team-total best bet is still staked.
+  2. **Thin game-total overs**: the card listed up to six over rungs a game;
+     those with an edge under 6% went -10.2u over 328 (losing in two of the
+     three stretches, -18.6u and -17.4u over 116 since 11-05), those from 6%
+     +39.9u over 146 (+14.1u, +9.7u, +16.1u). `LEAN_MIN_EDGE` lists a total
+     over from 6%, the bar the under already had (`lean_only_reason`,
+     `lean_bar`). The ledger's one-wager-per-side view does not show the
+     split (3.5-6% +31.6u over 213), so this is a judgement on what the card
+     listed.
+  Replayed together on the card's team leans: -31.0u over 1,288 graded
+  (496-740) to +20.6u over 747 (312-413); the removed rows lost -51.6u over
+  541 but won +56.4u from 10-22 to 11-04. The board's one lean a game (no
+  regulation three-way): -9.2u over 247 (107-126) to +0.4u over 200 (92-98). The site's
+  Totals record (the model's side on the main line) is unchanged: replayed
+  on the ledger since 10-22 it reads +13.7u over 153, and about -32u of its
+  season figure was graded under the projection-against-the-line call
+  retired on 11-05. So `web/build_site_json.CURRENT_RULE_FROM` (totals
+  2026-11-05, leans 2026-11-26) adds `money[key].since` to the season
+  record, and the board strip prints "since Nov 5 (current rule): W-L, Xu"
+  under Totals and Leans (`smooth_pages.PL`); the season figures are not
+  restated. Prop leans (points overs -19.5u over 234, goals overs -11.0u over
+  53 since 11-05) showed no edge or price band that held across the
+  stretches, so they are unchanged, as are shots unders (+38.8u over 1,059).
+  Chosen on the weeks they are scored on, every interval spans zero: **no
+  demonstrated edge.** Leans only: the snapshot, forward ledger, population
+  B, the model, the edge bars for best bets, the stakes and the registered
+  test are unchanged. `weekly_review.card_status` names both.
+  `tests/test_home_team_totals_and_thin_total_overs_are_not_leans.py`,
+  `tests/test_records_say_how_todays_rule_has_done.py`.
+
 ## Contract strings — never change these
 
 Cooper's local scheduled tasks hard-code these. Renaming any of them silently

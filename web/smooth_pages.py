@@ -112,9 +112,16 @@ NO_TRACKER_TAB: dict[str, re.Pattern[str]] = {
 # bets/totals/leans/straight up underneath the record", ".25u per bet. to win
 # .25u for -odds"). build_site_json.season_record writes `units` beside each
 # record; a record without it keeps the old line.
-PL = ('const pl = (key, alt) => { const m = r.season && r.season.money && r.season.money[key]; '
+#: Since 2026-11-25 a record graded under more than one rule also says how
+#: it has done under today's (`money[key].since`, CURRENT_RULE_FROM).
+PL = ('const sgn = (u) => `${u > 0.004 ? "+" : u < -0.004 ? "−" : ""}${Math.abs(u).toFixed(2)}u`;\n  '
+      'const since = (s) => { if (!s || typeof s.units !== "number" || typeof s.from !== "string") return ""; '
+      'const d = new Date(`${s.from}T12:00:00Z`); '
+      'const when = d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" }); '
+      'return ` · since ${when} (current rule): ${s.w || 0}–${s.l || 0}${s.p ? `–${s.p}` : ""}, ${sgn(s.units)}`; };\n  '
+      'const pl = (key, alt) => { const m = r.season && r.season.money && r.season.money[key]; '
       'return m && typeof m.units === "number" ? '
-      '`${m.units > 0.004 ? "+" : m.units < -0.004 ? "−" : ""}${Math.abs(m.units).toFixed(2)}u at ${m.stake ?? 1}u a bet` : alt; };\n  ')
+      '`${sgn(m.units)} at ${m.stake ?? 1}u a bet${since(m.since)}` : alt; };\n  ')
 
 #: The Due List's box label span, which the Hot List row relabels.
 SPAN = ("<span style=\"font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:.08em;"

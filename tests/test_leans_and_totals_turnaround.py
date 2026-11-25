@@ -175,7 +175,8 @@ def test_one_game_total_under_per_game() -> None:
 
 
 def test_a_game_total_over_is_unchanged() -> None:
-    selections, _ = _cards([(_total_row("over", 6.0), 0.55)])
+    # Over every line, from a 6% edge (the lean floor of 2026-11-25).
+    selections, _ = _cards([(_total_row("over", 6.0), 0.57)])
     assert len(selections) == 1
 
 

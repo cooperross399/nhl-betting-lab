@@ -44,5 +44,5 @@ def test_a_regulation_three_way_lean_goes_to_the_passes() -> None:
 
 
 def test_a_total_over_still_leans() -> None:
-    selections, _ = _price(_row("total_goals", "over", 100, 6.5), 0.55)
+    selections, _ = _price(_row("total_goals", "over", 100, 6.5), 0.57)  # 7 points: clears its 6% lean floor
     assert [c.section for c in selections] == [LEANS_SECTION]

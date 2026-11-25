@@ -2775,6 +2775,17 @@ FROZEN_BOARD = re.compile(r"^(\d{4}-\d{2}-\d{2})\.json$")
 
 SEASON_KEYS = ("straightUp", "picks", "leans", "totals")
 
+#: The first night each record was called under the rule in force today
+#: (2026-11-25, Cooper: "We have to improve our totals and leans in our model
+#: and on the website"). The season record keeps every night as it was
+#: graded; this adds, beside it, the same record from that night on, so a
+#: total graded under the projection-against-the-line call retired on
+#: 2026-11-05 (about -32u of the Totals record at 1u) no longer reads as
+#: today's rule. Totals: the model's side since 2026-11-05 (the 11-11 under
+#: rule refines it). Leans: the board's lean from the card of 2026-11-26,
+#: the first without thin total overs or home team totals as leans.
+CURRENT_RULE_FROM: dict[str, str] = {"totals": "2026-11-05", "leans": "2026-11-26"}
+
 #: The stake the season's four records are tracked at (Cooper, 2026-11-03:
 #: "I want a tracked profit/loss for best bets/totals/leans/straight up
 #: underneath the record", ".25u per bet. to win .25u for -odds"). On plus
@@ -2944,6 +2955,8 @@ def season_record(today: date, history_dir: Path, latest: dict, *, processed: Pa
     props = {"w": 0, "l": 0, "p": 0, "units": 0.0, "nights": 0}
     prop_leans = {"w": 0, "l": 0, "p": 0, "nights": 0}
     money = {key: {"units": 0.0, "staked": 0.0, "unpriced": 0, "nightsWithout": 0} for key in SEASON_KEYS}
+    since = {key: {"from": start, "w": 0, "l": 0, "p": 0, "units": 0.0, "nights": 0}
+             for key, start in CURRENT_RULE_FROM.items()}
     kept = history_dir / SETTLED_DIR
     nights, missing, first, last = 0, 0, None, None
     for path in sorted(history_dir.glob("*.json")):
@@ -3036,6 +3049,13 @@ def season_record(today: date, history_dir: Path, latest: dict, *, processed: Pa
                 if k in tally[key]:
                     tally[key][k] += int(v)
             paid = (night["summary"].get("money") or {}).get(key)
+            if key in since and day.isoformat() >= since[key]["from"]:
+                current = since[key]
+                for k in ("w", "l", "p"):
+                    current[k] += int(part.get(k) or 0)
+                if isinstance(paid, dict):
+                    current["units"] += float(paid.get("units") or 0.0)
+                current["nights"] += 1
             if isinstance(paid, dict):
                 money[key]["units"] += float(paid.get("units") or 0.0)
                 money[key]["staked"] += float(paid.get("staked") or 0.0)
@@ -3055,6 +3075,9 @@ def season_record(today: date, history_dir: Path, latest: dict, *, processed: Pa
                 season["money"][key]["unpriced"] = m["unpriced"]
             if m["nightsWithout"]:
                 season["money"][key]["nightsWithoutUnits"] = m["nightsWithout"]
+            current = since.get(key)
+            if current and current["w"] + current["l"] + current["p"]:
+                season["money"][key]["since"] = {**current, "units": round(current["units"], 2)}
     if due["nights"]:
         season["dueList"] = {"w": due["w"], "l": due["l"], "p": due["p"], "nights": due["nights"], "byMarket": due["byMarket"],
                              "stake": DUE_LIST_STAKE, "stakes": prop_stake_rule(), "units": round(due["units"], 2), "staked": round(due["staked"], 2),
