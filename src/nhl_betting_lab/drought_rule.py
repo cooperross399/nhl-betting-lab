@@ -2,24 +2,26 @@
 
 The rule (Cooper, 2026-10-07 evening; it replaces the flat 5-game rule shipped
 that morning in #307; widened 2026-11-10; assists refined 2026-11-17; goals
-20-24 dropped 2026-11-19): a skater with 60+ points, 25+
-goals or 55+ assists LAST
+20-24 dropped 2026-11-19; points and assists refined 2026-11-25): a skater
+with 60+ points, 25+ goals or 60+ assists LAST
 regular season is listed in that category when his current drought (regular-
 season games he dressed for without one in that category, carried across the
 season boundary) reaches EITHER of two bars. The better the player, the
 shorter the drought:
 
 1. The TIER bar, from last season's total in the category (`TIERS`):
-   points 100+ -> 2, 85-99 -> 3, 70-84 -> 4, 60-69 -> 5; goals 40+ -> 4,
-   25-39 -> 8; assists 55+ -> 3. (Goals 2026-11-10 to 11-19 also listed
+   points 60+ -> 2 (priced +120 to +200); goals 40+ -> 4, 25-39 -> 8;
+   assists 60+ -> 1 (priced +100 or longer): `PRICE_WINDOWS`. (Until
+   2026-11-25: points 100+ -> 2, 85-99 -> 3, 70-84 -> 4, 60-69 -> 5, assists
+   55+ -> 3, both on the surprise bar too. Goals 2026-11-10 to 11-19 also listed
    20-24 -> 10, dropped after it lost in both bought seasons. Assists 2026-11-10 to 11-17:
    40+ to qualify, 60+ -> 3, 40-59 -> 4. Until 2026-11-10,
    when Cooper asked for more picks every day: points 70+ at 3/4/5, goals 40+
    -> 5 and 25-39 -> 10, assists 60+ -> 3 only. Goals until 2026-10-10: 30+ to qualify, 40+ -> 3,
    35-39 -> 4, 30-34 -> 5, plus the surprise bar. Assists until 2026-10-31:
    30+ to qualify, 60+ -> 3, 45-59 -> 4, 30-44 -> 5.)
-2. The SURPRISE bar (equal surprise, points and assists only:
-   `SURPRISE_MARKETS`), from his own prior-season hit rate
+2. The SURPRISE bar (equal surprise, for the categories in
+   `SURPRISE_MARKETS`, none since 2026-11-25), from his own prior-season hit rate
    p = (prior-season regular-season games with one or more in the category)
    / (prior-season regular-season games dressed): the smallest n >= 1 with
    (1 - p)^n <= `SURPRISE_LEVEL` (0.05). Undefined when p == 0 (he never

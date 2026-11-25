@@ -1223,12 +1223,10 @@ def build_board(day: date, lab: Path, history_dir: Path) -> dict:
 
 #: The rule in one sentence (Cooper, 2026-10-07 evening; it replaces the flat
 #: 5-game rule shipped in #307). Two bars, and a drought at EITHER lists him.
-DROUGHT_RULE_SENTENCE = ("Cooper's Due List, an unstaked list he picks from: a skater with 60+ points, 25+ goals or 55+ assists "
-                         "last regular season whose drought in that category has reached either bar, the tier bar his total sets "
-                         "(points 100+ → 2, 85-99 → 3, 70-84 → 4, 60-69 → 5; goals 40+ → 4, 25-39 → 8; "
-                         "assists 55+ → 3) or, for points "
-                         "and assists, his own equal-surprise bar, the shortest drought with no more than a 5% chance at his "
-                         "last-season hit rate; and, for the big games, a 40+ goal scorer 25 games without 2+ goals, a 40+ "
+DROUGHT_RULE_SENTENCE = ("Cooper's Due List, an unstaked list he picks from: a skater with 60+ points, 25+ goals or 60+ assists "
+                         "last regular season whose drought in that category has reached its bar (points 60+ → 2 games, "
+                         "priced +120 to +200; goals 40+ → 4, 25-39 → 8; assists 60+ → 1 game, priced +100 or longer); "
+                         "and, for the big games, a 40+ goal scorer 25 games without 2+ goals, a 40+ "
                          "goal scorer 50 without a hat trick, a 100+ point scorer 3 games without 2+ points, or a goalie "
                          "with 4+ shutouts 12 starts without one.")
 
