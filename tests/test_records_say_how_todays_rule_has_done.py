@@ -60,11 +60,13 @@ def test_the_totals_record_counts_only_nights_under_its_rule(tmp_path: Path, mon
     assert season["money"]["totals"]["since"] == {"from": "2026-11-05", "nights": 2}
 
 
-def test_the_leans_record_counts_from_the_first_card_under_todays_rule(tmp_path: Path, monkeypatch) -> None:
+def test_the_leans_record_keeps_every_night(tmp_path: Path, monkeypatch) -> None:
+    """Cooper: "can we not re-go through the leans. didnt want that to
+    start fresh"."""
     season = _season(tmp_path, monkeypatch)
-    assert season["leans"] == {"w": 0, "l": 1, "p": 0}
-    assert season["money"]["leans"]["units"] == -1.0
-    assert season["money"]["leans"]["since"] == {"from": "2026-11-25", "nights": 1}
+    assert season["leans"] == {"w": 1, "l": 1, "p": 0}
+    assert season["money"]["leans"]["units"] == 0.0
+    assert "since" not in season["money"]["leans"]
 
 
 def test_the_other_records_keep_every_night(tmp_path: Path, monkeypatch) -> None:

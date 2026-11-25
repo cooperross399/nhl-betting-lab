@@ -4418,6 +4418,9 @@ Re-derive rather than trust if the data has moved.
   strip names the day ("· since Nov 5"). Straight up and best bets keep
   every night. Earlier nights stay in the frozen boards and kept nights,
   unread by the board. Site only.
+  **Later that night, Cooper: "can we not re-go through the leans. didnt
+  want that to start fresh".** The Leans record keeps every night again;
+  only Totals counts from 2026-11-05.
 
 ## Contract strings — never change these
 

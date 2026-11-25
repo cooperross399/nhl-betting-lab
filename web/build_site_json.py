@@ -2783,9 +2783,9 @@ SEASON_KEYS = ("straightUp", "picks", "leans", "totals")
 #: kept nights, and are read by nothing on the board. Totals: the model's side
 #: since 2026-11-05 (the 11-11 under rule refines it); the -32u or so graded
 #: under the projection-against-the-line call retired that day is gone from
-#: the record. Leans: the board's lean from the card of 2026-11-25, the first
-#: without thin total overs or home team totals as leans.
-CURRENT_RULE_FROM: dict[str, str] = {"totals": "2026-11-05", "leans": "2026-11-25"}
+#: the record. Leans keep every night (Cooper, the same evening: "can we not
+#: re-go through the leans. didnt want that to start fresh").
+CURRENT_RULE_FROM: dict[str, str] = {"totals": "2026-11-05"}
 
 #: The stake the season's four records are tracked at (Cooper, 2026-11-03:
 #: "I want a tracked profit/loss for best bets/totals/leans/straight up
