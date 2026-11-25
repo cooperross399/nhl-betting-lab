@@ -256,3 +256,10 @@ def test_the_drought_step_fails_the_run_without_degrading_it() -> None:
     assert step["continue-on-error"] is True and step["env"]["PYTHONPATH"] == "src"
     assert "scripts/run_drought_rule_forward.py" in step["run"]
     assert 'steps.drought.outcome }}" = "failure"' in text
+
+
+@pytest.fixture(autouse=True)
+def _every_fixture_entry_counts(monkeypatch):
+    """These fixtures test settlement and the report, not the 2026-11-25
+    restatement to today's bars, which has its own test."""
+    monkeypatch.setattr(df, "meets_current_bars", lambda *a, **k: True)

@@ -43,7 +43,7 @@ CASES = [
     ("assists", 60, 1, 450, True),
     ("assists", 60, 4, -105, False),
     ("assists", 55, 3, 150, False),
-    ("assists", None, 3, 150, False),
+    ("assists", None, 3, 150, True),
     ("goals", 22, 10, -120, True),
     ("hat_trick", 45, 50, 1200, True),
 ]

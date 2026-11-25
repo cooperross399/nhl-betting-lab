@@ -2277,8 +2277,11 @@ def meets_due_bars(market: object, last_season: object, drought: object, price: 
     try:
         prior, streak = float(last_season), float(drought)
     except (TypeError, ValueError):
-        return False
-    if not (math.isfinite(prior) and math.isfinite(streak)) or prior < floor or streak < bar:
+        # Not recorded: nothing to judge it by, so it is never guessed away.
+        return True
+    if not (math.isfinite(prior) and math.isfinite(streak)):
+        return True
+    if prior < floor or streak < bar:
         return False
     odds = _price(price)
     return odds is None or (odds >= lo and (hi is None or odds <= hi))

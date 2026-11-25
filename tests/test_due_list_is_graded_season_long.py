@@ -93,6 +93,7 @@ def build_night(lab: Path, out: Path, monkeypatch, day: date, *, not_final: tupl
                 unreachable: tuple[date, ...] = (), module=None) -> tuple[dict, dict]:
     """main() for `day`, as Publish Site runs it: the board for `day`, the results for the night before."""
     module = module or site_module()
+    module.DUE_CURRENT_BARS = {}  # grading fixtures; the restatement has its own test
     monkeypatch.setattr(module, "schedule_for", nightly_schedule(day, not_final=not_final, unreachable=unreachable))
     monkeypatch.setattr(module, "allowlisted_markets", lambda _lab: ["moneyline"])
     assert module.main(["--lab", str(lab), "--out", str(out), "--date", day.isoformat()]) == 0
@@ -290,6 +291,8 @@ def test_old_nights_are_kept_with_their_tallies_and_read_back(tmp_path: Path, mo
     assert first["dueList"]["impliedCount"] == 2, "Alpha and Bravo were priced; Charlie was not"
 
     module = site_module()
+
+    module.DUE_CURRENT_BARS = {}  # grading fixtures; the restatement has its own test
 
     def unreachable(_day):
         raise OSError("schedule unreachable")
@@ -498,6 +501,8 @@ def test_an_entry_that_never_grades_holds_its_night_no_longer_than_the_patience_
     from nhl_betting_lab.forward_evidence import PATIENCE_DAYS
 
     module = site_module()
+
+    module.DUE_CURRENT_BARS = {}  # grading fixtures; the restatement has its own test
     lab = make_due_list_lab(tmp_path, monkeypatch)
     out = tmp_path / "out"
     write_logs(lab, TWO_PLAYER_LOGS[:1])

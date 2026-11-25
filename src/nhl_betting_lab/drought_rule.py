@@ -196,9 +196,9 @@ def meets_current_bars(market, last_season, drought, price) -> bool:
         prior = float(last_season)
         streak = float(drought)
     except (TypeError, ValueError):
-        return False
+        return True  # not recorded: never guessed away
     if prior != prior or streak != streak:
-        return False
+        return True
     bar = tier_bar(market, prior)
     if bar is None or streak < bar:
         return False
