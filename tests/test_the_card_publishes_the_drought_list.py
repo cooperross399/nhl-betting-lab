@@ -76,26 +76,26 @@ def test_a_card_with_no_prices_still_publishes_the_list_with_not_posted(tmp_path
     assert [(r["player"], r["market"], r["drought"], r["last_season"], r["team"], r["opponent"], r["american_odds"])
             for r in card["drought_rows"]] == [("Skater 1", "points", 5, 64, "TOR", "BOS", None),
                                                ("Skater 1", "assists", 5, 64, "TOR", "BOS", None)], (
-        "64 assists are 64 points: since 2026-11-10 the 60-69 points band lists him too")
+        "64 assists are 64 points: 60+ points at 2 lists him too (2026-11-25)")
     row = card["drought_rows"][1]
     assert (row["tier_bar"], row["surprise_bar"], row["hit_rate"], row["rarity"], row["rule"], row["band"]) == (
-        3, 5, 0.5, 0.0312, "both", "55+")
+        1, None, 0.5, 0.0312, "tier", "60+")
     committed = json.loads((Path(__file__).resolve().parents[1] / "data" / "outputs" / "drought_rule_backtest.json")
                            .read_text(encoding="utf-8"))
     bucket = next(b for b in committed["buckets"] if b["window"] == "card" and b["season"] == "both"
-                  and b["market"] == "assists" and b["bucket"] == "TIER 55+ @3")
+                  and b["market"] == "assists" and b["bucket"] == "TIER 60+ @1")
     assert row["cell_record"] == {k: bucket[k] for k in ("wagers", "roi", "ci_low", "ci_high")}, (
         "the band's record is read from the committed backtest through the card's own main()")
     markdown = (tmp_path / "outputs" / "gameday_card.md").read_text(encoding="utf-8")
     section = markdown[markdown.index("## Due List"):]
     assert "Skater 1" in section and "not posted" in section and "over 0.5" in section
-    assert "| 5 (both) | tier 3 / surprise 5 | 1 in 32 for him | " in section and "| band 55+ @3: " in section
+    assert "| 5 (tier) | tier 1 / surprise - | 1 in 32 for him | " in section and "| band 60+ @1: " in section
     assert "Backtest" in section.splitlines()[2], "one headline line under the heading"
     assert "Drought rule" not in markdown
     listed = json.loads((tmp_path / "outputs" / "drought_list.json").read_text(encoding="utf-8"))
     assist_row = next(r for r in listed["rows"] if r["market"] == "assists")
     assert listed["day"] == "2026-10-15" and assist_row["american_odds"] is None
-    assert assist_row["rule"] == "both" and assist_row["cell_record"]["wagers"] == bucket["wagers"]
+    assert assist_row["rule"] == "tier" and assist_row["cell_record"]["wagers"] == bucket["wagers"]
     recorded = pd.read_csv(tmp_path / "processed" / "drought_list" / "2026-10-15.csv")
     assert recorded.player.tolist() == ["Skater 1", "Skater 1"] and recorded.american_odds.isna().all()
     assert "Due List for 2026-10-15: 2 row(s), 2 with no price posted" in out

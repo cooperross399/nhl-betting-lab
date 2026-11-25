@@ -23,6 +23,24 @@ import pytest
 from nhl_betting_lab import drought_rule as dr
 from nhl_betting_lab.reports.gameday_card import GamedayCard, render_card
 
+
+#: The bars of 2026-11-17 to 11-25: tiered points, 55+ assists at 3 and the
+#: surprise bar on both. The tests of the bar MECHANICS (either bar, "both",
+#: rarity, bands) run on them; the shipped bars are pinned by
+#: test_the_tier_bar_and_its_band_at_every_boundary.
+MECHANICS_BARS = {
+    "THRESHOLDS": {"points": 60, "goals": 25, "assists": 55},
+    "TIERS": {"points": ((100, 2), (85, 3), (70, 4), (60, 5)), "goals": ((40, 4), (25, 8)), "assists": ((55, 3),)},
+    "SURPRISE_MARKETS": ("points", "assists"),
+    "PRICE_WINDOWS": {},
+}
+
+
+@pytest.fixture
+def mechanics_bars(monkeypatch):
+    for name, value in MECHANICS_BARS.items():
+        monkeypatch.setattr(dr, name, value)
+
 DAY = "2026-10-08"
 NOW = datetime(2026, 10, 8, 12, 0, tzinfo=timezone.utc)
 TEAM_NAMES = {"edmonton oilers": "EDM", "calgary flames": "CGY", "winnipeg jets": "WPG",
@@ -93,23 +111,22 @@ def build(prices=None, **overrides):
 
 def test_the_tier_bar_and_its_band_at_every_boundary():
     cases = [
-        ("points", 59, None, None), ("points", 60, 5, "60-69"), ("points", 69, 5, "60-69"),
-        ("points", 70, 4, "70-84"), ("points", 84, 4, "70-84"),
-        ("points", 85, 3, "85-99"), ("points", 99, 3, "85-99"), ("points", 100, 2, "100+"), ("points", 153, 2, "100+"),
+        ("points", 59, None, None), ("points", 60, 2, "60+"), ("points", 153, 2, "60+"),
         ("goals", 19, None, None), ("goals", 20, None, None), ("goals", 24, None, None),
         ("goals", 25, 8, "25-39"), ("goals", 34, 8, "25-39"),
         ("goals", 39, 8, "25-39"), ("goals", 40, 4, "40+"), ("goals", 64, 4, "40+"),
-        ("assists", 40, None, None), ("assists", 54, None, None), ("assists", 55, 3, "55+"),
-        ("assists", 60, 3, "55+"), ("assists", 92, 3, "55+"),
+        ("assists", 55, None, None), ("assists", 59, None, None), ("assists", 60, 1, "60+"),
+        ("assists", 92, 1, "60+"),
     ]
     for market, total, bar, band in cases:
         assert dr.tier_bar(market, total) == bar, (market, total)
         assert dr.band_label(market, total) == band, (market, total)
     assert dr.tier_bar("points", float("nan")) is None and dr.band_label("goals", None) is None
-    assert dr.TIERS == {"points": ((100, 2), (85, 3), (70, 4), (60, 5)), "goals": ((40, 4), (25, 8)),
-                        "assists": ((55, 3),)}, "assists refined 2026-11-17"
-    assert dr.THRESHOLDS == {"points": 60, "goals": 25, "assists": 55}, "goals 20 from 2026-11-10 to 11-19; assists 40 until 2026-11-17"
-    assert dr.SURPRISE_MARKETS == ("points", "assists"), "goals left the surprise bar on 2026-10-10"
+    assert dr.TIERS == {"points": ((60, 2),), "goals": ((40, 4), (25, 8)),
+                        "assists": ((60, 1),)}, "points and assists refined 2026-11-25"
+    assert dr.THRESHOLDS == {"points": 60, "goals": 25, "assists": 60}, "assists 55 from 2026-11-17 to 11-25"
+    assert dr.SURPRISE_MARKETS == (), "points and assists left the surprise bar on 2026-11-25"
+    assert dr.PRICE_WINDOWS == {"points": (120, 200), "assists": (100, None)}
 
 
 def test_the_surprise_bar_is_the_smallest_drought_at_or_under_the_level():
@@ -170,6 +187,7 @@ def _either_bar_logs() -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+@pytest.mark.usefixtures("mechanics_bars")
 def test_a_player_is_listed_when_either_bar_is_reached_and_the_rule_names_which():
     q = dr.qualifiers_entering(_either_bar_logs(), DAY)
 
@@ -218,6 +236,7 @@ def test_one_in_is_computed_from_the_unrounded_figure_not_the_four_dp_rarity():
     assert dr.one_in(0.9, 400) is None, "a float underflow is 0, not a division by zero"
 
 
+@pytest.mark.usefixtures("mechanics_bars")
 def test_the_hit_rate_and_rarity_count_the_games_he_dressed_for_not_his_teams():
     rows = _games(21, "Iron Man", 20252026, "2025-10-10", 164, goals=1)  # the team's 164 games, through a teammate
     # 22 dressed for 120 of them: 30 without an assist, then 90 with one. p = 90/120 = 0.75, not 90/164 = 0.549.
@@ -236,6 +255,7 @@ def test_the_hit_rate_and_rarity_count_the_games_he_dressed_for_not_his_teams():
 # -- the list ----------------------------------------------------------------
 
 
+@pytest.mark.usefixtures("mechanics_bars")
 def test_the_qualifiers_are_the_evidences_own_drought_and_last_seasons_totals():
     q = dr.qualifiers_entering(make_logs(), DAY).set_index(["player_id", "market"])
 
@@ -274,6 +294,7 @@ def test_the_card_and_the_backtest_share_one_function():
     assert drb.SHIPPED_BUCKET == dr.SHIPPED_BUCKET and drb.tier_bucket is dr.tier_bucket
 
 
+@pytest.mark.usefixtures("mechanics_bars")
 def test_the_list_publishes_with_not_posted_prices_when_no_book_has_posted():
     result = build()
 
@@ -347,6 +368,7 @@ def test_a_name_two_players_share_resolves_to_neither_and_is_listed_unresolved()
     assert result.unresolved and "Assist Man" in result.unresolved[0]
 
 
+@pytest.mark.usefixtures("mechanics_bars")
 def test_rows_sort_by_category_then_rarest_first_not_longest_drought():
     # 8: 60 assists in 75 games (p = 0.8), 5 dry: rarity 0.2^5 = 0.0003, the rarest streak on the list.
     # 10: 62 assists in 124 games (p = 0.5), 7 dry (the 8th game is dated DAY: tonight, not history): 0.5^7 = 0.0078.
@@ -381,6 +403,7 @@ def _bucket(market, bucket, *, window="card", season="both", wagers=184, roi=0.1
             "median_odds": 150, "units": 1.0, "mde": 0.1}
 
 
+@pytest.mark.usefixtures("mechanics_bars")
 def test_the_cell_record_is_the_bands_card_window_bucket_and_null_when_the_file_lacks_it(tmp_path):
     (tmp_path / dr.BACKTEST_JSON).write_text(json.dumps({"buckets": [
         _bucket("assists", "TIER 55+ @3"),
@@ -438,6 +461,7 @@ def test_the_row_texts_read_the_bar_the_rarity_and_the_record():
     assert dr.rarity_text({}) == "-"
 
 
+@pytest.mark.usefixtures("mechanics_bars")
 def test_the_section_is_a_list_with_no_units_no_stakes_and_one_headline_line():
     card = GamedayCard(generated_at=NOW.isoformat(), card_generated=False, blockers=["Stale prices."])
     result = build([quote("Assist Man", "assists", 170, "DraftKings")],
