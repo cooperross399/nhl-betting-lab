@@ -111,6 +111,8 @@ def test_a_side_the_card_already_keeps_off_is_named_so():
     assert wr.card_status("points", "over") == "listed, never staked, off longer than +200"
     assert wr.card_status("goalie_saves", "over") == "on, off longer than +110"
     assert wr.card_status("blocked_shots", "under") == "on"
+    assert wr.card_status("team_total", "home_over") == "on, never a lean"
+    assert wr.card_status("total_goals", "over") == "on, leans from 6%"
     days = ["2026-11-01", "2026-11-02", "2026-11-03", "2026-11-04"]
     frame = _population(days, -1.0, -1.0).assign(market="points")
     trends, split = wr.side_trends(frame)

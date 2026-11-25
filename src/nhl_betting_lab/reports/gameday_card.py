@@ -223,6 +223,63 @@ LEAN_ONLY_EXCLUDED_MARKETS: dict[str, str] = {
 }
 
 
+#: Sides never listed as a lean, though a best bet on them is still staked
+#: (2026-11-25, Cooper: "We have to improve our totals and leans in our
+#: model and on the website. Find a way"). Read off card-feed's first card
+#: of each day and the forward ledger, 2026-09-29 to 11-23, the card's price,
+#: the 1u ladder: home team-total leans went -41.6u over 216 (overs -27.0u
+#: over 167, unders -14.1u over 49), losing in each of three periods
+#: (to 10-21, 10-22 to 11-04, from 11-05) both ways, while away team-total
+#: leans made +38.5u over 174. The ledger says why: on every settled
+#: team-total opinion from 10-22 the model held the home over at 46.2%
+#: where 44.7% landed and the away over at 44.7% where 47.0% landed (about
+#: 2,400 opinions each over 231 games), and home teams have won 49.4% of
+#: those games against the model's 53.7%. No demonstrated edge either way.
+LEAN_ONLY_EXCLUDED_SIDES: dict[tuple[str, str], str] = {
+    ("team_total", "home_over"): (
+        "home team totals are not listed as leans: as leans this season "
+        "they went -41.6u over 216 at 1u, losing in every stretch both ways"
+    ),
+    ("team_total", "home_under"): (
+        "home team totals are not listed as leans: as leans this season "
+        "they went -41.6u over 216 at 1u, losing in every stretch both ways"
+    ),
+}
+
+
+#: The edge a side needs to be listed as a lean, above the market's own bar
+#: (2026-11-25, the same request). A game-total over joins the under at
+#: `TOTAL_UNDER_MIN_EDGE`: the card's total-over leans with an edge of 6% or
+#: more made +39.9u over 146 at 1u (+14.1u, +9.7u, +16.1u in the three
+#: stretches above), those between 3.5% and 6% -10.2u over 328 (losing in two
+#: of the three, -18.6u and -17.4u over 116 since 11-05). Listed one rung after
+#: another on a game, the thin ones were six long overs on one outcome. The
+#: ledger's one-wager-per-side view does not show the split (3.5-6% +31.6u
+#: over 213), so this is a judgement on what the card listed, not a
+#: demonstrated edge.
+LEAN_MIN_EDGE: dict[tuple[str, str], float] = {("total_goals", "over"): 0.06}
+
+
+def lean_only_reason(market_key: str, selection: str, edge: Any = None) -> str | None:
+    """Why a lean (never a best bet) in this market and side is not listed."""
+    side = (market_key, str(selection).strip().lower())
+    reason = LEAN_ONLY_EXCLUDED_MARKETS.get(market_key) or LEAN_ONLY_EXCLUDED_SIDES.get(side)
+    if reason:
+        return reason
+    floor = LEAN_MIN_EDGE.get(side)
+    try:
+        short = floor is not None and edge is not None and float(edge) < floor
+    except (TypeError, ValueError):
+        short = False
+    if short:
+        return (
+            f"{side[0]} {side[1]}s need a {floor:.0%} edge to be listed as leans: "
+            "this season the thinner ones lost (-10.2u over 328 at 1u) while "
+            "those from 6% made +39.9u over 146"
+        )
+    return None
+
+
 #: The longest price at which a market and side is listed, by Cooper's
 #: decision of 2026-11-09 ("Yes do all 4"). Points overs listed from the 3%
 #: lean bar (`LEAN_BAR_OVERRIDES`) and priced longer than +200 lost in both
@@ -372,8 +429,10 @@ def lean_excluded_reason(
 def lean_bar(market_key: str, selection: str, default: float) -> float:
     """The edge a selection needs to be listed: `default`, or the lower bar
     `LEAN_BAR_OVERRIDES` gives that market and side."""
-    override = LEAN_BAR_OVERRIDES.get((market_key, str(selection).strip().lower()))
-    return min(default, override) if override is not None else default
+    side = (market_key, str(selection).strip().lower())
+    override = LEAN_BAR_OVERRIDES.get(side)
+    bar = min(default, override) if override is not None else default
+    return max(bar, LEAN_MIN_EDGE.get(side, bar))
 
 #: Flat stakes by tier, in units. Small on purpose: these are positions whose
 #: expected value is genuinely uncertain, and the sizing should say so.
@@ -940,7 +999,7 @@ def build_candidates(
             ),
         )
         if not excluded and candidate.section == LEANS_SECTION:
-            excluded = LEAN_ONLY_EXCLUDED_MARKETS.get(market_key)
+            excluded = lean_only_reason(market_key, selection, edge)
         if candidate.section in (LEANS_SECTION, BEST_BETS_SECTION) and excluded:
             candidate.section = PASSES_SECTION
             candidate.suggested_units = 0.0
@@ -973,9 +1032,9 @@ def build_candidates(
         if candidate.section == BEST_BETS_SECTION:
             bar = BEST_BET_PROP_EDGE if is_prop else BEST_BET_EDGE
         else:
-            bar = (
-                lean_bar(candidate.market, candidate.selection, min_prop_edge)
-                if is_prop else min_edge
+            bar = lean_bar(
+                candidate.market, candidate.selection,
+                min_prop_edge if is_prop else min_edge,
             )
         candidate.bet_down_to = bet_down_to(
             candidate.model_probability, bar, juice_limit=juice_limit
