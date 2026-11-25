@@ -491,6 +491,11 @@ PYTHONPATH=src .venv/bin/python scripts/run_due_list_big_games.py
 # ledger (Due List Tuning workflow runs it in CI).
 PYTHONPATH=src .venv/bin/python scripts/run_due_hot_research.py --ledger-dir <card-feed forward_evidence folder>
 
+# Refine the Due List's 1+ assist and 1+ point bars: every floor, drought bar and
+# price window on both bought seasons and this season's forward ledger, ranked
+# by the worst of the three (Due List Tuning workflow runs it in CI).
+PYTHONPATH=src .venv/bin/python scripts/run_due_list_refine.py --ledger-dir <card-feed forward_evidence folder>
+
 # How good are the DFS projections? Walk-forward MAE, rank and ceiling coverage
 # of the lab's DraftKings projection against DK averages and the app's old
 # formula (DFS Projection Test workflow runs it in CI on the bought prices).
