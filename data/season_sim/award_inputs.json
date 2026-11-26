@@ -32,8 +32,8 @@
       },
       {
         "book": "Sports Interaction",
-        "date": "2026-11-24",
-        "source": "canadasportsbetting.ca, Hart Trophy odds (page updated November 24, 2026; table note 'last updated on Nov 24, 2026'; odds courtesy of Sports Interaction; the analysis text still gives McDavid -325, Kaprizov +900, Kucherov +1500 and Celebrini +2200, table used; Nathan MacKinnon is not in the table)",
+        "date": "2026-11-26",
+        "source": "canadasportsbetting.ca, Hart Trophy odds (page updated November 26, 2026; table note 'last updated on Nov 26, 2026'; odds courtesy of Sports Interaction; table used; every price unchanged from the November 24 table; Nathan MacKinnon is not in the table)",
         "url": "https://www.canadasportsbetting.ca/betting-odds/nhl/awards/mvp/",
         "lines": [
           {"name": "Connor McDavid", "team": "EDM", "american": -425},
@@ -235,8 +235,8 @@
       },
       {
         "book": "Sports Interaction",
-        "date": "2026-11-21",
-        "source": "canadasportsbetting.ca, Norris Trophy odds (page updated November 21, 2026; table note 'last updated on Nov 21, 2026'; odds courtesy of Sports Interaction; the intro text gives Bouchard -120, table used)",
+        "date": "2026-11-25",
+        "source": "canadasportsbetting.ca, Norris Trophy odds (page updated November 25, 2026; table note 'last updated on Nov 26, 2026', page date used; odds courtesy of Sports Interaction; table used; every price unchanged from the November 21 table)",
         "url": "https://www.canadasportsbetting.ca/betting-odds/nhl/awards/best-defenseman/",
         "lines": [
           {"name": "Evan Bouchard", "team": "EDM", "american": -130},
