@@ -45,6 +45,7 @@ than papered over in a docstring.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -118,6 +119,36 @@ EXEMPT_SCOPE = ("data/raw/", "data/outputs/")
 #: This replaces the by-name skip of "checksum" and "receipt" files, which
 #: exempted every 32-hex run in such a file, a real key included.
 RECORDED_DIGESTS: frozenset[str] = frozenset()
+
+#: The Cloudflare Web Analytics site token, which the published pages carry
+#: in `data-cf-beacon` (design drop site-improvements-4, 2026-11-26, pinned
+#: from betting-lab-shared v23). It is public by design: Cloudflare serves it
+#: to every visitor of the site, and it grants nothing. It is the same shape
+#: as a provider key, so it is exempted by recorded value, held here only as
+#: its SHA-256 so this file does not carry a 32-hex run of its own, and only
+#: where all three hold: a page under `web/`, inside the beacon attribute
+#: exactly, and a value whose digest is listed. The same value anywhere else,
+#: or any other value in that attribute, is still a finding.
+PUBLIC_BEACON_TOKEN_SHA256: frozenset[str] = frozenset(
+    {"470aa5f7fdf48c265327ec0eedef19299df3f6deea1506c4b4d638447a7c504a"}
+)
+BEACON_SCOPE = "web/"
+BEACON_ATTRIBUTE = re.compile(r"""data-cf-beacon='\{"token": "([0-9a-f]{32})"\}'""")
+
+
+def _without_public_beacon(relative: str, text: str) -> str:
+    """`text` with each recorded beacon attribute removed, in a page under
+    `BEACON_SCOPE` only. Removed, not skipped by value, so the same value
+    outside the attribute in the same file is still read."""
+    if not relative.startswith(BEACON_SCOPE):
+        return text
+
+    def drop(match: re.Match[str]) -> str:
+        digest = hashlib.sha256(match.group(1).encode("ascii")).hexdigest()
+        return "" if digest in PUBLIC_BEACON_TOKEN_SHA256 else match.group(0)
+
+    return BEACON_ATTRIBUTE.sub(drop, text)
+
 
 #: The GitHub secret holding this lab's provider credential. The NAME belongs
 #: in the repository; the VALUE never does.
@@ -418,7 +449,8 @@ def _hex_key_offenders(
             found += [match.group(0) for match in HEX_KEY.finditer(relative)]
             found += [match.group(0) for match in HEX_KEY.finditer(_link_target(path))]
         if bodies:
-            found += [match.group(0) for match in HEX_KEY.finditer(_scan_text(path))]
+            body = _without_public_beacon(relative, _scan_text(path))
+            found += [match.group(0) for match in HEX_KEY.finditer(body)]
         for value in found:
             if value in permitted:
                 continue
@@ -1190,4 +1222,37 @@ def test_the_gaps_this_guard_still_has_are_the_ones_written_down(tmp_path: Path)
 
     assert _assignment_offenders([tmp_path / filename for filename in sorted(caught)], tmp_path) == [
         f"{filename}: {name}" for filename in sorted(caught)
+    ]
+
+
+def test_the_public_beacon_token_is_exempt_only_in_its_attribute_in_a_page(tmp_path: Path) -> None:
+    """The recorded beacon value passes inside the attribute in a page under
+    `web/`; the same value bare in that page, the attribute outside `web/`,
+    and an unrecorded value inside the attribute are all still findings."""
+    value = "0123456789abcdef0123456789abcdef"
+    recorded = frozenset({hashlib.sha256(value.encode("ascii")).hexdigest()})
+    attribute = f"""<script data-cf-beacon='{{"token": "{value}"}}'></script>"""
+    other = "fedcba9876543210fedcba9876543210"
+    (tmp_path / "web").mkdir()
+    files = {
+        "web/ok.html": attribute,
+        "web/bare.html": attribute + f"\nKEY = {value}\n",
+        "scripts/page.html": attribute,
+        "web/unrecorded.html": attribute.replace(value, other),
+    }
+    for name, body in files.items():
+        (tmp_path / name).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / name).write_text(body, encoding="utf-8")
+    original = PUBLIC_BEACON_TOKEN_SHA256
+    globals()["PUBLIC_BEACON_TOKEN_SHA256"] = recorded
+    try:
+        offenders = _hex_key_offenders(
+            [tmp_path / name for name in files], set(), tmp_path, names=False
+        )
+    finally:
+        globals()["PUBLIC_BEACON_TOKEN_SHA256"] = original
+    assert sorted(offenders) == [
+        "scripts/page.html: 012345...",
+        "web/bare.html: 012345...",
+        "web/unrecorded.html: fedcba...",
     ]
