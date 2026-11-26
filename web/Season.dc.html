@@ -4,6 +4,46 @@
 <meta charset="utf-8">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- mh-head -->
+<meta name="theme-color" content="#0e1013">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Maverick Hightower">
+<link rel="preconnect" href="https://unpkg.com" crossorigin>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<title>Season Sim — Maverick Hightower</title>
+<meta name="description" content="The rest of the NHL season simulated: projected points, playoff chances and the award races for all 32 teams.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Maverick Hightower">
+<meta property="og:title" content="Season Sim — Maverick Hightower">
+<meta property="og:description" content="The rest of the NHL season simulated: projected points, playoff chances and the award races for all 32 teams.">
+<meta property="og:image" content="https://maverickhightower.com/share.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:site" content="@mavhightower">
+<style id="mh-head">
+/* mh-head (2026-11-26): loading screen, phone layout fixes. */
+body:not(:has(#dc-root)) { background:#0e1013; margin:0; }
+body:not(:has(#dc-root))::before { content:"Maverick Hightower \00B7  Loading"; display:block; padding:32px 16px; font:600 12px/1.4 system-ui,-apple-system,sans-serif; letter-spacing:.16em; text-transform:uppercase; color:#8d93a0; }
+html body nav[aria-label="Board sections"][style] { overflow-x:auto; scrollbar-width:none; }
+html body nav[aria-label="Board sections"][style]::-webkit-scrollbar { display:none; }
+@media (max-width:560px) {
+  html body nav[aria-label="Board sections"][style] { gap:2px !important; }
+  html body nav[aria-label="Board sections"][style] a[href] { padding:0 11px !important; font-size:13.5px !important; min-height:36px !important; }
+  html body nav[aria-label="Board sections"][style] a[href] span[style*="IBM Plex Mono"] { font-size:10px !important; padding:0 4px !important; }
+  html body article[id] > button[aria-controls]:is([style*="grid-template-columns:64px"],[style*="grid-template-columns: 64px"]) { grid-template-columns:58px minmax(0,1fr) 14px !important; row-gap:6px !important; }
+  html body article[id] > button[aria-controls]:is([style*="grid-template-columns:64px"],[style*="grid-template-columns: 64px"]) > span:nth-of-type(2) { overflow:hidden; }
+  html body article[id] > button[aria-controls]:is([style*="grid-template-columns:64px"],[style*="grid-template-columns: 64px"]) > span:nth-of-type(3) { grid-column:2 / 3; grid-row:2; flex-direction:row !important; flex-wrap:wrap; align-items:baseline !important; justify-content:flex-start; gap:4px 10px !important; }
+  html body article[id] > button[aria-controls]:is([style*="grid-template-columns:64px"],[style*="grid-template-columns: 64px"]) > span:nth-of-type(4) { grid-column:3; grid-row:1; }
+  html body article[id] > button[aria-controls]:is([style*="grid-template-columns:64px"],[style*="grid-template-columns: 64px"]) > span:nth-of-type(3) > span:first-child { white-space:normal !important; }
+}
+@media (max-width:370px) {
+  html body nav[aria-label="Board sections"][style] a[href] { padding:0 8px !important; font-size:12.5px !important; }
+}
+</style>
+<script>(function(){var done=false;function go(){var a=document.querySelector('nav[aria-label="Board sections"] a[aria-current="page"]');if(a&&!done){done=true;try{var n=a.parentElement;n.scrollLeft=Math.max(0,a.offsetLeft-(n.clientWidth-a.offsetWidth)/2);}catch(e){}}}var mo=new MutationObserver(function(){go();if(done)mo.disconnect();});document.addEventListener("DOMContentLoaded",function(){mo.observe(document.body,{childList:true,subtree:true});go();});})();</script>
+<!-- /mh-head -->
 <script src="./support.js"></script>
 </head>
 <body>
@@ -385,6 +425,7 @@
           </div>
         </sc-for>
       </div>
+        <sc-if value="{{ teamCardsMore.show }}" hint-placeholder-val="{{ false }}"><button type="button" onClick="{{ teamCardsMore.onClick }}" style="margin-top:12px;min-height:40px;padding:0 18px;border:1px solid var(--rule);border-radius:999px;background:transparent;color:var(--ink);font:600 13px Inter,system-ui,sans-serif;cursor:pointer;">{{ teamCardsMore.label }}</button></sc-if>
     </section>
 
     <!-- Goalie wins -->
@@ -394,6 +435,7 @@
       </div>
       <div class="tblwrap"><div style="min-width:760px;">
         <div class="grow shead"><span>#</span><span>Goalie</span><span class="r">Starts</span><span class="r">Wins</span><span>10th–90th</span><span class="r">30+</span><span class="r">GSAx/60</span><span class="r">Last season</span></div>
+        <sc-if value="{{ goaliesMore.show }}" hint-placeholder-val="{{ false }}"><button type="button" onClick="{{ goaliesMore.onClick }}" style="margin-top:12px;min-height:40px;padding:0 18px;border:1px solid var(--rule);border-radius:999px;background:transparent;color:var(--ink);font:600 13px Inter,system-ui,sans-serif;cursor:pointer;">{{ goaliesMore.label }}</button></sc-if>
         <sc-for list="{{ goalies }}" as="g" hint-placeholder-count="20">
           <div class="grow" style="border-bottom:1px solid var(--rule-2);">
             <span class="mono" style="color:var(--mute);">{{ g.rank }}</span>
@@ -426,6 +468,7 @@
             <span class="mono" style="font-size:12px;white-space:nowrap;">{{ i.back }}</span>
           </div>
         </sc-for>
+        <sc-if value="{{ injuriesMore.show }}" hint-placeholder-val="{{ false }}"><button type="button" onClick="{{ injuriesMore.onClick }}" style="margin-top:12px;min-height:40px;padding:0 18px;border:1px solid var(--rule);border-radius:999px;background:transparent;color:var(--ink);font:600 13px Inter,system-ui,sans-serif;cursor:pointer;">{{ injuriesMore.label }}</button></sc-if>
       </div>
     </section>
 
@@ -661,6 +704,34 @@ class Component extends DCLogic {
   componentDidMount() { this.load(); }
   componentDidUpdate() { this.load(); }
   renderVals() {
+    // mh-guard (2026-11-26): one bad field in a feed must not blank the page. Keep the last good view;
+    // on a first-load failure, fall back to the page's own "couldn't load" view.
+    try { const v = this.__rv(); this.__good = v; return v; }
+    catch (e) {
+      if (!this.__logged) { this.__logged = true; try { console.error("[mh] page render failed; showing a safe view", e); } catch (_) {} }
+      if (this.__good) return this.__good;
+      const st = this.state;
+      try { this.state = { ...st, data: null, vm: null, board: null, game: null, season: null, err: (st && st.err) || "render" }; return this.__rv(); }
+      catch (_) { throw e; }
+      finally { this.state = st; }
+    }
+  }
+  __rv() { return this.__post(this.__rv0()); }
+  __post(v) {
+    // POST
+    // mh-more season
+    if (v) { for (const [k, n, noun] of [["teamCards", 8, "teams"], ["goalies", 10, "goalies"], ["injuries", 12, ""]]) { if (Array.isArray(v[k])) { const c = this.__cap(v[k], k, n, noun); v[k] = c.list; v[k + "More"] = c.more; } } }
+    return v;
+  }
+  // mh-more (2026-11-26): long lists show their first rows with a "Show all" button.
+  __cap(list, key, keep, noun) {
+    const all = Array.isArray(list) ? list : [], open = !!(this.state.__open || {})[key];
+    const flip = (v) => () => this.setState((s) => ({ __open: { ...(s.__open || {}), [key]: v } }));
+    if (all.length <= keep + 2) return { list: all, more: { show: false } };
+    if (open) return { list: all, more: { show: true, label: "Show fewer", onClick: flip(false) } };
+    return { list: all.slice(0, keep), more: { show: true, label: `Show all ${all.length}${noun ? " " + noun : ""}`, onClick: flip(true) } };
+  }
+  __rv0() {
     const vm = this.state.vm;
     const themeAttr = { Light: "light", Dark: "dark" }[this.props.theme] || "auto";
     const tabsList = [["Tonight", "Board.dc.html"], ["Props", "Board.dc.html#props"], ["Results", "Results.dc.html"], ["Season", "Season.dc.html"], ["Record", "Record.dc.html"]];
