@@ -81,6 +81,7 @@ from nhl_betting_lab.reports.gameday_card import (
 from nhl_betting_lab.dfs_hits_lines import build_hits_lines, load_lines as load_hits_lines
 from nhl_betting_lab.dfs_hits_lines import pricing_frame as hits_pricing_frame
 from nhl_betting_lab.stat_sides import build_stat_sides
+from nhl_betting_lab.points_parlay import build_points_parlay
 from nhl_betting_lab.forward_evidence import LEDGER_FILENAME, write_snapshot
 from nhl_betting_lab.price_movement import apply_movement, movement, opening_snapshot
 from nhl_betting_lab.self_learning import (
@@ -1174,6 +1175,16 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Hot List for {snapshot_day}: {len(hot.rows)} row(s), "
           f"{sum(1 for r in hot.rows if r['american_odds'] is None)} with no price posted.")
     save_hot_list(outputs / HOT_SITE_LIST_FILENAME, hot_site_payload(hot, card.generated_at))
+    # Cooper's daily points parlay (2026-11-27): one player per game, the
+    # best model chance of a point. A list; it changes nothing above.
+    parlay = build_points_parlay(
+        priceable, probabilities, now=moment, day=snapshot_day, stat_sides=sides.rows,
+    )
+    card.points_parlay_legs = parlay.legs
+    card.points_parlay_missing = parlay.missing_games
+    card.points_parlay_removed_by_guard = parlay.removed_by_guard
+    print(f"Points parlay for {snapshot_day}: {len(parlay.legs)} leg(s), "
+          f"{len(parlay.missing_games)} game(s) without one.")
     if args.now and processed.resolve() == PROCESSED_DIR.resolve():
         # The real ledger's own rule (see the archive above): a reproduction
         # of a past night must not write a dated list into the real record.
