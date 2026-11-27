@@ -1,9 +1,9 @@
 {
-  "date": "2026-11-26",
-  "card_day": "2026-11-26",
-  "decision": "none",
+  "date": "2026-11-27",
+  "card_day": "2026-11-27",
+  "decision": "post",
   "degraded": "false",
-  "empty_slate": "true",
-  "run_url": "https://github.com/cooperross399/nhl-betting-lab/actions/runs/45890247514",
+  "empty_slate": "false",
+  "run_url": "https://github.com/cooperross399/nhl-betting-lab/actions/runs/45988669585",
   "ref": "refs/heads/main"
 }
