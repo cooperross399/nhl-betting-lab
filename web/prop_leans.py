@@ -185,6 +185,26 @@ def ledger_outcomes(text: str) -> dict[tuple, set[str]]:
     return out
 
 
+#: Today's rules for listing a prop lean, the lab's `reports.gameday_card`
+#: LEAN_EXCLUDED_SIDES, LEAN_MAX_PRICE and LEAN_ONLY_MAX_PRICE spelled here
+#: (pinned equal by tests/test_past_leans_meet_todays_lean_rules.py). A lean
+#: an earlier card listed that today's card would not is left out of the
+#: record (2026-11-27, Cooper: "we need the regraded due list/leans/totals/
+#: etc all updated on the website with correct profits").
+EXCLUDED_SIDES = (("points", "under"), ("assists", "under"))
+MAX_PRICE: dict[tuple[str, str], float] = {
+    ("points", "over"): 200.0, ("goalie_saves", "over"): 110.0, ("goals", "over"): 150.0}
+
+
+def meets_lean_rules(row: dict) -> bool:
+    """Whether today's card would list this prop lean."""
+    side = (row.get("market"), row.get("side"))
+    if side in EXCLUDED_SIDES:
+        return False
+    cap = MAX_PRICE.get(side)
+    return cap is None or row.get("price") is None or float(row["price"]) <= cap
+
+
 def _lean_key(row: dict) -> tuple:
     return (_team_key(row["home"]), _team_key(row["away"]), row["market"], _fold(row["player"]), row["side"], row["line"])
 
@@ -265,6 +285,7 @@ def build(repo: Path, ref: str, *, today: date, directory=None, abbr=None,
     by_side: dict[str, dict] = {}
     nights: list[dict] = []
     rows: list[dict] = []
+    off_rules = 0
     for day in sorted(days):
         if day >= today.isoformat():
             continue
@@ -272,6 +293,9 @@ def build(repo: Path, ref: str, *, today: date, directory=None, abbr=None,
         outcomes = ledger_outcomes(_git(repo, "show", f"{ref}:{path}")) if path in ledger_files else None
         night = _empty()
         for lean in days[day]["rows"]:
+            if not meets_lean_rules(lean):
+                off_rules += 1
+                continue
             if outcomes is None:
                 result = "pending"
             else:
@@ -304,7 +328,10 @@ def build(repo: Path, ref: str, *, today: date, directory=None, abbr=None,
         "source": "card-feed: each league day's first card that lists a prop lean, settled by the forward ledger",
         "note": ("Leans are props the card lists but does not bet. This is what 1u on every one would have done "
                  "(on a minus price, enough to win 1u; +200 to +500 at 0.6u, +501 to +1500 at 0.4u, longer at "
-                 "0.2u), at the price the card listed. Nothing here was bet."),
+                 "0.2u), at the price the card listed. Only leans today's card would list are counted: "
+                 "points and assists unders, points overs longer than +200, goals overs longer than +150 "
+                 "and saves overs longer than +110 are left out. Nothing here was bet."),
+        "leftOutByTodaysRules": off_rules,
         "firstDate": graded_nights[0]["date"] if graded_nights else None,
         "lastDate": graded_nights[-1]["date"] if graded_nights else None,
         "nights": len(graded_nights),

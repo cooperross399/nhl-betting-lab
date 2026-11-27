@@ -1983,6 +1983,47 @@ def graded_total_side(total: dict) -> str | None:
     return None
 
 
+#: Today's rules for listing a team lean, the lab's
+#: `reports.gameday_card` constants spelled here because the site imports
+#: nothing from the card (pinned equal by
+#: tests/test_past_leans_meet_todays_lean_rules.py). Keyed by the board's
+#: market label and the pick's side. Regulation three-way is never a lean
+#: (LEAN_ONLY_EXCLUDED_MARKETS); a moneyline lean and a total-over lean need
+#: a 6% edge (LEAN_MIN_EDGE); a total-under lean is listed only at 5.5 or
+#: 6.5 with a 6% edge (TOTAL_UNDER_LINES, TOTAL_UNDER_MIN_EDGE).
+LEAN_EXCLUDED_MARKETS = ("Regulation",)
+LEAN_MIN_EDGE_PCT: dict[tuple[str, str], float] = {
+    ("Moneyline", "home"): 6.0, ("Moneyline", "away"): 6.0, ("Total", "over"): 6.0}
+TOTAL_UNDER_LINES = (5.5, 6.5)
+TOTAL_UNDER_MIN_EDGE_PCT = 6.0
+
+#: How a kept night's leans were graded. 1: only leans that today's lean
+#: rules would list count (2026-11-27, Cooper: "we need the regraded due
+#: list/leans/totals/etc all updated on the website with correct profits").
+#: A night kept under another rule is settled again once.
+LEANS_GRADING = 1
+
+
+def meets_lean_rules(pick: dict) -> bool:
+    """Whether a frozen board's lean would be listed under today's lean rules.
+
+    A best bet always counts. A lean whose edge or line the board did not
+    record is kept rather than guessed away."""
+    if not isinstance(pick, dict) or pick.get("kind", "bet") == "bet":
+        return True
+    market, side = str(pick.get("market") or ""), str(pick.get("side") or "")
+    if market in LEAN_EXCLUDED_MARKETS:
+        return False
+    edge = _real(pick.get("edgePct"))
+    if market == "Total" and side == "under":
+        line = _real(pick.get("line"))
+        if line is not None and not any(abs(line - x) < 1e-9 for x in TOTAL_UNDER_LINES):
+            return False
+        return edge is None or edge >= TOTAL_UNDER_MIN_EDGE_PCT - 1e-9
+    floor = LEAN_MIN_EDGE_PCT.get((market, side))
+    return floor is None or edge is None or edge >= floor - 1e-9
+
+
 def settle(day: date, history_dir: Path, *, processed: Path | None = None) -> dict:
     """Yesterday's frozen board, graded: results.json.
 
@@ -2072,10 +2113,14 @@ def settle(day: date, history_dir: Path, *, processed: Path | None = None) -> di
             # the page read it.
             # Leans keep their own tally, so the season can show how the
             # recorded-not-staked calls did without mixing them into it.
-            tally = s["picks"] if pick.get("kind", "bet") == "bet" else s["leans"]
-            tally["w" if outcome == "win" else "l" if outcome == "loss" else "p"] += 1
-            _add_units(s["money"]["picks" if tally is s["picks"] else "leans"], pick.get("price"), outcome)
-            row["pick"] = {**pick, "result": outcome}
+            # A lean today's lean rules would not list is shown with its
+            # result and left out of the record (meets_lean_rules).
+            counted = meets_lean_rules(pick)
+            if counted:
+                tally = s["picks"] if pick.get("kind", "bet") == "bet" else s["leans"]
+                tally["w" if outcome == "win" else "l" if outcome == "loss" else "p"] += 1
+                _add_units(s["money"]["picks" if tally is s["picks"] else "leans"], pick.get("price"), outcome)
+            row["pick"] = {**pick, "result": outcome, **({} if counted else {"onRecord": False})}
         else:
             # A game with no pick settles with no pick. This used to write
             # {"market": "—", "label": "No play", "price": 0, "result":
@@ -2285,6 +2330,51 @@ def meets_due_bars(market: object, last_season: object, drought: object, price: 
         return False
     odds = _price(price)
     return odds is None or (odds >= lo and (hi is None or odds <= hi))
+
+
+def due_ledger_tracker_rows(rows: list[dict]) -> list[dict]:
+    """The tracker's Due List rows from the lab's ledger: every graded,
+    priced entry meeting today's bars, one per (night, player, category),
+    at its own price. The season's Due List line already reads the ledger
+    (due_ledger_season); the tracker read the frozen boards, which carry a
+    price only where the board published one, so the two disagreed (on
+    2026-11-27, +7.33u against -1.26u). Both now read the ledger."""
+    try:
+        from nhl_betting_lab.drought_rule import TIERS, band_label
+    except ImportError:  # pragma: no cover - Publish Site always has the package
+        TIERS, band_label = {}, None
+    to_result = {"won": "win", "lost": "loss", "push": "push"}
+    out: list[dict] = []
+    seen: set[tuple] = set()
+    for r in rows:
+        result = to_result.get(str(r.get("outcome") or ""))
+        price = _price(r.get("american_odds"))
+        market = str(r.get("market") or "")
+        if result is None or price is None:
+            continue
+        if not meets_due_bars(market, r.get("last_season"), r.get("drought"), r.get("american_odds")):
+            continue
+        day = str(r.get("date") or "")[:10]
+        pid = str(r.get("player_id") or "").split(".")[0] or None
+        key = (day, pid or str(r.get("player") or ""), market)
+        if key in seen:
+            continue
+        seen.add(key)
+        band = None
+        if band_label is not None and market in TIERS:
+            try:
+                band = band_label(market, float(r.get("last_season")))
+            except (TypeError, ValueError):
+                band = None
+        line = _real(r.get("line"))
+        team, opp = (r.get("team") or None), (r.get("opponent") or None)
+        out.append(restake({"date": day, "group": "due", "market": market,
+                            "propType": PROP_LABEL.get(market, market), "side": "over",
+                            "line": line if line is not None else DUE_LIST_LINE, "player": r.get("player"),
+                            "playerId": int(pid) if pid and pid.isdigit() else pid, "team": team, "opp": opp,
+                            "teams": [t for t in (team, opp) if t], "price": price, "result": result,
+                            **({"band": band} if band else {}), "staked": 0.0, "units": 0.0}))
+    return out
 
 
 def due_ledger_prices(rows: list[dict], day: date) -> dict[tuple[str, str], float]:
@@ -2809,7 +2899,7 @@ def night_record(results: dict) -> dict:
     "ok", as the page reads a block without one)."""
     games = results.get("games") or []
     night = {"games": len(games), "summary": results.get("summary") or {}, "bets": tracker_rows(results),
-             "totalsGrading": TOTALS_GRADING, "dueGrading": DUE_GRADING}
+             "totalsGrading": TOTALS_GRADING, "dueGrading": DUE_GRADING, "leansGrading": LEANS_GRADING}
     due = results.get("dueList")
     if isinstance(due, dict):
         night["dueList"] = due_list_tallies(due.get("rows") or [])
@@ -3035,7 +3125,8 @@ def season_record(today: date, history_dir: Path, latest: dict, *, processed: Pa
                 stale = kept_night
             kept_night = None
         if kept_night is not None and (kept_night.get("totalsGrading") != TOTALS_GRADING
-                                       or kept_night.get("dueGrading") != DUE_GRADING):
+                                       or kept_night.get("dueGrading") != DUE_GRADING
+                                       or kept_night.get("leansGrading") != LEANS_GRADING):
             stale = stale or kept_night
             kept_night = None
         if kept_night is not None and _kept_without_record_units(kept_night):
@@ -3234,6 +3325,11 @@ def main(argv: list[str] | None = None) -> int:
     (out / "board.json").write_text(json.dumps(board, indent=1, ensure_ascii=False), encoding="utf-8")
     (out / "results.json").write_text(json.dumps(results, indent=1, ensure_ascii=False), encoding="utf-8")
     (out / "ratings.json").write_text(json.dumps(ratings_page(Path(args.lab)), indent=1, ensure_ascii=False), encoding="utf-8")
+    # The Due List's tracked rows from the lab's ledger, the same source as
+    # its season line, when the ledger holds any (due_ledger_tracker_rows).
+    ledger_due = due_ledger_tracker_rows(read_due_ledger(processed)[0])
+    if ledger_due:
+        tracked[:] = [r for r in tracked if r.get("group") != "due"] + ledger_due
     tracked_page = tracker(tracked, nights=season["nights"])
     (out / "tracker.json").write_text(json.dumps(tracked_page, indent=1, ensure_ascii=False), encoding="utf-8")
     # Every season record's units and what it risked, at the stake in force,
@@ -3254,7 +3350,8 @@ def main(argv: list[str] | None = None) -> int:
     elif leans.get("season"):
         s = leans["season"]
         print(f"prop leans: {s['w']}-{s['l']}-{s['p']} ({s['void']} void, {s['pending']} pending, "
-              f"{s['unmatched']} unmatched) over {leans['nights']} nights, {s['units']:+.2f}u at 1u (to win 1u on minus prices; +200 and longer smaller).")
+              f"{s['unmatched']} unmatched) over {leans['nights']} nights, {s['units']:+.2f}u at 1u (to win 1u on minus prices; +200 and longer smaller); "
+              f"{leans.get('leftOutByTodaysRules', 0)} lean(s) today's card would not list left out.")
     else:
         print(f"::warning::prop leans not built: {leans.get('note')}")
     print(f"board {today}: {len(board['games'])} games ({board['phase']}); results {today - timedelta(days=1)}: {len(results['games'])} settled.")

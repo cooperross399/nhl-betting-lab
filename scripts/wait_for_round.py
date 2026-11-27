@@ -75,6 +75,11 @@ CRON_LEADS = {
     # started 8 h 3 min late that morning. Publish Site alone fires at :55.
     "55 23 * * *": timedelta(hours=11),  # 10:55 UTC, 7 AM EDT
     "55 0 * * *": timedelta(hours=11),  # 11:55 UTC, 7 AM EST
+    # Publish Site's 3 AM New York primaries (2026-11-27): the Due List and
+    # Hot List before the card. The 8-hour backups ("0 23", "0 0") take
+    # ROUND_LEAD.
+    "0 20 * * *": timedelta(hours=11),  # 07:00 UTC, 3 AM EDT
+    "0 21 * * *": timedelta(hours=11),  # 08:00 UTC, 3 AM EST
 }
 
 #: The longest lead any cron carries; two wait jobs must cover it.

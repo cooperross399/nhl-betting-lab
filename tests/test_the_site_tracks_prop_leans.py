@@ -74,8 +74,8 @@ def feed(tmp_path: Path) -> Path:
         f"| {g} | Oct 1, 7:00 PM ET | `shots_on_goal` | Auston Matthews under 3.5 | 60.0% | +8.0% | +120 | Bovada |",
         f"| {g} | Oct 1, 7:00 PM ET | `points` | Mitch Marner over 0.5 | 60.0% | +8.0% | -150 | Fliff |",
         f"| {g} | Oct 1, 7:00 PM ET | `total_goals` | over 6.5 | 50.0% | +8.0% | +100 | Fliff |",
-        f"| {g} | Oct 1, 7:00 PM ET | `goals` | William Nylander over 0.5 | 40.0% | +8.0% | +200 | Fliff |",
-        f"| {g} | Oct 1, 7:00 PM ET | `assists` | Nobody Known under 0.5 | 60.0% | +8.0% | -110 | Fliff |",
+        f"| {g} | Oct 1, 7:00 PM ET | `goals` | William Nylander over 0.5 | 40.0% | +8.0% | +140 | Fliff |",
+        f"| {g} | Oct 1, 7:00 PM ET | `assists` | Nobody Known over 0.5 | 60.0% | +8.0% | -110 | Fliff |",
     ])}, "card 2026-10-01")
     commit(repo, {"latest_card_comment.md": card("2026-10-01T20:30:00+00:00", [
         f"| {g} | Oct 1, 7:00 PM ET | `hits` | Someone Else over 1.5 | 60.0% | +8.0% | +300 | Fliff |",

@@ -4497,6 +4497,47 @@ Re-derive rather than trust if the data has moved.
   forward ledger, population B, the model, the best-bet bars and the stakes
   are unchanged. `tests/test_thin_moneyline_and_long_goal_leans_are_off.py`.
 
+- **2026-11-27: the Due List and Hot List are built at 3 AM New York, and
+  the site's leans and Due List records read today's rules (Cooper: "We need
+  the due list and hot list to be updated at 3am like the college basketball
+  portion of the site does now", then "we need the regraded due
+  list/leans/totals/etc all updated on the website with correct profits").**
+  Site only: the card, snapshot, forward ledger, model, edge bars and stakes
+  are unchanged.
+  - **3 AM lists.** Publish Site gains a 3 AM slot (primaries `0 20` and
+    `0 21` UTC, eleven hours ahead in `wait_for_round.CRON_LEADS`; backups
+    `0 23` and `0 0`), and a soft step before the board: when today's
+    `drought_list.json` or `hot_list.json` is missing,
+    `scripts/build_early_lists.py --check` says so, the step fetches last
+    night's results (free NHL API, 8 minutes at most), rebuilds the tables
+    and builds both lists from the logs, rosters and schedule. Prices read
+    "not posted" until the card replaces both files at about 9:40 AM. It
+    writes no dated list, ledger row or snapshot, and leaves a list already
+    built for today alone.
+  - **Leans.** A lean a past board or card listed that today's card would
+    not is shown with its result and left out of the record: team leans
+    (`build_site_json.meets_lean_rules`: no regulation three-way, moneyline
+    and total-over leans from 6%, total-under leans only at 5.5 or 6.5 from
+    6%) and prop leans (`prop_leans.meets_lean_rules`: no points or assists
+    unders, points overs to +200, goals overs to +150, saves overs to +110).
+    Both pinned to `reports.gameday_card` by
+    `tests/test_past_leans_meet_todays_lean_rules.py`; every kept night is
+    settled again once (`LEANS_GRADING` = 1). Replayed on card-feed, the prop
+    leans record goes from 1,387-1,747, -21.29u, to 945-1,078, +117.2u (1,134
+    leans left out). The team-lean figure is read off the next publish. Home
+    team-total leans never reached the board. A game whose top lean is left
+    out does not take its next-best lean.
+  - **Due List.** The season line read the lab's ledger (+7.33u on 124.20u
+    risked) and the All results tracker read the frozen boards (38-158,
+    -1.26u on 108.40u), which carry a price only where the board published
+    one. The tracker's Due List rows now come from the ledger too
+    (`due_ledger_tracker_rows`, today's bars applied), so both read the same.
+  - **Totals** are unchanged: every game is graded on the model's
+    better-return side since 2026-11-25 (`TOTALS_GRADING` = 2), Cooper's
+    rule; -29.56u on 434.89u risked on 2026-11-27.
+  No demonstrated edge in any of it: the rules were chosen on the weeks they
+  are scored on.
+
 ## Contract strings — never change these
 
 Cooper's local scheduled tasks hard-code these. Renaming any of them silently
