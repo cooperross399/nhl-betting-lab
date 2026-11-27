@@ -701,6 +701,12 @@ class GamedayCard:
     hot_rows: list[dict[str, Any]] = field(default_factory=list)
     hot_unresolved: list[str] = field(default_factory=list)
     hot_notes: list[str] = field(default_factory=list)
+    #: Cooper's daily points parlay (2026-11-27, `nhl_betting_lab.points_parlay`):
+    #: one player per game, points over 0.5. A list, in none of the
+    #: selections, stakes, fingerprint or ledgers. None: not built.
+    points_parlay_legs: list[dict[str, Any]] | None = None
+    points_parlay_missing: list[str] = field(default_factory=list)
+    points_parlay_removed_by_guard: int = 0
     #: The Due List scorecard, as markdown lines, on Mondays only (2026-10-31).
     due_scorecard: list[str] = field(default_factory=list)
     #: The layer scorecard (`nhl_betting_lab.layer_scorecard`), as markdown
@@ -1905,6 +1911,14 @@ def render_card(card: GamedayCard) -> str:
         from nhl_betting_lab.hot_list import render_section as render_hot_section
 
         lines.extend(render_hot_section(card.hot_rows, card.hot_notes, card.hot_unresolved))
+    if card.points_parlay_legs is not None:
+        from nhl_betting_lab.points_parlay import PointsParlay, render_section as render_parlay
+
+        lines.extend(render_parlay(
+            PointsParlay(legs=card.points_parlay_legs, missing_games=card.points_parlay_missing,
+                         removed_by_guard=card.points_parlay_removed_by_guard),
+            _start_eastern,
+        ))
     lines.extend(card.layer_scorecard)
 
     if card.unresolved_names:

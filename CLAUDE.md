@@ -4538,6 +4538,24 @@ Re-derive rather than trust if the data has moved.
   No demonstrated edge in any of it: the rules were chosen on the weeks they
   are scored on.
 
+- **2026-11-27: a daily points parlay on the card (Cooper: "Make me a point
+  parlay with a player from every game on the slate today", "pick a player
+  from each game based on how we think the game will go and who may score",
+  then "I want this done everyday for however many games are on the
+  slate").** `nhl_betting_lab.points_parlay` picks, for each game on
+  tonight's slate, the player whose points over 0.5 the card's own
+  probability map rates likeliest (the map already carries the ratings, the
+  opponent, home ice, form, posted lines and scoring environment), at his
+  best staged price, and prints the card section "Points parlay": each leg
+  beside the model's projected winner, the combined price (legs multiplied,
+  each at its best book), the model's combined chance (multiplied as if
+  independent) and the tracked ladder stake. A game with no points price or
+  no opinion has no leg and is named; the puck-drop guard applies. It is a
+  LIST: nothing in the best bets, leans, passes, stakes, fingerprint,
+  snapshot, forward ledger or registered test. No measurement shows a long
+  parlay of short prices makes money: it pays the margin on every leg.
+  `tests/test_the_card_carries_a_points_parlay.py`.
+
 ## Contract strings — never change these
 
 Cooper's local scheduled tasks hard-code these. Renaming any of them silently
