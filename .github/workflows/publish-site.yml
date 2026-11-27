@@ -60,6 +60,17 @@ on:
     # nights; the backup publishes at the right one.
     - cron: "55 23 * * *"
     - cron: "55 0 * * *"
+    # The 3:00 AM New York refresh (Cooper, 2026-11-27: "We need the due
+    # list and hot list to be updated at 3am like the college basketball
+    # portion of the site does now"). Last night's games are final by then,
+    # so the board shows them and today's Due List and Hot List, built from
+    # them before the card (scripts/build_early_lists.py). Same shape as the
+    # 7 AM slot: primaries eleven hours ahead (20:00 UTC for 07:00 UTC in
+    # EDT, 21:00 for 08:00 in EST) and eight-hour backups (23:00, 00:00).
+    - cron: "0 20 * * *"
+    - cron: "0 21 * * *"
+    - cron: "0 23 * * *"
+    - cron: "0 0 * * *"
   # And after every Season Sim that built a projection (it runs hourly and
   # builds only when a game has gone final), so the Season page and its
   # award races move after each game (Cooper, 2026-11-08). The `when` job
@@ -105,7 +116,7 @@ jobs:
       go: ${{ steps.clock.outputs.go }}
       hold: ${{ steps.clock.outputs.hold }}
     steps:
-      - name: Keep only the 7 AM New York morning cron
+      - name: Keep only the morning crons that are 3 AM or 7 AM in New York
         id: clock
         env:
           SCHEDULE: ${{ github.event.schedule }}
@@ -142,6 +153,10 @@ jobs:
             "55 3 * * *") want="-0500"; slot="11:55" ;;
             "55 23 * * *") want="-0400"; slot="10:55" ;;
             "55 0 * * *") want="-0500"; slot="11:55" ;;
+            "0 20 * * *") want="-0400"; slot="07:00" ;;
+            "0 21 * * *") want="-0500"; slot="08:00" ;;
+            "0 23 * * *") want="-0400"; slot="07:00" ;;
+            "0 0 * * *") want="-0500"; slot="08:00" ;;
             *) want=""; slot="" ;;
           esac
           if [ -z "$want" ]; then
@@ -153,7 +168,7 @@ jobs:
           if [ "$offset" = "$want" ]; then
             echo "go=true" >> "$GITHUB_OUTPUT"
             echo "hold=true" >> "$GITHUB_OUTPUT"
-            echo "7 AM New York today is $slot UTC: this run waits for it, then publishes."
+            echo "This morning slot is $slot UTC in New York today: this run waits for it, then publishes."
           else
             echo "go=false" >> "$GITHUB_OUTPUT"
             echo "hold=false" >> "$GITHUB_OUTPUT"
@@ -308,6 +323,32 @@ jobs:
             echo "::warning::This morning's odds could not be fetched (exit $code); the board shows the odds it last had."
           fi
           exit "$code"
+
+      - name: Build today's Due List and Hot List before the card
+        # Cooper, 2026-11-27: the lists are updated at 3 AM. The card builds
+        # them about 9:40 AM; until then the restored lists are yesterday's
+        # and the board shows none. When today's are missing this fetches
+        # last night's results (free NHL API, every boxscore cached as it
+        # arrives), rebuilds the tables, and builds both lists from the logs,
+        # rosters and schedule. Prices read "not posted" until the card. It
+        # records, stakes and freezes nothing. Soft: on any failure the board
+        # is built as before.
+        continue-on-error: true
+        env:
+          PYTHONPATH: src
+        run: |
+          set -u
+          if ! python scripts/build_early_lists.py --check; then
+            exit 0
+          fi
+          code=0
+          timeout --kill-after=30s 8m \
+            python scripts/fetch_nhl_data.py --polite-seconds 0.25 --max-games 100 || code=$?
+          if [ "$code" -ne 0 ]; then
+            echo "::warning::Last night's results could not all be fetched (exit $code); the lists are built on what is cached."
+          fi
+          python scripts/build_datasets.py
+          python scripts/build_early_lists.py
 
       - name: Restore cached play-by-play
         # The NHL play-by-play the team ratings are built from. Shadow Stats

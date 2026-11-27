@@ -105,7 +105,12 @@ OFFLINE_SCRIPTS = frozenset({"restore_state.py", "site_history_floor.py"})
 #: a failure. `run_provider_shadow.py --live` (since 2026-11-11) asks The
 #: Odds API for today's team markets; its step allows a failure too, so the
 #: stub also proves a failed odds fetch still builds the board.
-STUBBED_SCRIPTS = frozenset({"run_shadow_stats.py", "run_provider_shadow.py"})
+#: The 3 AM list build (2026-11-27) runs `build_early_lists.py --check`,
+#: then `fetch_nhl_data.py` (the NHL API) and the list build; stubbed, the
+#: check fails and the step builds nothing, as on a morning the card's lists
+#: are already today's.
+STUBBED_SCRIPTS = frozenset({"run_shadow_stats.py", "run_provider_shadow.py", "build_early_lists.py",
+                             "fetch_nhl_data.py", "build_datasets.py"})
 STUB = (
     "import sys\n"
     "print('The chain does not run this script: it reaches the network.', file=sys.stderr)\n"

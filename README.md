@@ -103,6 +103,9 @@ PYTHONPATH=src .venv/bin/python scripts/run_player_props_backtest.py
 PYTHONPATH=src .venv/bin/python scripts/run_drought_rule_backtest.py
 # Settle the card's Due List and restate the rule's own forward record (offline)
 PYTHONPATH=src .venv/bin/python scripts/run_drought_rule_forward.py
+# Build today's Due List and Hot List for the 3 AM board, before the card
+# (Publish Site runs it; it records, stakes and freezes nothing)
+PYTHONPATH=src .venv/bin/python scripts/build_early_lists.py
 
 # Did a result on one window hold on another? -> data/outputs/replication.md
 PYTHONPATH=src .venv/bin/python scripts/run_replication.py \

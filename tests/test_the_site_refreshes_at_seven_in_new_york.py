@@ -26,6 +26,9 @@ EDT_CRON = "55 2 * * *"
 EST_CRON = "55 3 * * *"
 EDT_PRIMARY = "55 23 * * *"
 EST_PRIMARY = "55 0 * * *"
+# The 3 AM New York slot (2026-11-27), primaries and backups.
+EDT_THREE = ("0 20 * * *", "0 23 * * *")
+EST_THREE = ("0 21 * * *", "0 0 * * *")
 
 
 def _workflow() -> dict:
@@ -58,17 +61,18 @@ def _decide(tmp_path: Path, schedule: str, offset: str) -> dict[str, str]:
 def test_both_seven_am_crons_are_scheduled_beside_the_existing_one() -> None:
     on = _workflow().get("on", _workflow().get(True))
     crons = [c["cron"] for c in on["schedule"]]
-    assert crons == ["45 14 * * *", EDT_CRON, EST_CRON, EDT_PRIMARY, EST_PRIMARY]
+    assert crons == ["45 14 * * *", EDT_CRON, EST_CRON, EDT_PRIMARY, EST_PRIMARY,
+                     EDT_THREE[0], EST_THREE[0], EDT_THREE[1], EST_THREE[1]]
     assert "workflow_run" in on and "workflow_dispatch" in on
 
 
 @pytest.mark.parametrize(
     "offset, publishes",
-    [("-0400", (EDT_CRON, EDT_PRIMARY)), ("-0500", (EST_CRON, EST_PRIMARY))],
+    [("-0400", (EDT_CRON, EDT_PRIMARY, *EDT_THREE)), ("-0500", (EST_CRON, EST_PRIMARY, *EST_THREE))],
 )
 def test_exactly_one_morning_slot_publishes_on_each_offset(tmp_path: Path, offset: str, publishes: tuple) -> None:
     # Each slot has an eleven-hour primary and an eight-hour backup.
-    for cron in (EDT_CRON, EST_CRON, EDT_PRIMARY, EST_PRIMARY):
+    for cron in (EDT_CRON, EST_CRON, EDT_PRIMARY, EST_PRIMARY, *EDT_THREE, *EST_THREE):
         decided = _decide(tmp_path, cron, offset)
         if cron in publishes:
             assert decided == {"go": "true", "hold": "true"}, (cron, offset)
@@ -91,6 +95,8 @@ def test_the_gate_reads_new_yorks_offset_at_the_slot_not_at_the_fire() -> None:
     assert '"55 3 * * *") want="-0500"; slot="11:55"' in script
     assert '"55 23 * * *") want="-0400"; slot="10:55"' in script
     assert '"55 0 * * *") want="-0500"; slot="11:55"' in script
+    assert '"0 20 * * *") want="-0400"; slot="07:00"' in script
+    assert '"0 21 * * *") want="-0500"; slot="08:00"' in script
 
 
 def _wait_for_round():
@@ -115,6 +121,10 @@ def test_the_wait_ends_at_the_slot_the_gate_names(cron: str, slot: tuple[int, in
     # The EST primary fires at 00:55; started on time and 8 h late.
     (EST_PRIMARY, datetime(2026, 11, 12, 0, 56, tzinfo=timezone.utc), datetime(2026, 11, 12, 11, 55, tzinfo=timezone.utc)),
     (EST_PRIMARY, datetime(2026, 11, 12, 8, 58, tzinfo=timezone.utc), datetime(2026, 11, 12, 11, 55, tzinfo=timezone.utc)),
+    # The 3 AM slot: 07:00 UTC in EDT, 08:00 UTC in EST.
+    ("0 20 * * *", datetime(2027, 4, 1, 3, 30, tzinfo=timezone.utc), datetime(2027, 4, 1, 7, 0, tzinfo=timezone.utc)),
+    ("0 21 * * *", datetime(2026, 11, 27, 21, 1, tzinfo=timezone.utc), datetime(2026, 11, 28, 8, 0, tzinfo=timezone.utc)),
+    ("0 0 * * *", datetime(2026, 11, 28, 2, 0, tzinfo=timezone.utc), datetime(2026, 11, 28, 8, 0, tzinfo=timezone.utc)),
 ])
 def test_the_eleven_hour_primaries_wait_for_the_same_slot(cron: str, started: datetime, slot: datetime) -> None:
     wfr = _wait_for_round()
