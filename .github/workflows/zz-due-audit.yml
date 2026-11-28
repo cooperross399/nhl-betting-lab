@@ -1,0 +1,22 @@
+name: Due Audit (temporary)
+on:
+  push:
+    branches: [claude/project-thread-wazvke]
+    paths: [scratch_audit/**, .github/workflows/zz-due-audit.yml]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install -q -r requirements.txt && pip install -q -e .
+      - env: {GH_TOKEN: "${{ github.token }}"}
+        run: |
+          gh run download 46061168598 -R ${{ github.repository }} -n gameday-state -D "$RUNNER_TEMP/st"
+          f=$(find "$RUNNER_TEMP/st" -name drought_forward.csv | head -1); echo "ledger: $f"
+          ls "$(dirname "$f")" | head -40
+          python scratch_audit/due_audit.py "$f"
